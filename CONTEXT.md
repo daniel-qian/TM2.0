@@ -19,8 +19,12 @@ _Avoid_: AI SaaS 工具 / 效率工具 / 仪表盘 / 堆 agent 功能（这些�
 _Avoid_: `the moat` / `Auto-prioritized` / `Trusted output`（VC 腔，别进用户界面）；给人打分/量化成数值（人不该有血条）
 
 **Dashboard**：
-ambient 空间式指挥中心 —— 把人、项目、信号画成一张平静的地图，呈现当前"组织天气"。它是**观察面**：你看，还没动手。
-_Avoid_: home、canvas（canvas 是视觉手法，不是这个概念本身）
+进门第一面（surface label "Your team"）——回答"**今天该把心思花在哪**"：分析浏览区（人与项目双轨卡片）+ 今日 Handoff checklist 区，分区混排、概念不混。它是**观察 + 轻照料面**：看清处境、勾掉/搁置今天的小事；重的编排仍去 Nexus。地图不再是这一面的主形态，退为页内的全景子视图（见 Team map）。见 [ADR-0017](docs/adr/0017-card-home-demotes-team-map.md)。
+_Avoid_: home、canvas（canvas 是视觉手法，不是这个概念本身）、PM 仪表盘语言（P0 徽章 / 统计数字 chips / capacity 读数——SaaS 腔，违反 [ADR-0015](docs/adr/0015-product-tone-human-advisor-debrand-saas-naming.md)）
+
+**Team map**：
+Dashboard 页内的**全景子视图**——把人、项目、信号画成一张平静的空间地图。经卡片上的"在全景上看"类入口进入，镜头推进、关联簇点亮；calm / focus 语义都属于这一层。它是 demo 的高光时刻与关系全景，不再是进门第一眼。
+_Avoid_: 把它当独立页面/tab（已降级，见 [ADR-0017](docs/adr/0017-card-home-demotes-team-map.md)）、glance map（旧称，暗示"进门第一眼"）
 
 **Nexus**：
 **行动面** —— manager 的一个问题在这里变成一条被编排的 Thread：specialist agents 与人类同事协同，agent 在背景聆听并交叉校对证据，按需调用 tools，最终产出供人 review 的结构化可信输出。
@@ -44,11 +48,11 @@ Dashboard 上呈现的一段**离散、可重新生成**的高管摘要（"组�
 _Avoid_: summary、report（report 专指 Nexus 的结构化输出）
 
 **Calm**：
-Dashboard 的**静息态**——人与项目以最简密度铺成一张平静地图，无高亮、无展开。观察面的默认状态；点空白处即回到 calm。
+Team map（全景子视图）的**静息态**——人与项目以最简密度铺成一张平静地图，无高亮、无展开。全景的默认状态；点空白处即回到 calm。
 _Avoid_: idle、empty（calm 是"一切尽在掌握"的平静，不是空）
 
 **Focus**：
-calm 的反面——**一组关联实体被点亮、其余淡化**的状态。由三种选择器触发：点单个节点、选 tag、搜索。关键：**单点也点亮"该实体 + 它的关联簇"**（owner / 依赖 / 被分配的人），不是只亮被点那一个。是从"观察"过渡到"将要钻入"的中间态。
+calm 的反面——**一组关联实体被点亮、其余淡化**的状态。由四种选择器触发：点单个节点、选 tag、搜索、从 Dashboard 卡片经"在全景上看"入口飞入。关键：**单点也点亮"该实体 + 它的关联簇"**（owner / 依赖 / 被分配的人），不是只亮被点那一个。是从"观察"过渡到"将要钻入"的中间态。
 _Avoid_: select、filter（filter 暗示"减项"，focus 是"点亮关联簇"）、highlight（只说了视觉、没说关联语义）
 
 **Reality gap**：
@@ -61,10 +65,38 @@ _Avoid_: discrepancy、conflict
 _Avoid_: output（output 窄指结构化报告这一种产物）、artifacts（泛指、丢失"经链条显形"的语义）
 
 **Handoff**：
-agent 产出的、落在 Dashboard / 详情页表面上**可直接执行**的单条行动（checklist 形式，可 done / discard，部分可一键飞回 Nexus 深挖）。是"建议"与"已确认派出的 Task"之间的中间态：人确认后才经 dispatchTask 变成 Task。
+agent 产出的、落在 Dashboard / 详情页表面上**可直接执行**的单条行动（checklist 形式，可 done / discard，部分可一键飞回 Nexus 深挖）。是"建议"与"已确认派出的 Task"之间的中间态：人确认后才经 dispatchTask 变成 Task。自 [ADR-0017](docs/adr/0017-card-home-demotes-team-map.md) 起，Dashboard 的今日 Handoff checklist 区是进门第一眼的主体之一；完成感是安静的（勾掉、收进"今天已照料"），不游戏化。
 _Avoid_: action item、todo（会跟已派出的 Task 混淆）
 
 **Capabilities**：
-Avery 自有的垂直领域专家知识层——跨 HR / Legal / PM / Finance / Ops / Sales 的真实案例、解决方案、SOP / playbook。可信性的"第二条腿"：公司事实回答"发生了什么"，Capabilities 回答"专业上该怎么判断、怎么处理"。是 agent 建议区别于普通 ChatGPT（只有泛化常识）的关键。**Avery 私有资产，订阅制提供，agent 检索时自动优先引用——产品的护城河。**
+Avery 自有的垂直领域专家知识层——跨 HR / Legal / PM / Finance / Ops / Sales 的真实案例、解决方案、SOP / playbook。可信性的"第二条腿"：公司事实回答"发生了什么"，Capabilities 回答"专业上该怎么判断、怎么处理"。是 agent 建议区别于普通 ChatGPT（只有泛化常识）的关键。**Avery 私有资产，随 Manager seat 订阅提供、不单卖，agent 检索时自动优先引用——产品的护城河，也是席位定价的依据（席位贵在有 playbooks 背书的判断，不是贵在 UI）。**
 _Surface label_（[ADR-0015](docs/adr/0015-product-tone-human-advisor-debrand-saas-naming.md)）：user-facing 一律用 **"Playbooks"**（资深前辈的词，温暖、有经验感）；"Capabilities" 仅作内部领域概念名 / type / 变量名保留，不进用户界面（含"the moat"等护城河自夸不进界面）。
 _Avoid_: CAPA（撞行业既有术语 Corrective-And-Preventive-Action，会让听众卡顿解码）、capabilities RAG（RAG 是检索机制，不是这个知识层本身）、专家能力库
+
+## Commercial language
+
+（口径 = 合伙人 2026-07-02 revenue deck，经 2026-07-03 对齐讨论确认。取代旧口径"advisor AI + tools 免费，playbooks 付费"——**无免费层**，最低入场门槛就是付费 Pilot。价格数字不进本文件。）
+
+**Commercial thesis（商业主线）**：
+**服务开路换信任，订阅是生意本身**——service-heavy 起步（Pilot → Setup → Consulting），可重复工作流成熟后收入重心迁向 Manager seats + Benchmark data。卖的是"更安全的管理决策"，不是 generic AI chat。
+_Avoid_: 非订阅制 / 买断 / 一次性收费为主（旧 to-C 误读——一次性只在单客户第一年现金流里占大头，不是收入结构）
+
+**Pilot / Proof Pack**：
+**付费**入场动作——用买家真实数据跑一轮有限范围的证明服务，证明 Avery 能发现隐藏的人与项目风险。付费本身是筛选器：滤掉不认真的买家。
+_Avoid_: free trial / 免费试用（无免费层）、demo（demo 是演示我们的数据，pilot 是收费跑买家的数据）
+
+**Setup（company brain build）**：
+一次性信任层服务——公司数据对接、私有部署、SSO / 权限边界、内部知识库配置（"脏活累活"）。是敲门砖与信任钱，不是生意本身：规模化后占比最小的一层。
+_Avoid_: onboarding（太轻，像自助引导）、implementation fee（丢失"买的是安全边界与本地化"语义）
+
+**Manager seat**：
+经常性收入主体——manager 按月付费的访问权（Dashboard / 详情 / Nexus / follow-up），Playbooks 折在席位价内不单卖。计费单位是 **manager**，不是全员。
+_Avoid_: license / user seat（付费单位是 manager）、工具费（席位贵在有 playbooks 背书的判断，不是贵在 UI）
+
+**Benchmark layer**：
+隐私安全的跨客户对比数据订阅——回答"你们公司这样，算正常吗"：按 workload / project risk / operating cadence 聚合 normalize。**数据护城河：客户越多越值钱；客户数不足时该层收入为零**，是"晚熟"层。三条不可破的边界（与"绝不评判个人"红线同源）：① 只聚合**组织级**运转模式，任何能定位到具体个人的东西永不进池；② 客户明确知情、可退出（opt-in/opt-out）；③ 同段样本不足时不出对比数（防反匿名化）。
+_Avoid_: 行业报告（是持续订阅的对比层，不是一次性报告）、卖数据（买家听到的必须是"匿名对比智能"，且边界可自证）
+
+**Consulting retainer**：
+按月的人工服务——playbook 调优、决策校验、escalation 语言打磨、workflow 评估。信任变现的一层，规模化后让位给 seats。
+_Avoid_: 客服 / support（卖的是专家判断，不是技术支持）

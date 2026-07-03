@@ -9,6 +9,7 @@ import {
 import { HERO_QUESTION } from '../data/fixtures'
 import { focusEntity } from '../lib/focus'
 import { useCanvas } from './canvasStore'
+import { useHome } from './homeStore'
 
 type RailStep = {
   beat: string
@@ -35,9 +36,11 @@ export const SCRIPT: RailStep[] = [
     run: () => useCanvas.getState().goScene('onboarding'),
   },
   {
+    // feat-014（ADR-0017 决策 4）：B1 落卡片式今日主页——checklist 逐张发牌就是新的
+    // calm 开场；Team map 只在 B2 作为高光拍出现。
     beat: 'B1',
-    label: 'Dashboard calm',
-    run: () => useCanvas.getState().goScene('dashboard'),
+    label: 'The morning desk', // ⚠ 待 Danny 审字（caption）
+    run: () => useCanvas.getState().goScene('home'),
   },
   {
     // ── Act 1 · bill/acme hero ──。开头 title card（ADR-0013 决策 9：从第一个 case 就
@@ -45,12 +48,18 @@ export const SCRIPT: RailStep[] = [
     beat: 'T1',
     label: 'Use case — Lin Qing & the Shopping Guide demo', // ⚠ 待 Danny 审字（caption）
     titleCard: BILL_ACME_CASE.title,
-    run: () => useCanvas.getState().goScene('dashboard'),
+    run: () => useCanvas.getState().goScene('home'),
   },
   {
+    // 地图高光拍（ADR-0017 决策 4）：从主页风险卡"在全景上看"的同款动作序——
+    // 推进 Team map + 点亮关联簇（一步一个 state 落点，重放幂等）。
     beat: 'B2',
-    label: 'Focus the demo risk cluster',
-    run: () => useCanvas.getState().setFocus(focusEntity('project', 'p_acme')),
+    label: 'See it on the map — the risk cluster', // ⚠ 待 Danny 审字（caption）
+    run: () => {
+      const canvas = useCanvas.getState()
+      canvas.goScene('dashboard')
+      canvas.setFocus(focusEntity('project', 'p_acme'))
+    },
   },
   // P5-04 Act1（ADR-0009）：Nexus 前 drill「看现状」。thread.steps 空 → 详情页派生 believed 态（零剧透）。
   // 顺序参 demo-brief：focus → drill demo → drill Lin Qing → ask；不用 back()，下一步 askQuestion 自带 goScene('nexus') 飞进 Nexus。
@@ -130,7 +139,7 @@ export const SCRIPT: RailStep[] = [
     run: () => {
       const canvas = useCanvas.getState()
       canvas.regenBriefing()
-      canvas.goScene('dashboard')
+      canvas.goScene('home') // feat-014：主页开场行 + checklist 切到 grown 版
     },
   },
   {
@@ -139,7 +148,7 @@ export const SCRIPT: RailStep[] = [
     beat: 'T2',
     label: 'Use case — Apple review policy', // ⚠ 待 Danny 审字（caption）
     titleCard: WEB_SEARCH_CASE.title,
-    run: () => useCanvas.getState().goScene('dashboard'),
+    run: () => useCanvas.getState().goScene('home'),
   },
   {
     // askQuestion 是 case-aware（精确命中 case 默认问题）：开 web-search thread +
@@ -264,7 +273,12 @@ export const useRail = create<RailState>((set, get) => ({
 
   next: () => get().seek(get().index + 1),
   prev: () => get().seek(get().index - 1),
-  restart: () => get().seek(0),
+  // feat-014：restart（r 键 = 回 pristine 开场）连带清掉主页 checklist 的勾选态；
+  // 普通 seek 不清——Danny 现场勾掉的卡不该被一次方向键抹掉（homeStore 注释详述）。
+  restart: () => {
+    useHome.getState().reset()
+    get().seek(0)
+  },
   toggleHidden: () => set((state) => ({ hidden: !state.hidden })),
   toggleCapture: () => set((state) => ({ capture: !state.capture })),
 }))

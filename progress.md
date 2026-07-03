@@ -5,8 +5,9 @@
 
 ## Current State
 
-**Last Updated:** 2026-07-01（合伙人知识包整合 + 真 eval + landing/demo 上线，全推送）
-**Active Feature:** 无 active 编码 feature。本 session 详情见下方 `## Update — 2026-07-01` 三节 + 完整运行日志
+**Last Updated:** 2026-07-03（feat-014 卡片式今日主页 done；详见下方 `## Update — 2026-07-03`）
+**Active Feature:** 无 active 编码 feature。feat-014（Morning Desk 主页，GH #9）已完成并本地提交，**未 push**（copy 待审字 + push 触发部署，归 Danny 拍板）。
+上一轮（2026-07-01）状态：本 session 详情见下方 `## Update — 2026-07-01` 三节 + 完整运行日志
 `.handoff/partner-integration-0701.md`。要点：合伙人 6 个 SCN 落进 eval（解锁 non_danny 闸）、真跑完成（诚实结论
 在 `eval-harness/EVAL-REAL-0701.md`）、demo 终局卡对齐 8 字段 + Playbooks 换真场景、landing 折入 pack 并按 eval
 证据把定位从"我们不打分"改锚到"升级/校准/证据"（红线降为信任保证）、给合伙人的交付包 `eval-harness/for-partner/`。
@@ -150,3 +151,27 @@ avery loop 补 cite-before-number。
 - **office-AI 真捕获（Danny 手跑）**：SCN-001 粘进 3 个免费通用 AI。机检：**ms-copilot PASS · chatgpt PASS · gemini FAIL[PERSON-DIAGNOSIS]**；全部 UNCITED-NUMBER。**发现**：2026 免费 AI 给暖建议、2/3 不给人贴标签 → **"我们不打分、它们打分"这个卖点站不住**。真差异 = 通用 AI 给完建议就停（无升级/无置信/无证据链），Avery 三样都给。
 - **定位 pivot（Danny 拍板）**：红线**降为信任保证**（保留在 TrustLayer/Method/Output/Modules/隐私句），**从竞争亮点/反面教材 C 位撤下**；`whatItIs` 标题改成正向"A senior advisor for the call that's yours to make"，人身不打分降成一句信任注脚。**EvalContrast 用真抓取（去标识）重锚到真差异**："都在乎人,但只有一个告诉你多大把握、何时该拉 HR、并亮证据"（左=通用助手好建议但 `missing` 三缺口，右=Avery 补齐）。顶层定位（marketGap/output/method/stack）本就在对的轴上,未动;**demo 未动**（其 8 字段卡本就是真差异叙事）。en.ts 改后 **M3 重生 zh.ts 20/20**；`tsc --noEmit` 绿。
 - **仍未提交/推送**；所有新文案 `待审字`；真产品洞记录在案（avery loop 需 cite-before-number）。
+
+## Update — 2026-07-03 · feat-014 卡片式今日主页（Morning Desk A+）done
+
+> 缘起：合伙人（真实 HR 高管）发来自撰 PM-dashboard HTML mock——硬需求"进主页第一眼必须有 checklist 式的东西，卡片/颜色/动画一目了然，快速进入心流"。Danny 判断与之一致：现有全屏地图"放进办公室像玩具"。完整决策链：grill 6 决策 → ADR-0017 → 设计 3 方向 → claire+dana 双盲评审 → A+ 拍板 → GH issue #9 AFK 票 → 自循环开发 → 双 checker PASS。
+
+**What's Done**
+- **领域模型**：`CONTEXT.md` Dashboard 重定义（卡片式今日主页=进门第一面）、新增 **Team map**（全景子视图）、Calm/Focus 归属调整、Handoff 补"进门第一眼主体之一"；新 `docs/adr/0017-card-home-demotes-team-map.md`（取舍与回退成本都写了）。
+- **实现**（全部细节见 feature_list.json feat-014 evidence + `.issues/feat-014/plan.md`）：
+  - 新 `HomeScene` = 默认「Your team」：左脊柱今日 Handoff checklist（4 卡，墨迹勾选→"Handled today"抽屉→安静计数→前辈收尾屏）+ 右双轨证据层（人卡全定性、项目卡可硬；hover 联动点亮/降透明/浮依据签，纯 CSS 类驱动）。
+  - composer 抽取为 `TeamComposer` 随迁主页；勾选态在独立 `homeStore`（契约冻结不扩 canvasStore；rail seek 不抹勾选、restart 清）。
+  - 地图降级：tab 移除；入口 = 卡上 "See it on the map"（+focus）/ 右栏 "See the whole picture"（calm）；地图加 `← Back to today` chip；composer/briefing HUD 从地图移除。
+  - rail：B1/T1/T2→home，B2=地图高光拍，B10→home 且 checklist 切 grown 版（感谢 Lin Qing 卡）。
+- **验证**：`./init.sh` 绿；dev server DOM 断言全过（交互/联动/rail 26 拍/capture/红线扫描主页零 %）；claire PASS（三必达改进落地）+ dana PASS（"没有把我的人变成分数"），两轮建议共 7 条已修（文案 3 + 交互/CSS 4）。
+- **提交**：本地 commit（见 git log），**未 push**。
+
+**已知限制 / Notes**
+- headless 预览 rAF 停摆（feat-006 记录过的截图超时同源，且更广）：动画插值无法机测，静态样式用 `transition:none` 旁路断言正确；**动画手感 + 窄屏（<1080px 塌单列）+ 依据签换行观感，需 Danny 真机目测**。
+- 死 CSS 未清（stay in scope）：`.scene-dashboard .composer-*` 覆盖（composer 迁出后失效，global.css ~1886-1921）。
+- demo 录像脚本注意：B1 拍的 caption 从 "Dashboard calm" 改为 "The morning desk"，beat 总数不变（26）。
+
+**HITL（Danny）**
+- 全部新英文 copy `⚠ 待 Danny 审字`（fixtures.home.ts / railStore captions / map-back-chip / alertPills 原有）。
+- 真机目测后决定是否 push（push = tm2 自动部署）。
+- 文案微决策：hh_pitch 的 "goes out today" 与依据签重复；"Handled today" 词义（claire 2c-2，已分开计数）。

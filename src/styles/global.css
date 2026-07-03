@@ -6682,3 +6682,619 @@ h1 {
     bottom: 150px;
   }
 }
+
+/* ═══════════════════════ feat-014 · Card home（Morning Desk A+ / ADR-0017）═══════════
+   进门第一面：左脊柱 = 今日 Handoff checklist（判断），右双轨 = 人与项目卡带（证据）。
+   同屋檐：全部取色于既有 token（paper/ink/sage/honey/terracotta），无新色板。 */
+
+.scene-home {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.home-frame {
+  display: grid;
+  grid-template-columns: minmax(340px, 38fr) 62fr;
+  gap: 34px;
+  max-width: 1460px;
+  margin: 0 auto;
+  padding: 84px 36px 150px; /* 顶部让出 Topbar，底部让出 composer-layer */
+}
+
+/* ── 左脊柱 ─────────────────────────────────────────────────────────────── */
+
+.home-greeting {
+  margin-bottom: 26px;
+}
+
+.home-greeting h1 {
+  margin: 0 0 6px;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: clamp(21px, 2.4vw, 27px);
+  font-weight: 500;
+  line-height: 1.32;
+  letter-spacing: 0;
+}
+
+.home-greeting-sub {
+  margin: 0;
+  max-width: 46ch;
+  color: var(--ink-soft);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+.home-spine-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.home-spine-head h2 {
+  margin: 0;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.home-count {
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.home-handoff-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.home-handoff {
+  position: relative;
+  display: flex;
+  gap: 12px;
+  padding: 14px 16px 14px 18px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--paper-strong);
+  box-shadow: var(--shadow-soft);
+  margin-bottom: 0;
+}
+
+/* 左缘墨条 = 语气温度（不是评级徽章）：sage 安稳 · honey 值得一看 · terracotta 今天需要你 */
+.home-handoff::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 10px;
+  bottom: 10px;
+  width: 3px;
+  border-radius: 3px;
+  background: var(--rule-strong);
+}
+
+.home-tone-sage.home-handoff::before {
+  background: rgba(105, 128, 109, 0.75);
+}
+
+.home-tone-honey.home-handoff::before {
+  background: rgba(178, 123, 43, 0.7);
+}
+
+.home-tone-terracotta.home-handoff::before {
+  background: rgba(188, 92, 73, 0.78);
+}
+
+.home-handoff.is-linked {
+  border-color: var(--rule-strong);
+  box-shadow: var(--shadow);
+}
+
+.home-handoff.is-inking {
+  border-color: rgba(105, 128, 109, 0.55);
+}
+
+.home-check {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  margin-top: 2px;
+  padding: 0;
+  border: 1.5px solid var(--rule-strong);
+  border-radius: 999px;
+  background: rgba(255, 253, 248, 0.9);
+  transition:
+    border-color var(--fast) ease,
+    background var(--fast) ease;
+}
+
+.home-check:hover,
+.home-check:focus-visible {
+  border-color: rgba(105, 128, 109, 0.85);
+  background: rgba(105, 128, 109, 0.08);
+  outline: none;
+}
+
+.ink-check {
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 4px;
+}
+
+.ink-check path {
+  stroke: rgba(74, 96, 78, 0.95); /* 深 sage 墨色 */
+  stroke-width: 2.6;
+}
+
+.home-handoff-body {
+  min-width: 0;
+}
+
+.home-handoff-tone {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--ink-faint);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.home-tone-terracotta .home-handoff-tone {
+  color: rgba(160, 74, 58, 0.9);
+}
+
+.home-tone-honey .home-handoff-tone {
+  color: rgba(146, 100, 33, 0.9);
+}
+
+.home-handoff-body h3 {
+  margin: 0 0 5px;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 15.5px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.home-handoff-body > p {
+  margin: 0 0 9px;
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.home-handoff-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.home-map-card-link,
+.home-discard {
+  min-height: 28px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-faint);
+  font-size: 11.5px;
+  font-weight: 700;
+  transition:
+    color var(--fast) ease,
+    border-color var(--fast) ease,
+    background var(--fast) ease;
+}
+
+.home-map-card-link:hover,
+.home-map-card-link:focus-visible {
+  border-color: var(--rule);
+  color: var(--ink);
+  outline: none;
+}
+
+.home-discard:hover,
+.home-discard:focus-visible {
+  border-color: var(--rule);
+  color: var(--ink-soft);
+  background: rgba(29, 27, 23, 0.04);
+  outline: none;
+}
+
+/* 收尾屏（claire 改进 3）：安静的前辈收尾话，不是 "0 tasks 🎉" */
+.home-closing {
+  animation: home-rise-in var(--slow) ease both;
+  margin-top: 6px;
+  padding: 20px 20px 18px;
+  border: 1px solid rgba(105, 128, 109, 0.3);
+  border-radius: var(--radius);
+  background: rgba(105, 128, 109, 0.07);
+}
+
+.home-closing h3 {
+  margin: 0 0 6px;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 16.5px;
+  font-weight: 500;
+}
+
+.home-closing p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* 「今天已照料」抽屉 */
+.home-drawer {
+  margin-top: 16px;
+}
+
+.home-drawer-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 14px 0 8px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: rgba(255, 253, 248, 0.74);
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.home-drawer-toggle:hover,
+.home-drawer-toggle:focus-visible {
+  border-color: var(--rule-strong);
+  color: var(--ink);
+  outline: none;
+}
+
+.home-drawer-check {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+}
+
+.home-drawer-list {
+  margin: 10px 0 0;
+  padding: 4px 0 0;
+  list-style: none;
+}
+
+.home-drawer-list li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 4px;
+  border-bottom: 1px dashed var(--rule);
+}
+
+.home-drawer-item {
+  color: var(--ink-faint);
+  font-size: 12.5px;
+  text-decoration: line-through;
+  text-decoration-color: rgba(105, 128, 109, 0.55);
+}
+
+.home-drawer-list li.is-set-aside .home-drawer-item {
+  text-decoration-style: dotted;
+}
+
+.home-drawer-list button {
+  flex: 0 0 auto;
+  border: 0;
+  background: transparent;
+  color: var(--ink-faint);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.home-drawer-list button:hover,
+.home-drawer-list button:focus-visible {
+  color: var(--ink);
+  outline: none;
+  text-decoration: underline;
+}
+
+/* ── 右双轨（证据层） ────────────────────────────────────────────────────── */
+
+.home-lanes-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.home-lanes-head .eyebrow,
+.home-lane-label {
+  margin: 0;
+}
+
+.home-lane-label {
+  margin: 22px 0 12px;
+}
+
+.home-map-link {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--ink-faint);
+  font-size: 12px;
+  font-weight: 700;
+  transition: color var(--fast) ease;
+}
+
+.home-map-link:hover,
+.home-map-link:focus-visible {
+  color: var(--ink);
+  outline: none;
+  text-decoration: underline;
+}
+
+.home-lane {
+  display: grid;
+  gap: 10px;
+}
+
+.home-lane-people {
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+}
+
+.home-lane-projects {
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}
+
+.home-person-card,
+.home-project-card {
+  position: relative;
+  display: flex;
+  padding: 12px 14px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: rgba(255, 253, 248, 0.82);
+  box-shadow: none;
+  text-align: left;
+  transition:
+    border-color var(--fast) ease,
+    box-shadow var(--fast) ease,
+    opacity var(--medium) ease,
+    transform var(--medium) ease;
+}
+
+/* 联动降透明（claire 改进 1）：hover 左卡时右栏未关联卡退后——纯 CSS，类名驱动 */
+.home-lanes.has-link .home-person-card:not(.is-lit),
+.home-lanes.has-link .home-project-card:not(.is-lit) {
+  opacity: 0.35;
+}
+
+.home-person-card:hover,
+.home-person-card:focus-visible,
+.home-project-card:hover,
+.home-project-card:focus-visible {
+  border-color: var(--rule-strong);
+  box-shadow: var(--shadow-soft);
+  outline: none;
+}
+
+.home-person-card.is-lit,
+.home-project-card.is-lit {
+  border-color: var(--rule-strong);
+  background: var(--paper-strong);
+  box-shadow: var(--shadow-soft);
+  transform: scale(1.02);
+}
+
+.home-person-card {
+  align-items: center;
+  gap: 11px;
+}
+
+.home-person-avatar {
+  flex: 0 0 auto;
+  border-radius: 999px;
+}
+
+.home-person-body {
+  min-width: 0;
+}
+
+.home-person-body h3 {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.home-person-role {
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.home-person-read {
+  margin: 3px 0 0;
+  color: var(--ink-soft);
+  font-size: 11.5px;
+  font-style: italic;
+  line-height: 1.4;
+}
+
+.home-tone-terracotta .home-person-read {
+  color: rgba(160, 74, 58, 0.88);
+}
+
+.home-tone-honey .home-person-read {
+  color: rgba(146, 100, 33, 0.88);
+}
+
+.home-project-card {
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* 项目卡可以硬一点（due/进度/状态），但状态色只做左缘细边 */
+.home-project-card.edge-at-risk {
+  border-left: 3px solid rgba(178, 123, 43, 0.6);
+}
+
+.home-project-card.edge-blocked {
+  border-left: 3px solid rgba(188, 92, 73, 0.65);
+}
+
+.home-project-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.home-project-row h3 {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.home-project-status {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-faint);
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
+.home-project-strip-row .project-strip {
+  display: block;
+  width: 100%;
+}
+
+.home-project-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--ink-faint);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.home-project-due {
+  color: var(--ink-soft);
+}
+
+@keyframes home-tag-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes home-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* hover 联动时浮出的依据签（claire 改进 1：右栏是证据层）。
+   允许换行（bottom 锚定向上生长）——nowrap 会把长依据吃成省略号，削弱证据层。 */
+.home-evidence-tag {
+  animation: home-tag-in var(--medium) ease both;
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: -9px;
+  z-index: 3;
+  padding: 4px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 11px;
+  background: var(--paper-strong);
+  box-shadow: var(--shadow-soft);
+  color: var(--ink-soft);
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1.35;
+  text-align: center;
+  pointer-events: none;
+}
+
+/* 键盘焦点要看得见（claire 2a）：lit 态下低对比描边不足以指示焦点位置 */
+.home-person-card:focus-visible,
+.home-project-card:focus-visible,
+.home-check:focus-visible,
+.home-discard:focus-visible,
+.home-map-card-link:focus-visible,
+.home-map-link:focus-visible,
+.home-drawer-toggle:focus-visible {
+  outline: 2px solid rgba(82, 123, 145, 0.75);
+  outline-offset: 2px;
+}
+
+/* ── 地图页的回家入口（feat-014） ────────────────────────────────────────── */
+
+.map-back-chip {
+  min-height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: rgba(255, 253, 248, 0.86);
+  box-shadow: var(--shadow-soft);
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 700;
+  transition:
+    border-color var(--fast) ease,
+    color var(--fast) ease;
+}
+
+.map-back-chip:hover,
+.map-back-chip:focus-visible {
+  border-color: var(--rule-strong);
+  color: var(--ink);
+  outline: none;
+}
+
+/* ── 响应式与动效偏好 ────────────────────────────────────────────────────── */
+
+@media (max-width: 1080px) {
+  .home-frame {
+    grid-template-columns: 1fr;
+    gap: 30px;
+    padding: 84px 22px 160px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-handoff,
+  .home-person-card,
+  .home-project-card {
+    transition: none;
+  }
+
+  .home-evidence-tag,
+  .home-closing {
+    animation: none;
+  }
+}

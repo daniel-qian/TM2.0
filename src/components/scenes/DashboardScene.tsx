@@ -1,14 +1,11 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent, type MouseEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { AnimatePresence, motion, useReducedMotion, type Transition } from 'framer-motion'
 import type { ReactZoomPanPinchRef } from 'react-zoom-pan-pinch'
 import {
-  CAPABILITIES,
   DASHBOARD_TAGS,
-  HERO_QUESTION,
   PEOPLE,
   PROJECTS,
   SIGNALS,
-  type CapabilityEntry,
   type Person,
   type Project,
   type ProjectRisk,
@@ -48,22 +45,8 @@ const RISK_DIMS: Array<{ key: keyof ProjectRisk; label: string; color: string }>
 // composer）作为可叠放角落 chrome 浮在地图边角之上。只留够清 Topbar/tag 条与 composer 的薄边。
 const DASHBOARD_INSETS: SafeInsets = { top: 76, right: 28, bottom: 112, left: 28 }
 
-type ReferenceKind = 'person' | 'project' | 'capability' | 'file'
-type ReferenceFilter = 'all' | Exclude<ReferenceKind, 'file'>
-
-interface ComposerReference {
-  id: string
-  kind: ReferenceKind
-  label: string
-  meta: string
-}
-
-const REFERENCE_FILTERS: Array<{ id: ReferenceFilter; label: string }> = [
-  { id: 'all', label: 'All' },
-  { id: 'person', label: 'People' },
-  { id: 'project', label: 'Projects' },
-  { id: 'capability', label: 'Playbooks' },
-]
+// feat-014（ADR-0017）：composer / briefing HUD 已随主场迁往 HomeScene（TeamComposer 组件）；
+// 本页 = Team map 全景子视图——纯地图 + tags/search + alert pills + 风险图。
 
 // board 绝对坐标（修订 2：world 对象 board px only，禁 clamp/vw）。
 function nodeStyle(pos: Pos) {
@@ -126,39 +109,6 @@ function ownerName(project: Project) {
   return PEOPLE.find((p) => p.id === project.ownerId)?.name ?? 'Unassigned'
 }
 
-function personReference(person: Person): ComposerReference {
-  return { id: `person-${person.id}`, kind: 'person', label: person.name, meta: person.role }
-}
-
-function projectReference(project: Project): ComposerReference {
-  return {
-    id: `project-${project.id}`,
-    kind: 'project',
-    label: project.title,
-    meta: ownerName(project),
-  }
-}
-
-function capabilityReference(capability: CapabilityEntry): ComposerReference {
-  return {
-    id: `capability-${capability.id}`,
-    kind: 'capability',
-    label: capability.title,
-    meta: capability.domain,
-  }
-}
-
-function focusReferenceOf(focus: Focus | null): ComposerReference | null {
-  if (!focus?.primary) return null
-  if (focus.primary.kind === 'person') {
-    const person = PEOPLE.find((p) => p.id === focus.primary?.id)
-    return person ? personReference(person) : null
-  }
-
-  const project = PROJECTS.find((p) => p.id === focus.primary?.id)
-  return project ? projectReference(project) : null
-}
-
 function isPrimary(focus: Focus | null, kind: 'person' | 'project', id: string) {
   return focus?.primary?.kind === kind && focus.primary.id === id
 }
@@ -177,30 +127,10 @@ export function DashboardScene() {
   const focus = useCanvas((s) => s.focus)
   const setFocus = useCanvas((s) => s.setFocus)
   const openDetail = useCanvas((s) => s.openDetail)
-  const askQuestion = useCanvas((s) => s.askQuestion)
+  const goScene = useCanvas((s) => s.goScene)
   const briefing = useCanvas((s) => s.briefing)
   const prefersReducedMotion = useReducedMotion()
   const [searchQuery, setSearchQuery] = useState('')
-  const [question, setQuestion] = useState(HERO_QUESTION)
-  const [composerOpen, setComposerOpen] = useState(false)
-  const [referenceMenuOpen, setReferenceMenuOpen] = useState(false)
-  const [referenceFilter, setReferenceFilter] = useState<ReferenceFilter>('all')
-  const [referenceQuery, setReferenceQuery] = useState('')
-  const [references, setReferences] = useState<ComposerReference[]>([])
-  // 决定 2（Danny）：天气摘要行常驻可见，详情卡只靠「点击」展开/收起——去掉 hover 触发
-  //（Dana 是只扫一眼型用户，hover 弹卡会被忽略且鼠标划过误弹）。
-  const [briefingOpen, setBriefingOpen] = useState(false)
-
-  // 大横幅压成一行摘要：headline 首句（到第一个 em-dash / 句号）+ 关键读数并排。
-  // 单复数修正：value 恰为 "1" 时把复数 label 去掉结尾 's"（"1 hot spots" → "1 hot spot"）。
-  const briefingSummary = useMemo(() => {
-    const lead = briefing.headline.split(/\s*[—.]\s*/)[0].trim()
-    const reads = briefing.metrics.map((m) => {
-      const label = m.value.trim() === '1' && m.label.endsWith('s') ? m.label.slice(0, -1) : m.label
-      return `${m.value} ${label}`
-    })
-    return [lead, ...reads].join(' · ')
-  }, [briefing])
 
   const dashboardPhase: DetailPhase = briefing.version === 2 ? 'grown' : 'believed'
   const hasFocus = Boolean(focus)
@@ -228,8 +158,6 @@ export function DashboardScene() {
       },
     ]
   }, [])
-
-  const focusReference = useMemo(() => focusReferenceOf(focus), [focus])
 
   // focus 项目 → 风险分布图（world 对象，贴条右侧；回 calm 消失）。
   const riskProject = useMemo(() => {
@@ -291,31 +219,6 @@ export function DashboardScene() {
 
   useRailCamera(camRef, cameraTarget, DASHBOARD_INSETS, cameraKey, { maxFitScale: 1.05 })
 
-  const visibleReferences = useMemo(() => {
-    const refs = focusReference ? [focusReference] : []
-    for (const ref of references) {
-      if (!refs.some((existing) => existing.id === ref.id)) refs.push(ref)
-    }
-    return refs
-  }, [focusReference, references])
-
-  const referenceOptions = useMemo(() => {
-    const query = referenceQuery.trim().toLowerCase()
-    const allOptions = [
-      ...PEOPLE.map(personReference),
-      ...PROJECTS.map(projectReference),
-      ...CAPABILITIES.map(capabilityReference),
-    ]
-
-    return allOptions.filter((option) => {
-      if (referenceFilter !== 'all' && option.kind !== referenceFilter) return false
-      if (!query) return true
-      return `${option.label} ${option.meta}`.toLowerCase().includes(query)
-    })
-  }, [referenceFilter, referenceQuery])
-
-  const isComposerExpanded = hasFocus || composerOpen || referenceMenuOpen || visibleReferences.length > 0
-
   useEffect(() => {
     if (focus?.source === 'search') {
       setSearchQuery(focus.selector?.query ?? '')
@@ -331,7 +234,6 @@ export function DashboardScene() {
   function clearFocus() {
     setFocus(null)
     setSearchQuery('')
-    setReferenceMenuOpen(false)
   }
 
   function handleTagClick(tagId: string) {
@@ -352,41 +254,6 @@ export function DashboardScene() {
       return
     }
     setFocus(focusEntity(kind, id))
-  }
-
-  function handleAskQuestion(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    event.stopPropagation()
-    const text = question.trim() || HERO_QUESTION
-    setReferenceMenuOpen(false)
-    askQuestion(text)
-  }
-
-  function addReference(reference: ComposerReference) {
-    setReferences((current) =>
-      current.some((existing) => existing.id === reference.id) ? current : [...current, reference],
-    )
-    setReferenceQuery('')
-    setReferenceMenuOpen(false)
-    setComposerOpen(true)
-  }
-
-  function addAttachment() {
-    setReferences((current) => [
-      ...current,
-      {
-        id: `file-${current.filter((ref) => ref.kind === 'file').length + 1}`,
-        kind: 'file',
-        label: 'Smart_Shopping_Guide_Brief.docx', // ⚠ 待 Danny 审字
-        meta: 'Attachment',
-      },
-    ])
-    setReferenceMenuOpen(false)
-    setComposerOpen(true)
-  }
-
-  function removeReference(id: string) {
-    setReferences((current) => current.filter((ref) => ref.id !== id))
   }
 
   return (
@@ -565,6 +432,10 @@ export function DashboardScene() {
       </PanZoomCanvas>
 
       <div className="dashboard-control-layer" onClick={stopPropagation}>
+        {/* feat-014：回主页的克制入口（dana 守线：地图是子视图，随时能回今天的桌面） */}
+        <button type="button" className="map-back-chip" onClick={() => goScene('home')}>
+          ← Back to today {/* ⚠ 待 Danny 审字 */}
+        </button>
         <div className="dashboard-tags" aria-label="Focus tags">
           {DASHBOARD_TAGS.map((tag) => {
             const active = selectedTagIds.includes(tag.id)
@@ -592,44 +463,6 @@ export function DashboardScene() {
         </label>
       </div>
 
-      <motion.div
-        className={classNames(['briefing-hud', briefingOpen && 'is-open'])}
-        aria-label="How the team's doing"
-        onClick={stopPropagation}
-        animate={{ opacity: hasFocus ? 0.6 : 1 }}
-        transition={transition}
-      >
-        <button
-          type="button"
-          className="briefing-pill"
-          aria-expanded={briefingOpen}
-          onClick={() => setBriefingOpen((open) => !open)}
-        >
-          <span className="briefing-pill-dot" aria-hidden="true" />
-          <span className="briefing-pill-text">{briefingSummary}</span>
-          <span className="briefing-pill-caret" aria-hidden="true">
-            {briefingOpen ? '▴' : '▾'}
-          </span>
-        </button>
-
-        {/* 决定 2：仅点击展开/收起。用条件渲染 + CSS 入场动画（p6-popover-in，与 Nexus
-            brief 卡同口径）——收起即刻 unmount，不留 framer 退场残影。 */}
-        {briefingOpen ? (
-          <section className="briefing-card" aria-label="The longer read">
-            <p className="eyebrow">How the team's doing right now</p>
-            <h2>{briefing.headline}</h2>
-            <p>{briefing.subhead}</p>
-            <div className="metric-row" aria-label="Key metrics">
-              {briefing.metrics.map((m) => (
-                <span key={m.label}>
-                  <strong>{m.value}</strong> {m.label}
-                </span>
-              ))}
-            </div>
-          </section>
-        ) : null}
-      </motion.div>
-
       <div className="alert-pill-layer" aria-label="Team alerts" onClick={stopPropagation}>
         {alertPills.map((pill) => (
           <button
@@ -647,124 +480,6 @@ export function DashboardScene() {
         ))}
       </div>
 
-      <motion.div
-        className={classNames(['composer-layer', isComposerExpanded && 'is-expanded'])}
-        style={{ x: '-50%' }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={transition}
-        onClick={stopPropagation}
-      >
-        <motion.form
-          className="composer-card"
-          onSubmit={handleAskQuestion}
-          animate={{ borderRadius: isComposerExpanded ? 8 : 999 }}
-          transition={transition}
-        >
-          <div className="composer-main-row">
-            <input
-              value={question}
-              onClick={() => setComposerOpen(true)}
-              onFocus={() => setComposerOpen(true)}
-              onChange={(event) => setQuestion(event.currentTarget.value)}
-              aria-label="Ask about your team"
-            />
-            <button type="submit" className="icon-button">
-              Ask
-            </button>
-          </div>
-
-          <AnimatePresence initial={false}>
-            {isComposerExpanded && (
-              <motion.div
-                className="composer-reference-row"
-                initial={{ opacity: 0, height: 0, marginTop: 0 }}
-                animate={{ opacity: 1, height: 'auto', marginTop: 8 }}
-                exit={{ opacity: 0, height: 0, marginTop: 0 }}
-                transition={transition}
-                style={{ overflow: 'hidden' }}
-              >
-                <button
-                  type="button"
-                  className="composer-add-button"
-                  aria-label="Add reference or attachment"
-                  aria-expanded={referenceMenuOpen}
-                  onClick={() => {
-                    setComposerOpen(true)
-                    setReferenceMenuOpen((open) => !open)
-                  }}
-                >
-                  +
-                </button>
-                <div className="composer-reference-chips" aria-label="Composer references">
-                  {visibleReferences.map((reference) => (
-                    <span key={reference.id} className={`composer-reference-chip is-${reference.kind}`}>
-                      <span>{reference.label}</span>
-                      {reference.kind !== 'project' && <small>{reference.meta}</small>}
-                      {reference.id !== focusReference?.id && (
-                        <button
-                          type="button"
-                          aria-label={`Remove ${reference.label}`}
-                          onClick={() => removeReference(reference.id)}
-                        >
-                          x
-                        </button>
-                      )}
-                    </span>
-                  ))}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          <AnimatePresence initial={false}>
-            {referenceMenuOpen && (
-              <motion.div
-                className="composer-reference-picker"
-                initial={{ opacity: 0, height: 0, marginTop: 0 }}
-                animate={{ opacity: 1, height: 'auto', marginTop: 9 }}
-                exit={{ opacity: 0, height: 0, marginTop: 0 }}
-                transition={transition}
-                style={{ overflow: 'hidden' }}
-              >
-                <div className="reference-picker-actions">
-                  <button type="button" onClick={addAttachment}>
-                    Attach file
-                  </button>
-                  {REFERENCE_FILTERS.map((filter) => (
-                    <button
-                      key={filter.id}
-                      type="button"
-                      className={filter.id === referenceFilter ? 'is-active' : ''}
-                      aria-pressed={filter.id === referenceFilter}
-                      onClick={() => setReferenceFilter(filter.id)}
-                    >
-                      {filter.label}
-                    </button>
-                  ))}
-                </div>
-                <input
-                  type="search"
-                  value={referenceQuery}
-                  placeholder="Reference person, project, or capability"
-                  aria-label="Filter references"
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') event.preventDefault()
-                  }}
-                  onChange={(event) => setReferenceQuery(event.currentTarget.value)}
-                />
-                <div className="reference-picker-list">
-                  {referenceOptions.map((option) => (
-                    <button key={option.id} type="button" onClick={() => addReference(option)}>
-                      <span>{option.label}</span>
-                      <small>{option.meta}</small>
-                    </button>
-                  ))}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </motion.form>
-      </motion.div>
     </section>
   )
 }

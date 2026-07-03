@@ -1,5 +1,6 @@
 import { useCanvas } from '../store/canvasStore'
 import { Topbar } from './Topbar'
+import { HomeScene } from './scenes/HomeScene'
 import { DashboardScene } from './scenes/DashboardScene'
 import { NexusScene } from './scenes/NexusScene'
 import { OnboardingScene } from './scenes/OnboardingScene'
@@ -16,6 +17,7 @@ export function AmbientCanvasShell() {
       <Topbar />
       <main className="scene-stage">
         {scene === 'onboarding' && <OnboardingScene />}
+        {scene === 'home' && <HomeScene />}
         {scene === 'dashboard' && <DashboardScene />}
         {scene === 'nexus' && <NexusScene />}
         {scene === 'project' && <ProjectDetailScene />}

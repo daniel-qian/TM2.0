@@ -1347,7 +1347,7 @@ export function NexusScene() {
     thread.steps.length === 0 ? 'Start' : thread.steps.length >= planLength ? 'Hold' : 'Advance'
   const returnToDashboard = () => {
     regenBriefing()
-    goScene('dashboard')
+    goScene('home') // feat-014（ADR-0017）：回到卡片式今日主页（B10 同款落点）
   }
 
   // ── feat-004 (ADR-0014 决策 6)：镜头收敛——方程不再含节点簇。

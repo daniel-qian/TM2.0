@@ -129,7 +129,7 @@ export function OnboardingScene() {
 
   const advance = () => {
     if (step >= STAGES.length - 1) {
-      goScene('dashboard') // 第 4 步 → 进入稳态 Dashboard
+      goScene('home') // 第 4 步 → 进入卡片式今日主页（feat-014 / ADR-0017）
       return
     }
     setStep((current) => current + 1)

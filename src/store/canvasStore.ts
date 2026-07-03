@@ -25,7 +25,8 @@ import {
 
 export type Scene =
   | 'onboarding'
-  | 'dashboard'
+  | 'home' // feat-014（ADR-0017）：卡片式今日主页 = 进门第一面（surface label "Your team"）
+  | 'dashboard' // Team map 全景子视图（经 home 入口进入，不再是 tab）
   | 'nexus'
   | 'project'
   | 'employee'
@@ -134,7 +135,7 @@ interface CanvasState {
 }
 
 export const useCanvas = create<CanvasState>((set, get) => ({
-  scene: 'dashboard',
+  scene: 'home',
   focus: null,
   detail: null,
   briefing: BRIEFING_V1,
@@ -145,7 +146,7 @@ export const useCanvas = create<CanvasState>((set, get) => ({
   goScene: (scene) => set({ scene }),
   setFocus: (focus) => set({ focus }),
   openDetail: (kind, id) => set({ scene: kind, detail: { kind, id } }),
-  back: () => set({ scene: 'dashboard', detail: null, focus: null }),
+  back: () => set({ scene: 'home', detail: null, focus: null }),
 
   // case-aware（ADR-0013）：文本命中某 case 默认问题 → 该 case；其余落 hero case。
   // 重复提问重置该 case 的 thread（与冻结前单 thread 行为一致）。
