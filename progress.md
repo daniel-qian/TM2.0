@@ -14,6 +14,9 @@ roles.md 已同步；slug「senior at your ear」全面弃用，只留 "Managers
 `.issues/roadshow-landing-0703/session-handoff.md`。留给 Danny：en.ts 全部新文案 ⚠ 待审字（尤其投资人收口
 "we're raising" 口径）+ 预演三个追问（真实数字在哪 / 为什么大模型吃不掉 / 凭什么投单人创始人）。
 **注意 ADR 编号**：feat-014 占了 0017（card home），本线的定调修订是 **0018**。
+**⚠ feat-014 push 状态变更**：本次合并推送 main 时把 feat-014 一并带上了 origin（原计划"未 push 归 Danny 拍板"）。
+git 已推无法收回；副作用（tm2 production 自动部署了未审字主页）**已回滚**到 feat-014 前的部署
+（tm2-osj7dqiwv）。Danny 审字通过后 `vercel promote` 最新部署即可上线新主页。
 
 （上一条：feat-014 卡片式今日主页 done；详见下方 `## Update — 2026-07-03`）
 **Active Feature:** 无 active 编码 feature。feat-014（Morning Desk 主页，GH #9）已完成并本地提交，**未 push**（copy 待审字 + push 触发部署，归 Danny 拍板）。
