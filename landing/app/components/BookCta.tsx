@@ -43,6 +43,10 @@ export function BookCta({ t }: { t: Dict["bookCta"] }) {
 
         <p className="cta__micro">{t.micro}</p>
 
+        {/* Investor-facing close (Will, 2026-07-03): buyer CTA stays above;
+            this answers the room's "what's the ask", tied to the SOM figure. */}
+        <p className="cta__investor">{t.investorNote}</p>
+
         <div className="closing-cols">
           {t.closing.map((c) => (
             <div key={c.lbl}>

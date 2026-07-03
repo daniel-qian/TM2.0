@@ -28,18 +28,19 @@ if (!KEY) { console.error("No MINIMAX_API_KEY in eval-harness/.env"); process.ex
 // ── load the English source (single source of truth) ───────────────────────
 const { en } = await import(pathToFileURL(path.resolve(ROOT, "app/i18n/en.ts")).href);
 
-// ── the director brief (approved) ───────────────────────────────────────────
-const SYS = `你是 Avery 的资深中文文案。Avery 面向 20–500 人公司的管理者，定位是「资深前辈在你耳边」(a senior at your ear)——温暖、平实、站在用户这边、从不居高临下、不评判人，永远指向善意的下一步。绝不是 AI SaaS 效率工具 / 仪表盘 / 监控团队 的自夸腔。
+// ── the director brief (ADR-0018: management-decision layer; investor page) ─
+const SYS = `你是 Avery 的资深中文文案。Avery 是「管理决策层」产品：帮 20–500 人公司的管理者做出更稳妥、可追溯、算得清账的人事与项目决策。这一版页面面向证券金融行业的投资人路演使用：他们关心市场空白、盈利模式、降本增效和 ROI，对数字敏感。
 
-任务：把给定 JSON 里的英文 value 转译（transcreation，不是直译）成自然、地道的中文，保持「前辈在耳边」的口吻。
+任务：把给定 JSON 里的英文 value 转译（transcreation，不是直译）成自然、地道、专业的中文。语感：清晰、干练、可信的商业叙事——像一位懂产品的创始人向专业投资人陈述；产品描述处可以有温度，但不堆砌抒情。
 
 铁律：
 1. 只翻译 value；绝不改任何 key。返回 JSON 的结构、key 名、数组顺序、嵌套层级必须与输入完全一致。
-2. 原样保留、不要翻译：品牌名 Avery；占位符 {em}（必须原样出现在 title 里）；所有数字/百分比/符号（如 45、20、47m、94%、3×、≠、$240K、18%、08:02、MMXXVI、20–500）；任何形如 risk / actions / performance 这种英文小写 logic key。
-3. 红线：绝不给人打分 / 贴标签 / 「血条」；不用 VC 腔（the moat、auto-prioritized 之类）。
-4. 术语：专家方法论用「Playbooks（沉淀下来的做法）」的口吻；不要把 Avery 说成仪表盘 / 指挥中心 / 盯着团队的工具。
-5. 标题类（h2 / statement / kicker / em）要短、有力，符合中文标题习惯，别拖沓。
-6. 只返回 JSON 本身，不要任何解释、不要 markdown 代码块围栏。`;
+2. 原样保留、不要翻译：品牌名 Avery；占位符 {em}（必须原样出现在 title 里）；所有数字/百分比/价格/符号（如 60、20、47m、94%、3×、$114、$79–149、$8k–18k、≈ $7B、≈ $3.3M、650,000、~$240K、18%、08:02、MMXXVI、20–500）；SCN-001 这类编号；risk / actions / performance 这类英文小写 logic key。
+3. 红线（ADR-0018，任何情况下不破）：绝不给任何一个人打分 / 贴标签 / 下人格判断；文案不能让被讨论的员工读起来觉得自己「被处理 / 被监控」。
+4. 类目框架：中文重心落在「管理决策」「用人决策」「决策层」；"safer HR decisions" 往「更稳妥的用人决策」方向译，全文不出现「HR 软件 / 人力资源系统」这类低天花板类目词。dashboard / 效率 / 降本增效 / ROI / 护城河等商业词可以正常使用（旧的"去 SaaS 腔"总开关已按 ADR-0018 降级）。
+5. 术语：Playbooks 保留英文原词；TAM / SOM / SaaS / ARR / Pilot / benchmark 等商业术语保留英文或用行业通译。
+6. 标题类（h2 / kicker / punch / em）要短、有力，符合中文标题习惯，别拖沓。
+7. 只返回 JSON 本身，不要任何解释、不要 markdown 代码块围栏。`;
 
 async function translateSection(name, obj) {
   const res = await fetch(`${BASE}/chat/completions`, {
@@ -100,6 +101,16 @@ if (zh.modules?.items) zh.modules.items.forEach((it, i) => { it.key = en.modules
 if (zh.revenue?.kpis) zh.revenue.kpis.forEach((k, i) => { k.val = en.revenue.kpis[i].val; });
 if (zh.morningBriefing?.stats) zh.morningBriefing.stats.forEach((s, i) => { s.num = en.morningBriefing.stats[i].num; });
 if (zh.hero && !String(zh.hero.title).includes("{em}")) zh.hero.title = en.hero.title;
+// ADR-0018 additions — pure price/derivation values stay byte-identical to en.
+if (zh.revenue?.offers) zh.revenue.offers.forEach((o, i) => { o.price = en.revenue.offers[i].price; });
+if (zh.revenue?.components) zh.revenue.components.forEach((c, i) => { c.v = en.revenue.components[i].v; });
+if (zh.marketGap?.tam) {
+  zh.marketGap.tam.factors?.forEach((f, i) => { f.v = en.marketGap.tam.factors[i].v; });
+  if (zh.marketGap.tam.sam) zh.marketGap.tam.sam.v = en.marketGap.tam.sam.v;
+  if (zh.marketGap.tam.som) zh.marketGap.tam.som.v = en.marketGap.tam.som.v;
+}
+if (zh.roi?.account?.lines) zh.roi.account.lines.forEach((l, i) => { l.v = en.roi.account.lines[i].v; });
+if (zh.playbooks?.items) zh.playbooks.items.forEach((p, i) => { p.id = en.playbooks.items[i].id; });
 
 // ── write zh.ts ─────────────────────────────────────────────────────────────
 const out = `import type { Dict } from "./index";

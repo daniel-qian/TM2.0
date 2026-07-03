@@ -17,15 +17,28 @@ npm run dev      # http://localhost:3000
 npm run build    # production build (acceptance: builds clean)
 ```
 
-## Sections (all present; placeholders where assets pending)
+## Sections — 2026-07-03 investor restructure (ADR-0018)
 
-| Section | Source | State |
+7 screens, reweighted for the securities/finance investor roadshow (market gap /
+revenue model / ROI over eval data). Slug: **"Managers need safer HR decisions"**
+("senior at your ear" retired). Chinese is the display language for the roadshow
+(`?lang=zh`, MiniMax-M3 transcreation via `scripts/i18n-zh.mjs`).
+
+| # | Screen | Notes |
 |---|---|---|
-| Hero — slug + CTA | DECISION-MEMO §2 master slug, CTA "Book a 15-min look" | copy in place |
-| Demo video | feat-013 | **placeholder slot** |
-| Eval / advice-contrast | eval-sheet-spec §3–§4 (NOT a scoreboard) | Lin Qing mock + adversarial row; baseline cells **illustrative** |
-| What Avery is / isn't | `safeFraming` + on-device privacy line (Dana 🟢) + ADR-0016 decisiveness | copy in place |
-| Email capture + CTA | copy-kit | form is a **scaffold** (confirms locally; not wired) |
+| 1 | Hero | new slug; ghost CTA jumps to revenue screen |
+| 2 | Product in one look | morning-briefing mock + 47m/94%/3× design targets w/ visible micro-label |
+| 3 | Market gap + TAM | bottom-up formula on-page, SOM-forward; Landscape matrix folds in |
+| 4 | ROI account | wrong-cut four costs + illustrative model ($180k vs ≈$11k/yr → 16×) |
+| 5 | Revenue model | pricing tiers + component ranges + 60/20/15/5 mix + prove→tune→scale |
+| 6 | Moat | playbooks IP / benchmark data / trust architecture; Playbooks/Modules/Eval fold in |
+| 7 | CTA | buyer CTA + investor closing line (ties to SOM) |
+
+Cut sections (Audience / DemoVideo / WhatItIs / WhyItMatters / TrustLayer /
+Method / OutputShape / Stack) live in git history. Numbers policy per ADR-0018:
+mock **model-shaped** numbers allowed (annotated in code comments); result-shaped
+numbers carry an on-page micro-label; measured-claim numbers (eval scores) still
+banned until real.
 
 ## ⚠ Real assets to drop in later
 

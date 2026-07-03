@@ -1,8 +1,13 @@
-// Deck slide 06 (Market gap). Competitor names collapsed to categories.
-// Scores are the deck's illustrative numbers (language-agnostic, kept here);
-// labels come from the i18n dictionary. ⚠ 待 Danny 审字.
+// Screen 3 — market gap + bottom-up TAM/SOM (ADR-0018 restructure).
+// Gap-bar SCORES are the deck's illustrative numbers (language-agnostic).
+// TAM/SOM are an ILLUSTRATIVE bottom-up model — formula shown on the page IS
+// the annotation (inputs documented in en.ts). The old decision-strip and
+// vs-rows were cut (overlapped the panels); the Landscape matrix folds in
+// below. ⚠ 待 Danny 审字.
 
 import type { Dict } from "../i18n";
+import { Fold } from "./Fold";
+import { Landscape } from "./Landscape";
 
 const SCORES: [number, number][] = [[82, 41], [76, 48], [84, 39]];
 const AVERY_SCORES: [number, number] = [92, 88];
@@ -16,7 +21,13 @@ function Metric({ score, label }: { score: number; label: string }) {
   );
 }
 
-export function MarketGap({ t }: { t: Dict["marketGap"] }) {
+export function MarketGap({
+  t,
+  tLandscape,
+}: {
+  t: Dict["marketGap"];
+  tLandscape: Dict["landscape"];
+}) {
   return (
     <section className="section" id="gap">
       <div className="wrap">
@@ -45,30 +56,36 @@ export function MarketGap({ t }: { t: Dict["marketGap"] }) {
             <Metric score={AVERY_SCORES[1]} label={t.averyPanel.m2label} />
           </div>
         </div>
-        <div className="decision-strip">
-          {t.strip.map((s) => (
-            <div key={s.label}><strong>{s.label}</strong><span>{s.text}</span></div>
-          ))}
+
+        {/* Bottom-up market math — the derivation is the credibility. */}
+        <div className="tam">
+          <div className="eyebrow">{t.tam.eyebrow}</div>
+          <h3>{t.tam.title}</h3>
+          <p className="tam__note">{t.tam.note}</p>
+          <div>
+            {t.tam.factors.map((f) => (
+              <div className="tam__row" key={f.k}>
+                <span className="tam__k">{f.k}<em>{f.d}</em></span>
+                <strong>{f.v}</strong>
+              </div>
+            ))}
+            <div className="tam__row tam__row--sam">
+              <span className="tam__k">{t.tam.sam.k}</span>
+              <strong>{t.tam.sam.v}</strong>
+            </div>
+            <div className="tam__row tam__row--som">
+              <span className="tam__k">{t.tam.som.k}</span>
+              <strong>{t.tam.som.v}</strong>
+            </div>
+          </div>
+          <p className="tam__som-note">{t.tam.somNote}</p>
         </div>
 
-        <div style={{ marginTop: "clamp(28px,4vw,44px)" }}>
-          {t.rows.map((r) => (
-            <div className="vs-row" key={r.name}>
-              <div className="vs-row__name">
-                {r.name}
-                <span>{r.detail}</span>
-              </div>
-              <div className="vs-box">
-                <strong>{t.themLabel}</strong>
-                <span>{r.them}</span>
-              </div>
-              <div className="vs-box vs-box--ours">
-                <strong>{t.oursLabel}</strong>
-                <span>{r.ours}</span>
-              </div>
-            </div>
-          ))}
-        </div>
+        <p className="overseas-line">{t.overseas}</p>
+
+        <Fold label={t.landscapeToggle}>
+          <Landscape t={tLandscape} />
+        </Fold>
       </div>
     </section>
   );

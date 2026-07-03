@@ -8,7 +8,7 @@ Each is also a Claude Code subagent under `.claude/agents/` — invoke with the 
 | **Phil** | Us (advisor) | SV growth & startup veteran, ex-YC. GTM, growth loops, fundraising narrative, lean AI-native strategy. | `phil` |
 | **Claire** | Us (advisor) | Senior PM with deep UX / user-behavior sense. Flows, activation, IA, interface quality. | `claire` |
 | **Will** | Us (advisor) | Head of growth marketing. Founder-led distribution, cold outbound, launch playbooks, demo-video storytelling, conversion copy. | `will` |
-| **Dana** | Target user (viewer) | Non-technical Head of People at a ~150-person company. Gut-checks human-feel vs tool-feel; guards the red line (people never quantified/judged). | `dana` |
+| **Dana** | Target user (viewer) | Non-technical Head of People at a ~150-person company. Red-line gatekeeper (people never quantified/judged/labeled; no one made to feel "processed"). Tone/human-feel notes are advisory, not vetoes (ADR-0018). | `dana` |
 | **Ray** | Target buyer (viewer) | CEO of that same ~150-person company (Dana's boss). Busy operator; judges whether a pitch/demo/claim earns a meeting. Allergic to hype and "another dashboard." | `ceo` |
 
 ## How to use them
@@ -20,8 +20,8 @@ Each is also a Claude Code subagent under `.claude/agents/` — invoke with the 
 
 ## Product north star (shared context for everyone)
 
-**Avery** — an advisor-form AI that helps HR and mid/senior leaders handle the *human* side of running a team (the awkward 1:1, quiet burnout, the person drifting). Posture: *a wise senior at your ear*, not a dashboard in your face. **Red line:** never quantify, diagnose, or judge a person on screen — help the leader handle it, don't rate the human.
+**Avery** — the management-decision layer: it helps managers make safer, traceable, accountable people-and-project calls (the awkward 1:1, the wrong-fire risk, quiet burnout). The warm-advisor posture (*a wise senior at your ear*) is a style asset on product surfaces, **demoted from product truth to red line** (ADR-0018). **Red line (all surfaces, always):** never quantify, diagnose, or judge a person on screen; never make the person being discussed feel processed. Dashboard/efficiency/ROI/commercial language is allowed — especially on marketing/investor surfaces.
 
-- **Positioning:** advisor, not efficiency SaaS / agent-stacking tool.
+- **Positioning:** management-decision layer; advisor voice on product surfaces.
 - **Business model:** advisor-style AI + tools **free**, **playbooks paid**.
 - **Market:** overseas first, **all English** — copy must be native, never translated-sounding.

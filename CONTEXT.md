@@ -4,19 +4,19 @@
 
 面向小公司 manager / founder / CEO 的人与项目管理平台。把公司事实、专家方法论、实时工作信号合成为可追溯、可校对、可执行、且经人确认的管理建议。
 
-定调（[ADR-0015](docs/adr/0015-product-tone-human-advisor-debrand-saas-naming.md)）：这是一个**有人情味、人性化**的产品——帮 HR 和中高层处理团队里的"人情世故"，姿态是**资深前辈在你耳边**（a wise senior at your ear），不是仪表盘 + agent 编排的 AI SaaS 效率工具。
+定调（[ADR-0018](docs/adr/0018-renqingwei-demoted-to-redline-product-truth-decision-layer.md)，修订 ADR-0015）：**产品真理 = 管理决策层**——帮 manager 做出更稳妥、可追溯、算得清账的人事与项目决策。人情味 / 前辈人设退为**红线 + 风格资产**：产品表面默认仍是温暖的顾问声音，但它不再是产品的自我定义，也不再否决 dashboard / 效率 / 商业语言。
 
 本文件只是术语表（glossary），不放实现细节、不放 demo 脚本、不放架构决策。
 
 ## Language
 
 **Positioning（定调）**：
-产品是**"一个人"——资深前辈在你耳边**，不是**"一个地方"**（平台/仪表盘/你进去操作的系统）。"地方"语法（Hub / OS / Atlas / Workspace）天然漂向 SaaS 效率工具，是要逃离的观感。一切命名、文案、取景以"人 + 人情味"为总开关。见 [ADR-0015](docs/adr/0015-product-tone-human-advisor-debrand-saas-naming.md)。
-_Avoid_: AI SaaS 工具 / 效率工具 / 仪表盘 / 堆 agent 功能（这些是要逃离的反面，不是产品本身）
+**产品真理 = 管理决策层**：帮 manager 做出更稳妥、可追溯、算得清账的人事与项目决策。"资深前辈在你耳边"的人设是产品表面的默认风格资产，不再是总开关；商业/路演/投资表面可自由使用 dashboard / 效率 / 降本增效 / ROI 语言。见 [ADR-0018](docs/adr/0018-renqingwei-demoted-to-redline-product-truth-decision-layer.md)（修订 ADR-0015）。
+_Avoid_: 把人情味当产品自我定义来写（它是红线与风格，不是真理）
 
 **Voice（品牌声音）**：
-像一个见过世面、站在你这边、从不居高临下的资深同事说话——温暖、平实、把难搞的人际问题说出口而不带评判或术语，永远指向善意的下一步而非结论。**红线测试**（任一不过即砍/重写）：① 被讨论的那个人看到这屏会觉得被评判/被处理吗？② 它像 AI 工具在自夸 agent/自动化/效率吗？③ 一个温暖的资深人类会真的这样说出口吗？关键护栏：**洗掉"机器在评判人"+VC 自夸腔，但保留"它说得出依据"**（reasoning/evidence 改人话不删——前辈与算命先生之别）。
-_Avoid_: `the moat` / `Auto-prioritized` / `Trusted output`（VC 腔，别进用户界面）；给人打分/量化成数值（人不该有血条）
+产品表面（面向使用者）默认仍像一个见过世面、站在你这边的资深同事说话——温暖、平实、指向善意的下一步。**红线（任何表面、永远有效，[ADR-0018](docs/adr/0018-renqingwei-demoted-to-redline-product-truth-decision-layer.md)）**：① 永不量化/评判/标签化任何一个人（无分数、无等级、无血条、无人格断言）；② 文案不得让被讨论的那个人觉得被处理。旧测试"像 AI 在自夸效率吗 / 温暖前辈会这样说吗"降为产品表面的风格建议，不再否决。护栏不变：**保留"它说得出依据"**（reasoning/evidence 改人话不删）。**数字政策**：mock/预估数字可上展示面（代码注释标注性质；结果形态数字加页面微标注"设计目标值"）；伪造实测口径（eval 分数、用户数据）仍禁。
+_Avoid_: 给人打分/量化成数值（人不该有血条）；没有真人评分就上 eval scorecard
 
 **Dashboard**：
 进门第一面（surface label "Your team"）——回答"**今天该把心思花在哪**"：分析浏览区（人与项目双轨卡片）+ 今日 Handoff checklist 区，分区混排、概念不混。它是**观察 + 轻照料面**：看清处境、勾掉/搁置今天的小事；重的编排仍去 Nexus。地图不再是这一面的主形态，退为页内的全景子视图（见 Team map）。见 [ADR-0017](docs/adr/0017-card-home-demotes-team-map.md)。
