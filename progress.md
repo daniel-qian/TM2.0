@@ -19,7 +19,8 @@ git 已推无法收回；副作用（tm2 production 自动部署了未审字主�
 （tm2-osj7dqiwv）。Danny 审字通过后 `vercel promote` 最新部署即可上线新主页。
 
 （上一条：feat-014 卡片式今日主页 done；详见下方 `## Update — 2026-07-03`）
-**Active Feature:** 无 active 编码 feature。feat-014（Morning Desk 主页，GH #9）已完成并本地提交，**未 push**（copy 待审字 + push 触发部署，归 Danny 拍板）。
+**Active Feature:** 无 active 编码 feature。feat-014（Morning Desk 主页，GH #9）done 且已在 origin（f4bde81 随路演线 push 带上 + 59461bb UI 修复）；tm2 production 仍停在审字前部署，审字后 `vercel promote` 即上新主页。
+**feat-014 真机目测回环已闭（2026-07-03 晚）**：Danny 抓到两处 UI 重叠（composer 随滚动漂进内容 / 依据签压字且同句三卡重复）→ 修复 59461bb（滚动下放 `.home-scroll`、composer 锚回视口底；依据签只在第一张关联项目卡以文档流 chip 出现）→ DOM 断言复验 + init.sh 复绿 + 已 push。剩余 HITL 只有审字（fixtures.home.ts）。
 上一轮（2026-07-01）状态：本 session 详情见下方 `## Update — 2026-07-01` 三节 + 完整运行日志
 `.handoff/partner-integration-0701.md`。要点：合伙人 6 个 SCN 落进 eval（解锁 non_danny 闸）、真跑完成（诚实结论
 在 `eval-harness/EVAL-REAL-0701.md`）、demo 终局卡对齐 8 字段 + Playbooks 换真场景、landing 折入 pack 并按 eval

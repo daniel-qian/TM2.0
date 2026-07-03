@@ -1,59 +1,62 @@
-# Session Handoff — 2026-07-01（合伙人知识包整合 + 真 eval + landing/demo 上线）
+# Session Handoff — 2026-07-03 收盘（feat-014 卡片主页 + 投资人路演 landing / ADR-0018）
 
-> **本仓库 (`D:\avery`) 处于稳定、已上线状态；活跃工作已转到营销工作区。** 只靠本文件 +
-> `progress.md` + `feature_list.json` + `.handoff/partner-integration-0701.md`（完整运行日志）+
-> `eval-harness/EVAL-REAL-0701.md`（真 eval 诚实结论）即可 restart，不要回放聊天记录。
-> 前几轮的旧 handoff（P7 6-桶启动 / GTM 圆桌）已全部完成并被本轮覆盖。
+> **本仓库 (`D:\avery`) 干净、与 origin 同步（`59461bb`）、可 restart。** 只靠本文件 +
+> `progress.md` + `feature_list.json` 即可接上，不要回放聊天记录。两条今日线的完整记录：
+> feat-014 见 `feature_list.json` evidence + `.issues/feat-014/plan.md`；路演 landing 见
+> `.issues/roadshow-landing-0703/session-handoff.md`。2026-07-01 及更早的 handoff 已被本文件覆盖。
 
 ## 0 · 一句话现状
-合伙人（Cythia）交付的 HR 知识包已整合进 **eval / demo / landing** 三处并全部推送上线；跑了一轮真实盲测拿到
-**诚实结论**；给合伙人做了交付包。**8 个提交全推 `origin/main`（收尾 `e71629d`）**，Vercel 自动部署 landing。
-**下一步主战场是营销，不在本仓库**（见 §5）。
+今天两条线都收束：**① feat-014「Morning Desk」卡片式今日主页**（合伙人 checklist 硬需求）done + 真机目测回环闭合，
+demo 的「Your team」从全屏地图换成 checklist-first 卡片主页（地图降级为页内全景，ADR-0017）；
+**② 投资人路演 landing 重构**（18 屏 → 7 屏投资叙事）已上 production，并带来**宪法级 ADR-0018**（定调变更）。
+git 全推 `origin/main`；**tm2 production 有意停在审字前部署**（见 §4）。
 
-## 1 · 本轮 shipped（别重做，往上叠）
-- **eval**：合伙人 6 个 SCN → `eval-harness/cases/scn-00X-*.md`（`authored_by:"partner"`，解锁 non_danny 发布闸）；
-  judge rubric 换成 4 新差异轴；命名诚实化（`avery-m3`/`m3-raw`/`m3-scaffold-no-redline`，**同模型消融非跨厂商**）；
-  **真跑完成** `runs/real-0701c`（gitignored）→ 诚实结论在 `eval-harness/EVAL-REAL-0701.md`；pytest **124 绿**。
-- **demo** (`src/`)：终局卡 `AGENT_OUTPUT` 对齐合伙人 **8 字段**正典 + 三视觉区（read/backing/move）；Playbooks HR 栏换真 SCN。build 绿。
-- **landing** (`landing/`)：折入 5 护栏 + 最小证据政策 + 8 字段产出 + 6 SCN；**定位按 eval 证据重锚**（见 §2）；
-  eval 区用真逐字稿装填（**数字不上页**，NOT PUBLISHABLE）；中文 M3 20/20；tsc 绿。
-- **交付包**：`eval-harness/for-partner/`（README + Elif 五答案头对头 + scorecard）——给合伙人（HR 高管）看真材料。
+## 1 · 今日 shipped（别重做，往上叠）
+- **feat-014（GH #9，done）**：新 `HomeScene` = 默认「Your team」——左脊柱今日 Handoff checklist
+  （墨迹勾选 → Handled-today 抽屉 → 安静计数 → 前辈收尾屏）+ 右双轨证据层（人卡全定性、hover 联动点亮/降透明/
+  依据签）；composer 抽为 `TeamComposer` 随迁；勾选态在独立 `homeStore`（canvasStore 契约未扩）；地图 tab 移除、
+  经「See it on the map / whole picture」进入；rail B1/T1/T2→home、B2=地图高光拍、B10→home+grown checklist。
+  领域：`CONTEXT.md`（Dashboard 重定义 + 新概念 Team map）+ **ADR-0017**。
+  双 checker PASS（claire 骨架 / dana 红线人味），7 条建议已修；Danny 真机抓的两处 UI 重叠已修（`59461bb`）。
+- **路演 landing（另一线，已合并 `2588dc7`）**：7 屏投资叙事，production `avery-jade.vercel.app`（`?lang=zh`）；
+  **ADR-0018** + CONTEXT.md/roles.md 同步；slug 只留 "Managers need safer HR decisions"。
 
-## 2 · 锁定事实（不要 re-litigate；★ = 本轮更新）
-- **品牌 = Avery**，全英文、海外优先；`?lang=zh` 中文**走 MiniMax-M3 生成**（`landing/scripts/i18n-zh.mjs`，已加失败重试），我不自写中文。
-- **定位（★ 本轮按 eval 证据改锚）**：老卖点"我们不打分、别的 AI 会"**站不住**（真跑证明 2026 免费 AI 多半也不打分）。
-  → 红线**降为信任保证**（保留在 TrustLayer/Method/Output/Modules/隐私句，**不再当竞争亮点**）；
-  **真差异 = Avery 会告诉你①多大把握②何时该拉 HR（升级）③亮证据**——通用 AI 给完建议就停。声音仍"资深前辈在你耳边"。
-- **红线（ADR-0015）**：绝不在屏幕上量化/诊断/评判**一个人**。**deterministic 校验器是真护城河**（真跑：抽掉它同模型就翻车更多）。
-- **商业模式**：advisor AI + tools 免费，**playbooks 付费**。ADR-0016：果断双向（该硬要硬，含 exit，仍不打分）。
-- **standing 约束**：动页面/组件，**不动** rails(railStore) / store 契约(ADR-0013) / camera(ADR-0012) / terminal-stream(ADR-0014) /
-  内部 type & 变量名 / ADR 历史文件 / `docs/archived/**` / `.to-issues/archived/**`。（`.handoff/partner-integration-0701.md`
-  是本轮 integrator 作战板 = 当前件，可读可续；历史 handoff 冻结。）
+## 2 · 锁定事实（不要 re-litigate；★ = 今日新增/变更）
+- **★ ADR-0018（宪法级，写任何文案前先读新版 CONTEXT.md 定调段）**：「人情味/前辈人设」从产品真理降为**红线**；
+  新产品真理 = **管理决策层**。dashboard/效率/ROI/商业语言不再被否决。红线永远有效：①绝不量化/评判/标签化一个人；
+  ②不让被讨论者觉得"被处理"。数字新规见 ADR-0018 §3。Dana 职责收窄为红线门神（tone 意见降为建议）。
+- **★ ADR-0017**：demo 进门第一面 = 卡片式今日主页；地图 = 页内 Team map 子视图（回退成本已写进 ADR）。
+- **★ ADR 编号**：0017 = feat-014 card home；0018 = 定调修订。别撞号，下一篇从 0019 起。
+- 品牌 Avery、全英文海外优先、中文一律 MiniMax-M3 生成（不自写）；商业模式 advisor 免费 + playbooks 付费；
+  ADR-0016 果断双向。standing 约束不变：不动 rail replay 机器 / store 契约(ADR-0013) / camera(ADR-0012) /
+  terminal-stream(ADR-0014) / 内部命名 / ADR 历史 / archived。
+- **feat-014 交互实现纪律**（下次动 HomeScene 先知道）：退场不用 AnimatePresence exit（手动两段式 inking→leaving）；
+  联动 dim/lit 纯 CSS 类驱动；滚动在 `.home-scroll` 内层（composer 锚视口底，别把 overflow 挪回 scene）。
 
 ## 3 · 仓库当前态（干净、可 restart）
-- 分支 `main` 与 `origin/main` 同步（`e71629d`）。工作树只剩有意未追踪：`.claude/` `.codex/`
-  `assets/0630-partner-docs/`（合伙人 IP 原包，**有意未入库**）`assets/logo-v0.png` `eval-harness/for-partner.zip`。
-- 验证全绿：`eval-harness` pytest 124；`landing` `npx tsc --noEmit` 0 错（`next build` 本地卡 Google Fonts=国内网络，Vercel 可靠）；`src` `npm run build` 绿。
-- 无 `.env` / 密钥入库。key 仍在 `eval-harness/.env`（gitignored）；曾暴露过，轮换提醒仍有效（Danny 说本轮不轮换）。
+- `main` = `origin/main` = `59461bb`；单 worktree；untracked 仅有意本地件：`.claude/` `.codex/`
+  `assets/0630-partner-docs/`（合伙人 IP）`assets/logo-v0.png` `eval-harness/for-partner.zip`。
+- 验证：`./init.sh` 绿（tsc -b 0 错 + vite build ~1.3s，feat-014 修复后复跑）。
+- 已知环境坑（写进 feat-014 evidence）：headless 预览标签 rAF 停摆 → framer/CSS 动画插值与截图均不可机测，
+  验证用 DOM 断言 + `transition:none` 旁路；动画手感永远归真机目测。
 
-## 4 · 留给 Danny 的 HITL（本仓库侧，非 agent scope）
-- **审字**：全部新英文 copy + M3 中文仍是 `⚠ 待 Danny 审字`。
-- **真人 eval 评分**：eval 变"可发布 win-rate"的唯一解锁（现用合成 human label → NOT PUBLISHABLE）。找几位真 HR/经理评分。
-- **合伙人 IP**：具名来源 / 案例数能否公开（Ray 建议 landing 具名合伙人；SCN-004 涉法律，作者可信度关键）。
-- **真产品洞**：avery loop 需强制 **cite-before-number**（真跑暴露：no-halluc 0.1，会吐未引证数字）。
-- **demo 部署**：landing 自动部署；avery-根 demo 的 Vercel 连接未确认（KK team 只有 interactive-reader/danny-portfolio/teammaster-demosite，后者连的是另一 repo）。要对外展示 demo 需先确认。
+## 4 · 留给 Danny 的 HITL
+- **审字**：feat-014 全部新英文 copy（集中 `src/data/fixtures.home.ts`，另 railStore 新 caption / map-back-chip）；
+  路演 landing `en.ts` 新文案（尤其 "we're raising" 口径）。微决策两枚：hh_pitch "goes out today" 与依据签重复；
+  "Handled today" 词义（已 done/set-aside 分计数）。
+- **tm2 promote**：production 停在 feat-014 前部署（tm2-osj7dqiwv）。审字通过后 `vercel promote` 最新部署
+  即上新主页——**agent 不得代做**。
+- 旧账未变：真人 eval 评分（发布闸）、合伙人 IP 具名授权、avery loop cite-before-number、路演三追问预演。
 
-## 5 · 下个 session ≠ 本仓库：主战场转「营销」
-- **工作区** `D:\Boyle\marketing-resource\avery`（自带 harness）。任务：发 **ProductHunt** · 录 **视频 demo**
-  （叙事方向 + 分镜脚本 + **Remotion / HyperFrames 文本帧动画**）· **冷邮件**模板——"找方向 + 做素材"，不只写文案。
-- **完整交接已写入该工作区的 `session-handoff.md`**（含：更新后的诚实态、重锚定位、要引用的本仓库素材路径、
-  三大任务、Remotion/HyperFrames skills、公开 CTA/域名等 gap、中文-走-M3 约定）。
-- 若下个 session 仍需碰本仓库代码（如按营销反馈改 landing 文案）：回本目录，读本文件 + `progress.md` + `feature_list.json` 即可接上。
+## 5 · 下一步（按优先级，非本 session 遗留义务）
+1. Danny 审字 → promote tm2 → 合伙人看新主页（他的 checklist 硬需求就是 feat-014 的缘起）。
+2. 营销主战场仍在 `D:\Boyle\marketing-resource\avery`（其 handoff 自带；注意 ADR-0018 后定调已变，
+   该工作区交接里的"senior at your ear"口径需按新 CONTEXT.md 校对）。
+3. 顺手账（不急）：死 CSS 清理（`.scene-dashboard .composer-*` ~1886-1921 + feat-004 时代 `.nexus-inspector` 等）。
 
 ## 6 · 指针
-- 完整运行日志（本轮）：`.handoff/partner-integration-0701.md`
-- 真 eval 诚实结论：`eval-harness/EVAL-REAL-0701.md`；scorecard：`runs/real-0701c/scorecard.md`（gitignored，可重跑）
-- 合伙人交付包：`eval-harness/for-partner/`
-- 定位/红线：`docs/adr/0015-*.md` + `0016-*.md`；`CONTEXT.md`
-- 角色班子：`roles.md`（+ `.claude/agents/{phil,claire,will,dana,ceo}.md`）
-- 营销交接：`D:\Boyle\marketing-resource\avery\session-handoff.md`
+- feat-014：GH issue #9（已 close，含完成 comment）· `docs/adr/0017-card-home-demotes-team-map.md` ·
+  `.issues/feat-014/plan.md` · evidence 在 `feature_list.json`
+- 路演线：`.issues/roadshow-landing-0703/session-handoff.md` · `docs/adr/0018-renqingwei-demoted-to-redline-product-truth-decision-layer.md`
+- 定调/红线：`CONTEXT.md`（ADR-0018 后新版）· ADR-0015/0016/0018
+- 角色班子：`roles.md`（Dana 已收窄为红线门神）
