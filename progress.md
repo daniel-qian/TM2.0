@@ -5,7 +5,17 @@
 
 ## Current State
 
-**Last Updated:** 2026-07-03（feat-014 卡片式今日主页 done；详见下方 `## Update — 2026-07-03`）
+**Last Updated:** 2026-07-03 晚（投资人路演 landing 重构已合并 main，2588dc7）
+**本日第二条线（worktree `elated-noether-7807c8` → 已合并+清理）：** landing 18 屏 → 7 屏投资叙事，为今晚证券金融路演。
+**已上线 production：<https://avery-jade.vercel.app/?lang=zh>**。要点：**ADR-0018**（人情味从产品真理降为红线；产品真理
+= 管理决策层；数字新规：模型形态 mock 可上页/代码注释标注，结果形态数字加页面微标注，实测口径仍禁）——CONTEXT.md +
+roles.md 已同步；slug「senior at your ear」全面弃用，只留 "Managers need safer HR decisions"；M3 导演简报按新定调重写、
+中文 13/13 重新转创；Phil/Dana/Will 三角色旁听意见全部落地（Dana 红线 7 屏全 PASS）。详见
+`.issues/roadshow-landing-0703/session-handoff.md`。留给 Danny：en.ts 全部新文案 ⚠ 待审字（尤其投资人收口
+"we're raising" 口径）+ 预演三个追问（真实数字在哪 / 为什么大模型吃不掉 / 凭什么投单人创始人）。
+**注意 ADR 编号**：feat-014 占了 0017（card home），本线的定调修订是 **0018**。
+
+（上一条：feat-014 卡片式今日主页 done；详见下方 `## Update — 2026-07-03`）
 **Active Feature:** 无 active 编码 feature。feat-014（Morning Desk 主页，GH #9）已完成并本地提交，**未 push**（copy 待审字 + push 触发部署，归 Danny 拍板）。
 上一轮（2026-07-01）状态：本 session 详情见下方 `## Update — 2026-07-01` 三节 + 完整运行日志
 `.handoff/partner-integration-0701.md`。要点：合伙人 6 个 SCN 落进 eval（解锁 non_danny 闸）、真跑完成（诚实结论
