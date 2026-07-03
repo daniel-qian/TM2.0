@@ -784,3 +784,19 @@ a { color: inherit; }
 
 /* Investor-facing closing line inside the CTA block (Will, 2026-07-03). */
 .cta__investor { margin: 22px auto 0; max-width: 56ch; border: 2px solid rgba(244, 240, 231, 0.35); background: rgba(244, 240, 231, 0.07); padding: 14px 20px; font-size: 14.5px; line-height: 1.55; color: rgba(244, 240, 231, 0.88); }
+
+/* Fix (2026-07-03 night): a LIGHT .section nested inside .section--ink via a
+   fold-out (the eval section inside the Moat screen). The .section--ink
+   descendant rules (h1–h4 → ink-on-dark, .section__head p / inherited color →
+   cream, .eyebrow → gold) leak into it and wash cream text over the light
+   paper background. Re-assert the light-section palette. */
+.section--ink .fold__body .section:not(.section--ink) {
+  background: var(--bg);
+  color: var(--ink);
+}
+.section--ink .fold__body .section:not(.section--ink) h1,
+.section--ink .fold__body .section:not(.section--ink) h2,
+.section--ink .fold__body .section:not(.section--ink) h3,
+.section--ink .fold__body .section:not(.section--ink) h4 { color: var(--ink); }
+.section--ink .fold__body .section:not(.section--ink) .section__head p { color: var(--ink-3); }
+.section--ink .fold__body .section:not(.section--ink) .eyebrow { color: var(--ink-3); }
