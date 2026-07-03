@@ -186,6 +186,9 @@ export function HomeScene() {
 
   return (
     <section className="scene scene-home is-active" aria-label="Your team — today">
+      {/* 滚动在内层：composer 与滚动层平级、锚定视口底——若场景自身滚动，
+          绝对定位的 composer 会留在首屏布局位置、随内容漂走（Danny 真机抓到）。 */}
+      <div className="home-scroll">
       <div className="home-frame">
         {/* ── 左脊柱：问候 + 今日 checklist + 已照料抽屉 ─────────────────── */}
         <div className="home-spine">
@@ -358,9 +361,7 @@ export function HomeScene() {
                     <p className="home-person-role">{person.role}</p>
                     {read ? <p className="home-person-read">{read.read}</p> : null}
                   </span>
-                  {lit && linked?.evidenceTag ? (
-                    <span className="home-evidence-tag">{linked.evidenceTag}</span>
-                  ) : null}
+                  {/* 人卡不浮依据签：点亮 + 定性读数已足够，浮签会压字（Danny 真机抓到） */}
                 </button>
               )
             })}
@@ -402,7 +403,9 @@ export function HomeScene() {
                     <span>{ownerName(project)}</span>
                     {project.dueDate ? <span className="home-project-due">{project.dueDate}</span> : null}
                   </span>
-                  {lit && linked?.evidenceTag ? (
+                  {/* 依据签只在第一张关联项目卡、以文档流内 chip 出现——绝对悬浮会压字，
+                      同句在人卡+多张项目卡重复三遍是噪音（Danny 真机抓到）。 */}
+                  {lit && linked?.evidenceTag && linked.projectIds[0] === project.id ? (
                     <span className="home-evidence-tag">{linked.evidenceTag}</span>
                   ) : null}
                 </button>
@@ -410,6 +413,7 @@ export function HomeScene() {
             })}
           </div>
         </div>
+      </div>
       </div>
 
       <TeamComposer />

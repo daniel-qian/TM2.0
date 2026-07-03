@@ -6687,7 +6687,10 @@ h1 {
    进门第一面：左脊柱 = 今日 Handoff checklist（判断），右双轨 = 人与项目卡带（证据）。
    同屋檐：全部取色于既有 token（paper/ink/sage/honey/terracotta），无新色板。 */
 
-.scene-home {
+/* 滚动在内层（.home-scroll）：scene 本身不滚，composer 才能锚在视口底不随内容漂走 */
+.home-scroll {
+  position: absolute;
+  inset: 0;
   overflow-y: auto;
   overflow-x: hidden;
 }
@@ -7218,25 +7221,20 @@ h1 {
   }
 }
 
-/* hover 联动时浮出的依据签（claire 改进 1：右栏是证据层）。
-   允许换行（bottom 锚定向上生长）——nowrap 会把长依据吃成省略号，削弱证据层。 */
+/* hover 联动时的依据签（claire 改进 1：右栏是证据层）。
+   文档流内 chip、只出现在第一张关联项目卡（项目卡是纵向 flex，自然长高不压字）。 */
 .home-evidence-tag {
   animation: home-tag-in var(--medium) ease both;
-  position: absolute;
-  left: 10px;
-  right: 10px;
-  bottom: -9px;
-  z-index: 3;
+  align-self: flex-start;
+  margin-top: 2px;
   padding: 4px 10px;
-  border: 1px solid var(--rule);
-  border-radius: 11px;
-  background: var(--paper-strong);
-  box-shadow: var(--shadow-soft);
+  border: 1px solid rgba(105, 128, 109, 0.35);
+  border-radius: 999px;
+  background: rgba(105, 128, 109, 0.08);
   color: var(--ink-soft);
   font-size: 10.5px;
   font-weight: 700;
   line-height: 1.35;
-  text-align: center;
   pointer-events: none;
 }
 
