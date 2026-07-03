@@ -1,5 +1,6 @@
-// Deck slide 09 (Morning briefing demo) — illustrative mockup. Strings from
-// i18n dictionary. ⚠ The 47m/94%/3x stats are the deck's unverified claims.
+// Screen 2 — the product in one look (deck slide 09, illustrative mockup).
+// Strings from i18n dictionary. The 47m/94%/3× stats are RESTORED mock design
+// targets (ADR-0018 §3) and carry a visible micro-label (statNote).
 // ⚠ 待 Danny 审字.
 
 import type { Dict } from "../i18n";
@@ -53,10 +54,15 @@ export function MorningBriefing({ t }: { t: Dict["morningBriefing"] }) {
               </h3>
               <p style={{ fontSize: 17 }}>{t.promiseP}</p>
             </div>
-            <div className="stat-row">
-              {t.stats.map((s, i) => (
-                <div className="stat-tile" key={i}><strong>{s.num}</strong><span>{s.label}</span></div>
-              ))}
+            <div>
+              <div className="stat-row">
+                {t.stats.map((s, i) => (
+                  <div className="stat-tile" key={i}><strong>{s.num}</strong><span>{s.label}</span></div>
+                ))}
+              </div>
+              {/* Visible micro-label: these are design targets, not measurements
+                  (ADR-0018 §3 — own the assumption before the room asks). */}
+              <p className="stat-note">{t.statNote}</p>
             </div>
           </div>
         </div>

@@ -18,9 +18,10 @@ const manrope = Manrope({
 
 export const metadata: Metadata = {
   // ⚠ external strings await Danny 审字 before launch (kept out of the rendered page).
-  title: "Avery — the senior at your ear",
+  // ADR-0018: "senior at your ear" slug retired; surviving slug below.
+  title: "Avery — managers need safer HR decisions",
   description:
-    "Avery is a senior advisor in your ear for the conversation you keep putting off. It helps you notice sooner and handle the hard conversation well — and never puts a score on a person.",
+    "Avery is the management-decision layer for 20–500 person companies: a short, evidence-backed read every morning, so managers make safer, traceable people-and-project calls — and no person is ever scored.",
 };
 
 export default function RootLayout({

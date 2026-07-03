@@ -1,6 +1,8 @@
-// ⚠ Copy from copy-kit / DECISION-MEMO §2, still 待 Danny 审字. Strings come from
-// the i18n dictionary (app/i18n). VISUAL: editorial deck cover (slide 01) —
-// gradient Avery logo + Bodoni display + double-rule ornament.
+// ⚠ 待 Danny 审字. Strings come from the i18n dictionary (app/i18n).
+// 2026-07-03 (ADR-0018): slug switched to "Managers need safer HR decisions";
+// "senior at your ear" retired from slug/footer surfaces. Ghost CTA now jumps
+// to the revenue screen (investor audience). VISUAL: editorial deck cover
+// (slide 01) — gradient Avery logo + Bodoni display + double-rule ornament.
 
 import type { Dict } from "../i18n";
 
@@ -36,7 +38,8 @@ export function Hero({ t }: { t: Dict["hero"] }) {
               <path className="logo-flame" d="M 40 43 Q 32 53 40 63 Q 48 53 40 43 Z" fill="url(#averySpark)" />
             </g>
             <text className="logo-word-main" x="84" y="52">AVERY</text>
-            <text className="logo-tagline" x="88" y="68">HR INTELLIGENCE</text>
+            {/* Category label follows ADR-0018 (management-decision layer, not "HR software"). */}
+            <text className="logo-tagline" x="88" y="68">DECISION INTELLIGENCE</text>
           </svg>
         </div>
 
@@ -58,7 +61,7 @@ export function Hero({ t }: { t: Dict["hero"] }) {
 
         <div className="hero__cta">
           <a className="btn btn--primary" href="#book">{t.ctaPrimary}</a>
-          <a className="btn btn--ghost" href="#eval">{t.ctaGhost}</a>
+          <a className="btn btn--ghost" href="#revenue">{t.ctaGhost}</a>
         </div>
 
         <p className="hero__reassure">{t.reassure}</p>

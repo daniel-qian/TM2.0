@@ -1,24 +1,19 @@
 import { getDict, resolveLocale } from "./i18n";
 import { LangSwitch } from "./components/LangSwitch";
 import { Hero } from "./components/Hero";
-import { WhatItIs } from "./components/WhatItIs";
-import { Audience } from "./components/Audience";
-import { WhyItMatters } from "./components/WhyItMatters";
-import { WrongCut } from "./components/WrongCut";
 import { MorningBriefing } from "./components/MorningBriefing";
-import { DemoVideo } from "./components/DemoVideo";
-import { EvalContrast } from "./components/EvalContrast";
-import { TrustLayer } from "./components/TrustLayer";
 import { MarketGap } from "./components/MarketGap";
-import { Method } from "./components/Method";
-import { Modules } from "./components/Modules";
-import { OutputShape } from "./components/OutputShape";
-import { Playbooks } from "./components/Playbooks";
-import { Stack } from "./components/Stack";
-import { Landscape } from "./components/Landscape";
+import { Roi } from "./components/Roi";
 import { Revenue } from "./components/Revenue";
+import { Moat } from "./components/Moat";
 import { BookCta } from "./components/BookCta";
 
+// 2026-07-03 restructure (ADR-0018, investor roadshow): 7 screens —
+// hero → product in one look → market gap + TAM → ROI account → revenue model
+// → moat (Playbooks/Modules/eval fold in) → CTA. Cut sections (Audience /
+// DemoVideo placeholder / WhatItIs / WhyItMatters / TrustLayer / Method /
+// OutputShape / Stack) live in git history; Landscape folds into MarketGap.
+//
 // Locale via ?lang= (EN default). Reading searchParams makes this page dynamic.
 export default async function Home({
   searchParams,
@@ -33,22 +28,16 @@ export default async function Home({
     <main>
       <LangSwitch locale={locale} t={t.langSwitch} />
       <Hero t={t.hero} />
-      <WhatItIs t={t.whatItIs} />
-      <Audience t={t.audience} />
-      <WhyItMatters t={t.whyItMatters} />
-      <WrongCut t={t.wrongCut} />
       <MorningBriefing t={t.morningBriefing} />
-      <DemoVideo t={t.demoVideo} />
-      <EvalContrast t={t.evalSection} />
-      <TrustLayer t={t.trustLayer} />
-      <MarketGap t={t.marketGap} />
-      <Method t={t.method} />
-      <Modules t={t.modules} />
-      <OutputShape t={t.output} />
-      <Playbooks t={t.playbooks} />
-      <Stack t={t.stack} />
-      <Landscape t={t.landscape} />
+      <MarketGap t={t.marketGap} tLandscape={t.landscape} />
+      <Roi t={t.roi} />
       <Revenue t={t.revenue} />
+      <Moat
+        t={t.moat}
+        tPlaybooks={t.playbooks}
+        tModules={t.modules}
+        tEval={t.evalSection}
+      />
       <BookCta t={t.bookCta} />
 
       <footer className="foot wrap">
