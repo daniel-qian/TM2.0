@@ -34,6 +34,7 @@ from avery.env import load_dotenv
 
 from . import brain_factory, live_input
 from .engine import stream_advice
+from .ingest_api import router as ingest_router  # feat-018: /ingest + /team/{id} (compose over feat-016)
 
 HERE = Path(__file__).resolve().parent.parent          # eval-harness/
 SKILLS_DIR = HERE / "skills"
@@ -47,6 +48,10 @@ app = FastAPI(
     version="0.1.0",
     summary="LiveAgentSource backend — advisor engine (think->tool->observe) over FastAPI + SSE.",
 )
+
+# feat-018: the ingestion HTTP surface (upload → Your team). Thin wrapper over feat-016's
+# ingest_paths + registry; nothing in the engine changes. Endpoints: POST /ingest, GET /team/{id}.
+app.include_router(ingest_router)
 
 SAMPLE_SITUATION = (
     "One of my most reliable engineers has been slipping for a few weeks — a couple of missed "
@@ -69,6 +74,20 @@ def _system_prompt() -> str:
     return skills.build_system_prompt(SKILLS_DIR, MEMORY_DIR, scaffold="full")
 
 
+def _resolve_memory_dir(company_context_id: str | None) -> Path:
+    """feat-018: route an ingested company_context_id to its materialized facts.md/notes.md dir so
+    the loop's own recall + cite gate run over the manager's UPLOADED facts (feat-016 seam). Falls
+    back to the default demo memory for an unset/unknown id. Import is lazy so the service still runs
+    if the ingest package is absent."""
+    if not company_context_id:
+        return MEMORY_DIR
+    try:
+        from avery.ingest.seam import resolve_memory_dir
+        return resolve_memory_dir(company_context_id, MEMORY_DIR)
+    except Exception:
+        return MEMORY_DIR
+
+
 def _run_events(sit: live_input.LiveSituation) -> tuple[Iterator[dict[str, Any]], Any]:
     """Build the live case, pick the brain, and return the engine event iterator + the case (so
     the caller can discard the temp file when done). Brain-config errors surface as an error event
@@ -76,7 +95,8 @@ def _run_events(sit: live_input.LiveSituation) -> tuple[Iterator[dict[str, Any]]
     kind = brain_factory.resolve_brain_kind()
     # Mock needs a MOCK block in the case; real brains reason over raw text.
     with_mock = (kind == "mock")
-    case = live_input.build_live_case(sit, MEMORY_DIR, with_mock=with_mock)
+    memory_dir = _resolve_memory_dir(sit.company_context_id)
+    case = live_input.build_live_case(sit, memory_dir, with_mock=with_mock)
     try:
         brain = brain_factory.make_brain(case, kind)
     except RuntimeError as e:
@@ -87,7 +107,7 @@ def _run_events(sit: live_input.LiveSituation) -> tuple[Iterator[dict[str, Any]]
 
     events = stream_advice(
         brain, case, _system_prompt(), agent_name=getattr(brain, "name", kind),
-        scaffold="full", memory_dir=MEMORY_DIR, enforce_chain=True, enforce_redline=True)
+        scaffold="full", memory_dir=memory_dir, enforce_chain=True, enforce_redline=True)
     return events, case
 
 

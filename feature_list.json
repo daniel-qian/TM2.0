@@ -180,8 +180,8 @@
       "dependencies": [
         "feat-017"
       ],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "2026-07-05 done（feat018-dual-deploy AFK 线，99 tool calls / 1113s；config+smoke+runbook，NOT 实际部署）。分支 feat/live-core-015-018。integrator 复验全绿：pytest 169 passed 零回归 + init.sh 绿 + dual-target build smoke 3/3（story-default 保留 / overseas-en mode=live locale=en / domestic-zh mode=live locale=zh，window.__AVERY_BUILD__ 戳全对）。产出：前端——.env.example（无密钥）+ vercel.json（海外 EN，与 landing 分离、Root=repo root 警示）+ vite.config.ts（打戳）+ src/i18n/index.ts（新增 VITE_AVERY_LOCALE 构建默认：境内 ZH 默认中文、?lang= 仍覆盖，补了 EN 硬编码 gap）+ src/vite-env.d.ts/main.tsx（env 类型+曝戳）。后端——eval-harness/Dockerfile+.dockerignore（一镜像双 host、env 换脑：境内 minimax/deepseek·海外 claude；非 root+healthcheck）+ service/.env.example（brain+embeddings+retrieval+pgvector 全 env 矩阵，key 空）+ service/ingest_api.py 新（POST /ingest·GET /team/{id}，薄包 feat-016 ingest_paths+registry）+ app.py 挂载 + company_context_id 经 seam 接进 /advise（补齐 feat-016 显式留给 018 的 ingestion HTTP 面；engine loop/redline/brain/ingest 零改写）。冒烟+runbook——scripts/deploy/{build-targets.mjs,ingest_http_smoke.py,dual-smoke.sh} + docs/deploy/dual-deploy-runbook.md。env 矩阵：海外 EN=live/en/claude；境内 ZH=live/zh/minimax(或 deepseek)；story-default 保留=story/en/mock。ingestion HTTP 冒烟 13/13 含红线（诱导简历只抽定性、人卡零评分键穿过 HTTP 面）；真 MiniMax 契约冒烟 1 passed 37s。无密钥入 git（.env.example 空、pgvector CHANGEME 占位；真 .env gitignored+未 tracked 已核）。Danny HITL（本线未做）：域名双端 + 境内/海外主机开通 + 真 key 入主机 secret + docker build+容器 /health 冒烟（本机 Docker daemon 未起，Dockerfile 静态校验过）+ Vercel 项目 Root=repo root(≠landing) + 境内静态托管上传 ZH dist+SPA fallback + 生产 promote 双端 + deployment protection 给融资团队(别锁 SAML) + 可选 vector RAG 开关。⚠ flag：AVERY_RETRIEVAL/EMBEDDINGS/PGVECTOR_URL 已进矩阵+代码 seam 在，但 pipeline 仍在代码里选 store、未从 env 读——lite 走默认 keyword 无碍，接真 embedder 时补 env-read（runbook §D，非阻塞）。"
     },
     {
       "id": "feat-019",

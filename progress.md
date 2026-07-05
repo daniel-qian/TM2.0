@@ -224,7 +224,19 @@ avery loop 补 cite-before-number。
 - **feat-019 ✅ 研究+包草稿 slice done（07-05，AFK 线）**：客户核实=三亚绿杉壹居度假酒店（海棠湾豪华度假村，2024-12 开业，阳光保险投资，211 房+30 别墅，962㎡ 草坪=婚宴 showcase）；外置 `D:\Boyle\research\sanya-lushan-yiju-hotel\`（00-findings + pack-draft：5 案+5 PB+6 信号+5 护栏，红线零人评分）。待 feat-016/017 做 skin+demo+集成。HITL：Danny 补 9 条内行 know-how。
 - **feat-015 ✅ done（07-05，AFK 门全绿）**：agent service `eval-harness/service/`（FastAPI+SSE 包 engine，8 字段投影+API 边界红线，3 端点）；pytest 141 passed 零回归 + MiniMax-M3 真冒烟过。**代码在 worktree（branch worktree-agent-ac44e3f46118f46ca），未 commit、待整合进 main**。
 - **★ D5 三条并行线全部回（07-05）**：feat-015 ✅ / feat-019 研究+包 slice ✅ / feat-020 ✅。
-- **★ AFK 串行链 `feat/live-core-015-018`（07-05）**：f965bad docs → 4517f0e feat-015（141）→ 4e1bac0 feat-016（169，红线抽取门绿）→ fae493f feat-017 WIP → **feat-017 ✅ done（integrator runtime 验证 story 零回归+rail seek、live+UploadPanel、红线净、zh=M3）**。下一步 **feat-018（双端部署）串行**。主 main 不动，Danny 分支终验收后 merge。
+- **★ AFK 串行链 `feat/live-core-015-018` 全线完成（07-05）**：f965bad docs → 4517f0e feat-015（141）→ 4e1bac0 feat-016（169）→ fae493f/e1b890d feat-017 ✅（story 零回归+rail seek+live+红线净+zh=M3）→ **feat-018 ✅ done（双端 config+runbook，未 deploy；dual-build 3/3 + pytest 169 + ingest HTTP 13/13 + 真 MiniMax 冒烟；补齐 ingestion HTTP 面 /ingest·/team·/advise 接 context）**。**015→018 核心齐活**。真部署/域名/promote/protection/审字 = Danny HITL。主 main 不动，等 Danny 分支验收+merge。
 - **AFK 硬约束入 memory**（`afk-self-loop-minimize-danny`）：dev+test 自跑自验自修，HITL 只留审字/价值观/授权/评分/promote。
 - **不动的约束**：红线 ADR-0015/0018、决策层真理、Avery 品牌、商业模式（口径见 committed CONTEXT.md § Commercial language，sampler≠免费层，护栏见 ADR-0021 §6；ADR-0019 已于 07-05 恢复落盘并提交）、中文经 M3、**story mode 保留=不动 rail 回放机器**（ADR-0003/0006/0012/0013/0014）。
 - **旧账未变**：feat-014 审字 + tm2 promote 仍是 Danny 的 HITL（见 `session-handoff.md` §4）。
+
+## Update — 2026-07-05 · feat-018 双端部署（AFK 线，config+smoke+runbook，未 deploy）
+
+> ADR-0021 §5。**产出 = 配置 + 冒烟 + runbook，NOT 实际部署**（域名/promote/protection/真 key 全 Danny HITL）。分支 `feat/live-core-015-018`，未 commit，待整合。
+
+- **前端双 target 构建配置**：`VITE_AVERY_MODE`（story/live）+ 新增 `VITE_AVERY_LOCALE`（en/zh，境内 ZH 默认，`?lang=` 仍可覆盖，镜像 mode.ts）+ `VITE_AVERY_API_BASE`。`vite.config.ts` 给每个 target 打 `window.__AVERY_BUILD__` 戳（可 devtools 目测 + 冒烟无歧义断言）。`.env.example`（前端，无密钥）+ `vercel.json`（海外 EN，**与 landing 分离的独立项目**）。
+- **后端 agent service 部署配置**：`eval-harness/Dockerfile` + `.dockerignore`（**一个镜像双 host，仅 env 换脑**：境内 minimax/deepseek · 海外 claude）；`service/.env.example`（brain+embeddings+retrieval+pgvector 全 env 矩阵模板，key 字段空）。
+- **补齐 ingestion HTTP 面**（feat-016 显式留给 feat-018 的活）：`service/ingest_api.py`（`POST /ingest` · `GET /team/{id}`，薄包 `ingest_paths`+registry，compose-not-modify）+ app.py 挂载 + 把 `company_context_id` 经 seam 接进 `/advise`（上传→当场看团队长出→顾问答落在上传事实，端到端通）。
+- **双端冒烟门 `scripts/deploy/dual-smoke.sh`**：一条命令断言两侧。**AFK 门全绿**：前端 3 target（story-default 保留 + overseas-en + domestic-zh）构建+戳全对；后端契约电池 44 passed + ingestion HTTP 端到端（含红线：诱导简历只抽定性、人卡零评分键）；**真 MiniMax（境内）契约冒烟 1 passed**（37s）。**全仓 pytest 169 passed 零回归**；`init.sh` 绿（默认仍 story/en 安全默认）。
+- **runbook**：`docs/deploy/dual-deploy-runbook.md`（逐 target step + env 矩阵单一真源 + HITL 清单）。**Danny HITL**：域名、境内/海外主机开通、真 key（不进 git）、`docker build`+容器 /health 冒烟（本机 Docker daemon 未起）、Vercel 项目 Root=repo root（≠landing）、境内静态托管上传 dist+SPA fallback、生产 promote、deployment protection 面板给融资团队访问（别锁死 SAML）、可选 vector RAG 开关（选 embeddings+pgvector+3 个 env）。
+- **无密钥入 git**：`.env.example` 模板 key 字段空、pgvector 用 CHANGEME 占位；真 `eval-harness/.env`（有 MiniMax/DeepSeek key）gitignored+未 tracked，已核。
+- **源码改动（surgical，5 文件）**：`src/i18n/index.ts`（+VITE_AVERY_LOCALE 构建默认）· `src/vite-env.d.ts`（env 类型）· `src/main.tsx`（曝 __AVERY_BUILD__）· `vite.config.ts`（打戳）· `eval-harness/service/app.py`（挂 ingest router + 接 context seam）。engine（loop/redline/brain/ingest）零改写。

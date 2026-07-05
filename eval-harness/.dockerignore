@@ -1,0 +1,22 @@
+# feat-018 — keep the agent-service image lean AND keep secrets/artifacts out of build layers.
+# CRITICAL: .env (real keys) must NEVER enter an image layer. It is excluded here even though the
+# Dockerfile only COPYs specific dirs — defense in depth.
+.env
+.env.*
+!.env.example
+
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+
+# Not needed at runtime (the service only imports avery/ + service/ + reads skills/ + memory/):
+runs/
+cases/
+tests/
+scenarios/
+office-ai-capture/
+for-partner/
+*.md
+!README.md
