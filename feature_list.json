@@ -141,6 +141,66 @@
       ],
       "status": "not-started",
       "evidence": ""
+    },
+    {
+      "id": "feat-015",
+      "name": "Agent service — advisor engine as FastAPI+SSE API (live input)",
+      "description": "把已存在的 advisor engine（eval-harness 的 think→tool→observe loop）包成真部署的 HTTP 服务：FastAPI + SSE 流式；新增 live-input 路径（接受用户当场打字的管理情境，替代只读 case 文件）；保持红线校验器 + cite-before-number + 8 字段输出契约；pluggable brain（境内 MiniMax/DeepSeek，海外 Claude）。这是 Line A 的后端，也是 graduate demo 的 LiveAgentSource 数据来源（ADR-0020）。AFK 门：pytest 契约电池（红线/cite/schema）+ 一条真 API 冒烟只断言契约成立。stack 默认按推荐（见 .issues/feat-015/kickoff.md）。",
+      "dependencies": [
+        "feat-011"
+      ],
+      "status": "done",
+      "evidence": "2026-07-05 done，AFK 门全绿（feat015-agent-service-r2 worktree 线，relaunch 后 65 tool calls / 897s；首 launch 被误打断）。代码在 worktree D:/avery/.claude/worktrees/agent-ac44e3f46118f46ca（branch worktree-agent-ac44e3f46118f46ca），**未 commit/push、src/ 未碰、engine avery/ 未改**——待整合进 main。新包 eval-harness/service/（741 LOC + 421 LOC 测试）：app.py（FastAPI 3 端点）+ engine.py（SSE 流式驱动，复用 avery brain/tools/redline，与 run_loop 字段级 parity 测试锁定）+ contract.py（承重件：engine 原生 3 字段 read/move/framing+cites 投影到 canonical 8 字段 AgentOutput，并在 API 边界重跑红线校验器——护城河在 API 层成立）+ live_input.py（用户当场打字情境物化成临时 case、用完即弃；company_context_id=feat-016 stub 已穿线未解析）+ brain_factory.py（AVERY_BRAIN=mock/minimax/deepseek/claude/openai-compat 服务端选脑，key 不出服务器）。端点：GET /health（不泄 key）· POST /advise（默认 SSE started→think/tool/observe→manifest；stream:false 缓冲 JSON；空 situation→422）· GET /advise/sample。manifest.advice=8 字段（summary·detected_signals·diagnosis_hypotheses·evidence·recommended_actions·confidence·escalation·metrics_to_track+conversation_script）对齐 fixtures.ts::AgentOutput，另带 contract_ok/redline_passed/schema_ok/gates/cites/transcript。pytest：契约电池绿（15+6=21）+ 全套 141 passed（124 原+17 新，零回归），无 key 路径 140 passed/1 skipped；真起 uvicorn 打 /health 200 + /advise text/event-stream。真 API 冒烟 PASSED（AVERY_BRAIN=minimax，MiniMax-M3 ~39s 实调，只断言契约成立）。stack（按推荐）：FastAPI+sse-starlette；service 在 eval-harness/service/；8 字段走服务端投影适配器（因 8 字段 schema 原生只在前端 fixtures.ts、engine draft_advice 出 3 字段——投影+重校验 respects 包不重写 engine）。HITL/follow-up（无 blocker）：① contract.py 投影 fallback 里的英文 user-facing 串 ⚠ 待 Danny 审字（真脑路径文案来自模型、红线仍管）；② 代码待从 worktree 整合进 main（agent 因 worktree 无 feat-015 条目/.issues 无法自回填本 evidence，已在 worktree progress.md 记；整合时取 main 版忽略 worktree progress 块）；③ 前次被打断 run 残留 uvicorn LISTENING 127.0.0.1:8137（PID 38924）已由 integrator 清理。"
+    },
+    {
+      "id": "feat-016",
+      "name": "Ingestion engine — upload to parse to vector RAG to populate Your team",
+      "description": "内核里更重的一条腿（ADR-0021 §2）。管线：上传（简历/项目/公司材料，多格式 PDF/docx/xlsx）→ 解析 → 红线安全的结构化抽取（人只到定性，绝不评分/排名/画像）→ 全向量 RAG 库 → 填充 Your team（人卡/项目卡/briefing）→ 喂回答卡。用上传替代一对一数据接入（lite）。红线过滤器扩展 eval-harness/avery/redline.py 覆盖抽取产物，成为 AFK 门。stack 默认（按推荐，可异步拍）：向量库 pgvector；pluggable embeddings（境内国产/海外 OpenAI）；解析用 pypdf/python-docx/unstructured，LLM 只做结构化抽取；pluggable retrieval（keyword 供 AFK / vector 供真跑）。AFK 门：fixture 文件电池 → 断言抽取实体 + 红线（零人评分）+ 检索命中。详见 .issues/feat-016/kickoff.md。",
+      "dependencies": [
+        "feat-015"
+      ],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "feat-017",
+      "name": "Frontend graduate to Avery Live (seams, live mode, i18n)",
+      "description": "把 Vite demo 毕业成 Avery Live（ADR-0020）。给 Nexus 终端抽 StreamSource、给 Your team 抽 TeamDataSource，各两实现：ScriptedSource（现有 cases.ts/fixtures.home.ts，即 story mode，保留 rail 回放机器不动）+ LiveAgentSource/LiveTeamSource（调 feat-015 服务 + feat-016 ingestion，即 live mode）。加上传 UI；?mode=story|live 开关；i18n 把文案外置 en/zh（复用 landing 的 scripts/i18n-zh.mjs + M3）。红线扫描扩到 live 产出。AFK 门：live 源打桩成确定性 → DOM 断言（绕开真 LLM + headless rAF）；story mode 回归断言不回退。保持 ADR-0003/0006/0012/0013/0014 回放契约。详见 .issues/feat-017/kickoff.md。",
+      "dependencies": [
+        "feat-015",
+        "feat-016"
+      ],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "feat-018",
+      "name": "Dual deployment — 境内中文 + 海外英文双端",
+      "description": "ADR-0021 §5。前端静态 SPA 构建 → Vercel（海外 EN）+ 境内静态托管（ZH）；Python agent 服务 → 境内主机（brain=MiniMax/DeepSeek + 境内 embeddings/pgvector）+ 海外（brain=Claude）。env/secret 管理（key 不进 git，参考 eval-harness/.env 轮换提醒）；deployment protection（融资团队可访问）；双端 smoke。HITL：域名 + 生产 promote 归 Danny。",
+      "dependencies": [
+        "feat-017"
+      ],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "feat-019",
+      "name": "酒店 vertical pack + skin + demo（换皮首例）",
+      "description": "ADR-0021 §3 换皮首例（D6）。客户=三亚绿杉壹居度假酒店（度假酒店，婚宴是其业务线之一，非\"婚庆公司\"）；包按度假酒店建模，婚宴作 showcase 亮点。三件：① Capabilities 包——用 /mmx-cli 调研酒店（组织/部门/岗位、运营流、婚宴业务线、酒店 PMS/OTA/CRM/钉钉）起草 v1，Danny 补内行 know-how（D7 混合），落成跟合伙人 HR 包同形的 cases/playbook/信号；② skin——度假酒店视觉主题，布局与交互机器不变；③ demo 流——酒店当场上传真文件 → 酒店 Your team 长出来 → advisor 落在他们数据 + 酒店/婚宴 Playbooks；办公软件 live 连接器仍 mock。调研走 /mmx-cli，结果落 D:/Boyle/research/（项目外）。AFK 门：eval-harness 跑酒店包（红线/cite/schema）+ ingestion 跑酒店样本。pack-authoring 研究部分可与内核并行立即起（D5）。详见 .issues/feat-019/kickoff.md。",
+      "dependencies": [
+        "feat-016",
+        "feat-017"
+      ],
+      "status": "in_progress",
+      "evidence": "2026-07-05 研究+包草稿 slice done（feat019-hotel-pack AFK 线，relaunch 后 48 tool calls / 603s；首 launch 被误打断，relaunch 复用前次 mmx raw dumps 省配额）。全部产出外置 D:/Boyle/research/sanya-lushan-yiju-hotel/，repo 未碰、git 未碰。mmx smoke ✅（mmx v1.0.16，mmx search query --q ... --region cn --output json，key 读 eval-harness/.env）。★客户已核实=三亚绿杉壹居度假酒店（三亚海棠湾豪华度假村，2024-12 开业，阳光保险投资约 6.7 亿，海南绿杉酒店管理公司运营；约 86 亩、211 房+30 别墅、鲁菜+粤菜、会议厅、962㎡ 阳光草坪=婚宴 showcase 钩子；森系+亲子+康养定位）——确认是酒店非婚庆公司。产出：00-findings.md（13KB 综述）+ raw/q01-q09.json；pack-draft/（README 8字段契约映射 + facts.md 行号 cite 契约 + cases/htl-001..005.md 5 案同 HR 包形状[草坪婚宴纠纷 showcase / 旺季跨部门排班 / 前厅新人爬坡 / 宴会销售真实低效 ADR-0016 / OTA差评+员工关怀] + playbooks-and-signals.md[5 PB+6 信号阈值+5 升级护栏] + manifest.draft.json[frozen:false]）。红线自检 ✅ 零人评分（5 案 Avery read/move/cite 全定性；baseline 故意带个人打分做护城河对比）；MOCK JSON 全 valid。自修 bug：前次 cases cite facts.md:47-62 但文件仅 44 行=15 条悬空 cite，已重建 facts.md 行→事实映射、15 cite 全解析。待 feat-016/017：skin 视觉主题 + demo 流 wiring + repo 集成（本 slice 不含）。HITL：Danny 补内行 know-how 9 条（pack-draft 9 个 TODO + 00-findings §F：实际 PMS/OTA/CRM 工具、婚宴一站式 vs 场地+外部婚庆、别墅管家团队、旺季排班工具、BEO 现状、可用真实脱敏婚宴纠纷样本、婚宴套餐桌标、各岗爬坡期、EAP 渠道）。"
+    },
+    {
+      "id": "feat-020",
+      "name": "建筑公司（Skeppsviken，瑞典）调研 + 办公软件集成可行性",
+      "description": "research deliverable（非代码 feature）。客户=Skeppsviken（瑞典建筑公司，skeppsviken.se；byggsamverkan.se 实为其所用 PM 软件 Next Project 厂商页）；境外→用普通 WebSearch/WebFetch（非 mmx-cli）。已知栈（合伙人问来）：Teams（施工沟通）+ Outlook（通用/邮件）+ CAD（画图）+ 一款纯建筑项目软件（查看费用/材料、类 Excel，需查清实际产品）。调研岗位/日常 + 逐个软件集成可行性：Teams/Outlook 走 MS Graph（开放 OAuth）、CAD 查 Autodesk APS、项目软件先定位产品再查 API/导出——API 是否开放、能拉什么、认证、成本。喂 live sync roadmap 叙事。结果落 D:/Boyle/research/skeppsviken-construction/（项目外）。AFK web 调研，立即可起，不阻塞其他线。酒店侧办公软件可行性归 feat-019 国内调研。详见 .issues/feat-020/kickoff.md。",
+      "dependencies": [],
+      "status": "done",
+      "evidence": "2026-07-05 done（feat020-bygg-research AFK 线，28 tool calls / 343s）。产出 D:/Boyle/research/skeppsviken-construction/（原名 byggsamverkan-construction，07-05 整合改名）：README.md（241 行全报告 + §0.A-C Skeppsviken 画像）+ feasibility-table.md + sources.md；未碰 git。★关键反转（07-05 已解）：byggsamverkan.se 不是客户官网，而是建筑 PM 软件 Next Project 的厂商产品页（agent 判断正确）——Danny 07-05 更正真实客户官网 = Skeppsviken（https://www.skeppsviken.se ），即客户 = Skeppsviken 承包商，byggsamverkan.se 只是其建筑团队所用的 PM 软件。Skeppsviken 公司画像 + 栈确认 supplement 07-05 已完成（同 feat020 agent resumed，约 480s）：Skeppsviken = 西瑞典建筑+地产开发集团（Göteborg+Skövde，2016 改名，被动房专长）；集团 Skeppsviken Holding AB 约 18 公司/152 人/约 1552 MSEK，主建筑臂 Skövde 93 人 + Göteborg 56 人；自营土建/结构，做学校/养老/体育馆/商业 + 自有住宅开发 + 物业租赁；岗位 platschef/arbetsledare/projektledare/kalkylator/projektör/yrkesarbetare——150 人多址自营承包商，Teams+Outlook+CAD+建筑 PM 系统教科书契合。PM 产品认出 = Byggsamordnaren（旧）→ Next Project（云，厂商 NEXT/Next One Technology），有文档化开放 REST API（next-tech.readme.io）。可行性：四款软件全部开放 API、无一封闭——Teams/Outlook 走 MS Graph（OAuth2 Entra，免费，高可行）；CAD 假设 Autodesk 走 APS（Model Derivative 拉图纸元数据/BOM，最重）；PM 走 Next Project REST（OAuth2 client-creds+DB#+一次性 key，可拉 项目/预算/材料价单/工时/发票/文档/工单，客户需向 NEXT 申请授权，约 1000 SEK/月，test 免费）。Roadmap：lite = 四者全走 导出→上传（即刻可发、不需客户 IT）；企业 live 连接器优先级 Graph（Teams+Outlook）> Next Project API > Autodesk APS。开放项：① 建筑客户真实公司名 → 已解 = Skeppsviken；② PM 版本（云 Next Project / 旧桌面 Byggsamordnaren）+ ③ CAD 产品——supplement 查过，二者内部工具公开均不可确认（skeppsviken.se 有 bot 防护、画像靠搜索快照+登记处 bolagsfakta/allabolag/LinkedIn），仍待合伙人一句话确认（决定 API 路径）。"
     }
   ]
 }

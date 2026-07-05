@@ -5,7 +5,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-07-03 晚（投资人路演 landing 重构已合并 main，2588dc7）
+**Last Updated:** 2026-07-05（双线战略圆桌：架构锁定，feat-015..020 teed up；见文末 `## Update — 2026-07-05` + `docs/strategy/2026-07-05-dual-line-strategy-roundtable.md`）
+**上一条：** 2026-07-03 晚（投资人路演 landing 重构已合并 main，2588dc7）
 **本日第二条线（worktree `elated-noether-7807c8` → 已合并+清理）：** landing 18 屏 → 7 屏投资叙事，为今晚证券金融路演。
 **已上线 production：<https://avery-jade.vercel.app/?lang=zh>**。要点：**ADR-0018**（人情味从产品真理降为红线；产品真理
 = 管理决策层；数字新规：模型形态 mock 可上页/代码注释标注，结果形态数字加页面微标注，实测口径仍禁）——CONTEXT.md +
@@ -19,7 +20,7 @@ git 已推无法收回；副作用（tm2 production 自动部署了未审字主�
 （tm2-osj7dqiwv）。Danny 审字通过后 `vercel promote` 最新部署即可上线新主页。
 
 （上一条：feat-014 卡片式今日主页 done；详见下方 `## Update — 2026-07-03`）
-**Active Feature:** 无 active 编码 feature。feat-014（Morning Desk 主页，GH #9）done 且已在 origin（f4bde81 随路演线 push 带上 + 59461bb UI 修复）；tm2 production 仍停在审字前部署，审字后 `vercel promote` 即上新主页。
+**Active Feature:** 无 active 编码（2026-07-05 是战略圆桌，只产出决策+文档）。**下一步 = 启动 feat-015 / feat-019 pack-authoring / feat-020 三条并行 AFK 线**（见文末 `## Update — 2026-07-05` + `.issues/feat-01x/kickoff.md`）。feat-014（Morning Desk 主页，GH #9）done 且已在 origin（f4bde81 随路演线 push 带上 + 59461bb UI 修复）；tm2 production 仍停在审字前部署，审字后 `vercel promote` 即上新主页。
 **feat-014 真机目测回环已闭（2026-07-03 晚）**：Danny 抓到两处 UI 重叠（composer 随滚动漂进内容 / 依据签压字且同句三卡重复）→ 修复 59461bb（滚动下放 `.home-scroll`、composer 锚回视口底；依据签只在第一张关联项目卡以文档流 chip 出现）→ DOM 断言复验 + init.sh 复绿 + 已 push。剩余 HITL 只有审字（fixtures.home.ts）。
 上一轮（2026-07-01）状态：本 session 详情见下方 `## Update — 2026-07-01` 三节 + 完整运行日志
 `.handoff/partner-integration-0701.md`。要点：合伙人 6 个 SCN 落进 eval（解锁 non_danny 闸）、真跑完成（诚实结论
@@ -189,3 +190,40 @@ avery loop 补 cite-before-number。
 - 全部新英文 copy `⚠ 待 Danny 审字`（fixtures.home.ts / railStore captions / map-back-chip / alertPills 原有）。
 - 真机目测后决定是否 push（push = tm2 自动部署）。
 - 文案微决策：hh_pitch 的 "goes out today" 与依据签重复；"Handled today" 词义（claire 2c-2，已分开计数）。
+
+## Update — 2026-07-03 · 商业模式对齐（grilling session）→ ADR-0019
+- **Danny + Claude 逐条 grilling 合伙人 revenue deck（2026-07-02 版）**，采纳为唯一口径；
+  旧"advisor 免费 + playbooks 付费"作废 → **ADR-0019**（四层付费、无免费层、订阅为主体、按 manager 计费）。
+- 磨出三件带给 Cythia 的东西（`docs/commercial-alignment-for-cythia-20260703.md` + `.zh.md` 中文 M3 版，可直接转发）：
+  ①终局漏斗 60/20/15/5 ≠ 增长期 mix（补三阶段表 + 两条 attach 隐含假设明文化）；
+  ②benchmark 三条隐私边界（组织级 only / opt-in / 样本不足不出数）；
+  ③token 机制（席位含合理用量、BYO-API=企业版信任功能非折扣、每公司最低席位数、数据源分档）。
+- 领域落盘：`CONTEXT.md` 新增 **Commercial language** 六词条 + Capabilities 改"随席位订阅不单卖"（已 committed）。
+  核对当晚路演页：盈利模式屏与 deck 数字一致、算术复算全对、"工具免费"句已消失。
+- **文件史注**：ADR-0019 + Cythia 清单曾于 07-03 落盘、未及 commit 被并行 line 清理误扫；
+  07-05 Danny 确认后原样恢复并单独提交（决策本体期间一直安全在 committed CONTEXT.md）。
+
+## Update — 2026-07-05 · 双线战略圆桌（架构锁定 → feat-015..020 teed up）
+
+> 战略圆桌（非编码 session）。缘起：路演 + 酒店/建筑洽谈，定双线并行。完整记录 `docs/strategy/2026-07-05-dual-line-strategy-roundtable.md`；决策 `docs/adr/0020-*`（graduate + seam）+ `docs/adr/0021-*`（两引擎 + 换皮 + 双端）；术语 `CONTEXT.md` 新增 **Product surface** 组。
+
+- **核心反转**：现在的 demo 是录像回放、不接真实输入——两条线都缺"接真实输入→出真 Avery 回答"这同一能力，而它 80% 已在 `eval-harness`。
+- **锁定决策（10 条，逐条 grill）**：Line A=真 LLM 顾问复用 eval-harness；一套内核+垂直包+皮肤；**双端**（境内中文+海外英文）；企业 demo=可信 mock 集成+真顾问核；内核+首个垂直**并行**起跑；**酒店先行（婚宴亮点）**；垂直包混合 authoring；**graduate 现有 Vite demo→Avery Live**（story+live 双模，两道 seam），不新建 app，**ADR-0001 被 ADR-0020 超越**；**内核=两个引擎**（advisor 已存在 + ingestion 新建更重）；v1 ingestion **一步到位全向量 RAG**。
+- **内核=两引擎+两 seam**：advisor（eval-harness）+ ingestion（上传→解析→红线安全抽取→全向量 RAG→填 Your team→喂回答卡）；`StreamSource` + `TeamDataSource` 两道 seam（story 脚本 / live 真数据），seam 同时是 AFK 测试缝。
+- **红线扩面**：ingestion 抽取阶段内建红线过滤器（简历→人卡只到定性，绝不评分/排名/画像）；红线扫描从脚本 fixtures 扩到 **live 产出**。
+- **新工作项 feat-015..020**（feature_list.json，全 not-started，JSON 已 `node` 验证）+ 各 `.issues/feat-01x/kickoff.md`（AFK 冷启动可读）：
+  - feat-015 Agent service（FastAPI+SSE 包 eval-harness）← 立即可起
+  - feat-016 Ingestion engine（大核）← feat-015
+  - feat-017 Frontend graduate→Avery Live（两 seam+i18n）← 015+016
+  - feat-018 双端部署 ← 017
+  - feat-019 酒店换皮（pack+skin+demo）← 016+017；**pack-authoring 立即可并行起**
+  - feat-020 建筑(byggsamverkan)调研 + 办公软件集成可行性 ← 立即可起
+- **D5 并行三条立即 AFK 起跑线**：feat-015 + feat-019 的 pack-authoring + feat-020。
+- **客户事实校正（07-05 晚，Danny）**：Line B 两真实客户 = **三亚绿杉壹居度假酒店**（度假酒店，婚宴是业务线之一，非“婚庆公司”；包按酒店建模、婚宴作亮点）+ **byggsamverkan**（瑞典建筑，https://www.byggsamverkan.se/ ；栈=Teams/Outlook/CAD/一款建筑项目软件）。**国内调研走 `/mmx-cli`、境外走普通 web；调研结果落 `D:\Boyle\research\`（项目外，非项目内）**（memory `domestic-research-use-mmx-cli`）。feat-019/020 kickoff + feature_list + strategy/ADR-0021/CONTEXT 已同步。
+- **feat-020 ✅ done（07-05，AFK 线，核心+supplement）**：建筑集成可行性 + Skeppsviken 画像 → `D:\Boyle\research\skeppsviken-construction\`。★反转已解：`byggsamverkan.se` = PM 软件 Next Project 厂商页、非客户官网；**真实客户 = Skeppsviken**（西瑞典建筑+地产集团，约 152 人，自营土建）。四款软件全开放 API；roadmap lite=导出上传、企业 live 优先 Graph>Next Project>APS。余 2 项待合伙人一句话（PM 云/桌面、CAD 产品）。feature_list evidence 详录。
+- **feat-019 ✅ 研究+包草稿 slice done（07-05，AFK 线）**：客户核实=三亚绿杉壹居度假酒店（海棠湾豪华度假村，2024-12 开业，阳光保险投资，211 房+30 别墅，962㎡ 草坪=婚宴 showcase）；外置 `D:\Boyle\research\sanya-lushan-yiju-hotel\`（00-findings + pack-draft：5 案+5 PB+6 信号+5 护栏，红线零人评分）。待 feat-016/017 做 skin+demo+集成。HITL：Danny 补 9 条内行 know-how。
+- **feat-015 ✅ done（07-05，AFK 门全绿）**：agent service `eval-harness/service/`（FastAPI+SSE 包 engine，8 字段投影+API 边界红线，3 端点）；pytest 141 passed 零回归 + MiniMax-M3 真冒烟过。**代码在 worktree（branch worktree-agent-ac44e3f46118f46ca），未 commit、待整合进 main**。
+- **★ D5 三条并行线全部回（07-05）**：feat-015 ✅ / feat-019 研究+包 slice ✅ / feat-020 ✅。下一步 **feat-016（ingestion 大核，dep feat-015 已解，现可起）**。
+- **AFK 硬约束入 memory**（`afk-self-loop-minimize-danny`）：dev+test 自跑自验自修，HITL 只留审字/价值观/授权/评分/promote。
+- **不动的约束**：红线 ADR-0015/0018、决策层真理、Avery 品牌、商业模式（口径见 committed CONTEXT.md § Commercial language，sampler≠免费层，护栏见 ADR-0021 §6；ADR-0019 已于 07-05 恢复落盘并提交）、中文经 M3、**story mode 保留=不动 rail 回放机器**（ADR-0003/0006/0012/0013/0014）。
+- **旧账未变**：feat-014 审字 + tm2 promote 仍是 Danny 的 HITL（见 `session-handoff.md` §4）。

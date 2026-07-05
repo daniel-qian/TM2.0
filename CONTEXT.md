@@ -19,7 +19,7 @@ _Avoid_: 把人情味当产品自我定义来写（它是红线与风格，不�
 _Avoid_: 给人打分/量化成数值（人不该有血条）；没有真人评分就上 eval scorecard
 
 **Dashboard**：
-进门第一面（surface label "Your team"）——回答"**今天该把心思花在哪**"：分析浏览区（人与项目双轨卡片）+ 今日 Handoff checklist 区，分区混排、概念不混。它是**观察 + 轻照料面**：看清处境、勾掉/搁置今天的小事；重的编排仍去 Nexus。地图不再是这一面的主形态，退为页内的全景子视图（见 Team map）。见 [ADR-0017](docs/adr/0017-card-home-demotes-team-map.md)。
+进门第一面（surface label "Your team"）——回答"**今天该把心思花在哪**"：分析浏览区（人与项目双轨卡片）+ 今日 Handoff checklist 区，分区混排、概念不混。（live mode 下这些卡片由 **Ingestion** 从上传文件填充，story mode 下由 `fixtures`；见 [ADR-0020](docs/adr/0020-avery-graduates-from-demo-only-to-live-lite-product.md)。）它是**观察 + 轻照料面**：看清处境、勾掉/搁置今天的小事；重的编排仍去 Nexus。地图不再是这一面的主形态，退为页内的全景子视图（见 Team map）。见 [ADR-0017](docs/adr/0017-card-home-demotes-team-map.md)。
 _Avoid_: home、canvas（canvas 是视觉手法，不是这个概念本身）、PM 仪表盘语言（P0 徽章 / 统计数字 chips / capacity 读数——SaaS 腔，违反 [ADR-0015](docs/adr/0015-product-tone-human-advisor-debrand-saas-naming.md)）
 
 **Team map**：
@@ -69,9 +69,39 @@ agent 产出的、落在 Dashboard / 详情页表面上**可直接执行**的单
 _Avoid_: action item、todo（会跟已派出的 Task 混淆）
 
 **Capabilities**：
-Avery 自有的垂直领域专家知识层——跨 HR / Legal / PM / Finance / Ops / Sales 的真实案例、解决方案、SOP / playbook。可信性的"第二条腿"：公司事实回答"发生了什么"，Capabilities 回答"专业上该怎么判断、怎么处理"。是 agent 建议区别于普通 ChatGPT（只有泛化常识）的关键。**Avery 私有资产，随 Manager seat 订阅提供、不单卖，agent 检索时自动优先引用——产品的护城河，也是席位定价的依据（席位贵在有 playbooks 背书的判断，不是贵在 UI）。**
+Avery 自有的垂直领域专家知识层——跨 HR / Legal / PM / Finance / Ops / Sales 的真实案例、解决方案、SOP / playbook。可信性的"第二条腿"：公司事实回答"发生了什么"，Capabilities 回答"专业上该怎么判断、怎么处理"。是 agent 建议区别于普通 ChatGPT（只有泛化常识）的关键。lite 版的公司事实来自 **Ingestion** 上传（见 **Company context**）。**Avery 私有资产，随 Manager seat 订阅提供、不单卖，agent 检索时自动优先引用——产品的护城河，也是席位定价的依据（席位贵在有 playbooks 背书的判断，不是贵在 UI）。**
 _Surface label_（[ADR-0015](docs/adr/0015-product-tone-human-advisor-debrand-saas-naming.md)）：user-facing 一律用 **"Playbooks"**（资深前辈的词，温暖、有经验感）；"Capabilities" 仅作内部领域概念名 / type / 变量名保留，不进用户界面（含"the moat"等护城河自夸不进界面）。
 _Avoid_: CAPA（撞行业既有术语 Corrective-And-Preventive-Action，会让听众卡顿解码）、capabilities RAG（RAG 是检索机制，不是这个知识层本身）、专家能力库
+
+## Product surface（2026-07-05 圆桌新增，见 [ADR-0020](docs/adr/0020-avery-graduates-from-demo-only-to-live-lite-product.md) / [ADR-0021](docs/adr/0021-two-engine-core-vertical-packs-skins-dual-deploy.md)）
+
+**Avery Live**：
+毕业后的 Avery——现有 Vite demo 从 demo-only 升级成的真·lite 产品（[ADR-0020](docs/adr/0020-avery-graduates-from-demo-only-to-live-lite-product.md) 超越 [ADR-0001](docs/adr/0001-prototype-demo-only-engineering-docs-are-reference.md)）。同一 codebase、双模（story / live）。user-facing 不出现 "Avery Live" 这种内部区分，用户看到的就是 "Avery"。
+_Avoid_: 把它当独立于 demo 的新 app（是 demo 毕业，不是重造）；把 landing 也算进来（landing 是独立营销页，不动）
+
+**Story mode / Live mode**：
+Avery Live 的两种数据来源模式。**Story mode** = 脚本（`cases.ts`/`fixtures.home.ts`）驱动的可控叙事，供路演与视频（feat-013），保留原 rail 回放机器。**Live mode** = 真 agent 服务 + 真 Ingestion 驱动，接受用户真实输入/上传，是部署给融资团队的可用 Sampler。
+_Avoid_: 把 live mode 说成"实时/real-time"（那指数据新鲜度）；把两模当两个产品（同一 codebase 一个开关）
+
+**Ingestion**：
+把客户自己的文件（员工简历、项目材料、公司资料）变成 Avery 可用"公司事实"的管线：上传 → 解析 → **红线安全的结构化抽取** → 全向量 RAG → 填充 Your team + 喂回答卡。lite 版用它**替代"一对一数据接入"**。红线：抽取人相关信息**只到定性**，绝不评分/排名/画像（[ADR-0021](docs/adr/0021-two-engine-core-vertical-packs-skins-dual-deploy.md) §4）。
+_Avoid_: connector / 数据接入（那是 live 直连他们系统，是 roadmap，不是 Ingestion）；"上传附件给聊天"（Ingestion 产出结构化实体 + 填 Your team，不是塞进 prompt）
+
+**Company context (uploaded)**：
+Ingestion 产出的、**某一家公司**的事实层——人（定性）、项目、材料，进 RAG 供 agent 检索。可信性的一条腿（"发生了什么"），与 Capabilities（"专业上该怎么判断"）并列。lite 版来自上传；企业版将来可来自 live 连接器。
+_Avoid_: company brain（太大词，那是 Setup 层的完整对接）；跟 Capabilities 混（一个是这家公司的事实，一个是跨客户的专家方法论）
+
+**Vertical pack**：
+一个行业的 Avery 实例 = **Capabilities 包**（该行业案例/playbook/信号阈值，跟合伙人 HR 包同形）+ **Skin**（行业视觉主题）+ 客户**自己上传的数据**。两个引擎（advisor + ingestion）+ 两道 seam 全部共享——加行业 = "换皮"，不重写内核（[ADR-0021](docs/adr/0021-two-engine-core-vertical-packs-skins-dual-deploy.md)）。酒店先行（婚宴亮点；客户=三亚绿杉壹居度假酒店）。
+_Avoid_: fork / 分支（不是 codebase 分叉，是同一内核换配置）；vertical product（暗示独立产品线）
+
+**Skin**：
+垂直包里的行业视觉主题——配色/措辞/示例贴合该行业（酒店 vs 建筑），但布局与交互机器不变。
+_Avoid_: theme（太泛）；把 skin 当"改功能"（skin 只换表皮，功能在内核）
+
+**Sampler**：
+部署给国内融资团队、拿去给 prospect 试玩的 Line A live-mode 表面。漏斗顶端的**演示/营销面**，不是付费产品（商业模式见 [ADR-0019](docs/adr/0019-commercial-model-four-layer-paid-no-free-tier.md) + 本文件 **Commercial language** 段）——用临时会话/上传样本，不持久化成公司工作区。
+_Avoid_: free tier / 免费版 Avery（违反"无免费层"，见本文件 Commercial language 段；sampler 是尝鲜演示，不是产品免费档）；trial（暗示产品试用期）
 
 ## Commercial language
 
