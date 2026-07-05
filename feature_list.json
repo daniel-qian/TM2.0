@@ -159,8 +159,8 @@
       "dependencies": [
         "feat-015"
       ],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "2026-07-05 done，AFK 门全绿（feat016-ingestion 线，60 tool calls / 886s；建在 feat/live-core-015-018 分支 checkout，全新文件、零改现有、src/ 未碰）。integrator 复验 pytest 169 passed（141 baseline + 28 新，零回归，含 MiniMax-M3 真冒烟）。新包 eval-harness/avery/ingest/：parse.py（多格式→文本 pypdf/python-docx/openpyxl/stdlib，嗅 doc_kind，缺库降级，无 OCR/LLM）+ extract.py（红线安全抽取 → PersonEntity[无任何数字字段=类型即护城河]/ProjectEntity[可量化]/SignalEntity[人相关只到情境]/MaterialChunk；HeuristicExtractor 确定性离线 + Extractor 协议留 LLM 槽）+ redline_extract.py（把 avery/redline.py 扩到抽取产物，任何人实体带 score/rank/tier/moodPct/capacityPct 结构性+词典 hard-fail；项目/材料不 person-gate）+ store.py（pluggable retrieval：KeywordStore 离线确定性行寻址 + VectorStore 真 cosine kNN；pluggable Embedder，HashingEmbedder 离线 stand-in，BGE/MiniMax/OpenAI 可插；build_store 工厂）+ registry.py（company_context_id→CompanyContext，暴露 recall/team_cards/project_cards/signal_cards/briefing + 物化 facts.md/notes.md 让现有 loop recall+cite 落上传数据）+ pipeline.py（ingest_paths/ingest_docs：parse→extract→红线硬门→store→CompanyContext；抽取给人打分则 ok=False 不发布）+ seam.py（resolve_memory_dir + build_live_case_for_context，compose-not-modify，接 feat-015 service 仅 2 行）。fixtures：真 xlsx/docx/手搭文本层 pdf/md handbook/对抗性打分诱饵 txt + test_ingest.py。红线自检 ✅：对抗性简历（9/10、top 5%、百分位、flight risk、rating 5/5）→ 0 泄漏；6 条投毒抽取（模拟 LLM 幻觉）全 hard-fail；team_cards 永不含 moodPct/capacityPct 键；任期/计数（14 months、9 requests）正确不误伤。stack（按推荐）：向量库 pgvector（生产目标，离线默认内存 cosine 同接口）；pluggable embeddings/retrieval；解析成熟库、LLM 只做抽取。seam 验证：cite() 命中 ingested facts.md:21 解析成功。HITL（无 blocker）：embeddings/向量库最终选型（pgvector+BGE/MiniMax vs OpenAI）Danny 异步拍——默认离线已绿，pgvector 持久化+真 embedding endpoint 是唯二 needs-service 件。"
     },
     {
       "id": "feat-017",

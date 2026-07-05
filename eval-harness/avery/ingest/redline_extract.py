@@ -1,0 +1,142 @@
+"""The red line, extended to EXTRACTION OUTPUT (feat-016 AFK gate — ADR-0021 §4).
+
+`avery/redline.py` gates the advisor's final *advice*. Ingestion needs the same moat one stage
+earlier: the moment a resume/roster/weekly becomes structured entities, a PersonEntity must be
+QUALITATIVE ONLY. This module is the deterministic gate that HARD-FAILS an extraction result if a
+person entity smuggles in a score / rank / rating / tier / moodPct / capacityPct — whether the
+extractor was the offline heuristic or a hallucinating LLM.
+
+Two hard checks, composed with the existing content validator:
+
+  1. STRUCTURAL — a PersonEntity's fields. The dataclass has no numeric attribute by design, but a
+     real LLM extractor might hand us a dict with an extra key or stuff a number into a text field.
+     We (a) reject any person dict carrying a forbidden scoring key, and (b) reject a bare number /
+     percent / N-of-M in any person text field (role/tenure/owns/collaboration) that reads as a
+     rating rather than a tenure/count ("18 months", "9 requests" are allowed; "8/10", "82%",
+     "rating 4" are not).
+
+  2. CONTENT — every person's rendered free text is run through `avery.redline.validate` with the
+     subject FORCED to a person, so the full person-scoring lexicon (scorecard / percentile / low
+     performer / flight risk / toxic / C-player ...) fires. Project/material text is NOT gated this
+     way (work may be quantified — R2), matching the advice-side asymmetry.
+
+The result is a hard AFK gate: `validate_extraction(result).ok` must be True before a CompanyContext
+is built. `pipeline.ingest_*` calls it and refuses to publish a context that fails.
+"""
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass, field
+
+from avery import redline
+
+from .extract import ExtractionResult, PersonEntity, FORBIDDEN_PERSON_KEYS
+
+
+@dataclass
+class ExtractionViolation:
+    kind: str                    # "person-score-key" | "person-score-value" | "person-score-text"
+    person: str                  # which person (name/id)
+    detail: str                  # what tripped it
+    rule_id: str = ""            # underlying redline rule id when kind == person-score-text
+
+
+@dataclass
+class ExtractionRedlineResult:
+    ok: bool
+    violations: list[ExtractionViolation] = field(default_factory=list)
+
+    def __bool__(self) -> bool:
+        return self.ok
+
+    def summary(self) -> str:
+        if self.ok:
+            return "EXTRACTION-REDLINE PASS"
+        return "EXTRACTION-REDLINE FAIL[" + ", ".join(
+            f"{v.kind}:{v.person}" for v in self.violations) + "]"
+
+
+# A number that reads as a RATING (not a tenure/count). Tenures ("18 months", "2 years"), counts
+# ("9 requests", "12 comments") and dates are allowed; a bare N/M, a percent, or "rating: 4" are not.
+_TENURE_OR_COUNT = re.compile(
+    r"\b\d+\+?\s*(?:years?|yrs?|months?|mos?|weeks?|days?|hours?|"
+    r"people|persons?|reports?|requests?|comments?|reviews?|items?|tasks?|tickets?|"
+    r"projects?|deliverables?|times?|rounds?)\b", re.I)
+_RATING_NUMBER = re.compile(
+    r"\b\d{1,3}(?:\.\d+)?\s*(?:/|out\s+of)\s*\d{1,3}\b"      # 8/10, 3 out of 5
+    r"|\b\d{1,3}(?:\.\d+)?\s*%"                                # 82%
+    r"|\b\d(?:\.\d+)?\s*stars?\b", re.I)
+_SCORE_WORD_NEAR_NUM = re.compile(
+    r"\b(?:score|scored|scoring|rating|rated|rank|ranked|ranking|tier|grade|graded|"
+    r"percentile|potential|mood|capacity)\b\D{0,12}\d", re.I)
+
+
+def _person_text_fields(p: PersonEntity) -> list[str]:
+    return [p.role, p.tenure, *p.owns, *p.collaboration]
+
+
+def _scan_person_value(p: PersonEntity) -> list[ExtractionViolation]:
+    """Structural check #1b: a rating-shaped number inside any person free-text field.
+
+    Tenures/counts ("18 months", "9 change requests") do NOT match _RATING_NUMBER / _SCORE_WORD_
+    NEAR_NUM, so they pass; a bare N/M, a percent, or a scoring-word-next-to-a-number does not.
+    """
+    out: list[ExtractionViolation] = []
+    for fld in _person_text_fields(p):
+        if not fld:
+            continue
+        if _RATING_NUMBER.search(fld) or _SCORE_WORD_NEAR_NUM.search(fld):
+            out.append(ExtractionViolation(
+                kind="person-score-value", person=p.name,
+                detail=f"rating-shaped number in a person field: «{fld[:80]}»"))
+    return out
+
+
+def validate_person_dict(name: str, data: dict) -> list[ExtractionViolation]:
+    """Structural check #1a: reject a raw person dict (e.g. from an LLM extractor) that carries any
+    forbidden scoring key. Call this BEFORE constructing a PersonEntity from model output."""
+    out: list[ExtractionViolation] = []
+    for key in data.keys():
+        norm = re.sub(r"[^a-z0-9]", "", str(key).lower())
+        if norm in FORBIDDEN_PERSON_KEYS:
+            out.append(ExtractionViolation(
+                kind="person-score-key", person=name,
+                detail=f"forbidden scoring key on a person: '{key}'"))
+    return out
+
+
+def validate_extraction(result: ExtractionResult) -> ExtractionRedlineResult:
+    """THE AFK gate. Hard-fail if any PersonEntity carries or reads as a person score.
+
+    Projects and materials are intentionally NOT person-gated (work may be quantified — R2). Only
+    person entities and person-directed signals are held to the qualitative-only red line.
+    """
+    violations: list[ExtractionViolation] = []
+
+    for p in result.people:
+        # #1b structural: rating-shaped numbers in person free text
+        violations += _scan_person_value(p)
+        # #2 content: full person-scoring lexicon over the rendered person text, subject forced=person
+        blob = "\n".join(_person_text_fields(p))
+        if blob.strip():
+            # Anchor to a person so ambiguous forms fire (redline person-anchoring). Prefix a
+            # pronoun/noun so _has_person() is true for the whole segment window.
+            anchored = f"This teammate ({p.name}), she: {blob}"
+            rl = redline.validate(anchored)
+            for v in rl.violations:
+                violations.append(ExtractionViolation(
+                    kind="person-score-text", person=p.name,
+                    detail=f"{v.rule_id}: «{v.snippet}»", rule_id=v.rule_id))
+
+    # person-directed signals must stay at SITUATION — never a person-scoring label.
+    for s in result.signals:
+        if s.subjectType != "person":
+            continue
+        anchored = f"About this teammate, she: {s.summary}"
+        rl = redline.validate(anchored)
+        for v in rl.violations:
+            violations.append(ExtractionViolation(
+                kind="person-score-text", person=str(s.subjectRef),
+                detail=f"signal {v.rule_id}: «{v.snippet}»", rule_id=v.rule_id))
+
+    return ExtractionRedlineResult(ok=len(violations) == 0, violations=violations)

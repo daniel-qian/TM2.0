@@ -1,0 +1,179 @@
+"""The `company_context_id` <-> CompanyContext seam (feat-015 honor point).
+
+`service/live_input.py::LiveSituation.company_context_id` is a stub: it threads an id through the
+case file but nothing resolves it. THIS makes it real. Ingestion produces a `CompanyContext` and
+registers it under an id; the advisor path resolves that id back to:
+
+  * a `memory_dir` (materialized `facts.md` + `notes.md`) so the loop's EXISTING `avery.memory.recall`
+    retrieves real company facts — the loop runs UNCHANGED (same seam `live_input` already uses), and
+  * a `RetrievalStore` (keyword offline / vector real) for direct RAG queries, and
+  * the extracted Your-team structures (people / project cards / briefing) for the frontend.
+
+Why materialize facts.md rather than change recall(): the loop's memory + cite gate are already the
+audited path (facts.md:<line> is what a cite() resolves to). Writing the extracted, red-line-clean,
+line-addressable person/project/material facts INTO that file means every downstream gate (cite,
+red line, 8-field projection) applies to ingested data with zero engine change. It is the honest
+minimum: the advisor cites real lines that came from the manager's own uploads.
+"""
+from __future__ import annotations
+
+import tempfile
+import uuid
+from dataclasses import dataclass, field
+from pathlib import Path
+
+from .extract import ExtractionResult
+from .store import RetrievalStore, RetrievalHit, KeywordStore
+
+
+@dataclass
+class CompanyContext:
+    """The resolved company context an advisor retrieves against, keyed by `context_id`."""
+    context_id: str
+    extraction: ExtractionResult
+    store: RetrievalStore
+    memory_dir: Path                       # holds materialized facts.md / notes.md
+    name: str = "company"
+    source_files: list[str] = field(default_factory=list)
+
+    # --- retrieval surface (what the advisor uses) --------------------------------------------
+
+    def recall(self, query: str, limit: int = 8) -> list[RetrievalHit]:
+        """RAG query over ingested material (keyword offline / vector real)."""
+        return self.store.query(query, limit=limit)
+
+    # --- Your-team structures (what the frontend renders) -------------------------------------
+
+    def team_cards(self) -> list[dict]:
+        """People cards for 'Your team' — QUALITATIVE ONLY. Note: NO moodPct / capacityPct keys are
+        ever emitted (red line: live person cards have no blood bar). feat-017 renders these."""
+        cards = []
+        for p in self.extraction.people:
+            card = {"id": p.id, "name": p.name, "role": p.role}
+            if p.team:
+                card["team"] = p.team
+            if p.tenure:
+                card["tenure"] = p.tenure
+            if p.owns:
+                card["owns"] = p.owns
+            if p.collaboration:
+                card["collaboration"] = p.collaboration
+            # DELIBERATELY absent: moodPct, capacityPct, any score/rank/tier.
+            cards.append(card)
+        return cards
+
+    def project_cards(self) -> list[dict]:
+        """Project cards for 'Your team'. Work may be quantified (progress) when the doc stated it;
+        risk 4-dims / reportedStatus are left absent (lite lacks the signal — R2 don't invent)."""
+        cards = []
+        for pr in self.extraction.projects:
+            card = {"id": pr.id, "title": pr.title}
+            if pr.ownerId:
+                card["ownerId"] = pr.ownerId
+            if pr.ownerName:
+                card["ownerName"] = pr.ownerName
+            if pr.status:
+                card["status"] = pr.status
+            if pr.progress is not None:
+                card["progress"] = pr.progress
+            if pr.dueDate:
+                card["dueDate"] = pr.dueDate
+            if pr.summary:
+                card["summary"] = pr.summary
+            if pr.blockers:
+                card["blockers"] = pr.blockers
+            cards.append(card)
+        return cards
+
+    def signal_cards(self) -> list[dict]:
+        """Doc-derived signals. Person-directed ones stay at situation (gated upstream)."""
+        return [{"id": s.id, "source": s.source_kind, "subjectType": s.subjectType,
+                 "subjectId": s.subjectRef, "summary": s.summary, "tag": s.tag}
+                for s in self.extraction.signals]
+
+    def briefing(self) -> dict:
+        """A calm, HONEST 'organization weather' briefing. Counts are real (people/projects); it
+        emits NO invented aggregate health score (R2: real-or-nothing)."""
+        n_people = len(self.extraction.people)
+        n_proj = len(self.extraction.projects)
+        at_risk = [p for p in self.extraction.projects if p.status in ("at-risk", "blocked")]
+        metrics = [{"label": "people", "value": str(n_people)},
+                   {"label": "active projects", "value": str(n_proj)}]
+        if at_risk:
+            metrics.append({"label": "need a look", "value": str(len(at_risk))})
+        headline = f"Ingested {len(self.source_files)} file(s): {n_people} people, {n_proj} projects."
+        subhead = ("Everything below is drawn from your uploads — nothing invented. "
+                   + (f"{len(at_risk)} project(s) worth a closer look." if at_risk
+                      else "No risk signals surfaced from the documents."))
+        return {"tone": "alert" if at_risk else "calm", "headline": headline, "subhead": subhead,
+                "metrics": metrics}
+
+
+class ContextRegistry:
+    """In-memory id -> CompanyContext map. Process-local (a session-scoped handle, like the sampler's
+    ephemeral cases). A DB-backed registry would plug in behind the same get/put API."""
+
+    def __init__(self) -> None:
+        self._by_id: dict[str, CompanyContext] = {}
+
+    def put(self, ctx: CompanyContext) -> str:
+        self._by_id[ctx.context_id] = ctx
+        return ctx.context_id
+
+    def get(self, context_id: str) -> CompanyContext | None:
+        return self._by_id.get(context_id)
+
+    def resolve_memory_dir(self, context_id: str) -> Path | None:
+        """The seam live_input wants: an id -> a memory_dir the loop's recall() reads."""
+        ctx = self.get(context_id)
+        return ctx.memory_dir if ctx else None
+
+    def __contains__(self, context_id: str) -> bool:
+        return context_id in self._by_id
+
+    def clear(self) -> None:
+        self._by_id.clear()
+
+
+# Process-wide default registry (the service imports this).
+REGISTRY = ContextRegistry()
+
+
+def new_context_id() -> str:
+    return "ctx_" + uuid.uuid4().hex[:12]
+
+
+def materialize_memory(extraction: ExtractionResult, dest: Path) -> Path:
+    """Write extracted, red-line-clean entities to facts.md / notes.md so the EXISTING loop recall +
+    cite gate work over ingested data with no engine change. Each fact is one line (facts.md:<line>).
+    """
+    dest = Path(dest)
+    dest.mkdir(parents=True, exist_ok=True)
+
+    facts: list[str] = ["# Company facts (ingested from uploads — qualitative, red-line-clean)", ""]
+    if extraction.people:
+        facts.append("## People (qualitative only — no scores, no blood bars)")
+        for p in extraction.people:
+            facts += p.as_facts_lines()
+        facts.append("")
+    if extraction.projects:
+        facts.append("## Projects")
+        for pr in extraction.projects:
+            facts += pr.as_facts_lines()
+        facts.append("")
+    if extraction.materials:
+        facts.append("## Company material")
+        seen: set[str] = set()
+        for m in extraction.materials:
+            if m.text in seen:
+                continue
+            seen.add(m.text)
+            facts.append(m.text)
+        facts.append("")
+    (dest / "facts.md").write_text("\n".join(facts), encoding="utf-8")
+
+    notes: list[str] = ["# Notes (doc-derived signals — situational, never a person label)", ""]
+    for s in extraction.signals:
+        notes += s.as_facts_lines()
+    (dest / "notes.md").write_text("\n".join(notes) + "\n", encoding="utf-8")
+    return dest
