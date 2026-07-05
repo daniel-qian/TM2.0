@@ -32,21 +32,25 @@
 - standing 约束不变：不动 rail replay 机器 / store 契约(ADR-0013) / camera(ADR-0012) / terminal-stream(ADR-0014) / 内部命名 / ADR 历史 / archived。
 
 ## 3 · 仓库当前态
-- 分支 `main`，HEAD `2f76ceb`（Danny 的 ADR-0019 恢复提交；与 `origin/main` 同步）。**代码 `src/` 一行没碰。**
-- 本 session 只加/改**文档**（全部**未提交**，Danny 审后拍板）：
-  - 改（tracked）：`CONTEXT.md`、`feature_list.json`、`progress.md`、本文件。
-  - 新（untracked）：`docs/strategy/2026-07-05-dual-line-strategy-roundtable.md`、`docs/strategy/2026-07-05-real-integration-map.md`、`docs/adr/0020-*`、`docs/adr/0021-*`、`.issues/feat-015..020/`。
-- **⚠ 会话中途磁盘变化（如实记录）**：会话开始时未追踪存在的 `docs/adr/0019-commercial-model-*.md` 与 `docs/commercial-alignment-for-cythia-*.md` 现已**从磁盘消失**（被清理）；`docs/adr/0019` 从未 commit。**商业模式决策未丢**——它在 committed `CONTEXT.md` § Commercial language。若要恢复 ADR-0019 文档形态，需 Danny 确认（我未擅自重建被清理的文件）。→ **已解决（07-05 晚）**：Danny 确认，商业线 session 原样重建三文件（`docs/adr/0019-*` + Cythia 对齐清单 en/zh）并已单独提交。
-- 无代码改动 → `./init.sh` 状态不变（上次绿于 feat-014 修复后）。
+- **集成分支 `feat/live-core-015-018`（Danny 授权的 AFK 串行链，逐 feature commit、未 push）；主 `main` 仍在 `2f76ceb`（=`origin/main`）不动，等 Danny 分支验收后 merge。** 工作树干净（全提交）。
+- 提交链（`git log 2f76ceb..HEAD`，6 个）：`f965bad` docs（战略+ADR0020/0021+kickoffs+019/020 结果）→ `4517f0e` feat-015 agent service（pytest 141）→ `4e1bac0` feat-016 ingestion（169）→ `fae493f` feat-017 WIP → `e1b890d` feat-017 verified → `1d5f8f6` feat-018 dual-deploy config。
+- **代码新增**：`eval-harness/service/`（feat-015 FastAPI+SSE）+ `eval-harness/avery/ingest/`（feat-016）+ `eval-harness/{Dockerfile,.dockerignore,service/ingest_api.py,service/.env.example}`（feat-018）+ `src/live/` `src/i18n/` `src/store/liveStore.ts` `src/components/UploadPanel.tsx` `scripts/i18n-zh.mjs`（feat-017）+ `vite.config.ts` `src/{main.tsx,vite-env.d.ts}` `.env.example` `vercel.json` `scripts/deploy/` `docs/deploy/`（feat-018）+ 改 `Topbar/HomeScene/NexusScene`。**engine（loop/redline/brain）零改写。**
+- **验证态**：全仓 `pytest` 169 passed 零回归；`./init.sh` 绿；前端 dual-build 3/3；story mode runtime 零回归（integrator 真机 DOM 验：rail seek 1→5/26 + 8 人卡全定性 + 红线净）。真 `eval-harness/.env`（MiniMax/DeepSeek key）gitignored+未 tracked。
+- 研究产出在**项目外** `D:\Boyle\research\{sanya-lushan-yiju-hotel, skeppsviken-construction}\`（feat-019/020）。
+- **⚠ 历史（已解决）**：ADR-0019 曾被清理 → Danny 07-05 恢复并提交（在 main）。
 
 ## 4 · 留给 Danny 的 HITL
 - **旧账（仍有效）**：feat-014 全部新英文 copy 审字（`src/data/fixtures.home.ts` 等）+ **tm2 promote**（停在 `tm2-osj7dqiwv`，审字后 `vercel promote`，**agent 不得代做**）；路演 landing `en.ts` 审字；真人 eval 评分；合伙人 IP 具名授权。
 - **本圆桌新增**：
-  1. 审阅 + 提交 2026-07-05 战略文档（§1/§3）。
+  1. **验收集成分支 `feat/live-core-015-018`（015→018 逐 feature commit、全绿）→ merge 到 main**（含 feat-017/018 新前端/后端代码；`git log 2f76ceb..HEAD` 看链、`npm run dev` 目测、`cd eval-harness && python -m pytest`）。
   2. ~~决定是否恢复 ADR-0019 商业模式文档~~ → 已确认恢复并提交（07-05，商业线 session）。
   3. feat-016 的 embeddings/向量库选型确认（默认 pgvector+pluggable，可异步"按推荐"）。
   4. feat-019 补酒店/婚宴内行 know-how（几条）。
   5. ~~有无酒店/建筑下次见面硬日期~~ → **无硬日期**（07-05 Danny 确认）；feat-019 按 AFK 常规节奏，不冲刺。
+  6. **feat-018 真部署**（本线只出 config/runbook，见 `docs/deploy/dual-deploy-runbook.md`）：域名双端 + 境内/海外主机 + 真 key 入主机 secret + `docker build`+容器 /health + Vercel 项目(Root=repo root≠landing) + 境内静态托管上传 ZH dist + 生产 promote + deployment protection 给融资团队（别锁 SAML）。
+  7. **feat-020**：合伙人确认 Skeppsviken 的 PM（云 Next Project / 旧桌面 Byggsamordnaren）+ CAD 具体产品（定 API 路径）。
+  8. **feat-017/018 新英文/中文 copy 审字**（含 i18n `zh.ts` 的 M3 稿）。
+  9. （非阻塞）feat-017 live 空态 briefing/Today spine 仍显脚本 seed 文案，cosmetic polish；feat-018 `AVERY_RETRIEVAL/EMBEDDINGS/PGVECTOR_URL` 接真 embedder 时补 pipeline 的 env-read。
 
 ## 5 · 下一步（路线图详见 strategy doc §9）
 **D5「并行起跑」三条立即可 AFK 起跑线：**
