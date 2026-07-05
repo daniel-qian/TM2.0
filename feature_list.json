@@ -170,8 +170,8 @@
         "feat-015",
         "feat-016"
       ],
-      "status": "not-started",
-      "evidence": ""
+      "status": "in_progress",
+      "evidence": "2026-07-05 WIP（feat017-frontend-graduate 线，78 tool calls / 746s 后被 session 限流打断，8:40pm Asia/Shanghai 重置，**未产出结构化自检报告**）。代码在分支 feat/live-core-015-018 已提交保命，**只过了构建门、runtime 自检未完成**。integrator 复验 `./init.sh` 绿（tsc -b 0 错 + vite build 440 模块 1.85s）。已落地（git 可见）：新 src/live/（StreamSource + TeamDataSource seam 及 scripted/live 实现）+ src/store/liveStore.ts（live 模式 store）+ src/components/UploadPanel.tsx（上传 UI）+ src/i18n/（文案外置）+ scripts/i18n-zh.mjs（zh 生成脚本，复用 landing）+ 改 Topbar.tsx（?mode 开关/上传入口）/HomeScene.tsx（TeamDataSource 接线）/NexusScene.tsx（StreamSource 接线）。**待验证（限流打断前 agent 未跑完 AFK 门）**：① story mode 零回归（rail 回放机器 + canvasStore/camera/terminal-stream/homeStore 契约）——构建绿但 runtime 回归未确认；② live mode 打桩 DOM 断言；③ 红线 DOM 扫描（人卡无 %/无 moodPct）；④ i18n zh 是否已由 M3 生成（非手写）。下一步：8:40pm 重置后跑一条“完成+自检 feat-017”短线补齐 AFK 门，再 feat-018。"
     },
     {
       "id": "feat-018",

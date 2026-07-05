@@ -1,25 +1,44 @@
 import { useMemo, useState } from 'react'
 import { motion, useReducedMotion, type Transition } from 'framer-motion'
-import { PEOPLE, PROJECTS, type Person, type Project } from '../../data/fixtures'
+import { PEOPLE, PROJECTS } from '../../data/fixtures'
 import { dashboardProjectCopy, type DetailPhase } from '../../data/fixtures.p3'
 import {
   HANDLED_DRAWER_LABEL,
   HOME_CLOSING,
   HOME_CLOSING_NEUTRAL,
   HOME_COPY,
-  HOME_PEOPLE_IDS,
-  HOME_PROJECT_IDS,
   SET_ASIDE_LABEL,
-  homeHandoffs,
-  homePersonRead,
   spineCountLine,
   type HomeHandoff,
 } from '../../data/fixtures.home'
 import { focusEntity } from '../../lib/focus'
 import { PixelAvatar } from '../PixelAvatar'
 import { TeamComposer } from '../TeamComposer'
+import { UploadPanel } from '../UploadPanel'
 import { useCanvas } from '../../store/canvasStore'
 import { useHome } from '../../store/homeStore'
+import { useTeamData } from '../../live/useTeamData'
+import { useDict } from '../../i18n/useDict'
+import type { TeamPerson } from '../../live/teamDataSource'
+
+// live 人卡的文字首字母 avatar（live 人无 sprite——不凭空派 avatar 资产）。
+function InitialAvatar({ name, size = 44, className }: { name: string; size?: number; className?: string }) {
+  const initials = name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? '')
+    .join('')
+  return (
+    <span
+      className={['initial-avatar', className].filter(Boolean).join(' ')}
+      style={{ width: `${size}px`, height: `${size}px`, fontSize: `${Math.round(size * 0.36)}px` }}
+      aria-hidden="true"
+    >
+      {initials}
+    </span>
+  )
+}
 
 // feat-014（ADR-0017 / GH #9）：卡片式今日主页 "The Morning Desk"（方向 A+）。
 // 左脊柱 = 今日 Handoff checklist（判断），右双轨 = 人与项目卡带（证据）。
@@ -39,16 +58,27 @@ function statusTone(status: string) {
   return ''
 }
 
-function ownerName(project: Project) {
-  return PEOPLE.find((p) => p.id === project.ownerId)?.name ?? 'Unassigned'
-}
-
-function displayName(person: Person) {
-  return person.lastInitial ? `${person.name} ${person.lastInitial}.` : person.name
-}
-
 function classNames(parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(' ')
+}
+
+// story 人卡用 PixelAvatar（fixture sprite）；live 人卡用文字首字母（无 sprite）。
+// 按 TeamPerson.id 回查 fixture Person——命中即 story sprite，否则 live initials。
+function personAvatar(tp: TeamPerson, size: number) {
+  const fixture = PEOPLE.find((p) => p.id === tp.id)
+  return fixture ? (
+    <PixelAvatar person={fixture} size={size} className="home-person-avatar" />
+  ) : (
+    <InitialAvatar name={tp.name} size={size} className="home-person-avatar" />
+  )
+}
+
+// story 项目状态标签保留原 dashboardProjectCopy（phase-aware）；live 项目（非 fixture）用
+// 原始 status 兜底——项目可硬（数字/状态 OK），只是无脚本化 phase 文案。
+function projectStatusLabel(id: string, status: string, phase: DetailPhase): string {
+  const fixture = PROJECTS.find((p) => p.id === id)
+  if (fixture) return dashboardProjectCopy(fixture, phase).statusLabel
+  return status
 }
 
 // 墨迹对勾（签名元素）：手绘感 stroke 描边动画，勾下去才画完。
@@ -80,6 +110,9 @@ export function HomeScene() {
   const discard = useHome((s) => s.discard)
   const restore = useHome((s) => s.restore)
   const prefersReducedMotion = useReducedMotion()
+  // feat-017：数据经 TeamDataSource seam（story = fixtures 原样；live = ingestion 产出）。
+  const { source, live, liveEmpty } = useTeamData()
+  const { t } = useDict()
 
   // hover / focus 的 handoff（右栏联动）；inking = 正在画对勾；leaving = 正在淡出。
   // 退场是手动两段式（inking 550ms → leaving 240ms → 移除 + layout 补位）——不走
@@ -90,8 +123,10 @@ export function HomeScene() {
   const [leavingIds, setLeavingIds] = useState<ReadonlySet<string>>(new Set())
   const [drawerOpen, setDrawerOpen] = useState(false)
 
-  const phase: DetailPhase = briefing.version === 2 ? 'grown' : 'believed'
-  const handoffs = homeHandoffs(phase)
+  // story: canvasStore briefing 决定 phase（B10 后 grown）。live: 无 rail phase 概念——固定 believed。
+  const activeBriefing = live ? source.briefing(live ? 'believed' : 'grown') : briefing
+  const phase: DetailPhase = !live && briefing.version === 2 ? 'grown' : 'believed'
+  const handoffs = source.handoffs(phase)
 
   const pending = handoffs.filter((h) => !marks[h.id])
   const handled = handoffs.filter((h) => marks[h.id] === 'done')
@@ -107,12 +142,8 @@ export function HomeScene() {
     ? { duration: 0 }
     : { duration: 0.28, ease: [0.16, 1, 0.3, 1] }
 
-  const lanePeople = HOME_PEOPLE_IDS.map((id) => PEOPLE.find((p) => p.id === id)).filter(
-    (p): p is Person => Boolean(p),
-  )
-  const laneProjects = HOME_PROJECT_IDS.map((id) => PROJECTS.find((p) => p.id === id)).filter(
-    (p): p is Project => Boolean(p),
-  )
+  const lanePeople = source.people(phase)
+  const laneProjects = source.projects(phase)
 
   function isLinkedPerson(id: string) {
     return Boolean(linked?.personIds.includes(id))
@@ -193,9 +224,9 @@ export function HomeScene() {
         {/* ── 左脊柱：问候 + 今日 checklist + 已照料抽屉 ─────────────────── */}
         <div className="home-spine">
           <header className="home-greeting">
-            <p className="eyebrow">{HOME_COPY.greetingEyebrow}</p>
-            <h1>{briefing.headline}</h1>
-            <p className="home-greeting-sub">{briefing.subhead}</p>
+            <p className="eyebrow">{live ? t.team.liveEyebrow : HOME_COPY.greetingEyebrow}</p>
+            <h1>{activeBriefing.headline}</h1>
+            <p className="home-greeting-sub">{activeBriefing.subhead}</p>
           </header>
 
           <div className="home-spine-head">
@@ -331,17 +362,26 @@ export function HomeScene() {
         </div>
 
         {/* ── 右双轨：证据层（联动提亮/降透明），非陈列墙 ─────────────────── */}
+        {/* live 未上传：右栏换成上传 UI（Your team 从上传长出来）。 */}
+        {liveEmpty ? (
+          <div className="home-lanes home-lanes-live-empty">
+            <UploadPanel />
+          </div>
+        ) : (
         <div className={classNames(['home-lanes', linked && 'has-link'])}>
+          {/* live 已上传：在卡带上方保留上传入口（可继续加文件）。 */}
+          {live ? <UploadPanel /> : null}
           <div className="home-lanes-head">
             <p className="eyebrow">{HOME_COPY.peopleLane}</p>
-            <button type="button" className="home-map-link" onClick={openMap}>
-              {HOME_COPY.mapLink} →
-            </button>
+            {!live ? (
+              <button type="button" className="home-map-link" onClick={openMap}>
+                {HOME_COPY.mapLink} →
+              </button>
+            ) : null}
           </div>
           {/* 联动 dim/lit 全走 CSS（.has-link + .is-lit 类）：确定性强，不依赖 JS 动画帧 */}
           <div className="home-lane home-lane-people" aria-label="People this week">
             {lanePeople.map((person) => {
-              const read = homePersonRead(person.id, phase)
               const lit = isLinkedPerson(person.id)
               return (
                 <button
@@ -349,19 +389,20 @@ export function HomeScene() {
                   type="button"
                   className={classNames([
                     'home-person-card',
-                    read && `home-tone-${read.tone}`,
+                    person.read && `home-tone-${person.tone}`,
                     lit && 'is-lit',
                   ])}
                   onClick={() => openDetail('employee', person.id)}
-                  aria-label={`Open ${displayName(person)}${read ? ` — ${read.read}` : ''}`}
+                  aria-label={`Open ${person.name}${person.read ? ` — ${person.read}` : ''}`}
                 >
-                  <PixelAvatar person={person} size={44} className="home-person-avatar" />
+                  {personAvatar(person, 44)}
                   <span className="home-person-body">
-                    <h3>{displayName(person)}</h3>
+                    <h3>{person.name}</h3>
                     <p className="home-person-role">{person.role}</p>
-                    {read ? <p className="home-person-read">{read.read}</p> : null}
+                    {person.read ? <p className="home-person-read">{person.read}</p> : null}
                   </span>
                   {/* 人卡不浮依据签：点亮 + 定性读数已足够，浮签会压字（Danny 真机抓到） */}
+                  {/* 🔴 红线：人卡永不渲染任何数字 —— 无 moodPct/capacityPct/% */}
                 </button>
               )
             })}
@@ -370,7 +411,6 @@ export function HomeScene() {
           <p className="eyebrow home-lane-label">{HOME_COPY.projectLane}</p>
           <div className="home-lane home-lane-projects" aria-label="Projects in motion">
             {laneProjects.map((project) => {
-              const copy = dashboardProjectCopy(project, phase)
               const lit = isLinkedProject(project.id)
               return (
                 <button
@@ -388,19 +428,21 @@ export function HomeScene() {
                     <h3>{project.title}</h3>
                     <span className="home-project-status">
                       <span className={`status-dot ${statusTone(project.status)}`} />
-                      {copy.statusLabel}
+                      {projectStatusLabel(project.id, project.status, phase)}
                     </span>
                   </span>
-                  <span className="home-project-strip-row" aria-hidden="true">
-                    <span className={`project-strip ${progressBand(project.progress)}`}>
-                      <span
-                        className="project-strip-fill"
-                        style={{ width: `${project.progress}%` }}
-                      />
+                  {typeof project.progress === 'number' ? (
+                    <span className="home-project-strip-row" aria-hidden="true">
+                      <span className={`project-strip ${progressBand(project.progress)}`}>
+                        <span
+                          className="project-strip-fill"
+                          style={{ width: `${project.progress}%` }}
+                        />
+                      </span>
                     </span>
-                  </span>
+                  ) : null}
                   <span className="home-project-meta">
-                    <span>{ownerName(project)}</span>
+                    <span>{project.ownerName}</span>
                     {project.dueDate ? <span className="home-project-due">{project.dueDate}</span> : null}
                   </span>
                   {/* 依据签只在第一张关联项目卡、以文档流内 chip 出现——绝对悬浮会压字，
@@ -413,6 +455,7 @@ export function HomeScene() {
             })}
           </div>
         </div>
+        )}
       </div>
       </div>
 

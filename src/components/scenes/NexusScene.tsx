@@ -19,6 +19,7 @@ import {
   SCOPE_SPLIT,
   SIGNALS,
   TIMELINE,
+  type AgentOutput,
   type Person,
   type Signal,
   type TaskTemplate,
@@ -44,6 +45,8 @@ import {
 import { PanZoomCanvas } from '../PanZoomCanvas'
 import { flyToTarget, useRailCamera, type CameraTarget, type SafeInsets } from '../../lib/useRailCamera'
 import { PixelAvatar } from '../PixelAvatar'
+import { useLive } from '../../store/liveStore'
+import { useDict } from '../../i18n/useDict'
 
 // feat-004 (ADR-0014 决策 1)：终端 = viewport-fixed 左栏 HUD。镜头只对 Manifest 区取景，
 // insets.left 加宽为终端栏宽（440 + 边距）；其余薄边清 Topbar / advance-bar。
@@ -431,10 +434,12 @@ function StructuredOutputCard({
   dispatchedTaskKeys,
   onDispatchTask,
   onReturnDashboard,
+  output = AGENT_OUTPUT,
 }: {
   dispatchedTaskKeys: Set<string>
   onDispatchTask: (template: TaskTemplate) => void
   onReturnDashboard: () => void
+  output?: AgentOutput // feat-017：story 用 fixture AGENT_OUTPUT；live 传入真 agent 8 字段产出
 }) {
   return (
     <section className="structured-output-card" aria-label="What it found — the read">
@@ -451,14 +456,14 @@ function StructuredOutputCard({
         {/* 1 · summary（原 conclusion）——⚠ Danny 审字 label 用「The read」*/}
         <section className="report-section report-conclusion" aria-label="Summary — the read">
           <p className="report-section-label">The read</p>
-          <strong>{AGENT_OUTPUT.summary}</strong>
+          <strong>{output.summary}</strong>
         </section>
 
         {/* 2 · detected_signals（NEW）——观察到的具体信号，有 evidence 锚 */}
         <section className="report-section" aria-label="Signals it picked up">
           <p className="report-section-label">Signals it picked up {/* ⚠ 待 Danny 审字 */}</p>
           <ul className="report-list">
-            {AGENT_OUTPUT.detected_signals.map((item) => (
+            {output.detected_signals.map((item) => (
               <li key={item}>{item}</li>
             ))}
           </ul>
@@ -468,7 +473,7 @@ function StructuredOutputCard({
         <section className="report-section" aria-label="What might be going on">
           <p className="report-section-label">What might be going on — a read, not a verdict {/* ⚠ 待 Danny 审字 */}</p>
           <ul className="report-list report-hypotheses">
-            {AGENT_OUTPUT.diagnosis_hypotheses.map((h) => (
+            {output.diagnosis_hypotheses.map((h) => (
               <li key={h.label} className={classNames(['hypothesis-item', `is-${h.kind}`])}>
                 <span className="hypothesis-kind">{h.kind === 'primary' ? 'Most likely' : 'Also possible'}</span>
                 {h.label}
@@ -488,7 +493,7 @@ function StructuredOutputCard({
         <section className="report-section" aria-label="Why I'm saying this">
           <p className="report-section-label">Why I&rsquo;m saying this</p>
           <ol className="report-list">
-            {AGENT_OUTPUT.evidence.map((item) => (
+            {output.evidence.map((item) => (
               <li key={item}>{item}</li>
             ))}
           </ol>
@@ -498,20 +503,20 @@ function StructuredOutputCard({
           <section className="report-section report-confidence" aria-label="How sure it is">
             <p className="report-section-label">
               How sure it is {/* ⚠ 待 Danny 审字 */}
-              <span className={classNames(['confidence-badge', `is-${AGENT_OUTPUT.confidence.level}`])}>
-                {AGENT_OUTPUT.confidence.level}
+              <span className={classNames(['confidence-badge', `is-${output.confidence.level}`])}>
+                {output.confidence.level}
               </span>
             </p>
-            <p className="confidence-rationale">{AGENT_OUTPUT.confidence.rationale}</p>
+            <p className="confidence-rationale">{output.confidence.rationale}</p>
             {/* 渐进披露：wouldChange 折叠成一行 teaser，仍在场（可审计），首屏不占满高 */}
             <details className="report-disclosure">
               <summary>
                 <span className="disclosure-caret" aria-hidden="true" />
                 What would change it {/* ⚠ 待 Danny 审字 */}
-                <span className="disclosure-count">{AGENT_OUTPUT.confidence.wouldChange.length}</span>
+                <span className="disclosure-count">{output.confidence.wouldChange.length}</span>
               </summary>
               <ul className="report-list">
-                {AGENT_OUTPUT.confidence.wouldChange.map((item) => (
+                {output.confidence.wouldChange.map((item) => (
                   <li key={item}>{item}</li>
                 ))}
               </ul>
@@ -530,7 +535,7 @@ function StructuredOutputCard({
         <section className="report-section" aria-label="Recommended actions">
           <p className="report-section-label">Recommended actions</p>
           <ol className="report-list report-actions">
-            {AGENT_OUTPUT.recommended_actions.map((item) => (
+            {output.recommended_actions.map((item) => (
               <li key={item}>{item}</li>
             ))}
           </ol>
@@ -539,7 +544,7 @@ function StructuredOutputCard({
         {/* + · conversation_script（1:1 开场白，"senior 在耳边"的声音） */}
         <section className="report-section report-script" aria-label="If you open the 1:1">
           <p className="report-section-label">If you open the 1:1 {/* ⚠ 待 Danny 审字 */}</p>
-          <p className="report-script-line">{AGENT_OUTPUT.conversation_script}</p>
+          <p className="report-script-line">{output.conversation_script}</p>
         </section>
 
         {/* 8 · metrics_to_track（NEW）——看什么才知道奏效。渐进披露：折叠成一行 teaser，仍在场 */}
@@ -548,10 +553,10 @@ function StructuredOutputCard({
             <summary>
               <span className="disclosure-caret" aria-hidden="true" />
               What to watch to know it worked {/* ⚠ 待 Danny 审字 */}
-              <span className="disclosure-count">{AGENT_OUTPUT.metrics_to_track.length}</span>
+              <span className="disclosure-count">{output.metrics_to_track.length}</span>
             </summary>
             <ul className="report-list report-actions">
-              {AGENT_OUTPUT.metrics_to_track.map((item) => (
+              {output.metrics_to_track.map((item) => (
                 <li key={item}>{item}</li>
               ))}
             </ul>
@@ -563,14 +568,14 @@ function StructuredOutputCard({
         <section className="report-section" aria-label="HR / who confirms">
           <p className="report-section-label">
             When to pull in HR {/* ⚠ 待 Danny 审字 */}
-            <span className={classNames(['escalation-badge', `is-${AGENT_OUTPUT.escalation.level}`])}>
-              {AGENT_OUTPUT.escalation.level === 'none' ? 'not yet' : AGENT_OUTPUT.escalation.level}
+            <span className={classNames(['escalation-badge', `is-${output.escalation.level}`])}>
+              {output.escalation.level === 'none' ? 'not yet' : output.escalation.level}
             </span>
           </p>
-          <p className="escalation-note">{AGENT_OUTPUT.escalation.note}</p>
+          <p className="escalation-note">{output.escalation.note}</p>
           <p className="report-subtle-label">Who confirms</p>
           <div className="confirmation-list">
-            {AGENT_OUTPUT.escalation.confirmWith.map((label) => {
+            {output.escalation.confirmWith.map((label) => {
               const person = personByName(label)
               return (
                 <span key={label} className="confirmation-chip">
@@ -582,10 +587,11 @@ function StructuredOutputCard({
           </div>
         </section>
 
+        {output.nextTasks.length > 0 ? (
         <section className="report-section" aria-label="Next tasks">
           <p className="report-section-label">Next tasks</p>
           <div className="next-task-list">
-            {AGENT_OUTPUT.nextTasks.map((task) => {
+            {output.nextTasks.map((task) => {
               const dispatched = dispatchedTaskKeys.has(taskTemplateKey(task))
               const assigneePerson = PEOPLE.find((person) => person.id === task.assigneeId)
               return (
@@ -612,6 +618,7 @@ function StructuredOutputCard({
             })}
           </div>
         </section>
+        ) : null}
         </div>
       </div>
 
@@ -1299,7 +1306,169 @@ function NexusEmptyState() {
   )
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+// feat-017 · LIVE mode Nexus（ADR-0020 决策 2/3）。
+// 完全独立于 scripted 路径（rail 回放机器一行不碰）：终端从 liveStore.run.lines 逐帧渲染，
+// 结构化卡从 run.advice（真 agent 8 字段产出）渲染。红线扫描扩到 live 产出（contract.py 已在
+// 服务端校验；前端 coerceAgentOutput 不引入任何人评分/%）。
+// ════════════════════════════════════════════════════════════════════════════
+
+// live 终端：直接吃 StreamLine[]（与 story 同 chrome/CSS），不经 caseDef/thread 派生。
+function LiveTerminal({ lines, running }: { lines: StreamLine[]; running: boolean }) {
+  const logRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    const log = logRef.current
+    if (log) log.scrollTop = log.scrollHeight
+  }, [lines.length])
+
+  return (
+    <section className="nexus-terminal" aria-label="How it's thinking it through">
+      <header className="nexus-terminal-bar" aria-hidden="true">
+        <span className="nexus-terminal-dots">
+          <i />
+          <i />
+          <i />
+        </span>
+        <span className="nexus-terminal-title">thinking it through</span>
+      </header>
+      <div className="nexus-terminal-log" ref={logRef}>
+        {lines.map((line, index) => {
+          const meta = SPEAKER_META[line.speaker]
+          const prefix = line.type === 'manifest' ? 'MANIFEST' : meta.label
+          const prefixClass = line.type === 'manifest' ? 'is-manifest' : meta.className
+          return (
+            <p
+              key={(line as StreamLine & { key?: string }).key ?? `live:${index}`}
+              className={classNames(['terminal-line', `is-${line.type}`, 'is-new'])}
+              style={{ '--line-i': 0 } as CSSProperties}
+            >
+              <span className={classNames(['terminal-prefix', prefixClass])}>{prefix}</span>
+              <span className="terminal-text">{line.text}</span>
+            </p>
+          )
+        })}
+        {running ? (
+          <p className="terminal-line terminal-cursor-line" aria-hidden="true">
+            <span className="terminal-prefix is-system">·</span>
+            <span className="terminal-text">
+              running <span className="terminal-cursor">▌</span>
+            </span>
+          </p>
+        ) : null}
+      </div>
+    </section>
+  )
+}
+
+// live 提问 composer（空态 + 运行后追问共用）。走 liveStore.askLive → feat-015 /advise SSE。
+function LiveAskComposer({
+  placeholder,
+  submitLabel,
+  onAsk,
+}: {
+  placeholder: string
+  submitLabel: string
+  onAsk: (text: string) => void
+}) {
+  const [draft, setDraft] = useState('')
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const text = draft.trim()
+    if (!text) return
+    onAsk(text)
+    setDraft('')
+  }
+  return (
+    <form className="nexus-followup-composer" aria-label="Ask your team" onSubmit={handleSubmit}>
+      <input
+        type="text"
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+        placeholder={placeholder}
+        aria-label="Live question"
+      />
+      <button type="submit">{submitLabel}</button>
+    </form>
+  )
+}
+
+function LiveNexusScene() {
+  const run = useLive((s) => s.run)
+  const askLive = useLive((s) => s.askLive)
+  const goScene = useCanvas((s) => s.goScene)
+  const { t } = useDict()
+
+  const running = run.status === 'running'
+  const hasStarted = run.status !== 'idle'
+  const advice = run.advice
+  const noop = useMemo(() => new Set<string>(), [])
+
+  return (
+    <section className="scene scene-nexus is-active" aria-label="The room">
+      <PanZoomCanvas board={NEXUS_BOARD}>
+        <div className="canvas-grid board-surface" aria-hidden="true" />
+        {advice ? (
+          <div
+            className="nexus-card-slot is-active"
+            style={{ left: '760px', top: '520px' }}
+          >
+            <StructuredOutputCard
+              output={advice}
+              dispatchedTaskKeys={noop}
+              onDispatchTask={() => {}}
+              onReturnDashboard={() => goScene('home')}
+            />
+          </div>
+        ) : null}
+      </PanZoomCanvas>
+
+      {hasStarted ? (
+        <>
+          <LiveTerminal lines={run.lines} running={running} />
+          <div className="nexus-brief-hud">
+            <div className="nexus-brief-bar" aria-label={t.nexus.liveThinking}>
+              <span className="nexus-brief-bar-eyebrow">{t.nexus.liveThinking}</span>
+              <span className="nexus-brief-step">
+                {run.status === 'error'
+                  ? t.nexus.liveError
+                  : running
+                    ? t.nexus.liveRunning
+                    : t.nexus.liveReady}
+              </span>
+            </div>
+          </div>
+          <LiveAskComposer
+            placeholder={t.nexus.askPlaceholder}
+            submitLabel={t.nexus.ask}
+            onAsk={(text) => askLive({ situation: text })}
+          />
+        </>
+      ) : (
+        <section className="nexus-empty" aria-label="Working it through — ask your team">
+          <p className="eyebrow">{t.nexus.liveThinking}</p>
+          <h2>{t.team.emptyTitle}</h2>
+          <p>{t.nexus.askPlaceholder}</p>
+          <div className="nexus-empty-composer-wrap">
+            <LiveAskComposer
+              placeholder={t.nexus.askPlaceholder}
+              submitLabel={t.nexus.ask}
+              onAsk={(text) => askLive({ situation: text })}
+            />
+          </div>
+        </section>
+      )}
+    </section>
+  )
+}
+
 export function NexusScene() {
+  const mode = useLive((s) => s.mode)
+  // feat-017：live mode 走独立 LiveNexusScene（rail 回放机器不碰）；story mode 原样。
+  if (mode === 'live') return <LiveNexusScene />
+  return <ScriptedNexusScene />
+}
+
+function ScriptedNexusScene() {
   // null = 尚无 thread 或全部关闭 → 空态（composer 待命）；非空走 active case 渲染。
   // caseDef 仍 fallback 到 hero case——保持 hooks 无条件调用，空态下只是不渲染 world 内容。
   const rawActiveCaseId = useCanvas((s) => s.activeCaseId)
