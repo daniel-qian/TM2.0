@@ -170,8 +170,8 @@
         "feat-015",
         "feat-016"
       ],
-      "status": "in_progress",
-      "evidence": "2026-07-05 WIP（feat017-frontend-graduate 线，78 tool calls / 746s 后被 session 限流打断，8:40pm Asia/Shanghai 重置，**未产出结构化自检报告**）。代码在分支 feat/live-core-015-018 已提交保命，**只过了构建门、runtime 自检未完成**。integrator 复验 `./init.sh` 绿（tsc -b 0 错 + vite build 440 模块 1.85s）。已落地（git 可见）：新 src/live/（StreamSource + TeamDataSource seam 及 scripted/live 实现）+ src/store/liveStore.ts（live 模式 store）+ src/components/UploadPanel.tsx（上传 UI）+ src/i18n/（文案外置）+ scripts/i18n-zh.mjs（zh 生成脚本，复用 landing）+ 改 Topbar.tsx（?mode 开关/上传入口）/HomeScene.tsx（TeamDataSource 接线）/NexusScene.tsx（StreamSource 接线）。**待验证（限流打断前 agent 未跑完 AFK 门）**：① story mode 零回归（rail 回放机器 + canvasStore/camera/terminal-stream/homeStore 契约）——构建绿但 runtime 回归未确认；② live mode 打桩 DOM 断言；③ 红线 DOM 扫描（人卡无 %/无 moodPct）；④ i18n zh 是否已由 M3 生成（非手写）。下一步：8:40pm 重置后跑一条“完成+自检 feat-017”短线补齐 AFK 门，再 feat-018。"
+      "status": "done",
+      "evidence": "2026-07-05 done（feat017 线 78 tool calls 后被 session 限流打断未自检 → 重置后 integrator 亲自 runtime 验证通过；WIP 提交 fae493f + 验证提交）。代码在分支 feat/live-core-015-018。验证（dev server DOM 断言，动画手感照例归 Danny 真机；canvas rAF 停摆故截图 N/A）：① `./init.sh` 绿（tsc -b 0 错 + vite build 440 模块 1.85s）；② **story mode 零回归**：onboarding prologue 渲染、Your team 完整（THIS MORNING briefing + feat-014 四卡 Today spine + 8 人卡全定性 + 6 项目卡 + composer）、**rail 回放机器 seek 正常 1/26→5/26 label 随动**、零 console error；③ **live mode 优雅**：eyebrow 切 FROM YOUR UPLOADS、UploadPanel（拖拽/Choose files/格式/No files yet 空态）、人卡待上传正确隐藏、零 error；④ **红线**：forbiddenWordInDOM=false、人卡零 %、live 显 Nothing is scored about any person；⑤ i18n zh.ts 确为 MiniMax-M3 生成（⚠ 待审字）。落地：src/live/（StreamSource/TeamDataSource seam + scripted/live + transport HTTP）+ liveStore.ts + UploadPanel.tsx + src/i18n/（en/zh+useDict）+ scripts/i18n-zh.mjs + 改 Topbar（?mode，默认 story）/HomeScene（TeamDataSource）/NexusScene（StreamSource）。mode.ts：?mode > VITE_AVERY_MODE > 默认 story（守 ADR-0003/0006/0012/0013/0014 回放契约）。⚠ 小尾巴（非阻塞）：live 空态 briefing+Today spine 仍显脚本 seed（未随空态清空），cosmetic 可后续 polish。HITL：英文/中文 copy 待审字 + 真机目测手感。feat-018 部署翻 live 默认。"
     },
     {
       "id": "feat-018",

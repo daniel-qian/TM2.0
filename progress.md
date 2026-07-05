@@ -224,7 +224,7 @@ avery loop 补 cite-before-number。
 - **feat-019 ✅ 研究+包草稿 slice done（07-05，AFK 线）**：客户核实=三亚绿杉壹居度假酒店（海棠湾豪华度假村，2024-12 开业，阳光保险投资，211 房+30 别墅，962㎡ 草坪=婚宴 showcase）；外置 `D:\Boyle\research\sanya-lushan-yiju-hotel\`（00-findings + pack-draft：5 案+5 PB+6 信号+5 护栏，红线零人评分）。待 feat-016/017 做 skin+demo+集成。HITL：Danny 补 9 条内行 know-how。
 - **feat-015 ✅ done（07-05，AFK 门全绿）**：agent service `eval-harness/service/`（FastAPI+SSE 包 engine，8 字段投影+API 边界红线，3 端点）；pytest 141 passed 零回归 + MiniMax-M3 真冒烟过。**代码在 worktree（branch worktree-agent-ac44e3f46118f46ca），未 commit、待整合进 main**。
 - **★ D5 三条并行线全部回（07-05）**：feat-015 ✅ / feat-019 研究+包 slice ✅ / feat-020 ✅。
-- **★ AFK 串行链 `feat/live-core-015-018`（07-05）**：f965bad docs → 4517f0e feat-015（141）→ 4e1bac0 feat-016（169，红线抽取门绿）→ **feat-017 WIP（前端毕业，./init.sh 构建绿，但 agent 被 session 限流[8:40pm 重置]打断、runtime 自检未完成，已提交保命待补验）**。**feat-018 未起**。主 main 不动，Danny 分支终验收后 merge。
+- **★ AFK 串行链 `feat/live-core-015-018`（07-05）**：f965bad docs → 4517f0e feat-015（141）→ 4e1bac0 feat-016（169，红线抽取门绿）→ fae493f feat-017 WIP → **feat-017 ✅ done（integrator runtime 验证 story 零回归+rail seek、live+UploadPanel、红线净、zh=M3）**。下一步 **feat-018（双端部署）串行**。主 main 不动，Danny 分支终验收后 merge。
 - **AFK 硬约束入 memory**（`afk-self-loop-minimize-danny`）：dev+test 自跑自验自修，HITL 只留审字/价值观/授权/评分/promote。
 - **不动的约束**：红线 ADR-0015/0018、决策层真理、Avery 品牌、商业模式（口径见 committed CONTEXT.md § Commercial language，sampler≠免费层，护栏见 ADR-0021 §6；ADR-0019 已于 07-05 恢复落盘并提交）、中文经 M3、**story mode 保留=不动 rail 回放机器**（ADR-0003/0006/0012/0013/0014）。
 - **旧账未变**：feat-014 审字 + tm2 promote 仍是 Danny 的 HITL（见 `session-handoff.md` §4）。
