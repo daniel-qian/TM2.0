@@ -5,9 +5,14 @@
 >
 > **This runbook is CONFIG + STEPS, not an applied deploy.** The AFK build line (this ticket)
 > produced the build config, the service image, the env matrix, and the smoke gate — all green
-> locally. **Every step that touches a hosting provider, a domain, a production promote, a
-> deployment-protection panel, or a real key is Danny's HITL** and is marked 🧑 **HITL** below.
-> Nothing here has been deployed; no key is in git.
+> locally. Nothing here has been deployed; no key is in git.
+>
+> **Gate policy (先斩后奏, updated 2026-07-06):** deploy + **production promote are automatic** —
+> once the project is connected, the agent lets the latest build take the production main domain and
+> does **not** roll back or hold prod "pending 审字". The 🧑 marks below are **access walls, not
+> review gates**: they need Danny's own credentials/accounts (real API keys, choosing/provisioning a
+> host, the Vercel Deployment-Protection panel, domain DNS). The agent does everything up to each
+> wall and hands off only that step. See memory `gates-only-on-destructive`.
 
 ---
 
@@ -142,8 +147,9 @@ The build is deterministic and offline; **only the upload/promote is HITL.**
   `VITE_AVERY_MODE=live`. It is a **separate project** from `landing/`.
 - 🧑 **HITL** — in the Vercel project (Danny): set **Root Directory = repo root** (NOT `landing/`),
   and set `VITE_AVERY_API_BASE=https://<overseas-service>` (from §A.3) in project env.
-- 🧑 **HITL** — connect the project + trigger the deploy (or `vercel` CLI). **Do NOT** promote to
-  production from this line.
+- 🧑 **HITL (access)** — connect the project (needs Danny's Vercel account). **Once connected,
+  promote is automatic:** the latest build takes the production main domain — do NOT roll back or
+  gate it on review.
 
 Local equivalent of the Vercel build (to eyeball the exact artifact):
 
@@ -216,15 +222,17 @@ The financing team must reach the 境内 ZH demo **without being locked out**.
 
 ---
 
-## F. HITL checklist (Danny — everything the AFK line must NOT do)
+## F. Access-wall checklist (Danny — steps that need your credentials/accounts, not your review)
+
+> Promote itself is **automatic** (先斩后奏) — the items below are the credential/account walls only.
 
 - [ ] Provision 境内 host + 海外 host for the agent service.
 - [ ] Set real brain keys in each host's secret store (`MINIMAX_API_KEY` / `ANTHROPIC_API_KEY`) — **never git**.
 - [ ] `docker build` + container `/health` smoke on a machine with Docker running.
 - [ ] Vercel: separate project, **Root Directory = repo root** (not `landing/`), set `VITE_AVERY_API_BASE`.
 - [ ] Upload `dist/` (ZH build) to the 境内 static host + configure SPA fallback.
-- [ ] **Domain** for each target.
-- [ ] **Production promote** (both targets).
+- [ ] **Domain / DNS** for each target (needs your registrar/host access).
+- [ ] Connect each Vercel/host project (needs your account) — **promote is then automatic, no per-deploy sign-off.**
 - [ ] **Deployment-protection** panel: grant financing-team access without locking them out.
 - [ ] (Optional) vector RAG turn-on: pick embeddings, stand up pgvector, set the three env vars.
 

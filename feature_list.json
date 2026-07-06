@@ -176,7 +176,7 @@
     {
       "id": "feat-018",
       "name": "Dual deployment — 境内中文 + 海外英文双端",
-      "description": "ADR-0021 §5。前端静态 SPA 构建 → Vercel（海外 EN）+ 境内静态托管（ZH）；Python agent 服务 → 境内主机（brain=MiniMax/DeepSeek + 境内 embeddings/pgvector）+ 海外（brain=Claude）。env/secret 管理（key 不进 git，参考 eval-harness/.env 轮换提醒）；deployment protection（融资团队可访问）；双端 smoke。HITL：域名 + 生产 promote 归 Danny。",
+      "description": "ADR-0021 §5。前端静态 SPA 构建 → Vercel（海外 EN）+ 境内静态托管（ZH）；Python agent 服务 → 境内主机（brain=MiniMax/DeepSeek + 境内 embeddings/pgvector）+ 海外（brain=Claude）。env/secret 管理（key 不进 git，参考 eval-harness/.env 轮换提醒）；deployment protection（融资团队可访问）；双端 smoke。生产 promote 自动（先斩后奏，latest 上主域，不回滚/不待审字）；仅需 Danny 凭据的：项目 link + 域名 DNS + Vercel 面板。",
       "dependencies": [
         "feat-017"
       ],

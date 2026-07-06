@@ -54,7 +54,7 @@ Demo UI work:
 
 - Must respect ADR-0015 framing and avoid machine-judging people.
 - Manual `npm run dev` visual evidence matters when behavior or layout changed.
-- New Venus-facing English copy needs `⚠ 待 Danny 审字`.
+- New Venus-facing copy is finalized and shipped by the agent (先斩后奏) — do NOT dock points for a missing `待 Danny 审字` marker; that gate is retired (see AGENTS.md · Autonomy & gates).
 
 Eval-harness work:
 

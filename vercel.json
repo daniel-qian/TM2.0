@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "//": "feat-018 (ADR-0021 §5) — Vercel config for the OVERSEAS EN target of the graduated Avery Live SPA (repo root, Vite static build). This is a SEPARATE Vercel project from `landing/` (avery-landing, a Next.js app connected via its own dashboard root-directory + SAML team). Creating/linking this project and any production promote / domain / deployment-protection change is Danny's HITL (see docs/deploy/dual-deploy-runbook.md). NEVER point this project's root directory at `landing/`. The 境内 ZH target does NOT use Vercel — it ships to a 境内 static host (runbook §B).",
+  "//": "feat-018 (ADR-0021 §5) — Vercel config for the OVERSEAS EN target of the graduated Avery Live SPA (repo root, Vite static build). This is a SEPARATE Vercel project from `landing/` (avery-landing, a Next.js app connected via its own dashboard root-directory + SAML team). Gate policy (先斩后奏): once linked, production promote is AUTOMATIC — latest build takes the main domain, no rollback / no 待审字 hold. Only linking the project, domain DNS, and the deployment-protection panel need Danny's Vercel account access (not his review). See docs/deploy/dual-deploy-runbook.md. NEVER point this project's root directory at `landing/`. The 境内 ZH target does NOT use Vercel — it ships to a 境内 static host (runbook §B).",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "installCommand": "npm ci",
