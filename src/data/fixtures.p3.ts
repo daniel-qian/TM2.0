@@ -6,7 +6,7 @@
  * - 所有 user-facing 字符串英文（Venus = 美国听众）；注释中文给 Danny。
  * - 派生 helper 是纯函数吃 fixtures，零新 store state（P5-03：详情页 state-aware）。
  *
- * ⚠ 待 Danny 审字：下方所有英文 copy 是 Danny 初稿，P3-05 收口逐字审。
+ * 下方所有英文 copy 是 Danny 初稿，P3-05 收口逐字审。
  * ⚠ 守则：HR analysis / weekly sentiment 口径守 *no personnel judgment*
  *         （见 fixtures.ts 的 cap_hr_interrupt / MISMATCH.safeFraming）。
  */
@@ -167,7 +167,7 @@ export function signalsFor(personId: string, _phase: DetailPhase = 'grown'): Sig
 }
 
 // ───────────────────────── 概览卡 · HR signal 文本（按 id 索引）─────────────────
-// ⚠ 待 Danny 审字。story 人有文本；texture 人缺 → 概览走空态 "No HR signal — looks steady"。
+// story 人有文本；texture 人缺 → 概览走空态 "No HR signal — looks steady"。
 // 口径：工作负载 / 路由信号，不是人格评价。
 
 export const HR_SIGNAL: Record<string, string> = {
@@ -177,7 +177,7 @@ export const HR_SIGNAL: Record<string, string> = {
 }
 
 // ───────────────────────── Weekly summary + sentiment（按 id 索引）──────────────
-// ⚠ 待 Danny 审字。本周工作的中性复述 + 情绪读数（描述工作处境，非对人评价）。
+// 本周工作的中性复述 + 情绪读数（描述工作处境，非对人评价）。
 
 export type Sentiment = 'positive' | 'steady' | 'strained'
 
@@ -204,7 +204,7 @@ const EMPLOYEE_OVERVIEW_COPY: Record<DetailPhase, Record<string, EmployeeOvervie
       statusLabel: 'Stretched right now',
       progressLabel: 'Core flow progress',
       progressValue: '48% · brief kept moving',
-      hrSignal: 'The brief keeps moving on her — a good moment to check in', // ⚠ 待 Danny 审字
+      hrSignal: 'The brief keeps moving on her — a good moment to check in',
     },
     u_jason: {
       workloadLabel: 'This week',
@@ -230,7 +230,7 @@ const EMPLOYEE_OVERVIEW_COPY: Record<DetailPhase, Record<string, EmployeeOvervie
       statusLabel: 'Scope protected',
       progressLabel: 'Core flow progress',
       progressValue: '48% · core path protected',
-      hrSignal: 'Scope is frozen around her now — still a good moment to check in', // ⚠ 待 Danny 审字
+      hrSignal: 'Scope is frozen around her now — still a good moment to check in',
     },
     u_jason: {
       workloadLabel: 'Lending a hand',
@@ -251,7 +251,7 @@ const EMPLOYEE_OVERVIEW_COPY: Record<DetailPhase, Record<string, EmployeeOvervie
   },
 }
 
-// ⚠ 待 Danny 审字。believed 态只放可观察症状，不放 agent 诊断 / 建议。
+// believed 态只放可观察症状，不放 agent 诊断 / 建议。
 export const BELIEVED_WEEKLY_SUMMARY: Record<string, WeeklySummary> = {
   u_bill: {
     text: "Lin Qing's had a rough week — the brief kept moving (around nine client change requests in three days), so she spent it reworking screens rather than finishing the core guide flow. The work stalled because the finish line moved, not for lack of trying.",
@@ -289,7 +289,7 @@ export const WEEKLY_SUMMARY: Record<string, WeeklySummary> = {
 }
 
 // ───────────────────────── HR knowledge analysis（按 id 索引）──────────────────
-// ⚠ 待 Danny 审字。⚠⚠ 守则：no personnel judgment。
+// ⚠⚠ 守则：no personnel judgment。
 // agent 据 HR / Project-Ops capability 生成的建议；口径是「工作负载路由」而非「人事评价」。
 // capabilityId 指回 fixtures.ts 的 CAPABILITIES（护城河被 agent 自动优先引用）。
 
@@ -303,7 +303,7 @@ export interface HrAnalysis {
   framing?: string // 显式的 no-personnel-judgment 护栏
 }
 
-// ⚠ 待 Danny 审字。Act1 症状 payload：只并列 raw facts，不解释根因。
+// Act1 症状 payload：只并列 raw facts，不解释根因。
 export const BELIEVED_HR_ANALYSIS: Record<string, HrAnalysis> = {
   u_bill: {
     mode: 'reading',
@@ -499,7 +499,7 @@ const PROJECT_BRIEF_COPY: Record<DetailPhase, Record<string, ProjectBriefCopy>> 
   },
 }
 
-// ⚠ 待 Danny 审字。Act1 原始计划：展示 stall，不展示 B8 后的 freeze。
+// Act1 原始计划：展示 stall，不展示 B8 后的 freeze。
 const ACME_BELIEVED_MILESTONES: Milestone[] = [
   { label: 'Recommendation data fields', when: 'Wed', state: 'in-progress' },
   { label: 'Wire the core flow into the demo', when: 'Thu', state: 'stalled' },
@@ -514,7 +514,7 @@ const CONNECTOR_BELIEVED_MILESTONES: Milestone[] = [
   { label: 'Extra visual polish pass', when: 'Fri', state: 'waiting' },
 ]
 
-// ⚠ 待 Danny 审字。核心导购 flow 的冻结范围 + checklist 计划（保住周五核心 demo）。
+// 核心导购 flow 的冻结范围 + checklist 计划（保住周五核心 demo）。
 const CONNECTOR_MILESTONES: Milestone[] = [
   { label: 'Freeze scope · checklist agreed', when: 'Wed', state: 'planned' },
   { label: 'Lin Qing — core flow on the checklist', when: 'Thu', state: 'replanned' },
@@ -731,7 +731,7 @@ export function tasksForProject(projectId: string, phase: DetailPhase = 'grown')
 // ───────────────────────── Handoffs（按 projectId）─────────────────────────────
 // Handoff = agent 产出、可直接执行的单条行动（checklist：done / discard）。
 // flyToNexus 非空 = 可一键飞回 Nexus 深挖（调 askQuestion(flyToNexus)）。
-// ⚠ 待 Danny 审字。故事项目有；texture 项目无 → 模块空态。
+// 故事项目有；texture 项目无 → 模块空态。
 
 export interface Handoff {
   id: string
@@ -790,7 +790,7 @@ export function handoffsForProject(projectId: string, phase: DetailPhase = 'grow
 }
 
 // ───────────────────────── Weekly team updates（按 projectId）──────────────────
-// 本周成员进展。⚠ 待 Danny 审字。口径中性，描述工作进展非人事评价。
+// 本周成员进展。口径中性，描述工作进展非人事评价。
 
 export interface WeeklyUpdate {
   personId: string
@@ -809,7 +809,7 @@ export const WEEKLY_UPDATES: Record<string, WeeklyUpdate[]> = {
   ],
 }
 
-// ⚠ 待 Danny 审字。believed 态项目周更只陈列现场事实，不写 freeze / split 决策。
+// believed 态项目周更只陈列现场事实，不写 freeze / split 决策。
 export const BELIEVED_WEEKLY_UPDATES: Record<string, WeeklyUpdate[]> = {
   p_acme: [
     { personId: 'u_vanessa', update: 'Friday demo scope is still the target; the core guide flow remains the exposed dependency.' },
@@ -869,7 +869,7 @@ export function reportMismatchForProject(projectId: string): {
 // ════════════════════════════════════════════════════════════════════════════
 // P3-04 · Playbooks 页（register B · 产品页 + 「为什么值得信」横条）
 // 吃既有 CAPABILITIES fixture（按 domain 分组）；此处只加页面框架文案 + 分组 helper。
-// ⚠ 待 Danny 审字。呼应 CONTEXT 的 playbooks「第二条腿」。
+// 呼应 CONTEXT 的 playbooks「第二条腿」。
 // ════════════════════════════════════════════════════════════════════════════
 
 export const CAPABILITIES_PAGE = {
@@ -913,7 +913,7 @@ export interface CapabilityPackage {
   previewPlaybooks: string[]
 }
 
-// ⚠ 待 Danny 审字：P4-03 新增 Venus-facing catalog / subscription copy。
+// P4-03 新增 Venus-facing catalog / subscription copy。
 // 订阅包不带 status 字段；默认 subscribed 由 loadedCapabilityDomains() 派生，保持 loaded ⇔ subscribed。
 export const CAPABILITY_SUBSCRIPTION_COPY = {
   coverageEyebrow: 'Guiding your team now',
@@ -931,7 +931,7 @@ export const CAPABILITY_SUBSCRIPTION_COPY = {
 
 export const CAPABILITY_PACKAGES: CapabilityPackage[] = [
   {
-    // ⚠ 待 Danny 审字（HR gist + preview 名称）。改为反映合伙人真实 SCN playbooks / motivation drivers
+    // （HR gist + preview 名称）。改为反映合伙人真实 SCN playbooks / motivation drivers
     // （预览名，非全文）。SCN-001 = 本 demo 高潮卡的锚点，列在最前。
     domain: 'hr',
     title: 'HR',

@@ -33,13 +33,13 @@ function statusTone(status: string) {
   return ''
 }
 
-// ⚠ 待 Danny 审字：grown 态项目状态文案。
+// grown 态项目状态文案。
 const GROWN_STATUS_LABEL: Record<string, string> = {
   p_acme: 'at risk · diagnosed · actions in flight · Friday held',
   p_connector: 'at risk · diagnosed · actions in flight',
 }
 
-// ⚠ 待 Danny 审字：Act1/Act3 detail shell copy.
+// Act1/Act3 detail shell copy.
 const NO_HANDOFFS_COPY = 'Nothing to hand off yet — no next steps drawn up so far.'
 const RISK_CALLOUT_LABEL = {
   believed: 'Reported vs signals',

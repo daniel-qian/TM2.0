@@ -131,7 +131,7 @@ export function applyEvent(
     case 'error':
       state.status = 'error'
       state.error = ev.error ?? 'unknown error'
-      push('system', 'thought', 'Something went wrong reaching the room.') // ⚠ 待 Danny 审字
+      push('system', 'thought', 'Something went wrong reaching the room.')
       break
     default:
       break
@@ -150,7 +150,6 @@ function formatToolCall(name: string | undefined, input: Record<string, unknown>
 }
 
 function nudgeText(gate: 'chain' | 'redline' | undefined): string {
-  // ⚠ 待 Danny 审字
   if (gate === 'redline') return 'Re-checking so nobody gets labelled — describing the work instead.'
   return 'Grounding the answer in the evidence before drafting it.'
 }

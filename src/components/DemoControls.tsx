@@ -70,7 +70,7 @@ export function DemoControls() {
           key=index：每张卡独立入场动效（只动 transform/opacity，reduced-motion 全局兜底）。 */}
       {caption.titleCard ? (
         <div key={index} className="rail-title-card" role="status">
-          <p className="rail-title-card-eyebrow">Use case {/* ⚠ 待 Danny 审字 */}</p>
+          <p className="rail-title-card-eyebrow">Use case</p>
           <h2>{caption.titleCard}</h2>
         </div>
       ) : null}

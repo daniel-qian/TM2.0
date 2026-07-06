@@ -5,8 +5,6 @@
  * - additive：只 import 共享 fixtures，绝不修改它。
  * - 人的读数一律定性人话，绝无数字（ADR-0015 红线：人不该有血条）。
  * - phase 语义与详情页同源：believed = 晨会初见 · grown = hero thread 跑完（B10 后）。
- *
- * ⚠ 待 Danny 审字：本文件所有英文 copy。
  */
 
 import { HERO_QUESTION } from './fixtures'
@@ -36,47 +34,32 @@ const HOME_HANDOFFS_BELIEVED: HomeHandoff[] = [
   {
     id: 'hh_linqing',
     tone: 'terracotta',
-    toneLabel: 'Worth a closer look', // ⚠ 待 Danny 审字（surface label per ADR-0015）
-    action: 'Check in with Lin Qing before reading the demo as slow', // ⚠ 待 Danny 审字
-    evidence:
-      'She has been absorbing a week of shifting client feedback on the Shopping Guide demo — the quiet kind of heavy.', // ⚠ 待 Danny 审字
-    personIds: ['u_bill'],
+    toneLabel: 'Worth a closer look', // （surface label per ADR-0015）
+    action: 'Check in with Lin Qing before reading the demo as slow',    evidence:
+      'She has been absorbing a week of shifting client feedback on the Shopping Guide demo — the quiet kind of heavy.',    personIds: ['u_bill'],
     projectIds: ['p_acme', 'p_connector'],
-    evidenceTag: 'A week of changing feedback landed here', // ⚠ 待 Danny 审字
-    mapFocus: { kind: 'project', id: 'p_acme' },
+    evidenceTag: 'A week of changing feedback landed here',    mapFocus: { kind: 'project', id: 'p_acme' },
     flyToNexus: HERO_QUESTION,
   },
   {
     id: 'hh_pitch',
     tone: 'honey',
-    toneLabel: 'Before it goes out', // ⚠ 待 Danny 审字
-    action: 'Give the Venus pitch one last read — it goes out today', // ⚠ 待 Danny 审字
-    evidence: 'Wang has it steady; it just deserves your eyes before the room sees it.', // ⚠ 待 Danny 审字
-    personIds: ['u_wang'],
+    toneLabel: 'Before it goes out',    action: 'Give the Venus pitch one last read — it goes out today',    evidence: 'Wang has it steady; it just deserves your eyes before the room sees it.',    personIds: ['u_wang'],
     projectIds: ['p_pitch'],
-    evidenceTag: 'Goes out today', // ⚠ 待 Danny 审字
-  },
+    evidenceTag: 'Goes out today',  },
   {
     id: 'hh_kate',
     tone: 'honey',
     // dana 复核：与 "Worth a closer look" 同屏撞车（只差一个 closer 扛轻重差），换呼应 action 的说法。
-    toneLabel: 'When you pass by', // ⚠ 待 Danny 审字
-    action: 'Say hello to Kate when you pass her desk', // ⚠ 待 Danny 审字
-    evidence: 'She is carrying the client onboarding load on her own this week.', // ⚠ 待 Danny 审字
-    personIds: ['u_kate'],
+    toneLabel: 'When you pass by',    action: 'Say hello to Kate when you pass her desk',    evidence: 'She is carrying the client onboarding load on her own this week.',    personIds: ['u_kate'],
     projectIds: ['p_csonboard'],
-    evidenceTag: 'Solo on the client load this week', // ⚠ 待 Danny 审字
-  },
+    evidenceTag: 'Solo on the client load this week',  },
   {
     id: 'hh_jason',
     tone: 'sage',
-    toneLabel: 'An open door', // ⚠ 待 Danny 审字
-    action: 'Ask Jason if he could lend the demo a hand', // ⚠ 待 Danny 审字
-    evidence: 'He wrapped his sprint early — there is room on his plate this week.', // ⚠ 待 Danny 审字
-    personIds: ['u_jason'],
+    toneLabel: 'An open door',    action: 'Ask Jason if he could lend the demo a hand',    evidence: 'He wrapped his sprint early — there is room on his plate this week.',    personIds: ['u_jason'],
     projectIds: ['p_acme'],
-    evidenceTag: 'Finished early — has room', // ⚠ 待 Danny 审字
-  },
+    evidenceTag: 'Finished early — has room',  },
 ]
 
 // grown（B10 后）：hero 条目换成"风险已被接住"的安稳版（同 id，勾选态跨 phase 延续）；
@@ -86,19 +69,13 @@ const HOME_HANDOFFS_GROWN: HomeHandoff[] = [
     ...HOME_HANDOFFS_BELIEVED[0],
     tone: 'sage',
     // dana 复核："owned" 在 HR 语境有"问责"联想，settled 更暖。
-    toneLabel: 'Caught and settled', // ⚠ 待 Danny 审字
-    action: 'A word of thanks to Lin Qing would land well this week', // ⚠ 待 Danny 审字
-    evidence:
-      'The demo has a plan — scope frozen, responsibilities split, and she owns a clear checklist for the core flow.', // ⚠ 待 Danny 审字
-  },
+    toneLabel: 'Caught and settled',    action: 'A word of thanks to Lin Qing would land well this week',    evidence:
+      'The demo has a plan — scope frozen, responsibilities split, and she owns a clear checklist for the core flow.',  },
   HOME_HANDOFFS_BELIEVED[1],
   HOME_HANDOFFS_BELIEVED[2],
   {
     ...HOME_HANDOFFS_BELIEVED[3],
-    toneLabel: 'Already helping', // ⚠ 待 Danny 审字
-    action: 'Jason is taking a piece of the demo — see it settled', // ⚠ 待 Danny 审字
-    evidence: 'He picked up part of what was on Lin Qing’s plate; a quick nod keeps it warm.', // ⚠ 待 Danny 审字
-  },
+    toneLabel: 'Already helping',    action: 'Jason is taking a piece of the demo — see it settled',    evidence: 'He picked up part of what was on Lin Qing’s plate; a quick nod keeps it warm.',  },
 ]
 
 export function homeHandoffs(phase: DetailPhase): HomeHandoff[] {
@@ -113,33 +90,25 @@ export function spineCountLine(remaining: number, total: number): string {
   if (remaining <= 0) return ''
   const word = COUNT_WORDS[Math.min(remaining, COUNT_WORDS.length - 1)]
   if (remaining === total) {
-    return `${word} things worth your attention this morning.` // ⚠ 待 Danny 审字
-  }
-  return remaining === 1 ? 'One left this morning.' : `${word} left this morning.` // ⚠ 待 Danny 审字
-}
+    return `${word} things worth your attention this morning.`  }
+  return remaining === 1 ? 'One left this morning.' : `${word} left this morning.`}
 
 // 收尾屏（claire 改进 3：这一屏决定"顾问 vs 工具"观感——不是 "0 tasks 🎉"）。
 export const HOME_CLOSING: Record<DetailPhase, { title: string; line: string }> = {
   believed: {
-    title: 'That’s the morning looked after.', // ⚠ 待 Danny 审字
-    // dana 复核：别叫右栏 "board"（工具味）、别让它当主语（"后台自转"感）。
-    line: 'Lin Qing is on your list, and Friday’s demo has your eyes on it. The rest keeps itself current.', // ⚠ 待 Danny 审字
-  },
+    title: 'That’s the morning looked after.',    // dana 复核：别叫右栏 "board"（工具味）、别让它当主语（"后台自转"感）。
+    line: 'Lin Qing is on your list, and Friday’s demo has your eyes on it. The rest keeps itself current.',  },
   grown: {
-    title: 'That’s the morning looked after.', // ⚠ 待 Danny 审字
-    line: 'Lin Qing is covered, and Friday’s demo has a clean path. See how the afternoon settles.', // ⚠ 待 Danny 审字
-  },
+    title: 'That’s the morning looked after.',    line: 'Lin Qing is covered, and Friday’s demo has a clean path. See how the afternoon settles.',  },
 }
 
 // claire 2b：believed 收尾断言 "Lin Qing is on your list"——若她那张卡被搁置（Not today）
 // 会自相矛盾。中性版不点名，按用户实际选择收口。
 export const HOME_CLOSING_NEUTRAL: { title: string; line: string } = {
-  title: 'That’s the morning looked after.', // ⚠ 待 Danny 审字
-  line: 'Everything from this morning is settled the way you chose. The rest keeps itself current.', // ⚠ 待 Danny 审字
-}
+  title: 'That’s the morning looked after.',  line: 'Everything from this morning is settled the way you chose. The rest keeps itself current.',}
 
-export const HANDLED_DRAWER_LABEL = 'Handled today' // ⚠ 待 Danny 审字
-export const SET_ASIDE_LABEL = 'set aside' // ⚠ 待 Danny 审字（搁置 ≠ 已处理，抽屉分开计数）
+export const HANDLED_DRAWER_LABEL = 'Handled today'
+export const SET_ASIDE_LABEL = 'set aside' // （搁置 ≠ 已处理，抽屉分开计数）
 
 // ── 右栏双轨（证据层）────────────────────────────────────────────────────────
 // 人卡读数：定性人话 + 语气；绝不渲染 capacityPct / moodPct / 任何 %。
@@ -151,24 +120,13 @@ export interface HomePersonRead {
 }
 
 const PERSON_READS_BELIEVED: Record<string, HomePersonRead> = {
-  u_bill: { read: 'Chasing a moving brief', tone: 'terracotta' }, // ⚠ 待 Danny 审字
-  u_jason: { read: 'Some room to spare', tone: 'sage' }, // ⚠ 待 Danny 审字
-  u_vanessa: { read: 'Carrying the Friday demo', tone: 'honey' }, // ⚠ 待 Danny 审字
-}
+  u_bill: { read: 'Chasing a moving brief', tone: 'terracotta' },  u_jason: { read: 'Some room to spare', tone: 'sage' },  u_vanessa: { read: 'Carrying the Friday demo', tone: 'honey' },}
 
 const PERSON_READS_GROWN: Record<string, HomePersonRead> = {
-  u_bill: { read: 'Core flow, scope frozen', tone: 'sage' }, // ⚠ 待 Danny 审字
-  u_jason: { read: 'Lending a hand this week', tone: 'sage' }, // ⚠ 待 Danny 审字
-  u_vanessa: { read: 'Friday scope protected', tone: 'sage' }, // ⚠ 待 Danny 审字
-}
+  u_bill: { read: 'Core flow, scope frozen', tone: 'sage' },  u_jason: { read: 'Lending a hand this week', tone: 'sage' },  u_vanessa: { read: 'Friday scope protected', tone: 'sage' },}
 
 const PERSON_READS_COMMON: Record<string, HomePersonRead> = {
-  u_wang: { read: 'Steady hands on the pitch', tone: 'sage' }, // ⚠ 待 Danny 审字
-  u_kate: { read: 'Carrying the client load solo', tone: 'honey' }, // ⚠ 待 Danny 审字
-  u_kristen: { read: 'Deep in the data fields', tone: 'sage' }, // ⚠ 待 Danny 审字
-  u_andy: { read: 'A quiet, steady week', tone: 'sage' }, // ⚠ 待 Danny 审字
-  u_nasim: { read: 'In a good rhythm', tone: 'sage' }, // ⚠ 待 Danny 审字
-}
+  u_wang: { read: 'Steady hands on the pitch', tone: 'sage' },  u_kate: { read: 'Carrying the client load solo', tone: 'honey' },  u_kristen: { read: 'Deep in the data fields', tone: 'sage' },  u_andy: { read: 'A quiet, steady week', tone: 'sage' },  u_nasim: { read: 'In a good rhythm', tone: 'sage' },}
 
 export function homePersonRead(personId: string, phase: DetailPhase): HomePersonRead | null {
   const phased = phase === 'grown' ? PERSON_READS_GROWN : PERSON_READS_BELIEVED
@@ -199,13 +157,7 @@ export const HOME_PROJECT_IDS = [
 // ── 表面文案（section 标题等）────────────────────────────────────────────────
 
 export const HOME_COPY = {
-  greetingEyebrow: 'This morning', // ⚠ 待 Danny 审字
-  spineTitle: 'Worth your attention today', // ⚠ 待 Danny 审字
-  peopleLane: 'People this week', // ⚠ 待 Danny 审字
-  projectLane: 'Projects in motion', // ⚠ 待 Danny 审字
-  mapLink: 'See the whole picture', // ⚠ 待 Danny 审字（Team map 入口，克制常驻，不自荐）
-  mapCardLink: 'See it on the map', // ⚠ 待 Danny 审字（风险卡上的次级入口，rail B2 同款动作）
-  flyLabel: 'Work it through', // ⚠ 待 Danny 审字（ADR-0015 surface label）
-  discardLabel: 'Not today', // ⚠ 待 Danny 审字
-  undoLabel: 'Bring it back', // ⚠ 待 Danny 审字
-}
+  greetingEyebrow: 'This morning',  spineTitle: 'Worth your attention today',  peopleLane: 'People this week',  projectLane: 'Projects in motion',  mapLink: 'See the whole picture', // （Team map 入口，克制常驻，不自荐）
+  mapCardLink: 'See it on the map', // （风险卡上的次级入口，rail B2 同款动作）
+  flyLabel: 'Work it through', // （ADR-0015 surface label）
+  discardLabel: 'Not today',  undoLabel: 'Bring it back',}

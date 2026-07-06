@@ -147,7 +147,7 @@ export interface DashboardTag {
 // ───────────────────────── People（~14；You/Wang 真名，其余 SNL）─────────────
 
 export const PEOPLE: Person[] = [
-  // ⚠ 待 Danny 审字（全部 display name / role）。id 保持稳定不动（守引用）；
+  // （全部 display name / role）。id 保持稳定不动（守引用）；
   // display name re-map 成合伙人场景的 Prism Design Team（New Retail Smart Shopping Guide）。
   { id: 'u_you', name: 'You', role: 'Design Manager', team: 'Founders', capacityPct: 95, moodPct: 72, avatarSprite: AVATAR_SPRITES.paladin, storyCritical: true },
   { id: 'u_wang', name: 'Wang', role: 'Design Lead', team: 'Founders', capacityPct: 90, moodPct: 80, avatarSprite: AVATAR_SPRITES.cleric, storyCritical: true },
@@ -175,7 +175,7 @@ export const PEOPLE: Person[] = [
 
 export const PROJECTS: Project[] = [
   {
-    // ⚠ 待 Danny 审字。id 'p_acme' 保持不动（守 store / 详情页引用）；retitle 成合伙人 Demo。
+    // id 'p_acme' 保持不动（守 store / 详情页引用）；retitle 成合伙人 Demo。
     id: 'p_acme',
     title: 'New Retail Smart Shopping Guide',
     ownerId: 'u_vanessa',
@@ -188,7 +188,7 @@ export const PROJECTS: Project[] = [
     risk: { progress: 72, blockers: 64, staffing: 38, quality: 30 }, // 依赖核心导购 flow 拖累进度
   },
   {
-    // ⚠ 待 Danny 审字。id 'p_connector' 保持不动；retitle 成 Lin Qing 负责的核心导购 flow。
+    // id 'p_connector' 保持不动；retitle 成 Lin Qing 负责的核心导购 flow。
     id: 'p_connector',
     title: 'Core shopping-guide flow',
     ownerId: 'u_bill',
@@ -226,7 +226,7 @@ export const PROJECTS: Project[] = [
 ]
 
 // ───────────────────────── Tasks（聚焦 Demo + 核心导购 flow）─────────────────
-// ⚠ 待 Danny 审字（task title）。id 全部保持不动（fixtures.p3 override 按 id 索引）。
+// （task title）。id 全部保持不动（fixtures.p3 override 按 id 索引）。
 
 export const TASKS: Task[] = [
   // New Retail Smart Shopping Guide（Demo）
@@ -242,7 +242,7 @@ export const TASKS: Task[] = [
 
 // ───────────────────────── Signals（reality gap 的证据链）────────────────────
 
-// ⚠ 待 Danny 审字（全部 summary）。设计世界证据链：Figma frame 反复重做 / 反馈文档未解决评论 /
+// （全部 summary）。设计世界证据链：Figma frame 反复重做 / 反馈文档未解决评论 /
 // 没有明确验收标准。id / subjectId / tag 保持不动（卡片按 id 索引）。
 export const SIGNALS: Signal[] = [
   { id: 's_pr', source: 'figma', subjectType: 'project', subjectId: 'p_connector', summary: 'Home guide flow reopened and reworked 6 days running — still no signed-off version', ageDays: 6, tag: 'stalled' },
@@ -256,19 +256,17 @@ export const SIGNALS: Signal[] = [
 ]
 
 // ───────────────────────── Capabilities（被 agent 自动优先引用）──────────────
-// ⚠ 高价值：这是护城河的"内容证据"，建议你审字
+// ⚠ 高价值：这是护城河的"内容证据"。
 
 export const CAPABILITIES: CapabilityEntry[] = [
   {
     id: 'cap_po_dep',
-    // ⚠ 待 Danny 审字
     domain: 'project-ops',
     title: 'Shifting requirements near a ship date',
     gist: 'When the finish line keeps moving — new feedback, unclear acceptance — the first move is to freeze this week’s scope and split who owns what. Protect the core path before reading anyone as slow. A moving target is a project problem, not a person problem.',
   },
   {
     id: 'cap_hr_interrupt',
-    // ⚠ 待 Danny 审字
     domain: 'hr',
     title: 'Reading motivation, not output — Maslow’s ladder',
     gist: 'Before reading slow delivery as low effort, read where someone sits on the motivation ladder: is the workload sustainable, does "done" feel safe and clear, do they feel part of the work or alone in the mess, is their real contribution being seen? Most stalls are a dip in safety and recognition, not capability. Never infer performance from a single signal.',
@@ -278,7 +276,7 @@ export const CAPABILITIES: CapabilityEntry[] = [
 // ───────────────────────── Reality gap / Mismatch 卡 ─────────────────────────
 // ⚠ 高价值：killer beat 的卡片内容
 
-// ⚠ 待 Danny 审字（整块）。Maslow 重写：从"自报 vs 信号"的 report-mismatch
+// （整块）。Maslow 重写：从"自报 vs 信号"的 report-mismatch
 // 改成"经理看到的（Lin Qing 页面更新慢）vs 她实际在扛的（一整周变动的客户反馈）"
 // ——贡献没被正确识别（esteem gap）。字段名 / signal id / gapType 语义槽位不动。
 export const MISMATCH = {
@@ -311,8 +309,8 @@ export interface HumanLoopMessage {
   reference?: string
 }
 
-// ⚠ 待 Danny 审字：B7 Chat transcript（Venus-facing 英文）。
-// ⚠ 待 Danny 审字（整段 transcript）。Maslow 重写：1:1 不问"为什么还没好"，
+// B7 Chat transcript（Venus-facing 英文）。
+// （整段 transcript）。Maslow 重写：1:1 不问"为什么还没好"，
 // 改成"我看到你这周处理了很多反馈——先保护核心 Demo 路径，哪些反馈影响交付、
 // 哪些能放到下一版"。Avery 起草开场白，真人来发（ADR-0015）。
 const HUMAN_LOOP_MESSAGES: HumanLoopMessage[] = [
@@ -376,7 +374,7 @@ export const HUMAN_LOOP = {
 }
 
 export const NEXUS_INSPECTOR_CONTENT = {
-  // ⚠ 待 Danny 审字（inspector body）。
+  // （inspector body）。
   'pm-agent': {
     title: 'PM checks delivery evidence',
     body: 'Core-flow evidence is pulled from your design files and feedback rounds, then read against what the team already knows and the Project-Ops playbook on shifting requirements.',
@@ -414,7 +412,7 @@ export const AGENT_OUTPUT: AgentOutput = {
   summary:
     "Lin Qing’s drop in motivation isn’t about responsibility — the project’s sense of safety and accomplishment have been worn down. Constantly changing client feedback keeps the definition of done unstable, and her real contribution this week — absorbing a week of feedback and rework — isn’t visible anywhere in the project’s progress. The Smart Shopping Guide demo is still holdable for Friday: freeze this week’s demo scope, split the client feedback into priorities, and give Lin Qing a clear, completable checklist, and the core guide path lands.",
 
-  // 2 · detected_signals（NEW · Venus 逐字读）：⚠ 待 Danny 审字
+  // 2 · detected_signals（NEW · Venus 逐字读）
   // 观察到的具体信号，每条有 evidence 锚（映射真实 signal fixtures s_pr/s_blocker/s_noupdate/s_mentions/s_commits），
   // 是信号不是标签——对应 SCN-001 的 detected_signals（revision cycle rising / idea count down / missed sessions）。
   detected_signals: [
@@ -425,7 +423,7 @@ export const AGENT_OUTPUT: AgentOutput = {
     'Effort not converting to progress: her week went into reworking screens against new feedback, not finishing the core guide flow (Figma · s_commits).',
   ],
 
-  // 3 · diagnosis_hypotheses（NEW · Venus 逐字读）：⚠ 待 Danny 审字
+  // 3 · diagnosis_hypotheses（NEW · Venus 逐字读）
   // 关键改动：把单一读法改写成"带至少一个 alternative 的假设"，绝不当事实断言（partner guardrail: diagnosis）。
   // primary 对齐 SCN-001「challenging-work / recognition-of-work」driver；alternatives 留住其他可能，避免误诊。
   diagnosis_hypotheses: [
@@ -467,7 +465,7 @@ export const AGENT_OUTPUT: AgentOutput = {
     'Agree the client-side "definition of done" for the core flow before the next review, so the same effort finally lands as accepted progress instead of another rework loop.',
   ],
 
-  // 6 · confidence（NEW · Venus 逐字读）：⚠ 待 Danny 审字
+  // 6 · confidence（NEW · Venus 逐字读）
   // 明确 level + 什么会改变它（吸收原 uncertainties，改成"会推高/推低信心的条件"）。SCN-001 risk_level = medium。
   confidence: {
     level: 'medium',
@@ -479,7 +477,7 @@ export const AGENT_OUTPUT: AgentOutput = {
     ],
   },
 
-  // 7 · escalation（NEW · Venus 逐字读）：⚠ 待 Danny 审字
+  // 7 · escalation（NEW · Venus 逐字读）
   // 何时把 HR/legal 拉进来 + 谁来确认。对齐 SCN-001 hrbp_escalation（burnout / unfair treatment / performance risk）
   // 与 partner guardrails。confirmWith 沿用原 needsConfirmationFrom 语义槽（守 personByName 头像引用）。
   escalation: {
@@ -489,7 +487,7 @@ export const AGENT_OUTPUT: AgentOutput = {
     confirmWith: ['You (manager) — freezing this week’s demo scope', 'Sun Xiaomei — the responsibility split'],
   },
 
-  // 8 · metrics_to_track（NEW · Venus 逐字读）：⚠ 待 Danny 审字
+  // 8 · metrics_to_track（NEW · Venus 逐字读）
   // 看什么才知道奏效——对齐 SCN-001 metrics_to_track，但只用场景已支撑的量、不编造数字。
   metrics_to_track: [
     'Core guide path running end to end by Thursday, then holding through the Friday demo.',
@@ -511,7 +509,7 @@ export const AGENT_OUTPUT: AgentOutput = {
 
 // ───────────────────────── Timeline（B8 工具产出）──────────────────────────
 
-// ⚠ 待 Danny 审字。Maslow 重写：从"re-baseline"改成"冻结范围 + 责任拆分"取景；
+// Maslow 重写：从"re-baseline"改成"冻结范围 + 责任拆分"取景；
 // state 值（replanned/held/deferred/conditional）不动——MILESTONE_STATE_COPY 据此渲染。
 export const TIMELINE = {
   title: 'Smart Shopping Guide demo — scope frozen, core path protected for Friday',
@@ -525,7 +523,7 @@ export const TIMELINE = {
   ],
 }
 
-// ⚠ 待 Danny 审字（整块）。合伙人案例的核心产物，作为 TimelineCard 内的明确组件呈现：
+// （整块）。合伙人案例的核心产物，作为 TimelineCard 内的明确组件呈现：
 // (1) 责任拆分——把活儿从 Lin Qing 一个人手里拆给团队；(2) 给 Lin Qing 的可完成 checklist
 // （清楚的交付边界 + "什么算做完"），非核心反馈进 next iteration。owner 用 person id（守头像引用）。
 export const SCOPE_SPLIT: { ownerId: string; scope: string }[] = [
@@ -546,7 +544,7 @@ export const LIN_QING_CHECKLIST: { id: string; label: string; done: boolean }[] 
 // ───────────────────────── Briefings（B1 calm / B10 updated）────────────────
 // ⚠ 高价值：开场与收尾的"组织天气"
 
-// ⚠ 待 Danny 审字（headline / subhead）。
+// （headline / subhead）。
 export const BRIEFING_V1: Briefing = {
   id: 'b_v1',
   version: 1,
@@ -560,7 +558,7 @@ export const BRIEFING_V1: Briefing = {
   ],
 }
 
-// ⚠ 待 Danny 审字（headline / subhead）。
+// （headline / subhead）。
 export const BRIEFING_V2: Briefing = {
   id: 'b_v2',
   version: 2,
@@ -576,7 +574,7 @@ export const BRIEFING_V2: Briefing = {
 
 // ───────────────────────── Onboarding（B0 prologue）─────────────────────────
 
-// ⚠ 待 Danny 审字（onboarding 段全部英文 copy）。设计团队 re-flavor：源换成 Figma / 反馈渠道。
+// （onboarding 段全部英文 copy）。设计团队 re-flavor：源换成 Figma / 反馈渠道。
 export const ONBOARDING = {
   sampleFiles: [
     { name: 'Studio_Handbook.pdf', kind: 'pdf' },
@@ -602,12 +600,11 @@ export const ONBOARDING = {
 export const DASHBOARD_TAGS: DashboardTag[] = [
   { id: 'tag_week', label: 'This week', match: { by: 'due', within: 'this-week' } },
   { id: 'tag_risk', label: 'At risk', match: { by: 'status', status: 'at-risk' } },
-  { id: 'tag_acme', label: 'Shopping Guide demo', match: { by: 'project', projectId: 'p_acme' } }, // ⚠ 待 Danny 审字
+  { id: 'tag_acme', label: 'Shopping Guide demo', match: { by: 'project', projectId: 'p_acme' } },
   { id: 'tag_eng', label: 'Design', match: { by: 'team', team: 'Design' } },
   { id: 'tag_hot', label: 'Hot spots', match: { by: 'hotspot' } },
 ]
 
 // ───────────────────────── Hero 问题（B3 composer）──────────────────────────
 
-// ⚠ 待 Danny 审字。
 export const HERO_QUESTION = 'Are we on track to ship the Smart Shopping Guide demo this Friday?'

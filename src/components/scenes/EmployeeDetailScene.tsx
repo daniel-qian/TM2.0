@@ -35,7 +35,7 @@ const TASK_STATUS_LABEL: Record<Task['status'], string> = {
   done: 'Done',
 }
 
-// ⚠ 待 Danny 审字：believed/grown 模块深度标签。
+// believed/grown 模块深度标签。
 const HR_ANALYSIS_EYEBROW = {
   believed: "What's showing up",
   grown: 'Playbook-backed',

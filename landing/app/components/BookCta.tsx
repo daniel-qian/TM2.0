@@ -5,7 +5,7 @@ import type { Dict } from "../i18n";
 
 // Email capture + final CTA + deck closing line. Form is a scaffold (confirms
 // locally; wire to a real list/scheduler before launch). Strings from i18n
-// dictionary. ⚠ 待 Danny 审字.
+// dictionary.
 
 export function BookCta({ t }: { t: Dict["bookCta"] }) {
   const [email, setEmail] = useState("");

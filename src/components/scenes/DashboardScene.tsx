@@ -145,14 +145,14 @@ export function DashboardScene() {
       {
         id: 'connector-hotspot',
         label: 'Worth a look',
-        title: 'The core guide flow has more churn than the status let on', // ⚠ 待 Danny 审字
+        title: 'The core guide flow has more churn than the status let on',
         detail: `${hotspotSignals.length} things worth checking`,
         projectId: 'p_connector',
       },
       {
         id: 'acme-risk',
         label: 'Keep an eye on',
-        title: 'The demo is leaning on the core guide flow to make Friday', // ⚠ 待 Danny 审字
+        title: 'The demo is leaning on the core guide flow to make Friday',
         detail: 'Friday is getting tight',
         projectId: 'p_acme',
       },
@@ -434,7 +434,7 @@ export function DashboardScene() {
       <div className="dashboard-control-layer" onClick={stopPropagation}>
         {/* feat-014：回主页的克制入口（dana 守线：地图是子视图，随时能回今天的桌面） */}
         <button type="button" className="map-back-chip" onClick={() => goScene('home')}>
-          ← Back to today {/* ⚠ 待 Danny 审字 */}
+          ← Back to today
         </button>
         <div className="dashboard-tags" aria-label="Focus tags">
           {DASHBOARD_TAGS.map((tag) => {

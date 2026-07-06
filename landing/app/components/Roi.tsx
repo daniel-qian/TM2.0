@@ -1,6 +1,6 @@
 // Screen 4 — the ROI account (ADR-0018 restructure). WrongCut's four-cost
 // story reframed as the cost-saving account; absorbs old WhyItMatters lede.
-// ALL figures are an ILLUSTRATIVE MODEL (see en.ts comments). ⚠ 待 Danny 审字.
+// ALL figures are an ILLUSTRATIVE MODEL (see en.ts comments).
 
 import type { Dict } from "../i18n";
 

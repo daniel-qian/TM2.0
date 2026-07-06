@@ -115,7 +115,7 @@ export const BILL_ACME_CASE_ID: CaseId = 'bill-acme'
 
 export const BILL_ACME_CASE: CaseDefinition = {
   id: BILL_ACME_CASE_ID,
-  title: 'Lin Qing & the Shopping Guide demo', // ⚠ 待 Danny 审字（tab 短名）
+  title: 'Lin Qing & the Shopping Guide demo', // （tab 短名）
   question: HERO_QUESTION,
 
   // 主段编排。free-click 每调一次 runAgent 推进一步；
@@ -136,8 +136,7 @@ export const BILL_ACME_CASE: CaseDefinition = {
     'human-loop': 'Lin Qing enters the loop',
     timeline: 'Freezing scope and splitting the work',
     'structured-output': 'The read is ready',
-    'follow-up-alternatives': 'PM takes another look at who could help', // ⚠ 待 Danny 审字
-  },
+    'follow-up-alternatives': 'PM takes another look at who could help',  },
 
   // 每步脚本化 context-%（ADR-0013 决策 7）：重步骤可见地多耗
   //（human chat / report 占大头），主段收在 ~71%，follow-up 推到 ~80%。
@@ -343,8 +342,7 @@ export const BILL_ACME_CASE: CaseDefinition = {
     {
       id: 'jason-alternatives',
       anchorStep: 'structured-output',
-      suggestedQuestion: 'I have a job for Jason — is there any alternative?', // ⚠ 待 Danny 审字
-      steps: ['follow-up-alternatives'],
+      suggestedQuestion: 'I have a job for Jason — is there any alternative?',      steps: ['follow-up-alternatives'],
     },
   ],
 }
@@ -365,19 +363,15 @@ export const APPLE_POLICY_SCREENSHOT = '/apple-app-review-guidelines.png'
 
 export const WEB_SEARCH_CASE: CaseDefinition = {
   id: WEB_SEARCH_CASE_ID,
-  title: 'Apple review policy', // ⚠ 待 Danny 审字（tab 短名）
+  title: 'Apple review policy', // （tab 短名）
   // ADR-0013 决策 3 原文——resolveCaseForQuestion 精确匹配此文本进本 case 的 thread。
   question:
-    "We're shipping the Smart Shopping Guide companion app — what's Apple's policy on expedited App Review?", // ⚠ 待 Danny 审字
-
+    "We're shipping the Smart Shopping Guide companion app — what's Apple's policy on expedited App Review?",
   // 短链主段：2 步（errand 深度，ADR-0013 决策 2——否决等重编排）。
   orchestration: ['web-search', 'policy-gist'],
 
   stepLabels: {
-    'web-search': 'Avery searches Apple developer docs', // ⚠ 待 Danny 审字
-    'policy-gist': 'Policy gist is ready', // ⚠ 待 Danny 审字
-    'follow-up-compliance': 'Avery checks the companion-app build against the guidelines', // ⚠ 待 Danny 审字
-  },
+    'web-search': 'Avery searches Apple developer docs',    'policy-gist': 'Policy gist is ready',    'follow-up-compliance': 'Avery checks the companion-app build against the guidelines',  },
 
   // errand thread 的低 context-%（决策 7）：主段收在 ~15%，follow-up 推到 ~23%——
   // 与 hero 的 71%/80% 成对比，"thread 是真实会话边界"可被看见。
@@ -412,8 +406,7 @@ export const WEB_SEARCH_CASE: CaseDefinition = {
       {
         speaker: 'agent',
         type: 'thought',
-        text: 'Distilling the policy to what matters for the Smart Shopping Guide companion launch.', // ⚠ 待 Danny 审字
-      },
+        text: 'Distilling the policy to what matters for the Smart Shopping Guide companion launch.',      },
       {
         speaker: 'agent',
         type: 'thought',
@@ -430,8 +423,7 @@ export const WEB_SEARCH_CASE: CaseDefinition = {
       {
         speaker: 'agent',
         type: 'thought',
-        text: 'Checking the current companion-app build against the guidelines just cited.', // ⚠ 待 Danny 审字
-      },
+        text: 'Checking the current companion-app build against the guidelines just cited.',      },
       { speaker: 'agent', type: 'tool-call', text: 'review build --against guidelines 2.1, 5.1.1' },
       {
         speaker: 'tool',
@@ -443,8 +435,7 @@ export const WEB_SEARCH_CASE: CaseDefinition = {
         type: 'thought',
         text: 'One fix before submitting: declare the analytics SDK in the privacy labels. Everything else is ready.',
       },
-      { speaker: 'system', type: 'manifest', text: 'Compliance check — companion-app build', ref: 'follow-up-compliance' }, // ⚠ 待 Danny 审字
-    ],
+      { speaker: 'system', type: 'manifest', text: 'Compliance check — companion-app build', ref: 'follow-up-compliance' },    ],
   },
 
   manifestLabelPos: MANIFEST_LABEL_POS,
@@ -460,8 +451,7 @@ export const WEB_SEARCH_CASE: CaseDefinition = {
     {
       id: 'acme-compliance',
       anchorStep: 'policy-gist',
-      suggestedQuestion: 'Does our current companion-app build comply with this?', // ⚠ 待 Danny 审字
-      steps: ['follow-up-compliance'],
+      suggestedQuestion: 'Does our current companion-app build comply with this?',      steps: ['follow-up-compliance'],
     },
   ],
 }
@@ -477,23 +467,19 @@ export const EMAIL_CASE_ID: CaseId = 'email-eng-memo'
 // ★ memo 照片占位资产（P6-08 HITL：Danny 换真实 memo 照片）——路径集中在这一个常量：
 // 换照片 = 直接覆盖 public/memo-draft-photo.svg，或把真照片放进 public/ 后改这一行。
 export const MEMO_PHOTO_SRC = '/memo-draft-photo.svg'
-export const MEMO_PHOTO_NAME = 'memo-draft.jpg' // attachment chip 显示的文件名 ⚠ 待 Danny 审字
+export const MEMO_PHOTO_NAME = 'memo-draft.jpg' // attachment chip 显示的文件名
 
 export const EMAIL_CASE: CaseDefinition = {
   id: EMAIL_CASE_ID,
-  title: 'Memo → team email', // ⚠ 待 Danny 审字（tab 短名）
+  title: 'Memo → team email', // （tab 短名）
   // ADR-0013 决策 4 / issue 原文——resolveCaseForQuestion 精确匹配此文本进本 case 的 thread。
-  question: 'Turn this memo draft into an email and send it to everyone on the team.', // ⚠ 待 Danny 审字
-
+  question: 'Turn this memo draft into an email and send it to everyone on the team.',
   // 短链主段：2 步（errand 深度，决策 2）。Send 本身不是编排步骤——email-ready 把一切
   // 备好，扣扳机的是人（sendEmail action，不进 SCRIPT）。
   orchestration: ['memo-draft', 'email-ready'],
 
   stepLabels: {
-    'memo-draft': 'Avery reads the memo and drafts the email', // ⚠ 待 Danny 审字
-    'email-ready': 'Email staged — waiting for you to hit Send', // ⚠ 待 Danny 审字
-    'follow-up-slack': 'Avery drafts the short version for #team', // ⚠ 待 Danny 审字
-  },
+    'memo-draft': 'Avery reads the memo and drafts the email',    'email-ready': 'Email staged — waiting for you to hit Send',    'follow-up-slack': 'Avery drafts the short version for #team',  },
 
   // errand thread 的低 context-%（决策 7）：主段收在 ~17%，follow-up 推到 ~24%。
   stepContextPct: {
@@ -514,21 +500,18 @@ export const EMAIL_CASE: CaseDefinition = {
       {
         speaker: 'tool',
         type: 'tool-result',
-        text: 'Extracted: design freeze Thursday 6pm · client support pings → on-call rotation', // ⚠ 待 Danny 审字
-      },
+        text: 'Extracted: design freeze Thursday 6pm · client support pings → on-call rotation',      },
       {
         speaker: 'agent',
         type: 'thought',
-        text: 'Drafting the announcement email for the team — the draft stays editable until you send it.', // ⚠ 待 Danny 审字
-      },
+        text: 'Drafting the announcement email for the team — the draft stays editable until you send it.',      },
       { speaker: 'system', type: 'manifest', text: 'Email draft — editable', ref: 'memo-draft' },
     ],
     'email-ready': [
       {
         speaker: 'agent',
         type: 'tool-call',
-        text: 'email stage --to team-all --subject "Friday demo: design freeze + client-support rotation"', // ⚠ 待 Danny 审字
-      },
+        text: 'email stage --to team-all --subject "Friday demo: design freeze + client-support rotation"',      },
       { speaker: 'tool', type: 'tool-result', text: '6 recipients resolved from the team roster' },
       {
         speaker: 'system',
@@ -541,16 +524,14 @@ export const EMAIL_CASE: CaseDefinition = {
       {
         speaker: 'agent',
         type: 'thought',
-        text: 'Condensing the email into a two-line heads-up for #team.', // ⚠ 待 Danny 审字
-      },
+        text: 'Condensing the email into a two-line heads-up for #team.',      },
       { speaker: 'agent', type: 'tool-call', text: 'slack draft --channel #team' },
       {
         speaker: 'tool',
         type: 'tool-result',
         text: 'Draft ready — full details deferred to the email just staged',
       },
-      { speaker: 'system', type: 'manifest', text: 'Slack message — short version for #team', ref: 'follow-up-slack' }, // ⚠ 待 Danny 审字
-    ],
+      { speaker: 'system', type: 'manifest', text: 'Slack message — short version for #team', ref: 'follow-up-slack' },    ],
   },
 
   manifestLabelPos: MANIFEST_LABEL_POS,
@@ -566,8 +547,7 @@ export const EMAIL_CASE: CaseDefinition = {
     {
       id: 'slack-short-version',
       anchorStep: 'email-ready',
-      suggestedQuestion: 'Also post a short version to #team in Slack', // ⚠ 待 Danny 审字
-      steps: ['follow-up-slack'],
+      suggestedQuestion: 'Also post a short version to #team in Slack',      steps: ['follow-up-slack'],
     },
   ],
 

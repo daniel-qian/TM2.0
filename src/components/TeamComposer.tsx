@@ -130,7 +130,7 @@ export function TeamComposer({
       {
         id: `file-${current.filter((ref) => ref.kind === 'file').length + 1}`,
         kind: 'file',
-        label: 'Smart_Shopping_Guide_Brief.docx', // ⚠ 待 Danny 审字
+        label: 'Smart_Shopping_Guide_Brief.docx',
         meta: 'Attachment',
       },
     ])

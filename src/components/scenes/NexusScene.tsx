@@ -336,7 +336,7 @@ function TimelineCard() {
         })}
       </div>
 
-      {/* 责任拆分：把活儿从 Lin Qing 一个人手里拆给团队 ⚠ 待 Danny 审字 */}
+      {/* 责任拆分：把活儿从 Lin Qing 一个人手里拆给团队 */}
       <div className="scope-split" aria-label="Who owns what once scope is frozen">
         <p className="scope-split-label">Who owns what</p>
         <div className="scope-split-list">
@@ -357,7 +357,7 @@ function TimelineCard() {
         </div>
       </div>
 
-      {/* Lin Qing 的可完成 checklist：清楚的交付边界 + "什么算做完" ⚠ 待 Danny 审字 */}
+      {/* Lin Qing 的可完成 checklist：清楚的交付边界 + "什么算做完" */}
       <div className="lin-checklist" aria-label="A completable checklist for Lin Qing">
         <p className="lin-checklist-label">
           {linQing ? (
@@ -453,7 +453,7 @@ function StructuredOutputCard({
 
       {/* ── ZONE 1 · THE READ（hero）= summary + detected_signals + diagnosis_hypotheses ── */}
       <div className="report-zone report-zone-read" aria-label="The read">
-        {/* 1 · summary（原 conclusion）——⚠ Danny 审字 label 用「The read」*/}
+        {/* 1 · summary（原 conclusion）——label 用「The read」*/}
         <section className="report-section report-conclusion" aria-label="Summary — the read">
           <p className="report-section-label">The read</p>
           <strong>{output.summary}</strong>
@@ -461,7 +461,7 @@ function StructuredOutputCard({
 
         {/* 2 · detected_signals（NEW）——观察到的具体信号，有 evidence 锚 */}
         <section className="report-section" aria-label="Signals it picked up">
-          <p className="report-section-label">Signals it picked up {/* ⚠ 待 Danny 审字 */}</p>
+          <p className="report-section-label">Signals it picked up</p>
           <ul className="report-list">
             {output.detected_signals.map((item) => (
               <li key={item}>{item}</li>
@@ -471,7 +471,7 @@ function StructuredOutputCard({
 
         {/* 3 · diagnosis_hypotheses（NEW）——带 alternative 的假设，绝不当事实断言 */}
         <section className="report-section" aria-label="What might be going on">
-          <p className="report-section-label">What might be going on — a read, not a verdict {/* ⚠ 待 Danny 审字 */}</p>
+          <p className="report-section-label">What might be going on — a read, not a verdict</p>
           <ul className="report-list report-hypotheses">
             {output.diagnosis_hypotheses.map((h) => (
               <li key={h.label} className={classNames(['hypothesis-item', `is-${h.kind}`])}>
@@ -487,7 +487,7 @@ function StructuredOutputCard({
 
       {/* ── ZONE 2 · THE BACKING（secondary, calmer）= evidence + confidence ── */}
       <div className="report-zone report-zone-backing" aria-label="The backing">
-        <p className="report-zone-label">The backing {/* ⚠ 待 Danny 审字 */}</p>
+        <p className="report-zone-label">The backing</p>
         <div className="report-grid">
         {/* 4 · evidence（保留） */}
         <section className="report-section" aria-label="Why I'm saying this">
@@ -502,8 +502,7 @@ function StructuredOutputCard({
         {/* 6 · confidence（NEW）——明确 level + 什么会改变它 */}
           <section className="report-section report-confidence" aria-label="How sure it is">
             <p className="report-section-label">
-              How sure it is {/* ⚠ 待 Danny 审字 */}
-              <span className={classNames(['confidence-badge', `is-${output.confidence.level}`])}>
+              How sure it is              <span className={classNames(['confidence-badge', `is-${output.confidence.level}`])}>
                 {output.confidence.level}
               </span>
             </p>
@@ -512,8 +511,7 @@ function StructuredOutputCard({
             <details className="report-disclosure">
               <summary>
                 <span className="disclosure-caret" aria-hidden="true" />
-                What would change it {/* ⚠ 待 Danny 审字 */}
-                <span className="disclosure-count">{output.confidence.wouldChange.length}</span>
+                What would change it                <span className="disclosure-count">{output.confidence.wouldChange.length}</span>
               </summary>
               <ul className="report-list">
                 {output.confidence.wouldChange.map((item) => (
@@ -529,7 +527,7 @@ function StructuredOutputCard({
 
       {/* ── ZONE 3 · THE MOVE（actionable tail）= actions + script + metrics + escalation + tasks ── */}
       <div className="report-zone report-zone-move" aria-label="The move">
-        <p className="report-zone-label">The move {/* ⚠ 待 Danny 审字 */}</p>
+        <p className="report-zone-label">The move</p>
 
         {/* 5 · recommended_actions（原 recommendedActions） */}
         <section className="report-section" aria-label="Recommended actions">
@@ -543,7 +541,7 @@ function StructuredOutputCard({
 
         {/* + · conversation_script（1:1 开场白，"senior 在耳边"的声音） */}
         <section className="report-section report-script" aria-label="If you open the 1:1">
-          <p className="report-section-label">If you open the 1:1 {/* ⚠ 待 Danny 审字 */}</p>
+          <p className="report-section-label">If you open the 1:1</p>
           <p className="report-script-line">{output.conversation_script}</p>
         </section>
 
@@ -552,8 +550,7 @@ function StructuredOutputCard({
           <details className="report-disclosure">
             <summary>
               <span className="disclosure-caret" aria-hidden="true" />
-              What to watch to know it worked {/* ⚠ 待 Danny 审字 */}
-              <span className="disclosure-count">{output.metrics_to_track.length}</span>
+              What to watch to know it worked              <span className="disclosure-count">{output.metrics_to_track.length}</span>
             </summary>
             <ul className="report-list report-actions">
               {output.metrics_to_track.map((item) => (
@@ -567,8 +564,7 @@ function StructuredOutputCard({
         {/* 7 · escalation（NEW）——何时把 HR 拉进来 + 谁来确认 */}
         <section className="report-section" aria-label="HR / who confirms">
           <p className="report-section-label">
-            When to pull in HR {/* ⚠ 待 Danny 审字 */}
-            <span className={classNames(['escalation-badge', `is-${output.escalation.level}`])}>
+            When to pull in HR            <span className={classNames(['escalation-badge', `is-${output.escalation.level}`])}>
               {output.escalation.level === 'none' ? 'not yet' : output.escalation.level}
             </span>
           </p>
@@ -624,7 +620,7 @@ function StructuredOutputCard({
 
       <footer className="report-footer">
         <button type="button" className="return-dashboard-button" onClick={onReturnDashboard}>
-          Return to your team {/* ⚠ 待 Danny 审字 — surface label per ADR-0015 (dashboard → Your team) */}
+          Return to your team {/* surface label per ADR-0015 (dashboard → Your team) */}
         </button>
       </footer>
     </section>
@@ -639,7 +635,7 @@ const ALTERNATIVE_CANDIDATES: Array<{
   personId: string
   note: string
 }> = [
-  // ⚠ 待 Danny 审字（note 整组 copy）
+  // （note 整组 copy）
   {
     personId: 'u_fred',
     note: "Fred knows the guide screens well, and his week looks light enough to pick a bit of this up.",
@@ -659,16 +655,15 @@ function AlternativesCard({ question }: { question: string }) {
     <section className="alternatives-card" aria-label="Follow-up: who could help out this week">
       <header className="alternatives-header">
         <div>
-          <p className="eyebrow">Follow-up {/* ⚠ 待 Danny 审字 */}</p>
-          <h2>Who might have room to help out? {/* ⚠ 待 Danny 审字 */}</h2>
+          <p className="eyebrow">Follow-up</p>
+          <h2>Who might have room to help out?</h2>
         </div>
-        <span>A second look {/* ⚠ 待 Danny 审字 */}</span>
+        <span>A second look</span>
       </header>
 
       <p className="alternatives-question">&ldquo;{question}&rdquo;</p>
 
       <p className="alternatives-intro">
-        {/* ⚠ 待 Danny 审字 */}
         A few people on the team might have a little room this week — here's how each is placed,
         so you can decide who to ask.
       </p>
@@ -693,7 +688,6 @@ function AlternativesCard({ question }: { question: string }) {
       </div>
 
       <p className="alternatives-verdict">
-        {/* ⚠ 待 Danny 审字 */}
         Whoever you ask, it's worth keeping the hand-off to a couple of days so it stays a favour,
         not a new burden — and so Friday stays protected.
       </p>
@@ -748,7 +742,7 @@ function WebPreviewCard() {
 // ② policy gist 卡：agent 的实际回答——guideline 要点引文 + 回链 URL 引用
 //（是 agent 不是搜索引擎的证据）。fixture copy 摘自 Apple 官方口径（演示用转述）。
 const POLICY_GIST_POINTS: Array<{ point: string; quote: string; ref: string }> = [
-  // ⚠ 待 Danny 审字（point / quote 整组 copy）
+  // （point / quote 整组 copy）
   {
     point: 'Expedited review exists, but only for extenuating circumstances.',
     quote:
@@ -790,7 +784,6 @@ function PolicyGistCard() {
       </div>
 
       <p className="policy-gist-verdict">
-        {/* ⚠ 待 Danny 审字 */}
         For the Smart Shopping Guide companion launch: submit a final build through the normal
         queue now, and file the expedited request citing the launch date — Apple grants these on a
         limited, case-by-case basis.
@@ -805,7 +798,7 @@ const COMPLIANCE_CHECKS: Array<{
   guideline: string
   status: 'pass' | 'attention'
 }> = [
-  // ⚠ 待 Danny 审字（verdict 整组 copy）
+  // （verdict 整组 copy）
   {
     verdict: 'Release candidate is final — no placeholder content, no known crashes.',
     guideline: 'Guideline 2.1 — App Completeness',
@@ -817,7 +810,7 @@ const COMPLIANCE_CHECKS: Array<{
     status: 'attention',
   },
   {
-    verdict: 'Expedited request is justifiable — the Smart Shopping Guide launch is a dated event.', // ⚠ 待 Danny 审字
+    verdict: 'Expedited request is justifiable — the Smart Shopping Guide launch is a dated event.',
     guideline: 'Expedited review criteria',
     status: 'pass',
   },
@@ -828,10 +821,10 @@ function ComplianceCard({ question }: { question: string }) {
     <section className="compliance-card" aria-label="Follow-up output: compliance check">
       <header className="compliance-header">
         <div>
-          <p className="eyebrow">Follow-up · Compliance check {/* ⚠ 待 Danny 审字 */}</p>
-          <h2>Does the companion-app build comply? {/* ⚠ 待 Danny 审字 */}</h2>
+          <p className="eyebrow">Follow-up · Compliance check</p>
+          <h2>Does the companion-app build comply?</h2>
         </div>
-        <span>Against cited guidelines {/* ⚠ 待 Danny 审字 */}</span>
+        <span>Against cited guidelines</span>
       </header>
 
       {question ? <p className="compliance-question">&ldquo;{question}&rdquo;</p> : null}
@@ -851,7 +844,6 @@ function ComplianceCard({ question }: { question: string }) {
       </div>
 
       <p className="compliance-verdict">
-        {/* ⚠ 待 Danny 审字 */}
         Fix the privacy labels, then submit — everything else is ready for an expedited request.
       </p>
     </section>
@@ -864,7 +856,7 @@ function ComplianceCard({ question }: { question: string }) {
 const ENG_RECIPIENTS = PEOPLE.filter(
   (person) => person.team === 'Design' || person.team === 'Eng',
 ).slice(0, 6)
-const EMAIL_DOMAIN = 'avery.io' // ⚠ 待 Danny 审字（演示用公司域名）
+const EMAIL_DOMAIN = 'avery.io' // （演示用公司域名）
 
 function emailAddressOf(person: Person) {
   // handle = 名字各词用 '.' 连接、去空格小写（"Lin Qing" → lin.qing）；
@@ -878,8 +870,8 @@ function emailAddressOf(person: Person) {
 }
 
 // agent 预填的邮件草稿（fixture copy，呼应 memo 占位照片上的要点）。
-const EMAIL_SUBJECT = 'Friday demo: design freeze + client-support rotation' // ⚠ 待 Danny 审字
-// ⚠ 待 Danny 审字（草稿 body 整段 copy）
+const EMAIL_SUBJECT = 'Friday demo: design freeze + client-support rotation'
+// （草稿 body 整段 copy）
 const EMAIL_DRAFT_BODY = `Team,
 
 Two changes for the Smart Shopping Guide demo this Friday:
@@ -912,8 +904,7 @@ function MemoDraftCard({ body, onChange }: { body: string; onChange: (text: stri
         spellCheck={false}
       />
       <p className="memo-draft-hint">
-        Edit anything — changes flow straight into the email below. {/* ⚠ 待 Danny 审字 */}
-      </p>
+        Edit anything — changes flow straight into the email below.      </p>
     </section>
   )
 }
@@ -927,7 +918,7 @@ function EmailToolCard({ body, sent, onSend }: { body: string; sent: boolean; on
     <section className="email-tool-card" aria-label="The email, ready for you to send">
       <header className="email-tool-header">
         <div>
-          <p className="eyebrow">Drafted by Avery · you send it {/* ⚠ 待 Danny 审字 */}</p>
+          <p className="eyebrow">Drafted by Avery · you send it</p>
           <h2>Ready for you to send</h2>
         </div>
         <span className={classNames(['email-tool-status', sent && 'is-sent'])}>
@@ -937,7 +928,7 @@ function EmailToolCard({ body, sent, onSend }: { body: string; sent: boolean; on
 
       <div className="email-field">
         <span className="email-field-label">From</span>
-        <p className="email-from">You {/* ⚠ 待 Danny 审字 */}</p>
+        <p className="email-from">You</p>
       </div>
 
       <div className="email-field">
@@ -970,7 +961,7 @@ function EmailToolCard({ body, sent, onSend }: { body: string; sent: boolean; on
           disabled={sent}
           onClick={onSend}
         >
-          {/* ⚠ 待 Danny 审字（Send / Sent ✓ 按钮文案） */}
+          {/* （Send / Sent ✓ 按钮文案） */}
           {sent ? `Sent ✓ — from you, to ${ENG_RECIPIENTS.length} people` : 'Send it yourself'}
         </button>
       </footer>
@@ -979,7 +970,7 @@ function EmailToolCard({ body, sent, onSend }: { body: string; sent: boolean; on
 }
 
 // follow-up：Slack-message 小 Manifest——短版发 #team（决策 4；chip 锚在 email-tool 卡）。
-const SLACK_SHORT_VERSION = // ⚠ 待 Danny 审字（Slack 短版整段 copy）
+const SLACK_SHORT_VERSION = // （Slack 短版整段 copy）
   "Heads-up for Friday's Smart Shopping Guide demo — design freeze Thursday 6pm, and client support now goes to the on-call rotation (not straight to Lin Qing). I've just emailed the team the full details."
 
 function SlackMessageCard({ question }: { question: string }) {
@@ -987,18 +978,18 @@ function SlackMessageCard({ question }: { question: string }) {
     <section className="slack-message-card" aria-label="Follow-up: a short version for you to post to #team">
       <header className="slack-message-header">
         <div>
-          <p className="eyebrow">Drafted by Avery · you post it {/* ⚠ 待 Danny 审字 */}</p>
-          <h2>A short version for #team {/* ⚠ 待 Danny 审字 */}</h2>
+          <p className="eyebrow">Drafted by Avery · you post it</p>
+          <h2>A short version for #team</h2>
         </div>
-        <span>#team {/* ⚠ 待 Danny 审字 */}</span>
+        <span>#team</span>
       </header>
 
       {question ? <p className="slack-message-question">&ldquo;{question}&rdquo;</p> : null}
 
       <div className="slack-message-bubble">
-        <span className="slack-message-author">You {/* ⚠ 待 Danny 审字 */}</span>
+        <span className="slack-message-author">You</span>
         <p>{SLACK_SHORT_VERSION}</p>
-        <span className="slack-message-byline">Drafted by Avery {/* ⚠ 待 Danny 审字 */}</span>
+        <span className="slack-message-byline">Drafted by Avery</span>
       </div>
     </section>
   )
@@ -1024,10 +1015,10 @@ function FollowUpComposer({ onAsk }: { onAsk: (text: string) => void }) {
         type="text"
         value={draft}
         onChange={(event) => setDraft(event.target.value)}
-        placeholder="Ask a follow-up on this thread..." /* ⚠ 待 Danny 审字 */
+        placeholder="Ask a follow-up on this thread..."
         aria-label="Follow-up question"
       />
-      <button type="submit">Ask {/* ⚠ 待 Danny 审字 */}</button>
+      <button type="submit">Ask</button>
     </form>
   )
 }
@@ -1223,11 +1214,10 @@ function ThreadChrome() {
           aria-haspopup="menu"
           onClick={() => setHistoryOpen((open) => !open)}
         >
-          History {/* ⚠ 待 Danny 审字 */}
-        </button>
+          History        </button>
         {historyOpen ? (
           <div className="nexus-history-popover" role="menu" aria-label="Thread history">
-            <p className="eyebrow">Threads {/* ⚠ 待 Danny 审字 */}</p>
+            <p className="eyebrow">Threads</p>
             {threadList.map((t) => {
               const def = CASES[t.caseId]
               return (
@@ -1246,7 +1236,7 @@ function ThreadChrome() {
                     <span className="nexus-history-item-question">{t.question}</span>
                   ) : null}
                   <span className="nexus-history-item-meta">
-                    {/* ⚠ 待 Danny 审字（Open/Closed badge 文案） */}
+                    {/* （Open/Closed badge 文案） */}
                     {t.steps.length}/{threadPlan(t).length} steps · {t.isOpen ? 'Open' : 'Closed'}
                   </span>
                 </button>
@@ -1285,10 +1275,10 @@ function NexusEmptyState() {
           type="text"
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
-          placeholder="Ask your team anything..." /* ⚠ 待 Danny 审字 */
+          placeholder="Ask your team anything..."
           aria-label="New thread question"
         />
-        <button type="submit">Ask {/* ⚠ 待 Danny 审字 */}</button>
+        <button type="submit">Ask</button>
       </form>
       <div className="nexus-empty-suggestions" aria-label="Suggested threads">
         {Object.values(CASES).map((caseDef) => (

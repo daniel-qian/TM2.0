@@ -2,7 +2,7 @@
 // `Dict` is inferred from this object (see ./index), so zh.ts must mirror its
 // shape exactly. Values use backticks so ' and " need no escaping.
 //
-// ⚠ Every string here is still 待 Danny 审字 (draft). The Chinese (zh.ts) is
+// Every string here is still a draft. The Chinese (zh.ts) is
 // transcreated from THIS draft by MiniMax-M3 and is regenerable: when Danny
 // edits the English, re-run scripts/i18n-zh.mjs.
 //
@@ -24,7 +24,7 @@ export const en = {
   langSwitch: { en: `EN`, zh: `中文` },
 
   // ── Screen 1 · Hero ────────────────────────────────────────────────────────
-  // ⚠ 待 Danny 审字 — slug switched to "Managers need safer HR decisions"
+  // slug switched to "Managers need safer HR decisions"
   // (founder decision 2026-07-03); category claim = management-decision layer
   // (NOT "HR software" — see ADR-0018; zh renders the category as 管理决策,
   // avoiding the low-ceiling "HR软件" filing).
@@ -78,7 +78,7 @@ export const en = {
   // ── Screen 3 · Market gap + TAM ────────────────────────────────────────────
   marketGap: {
     eyebrow: `The gap`,
-    // ⚠ 待 Danny 审字 — h2 + bridge line per Will's last-mile check (2026-07-03):
+    // h2 + bridge line per Will's last-mile check (2026-07-03):
     // headline names the stake; lede opens by carrying Screen 2's morning read
     // up into the market frame so the live-scroll pullback feels earned.
     h2: `There's a tool for every part of the job — except the part you're paid for.`,
@@ -91,7 +91,7 @@ export const en = {
       { name: `Consulting`, line: `Expert judgement, slow cycle.`, m1label: `human interpretation`, m2label: `daily manager workflow` },
     ],
     averyPanel: { name: `Avery`, line: `Decision-ready, with a human in the loop.`, m1label: `evidence-weighted context`, m2label: `manager review loop` },
-    // ⚠ 待 Danny 审字 — bottom-up TAM/SOM (ADR-0018: model-shaped numbers,
+    // bottom-up TAM/SOM (ADR-0018: model-shaped numbers,
     // formula visible on page = the annotation). Inputs: US Census SUSB
     // ballpark ~650k firms with 20–499 employees; 8 managers/company and the
     // $114 seat midpoint are OUR stated assumptions. 650k × 8 × $114 × 12 ≈ $7B.
@@ -109,7 +109,7 @@ export const en = {
       som: { k: `Reachable in 24 months — 300 companies × 8 seats`, v: `≈ $3.3M ARR` },
       somNote: `We'd rather show a believable $3M than an unbelievable $7B.`,
     },
-    // ⚠ 待 Danny 审字 — the "why overseas-first" pre-empt (Phil: answer it
+    // the "why overseas-first" pre-empt (Phil: answer it
     // before the room asks it).
     overseas: `Why overseas-first: higher willingness-to-pay per seat, cleaner SaaS payment behavior, and an English-native AI advantage — APAC is the expansion layer, not the beachhead.`,
     landscapeToggle: `Unfold — the full HR-tool capability matrix`,
@@ -152,7 +152,7 @@ export const en = {
   },
 
   // ── Screen 4 · The ROI account ─────────────────────────────────────────────
-  // ⚠ 待 Danny 审字 — WrongCut reframed as the cost-saving account; absorbs
+  // WrongCut reframed as the cost-saving account; absorbs
   // the old WhyItMatters ("judged on shipped work / defensible calls") into
   // the lede. All figures are an ILLUSTRATIVE MODEL (ADR-0018): rule-of-thumb
   // replacement cost (50–100% of salary), stated team-slip assumption, and our
@@ -162,7 +162,7 @@ export const en = {
     mastheadR: `Illustrative model`,
     eyebrow: `Cheaper to see it coming`,
     h2: `One bad people call pays for years of Avery.`,
-    // ⚠ 待 Danny 审字 — Will's check: the "reportedly asked back" anecdote was
+    // Will's check: the "reportedly asked back" anecdote was
     // the only unverifiable claim in the hardest-numbers section → cut. Dana's
     // check: "node" was the one word that turns a person into a diagram
     // element → "person". The four-cost account below is the evidence.
@@ -186,7 +186,7 @@ export const en = {
   },
 
   // ── Screen 5 · Revenue model (the screen they came for) ───────────────────
-  // ⚠ 待 Danny 审字 — expanded from the partner's revenue-model deck
+  // expanded from the partner's revenue-model deck
   // (2026-07-02): pricing architecture + revenue mix at scale + commercial
   // thesis + condensed roadmap. All prices are the DESIGNED pricing model
   // (mock in the sense of pre-revenue; real in the sense that this is what we
@@ -196,7 +196,7 @@ export const en = {
     mastheadR: `Proof → recurring → moat`,
     eyebrow: `How this becomes a business`,
     h2: `Charge for trust first. Then scale the recurring layer.`,
-    // ⚠ 待 Danny 审字 — opening line marks the buyer-ROI → seller-economics
+    // opening line marks the buyer-ROI → seller-economics
     // pivot on purpose (Will's beat 4→5 bridge).
     lede: `That's the value to them. Here's how it becomes revenue for us: Avery is not priced as generic AI chat. Buyers pay for safer manager decisions, private company context, benchmark intelligence, and review-ready workflows — service-heavy at first to earn trust, shifting to seats and benchmark data as workflows mature.`,
     offers: [
@@ -227,7 +227,7 @@ export const en = {
   },
 
   // ── Screen 6 · Moat ────────────────────────────────────────────────────────
-  // ⚠ 待 Danny 审字 — the "why can't a general model eat this" screen. Absorbs
+  // the "why can't a general model eat this" screen. Absorbs
   // TrustLayer (trust architecture pillar) and hosts the fold-outs for
   // Playbooks / Modules / the eval section. The honesty strip keeps the locked
   // eval promise: NO scorecard numbers until real human ratings land.
@@ -315,7 +315,7 @@ export const en = {
     button: `Book a 15-min look`,
     ok: `Thanks — we'll be in touch to find 15 minutes. 🙏`,
     micro: `We'll never put your people on a dashboard — the trust layer is the product.`,
-    // ⚠ 待 Danny 审字 — investor-facing closing line (Will, 2026-07-03): the
+    // investor-facing closing line (Will, 2026-07-03): the
     // buyer CTA stays; this answers the investor's "what's the ask" and ties
     // back to the SOM figure on the market screen.
     investorNote: `For investors: we're raising to reach the 300-company SOM on this page. The ask, the use of funds, and the 24-month plan are a conversation away — same 15 minutes.`,

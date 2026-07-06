@@ -147,12 +147,11 @@ function liveRead(card: LivePersonCard): { read: string; tone: HomeTone } {
     return { read: card.collaboration.trim(), tone: 'sage' }
   }
   if (card.owns && card.owns.length > 0) {
-    return { read: `Owns ${card.owns.slice(0, 2).join(', ')}`, tone: 'sage' } // ⚠ 待 Danny 审字
-  }
+    return { read: `Owns ${card.owns.slice(0, 2).join(', ')}`, tone: 'sage' }  }
   if (card.tenure && card.tenure.trim()) {
     return { read: card.tenure.trim(), tone: 'sage' }
   }
-  return { read: 'On the team', tone: 'sage' } // ⚠ 待 Danny 审字（无信号时的中性读数）
+  return { read: 'On the team', tone: 'sage' } // （无信号时的中性读数）
 }
 
 function briefingFromPayload(payload: LiveTeamPayload): Briefing {
@@ -178,17 +177,15 @@ function liveHandoffs(payload: LiveTeamPayload): HomeHandoff[] {
     const evidence =
       blockers.length > 0
         ? blockers[0]
-        : `${pr.title} is flagged ${pr.status ?? 'worth a look'} in your uploads.` // ⚠ 待 Danny 审字
+        : `${pr.title} is flagged ${pr.status ?? 'worth a look'} in your uploads.`
     out.push({
       id: `lh_${pr.id}`,
       tone: pr.status === 'blocked' ? 'terracotta' : 'honey',
-      toneLabel: 'Worth a closer look', // ⚠ 待 Danny 审字（surface label per ADR-0015）
-      action: `Take a look at ${pr.title}`, // ⚠ 待 Danny 审字
-      evidence,
+      toneLabel: 'Worth a closer look', // （surface label per ADR-0015）
+      action: `Take a look at ${pr.title}`,      evidence,
       personIds: pr.ownerId ? [pr.ownerId] : [],
       projectIds: [pr.id],
-      evidenceTag: 'From your uploads', // ⚠ 待 Danny 审字
-    })
+      evidenceTag: 'From your uploads',    })
   }
   return out
 }

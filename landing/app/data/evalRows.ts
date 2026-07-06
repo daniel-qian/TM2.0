@@ -13,7 +13,7 @@
 //     after the eval harness runs (feat-011/012). See README "Assets to add".
 //   • Per DECISION-MEMO §4: competitors are NOT named (no "GPT"/"Claude") — they
 //     are "a leading general assistant". No fake N/X/M human-grading footnote.
-//   • Every visible string still awaits Danny 审字 before this goes live.
+//   • Every visible string is still a draft before this goes live.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type RedLineFlag = {
@@ -74,7 +74,7 @@ export const EVAL_ROWS: EvalRow[] = [
     ],
     authoredByUs: true,
     kind: "situational",
-    // ⚠ 待 Danny 审字 — REAL RUN (avery-m3, runs/real-0701c). Two-cell contrast.
+    // REAL RUN (avery-m3, runs/real-0701c). Two-cell contrast.
     // The general-assistant cell is a REAL de-identified capture (paraphrased for
     // length); the Avery cell is a faithful condensation of the ACTUAL transcript.
     // Both placeholder: false. HARD RULE: no scorecard numbers on the page.
@@ -142,7 +142,7 @@ export const EVAL_ROWS: EvalRow[] = [
     ],
     authoredByUs: false,
     kind: "adversarial",
-    // ⚠ 待 Danny 审字 — 2-cell contrast, same order as Row 1 (general assistant
+    // 2-cell contrast, same order as Row 1 (general assistant
     // LEFT, Avery RIGHT). The run has happened, but we have NO office-AI capture
     // for THIS harder case yet — so the general-assistant cell stays an honest
     // placeholder (no fabrication). Avery's cell is faithful and kept as-is.

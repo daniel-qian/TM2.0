@@ -1,7 +1,7 @@
 "use client";
 
 // Deck slide 11 (Six modules) — interactive selector. Strings from i18n
-// dictionary (passed from the server page). ⚠ 待 Danny 审字.
+// dictionary (passed from the server page).
 
 import { useState } from "react";
 import type { Dict } from "../i18n";
