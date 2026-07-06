@@ -21,10 +21,12 @@ Keys stay server-side (`service/brain_factory.py`); the frontend only ever sees 
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any, Iterator
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
@@ -47,6 +49,22 @@ app = FastAPI(
     title="Avery agent service",
     version="0.1.0",
     summary="LiveAgentSource backend — advisor engine (think->tool->observe) over FastAPI + SSE.",
+)
+
+# Browser live mode (frontend :5173 -> this service :8137) needs CORS. Origins are env-configurable
+# for deploy (AVERY_CORS_ORIGINS, comma-separated); dev defaults to the Vite dev ports.
+_cors_origins = [
+    o.strip()
+    for o in os.getenv(
+        "AVERY_CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173"
+    ).split(",")
+    if o.strip()
+]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_origins,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # feat-018: the ingestion HTTP surface (upload → Your team). Thin wrapper over feat-016's
