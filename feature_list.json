@@ -201,6 +201,48 @@
       "dependencies": [],
       "status": "done",
       "evidence": "2026-07-05 done（feat020-bygg-research AFK 线，28 tool calls / 343s）。产出 D:/Boyle/research/skeppsviken-construction/（原名 byggsamverkan-construction，07-05 整合改名）：README.md（241 行全报告 + §0.A-C Skeppsviken 画像）+ feasibility-table.md + sources.md；未碰 git。★关键反转（07-05 已解）：byggsamverkan.se 不是客户官网，而是建筑 PM 软件 Next Project 的厂商产品页（agent 判断正确）——Danny 07-05 更正真实客户官网 = Skeppsviken（https://www.skeppsviken.se ），即客户 = Skeppsviken 承包商，byggsamverkan.se 只是其建筑团队所用的 PM 软件。Skeppsviken 公司画像 + 栈确认 supplement 07-05 已完成（同 feat020 agent resumed，约 480s）：Skeppsviken = 西瑞典建筑+地产开发集团（Göteborg+Skövde，2016 改名，被动房专长）；集团 Skeppsviken Holding AB 约 18 公司/152 人/约 1552 MSEK，主建筑臂 Skövde 93 人 + Göteborg 56 人；自营土建/结构，做学校/养老/体育馆/商业 + 自有住宅开发 + 物业租赁；岗位 platschef/arbetsledare/projektledare/kalkylator/projektör/yrkesarbetare——150 人多址自营承包商，Teams+Outlook+CAD+建筑 PM 系统教科书契合。PM 产品认出 = Byggsamordnaren（旧）→ Next Project（云，厂商 NEXT/Next One Technology），有文档化开放 REST API（next-tech.readme.io）。可行性：四款软件全部开放 API、无一封闭——Teams/Outlook 走 MS Graph（OAuth2 Entra，免费，高可行）；CAD 假设 Autodesk 走 APS（Model Derivative 拉图纸元数据/BOM，最重）；PM 走 Next Project REST（OAuth2 client-creds+DB#+一次性 key，可拉 项目/预算/材料价单/工时/发票/文档/工单，客户需向 NEXT 申请授权，约 1000 SEK/月，test 免费）。Roadmap：lite = 四者全走 导出→上传（即刻可发、不需客户 IT）；企业 live 连接器优先级 Graph（Teams+Outlook）> Next Project API > Autodesk APS。开放项：① 建筑客户真实公司名 → 已解 = Skeppsviken；② PM 版本（云 Next Project / 旧桌面 Byggsamordnaren）+ ③ CAD 产品——supplement 查过，二者内部工具公开均不可确认（skeppsviken.se 有 bot 防护、画像靠搜索快照+登记处 bolagsfakta/allabolag/LinkedIn），仍待合伙人一句话确认（决定 API 路径）。"
+    },
+    {
+      "id": "feat-021",
+      "name": "真向量语义检索(百炼 text-embedding-v4 接入 memory.recall)",
+      "description": "recall() 可选语义化:有 embedder 用向量余弦排序,无 key/失败退回关键词(离线 AFK 门保绿);embedder 从 env→service→engine→loop 一路穿透;cite 焊死 facts.md 行号不动、红线不动;/health 报 embeddings 口径。rerank(qwen3-rerank)有意不做。",
+      "dependencies": [
+        "feat-015",
+        "feat-016"
+      ],
+      "status": "done",
+      "evidence": "2026-07-07 done(实现于 07-07 早 session,复验+落 commit 于 07-07 晚 session,53e0ef6):tsc -b 零错;pytest 174 passed(含 test_semantic_recall.py 真打百炼 API:与目标行零共同词的查询被向量排到第一、关键词版搜不到);/health 报 embeddings:dashscope:text-embedding-v4/1024;流式 /advise 带 context_id 实测语义命中上传 xlsx 行并 cite(问 who leads design → facts.md:156 Chen Mingyuan 行,58s@M3)。已知质量缺口转 feat-022 gate 断言:top-k 漏了 Lin Qing|Design Director 最佳行。真 key 在 eval-harness/.env(gitignored)。"
+    },
+    {
+      "id": "feat-022",
+      "name": "seed 端到端验收 gate(双层机器门,先立必红)",
+      "description": "把 2026-07-07 手工复现固化成机器断言。离线层(每次必跑):golden-payload 回放+现有 pytest,无 key 绿。集成层(lite feature 标 done 前必跑):真起 service 真传 2 个 seed(LogiPulse-Roadmap.pdf + PrismDesign_TeamProfile_EN.xlsx,拷为 tracked fixtures),断言 xlsx≥15 人且具名含 Lin Qing/Chen Mingyuan、假人黑名单(No./Case ID/表头词)=0、pdf≥2 项目且标题≠文件名、人卡零数字、who leads design→cite 命中 Lin Qing 行、facts 无 mojibake;前端真浏览器 agent 自驱 live 全流程(上传→卡→薄详情→askLive),DOM 扫 story 专有名词黑名单=0。立完必红(现状必挂)——红是成功,绿等 023/024。Danny 只抽查不设闸。见 .issues/feat-022/kickoff.md + .issues/live-rescue-0707/plan.md。",
+      "dependencies": [
+        "feat-016",
+        "feat-017"
+      ],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "feat-023",
+      "name": "LLM 抽取引擎(LLMExtractor 接 pluggable brain,修绿 022 后端断言)",
+      "description": "抽取主位换 LLM:喂带行号解析文本→一次结构化输出多 Person/Project/Signal,每实体带来源行号(cite 链不断)→产物过同一 redline_extract 门(PersonEntity 类型层无数字字段不变);brain 现实可用=M3+DeepSeek(claude 仅代码路径无 key,不得假设);无 key/失败自动退 HeuristicExtractor(离线门保绿);pypdf mojibake 清洗;检索质量调到 gate 的 cite 断言绿。正则不修,降级测试/兜底。完工判定=feat-022 后端断言全绿,非自报。见 .issues/feat-023/kickoff.md。",
+      "dependencies": [
+        "feat-022"
+      ],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "feat-024",
+      "name": "story/lite 同仓立墙 + lite 3 屏壳(ADR-0022,修绿 022 前端断言)",
+      "description": "src/story/**(fixtures/cases/rail/满血场景,冻结路演资产)/ src/lite/**(3 屏:上传空态·Your team·The room 薄建 + 薄只读详情浮层,零 fixtures)/ src/shared/**(卡片/字体/CSS 原子);ESLint no-restricted-imports 把 lite→story import 变红灯(机器闸)。composer 接 askLive;live 空态左脊柱不渲染 scripted 占位;HOME_CLOSING 类 story 文案出 lite。硬门:feat-022 前端断言全绿 且 story 回归(rail 26 拍)仍绿;story 资产 URL/构建不变;红线人卡零数字。EN copy act-first,ZH 走 M3。见 .issues/feat-024/kickoff.md。",
+      "dependencies": [
+        "feat-022"
+      ],
+      "status": "not-started",
+      "evidence": ""
     }
   ]
 }

@@ -5,7 +5,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-07-05（双线战略圆桌：架构锁定，feat-015..020 teed up；见文末 `## Update — 2026-07-05` + `docs/strategy/2026-07-05-dual-line-strategy-roundtable.md`）
+**Last Updated:** 2026-07-07 晚（救 15–20：确诊 + grill 六岔口 Danny 全拍 → **ADR-0022** + feat-021 done / feat-022..024 teed up；见文末 `## Update — 2026-07-07` + `.issues/live-rescue-0707/plan.md`；接续读根 `session-handoff.md` 2026-07-07 收盘版）
+**上一条：** 2026-07-05（双线战略圆桌：架构锁定，feat-015..020 teed up；见 `## Update — 2026-07-05` + `docs/strategy/2026-07-05-dual-line-strategy-roundtable.md`）
 **上一条：** 2026-07-03 晚（投资人路演 landing 重构已合并 main，2588dc7）
 **本日第二条线（worktree `elated-noether-7807c8` → 已合并+清理）：** landing 18 屏 → 7 屏投资叙事，为今晚证券金融路演。
 **已上线 production：<https://avery-jade.vercel.app/?lang=zh>**。要点：**ADR-0018**（人情味从产品真理降为红线；产品真理
@@ -240,3 +241,12 @@ avery loop 补 cite-before-number。
 - **runbook**：`docs/deploy/dual-deploy-runbook.md`（逐 target step + env 矩阵单一真源 + HITL 清单）。**Danny HITL**：域名、境内/海外主机开通、真 key（不进 git）、`docker build`+容器 /health 冒烟（本机 Docker daemon 未起）、Vercel 项目 Root=repo root（≠landing）、境内静态托管上传 dist+SPA fallback、生产 promote、deployment protection 面板给融资团队访问（别锁死 SAML）、可选 vector RAG 开关（选 embeddings+pgvector+3 个 env）。
 - **无密钥入 git**：`.env.example` 模板 key 字段空、pgvector 用 CHANGEME 占位；真 `eval-harness/.env`（有 MiniMax/DeepSeek key）gitignored+未 tracked，已核。
 - **源码改动（surgical，5 文件）**：`src/i18n/index.ts`（+VITE_AVERY_LOCALE 构建默认）· `src/vite-env.d.ts`（env 类型）· `src/main.tsx`（曝 __AVERY_BUILD__）· `vite.config.ts`（打戳）· `eval-harness/service/app.py`（挂 ingest router + 接 context seam）。engine（loop/redline/brain/ingest）零改写。
+
+## Update — 2026-07-07 · 救 15–20:确诊 + grill 拍板(ADR-0022;本 session 零实现代码)
+
+- **使命完成**:① 复现+确诊「15–20 为什么临近崩盘」② grilling 六岔口逼出 Danny 亲拍的补救计划。全记录:`.issues/live-rescue-0707/plan.md`(决策表)+ 根 `session-handoff.md` 07-07 收盘版(确诊全文)+ **ADR-0022**。
+- **确诊要点(全 verified)**:管道真、门面假——(a) story 渗漏 3 缺口:live 空态左脊柱渲染 scripted 占位(眉题 "FROM YOUR UPLOADS" 下是 Venus/Kate/Jason)、TeamComposer 整个在缝外(live 提问进 story 剧本机,handoff §3 没抓到的新点)、详情页只查 fixtures(live 卡必 Unknown);(b) 抽取抓瞎:两个官方 seed 实测 → xlsx 20 人表出 1 个假人 "No."、pdf roadmap 出 1 个文件名项目;强制修正路由后 roster 启发式仍出 3 假人(Name 列焊死第 0 列);(c) 174 绿没拦住 = 测试 fixture 按抽取器假设反向定制(数据层 maker==checker)+ live 从未被人点过。**好消息**:advisor+RAG 腿端到端真跑通(语义 recall 命中上传 xlsx 行+cite+红线全 hold),红线零违规。
+- **grill 拍板(六岔口)**:C 同仓立墙(story/lite/shared + ESLint 机器边界)/ v1 lite 3 屏+薄详情 / LLM 主抽(M3+DeepSeek 现实可用,claude 仅无 key 代码路径——Danny 纠正记忆,勿再假设)/ 双层机器门(agent 当第一个用户,Danny 只抽查)/ 未提交改动都提+分支继续 / Gate 先红→双线并行。
+- **落盘**:commit `53e0ef6`(feat-021 真向量,174 绿含真 API 证据)+ `4e90966`(fix:Story/Live 开关可点 + 剧本 rail 只挂 story)+ 本 docs 批;feature_list 新增 feat-021(done)/022/023/024(not-started);kickoff ×3。分支 `feat/live-core-015-018` 已 push;**main(2f76ceb)不动**,gate 绿+Danny 验收后才 merge。
+- **下一步**:S1 = feat-022(gate 先立必红)+ feat-023(LLM 抽取修绿后端)→ S2 = feat-024(立墙修绿前端+story 回归)→ S3 合流验收 merge。
+- Notes:环境坑复确认——headless 预览 rAF 停摆,场景切换/动画不可机测,断言走 DOM 旁路;07-07 工作树曾因分支切换被自动 stash(已恢复+落 commit+drop)。
