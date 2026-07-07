@@ -76,7 +76,7 @@ def _good_payload():
 # --- (a) happy path: entities + resolvable line sources ----------------------------------------
 
 def test_llm_entities_carry_resolvable_line_sources():
-    ex = LLMExtractor(FakeBrain([_good_payload()]))
+    ex = LLMExtractor(FakeBrain([_good_payload()]), retry_backoff_s=0)
     res = ex.extract(ROSTER_DOC)
     names = {p.name for p in res.people}
     assert names == {"Lin Qing", "Chen Mingyuan"}
@@ -93,7 +93,7 @@ def test_llm_entities_carry_resolvable_line_sources():
 def test_llm_line_out_of_range_is_clamped_not_crashed():
     bad = _good_payload()
     bad["people"][0]["line"] = 99999
-    res = LLMExtractor(FakeBrain([bad])).extract(ROSTER_DOC)
+    res = LLMExtractor(FakeBrain([bad]), retry_backoff_s=0).extract(ROSTER_DOC)
     lin = next(p for p in res.people if p.name == "Lin Qing")
     assert int(lin.source.rsplit(":", 1)[1]) <= len(ROSTER_DOC.lines)
 
@@ -103,18 +103,38 @@ def test_llm_line_out_of_range_is_clamped_not_crashed():
 def test_smuggled_scoring_key_kills_the_record_only():
     bad = _good_payload()
     bad["people"][0]["moodPct"] = 24        # the hallucinated blood bar
-    res = LLMExtractor(FakeBrain([bad])).extract(ROSTER_DOC)
+    res = LLMExtractor(FakeBrain([bad]), retry_backoff_s=0).extract(ROSTER_DOC)
     names = {p.name for p in res.people}
     assert "Lin Qing" not in names, "a person dict with a scoring key must not survive"
     assert "Chen Mingyuan" in names, "clean records in the same doc must survive"
 
 
-def test_rating_in_free_text_falls_back_to_heuristic():
+def test_rating_shaped_numbers_are_stripped_not_fatal():
+    """Real staffing tables put '80%' next to a person; the model sometimes copies it. The
+    sanitizer STRIPS the rating-shaped number (person survives, qualitative text intact) instead
+    of collapsing the whole doc to the heuristic — this exact shape flaked the seed gate live
+    (LogiPulse pdf, 8 people with allocation %)."""
     bad = _good_payload()
-    bad["people"][0]["role"] = "Design Director, performance 9/10"   # text-smuggled rating
-    ex = LLMExtractor(FakeBrain([bad]))
+    bad["people"][0]["role"] = "Design Director, performance 9/10"
+    bad["people"][1]["tenure"] = "80% allocated, throughout"
+    bad["people"][1]["owns"] = ["~10%", "project lead across Phase 1"]
+    ex = LLMExtractor(FakeBrain([bad]), retry_backoff_s=0)
     res = ex.extract(ROSTER_DOC)
-    # the whole doc fell back to the (red-line-safe) heuristic — never a poisoned payload
+    by = {p.name: p for p in res.people}
+    assert set(by) == {"Lin Qing", "Chen Mingyuan"}, "people must survive a smuggled percent"
+    assert "9/10" not in by["Lin Qing"].role and "Design Director" in by["Lin Qing"].role
+    assert "80%" not in by["Chen Mingyuan"].tenure
+    assert by["Chen Mingyuan"].owns == ["project lead across Phase 1"]  # pure-% item dropped
+    from avery.ingest import validate_extraction
+    assert validate_extraction(res).ok, "stripped output must pass the same red-line gate"
+
+
+def test_scoring_lexicon_still_falls_back_whole_doc():
+    """Stripping covers number SHAPES only. A person-scoring LABEL (red-line lexicon) still
+    rejects the doc into the heuristic — the gate inside the extractor is not weakened."""
+    bad = _good_payload()
+    bad["people"][0]["owns"] = ["flagged as a low performer in the review"]
+    res = LLMExtractor(FakeBrain([bad]), retry_backoff_s=0).extract(ROSTER_DOC)
     baseline = HeuristicExtractor().extract(ROSTER_DOC)
     assert {p.name for p in res.people} == {p.name for p in baseline.people}
     from avery.ingest import validate_extraction
@@ -124,20 +144,20 @@ def test_rating_in_free_text_falls_back_to_heuristic():
 # --- (c) failure modes fall back ---------------------------------------------------------------
 
 def test_garbage_json_falls_back():
-    ex = LLMExtractor(FakeBrain(["I refuse to answer in JSON, here's prose instead."]))
+    ex = LLMExtractor(FakeBrain(["I refuse to answer in JSON, here's prose instead."]), retry_backoff_s=0)
     res = ex.extract(ROSTER_DOC)
     baseline = HeuristicExtractor().extract(ROSTER_DOC)
     assert {p.name for p in res.people} == {p.name for p in baseline.people}
 
 
 def test_model_exception_falls_back():
-    res = LLMExtractor(ExplodingBrain()).extract(ROSTER_DOC)
+    res = LLMExtractor(ExplodingBrain(), retry_backoff_s=0).extract(ROSTER_DOC)
     baseline = HeuristicExtractor().extract(ROSTER_DOC)
     assert {p.name for p in res.people} == {p.name for p in baseline.people}
 
 
 def test_empty_result_falls_back():
-    res = LLMExtractor(FakeBrain([{"people": [], "projects": [], "signals": []}])).extract(ROSTER_DOC)
+    res = LLMExtractor(FakeBrain([{"people": [], "projects": [], "signals": []}]), retry_backoff_s=0).extract(ROSTER_DOC)
     baseline = HeuristicExtractor().extract(ROSTER_DOC)
     assert {p.name for p in res.people} == {p.name for p in baseline.people}
 
@@ -155,7 +175,7 @@ def test_header_cells_and_filename_titles_refused_even_from_the_model():
     bad["people"].insert(0, {"name": "No.", "role": "Founder", "line": 2})
     bad["people"].insert(1, {"name": "Case ID", "role": "", "line": 2})
     bad["projects"].insert(0, {"title": "Team", "line": 1})          # filename stem 'Team'
-    res = LLMExtractor(FakeBrain([bad])).extract(ROSTER_DOC)
+    res = LLMExtractor(FakeBrain([bad]), retry_backoff_s=0).extract(ROSTER_DOC)
     names = {p.name for p in res.people}
     assert names == {"Lin Qing", "Chen Mingyuan"}
     assert all(pr.title.lower() != "team" for pr in res.projects)

@@ -226,19 +226,26 @@ def live_service():
             time.sleep(0.5)
     assert _port_free(SERVICE_PORT), f"port {SERVICE_PORT} still occupied; kill the stray uvicorn"
 
-    env = {**os.environ, "AVERY_BRAIN": "minimax", "AVERY_EMBEDDINGS": "dashscope"}
+    env = {**os.environ, "AVERY_BRAIN": "minimax", "AVERY_EMBEDDINGS": "dashscope",
+           "PYTHONUNBUFFERED": "1"}
+    # Server logs go to a file so an extraction fallback (logged as a warning) is diagnosable
+    # after the fact — the 07-07 pdf flake was blind while these went to a discarded PIPE.
+    log_path = HARNESS / "runs" / "seed-gate-uvicorn.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_file = open(log_path, "w", encoding="utf-8", errors="replace")
     proc = subprocess.Popen(
         [sys.executable, "-m", "uvicorn", "service.app:app",
-         "--host", "127.0.0.1", "--port", str(SERVICE_PORT)],
+         "--host", "127.0.0.1", "--port", str(SERVICE_PORT), "--log-level", "info"],
         cwd=str(HARNESS), env=env,
-        stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        stdout=log_file, stderr=subprocess.STDOUT)
     import httpx
     try:
         deadline = time.time() + 60
         last_err = None
         while time.time() < deadline:
             if proc.poll() is not None:
-                out = proc.stdout.read().decode(errors="replace") if proc.stdout else ""
+                log_file.flush()
+                out = log_path.read_text(encoding="utf-8", errors="replace")
                 pytest.fail(f"uvicorn died on startup:\n{out[-2000:]}")
             try:
                 r = httpx.get(f"{SERVICE_URL}/health", timeout=5)
@@ -267,6 +274,7 @@ def live_service():
         except subprocess.TimeoutExpired:
             proc.kill()
             proc.wait(timeout=10)
+        log_file.close()
         if not _port_free(SERVICE_PORT):
             _kill_port_owner(SERVICE_PORT)
 

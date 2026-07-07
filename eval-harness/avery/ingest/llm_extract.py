@@ -33,17 +33,25 @@ Shape of the thing:
 from __future__ import annotations
 
 import json
+import logging
 import re
+import time
+
+log = logging.getLogger("avery.ingest.llm_extract")
 
 from .extract import (
     ExtractionResult, Extractor, HeuristicExtractor, PersonEntity, ProjectEntity,
     SignalEntity, _norm_status, _norm_team, _slug,
 )
 from .parse import ParsedDoc
-from .redline_extract import validate_extraction, validate_person_dict
+from .redline_extract import (
+    _RATING_NUMBER, _SCORE_WORD_NEAR_NUM, validate_extraction, validate_person_dict,
+)
 
 # One extraction call sees at most this many numbered lines; longer docs are windowed and merged.
-MAX_LINES_PER_CALL = 220
+# Sized so BOTH official seeds fit in a single window (xlsx 44 / pdf 264 lines): fewer calls =
+# fewer flake surfaces — the full-suite run caught a real one-window-dropped flake at 220.
+MAX_LINES_PER_CALL = 320
 
 _ALLOWED_STATUS = {"on-track", "at-risk", "blocked", "done", ""}
 
@@ -52,7 +60,9 @@ resume, weekly, handbook...). You return STRICT JSON only — no prose, no markd
 
 HARD RULES (a compliance gate rejects your output if you break them):
 - PEOPLE ARE QUALITATIVE ONLY. Never output a score, rating, ranking, tier, grade, percentage,
-  mood or capacity number about a person — not as a field, not inside text.
+  mood or capacity number about a person — not as a field, not inside text. This INCLUDES
+  allocation/utilization percentages from staffing tables ('80%', '~10%'): drop the number,
+  keep the qualitative part ('project lead, throughout' — never '80% allocated').
 - NEVER invent. Only entities the document actually states. A field the document does not state
   is "" (or [] for lists).
 - Header/label cells are NOT people: "No.", "Name", "Case ID", "Role", "Title", column headers,
@@ -119,6 +129,22 @@ def _s(v, cap: int = 200) -> str:
     return str(v).strip()[:cap]
 
 
+def _strip_person_ratings(text: str) -> str:
+    """Excise rating-shaped numbers from a PERSON free-text field (the same shapes the red-line
+    gate rejects: percents, N/M, score-word-near-number). Real docs carry per-person allocation
+    tables ('Aarav Patel — 80%'); the model sometimes copies them despite instructions, and one
+    smuggled percent must not collapse the whole doc to the heuristic. Mirrors the frontend's
+    strip philosophy: the number is removed, the qualitative text survives, the gate stays the
+    backstop for anything this misses."""
+    if not text:
+        return text
+    out = _SCORE_WORD_NEAR_NUM.sub("", _RATING_NUMBER.sub("", text))
+    out = re.sub(r"[~≈]\s*(?=$|[,;.)])", "", out)          # orphaned approx-markers
+    out = re.sub(r"\(\s*\)|\[\s*\]", "", out)              # emptied brackets
+    out = re.sub(r"\s{2,}", " ", out).strip(" ,;-—·")
+    return out
+
+
 def _slist(v, cap_items: int = 6, cap_len: int = 180) -> list[str]:
     if not isinstance(v, list):
         return []
@@ -146,10 +172,11 @@ class LLMExtractor:
     """Real-model extraction behind the `Extractor` protocol. Sanitize -> gate -> fallback."""
 
     def __init__(self, brain, fallback: Extractor | None = None,
-                 max_lines_per_call: int = MAX_LINES_PER_CALL):
+                 max_lines_per_call: int = MAX_LINES_PER_CALL, retry_backoff_s: float = 2.0):
         self._brain = brain
         self._fallback = fallback or HeuristicExtractor()
         self._window = max(20, int(max_lines_per_call))
+        self._backoff = max(0.0, retry_backoff_s)   # tests pass 0 — no sleeping on a fake brain
         # deterministic material chunking (the citable RAG corpus) reuses the heuristic's path
         self._chunker = HeuristicExtractor()
 
@@ -158,13 +185,19 @@ class LLMExtractor:
     def extract(self, doc: ParsedDoc) -> ExtractionResult:
         try:
             res = self._extract_with_model(doc)
-        except Exception:
+        except Exception as e:
+            log.warning("LLM extraction failed for %s -> heuristic fallback: %s: %s",
+                        doc.name, type(e).__name__, str(e)[:300])
             return self._fallback.extract(doc)
         # the same red-line gate, INSIDE the extractor: a scoring extraction never leaves here
-        if not validate_extraction(res).ok:
+        rl = validate_extraction(res)
+        if not rl.ok:
+            log.warning("LLM extraction for %s failed the red line -> heuristic fallback: %s",
+                        doc.name, rl.summary())
             return self._fallback.extract(doc)
         if not (res.people or res.projects or res.signals):
             # the model saw nothing structurable — the conservative regexes get a shot
+            log.warning("LLM extraction for %s returned no entities -> heuristic fallback", doc.name)
             return self._fallback.extract(doc)
         return res
 
@@ -183,14 +216,21 @@ class LLMExtractor:
                     f"Lines {start + 1}-{min(start + self._window, len(lines))} of {len(lines)}, "
                     f"numbered `N| text`:\n\n{body}\n\n{_INSTRUCTIONS}")
             # One failed window must not sink the doc — partial extraction beats full fallback.
-            # (M3 is a reasoning model: a long think can truncate the JSON tail of ONE window.)
-            try:
-                data = self._call_once(user)
-            except Exception:
+            # (M3 is a reasoning model: a long think can truncate the JSON tail of ONE window;
+            # rapid-fire windows can also trip provider rate limits.) Retry with backoff.
+            data = None
+            for attempt in range(3):
                 try:
-                    data = self._call_once(user)   # one retry per window, then skip it
-                except Exception:
-                    continue
+                    data = self._call_once(user)
+                    break
+                except Exception as e:
+                    log.warning("extraction window %s..%s of %s attempt %d failed: %s: %s",
+                                start + 1, min(start + self._window, len(lines)), doc.name,
+                                attempt + 1, type(e).__name__, str(e)[:300])
+                    if attempt < 2 and self._backoff:
+                        time.sleep(self._backoff * (attempt + 1))
+            if data is None:
+                continue
             windows += 1
             for key in merged:
                 val = data.get(key)
@@ -224,18 +264,21 @@ class LLMExtractor:
             if person is None:
                 person = PersonEntity(
                     id=_slug(name, "u"), name=name,
-                    role=_s(raw.get("role"), 120),
+                    role=_strip_person_ratings(_s(raw.get("role"), 120)),
                     team=_norm_team(_s(raw.get("team"), 40)),
-                    tenure=_s(raw.get("tenure"), 120),
-                    owns=_slist(raw.get("owns")),
-                    collaboration=_slist(raw.get("collaboration")),
+                    tenure=_strip_person_ratings(_s(raw.get("tenure"), 120)),
+                    owns=[_strip_person_ratings(o) for o in _slist(raw.get("owns")) if
+                          _strip_person_ratings(o)],
+                    collaboration=[_strip_person_ratings(c) for c in
+                                   _slist(raw.get("collaboration")) if _strip_person_ratings(c)],
                     source=_line_ref(doc, raw.get("line")))
                 seen_people[key] = person
                 res.people.append(person)
             else:
                 # same person across windows: enrich, don't duplicate
-                person.owns = (person.owns + _slist(raw.get("owns")))[:6]
-                person.role = person.role or _s(raw.get("role"), 120)
+                extra = [_strip_person_ratings(o) for o in _slist(raw.get("owns"))]
+                person.owns = (person.owns + [o for o in extra if o])[:6]
+                person.role = person.role or _strip_person_ratings(_s(raw.get("role"), 120))
 
         seen_titles: set[str] = set()
         stem = re.sub(r"\.[a-z0-9]+$", "", doc.name, flags=re.I).lower()
