@@ -5,7 +5,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-07-07 晚（救 15–20：确诊 + grill 六岔口 Danny 全拍 → **ADR-0022** + feat-021 done / feat-022..024 teed up；见文末 `## Update — 2026-07-07` + `.issues/live-rescue-0707/plan.md`；接续读根 `session-handoff.md` 2026-07-07 收盘版）
+**Last Updated:** 2026-07-07（**S1 执行完毕**：feat-022 done（双层机器门，出生即红——红是成功）+ feat-023 done（LLM 抽取修绿全部后端断言，`-m seedgate` 6 passed）；**前端断言按计划保持红 = S2 feat-024 的活**；见文末 `## Update — 2026-07-07 · S1` + 根 `session-handoff.md` S1 收盘版）
+**上一条：** 2026-07-07 晚（救 15–20：确诊 + grill 六岔口 Danny 全拍 → **ADR-0022** + feat-021 done / feat-022..024 teed up；见文末 `## Update — 2026-07-07` + `.issues/live-rescue-0707/plan.md`）
 **上一条：** 2026-07-05（双线战略圆桌：架构锁定，feat-015..020 teed up；见 `## Update — 2026-07-05` + `docs/strategy/2026-07-05-dual-line-strategy-roundtable.md`）
 **上一条：** 2026-07-03 晚（投资人路演 landing 重构已合并 main，2588dc7）
 **本日第二条线（worktree `elated-noether-7807c8` → 已合并+清理）：** landing 18 屏 → 7 屏投资叙事，为今晚证券金融路演。
@@ -250,3 +251,20 @@ avery loop 补 cite-before-number。
 - **落盘**:commit `53e0ef6`(feat-021 真向量,174 绿含真 API 证据)+ `4e90966`(fix:Story/Live 开关可点 + 剧本 rail 只挂 story)+ 本 docs 批;feature_list 新增 feat-021(done)/022/023/024(not-started);kickoff ×3。分支 `feat/live-core-015-018` 已 push;**main(2f76ceb)不动**,gate 绿+Danny 验收后才 merge。
 - **下一步**:S1 = feat-022(gate 先立必红)+ feat-023(LLM 抽取修绿后端)→ S2 = feat-024(立墙修绿前端+story 回归)→ S3 合流验收 merge。
 - Notes:环境坑复确认——headless 预览 rAF 停摆,场景切换/动画不可机测,断言走 DOM 旁路;07-07 工作树曾因分支切换被自动 stash(已恢复+落 commit+drop)。
+
+## Update — 2026-07-07 · S1:feat-022 门立(必红)+ feat-023 LLM 抽取修绿后端
+
+> 一个 AFK session 完成 S1 两步(plan.md §S1)。**红→绿的全程都有机器证据,无自报**。分支 `feat/live-core-015-018`,commit 链:`4398caa`(feat-022 门,出生即红)→ `0d1981c`(.gitattributes 钉二进制 fixture)→ `ad7ad13`(feat-023 修绿)→ 收盘 docs。main(2f76ceb)未动。
+
+- **feat-022 ✅ done——双层机器门,立完即红(红是成功,ADR-0022 §3)**:
+  - 后端 `eval-harness/tests/test_seed_gate.py`:离线层(无 key 绿,heuristic 强制,断安全不断质量)+ 集成层 `@seedgate`(真 uvicorn :8137、真 POST /ingest 两个官方 seed(已拷 tracked:`tests/fixtures/seed/`)、具名断言)。**立门时实测 3 红**(xlsx 具名团队=1 假人 "No." / 假人黑名单命中 / pdf=1 文件名项目)**3 绿**(人卡红线在真线上稳 / 无 U+FFFD / advise cite 命中 Lin Qing 行——07-07 晚漏检的检索质量当日复测已命中,留作回归守卫)。
+  - 前端 `scripts/gates/live-frontend-gate.{md,snippet.js}`(浏览器自驱协议+DOM 断言包,story 名词黑名单、transition:none 旁路、setTimeout 轮询防 rAF 停摆)。实跑 verdict **RED**:空态 7 处 story 渗漏(Venus/Smart Shopping Guide/Kate/Jason/Wang/Venus Pitch/Lin Qing story 文案)、1 假人卡、点卡="Unknown teammate" 实证。**黑名单口径坑已埋点**:Lin Qing/Chen Mingyuan/Sun Xiaomei/Zheng Zixuan 四名 story 与真 seed 复用不得按名入黑;"New Retail" 不入黑(真 seed 有合法项目 "New Retail Smart Shopper Mini Program")。
+- **feat-023 ✅ done——LLMExtractor,完工判定=022 后端断言全绿**:`pytest -m seedgate` → **6 passed(7:07)**:xlsx→**20/20 人**(Lin Qing Design Director:8 / Chen Mingyuan Founder-CEO:7,行号全对)、假人=0、pdf 单传→**2 项目**(LogiPulse Phase 1 done / Phase 2 on-track)、人卡零数字、无 mojibake、advise cite 命中。
+  - 实现:`avery/ingest/llm_extract.py`(接 pluggable brain=M3 默认/DeepSeek 可切;行号喂入→一次结构化输出多实体,**每实体带来源行号**;三层红线=白名单 sanitizer(走私评分键只杀单条)→抽取器内 `validate_extraction` 门(正文评分整篇退兜底)→pipeline 复验;任何失败退 HeuristicExtractor,离线门永绿;正则未修=兜底原样)+ `service/extractor_factory.py`(`AVERY_EXTRACTOR` auto/llm/heuristic;claude 仍是无 key 代码路径未假设)+ parse.py mojibake/连字清洗 + /health 曝 extractor。
+  - **两个真问题当场修**:① M3 是 reasoning 模型,`<think>` 吃 max_tokens 截断 JSON 尾巴 → 抽取 brain 32k 输出预算 + 逐窗容错(单窗失败重试一次后跳过,全败才退兜底);② provider 调用无超时会吊死 /ingest(旧探针实测吊死 20 分钟)→ 240s per-call timeout(`AVERY_EXTRACT_TIMEOUT_S`)。
+  - 离线电池 `tests/test_llm_extract.py` 13 passed(FakeBrain 零网络,断机器不断模型:cite 链、红线分层、退化路径、表头假人/文件名标题拒收、factory 三档)。
+- **验证态收盘**:init.sh 绿;离线 190 全绿(174 基线+14 llm 电池+2 offline seed);集成 `-m seedgate` 6 绿(数字见 handoff §2)。
+- **门抓到一次真 flake,根因已定谳(这一段是 S1 最有价值的产出之一)**:pdf 项目断言专跑绿/复跑红。给 gate fixture 加 server 日志+给抽取器 fallback 加 logging 后定位:**不是网络——是红线在工作**。LogiPulse pdf 团队表带人均 Allocation %(~10%–80%),M3 有概率把 "80%" 抄进人的字段 → `redline_extract` person-score-value ×8 → 整篇退 heuristic → 文件名项目。修法**不改弱红线**:sanitizer 层剥离 rating 形数字(与前端剥离哲学一致,门仍是后盾;纯 % 条目整条丢弃)+ prompt 明令禁抄 allocation % + 词库类违规(如 "low performer")仍整篇回退(有测试钉住)。顺手的强壮化:两 seed 收进单窗(220→320 行/窗)、逐窗 3 次尝试带退避、抽取 brain 240s per-call timeout、uvicorn 日志落 `runs/seed-gate-uvicorn.log`(下次 flake 不再盲修)。
+- **前端门 023 后复驱(真浏览器+真 :8137 llm:minimax+真上传),又抓到一条 174 时代永远抓不到的崩溃**:`team_cards()` 一直发 `collaboration: list[str]`,但 transport.ts 契约误写 `string`、`liveRead()` 对它 `.trim()`——heuristic 从不产 collaboration,潜伏至 LLM 抽取第一次真发 → HomeScene 白屏。契约改 `string[]` + 适配(7ef9e31)。**复驱终态:teamRendered ✅(30 卡、Lin Qing/Chen Mingyuan 在、零血条)、postUploadClean ✅(0 story 名词)、emptyStateClean ❌(7 处)/detailIsLive ❌("Unknown teammate")——后两红按计划留给 S2**。黑名单再修一处假阳性:裸 "Wang" 撞真 seed 的 Wang Yuxuan,改用 story 文案签名 "Wang has it steady"。
+- **S1 边界守住**:除 live seam 的崩溃级 bug fix(transport.ts/teamDataSource.ts 各几行)外未碰 src/;story/lite 结构、rail/store/camera/terminal-stream 原样;**前端断言保持红**,留给 S2 feat-024(立墙)。
+- Notes:`.gitattributes` 新增——git 曾要对 tracked seed PDF 做 CRLF 归一化(会毁二进制,blob 已核完好);终端 GBK 控制台把 EM DASH/á 渲染成 "��" 是假象,U+FFFD 判定一律以代码断言为准,勿信肉眼;vite 会因 /@fs/ 取过的文件被编辑而全量重载页面 → 浏览器自驱相位全跑完之前别改文件(ephemeral 状态会清零)。
