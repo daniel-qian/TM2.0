@@ -20,7 +20,10 @@
  *   __seedGate.assertTeamRendered()                               // phase C: cards grew from uploads
  *   __seedGate.scanStoryNouns()                                   // phase D: post-upload leak scan
  *   await __seedGate.openPersonDetail('Lin Qing')                 // phase E: thin detail, no fixtures
- *   __seedGate.composerCheck()                                    // phase F: composer must be live-wired
+ *   __seedGate.composerCheck()                                    // phase F1: composer static (no story prefill/refs)
+ *   await __seedGate.composerAskLive('Who leads design, and what do they own?')
+ *                                                                 // phase F2: askLive dynamic — SSE events to frames
+ *                                                                 // (real backend run, ~1-3 min on M3; added S2/feat-024)
  *   __seedGate.verdict()                                          // aggregate
  */
 (() => {
@@ -163,7 +166,8 @@
     },
 
     composerCheck() {
-      // The live composer must not carry story prefill / story references (TeamComposer leak).
+      // Phase F1 (static): the live composer must not carry story prefill / story references
+      // (the TeamComposer leak: HERO_QUESTION prefill + fixture @-references).
       const composer = $('.composer-card');
       if (!composer) return (results.composer = { pass: false, error: 'no .composer-card' });
       const text = composer.innerText || '';
@@ -175,6 +179,69 @@
       return out;
     },
 
+    async composerAskLive(question) {
+      // Phase F2 (dynamic, added S2/feat-024): submitting the composer must drive the REAL
+      // /advise SSE stream to rendered frames — not the story script machine (the diagnosed
+      // TeamComposer.tsx:115 askQuestion leak). Asserts: submit -> terminal frames appear
+      // (SSE events to DOM) -> manifest lands -> the 8-field card renders. Real backend, ~1-3 min.
+      const q = question || 'Who leads design, and what do they own?';
+      // A thin detail overlay from phase E may still be up — close it first (programmatic
+      // dispatch would work through it, but keep the DOM in a user-realistic state).
+      const closeBtn = $('.lite-detail-close');
+      if (closeBtn) closeBtn.click();
+
+      const composer = $('.composer-card');
+      const input = composer && composer.querySelector('textarea, input[type="text"]');
+      const form = input ? input.closest('form') : null;
+      if (!input || !form) {
+        return (results.composerLive = { pass: false, error: 'no composer input/form to drive' });
+      }
+      // React controlled input: go through the native value setter + input event.
+      const setter = Object.getOwnPropertyDescriptor(
+        input.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype,
+        'value',
+      ).set;
+      setter.call(input, q);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      if (typeof form.requestSubmit === 'function') form.requestSubmit();
+      else form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+
+      const liveLines = () =>
+        $$('.nexus-terminal-log .terminal-line').filter((l) => !l.classList.contains('terminal-cursor-line'));
+      const errorText = () => /something went wrong/i.test(bodyText());
+
+      try {
+        // 1) SSE events reach frames: at least one real terminal line renders.
+        await poll(() => (liveLines().length > 0 ? true : null), 120000, 'first SSE frame to render');
+        // 2) run completes: manifest line lands and the 8-field advice card is in the DOM.
+        await poll(
+          () => ($('.terminal-line.is-manifest') && $('.structured-output-card') ? true : null),
+          240000,
+          'manifest + advice card',
+        );
+      } catch (e) {
+        results.composerLive = {
+          pass: false,
+          question: q,
+          framesSeen: liveLines().length,
+          sawManifest: !!$('.terminal-line.is-manifest'),
+          adviceRendered: !!$('.structured-output-card'),
+          error: String(e) + (errorText() ? ' (page shows live error state)' : ''),
+        };
+        return results.composerLive;
+      }
+      const out = {
+        question: q,
+        framesSeen: liveLines().length,
+        sawManifest: true,
+        adviceRendered: true,
+        liveError: errorText(),
+        pass: liveLines().length > 0 && !errorText(),
+      };
+      results.composerLive = out;
+      return out;
+    },
+
     verdict() {
       const phases = {
         emptyStateClean: !!(results.storyNouns && results.storyNouns[0] && results.storyNouns[0].pass),
@@ -182,7 +249,11 @@
         teamRendered: !!(results.team && results.team.pass),
         postUploadClean: !!(results.storyNouns && results.storyNouns[1] && results.storyNouns[1].pass),
         detailIsLive: !!(results.detail && results.detail.pass),
-        composerIsLive: !!(results.composer && results.composer.pass),
+        // composerIsLive = static (no story prefill/refs) AND dynamic (askLive SSE to frames).
+        // The dynamic half is REQUIRED as of S2/feat-024 — skipping composerAskLive() = red.
+        composerIsLive:
+          !!(results.composer && results.composer.pass) &&
+          !!(results.composerLive && results.composerLive.pass),
       };
       return { pass: Object.values(phases).every(Boolean), phases, results };
     },

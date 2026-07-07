@@ -1,4 +1,5 @@
-// feat-017 · Orchestrates MiniMax-M3 to transcreate src/i18n/en.ts -> src/i18n/zh.ts.
+// feat-017 · Orchestrates MiniMax-M3 to transcreate src/shared/i18n/en.ts -> src/shared/i18n/zh.ts.
+// (feat-024: i18n moved into src/shared/ behind the story/lite wall.)
 // I (the agent) DIRECT M3 via the brief below; M3 writes the Chinese (memory: chinese-copy-via-m3).
 //
 //   node scripts/i18n-zh.mjs
@@ -27,7 +28,7 @@ const MODEL = env.MINIMAX_MODEL || "MiniMax-M3";
 if (!KEY) { console.error("No MINIMAX_API_KEY in eval-harness/.env"); process.exit(1); }
 
 // ── load the English source (single source of truth) ───────────────────────
-const { en } = await import(pathToFileURL(path.resolve(ROOT, "src/i18n/en.ts")).href);
+const { en } = await import(pathToFileURL(path.resolve(ROOT, "src/shared/i18n/en.ts")).href);
 
 // ── the director brief (Avery Live product surface; ADR-0015/0018 voice + red line) ─
 const SYS = `你是 Avery 的资深中文文案。Avery 是「管理决策层」产品：帮 20–500 人公司的管理者做出更稳妥、可追溯、算得清账的人事与项目决策。这一版文案是产品界面本身（Avery Live 的 live mode）：给管理者当场使用——上传公司文件、看自己团队长出来、就自己团队提问。
@@ -101,6 +102,6 @@ const out = `import type { Dict } from "./index";
 // Do NOT hand-edit; re-run the script after editing en.ts. ⚠ Draft / 待 Danny 审字.
 export const zh: Dict = ${JSON.stringify(zh, null, 2)};
 `;
-fs.writeFileSync(path.resolve(ROOT, "src/i18n/zh.ts"), out, "utf8");
-console.log(`\nWrote src/i18n/zh.ts (${keys.length - failed.length}/${keys.length} sections translated)` +
+fs.writeFileSync(path.resolve(ROOT, "src/shared/i18n/zh.ts"), out, "utf8");
+console.log(`\nWrote src/shared/i18n/zh.ts (${keys.length - failed.length}/${keys.length} sections translated)` +
   (failed.length ? `; kept English for: ${failed.join(", ")}` : ""));

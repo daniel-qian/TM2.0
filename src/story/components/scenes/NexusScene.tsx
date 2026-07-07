@@ -45,8 +45,6 @@ import {
 import { PanZoomCanvas } from '../PanZoomCanvas'
 import { flyToTarget, useRailCamera, type CameraTarget, type SafeInsets } from '../../lib/useRailCamera'
 import { PixelAvatar } from '../PixelAvatar'
-import { useLive } from '../../store/liveStore'
-import { useDict } from '../../i18n/useDict'
 
 // feat-004 (ADR-0014 决策 1)：终端 = viewport-fixed 左栏 HUD。镜头只对 Manifest 区取景，
 // insets.left 加宽为终端栏宽（440 + 边距）；其余薄边清 Topbar / advance-bar。
@@ -1297,164 +1295,11 @@ function NexusEmptyState() {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// feat-017 · LIVE mode Nexus（ADR-0020 决策 2/3）。
-// 完全独立于 scripted 路径（rail 回放机器一行不碰）：终端从 liveStore.run.lines 逐帧渲染，
-// 结构化卡从 run.advice（真 agent 8 字段产出）渲染。红线扫描扩到 live 产出（contract.py 已在
-// 服务端校验；前端 coerceAgentOutput 不引入任何人评分/%）。
+// feat-024（ADR-0022 决策 1）：live mode Nexus 随 lite 壳搬进 src/lite/RoomScreen——
+// story 壳只在 story mode 挂载，本文件回到纯 scripted 剧场（rail 回放机器原样）。
 // ════════════════════════════════════════════════════════════════════════════
 
-// live 终端：直接吃 StreamLine[]（与 story 同 chrome/CSS），不经 caseDef/thread 派生。
-function LiveTerminal({ lines, running }: { lines: StreamLine[]; running: boolean }) {
-  const logRef = useRef<HTMLDivElement | null>(null)
-  useEffect(() => {
-    const log = logRef.current
-    if (log) log.scrollTop = log.scrollHeight
-  }, [lines.length])
-
-  return (
-    <section className="nexus-terminal" aria-label="How it's thinking it through">
-      <header className="nexus-terminal-bar" aria-hidden="true">
-        <span className="nexus-terminal-dots">
-          <i />
-          <i />
-          <i />
-        </span>
-        <span className="nexus-terminal-title">thinking it through</span>
-      </header>
-      <div className="nexus-terminal-log" ref={logRef}>
-        {lines.map((line, index) => {
-          const meta = SPEAKER_META[line.speaker]
-          const prefix = line.type === 'manifest' ? 'MANIFEST' : meta.label
-          const prefixClass = line.type === 'manifest' ? 'is-manifest' : meta.className
-          return (
-            <p
-              key={(line as StreamLine & { key?: string }).key ?? `live:${index}`}
-              className={classNames(['terminal-line', `is-${line.type}`, 'is-new'])}
-              style={{ '--line-i': 0 } as CSSProperties}
-            >
-              <span className={classNames(['terminal-prefix', prefixClass])}>{prefix}</span>
-              <span className="terminal-text">{line.text}</span>
-            </p>
-          )
-        })}
-        {running ? (
-          <p className="terminal-line terminal-cursor-line" aria-hidden="true">
-            <span className="terminal-prefix is-system">·</span>
-            <span className="terminal-text">
-              running <span className="terminal-cursor">▌</span>
-            </span>
-          </p>
-        ) : null}
-      </div>
-    </section>
-  )
-}
-
-// live 提问 composer（空态 + 运行后追问共用）。走 liveStore.askLive → feat-015 /advise SSE。
-function LiveAskComposer({
-  placeholder,
-  submitLabel,
-  onAsk,
-}: {
-  placeholder: string
-  submitLabel: string
-  onAsk: (text: string) => void
-}) {
-  const [draft, setDraft] = useState('')
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    const text = draft.trim()
-    if (!text) return
-    onAsk(text)
-    setDraft('')
-  }
-  return (
-    <form className="nexus-followup-composer" aria-label="Ask your team" onSubmit={handleSubmit}>
-      <input
-        type="text"
-        value={draft}
-        onChange={(event) => setDraft(event.target.value)}
-        placeholder={placeholder}
-        aria-label="Live question"
-      />
-      <button type="submit">{submitLabel}</button>
-    </form>
-  )
-}
-
-function LiveNexusScene() {
-  const run = useLive((s) => s.run)
-  const askLive = useLive((s) => s.askLive)
-  const goScene = useCanvas((s) => s.goScene)
-  const { t } = useDict()
-
-  const running = run.status === 'running'
-  const hasStarted = run.status !== 'idle'
-  const advice = run.advice
-  const noop = useMemo(() => new Set<string>(), [])
-
-  return (
-    <section className="scene scene-nexus is-active" aria-label="The room">
-      <PanZoomCanvas board={NEXUS_BOARD}>
-        <div className="canvas-grid board-surface" aria-hidden="true" />
-        {advice ? (
-          <div
-            className="nexus-card-slot is-active"
-            style={{ left: '760px', top: '520px' }}
-          >
-            <StructuredOutputCard
-              output={advice}
-              dispatchedTaskKeys={noop}
-              onDispatchTask={() => {}}
-              onReturnDashboard={() => goScene('home')}
-            />
-          </div>
-        ) : null}
-      </PanZoomCanvas>
-
-      {hasStarted ? (
-        <>
-          <LiveTerminal lines={run.lines} running={running} />
-          <div className="nexus-brief-hud">
-            <div className="nexus-brief-bar" aria-label={t.nexus.liveThinking}>
-              <span className="nexus-brief-bar-eyebrow">{t.nexus.liveThinking}</span>
-              <span className="nexus-brief-step">
-                {run.status === 'error'
-                  ? t.nexus.liveError
-                  : running
-                    ? t.nexus.liveRunning
-                    : t.nexus.liveReady}
-              </span>
-            </div>
-          </div>
-          <LiveAskComposer
-            placeholder={t.nexus.askPlaceholder}
-            submitLabel={t.nexus.ask}
-            onAsk={(text) => askLive({ situation: text })}
-          />
-        </>
-      ) : (
-        <section className="nexus-empty" aria-label="Working it through — ask your team">
-          <p className="eyebrow">{t.nexus.liveThinking}</p>
-          <h2>{t.team.emptyTitle}</h2>
-          <p>{t.nexus.askPlaceholder}</p>
-          <div className="nexus-empty-composer-wrap">
-            <LiveAskComposer
-              placeholder={t.nexus.askPlaceholder}
-              submitLabel={t.nexus.ask}
-              onAsk={(text) => askLive({ situation: text })}
-            />
-          </div>
-        </section>
-      )}
-    </section>
-  )
-}
-
 export function NexusScene() {
-  const mode = useLive((s) => s.mode)
-  // feat-017：live mode 走独立 LiveNexusScene（rail 回放机器不碰）；story mode 原样。
-  if (mode === 'live') return <LiveNexusScene />
   return <ScriptedNexusScene />
 }
 

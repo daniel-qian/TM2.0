@@ -1,0 +1,257 @@
+/* ───────────────────────── feat-004 · Nexus terminal (ADR-0014) ───────────────────────── */
+/* 终端流左栏 HUD：viewport-fixed、1:1 永远可读、自滚动。等宽小字 + per-speaker 专色
+   （决策 4）；MANIFEST 行 = 可点锚（决策 3）；行级 stagger 渐显（决策 5，--line-i）；
+   底部「运行中 ▌」光标行仅视觉提示（决策 8）。深色面 = "agent 机房"，与 paper UI 对比。 */
+
+.nexus-terminal {
+  position: absolute;
+  z-index: 30;
+  top: 76px;
+  left: 16px;
+  bottom: 88px;
+  display: flex;
+  flex-direction: column;
+  width: min(440px, calc(100vw - 32px));
+  overflow: hidden;
+  border: 1px solid rgba(52, 48, 40, 0.34);
+  border-radius: 14px;
+  background: rgba(30, 28, 24, 0.94);
+  box-shadow: 0 30px 90px rgba(40, 36, 28, 0.32);
+  backdrop-filter: blur(14px);
+}
+
+.nexus-terminal-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+  padding: 9px 14px;
+  border-bottom: 1px solid rgba(232, 227, 216, 0.12);
+  background: rgba(232, 227, 216, 0.05);
+}
+
+.nexus-terminal-dots {
+  display: inline-flex;
+  gap: 5px;
+}
+
+.nexus-terminal-dots i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: rgba(232, 227, 216, 0.22);
+}
+
+.nexus-terminal-title {
+  color: rgba(232, 227, 216, 0.55);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.nexus-terminal-log {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px 18px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(232, 227, 216, 0.22) transparent;
+}
+
+.terminal-line {
+  display: flex;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: rgba(232, 227, 216, 0.92);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  text-align: left;
+}
+
+.terminal-prefix {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  min-width: 62px;
+  padding-top: 1px;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+}
+
+/* per-speaker 专色（决策 4）：PM 紫 / HR 苔绿 / 泛 AGENT 青 / TOOL 蜜 / SYS 灰 /
+   YOU 亮纸白 / BILL 暖砂（人类）。与 paper UI 的 accent 家族同源、提亮适配深底。 */
+.terminal-prefix.is-you {
+  color: #f2ede1;
+}
+
+.terminal-prefix.is-pm {
+  color: #a89ef0;
+}
+
+.terminal-prefix.is-hr {
+  color: #93c29b;
+}
+
+.terminal-prefix.is-agent {
+  color: #7fc4c9;
+}
+
+.terminal-prefix.is-tool {
+  color: #d9a857;
+}
+
+.terminal-prefix.is-system {
+  color: rgba(232, 227, 216, 0.42);
+}
+
+.terminal-prefix.is-bill {
+  color: #dfb38a;
+}
+
+.terminal-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.terminal-line.is-thought .terminal-text {
+  color: rgba(232, 227, 216, 0.88);
+}
+
+.terminal-line.is-tool-call .terminal-text {
+  color: #d9a857;
+}
+
+.terminal-line.is-tool-call .terminal-text::before {
+  content: '$ ';
+  opacity: 0.62;
+}
+
+.terminal-line.is-tool-result .terminal-text {
+  color: rgba(232, 227, 216, 0.62);
+}
+
+.terminal-line.is-tool-result .terminal-text::before {
+  content: '↳ ';
+  opacity: 0.55;
+}
+
+/* MANIFEST 锚行（决策 3）：粗体强调色、可点 → 镜头飞向对应卡。跨层对应靠同色 + 同标题，
+   不画 HUD×world 连线。 */
+.terminal-line.is-manifest {
+  cursor: pointer;
+}
+
+.terminal-line.is-manifest .terminal-prefix.is-manifest {
+  color: #f0c269;
+}
+
+.terminal-line.is-manifest .terminal-text {
+  color: #f0c269;
+  font-weight: 800;
+  text-decoration: underline;
+  text-decoration-color: rgba(240, 194, 105, 0.4);
+  text-underline-offset: 3px;
+}
+
+.terminal-line.is-manifest:hover .terminal-text,
+.terminal-line.is-manifest:focus-visible .terminal-text {
+  text-decoration-color: rgba(240, 194, 105, 0.95);
+}
+
+.terminal-line.is-manifest:focus-visible {
+  outline: 1px solid rgba(240, 194, 105, 0.6);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+/* 行级 stagger 渐显（决策 5）：只动 opacity/transform（守 ADR-0002 动效边界）；
+   seek / 重开 = 旧行 key 稳定不重播，新挂载行才动。 */
+.terminal-line.is-new {
+  animation: terminal-line-in 0.34s ease-out both;
+  animation-delay: calc(var(--line-i, 0) * 110ms);
+}
+
+@keyframes terminal-line-in {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* 「运行中 ▌」光标行（决策 8）：仅视觉提示，不可点。 */
+.terminal-cursor-line .terminal-text {
+  color: rgba(232, 227, 216, 0.48);
+}
+
+.terminal-cursor {
+  display: inline-block;
+  animation: terminal-cursor-blink 1.1s steps(2, start) infinite;
+}
+
+@keyframes terminal-cursor-blink {
+  to {
+    visibility: hidden;
+  }
+}
+
+/* Bill 内联像素头像（决策 9）。 */
+.terminal-avatar {
+  border-radius: 4px;
+  box-shadow: none;
+}
+
+/* memo 附件 chip（决策 9）：终端首行内联打印（原 question 节点 chip 的深色版）。 */
+.terminal-attachment-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  margin-top: 6px;
+  padding: 5px 10px 5px 5px;
+  border: 1px solid rgba(232, 227, 216, 0.2);
+  border-radius: 9px;
+  background: rgba(232, 227, 216, 0.07);
+  color: rgba(232, 227, 216, 0.72);
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
+.terminal-attachment-chip img {
+  display: block;
+  width: 40px;
+  height: 30px;
+  border-radius: 5px;
+  object-fit: cover;
+  user-select: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .terminal-line.is-new {
+    animation: none;
+  }
+
+  .terminal-cursor {
+    animation: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .nexus-terminal {
+    bottom: 150px;
+  }
+}
+

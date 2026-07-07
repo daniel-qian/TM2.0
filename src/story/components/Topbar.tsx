@@ -1,7 +1,7 @@
 import { useCanvas, type Scene } from '../store/canvasStore'
-import { useLive } from '../store/liveStore'
-import { useDict } from '../i18n/useDict'
-import type { AveryMode } from '../live/mode'
+import { applyModeToUrl, useMode } from '../../shared/modeStore'
+import { useDict } from '../../shared/i18n/useDict'
+import type { AveryMode } from '../../shared/mode'
 
 // 导航 scene tab。Capabilities 既经 Nexus 钻入（rail B4 / PM agent 卡按钮），
 // 也给个 free-click tab（litmus：每个 beat 自由点击可达）。detail 仍走钻入。
@@ -14,19 +14,14 @@ const TABS: { label: string; scene: Scene }[] = [
   { label: 'Playbooks', scene: 'capabilities' },
 ]
 
-// feat-017：翻 mode 并把 `?mode=` 写进 URL（可分享 / 刷新存活），不整页重载。
-function applyModeToUrl(mode: AveryMode) {
-  if (typeof window === 'undefined' || !window.history) return
-  const url = new URL(window.location.href)
-  url.searchParams.set('mode', mode)
-  window.history.replaceState({}, '', url.toString())
-}
+// feat-024（ADR-0022）：mode 状态升 shared/modeStore（applyModeToUrl 同步上移）——
+// 切 live = App 换 lite 壳，story 壳只在 story mode 挂载。
 
 export function Topbar() {
   const scene = useCanvas((s) => s.scene)
   const goScene = useCanvas((s) => s.goScene)
-  const mode = useLive((s) => s.mode)
-  const setMode = useLive((s) => s.setMode)
+  const mode = useMode((s) => s.mode)
+  const setMode = useMode((s) => s.setMode)
   const { t } = useDict()
 
   const switchMode = (next: AveryMode) => {

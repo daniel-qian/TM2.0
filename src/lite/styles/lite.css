@@ -1,0 +1,357 @@
+/* ═══════════════════════ feat-024 · lite 壳（ADR-0022）═══════════════════════
+   lite 专属增量样式。只取色于既有 token（paper/ink/sage/honey/terracotta），无新色板。
+   卡片/字体/终端/报告卡的 chrome 全部来自 shared chunk——这里只补 lite 独有件：
+   上传面板（feat-017 时代裸奔无样式）、首字母 avatar、真数 briefing chips、
+   空态引导、薄详情浮层、The room 的卡布局。 */
+
+/* ── 首字母 avatar（live 人无 sprite——不凭空派 avatar 资产）─────────────── */
+.initial-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  border: 1px solid var(--rule-strong);
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(105, 128, 109, 0.16), rgba(82, 123, 145, 0.14));
+  color: var(--ink-soft);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+/* ── 上传面板 ────────────────────────────────────────────────────────────── */
+.upload-panel {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: rgba(255, 253, 248, 0.86);
+  box-shadow: var(--shadow-soft);
+}
+
+.upload-panel-head h2 {
+  margin: 0 0 4px;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 17px;
+  font-weight: 500;
+}
+
+.upload-panel-head p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.upload-dropzone {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 22px 16px;
+  border: 1.5px dashed var(--rule-strong);
+  border-radius: var(--radius);
+  background: rgba(247, 244, 238, 0.7);
+  text-align: center;
+  cursor: pointer;
+  transition: border-color var(--fast) ease, background var(--fast) ease;
+}
+
+.upload-dropzone.is-dragover {
+  border-color: var(--sage);
+  background: rgba(105, 128, 109, 0.08);
+}
+
+.upload-dropzone.is-busy {
+  opacity: 0.65;
+  pointer-events: none;
+}
+
+.upload-drop-label {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+
+.upload-choose {
+  min-height: 34px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--paper);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.upload-choose:hover,
+.upload-choose:focus-visible {
+  outline: none;
+  background: #2b2822;
+}
+
+.upload-accepted {
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: 11px;
+}
+
+.upload-status p {
+  margin: 0;
+  font-size: 13px;
+}
+
+.upload-ingesting {
+  color: var(--honey);
+}
+
+.upload-ready-label {
+  color: var(--sage);
+  font-weight: 700;
+}
+
+.upload-grown-from {
+  margin-top: 4px !important;
+  color: var(--ink-soft);
+  font-size: 12px !important;
+}
+
+.upload-source-chip {
+  display: inline-block;
+  margin: 2px 4px 0 0;
+  padding: 2px 8px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: rgba(247, 244, 238, 0.9);
+  font-size: 11px;
+}
+
+.upload-error-label {
+  color: var(--terracotta);
+  font-weight: 700;
+}
+
+.upload-error-detail {
+  color: var(--ink-soft);
+  font-size: 12px !important;
+}
+
+.upload-retry {
+  margin-top: 6px;
+  min-height: 30px;
+  padding: 0 14px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 999px;
+  background: transparent;
+  font-size: 12px;
+}
+
+.upload-empty {
+  color: var(--ink-faint);
+}
+
+.upload-privacy-note {
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+/* 空态右栏：上传面板不贴边、居中呼吸 */
+.home-lanes-live-empty {
+  align-content: start;
+  padding-top: 24px;
+}
+
+/* ── 上传空态左脊柱（live 自己的引导，零 scripted 占位）───────────────────── */
+.lite-empty-greeting .home-greeting-sub {
+  max-width: 44ch;
+}
+
+.lite-empty-hints {
+  margin: 18px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 10px;
+}
+
+.lite-empty-hints li {
+  position: relative;
+  padding-left: 18px;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.lite-empty-hints li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.55em;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--sage);
+  opacity: 0.7;
+}
+
+/* ── briefing 真数顶栏（聚合数字 R2：真算才显）───────────────────────────── */
+.lite-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.lite-metric-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 4px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: rgba(255, 253, 248, 0.9);
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+
+.lite-metric-chip strong {
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.lite-handoffs-empty {
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+/* ── 薄只读详情浮层（纯 live payload，杀死 "Unknown teammate"）──────────── */
+.lite-detail-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 48px 24px;
+}
+
+.lite-detail-backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(29, 27, 23, 0.32);
+  backdrop-filter: blur(3px);
+  cursor: default;
+}
+
+.lite-detail-card {
+  position: relative;
+  width: min(560px, 92vw);
+  max-height: min(78vh, 720px);
+  overflow: auto;
+  display: grid;
+  gap: 16px;
+  padding: 22px 24px 24px;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--paper-strong);
+  box-shadow: var(--shadow);
+}
+
+.lite-detail-close {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  min-height: 30px;
+  padding: 0 14px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+
+.lite-detail-close:hover,
+.lite-detail-close:focus-visible {
+  outline: none;
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+.lite-detail-head {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  padding-right: 72px;
+}
+
+.lite-detail-head h2 {
+  margin: 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 22px;
+  font-weight: 500;
+}
+
+.lite-detail-subtitle {
+  margin: 2px 0 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+
+.lite-detail-section p,
+.lite-detail-section ul {
+  margin: 0;
+  color: var(--ink);
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+
+.lite-detail-section ul {
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+}
+
+.lite-detail-source p {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+/* ── The room（薄建）：8 字段卡从 board 世界坐标解放成滚动列 ─────────────── */
+.lite-room .lite-room-card {
+  position: absolute;
+  top: 76px;
+  right: 28px;
+  bottom: 96px;
+  left: 496px;
+  overflow: auto;
+  display: grid;
+  align-content: start;
+  padding: 4px;
+}
+
+.lite-room .lite-room-card .structured-output-card {
+  position: static;
+  width: 100%;
+  max-width: 950px;
+  max-height: none;
+  transform: none;
+  margin: 0 auto;
+}
+
+@media (max-width: 1100px) {
+  .lite-room .lite-room-card {
+    left: 24px;
+    top: 320px;
+  }
+}
+
+/* ── composer 引用空态 ───────────────────────────────────────────────────── */
+.lite-reference-empty {
+  margin: 8px 4px;
+  color: var(--ink-faint);
+  font-size: 12px;
+}

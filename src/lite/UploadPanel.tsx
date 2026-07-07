@@ -1,14 +1,14 @@
 import { useRef, useState, type ChangeEvent, type DragEvent } from 'react'
-import { useLive } from '../store/liveStore'
-import { useDict } from '../i18n/useDict'
+import { useLite } from './store'
+import { useDict } from '../shared/i18n/useDict'
 
-// feat-017 · 上传 UI（live mode）——ADR-0020 决策 2 / 施工图 §2 表 #1。
+// feat-017 · 上传 UI——ADR-0020 决策 2 / 施工图 §2 表 #1；feat-024 随 lite 壳入墙。
 //
-// 把 OnboardingScene 脚本化"演"的 ingestion 做成真的：用户传文件 → liveStore.uploadFiles →
+// 把脚本化"演"的 ingestion 做成真的：用户传文件 → store.uploadFiles →
 // transport.ingest（feat-016）→ Your team 长出来。红线（施工图 §5）：上传产出的人卡在
-// TeamDataSource 侧已剥净数字；这里只负责"传文件 + 显进度 + 显来源"。
+// teamData 侧已剥净数字；这里只负责"传文件 + 显进度 + 显来源"。
 //
-// copy 全走 i18n（en/zh）。仅在 live mode 渲染（调用方 gate）。
+// copy 全走 i18n（en/zh）。只在 lite 壳内渲染。
 
 function classNames(parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(' ')
@@ -18,14 +18,14 @@ const ACCEPT = '.pdf,.docx,.doc,.xlsx,.xls,.csv,.md,.markdown,.txt'
 
 export function UploadPanel() {
   const { t } = useDict()
-  const uploadFiles = useLive((s) => s.uploadFiles)
-  const status = useLive((s) => s.ingestStatus)
-  const error = useLive((s) => s.ingestError)
-  const team = useLive((s) => s.team)
+  const uploadFiles = useLite((s) => s.uploadFiles)
+  const status = useLite((s) => s.ingestStatus)
+  const error = useLite((s) => s.ingestError)
+  const team = useLite((s) => s.team)
   const inputRef = useRef<HTMLInputElement | null>(null)
   const [dragOver, setDragOver] = useState(false)
 
-  const sourceFiles = team?.source_files ?? []
+  const sourceFiles = team?.sourceFiles ?? []
   const busy = status === 'ingesting'
 
   const onPick = (event: ChangeEvent<HTMLInputElement>) => {

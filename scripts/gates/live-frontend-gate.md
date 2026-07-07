@@ -23,7 +23,11 @@
    - `__seedGate.scanStoryNouns()` — **相位 D**:上传后再扫,黑名单 = 0。
    - `await __seedGate.openPersonDetail('Lin Qing')` — **相位 E**:点人卡开详情,
      无 "Unknown teammate"、显 live payload。
-   - `__seedGate.composerCheck()` — **相位 F**:composer 无 story 预填/引用。
+   - `__seedGate.composerCheck()` — **相位 F1**:composer 无 story 预填/引用(静态)。
+   - `await __seedGate.composerAskLive('Who leads design, and what do they own?')` —
+     **相位 F2**(S2/feat-024 补齐):真提交 composer → askLive → /advise SSE 事件到帧
+     (终端行渲染 → manifest → 8 字段卡),真后端实跑 ~1–3 分钟。verdict 的
+     `composerIsLive` = F1 静态 **且** F2 动态,漏跑 F2 = 红。
    - `__seedGate.verdict()` — 聚合判定。
 5. **收尾**:停 dev server、杀 8137 uvicorn。verdict JSON 原样贴进
    `feature_list.json` evidence / progress.md。
@@ -44,6 +48,7 @@ story 的 Wang 用其文案签名 "Wang has it steady" 代替(实跑抓到过此
 
 - headless rAF 停摆:一切等待走 DOM 轮询(snippet 内 setTimeout),不依赖动画帧;截图只作参考。
 - `.prototype-topbar` pointer-events:none:模式切换点不动时检查子元素 pointer-events(4e90966)。
-- composer 提交进 story 剧本机(TeamComposer.tsx:115 恒走 askQuestion)是确诊渗漏——
-  相位 F 只断言静态渗漏(预填/引用);askLive SSE 到帧的动态断言等 feat-024 The room 落地后
-  补进 snippet(S2)。
+- composer 提交进 story 剧本机(TeamComposer.tsx:115 恒走 askQuestion)是当年的确诊渗漏——
+  相位 F1 断静态(预填/引用),相位 F2(S2/feat-024 已补)断动态:真提交走 askLive →
+  SSE 事件到帧。F2 需要真后端带 key 在跑;provider 偶发抽风时可单独重跑
+  `__seedGate.composerAskLive(...)` 再取 verdict,但不得跳过。

@@ -14,31 +14,9 @@ import {
 import { focusEntity } from '../../lib/focus'
 import { PixelAvatar } from '../PixelAvatar'
 import { TeamComposer } from '../TeamComposer'
-import { UploadPanel } from '../UploadPanel'
 import { useCanvas } from '../../store/canvasStore'
 import { useHome } from '../../store/homeStore'
-import { useTeamData } from '../../live/useTeamData'
-import { useDict } from '../../i18n/useDict'
-import type { TeamPerson } from '../../live/teamDataSource'
-
-// live 人卡的文字首字母 avatar（live 人无 sprite——不凭空派 avatar 资产）。
-function InitialAvatar({ name, size = 44, className }: { name: string; size?: number; className?: string }) {
-  const initials = name
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase() ?? '')
-    .join('')
-  return (
-    <span
-      className={['initial-avatar', className].filter(Boolean).join(' ')}
-      style={{ width: `${size}px`, height: `${size}px`, fontSize: `${Math.round(size * 0.36)}px` }}
-      aria-hidden="true"
-    >
-      {initials}
-    </span>
-  )
-}
+import { createScriptedTeamSource, type TeamPerson } from '../../data/teamSource'
 
 // feat-014（ADR-0017 / GH #9）：卡片式今日主页 "The Morning Desk"（方向 A+）。
 // 左脊柱 = 今日 Handoff checklist（判断），右双轨 = 人与项目卡带（证据）。
@@ -62,15 +40,11 @@ function classNames(parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(' ')
 }
 
-// story 人卡用 PixelAvatar（fixture sprite）；live 人卡用文字首字母（无 sprite）。
-// 按 TeamPerson.id 回查 fixture Person——命中即 story sprite，否则 live initials。
+// story 人卡用 PixelAvatar（fixture sprite）。live 人卡（文字首字母）随 lite 壳走
+// src/lite/**（feat-024 立墙）；story 名单全部命中 fixture，此处不再留 live 兜底。
 function personAvatar(tp: TeamPerson, size: number) {
   const fixture = PEOPLE.find((p) => p.id === tp.id)
-  return fixture ? (
-    <PixelAvatar person={fixture} size={size} className="home-person-avatar" />
-  ) : (
-    <InitialAvatar name={tp.name} size={size} className="home-person-avatar" />
-  )
+  return fixture ? <PixelAvatar person={fixture} size={size} className="home-person-avatar" /> : null
 }
 
 // story 项目状态标签保留原 dashboardProjectCopy（phase-aware）；live 项目（非 fixture）用
@@ -110,9 +84,8 @@ export function HomeScene() {
   const discard = useHome((s) => s.discard)
   const restore = useHome((s) => s.restore)
   const prefersReducedMotion = useReducedMotion()
-  // feat-017：数据经 TeamDataSource seam（story = fixtures 原样；live = ingestion 产出）。
-  const { source, live, liveEmpty } = useTeamData()
-  const { t } = useDict()
+  // feat-017 的 seam 保留 scripted 半边（feat-024：live 半边随 lite 壳走，story 壳只读 fixtures）。
+  const source = useMemo(() => createScriptedTeamSource(() => briefing), [briefing])
 
   // hover / focus 的 handoff（右栏联动）；inking = 正在画对勾；leaving = 正在淡出。
   // 退场是手动两段式（inking 550ms → leaving 240ms → 移除 + layout 补位）——不走
@@ -123,9 +96,9 @@ export function HomeScene() {
   const [leavingIds, setLeavingIds] = useState<ReadonlySet<string>>(new Set())
   const [drawerOpen, setDrawerOpen] = useState(false)
 
-  // story: canvasStore briefing 决定 phase（B10 后 grown）。live: 无 rail phase 概念——固定 believed。
-  const activeBriefing = live ? source.briefing(live ? 'believed' : 'grown') : briefing
-  const phase: DetailPhase = !live && briefing.version === 2 ? 'grown' : 'believed'
+  // canvasStore briefing 决定 phase（B10 后 grown）。
+  const activeBriefing = briefing
+  const phase: DetailPhase = briefing.version === 2 ? 'grown' : 'believed'
   const handoffs = source.handoffs(phase)
 
   const pending = handoffs.filter((h) => !marks[h.id])
@@ -224,7 +197,7 @@ export function HomeScene() {
         {/* ── 左脊柱：问候 + 今日 checklist + 已照料抽屉 ─────────────────── */}
         <div className="home-spine">
           <header className="home-greeting">
-            <p className="eyebrow">{live ? t.team.liveEyebrow : HOME_COPY.greetingEyebrow}</p>
+            <p className="eyebrow">{HOME_COPY.greetingEyebrow}</p>
             <h1>{activeBriefing.headline}</h1>
             <p className="home-greeting-sub">{activeBriefing.subhead}</p>
           </header>
@@ -362,22 +335,12 @@ export function HomeScene() {
         </div>
 
         {/* ── 右双轨：证据层（联动提亮/降透明），非陈列墙 ─────────────────── */}
-        {/* live 未上传：右栏换成上传 UI（Your team 从上传长出来）。 */}
-        {liveEmpty ? (
-          <div className="home-lanes home-lanes-live-empty">
-            <UploadPanel />
-          </div>
-        ) : (
         <div className={classNames(['home-lanes', linked && 'has-link'])}>
-          {/* live 已上传：在卡带上方保留上传入口（可继续加文件）。 */}
-          {live ? <UploadPanel /> : null}
           <div className="home-lanes-head">
             <p className="eyebrow">{HOME_COPY.peopleLane}</p>
-            {!live ? (
-              <button type="button" className="home-map-link" onClick={openMap}>
-                {HOME_COPY.mapLink} →
-              </button>
-            ) : null}
+            <button type="button" className="home-map-link" onClick={openMap}>
+              {HOME_COPY.mapLink} →
+            </button>
           </div>
           {/* 联动 dim/lit 全走 CSS（.has-link + .is-lit 类）：确定性强，不依赖 JS 动画帧 */}
           <div className="home-lane home-lane-people" aria-label="People this week">
@@ -455,7 +418,6 @@ export function HomeScene() {
             })}
           </div>
         </div>
-        )}
       </div>
       </div>
 

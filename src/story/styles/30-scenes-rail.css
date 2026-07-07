@@ -1,0 +1,2169 @@
+/* ───────────────────────── P3 · 详情 4 scene ───────────────────────── */
+/* 共享 DetailShell + 员工详情四模块（P3-01）。静态恒显，零 thread 耦合。 */
+/* 只动 transform/opacity；卡片用共享 token，不 fork 基座。 */
+
+.scene-detail .detail-scroll {
+  position: absolute;
+  z-index: 6;
+  inset: 0;
+  overflow-y: auto;
+  padding: 104px clamp(20px, 6vw, 96px) 72px;
+}
+
+.detail-header,
+.detail-sections {
+  width: min(760px, 100%);
+  margin: 0 auto;
+}
+
+.detail-header {
+  margin-bottom: 26px;
+}
+
+.detail-back {
+  display: inline-flex;
+  align-items: center;
+  margin-bottom: 18px;
+  padding: 0 14px;
+  border-color: var(--rule);
+  background: rgba(255, 253, 248, 0.74);
+}
+
+.detail-back:hover,
+.detail-back:focus-visible {
+  border-color: var(--rule-strong);
+  background: rgba(255, 253, 248, 0.94);
+}
+
+.detail-header h2 {
+  margin: 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(30px, 4vw, 46px);
+  font-weight: 500;
+  line-height: 1.05;
+  letter-spacing: 0;
+}
+
+.detail-subtitle {
+  margin: 8px 0 0;
+  color: var(--ink-soft);
+  font-size: 15px;
+}
+
+.detail-sections {
+  display: grid;
+  gap: 16px;
+}
+
+.detail-section,
+.overview-card {
+  padding: 20px 22px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: rgba(255, 253, 248, 0.82);
+  box-shadow: var(--shadow-soft);
+}
+
+.detail-section-head {
+  margin-bottom: 14px;
+}
+
+.detail-section-head h3 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: 0;
+}
+
+.detail-empty {
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: 14px;
+  font-style: italic;
+}
+
+/* 概览卡：Workload / Status / Progress / HR signal */
+.overview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 16px;
+}
+
+.overview-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.overview-label {
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.overview-stat strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink);
+  font-size: 19px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.overview-stat strong.is-empty {
+  color: var(--ink-faint);
+  font-size: 15px;
+  font-weight: 500;
+  font-style: italic;
+}
+
+.overview-stat .status-dot {
+  width: 9px;
+  height: 9px;
+}
+
+.overview-stat .progress-track {
+  width: 100%;
+  margin: 5px 0 0;
+}
+
+/* Current project tasks */
+.task-card-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.task-card {
+  padding: 12px 14px;
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.task-card.is-stalled {
+  border-left-color: var(--terracotta);
+}
+
+.task-card.is-in-progress {
+  border-left-color: var(--sky);
+}
+
+.task-card.is-done {
+  border-left-color: var(--sage);
+}
+
+.task-card strong {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.task-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+
+.task-status-pill {
+  padding: 3px 8px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  font-weight: 700;
+}
+
+.phase-note {
+  margin: 8px 0 0;
+  color: var(--ink-faint);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+/* Weekly summary + sentiment */
+.weekly-block p {
+  margin: 12px 0 0;
+  color: var(--ink-soft);
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.sentiment-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 11px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.sentiment-pill.is-positive {
+  border-color: rgba(105, 128, 109, 0.45);
+  background: rgba(105, 128, 109, 0.14);
+  color: #43614a;
+}
+
+.sentiment-pill.is-steady {
+  border-color: rgba(82, 123, 145, 0.4);
+  background: rgba(82, 123, 145, 0.12);
+  color: #31586c;
+}
+
+.sentiment-pill.is-strained {
+  border-color: rgba(188, 92, 73, 0.42);
+  background: rgba(188, 92, 73, 0.13);
+  color: #9c4633;
+}
+
+/* HR knowledge analysis（capability-backed · no personnel judgment）*/
+.hr-analysis-capability {
+  margin: 0 0 10px;
+  color: var(--ink-faint);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.hr-analysis-reading {
+  margin: 0 0 14px;
+  color: var(--ink-soft);
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.hr-analysis-recs {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 16px;
+  padding-left: 20px;
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.hr-analysis-evidence {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.42);
+}
+
+.hr-analysis-evidence .overview-label {
+  margin-bottom: 2px;
+}
+
+.hr-evidence-row {
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  gap: 10px;
+  align-items: baseline;
+}
+
+.hr-evidence-row span {
+  color: var(--ink-faint);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.hr-evidence-row p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.hr-analysis-framing {
+  margin: 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--rule);
+  color: var(--ink-faint);
+  font-size: 13px;
+  font-style: italic;
+  line-height: 1.5;
+}
+
+.source-anchor {
+  position: relative;
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  margin-left: 7px;
+  vertical-align: baseline;
+}
+
+.source-anchor-button {
+  min-height: 21px;
+  padding: 0 8px;
+  border: 1px solid rgba(52, 48, 40, 0.18);
+  border-radius: 999px;
+  background: rgba(255, 253, 248, 0.72);
+  color: var(--ink-faint);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  line-height: 1;
+  text-transform: uppercase;
+  transition:
+    opacity var(--fast) ease,
+    transform var(--fast) ease,
+    border-color var(--fast) ease,
+    background var(--fast) ease,
+    color var(--fast) ease;
+}
+
+.source-anchor-button:hover,
+.source-anchor-button:focus-visible,
+.source-anchor.is-open .source-anchor-button {
+  border-color: rgba(82, 123, 145, 0.4);
+  background: rgba(82, 123, 145, 0.1);
+  color: #31586c;
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.source-popover {
+  position: absolute;
+  top: calc(100% + 7px);
+  left: 0;
+  display: grid;
+  width: min(330px, calc(100vw - 56px));
+  gap: 8px;
+  padding: 10px 11px;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: rgba(255, 253, 248, 0.97);
+  box-shadow: var(--shadow-soft);
+  opacity: 0;
+  pointer-events: none;
+  text-align: left;
+  text-transform: none;
+  transform: translateY(-4px);
+  transition:
+    opacity var(--fast) ease,
+    transform var(--fast) ease;
+}
+
+.source-anchor:hover .source-popover,
+.source-anchor:focus-within .source-popover,
+.source-anchor.is-open .source-popover {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.source-popover-row {
+  display: grid;
+  gap: 3px;
+}
+
+.source-anchor .source-popover-row strong {
+  color: var(--ink-faint);
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.source-anchor .source-popover-row span {
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
+  line-height: 1.4;
+}
+
+.source-anchor .source-popover-row em {
+  color: var(--ink-faint);
+  font-style: normal;
+}
+
+@media (max-width: 860px) {
+  .scene-detail .detail-scroll {
+    padding: 92px 16px 56px;
+  }
+}
+
+/* ───── P3-02 · Project 详情页（brief / milestones / team / board / handoffs） ───── */
+
+/* Project brief */
+.brief-card {
+  padding: 20px 22px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: rgba(255, 253, 248, 0.82);
+  box-shadow: var(--shadow-soft);
+}
+
+.brief-summary {
+  margin: 0 0 14px;
+  color: var(--ink-soft);
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.brief-card .progress-track {
+  margin: 0 0 12px;
+}
+
+.brief-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.brief-meta > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 0 11px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.5);
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+
+.brief-status {
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.brief-status.tone-warning .status-dot {
+  background: var(--honey);
+}
+
+.brief-status.tone-danger .status-dot {
+  background: var(--terracotta);
+}
+
+.brief-dep {
+  color: var(--ink-faint);
+}
+
+.brief-mismatch {
+  border-color: rgba(188, 92, 73, 0.42);
+  background: rgba(188, 92, 73, 0.1);
+  color: #8f3f31;
+  font-weight: 700;
+}
+
+.anchored-claim-panel {
+  display: grid;
+  gap: 7px;
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid rgba(188, 92, 73, 0.34);
+  border-left: 3px solid var(--terracotta);
+  border-radius: var(--radius);
+  background: rgba(188, 92, 73, 0.08);
+}
+
+.anchored-claim-panel > strong {
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.anchored-claim-panel > span,
+.anchored-claim-panel > em {
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.anchored-claim-panel > em {
+  color: var(--ink-faint);
+  font-style: italic;
+}
+
+.anchored-claim-panel.is-grown {
+  border-color: rgba(178, 123, 43, 0.38);
+  border-left-color: var(--honey);
+  background: rgba(178, 123, 43, 0.08);
+}
+
+/* Delivery milestones — 颜色/标签区分 state */
+/* 时间线视觉强化（co-founder 反馈）：连通主轴 + 方向箭头 + 加粗状态色圆点。
+   骨架不变（竖向 when | dot | body 列表），只加方向与色彩分级。 */
+.milestone-track {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.milestone {
+  position: relative;
+  display: grid;
+  grid-template-columns: 76px 20px 1fr;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+}
+
+/* 主轴：从本行圆点延伸到下一行圆点（dot 列中心 x = 76 + 12 + 10 = 98px）。 */
+.milestone:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  z-index: 0;
+  left: 97px;
+  top: 50%;
+  height: 100%;
+  width: 2px;
+  background: rgba(52, 48, 40, 0.18);
+}
+
+/* 方向箭头：行与行交界处，指向下一里程碑。 */
+.milestone:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  z-index: 1;
+  left: 93px;
+  bottom: -5px;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 7px solid rgba(52, 48, 40, 0.34);
+}
+
+.milestone-when {
+  color: var(--ink-faint);
+  font-size: 12px;
+  font-weight: 700;
+  text-align: right;
+}
+
+.milestone-dot {
+  position: relative;
+  z-index: 2;
+  width: 16px;
+  height: 16px;
+  justify-self: center;
+  border-radius: 50%;
+  border: 3px solid var(--rule-strong);
+  background: var(--paper-strong);
+  box-shadow: 0 0 0 3px var(--paper);
+}
+
+.milestone-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.milestone-body strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.milestone-state {
+  min-height: 22px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 9px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+}
+
+/* state tones — held（赢点）/ conditional（兜底）/ deferred（砍）视觉可辨 */
+.milestone.is-held .milestone-dot {
+  border-color: var(--sage);
+  background: var(--sage);
+}
+.milestone.is-held .milestone-state {
+  border-color: rgba(105, 128, 109, 0.45);
+  background: rgba(105, 128, 109, 0.16);
+  color: #3f5c46;
+}
+
+.milestone.is-replanned .milestone-dot {
+  border-color: var(--sky);
+  background: var(--sky);
+}
+.milestone.is-replanned .milestone-state {
+  border-color: rgba(82, 123, 145, 0.4);
+  background: rgba(82, 123, 145, 0.13);
+  color: #31586c;
+}
+
+.milestone.is-stalled .milestone-dot {
+  border-color: var(--terracotta);
+  background: var(--terracotta);
+}
+.milestone.is-stalled .milestone-state {
+  border-color: rgba(188, 92, 73, 0.45);
+  background: rgba(188, 92, 73, 0.14);
+  color: #8f3f31;
+}
+
+.milestone.is-conditional .milestone-dot {
+  border-style: dashed;
+  border-color: var(--honey);
+  background: transparent;
+}
+.milestone.is-conditional .milestone-state {
+  border-color: rgba(178, 123, 43, 0.45);
+  background: rgba(178, 123, 43, 0.14);
+  color: #8a5e1f;
+}
+
+.milestone.is-deferred {
+  opacity: 0.6;
+}
+.milestone.is-deferred .milestone-dot {
+  background: var(--paper);
+}
+
+/* Team responsibilities */
+.team-avatars {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.team-member {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px 8px 8px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.team-member .avatar {
+  width: 34px;
+  height: 34px;
+}
+
+.team-member strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.team-member > div span {
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+
+/* Task board — 3 段 */
+.task-board {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.task-column {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.38);
+}
+
+.task-column-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 0 2px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.task-column-head span {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: rgba(52, 48, 40, 0.08);
+  color: var(--ink-faint);
+  font-size: 11px;
+}
+
+.task-column.is-needs-decision {
+  border-top: 2px solid var(--terracotta);
+}
+.task-column.is-in-progress {
+  border-top: 2px solid var(--sky);
+}
+.task-column.is-done-waiting {
+  border-top: 2px solid var(--sage);
+}
+
+.task-column-list {
+  display: grid;
+  gap: 8px;
+}
+
+.task-column-empty {
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: 12px;
+  font-style: italic;
+}
+
+.board-card {
+  padding: 10px 11px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--paper-strong);
+}
+
+.board-card strong {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.board-card span {
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+
+.board-card .phase-note {
+  color: var(--ink-faint);
+}
+
+/* Handoffs checklist */
+.handoff-list {
+  display: grid;
+  gap: 10px;
+}
+
+.handoff-card {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--sage);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.5);
+  transition: opacity var(--fast) ease;
+}
+
+.handoff-card.is-discarded {
+  opacity: 0.5;
+  border-left-color: var(--rule-strong);
+}
+
+.handoff-card.is-done {
+  border-left-color: var(--sage);
+  background: rgba(105, 128, 109, 0.08);
+}
+
+.handoff-body strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.handoff-card.is-done .handoff-body strong {
+  text-decoration: line-through;
+  color: var(--ink-soft);
+}
+
+.handoff-body p {
+  margin: 6px 0 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.handoff-fly {
+  margin-top: 10px;
+  padding: 5px 11px;
+  border: 1px solid rgba(108, 99, 181, 0.4);
+  border-radius: 999px;
+  background: rgba(108, 99, 181, 0.1);
+  color: #4a4197;
+  font-size: 12px;
+  font-weight: 700;
+  transition:
+    background var(--fast) ease,
+    border-color var(--fast) ease;
+}
+
+.handoff-fly:hover,
+.handoff-fly:focus-visible {
+  border-color: rgba(108, 99, 181, 0.7);
+  background: rgba(108, 99, 181, 0.18);
+  outline: none;
+}
+
+.handoff-actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+.handoff-done,
+.handoff-discard,
+.handoff-undo {
+  min-height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--paper-strong);
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 700;
+  transition:
+    border-color var(--fast) ease,
+    color var(--fast) ease;
+}
+
+.handoff-done:hover,
+.handoff-done:focus-visible {
+  border-color: rgba(105, 128, 109, 0.55);
+  color: #3f5c46;
+  outline: none;
+}
+
+.handoff-discard:hover,
+.handoff-discard:focus-visible {
+  border-color: rgba(188, 92, 73, 0.5);
+  color: #9c4633;
+  outline: none;
+}
+
+.handoff-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink-faint);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.handoff-undo {
+  min-height: 26px;
+  padding: 0 9px;
+  font-weight: 600;
+}
+
+/* Weekly team updates */
+.weekly-update-list {
+  display: grid;
+  gap: 12px;
+}
+
+.weekly-update-row {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  gap: 12px;
+  align-items: baseline;
+}
+
+.weekly-update-row strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.weekly-update-row p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* 次层级（下沉）：risk & evidence — 视觉退一档，护 reveal */
+.detail-sublayer {
+  display: grid;
+  gap: 16px;
+  margin-top: 8px;
+  padding-top: 20px;
+  border-top: 1px dashed var(--rule);
+}
+
+.detail-sublayer .detail-section {
+  background: rgba(255, 253, 248, 0.55);
+  box-shadow: none;
+}
+
+.risk-list {
+  display: grid;
+  gap: 9px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--ink-soft);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.reality-gap-callout {
+  display: grid;
+  gap: 7px;
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  border: 1px solid rgba(188, 92, 73, 0.34);
+  border-left: 3px solid var(--terracotta);
+  border-radius: var(--radius);
+  background: rgba(188, 92, 73, 0.08);
+}
+
+.reality-gap-callout strong {
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.reality-gap-callout span,
+.reality-gap-callout em {
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.reality-gap-callout em {
+  color: var(--ink-faint);
+  font-style: italic;
+}
+
+.reality-gap-callout.is-grown {
+  border-color: rgba(178, 123, 43, 0.38);
+  border-left-color: var(--honey);
+  background: rgba(178, 123, 43, 0.08);
+}
+
+.risk-tag {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 8px;
+  padding: 1px 8px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.6);
+  color: var(--ink-faint);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+
+.evidence-list {
+  display: grid;
+  gap: 9px;
+}
+
+.evidence-row {
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  gap: 10px;
+  align-items: baseline;
+}
+
+.evidence-row span {
+  color: var(--ink-faint);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.evidence-row p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.evidence-row em {
+  color: var(--ink-faint);
+  font-style: normal;
+}
+
+@media (max-width: 720px) {
+  .task-board {
+    grid-template-columns: 1fr;
+  }
+
+  .handoff-card {
+    flex-direction: column;
+  }
+
+  .weekly-update-row,
+  .milestone {
+    grid-template-columns: 1fr;
+  }
+
+  .milestone-dot {
+    display: none;
+  }
+
+  .milestone:not(:last-child)::before,
+  .milestone:not(:last-child)::after {
+    display: none;
+  }
+}
+
+/* ───── P3-04 · Playbooks 页（「为什么值得信」横条 + grouped playbooks） ───── */
+
+.playbook-why {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 16px 18px;
+  border: 1px solid rgba(108, 99, 181, 0.28);
+  border-radius: var(--radius);
+  background: linear-gradient(
+    120deg,
+    rgba(108, 99, 181, 0.1),
+    rgba(82, 123, 145, 0.08)
+  );
+  box-shadow: var(--shadow-soft);
+}
+
+.playbook-why-point {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #3f3a73;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.playbook-why-point::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--iris);
+}
+
+/* Library coverage strip */
+.capability-coverage .eyebrow {
+  margin-bottom: 10px;
+}
+
+.coverage-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.coverage-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 30px;
+  padding: 0 12px;
+  border: 1px dashed var(--rule-strong);
+  border-radius: 999px;
+  color: var(--ink-faint);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.coverage-chip.is-loaded {
+  border-style: solid;
+  border-color: rgba(105, 128, 109, 0.45);
+  background: rgba(105, 128, 109, 0.12);
+  color: #3f5c46;
+}
+
+.coverage-chip em {
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+
+/* Grouped capability cards */
+.capability-group {
+  display: grid;
+  gap: 12px;
+}
+
+.capability-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.capability-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 18px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: rgba(255, 253, 248, 0.82);
+  box-shadow: var(--shadow-soft);
+}
+
+.capability-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.cap-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 9px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.cap-badge.is-proprietary {
+  border-color: rgba(108, 99, 181, 0.4);
+  background: rgba(108, 99, 181, 0.12);
+  color: #4a4197;
+}
+
+.cap-badge.is-cited {
+  border-color: rgba(82, 123, 145, 0.4);
+  background: rgba(82, 123, 145, 0.12);
+  color: #31586c;
+}
+
+.capability-card strong {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.capability-card p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+/* ───── P3-03 · Onboarding 4 步微流程（B0 prologue） ───── */
+
+.scene-onboarding {
+  display: grid;
+  place-items: center;
+  padding: 96px 20px 40px;
+}
+
+.onboarding-card {
+  width: min(620px, 100%);
+  max-height: calc(100vh - 140px);
+  overflow-y: auto;
+  padding: 28px 30px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: rgba(255, 253, 248, 0.9);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(12px);
+}
+
+.onboarding-head h2 {
+  margin: 2px 0 8px;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(24px, 3vw, 32px);
+  font-weight: 500;
+  line-height: 1.1;
+}
+
+.onboarding-head p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.onboarding-progress {
+  display: flex;
+  gap: 6px;
+  margin: 20px 0 18px;
+}
+
+.progress-pip {
+  height: 4px;
+  flex: 1;
+  border-radius: 999px;
+  background: rgba(52, 48, 40, 0.12);
+  transition: background var(--medium) ease;
+}
+
+.progress-pip.is-done {
+  background: var(--sage);
+}
+
+.progress-pip.is-active {
+  background: var(--iris);
+}
+
+.onboarding-stages {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.onboarding-stage {
+  display: grid;
+  grid-template-columns: 30px 1fr;
+  gap: 14px;
+  padding: 12px 0;
+  transition: opacity var(--medium) ease;
+}
+
+.onboarding-stage.is-upcoming {
+  opacity: 0.4;
+}
+
+.stage-marker {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid var(--rule-strong);
+  background: var(--paper-strong);
+  color: var(--ink-soft);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.onboarding-stage.is-active .stage-marker {
+  border-color: var(--iris);
+  background: var(--iris);
+  color: var(--paper);
+}
+
+.onboarding-stage.is-done .stage-marker {
+  border-color: var(--sage);
+  background: var(--sage);
+  color: var(--paper);
+}
+
+.stage-content h3 {
+  margin: 4px 0 0;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.stage-done {
+  margin: 6px 0 0;
+  color: var(--ink-faint);
+  font-size: 13px;
+}
+
+.onboarding-status {
+  margin: 12px 0 10px;
+  color: var(--ink-faint);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* Step 1 · files */
+.onboarding-files {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.file-chip {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 12px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--paper-strong);
+  font-size: 13px;
+}
+
+.file-kind {
+  display: inline-grid;
+  place-items: center;
+  min-width: 38px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 5px;
+  background: rgba(82, 123, 145, 0.14);
+  color: #31586c;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+/* Step 2 · parsed facets */
+.onboarding-parsed {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.parsed-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.55);
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+
+/* Step 3 · capabilities matched（auto-prioritized tease）*/
+.onboarding-capabilities {
+  display: grid;
+  gap: 8px;
+}
+
+.capability-match {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 13px;
+  border: 1px solid rgba(108, 99, 181, 0.32);
+  border-radius: var(--radius);
+  background: rgba(108, 99, 181, 0.1);
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.match-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 9px;
+  border-radius: 999px;
+  background: var(--iris);
+  color: var(--paper);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* Step 4 · ready metrics */
+.onboarding-ready-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin-top: 12px;
+}
+
+.onboarding-ready-metrics span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.6);
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+
+.onboarding-ready-metrics strong {
+  color: var(--ink);
+  font-size: 15px;
+}
+
+.onboarding-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 22px;
+}
+
+.onboarding-continue {
+  min-height: 40px;
+  padding: 0 22px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--paper);
+  font-size: 14px;
+  font-weight: 700;
+  transition: opacity var(--fast) ease;
+}
+
+.onboarding-continue:hover,
+.onboarding-continue:focus-visible {
+  opacity: 0.86;
+  outline: none;
+}
+
+/* ───────────────────────── P4 · Rail / Capabilities mgmt ───────────────────────── */
+
+.scene-capabilities .detail-sections {
+  width: min(920px, 100%);
+}
+
+.capability-subscription-group {
+  padding: 20px 22px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: rgba(255, 253, 248, 0.66);
+  box-shadow: var(--shadow-soft);
+}
+
+.capability-subscription-group .detail-section-head {
+  margin-bottom: 14px;
+}
+
+.capability-package-grid {
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+}
+
+.capability-package-card {
+  min-height: 100%;
+  justify-content: space-between;
+}
+
+.capability-package-card.is-subscribed {
+  border-color: rgba(105, 128, 109, 0.38);
+  background: rgba(255, 253, 248, 0.9);
+}
+
+.capability-package-card.is-available {
+  border-style: dashed;
+}
+
+.capability-package-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.capability-domain-kicker {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--ink-faint);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.capability-package-card h4 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 18px;
+  font-weight: 650;
+  letter-spacing: 0;
+  line-height: 1.2;
+}
+
+.cap-badge.is-subscribed {
+  border-color: rgba(105, 128, 109, 0.45);
+  background: rgba(105, 128, 109, 0.14);
+  color: #3f5c46;
+}
+
+.cap-badge.is-available {
+  border-color: rgba(82, 123, 145, 0.38);
+  background: rgba(82, 123, 145, 0.1);
+  color: #31586c;
+}
+
+.capability-preview {
+  display: grid;
+  gap: 7px;
+  padding: 12px 14px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.42);
+}
+
+.capability-preview > span {
+  color: var(--ink-faint);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.capability-preview ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.capability-action {
+  align-self: flex-start;
+  min-height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--paper-strong);
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 700;
+  transition:
+    background var(--fast) ease,
+    border-color var(--fast) ease,
+    color var(--fast) ease,
+    opacity var(--fast) ease;
+}
+
+.capability-action.is-primary {
+  border-color: rgba(29, 27, 23, 0.9);
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.capability-action.is-danger:hover,
+.capability-action.is-danger:focus-visible {
+  border-color: rgba(188, 92, 73, 0.5);
+  color: #9c4633;
+  outline: none;
+}
+
+.capability-action.is-primary:hover,
+.capability-action.is-primary:focus-visible {
+  opacity: 0.86;
+  outline: none;
+}
+
+.rail-controls {
+  z-index: 80;
+  left: auto;
+  right: 24px;
+  bottom: 24px;
+  transform: none;
+  align-items: center;
+  justify-content: center;
+  max-width: min(420px, calc(100vw - 40px));
+  padding: 9px 14px;
+  border-color: rgba(40, 35, 29, 0.1);
+  border-radius: 999px;
+  background: rgba(255, 253, 248, 0.72);
+  box-shadow: 0 10px 34px rgba(40, 35, 29, 0.1);
+}
+
+/* P5-01 (ADR-0007)：Capabilities 移出思考流，inspector 内的 free-click 入口按钮已删。
+   free-click 仍走 Topbar tab；rail 走收尾 B11 beat（P6 三幕化后为末拍 26/26）。原 .nexus-capabilities-link 样式随按钮移除。 */
+
+.rail-caption {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 0;
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.rail-caption small {
+  color: var(--ink-faint);
+  font-weight: 650;
+}
+
+.rail-caption strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rail-caption span {
+  color: rgba(40, 35, 29, 0.24);
+}
+
+.rail-caption em {
+  color: var(--accent);
+  font-style: normal;
+  font-weight: 650;
+}
+
+@media (max-width: 860px) {
+  .rail-controls {
+    max-width: calc(100vw - 32px);
+    padding: 9px 12px;
+  }
+
+  .rail-caption {
+    flex-wrap: wrap;
+    row-gap: 4px;
+    white-space: normal;
+  }
+}
+
+/* ───────────────────── P5-02 · #6 in-thread Chat (B7 ChatCard) ─────────────────────
+   B7 human-loop 从 inspector 轻量步毕业为中央卡（ADR-0008），与 timeline/mismatch/output 同级。
+   消息逐条渐显 = opacity/transform stagger（守 ADR-0002）；reduced-motion 瞬显。 */
+
+.nexus-chat-card {
+  position: absolute;
+  z-index: 22;
+  top: 49%;
+  left: 50%;
+  display: flex;
+  flex-direction: column;
+  width: 720px;
+  max-height: 760px;
+  padding: 22px;
+  border: 1px solid rgba(52, 48, 40, 0.22);
+  border-radius: var(--radius);
+  background: rgba(255, 253, 248, 0.94);
+  box-shadow: 0 30px 110px rgba(50, 45, 36, 0.2);
+  backdrop-filter: blur(18px);
+  transform: translate(-50%, -50%);
+}
+
+.nexus-chat-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 16px;
+}
+
+.nexus-chat-header h2 {
+  margin: 0;
+  color: var(--ink);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 26px;
+  font-weight: 500;
+  line-height: 1.08;
+}
+
+.nexus-chat-header > span {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  flex: 0 0 auto;
+  padding: 4px 10px;
+  border: 1px solid rgba(105, 128, 109, 0.38);
+  border-radius: 999px;
+  background: rgba(105, 128, 109, 0.12);
+  color: var(--sage);
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.nexus-chat-log {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  padding: 2px 4px 2px 0;
+}
+
+.chat-msg {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 86%;
+  padding: 10px 14px;
+  border: 1px solid var(--rule);
+  border-radius: 14px;
+  background: rgba(255, 253, 248, 0.7);
+  opacity: 0;
+  transform: translateY(8px);
+  animation: chat-msg-in 0.34s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation-delay: calc(var(--chat-i, 0) * 0.09s);
+}
+
+.chat-msg.is-room {
+  align-self: flex-start;
+  border-color: rgba(105, 128, 109, 0.22);
+}
+
+.chat-msg.is-you {
+  align-self: flex-end;
+  border-color: rgba(40, 35, 29, 0.16);
+  background: rgba(40, 35, 29, 0.07);
+}
+
+.chat-msg.is-agent {
+  background: rgba(105, 128, 109, 0.08);
+}
+
+.chat-msg.is-pm {
+  border-left: 2px solid var(--sage);
+}
+
+.chat-msg.is-hr {
+  border-left: 2px solid var(--terracotta);
+}
+
+.chat-speaker-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.chat-speaker {
+  color: var(--ink-soft);
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.chat-agent-badge {
+  display: inline-flex;
+  min-height: 18px;
+  align-items: center;
+  padding: 1px 6px;
+  border: 1px solid rgba(105, 128, 109, 0.24);
+  border-radius: 999px;
+  background: rgba(255, 253, 248, 0.68);
+  color: var(--sage);
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.chat-msg.is-hr .chat-agent-badge {
+  border-color: rgba(181, 95, 74, 0.28);
+  color: var(--terracotta);
+}
+
+.chat-text {
+  margin: 0;
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.chat-ref {
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(105, 128, 109, 0.12);
+  color: var(--sage);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.nexus-chat-composer {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--rule);
+}
+
+.nexus-chat-composer input {
+  min-width: 0;
+  flex: 1;
+  height: 42px;
+  padding: 0 14px;
+  border: 1px solid rgba(52, 48, 40, 0.18);
+  border-radius: 999px;
+  background: rgba(255, 253, 248, 0.86);
+  color: var(--ink);
+  font-size: 14px;
+  outline: none;
+}
+
+.nexus-chat-composer input::placeholder {
+  color: rgba(70, 63, 52, 0.44);
+}
+
+.nexus-chat-composer input:focus-visible {
+  border-color: rgba(105, 128, 109, 0.52);
+  box-shadow: 0 0 0 3px rgba(105, 128, 109, 0.14);
+}
+
+.nexus-chat-composer button {
+  flex: 0 0 auto;
+  min-width: 76px;
+  height: 42px;
+  padding: 0 16px;
+  border: 1px solid rgba(40, 35, 29, 0.2);
+  border-radius: 999px;
+  background: var(--ink);
+  color: #fffdf8;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.nexus-chat-composer button:hover,
+.nexus-chat-composer button:focus-visible {
+  background: var(--terracotta);
+}
+
+@keyframes chat-msg-in {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 760px) {
+  .nexus-chat-card {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    bottom: auto;
+    left: 14px;
+    width: auto;
+    height: min(620px, calc(100svh - 238px));
+    max-height: calc(100svh - 238px);
+    padding: 16px;
+    transform: none;
+  }
+
+  .nexus-chat-header {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .nexus-chat-header h2 {
+    font-size: 22px;
+  }
+
+  .chat-msg {
+    max-width: 94%;
+  }
+
+  .nexus-chat-composer {
+    gap: 7px;
+  }
+
+  .nexus-chat-composer input {
+    height: 40px;
+    padding: 0 12px;
+  }
+
+  .nexus-chat-composer button {
+    min-width: 64px;
+    height: 40px;
+    padding: 0 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-msg {
+    opacity: 1;
+    transform: none;
+    animation: none;
+  }
+}
+
+/* ───────────────────────── P5 · Shared PixelAvatar ───────────────────────── */
+/* 场景无关像素头像：详情页 team / 员工页头部 / Nexus chat / Bill 节点 / report。 */
+/* DashboardScene 仍走自己的 .scene-dashboard scoped 规则，避免回归（待 ⑤ 重写时再统一）。 */
+.pixel-avatar {
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  flex: none;
+  border: 1px solid rgba(52, 48, 40, 0.16);
+  border-radius: 8px;
+  background: rgba(255, 253, 248, 0.84);
+  box-shadow: inset 0 -6px 12px rgba(52, 48, 40, 0.05);
+}
+
+.pixel-avatar-sprite {
+  width: var(--avatar-size);
+  height: var(--avatar-size);
+  background-image: var(--avatar-image);
+  background-repeat: no-repeat;
+  background-position: var(--avatar-x) var(--avatar-y);
+  background-size: var(--avatar-sheet-width) auto;
+  image-rendering: pixelated;
+  transform: scale(1.32);
+  transform-origin: 50% 58%;
+}
+
+/* 员工详情页头部头像 */
+.detail-hero-media {
+  margin-bottom: 12px;
+}
+
+.detail-avatar {
+  border-radius: 12px;
+}
+
+/* Nexus chat 发言者头像 */
+.chat-avatar {
+  border-radius: 6px;
+}
+
+/* feat-004 (ADR-0014 决策 9)：Bill 头像改内联终端行（.terminal-avatar，见 Nexus terminal 区）。 */
+
+/* report 内联人名头像（覆盖 .confirmation-list span / .next-task-row span 的 display:block）*/
+.confirmation-list .confirmation-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.next-task-row .next-task-assignee {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.inline-avatar {
+  border-radius: 5px;
+  box-shadow: none;
+}
+
+/* ═══════════════════════════════════ P6 ═══════════════════════════════════ */
+/* ADR-0013 wave。新 P6 CSS 一律追加在本 banner 区内。
+   动效守 ADR-0002：只动 transform/opacity；reduced-motion 由全局 1ms 守卫兜底。 */
+
+/* ── P6-02 · thread chrome：Nexus HUD tab strip + history popover ──────────
+   viewport-fixed HUD（ADR-0012 world/HUD 分层，不进画板）。位置 = Topbar 行的
+   空闲中段（brand 左 / scene-tabs 右），chrome-tab 语法：标签在最顶上。 */
+
+.nexus-thread-chrome {
+  position: absolute;
+  z-index: 45;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.nexus-tab-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.nexus-thread-tab {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 6px 4px 8px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: rgba(255, 253, 248, 0.82);
+  box-shadow: var(--shadow-soft);
+  backdrop-filter: blur(12px);
+  transition:
+    opacity var(--medium) ease,
+    transform var(--medium) ease;
+}
+
+.nexus-thread-tab.is-active {
+  border-color: var(--ink);
+  background: var(--ink);
+}
+
+.nexus-thread-tab-label {
+  border: 0;
+  padding: 4px 6px;
+  background: none;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.nexus-thread-tab.is-active .nexus-thread-tab-label {
+  color: var(--paper);
+}
+
+.nexus-thread-tab-close {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--ink-faint);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    opacity var(--medium) ease,
+    transform var(--medium) ease;
+}
+
+.nexus-thread-tab.is-active .nexus-thread-tab-close {
+  color: rgba(255, 253, 248, 0.72);
+}
+
+.nexus-thread-tab-close:hover,
+.nexus-thread-tab-close:focus-visible {
+  outline: none;
+  transform: scale(1.18);
+  opacity: 1;
+}
+
+.nexus-history {
+  position: relative;
+}
+
+.nexus-history-toggle {
+  padding: 8px 14px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: rgba(255, 253, 248, 0.82);
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 700;
+  box-shadow: var(--shadow-soft);
+  backdrop-filter: blur(12px);
+  cursor: pointer;
+  transition:
+    opacity var(--medium) ease,
+    transform var(--medium) ease;
+}
+
+.nexus-history-toggle:hover,
+.nexus-history-toggle:focus-visible,
+.nexus-history-toggle.is-open {
+  outline: none;
+  color: var(--ink);
+  transform: translateY(-1px);
+}
+
+@keyframes p6-popover-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.nexus-history-popover {
+  position: absolute;
+  z-index: 46;
+  top: calc(100% + 8px);
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 330px;
+  max-height: 420px;
+  overflow: auto;
+  padding: 14px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: rgba(255, 253, 248, 0.95);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(12px);
+  animation: p6-popover-in 160ms ease;
+}
+
+.nexus-history-popover .eyebrow {
+  margin-bottom: 2px;
+}
+
+.nexus-history-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  background: rgba(255, 253, 248, 0.9);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    opacity var(--medium) ease,
+    transform var(--medium) ease;
+}
+
+.nexus-history-item:hover,
+.nexus-history-item:focus-visible {
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.nexus-history-item.is-closed {
+  opacity: 0.74;
+}
+
+.nexus-history-item-title {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.nexus-history-item-question {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.nexus-history-item-meta {
+  color: var(--ink-faint);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+

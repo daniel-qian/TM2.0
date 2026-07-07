@@ -1,5 +1,5 @@
 import { useCanvas } from '../store/canvasStore'
-import { useLive } from '../store/liveStore'
+import { useMode } from '../../shared/modeStore'
 import { Topbar } from './Topbar'
 import { HomeScene } from './scenes/HomeScene'
 import { DashboardScene } from './scenes/DashboardScene'
@@ -13,7 +13,7 @@ import { DemoControls } from './DemoControls'
 // P0：按 scene state 条件渲染。scene 间转场动画留到 P1（framer-motion AnimatePresence）。
 export function AmbientCanvasShell() {
   const scene = useCanvas((s) => s.scene)
-  const mode = useLive((s) => s.mode)
+  const mode = useMode((s) => s.mode)
   return (
     <div className="app-shell" data-scene={scene} data-mode={mode}>
       <Topbar />

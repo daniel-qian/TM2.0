@@ -41,7 +41,8 @@ export const en = {
   team: {
     liveEyebrow: 'From your uploads',
     emptyTitle: 'Your team will appear here',
-    emptyBody: 'Upload a few files above and the people and projects grow from them.',
+    emptyBody:
+      'Drop a few files on the right and the people and projects grow out of them — nothing to configure.',
   },
 
   // ── Nexus, live ───────────────────────────────────────────────────────────
@@ -52,6 +53,57 @@ export const en = {
     liveError: 'Something went wrong reaching the room.',
     askPlaceholder: 'Ask about your team…',
     ask: 'Ask',
+  },
+
+  // ── lite shell (feat-024: the product shell behind the story/lite wall) ───
+  lite: {
+    tabTeam: 'Your team',
+    tabRoom: 'The room',
+
+    // Your team — briefing header (real numbers from ingestion) + weak handoffs
+    briefingEyebrow: 'From your uploads',
+    metricsLabel: 'Team at a glance',
+    handoffsTitle: 'Worth your attention today',
+    handoffsEmpty: 'Nothing needs you right now — your uploads read steady.',
+    handoffOpen: 'Open the project',
+
+    // Upload empty state (the left spine speaks for itself — no scripted placeholders)
+    emptyEyebrow: 'Getting started',
+    emptyHintRoster: 'A team roster or a few resumes — the people appear as cards.',
+    emptyHintProject: 'A project plan or weekly update — the projects line up next to them.',
+    emptyHintPrivacy: 'No one gets scored. Avery only keeps what people do and own.',
+
+    // Lanes
+    peopleLane: 'People',
+    projectLane: 'Projects',
+
+    // The room — empty state
+    roomEmptyTitle: 'Bring a situation to the room',
+    roomEmptyBody:
+      'Describe what is on your mind about the team — it thinks it through against your uploads and comes back with a read.',
+
+    // Composer references (live corpus only)
+    refAll: 'All',
+    refPeople: 'People',
+    refProjects: 'Projects',
+    refAdd: 'Add a reference',
+    refSearch: 'Reference a person or project',
+    refEmpty: 'Upload a few files first — people and projects appear here.',
+
+    // Thin read-only detail overlay (pure live payload)
+    detailAria: 'Detail',
+    detailClose: 'Close',
+    detailPersonEyebrow: 'Teammate',
+    detailProjectEyebrow: 'Project',
+    detailTenure: 'Tenure',
+    detailOwns: 'Owns',
+    detailCollab: 'Working with',
+    detailSummary: 'Summary',
+    detailProgress: 'Progress',
+    detailBlockers: 'Worth a closer look',
+    detailSignals: 'What the documents say',
+    detailSource: 'From your uploads',
+    detailGone: 'This card is no longer in your uploads.',
   },
 }
 
