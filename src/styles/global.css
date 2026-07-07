@@ -75,7 +75,10 @@ button {
   pointer-events: none;
 }
 
-.scene-tabs {
+/* topbar 容器 pointer-events:none（空白落到画板），可交互子元素各自 auto 回来。
+   feat-017 的 mode-switch 当初漏了这条 → Story/Live 不可点；补上与 scene-tabs 同款。 */
+.scene-tabs,
+.mode-switch {
   pointer-events: auto;
 }
 
