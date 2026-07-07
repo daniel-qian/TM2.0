@@ -37,6 +37,8 @@ Writing the playbooks · Core shopping-guide flow · Lin Qing story 卡文案句
 不得按名字入黑名单——只黑他们的 story 文案句式。
 **注意 2**:"New Retail" 不入黑名单——真 seed xlsx 含合法项目
 "New Retail Smart Shopper Mini Program"(story 独占标识用 "Smart Shopping Guide" 已够)。
+**注意 3**:裸 "Wang" 不入黑名单——真 seed roster 有 "Wang Yuxuan"(第 15 行);
+story 的 Wang 用其文案签名 "Wang has it steady" 代替(实跑抓到过此假阳性)。
 
 ## 已知坑
 

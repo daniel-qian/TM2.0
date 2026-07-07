@@ -143,8 +143,9 @@ export function stripPersonNumbers(card: LivePersonCard): LivePersonCard {
 
 // ingestion 人卡 → 定性读数：优先 collaboration（她在跟谁协作/扛什么），否则 owns 情境，否则中性句。
 function liveRead(card: LivePersonCard): { read: string; tone: HomeTone } {
-  if (card.collaboration && card.collaboration.trim()) {
-    return { read: card.collaboration.trim(), tone: 'sage' }
+  const collab = (card.collaboration ?? []).map((c) => c.trim()).filter(Boolean)
+  if (collab.length > 0) {
+    return { read: collab[0], tone: 'sage' }
   }
   if (card.owns && card.owns.length > 0) {
     return { read: `Owns ${card.owns.slice(0, 2).join(', ')}`, tone: 'sage' }  }

@@ -32,7 +32,9 @@
     'Smart Shopping Guide',     // story flagship project (the REAL seed has 'Smart Shopper' —
                                 // do NOT blacklist 'New Retail': the seed xlsx legitimately
                                 // contains 'New Retail Smart Shopper Mini Program')
-    'Kate', 'Jason', 'Cecily', 'Kenan', 'Nasim', 'Aidy', 'Fred', 'Wang',  // story-only cast
+    'Kate', 'Jason', 'Cecily', 'Kenan', 'Nasim', 'Aidy', 'Fred',  // story-only cast
+    // NOT bare 'Wang' — the real seed roster has 'Wang Yuxuan'; use the story copy instead:
+    'Wang has it steady',
     'Client Onboarding Kit', 'Store Dashboard polish', 'Writing the playbooks',
     'Core shopping-guide flow', 'Venus Pitch', 'Prototype 2.0',
     // Lin Qing's story-card copy signature (the card text, not her name):

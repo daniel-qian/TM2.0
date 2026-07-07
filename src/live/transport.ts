@@ -74,7 +74,9 @@ export interface LivePersonCard {
   team?: string
   tenure?: string
   owns?: string[]
-  collaboration?: string
+  // team_cards() 发的是 list[str]（PersonEntity.collaboration）。feat-023 的 LLM 抽取第一次
+  // 真的填了它，暴露此处曾误写 string（heuristic 从不产 collaboration，一直潜伏到 gate 抓到）。
+  collaboration?: string[]
 }
 
 export interface LiveProjectCard {
