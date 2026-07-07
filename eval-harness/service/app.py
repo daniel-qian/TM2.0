@@ -34,7 +34,7 @@ from sse_starlette.sse import EventSourceResponse
 from avery import skills
 from avery.env import load_dotenv
 
-from . import brain_factory, live_input
+from . import brain_factory, embedding_factory, live_input
 from .engine import stream_advice
 from .ingest_api import router as ingest_router  # feat-018: /ingest + /team/{id} (compose over feat-016)
 
@@ -125,7 +125,8 @@ def _run_events(sit: live_input.LiveSituation) -> tuple[Iterator[dict[str, Any]]
 
     events = stream_advice(
         brain, case, _system_prompt(), agent_name=getattr(brain, "name", kind),
-        scaffold="full", memory_dir=memory_dir, enforce_chain=True, enforce_redline=True)
+        scaffold="full", memory_dir=memory_dir, enforce_chain=True, enforce_redline=True,
+        embedder=embedding_factory.make_embedder())  # None -> keyword recall (key stays server-side)
     return events, case
 
 
@@ -145,7 +146,8 @@ def _sse(events: Iterator[dict[str, Any]], case) -> EventSourceResponse:
 def health() -> dict:
     kind = brain_factory.resolve_brain_kind()
     return {"status": "ok", "service": "avery-agent", "brain": kind,
-            "live": brain_factory.brain_is_live()}
+            "live": brain_factory.brain_is_live(),
+            "embeddings": embedding_factory.active_embeddings()}  # "keyword" or "dashscope:<model>/<dim>"
 
 
 @app.post("/advise")

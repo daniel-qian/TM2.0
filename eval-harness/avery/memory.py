@@ -26,7 +26,7 @@ MEMORY_FILES = ("facts.md", "notes.md")
 class Hit:
     source: str   # e.g. "facts.md:15"
     text: str
-    score: int    # number of distinct query tokens matched
+    score: float  # keyword: distinct query tokens matched · vector: cosine similarity
 
     def as_line(self) -> str:
         return f"{self.source}  {self.text}"
@@ -47,11 +47,11 @@ def load_facts_head(memory_dir: Path, max_lines: int = 12) -> str:
     return "\n".join(body[:max_lines])
 
 
-def recall(query: str, memory_dir: Path, limit: int = 8) -> list[Hit]:
-    """Keyword search over facts.md + notes.md. Returns line-addressable hits, ranked by how
-    many distinct query tokens each line matches."""
-    q = _tokens(query)
-    hits: list[Hit] = []
+def _candidates(memory_dir: Path) -> list[tuple[str, str]]:
+    """Every citable line of facts.md + notes.md as (source, text). Source is `<file>:<line>` with
+    the TRUE 1-based line number so a cite() resolves; headings/quotes/blank lines are skipped —
+    the exact same iteration keyword recall and semantic recall both rank over."""
+    cands: list[tuple[str, str]] = []
     for fname in MEMORY_FILES:
         path = Path(memory_dir) / fname
         if not path.exists():
@@ -60,10 +60,50 @@ def recall(query: str, memory_dir: Path, limit: int = 8) -> list[Hit]:
             line = raw.strip()
             if not line or line.startswith(("#", ">")):
                 continue
-            text = line.lstrip("- ").strip()
-            matched = q & _tokens(line)
-            if matched:
-                hits.append(Hit(source=f"{fname}:{i}", text=text, score=len(matched)))
+            cands.append((f"{fname}:{i}", line.lstrip("- ").strip()))
+    return cands
+
+
+def _corpus_cache_key(memory_dir: Path, embedder_name: str) -> str:
+    """Key the per-corpus embedding cache on the dir + file mtimes so a re-materialized context
+    (same path, new content) re-embeds instead of serving stale vectors."""
+    parts = [str(memory_dir), embedder_name]
+    for fname in MEMORY_FILES:
+        path = Path(memory_dir) / fname
+        parts.append(f"{fname}:{path.stat().st_mtime_ns if path.exists() else 0}")
+    return "|".join(parts)
+
+
+def recall(query: str, memory_dir: Path, limit: int = 8, embedder=None) -> list[Hit]:
+    """Search facts.md + notes.md; return line-addressable hits (`facts.md:15`) the model can cite().
+
+    embedder is None (default) -> KEYWORD: rank lines by distinct query tokens matched. Offline,
+        deterministic, no service. Every existing caller uses this path unchanged.
+    embedder given             -> SEMANTIC: rank the SAME lines by embedding cosine (finds the right
+        evidence even when the words differ). Sources stay `<file>:<line>` so the cite gate is
+        untouched. Any embedding failure falls back to keyword — a live endpoint can never break an
+        advise turn.
+    """
+    cands = _candidates(memory_dir)
+    if not cands:
+        return []
+
+    if embedder is not None:
+        try:
+            from avery import embeddings
+            ranked = embeddings.semantic_rank(
+                query, cands, embedder, limit=limit,
+                cache_key=_corpus_cache_key(memory_dir, getattr(embedder, "name", "embedder")))
+            return [Hit(source=s, text=t, score=score) for s, t, score in ranked]
+        except Exception:
+            pass  # fall back to keyword — never fail the retrieval on an embedding hiccup
+
+    q = _tokens(query)
+    hits: list[Hit] = []
+    for source, text in cands:
+        matched = q & _tokens(text)
+        if matched:
+            hits.append(Hit(source=source, text=text, score=float(len(matched))))
     hits.sort(key=lambda h: h.score, reverse=True)
     return hits[:limit]
 

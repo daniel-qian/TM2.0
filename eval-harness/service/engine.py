@@ -39,7 +39,7 @@ def _anthropic_tools() -> list[dict]:
 
 def stream_advice(brain: Brain, case: Case, system_prompt: str, *, agent_name: str,
                   scaffold: str, memory_dir: Path, enforce_chain: bool = True,
-                  enforce_redline: bool = True, max_iters: int = MAX_ITERS
+                  enforce_redline: bool = True, max_iters: int = MAX_ITERS, embedder=None
                   ) -> Iterator[dict[str, Any]]:
     """Drive one (brain, case) and yield events. Event `type` is one of:
 
@@ -54,7 +54,8 @@ def stream_advice(brain: Brain, case: Case, system_prompt: str, *, agent_name: s
     The terminal `manifest` event's `transcript` matches what `run_loop` returns for the same
     inputs; its `contract` block is the API-level 8-field projection + red-line re-validation.
     """
-    ctx = ToolContext(memory_dir=Path(memory_dir), case_path=case.path, case_id=case.case_id)
+    ctx = ToolContext(memory_dir=Path(memory_dir), case_path=case.path, case_id=case.case_id,
+                      embedder=embedder)
     conversation: list[dict] = [{
         "role": "user",
         "content": [{"type": "text",
