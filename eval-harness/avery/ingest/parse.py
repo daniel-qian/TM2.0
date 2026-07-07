@@ -69,8 +69,22 @@ class ParsedDoc:
         return [ln.rstrip() for ln in self.text.splitlines()]
 
 
+# feat-023: pdf text layers (pypdf) leak typographic ligatures, soft hyphens and U+FFFD
+# replacement chars into the corpus — and facts.md is the advisor's citable memory, so the
+# mojibake gate (test_seed_gate) demands a clean corpus. Fixed at the parse seam for every format.
+_MOJIBAKE_MAP = {
+    "ﬀ": "ff", "ﬁ": "fi", "ﬂ": "fl", "ﬃ": "ffi", "ﬄ": "ffl",
+    "ﬅ": "st", "ﬆ": "st",
+    "­": "",          # soft hyphen
+    "​": "", "‌": "", "‍": "", "﻿": "",   # zero-widths / BOM
+    "�": "",          # U+FFFD REPLACEMENT CHARACTER — mojibake never enters the corpus
+}
+_MOJIBAKE_TRANS = str.maketrans(_MOJIBAKE_MAP)
+
+
 def _normalize(text: str) -> str:
     text = (text or "").replace("\r\n", "\n").replace("\r", "\n")
+    text = text.translate(_MOJIBAKE_TRANS)
     # collapse >2 blank lines, strip trailing spaces per line
     text = re.sub(r"[ \t]+\n", "\n", text)
     text = re.sub(r"\n{3,}", "\n\n", text)

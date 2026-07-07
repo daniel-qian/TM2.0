@@ -34,7 +34,7 @@ from sse_starlette.sse import EventSourceResponse
 from avery import skills
 from avery.env import load_dotenv
 
-from . import brain_factory, embedding_factory, live_input
+from . import brain_factory, embedding_factory, extractor_factory, live_input
 from .engine import stream_advice
 from .ingest_api import router as ingest_router  # feat-018: /ingest + /team/{id} (compose over feat-016)
 
@@ -147,7 +147,8 @@ def health() -> dict:
     kind = brain_factory.resolve_brain_kind()
     return {"status": "ok", "service": "avery-agent", "brain": kind,
             "live": brain_factory.brain_is_live(),
-            "embeddings": embedding_factory.active_embeddings()}  # "keyword" or "dashscope:<model>/<dim>"
+            "embeddings": embedding_factory.active_embeddings(),  # "keyword" or "dashscope:<model>/<dim>"
+            "extractor": extractor_factory.active_extractor()}    # "heuristic" or "llm:<brain>"
 
 
 @app.post("/advise")

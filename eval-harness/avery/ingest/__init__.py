@@ -35,6 +35,7 @@ from .extract import (
     Extractor,
     extract_docs,
 )
+from .llm_extract import LLMExtractor, FallbackExtractor
 from .redline_extract import validate_extraction, ExtractionRedlineResult, ExtractionViolation
 from .store import (
     KeywordStore, VectorStore, RetrievalStore, RetrievalHit, Embedder, HashingEmbedder, build_store,
@@ -46,6 +47,7 @@ __all__ = [
     "ParsedDoc", "parse_file", "parse_bytes",
     "PersonEntity", "ProjectEntity", "SignalEntity", "MaterialChunk",
     "ExtractionResult", "HeuristicExtractor", "Extractor", "extract_docs",
+    "LLMExtractor", "FallbackExtractor",
     "validate_extraction", "ExtractionRedlineResult", "ExtractionViolation",
     "KeywordStore", "VectorStore", "RetrievalStore", "RetrievalHit", "Embedder",
     "HashingEmbedder", "build_store",

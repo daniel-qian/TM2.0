@@ -33,6 +33,8 @@ from fastapi import File
 from avery.ingest import ingest_paths
 from avery.ingest.registry import REGISTRY, CompanyContext
 
+from . import extractor_factory
+
 router = APIRouter()
 
 
@@ -70,7 +72,10 @@ async def ingest(files: list[UploadFile] = File(...)) -> dict:
             dest.write_bytes(await f.read())
             saved.append(dest)
 
-        report = ingest_paths([str(p) for p in saved], registry=REGISTRY, name="company")
+        # feat-023: pluggable extraction (LLM when keyed, heuristic otherwise/forced) — the
+        # red-line gate inside ingest_paths is unchanged and still refuses a scoring extraction.
+        report = ingest_paths([str(p) for p in saved], registry=REGISTRY, name="company",
+                              extractor=extractor_factory.make_extractor())
 
         if not report.ok or report.context is None:
             # Red-line gate (or an all-unparseable batch) refused to publish a context.

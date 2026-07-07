@@ -30,11 +30,13 @@
 
 ## 黑名单口径(与 snippet 内 STORY_NOUNS 同步,snippet 为准)
 
-story 独占:Venus · Smart Shopping Guide · New Retail · Kate/Jason/Cecily/Kenan/Nasim/Aidy/
+story 独占:Venus · Smart Shopping Guide · Kate/Jason/Cecily/Kenan/Nasim/Aidy/
 Fred/Wang · Venus Pitch · Prototype 2.0 · Client Onboarding Kit · Store Dashboard polish ·
 Writing the playbooks · Core shopping-guide flow · Lin Qing story 卡文案句式。
-**注意**:Lin Qing / Chen Mingyuan / Sun Xiaomei / Zheng Zixuan 四个名字 story 与真 seed 复用,
+**注意 1**:Lin Qing / Chen Mingyuan / Sun Xiaomei / Zheng Zixuan 四个名字 story 与真 seed 复用,
 不得按名字入黑名单——只黑他们的 story 文案句式。
+**注意 2**:"New Retail" 不入黑名单——真 seed xlsx 含合法项目
+"New Retail Smart Shopper Mini Program"(story 独占标识用 "Smart Shopping Guide" 已够)。
 
 ## 已知坑
 

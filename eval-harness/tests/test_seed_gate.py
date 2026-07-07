@@ -248,6 +248,11 @@ def live_service():
                     assert health["embeddings"].startswith("dashscope"), (
                         f"gate needs real embeddings, got {health['embeddings']} "
                         f"(is DASHSCOPE_API_KEY loaded?)")
+                    # feat-023 exposes the active extractor; before it lands the key is absent —
+                    # the gate stays runnable both sides of the fix (extraction quality asserts red).
+                    if "extractor" in health:
+                        assert health["extractor"].startswith("llm:"), (
+                            f"live gate expects LLM extraction to be active, got {health}")
                     break
             except (httpx.HTTPError, OSError) as e:
                 last_err = e
