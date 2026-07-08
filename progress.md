@@ -288,3 +288,9 @@ avery loop 补 cite-before-number。
   - `eval-harness/tests/test_service_contract.py::test_schema_field_list_matches_frontend_agentoutput` 因 fixtures.ts 移居 `src/story/data/` 路径失效 → **skip**(195+1s 的那个 s)。按"eval-harness 不动"纪律未顺手修;S3 应把该防漂移守卫重指 `src/story/data/fixtures.ts` + lite 侧真身 `src/lite/streamSource.ts`(LiteAdvice)。
   - 隐藏 preview tab 的 Chrome 定时器节流(链式 setTimeout 可被压到 ~1 次/分钟)会拖慢 snippet 内部轮询——ingest settle 等待预算已放 360s(对齐后端 240s/call 包络+tick 粒度,断言本体未动),坑已记 live-frontend-gate.md。
   - 本轮某次 ingest 中红线又拦到 M3 把评分文本抄进人字段(`person-score-text:Noah Williams`→整篇退 heuristic),红线在工作,非 flake。
+
+## Update — 2026-07-09 · S3:Danny 试玩通过 → merge main;下一波(lite 打磨)已排
+
+- **S3 合流完成**:Danny 亲手试玩 lite 全流程(上传→人卡→详情→提问→8 字段卡),基本功能通过 → 顺手清了 S2 留的账:契约防漂移守卫重指墙后双真身(story `fixtures.ts` AgentOutput + lite `streamSource.ts` LiteAdvice,`test_service_contract.py` 11 passed 0 skipped,commit 9a4e699)→ **merge `feat/live-core-015-018` → main(`1f5a56a`,--no-ff 里程碑 commit,已 push)**;merge 后 main 上 init.sh 复绿。ADR-0022 救援线(S1 门红→S2 立墙前端绿→S3 合流)**closed**。
+- **Danny 试玩反馈 7 项 → 下一波作战文件已落**:`.issues/live-polish-0709/plan.md`(反馈原话+考古入口+session 划分)+ kickoff-s4/s5/s6.md。划分:**S4 考古判定+UI bug 即修**(串行先跑:lite 缺 Playbooks/team map/room 画板是"拍板范围"还是"遗漏"?repo 证据初步指向 ADR-0022 决策 2 的 v1 拍板——"地图/Playbooks/多人 Chat = story-only",S4 拿实证给 Danny 拍板补齐范围;两张 UI bug 截图直接修)→ **S5 feat-025 模块补齐 ∥ S6 feat-026 定位叙事+能力边界 mock**(worktree 并行,交集只在 LiteTopbar/LiteApp)。feat-025/026 已登记 not-started。
+- Notes:两个 UI bug 截图在 `D:\Screenshot\`(首页UI bug.png / 按钮风格丢失.png),S4 优先怀疑方向=CSS 拆 chunk 后 lite 复用类名的 cascade 断差;item 6/7 参考资料 4 篇路径在 plan.md §2。
