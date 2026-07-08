@@ -62,15 +62,21 @@ def test_manifest_carries_all_eight_fields_plus_script():
 
 
 def test_schema_field_list_matches_frontend_agentoutput():
-    """The API's required-field list must equal the frontend AgentOutput contract, so the two
-    never silently drift (feat-017 renders exactly these)."""
-    fixtures = (HERE.parent / "src" / "data" / "fixtures.ts")
-    if not fixtures.exists():
-        pytest.skip("frontend fixtures.ts not present in this checkout")
-    text = fixtures.read_text(encoding="utf-8")
-    # AgentOutput must declare each of our required fields.
-    for f in contract.REQUIRED_FIELDS:
-        assert f + ":" in text or f + " " in text, f"AgentOutput missing field {f}"
+    """The API's required-field list must equal the frontend render contracts, so the two never
+    silently drift. feat-024 (story/lite wall) split the frontend in two: the story theater keeps
+    AgentOutput in src/story/data/fixtures.ts, and the lite product renders LiteAdvice in
+    src/lite/streamSource.ts — BOTH must carry every required field."""
+    frontends = [
+        HERE.parent / "src" / "story" / "data" / "fixtures.ts",   # story AgentOutput
+        HERE.parent / "src" / "lite" / "streamSource.ts",         # lite LiteAdvice (feat-024)
+    ]
+    present = [p for p in frontends if p.exists()]
+    if not present:
+        pytest.skip("frontend contract files not present in this checkout")
+    for path in present:
+        text = path.read_text(encoding="utf-8")
+        for f in contract.REQUIRED_FIELDS:
+            assert f + ":" in text or f + " " in text, f"{path.name} missing field {f}"
 
 
 # === red line is enforced through the API (projected payload, not just the loop) ===============
