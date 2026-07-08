@@ -110,7 +110,11 @@
       input.files = dt.files;
       input.dispatchEvent(new Event('change', { bubbles: true }));
       try {
-        await poll(() => $('.upload-ready') || $('.upload-error'), 180000, 'ingest to settle');
+        // Wait budget (not an assertion): real LLM ingest of both seeds runs to ~200s+ (the
+        // backend allows 240s per brain call), and a HIDDEN preview tab throttles setTimeout
+        // ticks to ~1/min — 180s flaked on a passing upload (S2 run 4). 360s covers the
+        // backend envelope + tick granularity.
+        await poll(() => $('.upload-ready') || $('.upload-error'), 360000, 'ingest to settle');
       } catch (e) {
         return (results.inject = { pass: false, error: String(e) });
       }
@@ -171,7 +175,9 @@
       const composer = $('.composer-card');
       if (!composer) return (results.composer = { pass: false, error: 'no .composer-card' });
       const text = composer.innerText || '';
-      const input = composer.querySelector('textarea, input[type="text"]');
+      // Main ask input first (.composer-main-row) — `input[type="text"]` alone misses inputs
+      // with no explicit type attribute (caught live on the S2 gate run, 2026-07-08).
+      const input = composer.querySelector('.composer-main-row input, textarea, input[type="text"]');
       const prefill = input ? (input.value || input.placeholder || '') : '';
       const storyHits = STORY_NOUNS.filter((n) => text.includes(n) || prefill.includes(n));
       const out = { prefill, storyHits, pass: storyHits.length === 0 };
@@ -191,7 +197,8 @@
       if (closeBtn) closeBtn.click();
 
       const composer = $('.composer-card');
-      const input = composer && composer.querySelector('textarea, input[type="text"]');
+      const input =
+        composer && composer.querySelector('.composer-main-row input, textarea, input[type="text"]');
       const form = input ? input.closest('form') : null;
       if (!input || !form) {
         return (results.composerLive = { pass: false, error: 'no composer input/form to drive' });

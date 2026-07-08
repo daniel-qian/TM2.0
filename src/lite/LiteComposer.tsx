@@ -100,6 +100,7 @@ export function LiteComposer() {
       <form className="composer-card" onSubmit={handleSubmit}>
         <div className="composer-main-row">
           <input
+            type="text"
             value={question}
             placeholder={t.nexus.askPlaceholder}
             onClick={() => setComposerOpen(true)}

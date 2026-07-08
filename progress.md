@@ -268,3 +268,23 @@ avery loop 补 cite-before-number。
 - **前端门 023 后复驱(真浏览器+真 :8137 llm:minimax+真上传),又抓到一条 174 时代永远抓不到的崩溃**:`team_cards()` 一直发 `collaboration: list[str]`,但 transport.ts 契约误写 `string`、`liveRead()` 对它 `.trim()`——heuristic 从不产 collaboration,潜伏至 LLM 抽取第一次真发 → HomeScene 白屏。契约改 `string[]` + 适配(7ef9e31)。**复驱终态:teamRendered ✅(30 卡、Lin Qing/Chen Mingyuan 在、零血条)、postUploadClean ✅(0 story 名词)、emptyStateClean ❌(7 处)/detailIsLive ❌("Unknown teammate")——后两红按计划留给 S2**。黑名单再修一处假阳性:裸 "Wang" 撞真 seed 的 Wang Yuxuan,改用 story 文案签名 "Wang has it steady"。
 - **S1 边界守住**:除 live seam 的崩溃级 bug fix(transport.ts/teamDataSource.ts 各几行)外未碰 src/;story/lite 结构、rail/store/camera/terminal-stream 原样;**前端断言保持红**,留给 S2 feat-024(立墙)。
 - Notes:`.gitattributes` 新增——git 曾要对 tracked seed PDF 做 CRLF 归一化(会毁二进制,blob 已核完好);终端 GBK 控制台把 EM DASH/á 渲染成 "��" 是假象,U+FFFD 判定一律以代码断言为准,勿信肉眼;vite 会因 /@fs/ 取过的文件被编辑而全量重载页面 → 浏览器自驱相位全跑完之前别改文件(ephemeral 状态会清零)。
+
+## Update — 2026-07-08 · S2:feat-024 同仓立墙 + lite 3 屏,前端门六相位全绿
+
+> 一个 session 完成 S2(plan.md §S2 / ADR-0022 决策 1)。**完工判定全部是机器门输出,无自报**:前端门 verdict 六相位 `pass:true`、story 回归 29 步 26 拍零失败、后端 195 passed 零牵连、墙红灯实证 exit 1。分支 `feat/live-core-015-018`,commit 链:`b133210`(立墙+lite 壳+机器闸)→ 收盘 fixes+docs。main(2f76ceb)未动,S3 前不 merge。
+
+- **feat-024 ✅ done——同仓立墙 + lite 3 屏壳,修绿 022 前端断言**:
+  - **目录墙**:`src/story/**`(components/data/lib/store 四棵子树整树平移,story 内部相对 import 零改动;HomeScene/NexusScene 剥掉 live 分支——story 壳只在 story mode 挂载,分支不可达,DOM 逐拍验证不变)/ `src/lite/**`(产品壳,零 fixtures 依赖,类型全 lite 本地直typed 后端契约)/ `src/shared/**`(mode/modeStore/i18n/CSS 原子)。`?mode=` 语义=两个壳,App.tsx 是唯一合成根。
+  - **机器闸(本 feature 的灵魂)**:eslint flat config `no-restricted-imports`——lite→story、story→lite、shared→两侧 全 error;`noInlineConfig` 让行内 eslint-disable 对墙失效。**红灯实证:注入违规 import → `npm run lint` exit 1(报错带 ADR-0022 中文口径);移除 → exit 0**。已挂进 init.sh 第一步(AFK 门组成部分)。
+  - **global.css 拆分(52ecfb5 教训的解法)**:按行界切成 10 个顺序 chunk(shared 5 + story 4 + lite 新增 1),main.tsx 按原文件顺序 import——**shared/story chunk 串联与拆分前逐字节一致**(脚本验证 `concat==original`),cascade 零漂移;lite.css 唯一新增排最后。story 资产哈希不变(cleric_sprite_sheet-DD71vM_i.png 等全同)。
+  - **lite 3 屏**:TeamScreen(上传空态=live 自己的引导文案,左脊柱零 scripted 占位;上传后=briefing 真数顶栏(ingestion metrics)+人卡(InitialAvatar,红线:类型层无数字键+运行时 stripPersonNumbers)+项目卡+弱 handoffs(只从 blocker 派生))· RoomScreen(薄建:SSE 控制台+8 字段 LiteAdviceCard,复用 shared CSS chrome,不搬 1400 行剧场)· DetailOverlay(~150 行只读浮层,纯 live payload,**杀死 "Unknown teammate"**)。LiteComposer:预填空、@ 引用只来自 live 语料、提交 askLive→room(不进 story 剧本机)。
+  - **前端门 verdict(2026-07-08 实跑,真 uvicorn :8137 minimax+dashscope+llm:minimax、真上传两 tracked seed、浏览器自驱)**:`{"pass":true,"phases":{"emptyStateClean":true,"ingested":true,"teamRendered":true,"postUploadClean":true,"detailIsLive":true,"composerIsLive":true}}`——A 空态渗漏 **7→0**、C **30 人卡**含 Lin Qing/Chen Mingyuan 零血条、E 详情显真名零 Unknown、F2 动态 **18 帧 SSE 到 DOM+manifest+8 字段卡**(verdict 全文在 feature_list evidence)。
+  - **story 回归**:rail 26 拍/29 步 DOM 断言驱动(键盘通道+DOM 轮询)`{"pass":true,"totalSteps":29,"beatTotalOk":true,"failures":[]}`——idx1 主页 4 卡/8 人/6 项目/零 %、idx3 focus 簇=8、idx12 structured-output、idx16 grown 切换(CAUGHT AND SETTLED)、idx28 capabilities、末拍 26/26。
+  - **后端门复证(立墙动了前端,收盘复跑)**:`python -m pytest eval-harness -q` → **195 passed, 1 skipped in 474.94s**(=189 离线+6 seedgate 全绿;skip 见 Notes,与后端行为无关)。init.sh 绿(lint+tsc+build 459 模块)+ 双 target 构建 smoke 3/3。
+- **S1 立的动态断言补齐(顺手债)**:snippet 新增 `composerAskLive` 相位 F2(真提交→SSE 事件到帧→manifest→卡渲染),verdict 的 composerIsLive=F1 静态**且** F2 动态,漏跑=红。**它第一次跑就抓到两条真 bug**:
+  1. **transport.ts SSE 分帧 bug(致命,潜伏自 feat-017)**:记录切分只找 `'\n\n'`,而 sse-starlette 按 SSE 惯例发 CRLF(`od -c` 实证 `…"}\r\n\r\nevent: think…`)——**一条记录都切不出来**,流"正常"走完但零帧、advice 永远 null。S1 只立了静态检查,这条链路从未被真浏览器点过。修:`/\r?\n\r?\n/` 切分。修后实测 18-26 帧真渲染。
+  2. snippet 自身选择器 bug:`input[type="text"]` 匹配不到无显式 type 的 input——F1 一直静默拿空 prefill 恒绿。修:`.composer-main-row input` 主路径 + composer 补显式 type。
+- **Notes(不阻塞,S3 处理)**:
+  - `eval-harness/tests/test_service_contract.py::test_schema_field_list_matches_frontend_agentoutput` 因 fixtures.ts 移居 `src/story/data/` 路径失效 → **skip**(195+1s 的那个 s)。按"eval-harness 不动"纪律未顺手修;S3 应把该防漂移守卫重指 `src/story/data/fixtures.ts` + lite 侧真身 `src/lite/streamSource.ts`(LiteAdvice)。
+  - 隐藏 preview tab 的 Chrome 定时器节流(链式 setTimeout 可被压到 ~1 次/分钟)会拖慢 snippet 内部轮询——ingest settle 等待预算已放 360s(对齐后端 240s/call 包络+tick 粒度,断言本体未动),坑已记 live-frontend-gate.md。
+  - 本轮某次 ingest 中红线又拦到 M3 把评分文本抄进人字段(`person-score-text:Noah Williams`→整篇退 heuristic),红线在工作,非 flake。

@@ -154,11 +154,13 @@ export function createHttpTransport(base: string = apiBase()): LiveTransport {
             const { done, value } = await reader.read()
             if (done) break
             buffer += decoder.decode(value, { stream: true })
-            // SSE 记录以空行分隔；每条含 `event:` + `data:` 行。
-            let sep: number
-            while ((sep = buffer.indexOf('\n\n')) !== -1) {
-              const rawEvent = buffer.slice(0, sep)
-              buffer = buffer.slice(sep + 2)
+            // SSE 记录以空行分隔（LF-LF 或 CRLF-CRLF——sse-starlette 按 SSE 惯例发 CRLF，
+            // 只找 '\n\n' 一条记录都切不出来：流"正常"走完但零帧。S2 前端门相位 F2
+            //（askLive SSE 事件到帧）抓到的真 bug；od -c 实证 `…"}\r\n\r\nevent: think…`）。
+            let m: RegExpExecArray | null
+            while ((m = /\r?\n\r?\n/.exec(buffer)) !== null) {
+              const rawEvent = buffer.slice(0, m.index)
+              buffer = buffer.slice(m.index + m[0].length)
               const parsed = parseSseRecord(rawEvent)
               if (parsed) onEvent(parsed)
             }
