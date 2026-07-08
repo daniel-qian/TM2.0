@@ -355,3 +355,78 @@
   color: var(--ink-faint);
   font-size: 12px;
 }
+
+/* ── 顶栏 mode 开关（Story/Live）补样式（S4 · 试玩 bug 5「按钮风格丢失」）──────
+   根因：`.mode-switch-btn` 由 feat-017（fae493f，WIP 被 session limit 截断）引入却
+   从未配 CSS——拆分前 global.css 与拆分后 chunk 里都只有 `.mode-switch` 的 pointer-events，
+   无按钮样式，故 Story/Live 一直是浏览器默认 `<button>`（灰框），feat-024 lite 顶栏
+   首次把它摆到右上角显著位而暴露。**不是拆 chunk 的 cascade 漂移。**
+   修法：补齐为与 `.scene-tabs`/`.scene-tab` 同款药丸，仅在 lite 壳内生效——`.mode-switch`
+   是 story 顶栏也复用的 shared chrome，而 story 是「冻结路演/视频资产」（ADR-0022 决策1），
+   其外观一像素不动，故此修 scope 在 `.lite-shell` 内，不落 shared/00-base.css。 */
+.lite-shell .mode-switch {
+  display: flex;
+  gap: 6px;
+  padding: 5px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: rgba(255, 253, 248, 0.78);
+  box-shadow: var(--shadow-soft);
+  backdrop-filter: blur(12px);
+}
+
+.lite-shell .mode-switch-btn {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 13px;
+  transition:
+    background var(--fast) ease,
+    color var(--fast) ease,
+    border-color var(--fast) ease;
+}
+
+.lite-shell .mode-switch-btn:hover,
+.lite-shell .mode-switch-btn:focus-visible {
+  background: rgba(29, 27, 23, 0.06);
+  color: var(--ink);
+  outline: none;
+}
+
+.lite-shell .mode-switch-btn.is-active {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.lite-shell .mode-switch-btn:focus-visible {
+  outline: 2px solid rgba(82, 123, 145, 0.75);
+  outline-offset: 2px;
+}
+
+/* ── Your team 人栏限高自滚（S4 · 首页 UI bug 4）──────────────────────────────
+   真 ingestion 下 people 可达 20+，`.home-lane-people` 是 auto-fill grid 无高度上限，
+   整列（连同外层 `.home-scroll`）被撑爆，projects 栏被推到很深的滚动位。给 people
+   栏自己的有界滚动容器：限高 + 自滚，projects 栏立即可达、整页高度回收。
+   仅在 lite 壳生效——`.home-lane-people` 是 shared 类（story HomeScene 也用，且冻结），
+   不动 story。padding/负 margin 抵消：给内滚条与卡片 focus 描边留呼吸，同时保持人栏
+   与下方 projects 栏的外缘对齐不偏。 */
+.lite-shell .home-lane-people {
+  max-height: min(52vh, 520px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 4px;
+  margin: -4px -4px 0;
+  /* 有界容器暗示（可滚）：极轻的内描边 + 圆角，读作一个盛人卡的托盘 */
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  scrollbar-width: thin;
+}
+
+/* 只有真的溢出（内容高于上限）时才显托盘感——空间够时无边框、无视觉负担。
+   overflow:auto 自带此行为：不溢出即无滚条；描边保持透明即可。 */
+.lite-shell .home-lane-people:hover {
+  border-color: var(--rule);
+}

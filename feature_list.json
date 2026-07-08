@@ -247,7 +247,7 @@
     {
       "id": "feat-025",
       "name": "lite 模块补齐(Playbooks 空态 + team map / room 画板按 S4 拍板)",
-      "description": "Danny 2026-07-09 试玩反馈 item 1/2/3:lite 缺 Playbooks(要求至少空态显示)、team map、the room 画板(拖拽/缩放)。⚠ 开工前置:S4 考古 triage(.issues/live-polish-0709/triage-report.md)出'拍板 vs 遗漏'结论 + Danny 拍板各项范围(空态/轻建/移植)。gate 先行:新模块断言先进 live-frontend-gate.snippet.js 必红再修绿。墙不打洞(移植走 shared,lite 永不 import story)。见 .issues/live-polish-0709/kickoff-s5.md。",
+      "description": "Danny 2026-07-09 试玩反馈 item 1/2/3:lite 缺 Playbooks(要求至少空态显示)、team map、the room 画板(拖拽/缩放)。⚠ 开工前置:S4 考古 triage(.issues/live-polish-0709/triage-report.md)出'拍板 vs 遗漏'结论 + Danny 拍板各项范围(空态/轻建/移植)。gate 先行:新模块断言先进 live-frontend-gate.snippet.js 必红再修绿。墙不打洞(移植走 shared,lite 永不 import story)。见 .issues/live-polish-0709/kickoff-s5.md。 【S4 考古结论 2026-07-09,triage-report.md】三项均=Danny 2026-07-07 亲拍的 v1 范围排除(拍板排除,非开发遗漏):双一手源 ADR-0022 决策1(story/lite 分区)+ 救援 plan §0 岔口2「地图/Playbooks/多人 Chat=story-only」;Playbooks 另 defer v2(feat-019)。补齐=重开产品范围的新决定,待 Danny 拍 Q1-Q3(triage §5):Playbooks→空态屏(推荐,文案锚未来能力,不移植 story);team map→轻量分组视图(推荐,顺带解 Bug4 列表分类;story 空间 map=rail 冻结+需后端关系抽取+破墙,否);room 画板→轻建(PanZoomCanvas 41 行薄壳提 shared,依赖 react-zoom-pan-pinch 已在 package.json;不搬 1629 行剧场 NexusScene)。",
       "dependencies": [
         "feat-024"
       ],
@@ -257,7 +257,7 @@
     {
       "id": "feat-026",
       "name": "lite 定位叙事页/卡 + 能力边界 mock",
-      "description": "Danny 2026-07-09 反馈 item 6/7:lite 当下=给国内融资团队可展示可试玩的产品(非盈利),日后=为公司量身定制的 custom agent 服务(接公司数据+安全私有部署)——补说明 surface;并把'接入数据后的能力边界'做成诚实标注的 mock 预览(agent file system/定制 skills/tools/SOP/自动批量后台 loop)。参考资料 4 篇见 .issues/live-polish-0709/plan.md §2。红线在 mock 数据同样成立。可与 feat-025 并行(worktree)。见 kickoff-s6.md。",
+      "description": "Danny 2026-07-09 反馈 item 6/7:lite 当下=给国内融资团队可展示可试玩的产品(非盈利),日后=为公司量身定制的 custom agent 服务(接公司数据+安全私有部署)——补说明 surface;并把'接入数据后的能力边界'做成诚实标注的 mock 预览(agent file system/定制 skills/tools/SOP/自动批量后台 loop)。参考资料 4 篇见 .issues/live-polish-0709/plan.md §2。红线在 mock 数据同样成立。可与 feat-025 并行(worktree)。见 kickoff-s6.md。 【S4 triage Q4 2026-07-09】feat-025 三模块补齐与本叙事应绑做:补齐形态一律锚『展示未来 custom-agent 能力』、诚实标 coming-soon/mock,而非当下可用功能(triage-report §5 Q4)。",
       "dependencies": [
         "feat-024"
       ],
