@@ -5,7 +5,10 @@
 
 ## Current State
 
-**Last Updated:** 2026-07-03 晚（投资人路演 landing 重构已合并 main，2588dc7）
+**Last Updated:** 2026-07-07（**S1 执行完毕**：feat-022 done（双层机器门，出生即红——红是成功）+ feat-023 done（LLM 抽取修绿全部后端断言，`-m seedgate` 6 passed）；**前端断言按计划保持红 = S2 feat-024 的活**；见文末 `## Update — 2026-07-07 · S1` + 根 `session-handoff.md` S1 收盘版）
+**上一条：** 2026-07-07 晚（救 15–20：确诊 + grill 六岔口 Danny 全拍 → **ADR-0022** + feat-021 done / feat-022..024 teed up；见文末 `## Update — 2026-07-07` + `.issues/live-rescue-0707/plan.md`）
+**上一条：** 2026-07-05（双线战略圆桌：架构锁定，feat-015..020 teed up；见 `## Update — 2026-07-05` + `docs/strategy/2026-07-05-dual-line-strategy-roundtable.md`）
+**上一条：** 2026-07-03 晚（投资人路演 landing 重构已合并 main，2588dc7）
 **本日第二条线（worktree `elated-noether-7807c8` → 已合并+清理）：** landing 18 屏 → 7 屏投资叙事，为今晚证券金融路演。
 **已上线 production：<https://avery-jade.vercel.app/?lang=zh>**。要点：**ADR-0018**（人情味从产品真理降为红线；产品真理
 = 管理决策层；数字新规：模型形态 mock 可上页/代码注释标注，结果形态数字加页面微标注，实测口径仍禁）——CONTEXT.md +
@@ -19,7 +22,7 @@ git 已推无法收回；副作用（tm2 production 自动部署了未审字主�
 （tm2-osj7dqiwv）。Danny 审字通过后 `vercel promote` 最新部署即可上线新主页。
 
 （上一条：feat-014 卡片式今日主页 done；详见下方 `## Update — 2026-07-03`）
-**Active Feature:** 无 active 编码 feature。feat-014（Morning Desk 主页，GH #9）done 且已在 origin（f4bde81 随路演线 push 带上 + 59461bb UI 修复）；tm2 production 仍停在审字前部署，审字后 `vercel promote` 即上新主页。
+**Active Feature:** 无 active 编码（2026-07-05 是战略圆桌，只产出决策+文档）。**下一步 = 启动 feat-015 / feat-019 pack-authoring / feat-020 三条并行 AFK 线**（见文末 `## Update — 2026-07-05` + `.issues/feat-01x/kickoff.md`）。feat-014（Morning Desk 主页，GH #9）done 且已在 origin（f4bde81 随路演线 push 带上 + 59461bb UI 修复）；tm2 production 仍停在审字前部署，审字后 `vercel promote` 即上新主页。
 **feat-014 真机目测回环已闭（2026-07-03 晚）**：Danny 抓到两处 UI 重叠（composer 随滚动漂进内容 / 依据签压字且同句三卡重复）→ 修复 59461bb（滚动下放 `.home-scroll`、composer 锚回视口底；依据签只在第一张关联项目卡以文档流 chip 出现）→ DOM 断言复验 + init.sh 复绿 + 已 push。剩余 HITL 只有审字（fixtures.home.ts）。
 上一轮（2026-07-01）状态：本 session 详情见下方 `## Update — 2026-07-01` 三节 + 完整运行日志
 `.handoff/partner-integration-0701.md`。要点：合伙人 6 个 SCN 落进 eval（解锁 non_danny 闸）、真跑完成（诚实结论
@@ -189,3 +192,99 @@ avery loop 补 cite-before-number。
 - 全部新英文 copy `⚠ 待 Danny 审字`（fixtures.home.ts / railStore captions / map-back-chip / alertPills 原有）。
 - 真机目测后决定是否 push（push = tm2 自动部署）。
 - 文案微决策：hh_pitch 的 "goes out today" 与依据签重复；"Handled today" 词义（claire 2c-2，已分开计数）。
+
+## Update — 2026-07-03 · 商业模式对齐（grilling session）→ ADR-0019
+- **Danny + Claude 逐条 grilling 合伙人 revenue deck（2026-07-02 版）**，采纳为唯一口径；
+  旧"advisor 免费 + playbooks 付费"作废 → **ADR-0019**（四层付费、无免费层、订阅为主体、按 manager 计费）。
+- 磨出三件带给 Cythia 的东西（`docs/commercial-alignment-for-cythia-20260703.md` + `.zh.md` 中文 M3 版，可直接转发）：
+  ①终局漏斗 60/20/15/5 ≠ 增长期 mix（补三阶段表 + 两条 attach 隐含假设明文化）；
+  ②benchmark 三条隐私边界（组织级 only / opt-in / 样本不足不出数）；
+  ③token 机制（席位含合理用量、BYO-API=企业版信任功能非折扣、每公司最低席位数、数据源分档）。
+- 领域落盘：`CONTEXT.md` 新增 **Commercial language** 六词条 + Capabilities 改"随席位订阅不单卖"（已 committed）。
+  核对当晚路演页：盈利模式屏与 deck 数字一致、算术复算全对、"工具免费"句已消失。
+- **文件史注**：ADR-0019 + Cythia 清单曾于 07-03 落盘、未及 commit 被并行 line 清理误扫；
+  07-05 Danny 确认后原样恢复并单独提交（决策本体期间一直安全在 committed CONTEXT.md）。
+
+## Update — 2026-07-05 · 双线战略圆桌（架构锁定 → feat-015..020 teed up）
+
+> 战略圆桌（非编码 session）。缘起：路演 + 酒店/建筑洽谈，定双线并行。完整记录 `docs/strategy/2026-07-05-dual-line-strategy-roundtable.md`；决策 `docs/adr/0020-*`（graduate + seam）+ `docs/adr/0021-*`（两引擎 + 换皮 + 双端）；术语 `CONTEXT.md` 新增 **Product surface** 组。
+
+- **核心反转**：现在的 demo 是录像回放、不接真实输入——两条线都缺"接真实输入→出真 Avery 回答"这同一能力，而它 80% 已在 `eval-harness`。
+- **锁定决策（10 条，逐条 grill）**：Line A=真 LLM 顾问复用 eval-harness；一套内核+垂直包+皮肤；**双端**（境内中文+海外英文）；企业 demo=可信 mock 集成+真顾问核；内核+首个垂直**并行**起跑；**酒店先行（婚宴亮点）**；垂直包混合 authoring；**graduate 现有 Vite demo→Avery Live**（story+live 双模，两道 seam），不新建 app，**ADR-0001 被 ADR-0020 超越**；**内核=两个引擎**（advisor 已存在 + ingestion 新建更重）；v1 ingestion **一步到位全向量 RAG**。
+- **内核=两引擎+两 seam**：advisor（eval-harness）+ ingestion（上传→解析→红线安全抽取→全向量 RAG→填 Your team→喂回答卡）；`StreamSource` + `TeamDataSource` 两道 seam（story 脚本 / live 真数据），seam 同时是 AFK 测试缝。
+- **红线扩面**：ingestion 抽取阶段内建红线过滤器（简历→人卡只到定性，绝不评分/排名/画像）；红线扫描从脚本 fixtures 扩到 **live 产出**。
+- **新工作项 feat-015..020**（feature_list.json，全 not-started，JSON 已 `node` 验证）+ 各 `.issues/feat-01x/kickoff.md`（AFK 冷启动可读）：
+  - feat-015 Agent service（FastAPI+SSE 包 eval-harness）← 立即可起
+  - feat-016 Ingestion engine（大核）← feat-015
+  - feat-017 Frontend graduate→Avery Live（两 seam+i18n）← 015+016
+  - feat-018 双端部署 ← 017
+  - feat-019 酒店换皮（pack+skin+demo）← 016+017；**pack-authoring 立即可并行起**
+  - feat-020 建筑(byggsamverkan)调研 + 办公软件集成可行性 ← 立即可起
+- **D5 并行三条立即 AFK 起跑线**：feat-015 + feat-019 的 pack-authoring + feat-020。
+- **客户事实校正（07-05 晚，Danny）**：Line B 两真实客户 = **三亚绿杉壹居度假酒店**（度假酒店，婚宴是业务线之一，非“婚庆公司”；包按酒店建模、婚宴作亮点）+ **byggsamverkan**（瑞典建筑，https://www.byggsamverkan.se/ ；栈=Teams/Outlook/CAD/一款建筑项目软件）。**国内调研走 `/mmx-cli`、境外走普通 web；调研结果落 `D:\Boyle\research\`（项目外，非项目内）**（memory `domestic-research-use-mmx-cli`）。feat-019/020 kickoff + feature_list + strategy/ADR-0021/CONTEXT 已同步。
+- **feat-020 ✅ done（07-05，AFK 线，核心+supplement）**：建筑集成可行性 + Skeppsviken 画像 → `D:\Boyle\research\skeppsviken-construction\`。★反转已解：`byggsamverkan.se` = PM 软件 Next Project 厂商页、非客户官网；**真实客户 = Skeppsviken**（西瑞典建筑+地产集团，约 152 人，自营土建）。四款软件全开放 API；roadmap lite=导出上传、企业 live 优先 Graph>Next Project>APS。余 2 项待合伙人一句话（PM 云/桌面、CAD 产品）。feature_list evidence 详录。
+- **feat-019 ✅ 研究+包草稿 slice done（07-05，AFK 线）**：客户核实=三亚绿杉壹居度假酒店（海棠湾豪华度假村，2024-12 开业，阳光保险投资，211 房+30 别墅，962㎡ 草坪=婚宴 showcase）；外置 `D:\Boyle\research\sanya-lushan-yiju-hotel\`（00-findings + pack-draft：5 案+5 PB+6 信号+5 护栏，红线零人评分）。待 feat-016/017 做 skin+demo+集成。HITL：Danny 补 9 条内行 know-how。
+- **feat-015 ✅ done（07-05，AFK 门全绿）**：agent service `eval-harness/service/`（FastAPI+SSE 包 engine，8 字段投影+API 边界红线，3 端点）；pytest 141 passed 零回归 + MiniMax-M3 真冒烟过。**代码在 worktree（branch worktree-agent-ac44e3f46118f46ca），未 commit、待整合进 main**。
+- **★ D5 三条并行线全部回（07-05）**：feat-015 ✅ / feat-019 研究+包 slice ✅ / feat-020 ✅。
+- **★ AFK 串行链 `feat/live-core-015-018` 全线完成（07-05）**：f965bad docs → 4517f0e feat-015（141）→ 4e1bac0 feat-016（169）→ fae493f/e1b890d feat-017 ✅（story 零回归+rail seek+live+红线净+zh=M3）→ **feat-018 ✅ done（双端 config+runbook，未 deploy；dual-build 3/3 + pytest 169 + ingest HTTP 13/13 + 真 MiniMax 冒烟；补齐 ingestion HTTP 面 /ingest·/team·/advise 接 context）**。**015→018 核心齐活**。真部署/域名/promote/protection/审字 = Danny HITL。主 main 不动，等 Danny 分支验收+merge。
+- **AFK 硬约束入 memory**（`afk-self-loop-minimize-danny`）：dev+test 自跑自验自修，HITL 只留审字/价值观/授权/评分/promote。
+- **不动的约束**：红线 ADR-0015/0018、决策层真理、Avery 品牌、商业模式（口径见 committed CONTEXT.md § Commercial language，sampler≠免费层，护栏见 ADR-0021 §6；ADR-0019 已于 07-05 恢复落盘并提交）、中文经 M3、**story mode 保留=不动 rail 回放机器**（ADR-0003/0006/0012/0013/0014）。
+- **旧账未变**：feat-014 审字 + tm2 promote 仍是 Danny 的 HITL（见 `session-handoff.md` §4）。
+
+## Update — 2026-07-05 · feat-018 双端部署（AFK 线，config+smoke+runbook，未 deploy）
+
+> ADR-0021 §5。**产出 = 配置 + 冒烟 + runbook，NOT 实际部署**（域名/promote/protection/真 key 全 Danny HITL）。分支 `feat/live-core-015-018`，未 commit，待整合。
+
+- **前端双 target 构建配置**：`VITE_AVERY_MODE`（story/live）+ 新增 `VITE_AVERY_LOCALE`（en/zh，境内 ZH 默认，`?lang=` 仍可覆盖，镜像 mode.ts）+ `VITE_AVERY_API_BASE`。`vite.config.ts` 给每个 target 打 `window.__AVERY_BUILD__` 戳（可 devtools 目测 + 冒烟无歧义断言）。`.env.example`（前端，无密钥）+ `vercel.json`（海外 EN，**与 landing 分离的独立项目**）。
+- **后端 agent service 部署配置**：`eval-harness/Dockerfile` + `.dockerignore`（**一个镜像双 host，仅 env 换脑**：境内 minimax/deepseek · 海外 claude）；`service/.env.example`（brain+embeddings+retrieval+pgvector 全 env 矩阵模板，key 字段空）。
+- **补齐 ingestion HTTP 面**（feat-016 显式留给 feat-018 的活）：`service/ingest_api.py`（`POST /ingest` · `GET /team/{id}`，薄包 `ingest_paths`+registry，compose-not-modify）+ app.py 挂载 + 把 `company_context_id` 经 seam 接进 `/advise`（上传→当场看团队长出→顾问答落在上传事实，端到端通）。
+- **双端冒烟门 `scripts/deploy/dual-smoke.sh`**：一条命令断言两侧。**AFK 门全绿**：前端 3 target（story-default 保留 + overseas-en + domestic-zh）构建+戳全对；后端契约电池 44 passed + ingestion HTTP 端到端（含红线：诱导简历只抽定性、人卡零评分键）；**真 MiniMax（境内）契约冒烟 1 passed**（37s）。**全仓 pytest 169 passed 零回归**；`init.sh` 绿（默认仍 story/en 安全默认）。
+- **runbook**：`docs/deploy/dual-deploy-runbook.md`（逐 target step + env 矩阵单一真源 + HITL 清单）。**Danny HITL**：域名、境内/海外主机开通、真 key（不进 git）、`docker build`+容器 /health 冒烟（本机 Docker daemon 未起）、Vercel 项目 Root=repo root（≠landing）、境内静态托管上传 dist+SPA fallback、生产 promote、deployment protection 面板给融资团队访问（别锁死 SAML）、可选 vector RAG 开关（选 embeddings+pgvector+3 个 env）。
+- **无密钥入 git**：`.env.example` 模板 key 字段空、pgvector 用 CHANGEME 占位；真 `eval-harness/.env`（有 MiniMax/DeepSeek key）gitignored+未 tracked，已核。
+- **源码改动（surgical，5 文件）**：`src/i18n/index.ts`（+VITE_AVERY_LOCALE 构建默认）· `src/vite-env.d.ts`（env 类型）· `src/main.tsx`（曝 __AVERY_BUILD__）· `vite.config.ts`（打戳）· `eval-harness/service/app.py`（挂 ingest router + 接 context seam）。engine（loop/redline/brain/ingest）零改写。
+
+## Update — 2026-07-07 · 救 15–20:确诊 + grill 拍板(ADR-0022;本 session 零实现代码)
+
+- **使命完成**:① 复现+确诊「15–20 为什么临近崩盘」② grilling 六岔口逼出 Danny 亲拍的补救计划。全记录:`.issues/live-rescue-0707/plan.md`(决策表)+ 根 `session-handoff.md` 07-07 收盘版(确诊全文)+ **ADR-0022**。
+- **确诊要点(全 verified)**:管道真、门面假——(a) story 渗漏 3 缺口:live 空态左脊柱渲染 scripted 占位(眉题 "FROM YOUR UPLOADS" 下是 Venus/Kate/Jason)、TeamComposer 整个在缝外(live 提问进 story 剧本机,handoff §3 没抓到的新点)、详情页只查 fixtures(live 卡必 Unknown);(b) 抽取抓瞎:两个官方 seed 实测 → xlsx 20 人表出 1 个假人 "No."、pdf roadmap 出 1 个文件名项目;强制修正路由后 roster 启发式仍出 3 假人(Name 列焊死第 0 列);(c) 174 绿没拦住 = 测试 fixture 按抽取器假设反向定制(数据层 maker==checker)+ live 从未被人点过。**好消息**:advisor+RAG 腿端到端真跑通(语义 recall 命中上传 xlsx 行+cite+红线全 hold),红线零违规。
+- **grill 拍板(六岔口)**:C 同仓立墙(story/lite/shared + ESLint 机器边界)/ v1 lite 3 屏+薄详情 / LLM 主抽(M3+DeepSeek 现实可用,claude 仅无 key 代码路径——Danny 纠正记忆,勿再假设)/ 双层机器门(agent 当第一个用户,Danny 只抽查)/ 未提交改动都提+分支继续 / Gate 先红→双线并行。
+- **落盘**:commit `53e0ef6`(feat-021 真向量,174 绿含真 API 证据)+ `4e90966`(fix:Story/Live 开关可点 + 剧本 rail 只挂 story)+ 本 docs 批;feature_list 新增 feat-021(done)/022/023/024(not-started);kickoff ×3。分支 `feat/live-core-015-018` 已 push;**main(2f76ceb)不动**,gate 绿+Danny 验收后才 merge。
+- **下一步**:S1 = feat-022(gate 先立必红)+ feat-023(LLM 抽取修绿后端)→ S2 = feat-024(立墙修绿前端+story 回归)→ S3 合流验收 merge。
+- Notes:环境坑复确认——headless 预览 rAF 停摆,场景切换/动画不可机测,断言走 DOM 旁路;07-07 工作树曾因分支切换被自动 stash(已恢复+落 commit+drop)。
+
+## Update — 2026-07-07 · S1:feat-022 门立(必红)+ feat-023 LLM 抽取修绿后端
+
+> 一个 AFK session 完成 S1 两步(plan.md §S1)。**红→绿的全程都有机器证据,无自报**。分支 `feat/live-core-015-018`,commit 链:`4398caa`(feat-022 门,出生即红)→ `0d1981c`(.gitattributes 钉二进制 fixture)→ `ad7ad13`(feat-023 修绿)→ 收盘 docs。main(2f76ceb)未动。
+
+- **feat-022 ✅ done——双层机器门,立完即红(红是成功,ADR-0022 §3)**:
+  - 后端 `eval-harness/tests/test_seed_gate.py`:离线层(无 key 绿,heuristic 强制,断安全不断质量)+ 集成层 `@seedgate`(真 uvicorn :8137、真 POST /ingest 两个官方 seed(已拷 tracked:`tests/fixtures/seed/`)、具名断言)。**立门时实测 3 红**(xlsx 具名团队=1 假人 "No." / 假人黑名单命中 / pdf=1 文件名项目)**3 绿**(人卡红线在真线上稳 / 无 U+FFFD / advise cite 命中 Lin Qing 行——07-07 晚漏检的检索质量当日复测已命中,留作回归守卫)。
+  - 前端 `scripts/gates/live-frontend-gate.{md,snippet.js}`(浏览器自驱协议+DOM 断言包,story 名词黑名单、transition:none 旁路、setTimeout 轮询防 rAF 停摆)。实跑 verdict **RED**:空态 7 处 story 渗漏(Venus/Smart Shopping Guide/Kate/Jason/Wang/Venus Pitch/Lin Qing story 文案)、1 假人卡、点卡="Unknown teammate" 实证。**黑名单口径坑已埋点**:Lin Qing/Chen Mingyuan/Sun Xiaomei/Zheng Zixuan 四名 story 与真 seed 复用不得按名入黑;"New Retail" 不入黑(真 seed 有合法项目 "New Retail Smart Shopper Mini Program")。
+- **feat-023 ✅ done——LLMExtractor,完工判定=022 后端断言全绿**:`pytest -m seedgate` → **6 passed(7:07)**:xlsx→**20/20 人**(Lin Qing Design Director:8 / Chen Mingyuan Founder-CEO:7,行号全对)、假人=0、pdf 单传→**2 项目**(LogiPulse Phase 1 done / Phase 2 on-track)、人卡零数字、无 mojibake、advise cite 命中。
+  - 实现:`avery/ingest/llm_extract.py`(接 pluggable brain=M3 默认/DeepSeek 可切;行号喂入→一次结构化输出多实体,**每实体带来源行号**;三层红线=白名单 sanitizer(走私评分键只杀单条)→抽取器内 `validate_extraction` 门(正文评分整篇退兜底)→pipeline 复验;任何失败退 HeuristicExtractor,离线门永绿;正则未修=兜底原样)+ `service/extractor_factory.py`(`AVERY_EXTRACTOR` auto/llm/heuristic;claude 仍是无 key 代码路径未假设)+ parse.py mojibake/连字清洗 + /health 曝 extractor。
+  - **两个真问题当场修**:① M3 是 reasoning 模型,`<think>` 吃 max_tokens 截断 JSON 尾巴 → 抽取 brain 32k 输出预算 + 逐窗容错(单窗失败重试一次后跳过,全败才退兜底);② provider 调用无超时会吊死 /ingest(旧探针实测吊死 20 分钟)→ 240s per-call timeout(`AVERY_EXTRACT_TIMEOUT_S`)。
+  - 离线电池 `tests/test_llm_extract.py` 13 passed(FakeBrain 零网络,断机器不断模型:cite 链、红线分层、退化路径、表头假人/文件名标题拒收、factory 三档)。
+- **验证态收盘**:init.sh 绿;离线 190 全绿(174 基线+14 llm 电池+2 offline seed);集成 `-m seedgate` 6 绿(数字见 handoff §2)。
+- **门抓到一次真 flake,根因已定谳(这一段是 S1 最有价值的产出之一)**:pdf 项目断言专跑绿/复跑红。给 gate fixture 加 server 日志+给抽取器 fallback 加 logging 后定位:**不是网络——是红线在工作**。LogiPulse pdf 团队表带人均 Allocation %(~10%–80%),M3 有概率把 "80%" 抄进人的字段 → `redline_extract` person-score-value ×8 → 整篇退 heuristic → 文件名项目。修法**不改弱红线**:sanitizer 层剥离 rating 形数字(与前端剥离哲学一致,门仍是后盾;纯 % 条目整条丢弃)+ prompt 明令禁抄 allocation % + 词库类违规(如 "low performer")仍整篇回退(有测试钉住)。顺手的强壮化:两 seed 收进单窗(220→320 行/窗)、逐窗 3 次尝试带退避、抽取 brain 240s per-call timeout、uvicorn 日志落 `runs/seed-gate-uvicorn.log`(下次 flake 不再盲修)。
+- **前端门 023 后复驱(真浏览器+真 :8137 llm:minimax+真上传),又抓到一条 174 时代永远抓不到的崩溃**:`team_cards()` 一直发 `collaboration: list[str]`,但 transport.ts 契约误写 `string`、`liveRead()` 对它 `.trim()`——heuristic 从不产 collaboration,潜伏至 LLM 抽取第一次真发 → HomeScene 白屏。契约改 `string[]` + 适配(7ef9e31)。**复驱终态:teamRendered ✅(30 卡、Lin Qing/Chen Mingyuan 在、零血条)、postUploadClean ✅(0 story 名词)、emptyStateClean ❌(7 处)/detailIsLive ❌("Unknown teammate")——后两红按计划留给 S2**。黑名单再修一处假阳性:裸 "Wang" 撞真 seed 的 Wang Yuxuan,改用 story 文案签名 "Wang has it steady"。
+- **S1 边界守住**:除 live seam 的崩溃级 bug fix(transport.ts/teamDataSource.ts 各几行)外未碰 src/;story/lite 结构、rail/store/camera/terminal-stream 原样;**前端断言保持红**,留给 S2 feat-024(立墙)。
+- Notes:`.gitattributes` 新增——git 曾要对 tracked seed PDF 做 CRLF 归一化(会毁二进制,blob 已核完好);终端 GBK 控制台把 EM DASH/á 渲染成 "��" 是假象,U+FFFD 判定一律以代码断言为准,勿信肉眼;vite 会因 /@fs/ 取过的文件被编辑而全量重载页面 → 浏览器自驱相位全跑完之前别改文件(ephemeral 状态会清零)。
+
+## Update — 2026-07-08 · S2:feat-024 同仓立墙 + lite 3 屏,前端门六相位全绿
+
+> 一个 session 完成 S2(plan.md §S2 / ADR-0022 决策 1)。**完工判定全部是机器门输出,无自报**:前端门 verdict 六相位 `pass:true`、story 回归 29 步 26 拍零失败、后端 195 passed 零牵连、墙红灯实证 exit 1。分支 `feat/live-core-015-018`,commit 链:`b133210`(立墙+lite 壳+机器闸)→ 收盘 fixes+docs。main(2f76ceb)未动,S3 前不 merge。
+
+- **feat-024 ✅ done——同仓立墙 + lite 3 屏壳,修绿 022 前端断言**:
+  - **目录墙**:`src/story/**`(components/data/lib/store 四棵子树整树平移,story 内部相对 import 零改动;HomeScene/NexusScene 剥掉 live 分支——story 壳只在 story mode 挂载,分支不可达,DOM 逐拍验证不变)/ `src/lite/**`(产品壳,零 fixtures 依赖,类型全 lite 本地直typed 后端契约)/ `src/shared/**`(mode/modeStore/i18n/CSS 原子)。`?mode=` 语义=两个壳,App.tsx 是唯一合成根。
+  - **机器闸(本 feature 的灵魂)**:eslint flat config `no-restricted-imports`——lite→story、story→lite、shared→两侧 全 error;`noInlineConfig` 让行内 eslint-disable 对墙失效。**红灯实证:注入违规 import → `npm run lint` exit 1(报错带 ADR-0022 中文口径);移除 → exit 0**。已挂进 init.sh 第一步(AFK 门组成部分)。
+  - **global.css 拆分(52ecfb5 教训的解法)**:按行界切成 10 个顺序 chunk(shared 5 + story 4 + lite 新增 1),main.tsx 按原文件顺序 import——**shared/story chunk 串联与拆分前逐字节一致**(脚本验证 `concat==original`),cascade 零漂移;lite.css 唯一新增排最后。story 资产哈希不变(cleric_sprite_sheet-DD71vM_i.png 等全同)。
+  - **lite 3 屏**:TeamScreen(上传空态=live 自己的引导文案,左脊柱零 scripted 占位;上传后=briefing 真数顶栏(ingestion metrics)+人卡(InitialAvatar,红线:类型层无数字键+运行时 stripPersonNumbers)+项目卡+弱 handoffs(只从 blocker 派生))· RoomScreen(薄建:SSE 控制台+8 字段 LiteAdviceCard,复用 shared CSS chrome,不搬 1400 行剧场)· DetailOverlay(~150 行只读浮层,纯 live payload,**杀死 "Unknown teammate"**)。LiteComposer:预填空、@ 引用只来自 live 语料、提交 askLive→room(不进 story 剧本机)。
+  - **前端门 verdict(2026-07-08 实跑,真 uvicorn :8137 minimax+dashscope+llm:minimax、真上传两 tracked seed、浏览器自驱)**:`{"pass":true,"phases":{"emptyStateClean":true,"ingested":true,"teamRendered":true,"postUploadClean":true,"detailIsLive":true,"composerIsLive":true}}`——A 空态渗漏 **7→0**、C **30 人卡**含 Lin Qing/Chen Mingyuan 零血条、E 详情显真名零 Unknown、F2 动态 **18 帧 SSE 到 DOM+manifest+8 字段卡**(verdict 全文在 feature_list evidence)。
+  - **story 回归**:rail 26 拍/29 步 DOM 断言驱动(键盘通道+DOM 轮询)`{"pass":true,"totalSteps":29,"beatTotalOk":true,"failures":[]}`——idx1 主页 4 卡/8 人/6 项目/零 %、idx3 focus 簇=8、idx12 structured-output、idx16 grown 切换(CAUGHT AND SETTLED)、idx28 capabilities、末拍 26/26。
+  - **后端门复证(立墙动了前端,收盘复跑)**:`python -m pytest eval-harness -q` → **195 passed, 1 skipped in 474.94s**(=189 离线+6 seedgate 全绿;skip 见 Notes,与后端行为无关)。init.sh 绿(lint+tsc+build 459 模块)+ 双 target 构建 smoke 3/3。
+- **S1 立的动态断言补齐(顺手债)**:snippet 新增 `composerAskLive` 相位 F2(真提交→SSE 事件到帧→manifest→卡渲染),verdict 的 composerIsLive=F1 静态**且** F2 动态,漏跑=红。**它第一次跑就抓到两条真 bug**:
+  1. **transport.ts SSE 分帧 bug(致命,潜伏自 feat-017)**:记录切分只找 `'\n\n'`,而 sse-starlette 按 SSE 惯例发 CRLF(`od -c` 实证 `…"}\r\n\r\nevent: think…`)——**一条记录都切不出来**,流"正常"走完但零帧、advice 永远 null。S1 只立了静态检查,这条链路从未被真浏览器点过。修:`/\r?\n\r?\n/` 切分。修后实测 18-26 帧真渲染。
+  2. snippet 自身选择器 bug:`input[type="text"]` 匹配不到无显式 type 的 input——F1 一直静默拿空 prefill 恒绿。修:`.composer-main-row input` 主路径 + composer 补显式 type。
+- **Notes(不阻塞,S3 处理)**:
+  - `eval-harness/tests/test_service_contract.py::test_schema_field_list_matches_frontend_agentoutput` 因 fixtures.ts 移居 `src/story/data/` 路径失效 → **skip**(195+1s 的那个 s)。按"eval-harness 不动"纪律未顺手修;S3 应把该防漂移守卫重指 `src/story/data/fixtures.ts` + lite 侧真身 `src/lite/streamSource.ts`(LiteAdvice)。
+  - 隐藏 preview tab 的 Chrome 定时器节流(链式 setTimeout 可被压到 ~1 次/分钟)会拖慢 snippet 内部轮询——ingest settle 等待预算已放 360s(对齐后端 240s/call 包络+tick 粒度,断言本体未动),坑已记 live-frontend-gate.md。
+  - 本轮某次 ingest 中红线又拦到 M3 把评分文本抄进人字段(`person-score-text:Noah Williams`→整篇退 heuristic),红线在工作,非 flake。

@@ -1,0 +1,7 @@
+# Binary fixtures — never CRLF-normalize (a normalized PDF/XLSX no longer parses).
+*.pdf  binary
+*.xlsx binary
+*.docx binary
+*.png  binary
+*.jpg  binary
+*.woff2 binary

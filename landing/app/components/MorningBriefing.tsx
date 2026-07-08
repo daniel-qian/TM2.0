@@ -1,7 +1,6 @@
 // Screen 2 — the product in one look (deck slide 09, illustrative mockup).
 // Strings from i18n dictionary. The 47m/94%/3× stats are RESTORED mock design
 // targets (ADR-0018 §3) and carry a visible micro-label (statNote).
-// ⚠ 待 Danny 审字.
 
 import type { Dict } from "../i18n";
 

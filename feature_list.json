@@ -141,6 +141,108 @@
       ],
       "status": "not-started",
       "evidence": ""
+    },
+    {
+      "id": "feat-015",
+      "name": "Agent service — advisor engine as FastAPI+SSE API (live input)",
+      "description": "把已存在的 advisor engine（eval-harness 的 think→tool→observe loop）包成真部署的 HTTP 服务：FastAPI + SSE 流式；新增 live-input 路径（接受用户当场打字的管理情境，替代只读 case 文件）；保持红线校验器 + cite-before-number + 8 字段输出契约；pluggable brain（境内 MiniMax/DeepSeek，海外 Claude）。这是 Line A 的后端，也是 graduate demo 的 LiveAgentSource 数据来源（ADR-0020）。AFK 门：pytest 契约电池（红线/cite/schema）+ 一条真 API 冒烟只断言契约成立。stack 默认按推荐（见 .issues/feat-015/kickoff.md）。",
+      "dependencies": [
+        "feat-011"
+      ],
+      "status": "done",
+      "evidence": "2026-07-05 done，AFK 门全绿（feat015-agent-service-r2 worktree 线，relaunch 后 65 tool calls / 897s；首 launch 被误打断）。已整合进 main（分支 feat/live-core-015-018：从 worktree 拷入 eval-harness/service/ + 3 测试 + pytest.ini + requirements.txt；src/ 未碰、engine avery/ 未改；worktree 的 progress.md 冲突块弃用）。整合后主 checkout pytest 141 passed 复验绿（含 MiniMax-M3 真冒烟）。新包 eval-harness/service/（741 LOC + 421 LOC 测试）：app.py（FastAPI 3 端点）+ engine.py（SSE 流式驱动，复用 avery brain/tools/redline，与 run_loop 字段级 parity 测试锁定）+ contract.py（承重件：engine 原生 3 字段 read/move/framing+cites 投影到 canonical 8 字段 AgentOutput，并在 API 边界重跑红线校验器——护城河在 API 层成立）+ live_input.py（用户当场打字情境物化成临时 case、用完即弃；company_context_id=feat-016 stub 已穿线未解析）+ brain_factory.py（AVERY_BRAIN=mock/minimax/deepseek/claude/openai-compat 服务端选脑，key 不出服务器）。端点：GET /health（不泄 key）· POST /advise（默认 SSE started→think/tool/observe→manifest；stream:false 缓冲 JSON；空 situation→422）· GET /advise/sample。manifest.advice=8 字段（summary·detected_signals·diagnosis_hypotheses·evidence·recommended_actions·confidence·escalation·metrics_to_track+conversation_script）对齐 fixtures.ts::AgentOutput，另带 contract_ok/redline_passed/schema_ok/gates/cites/transcript。pytest：契约电池绿（15+6=21）+ 全套 141 passed（124 原+17 新，零回归），无 key 路径 140 passed/1 skipped；真起 uvicorn 打 /health 200 + /advise text/event-stream。真 API 冒烟 PASSED（AVERY_BRAIN=minimax，MiniMax-M3 ~39s 实调，只断言契约成立）。stack（按推荐）：FastAPI+sse-starlette；service 在 eval-harness/service/；8 字段走服务端投影适配器（因 8 字段 schema 原生只在前端 fixtures.ts、engine draft_advice 出 3 字段——投影+重校验 respects 包不重写 engine）。HITL/follow-up（无 blocker）：① contract.py 投影 fallback 里的英文 user-facing 串 ⚠ 待 Danny 审字（真脑路径文案来自模型、红线仍管）；② 代码已整合进 main（feat/live-core-015-018 链，integrator 拷入+复验 141 passed）；③ 前次被打断 run 残留 uvicorn LISTENING 127.0.0.1:8137（PID 38924）已由 integrator 清理。"
+    },
+    {
+      "id": "feat-016",
+      "name": "Ingestion engine — upload to parse to vector RAG to populate Your team",
+      "description": "内核里更重的一条腿（ADR-0021 §2）。管线：上传（简历/项目/公司材料，多格式 PDF/docx/xlsx）→ 解析 → 红线安全的结构化抽取（人只到定性，绝不评分/排名/画像）→ 全向量 RAG 库 → 填充 Your team（人卡/项目卡/briefing）→ 喂回答卡。用上传替代一对一数据接入（lite）。红线过滤器扩展 eval-harness/avery/redline.py 覆盖抽取产物，成为 AFK 门。stack 默认（按推荐，可异步拍）：向量库 pgvector；pluggable embeddings（境内国产/海外 OpenAI）；解析用 pypdf/python-docx/unstructured，LLM 只做结构化抽取；pluggable retrieval（keyword 供 AFK / vector 供真跑）。AFK 门：fixture 文件电池 → 断言抽取实体 + 红线（零人评分）+ 检索命中。详见 .issues/feat-016/kickoff.md。",
+      "dependencies": [
+        "feat-015"
+      ],
+      "status": "done",
+      "evidence": "2026-07-05 done，AFK 门全绿（feat016-ingestion 线，60 tool calls / 886s；建在 feat/live-core-015-018 分支 checkout，全新文件、零改现有、src/ 未碰）。integrator 复验 pytest 169 passed（141 baseline + 28 新，零回归，含 MiniMax-M3 真冒烟）。新包 eval-harness/avery/ingest/：parse.py（多格式→文本 pypdf/python-docx/openpyxl/stdlib，嗅 doc_kind，缺库降级，无 OCR/LLM）+ extract.py（红线安全抽取 → PersonEntity[无任何数字字段=类型即护城河]/ProjectEntity[可量化]/SignalEntity[人相关只到情境]/MaterialChunk；HeuristicExtractor 确定性离线 + Extractor 协议留 LLM 槽）+ redline_extract.py（把 avery/redline.py 扩到抽取产物，任何人实体带 score/rank/tier/moodPct/capacityPct 结构性+词典 hard-fail；项目/材料不 person-gate）+ store.py（pluggable retrieval：KeywordStore 离线确定性行寻址 + VectorStore 真 cosine kNN；pluggable Embedder，HashingEmbedder 离线 stand-in，BGE/MiniMax/OpenAI 可插；build_store 工厂）+ registry.py（company_context_id→CompanyContext，暴露 recall/team_cards/project_cards/signal_cards/briefing + 物化 facts.md/notes.md 让现有 loop recall+cite 落上传数据）+ pipeline.py（ingest_paths/ingest_docs：parse→extract→红线硬门→store→CompanyContext；抽取给人打分则 ok=False 不发布）+ seam.py（resolve_memory_dir + build_live_case_for_context，compose-not-modify，接 feat-015 service 仅 2 行）。fixtures：真 xlsx/docx/手搭文本层 pdf/md handbook/对抗性打分诱饵 txt + test_ingest.py。红线自检 ✅：对抗性简历（9/10、top 5%、百分位、flight risk、rating 5/5）→ 0 泄漏；6 条投毒抽取（模拟 LLM 幻觉）全 hard-fail；team_cards 永不含 moodPct/capacityPct 键；任期/计数（14 months、9 requests）正确不误伤。stack（按推荐）：向量库 pgvector（生产目标，离线默认内存 cosine 同接口）；pluggable embeddings/retrieval；解析成熟库、LLM 只做抽取。seam 验证：cite() 命中 ingested facts.md:21 解析成功。HITL（无 blocker）：embeddings/向量库最终选型（pgvector+BGE/MiniMax vs OpenAI）Danny 异步拍——默认离线已绿，pgvector 持久化+真 embedding endpoint 是唯二 needs-service 件。"
+    },
+    {
+      "id": "feat-017",
+      "name": "Frontend graduate to Avery Live (seams, live mode, i18n)",
+      "description": "把 Vite demo 毕业成 Avery Live（ADR-0020）。给 Nexus 终端抽 StreamSource、给 Your team 抽 TeamDataSource，各两实现：ScriptedSource（现有 cases.ts/fixtures.home.ts，即 story mode，保留 rail 回放机器不动）+ LiveAgentSource/LiveTeamSource（调 feat-015 服务 + feat-016 ingestion，即 live mode）。加上传 UI；?mode=story|live 开关；i18n 把文案外置 en/zh（复用 landing 的 scripts/i18n-zh.mjs + M3）。红线扫描扩到 live 产出。AFK 门：live 源打桩成确定性 → DOM 断言（绕开真 LLM + headless rAF）；story mode 回归断言不回退。保持 ADR-0003/0006/0012/0013/0014 回放契约。详见 .issues/feat-017/kickoff.md。",
+      "dependencies": [
+        "feat-015",
+        "feat-016"
+      ],
+      "status": "done",
+      "evidence": "2026-07-05 done（feat017 线 78 tool calls 后被 session 限流打断未自检 → 重置后 integrator 亲自 runtime 验证通过；WIP 提交 fae493f + 验证提交）。代码在分支 feat/live-core-015-018。验证（dev server DOM 断言，动画手感照例归 Danny 真机；canvas rAF 停摆故截图 N/A）：① `./init.sh` 绿（tsc -b 0 错 + vite build 440 模块 1.85s）；② **story mode 零回归**：onboarding prologue 渲染、Your team 完整（THIS MORNING briefing + feat-014 四卡 Today spine + 8 人卡全定性 + 6 项目卡 + composer）、**rail 回放机器 seek 正常 1/26→5/26 label 随动**、零 console error；③ **live mode 优雅**：eyebrow 切 FROM YOUR UPLOADS、UploadPanel（拖拽/Choose files/格式/No files yet 空态）、人卡待上传正确隐藏、零 error；④ **红线**：forbiddenWordInDOM=false、人卡零 %、live 显 Nothing is scored about any person；⑤ i18n zh.ts 确为 MiniMax-M3 生成（⚠ 待审字）。落地：src/live/（StreamSource/TeamDataSource seam + scripted/live + transport HTTP）+ liveStore.ts + UploadPanel.tsx + src/i18n/（en/zh+useDict）+ scripts/i18n-zh.mjs + 改 Topbar（?mode，默认 story）/HomeScene（TeamDataSource）/NexusScene（StreamSource）。mode.ts：?mode > VITE_AVERY_MODE > 默认 story（守 ADR-0003/0006/0012/0013/0014 回放契约）。⚠ 小尾巴（非阻塞）：live 空态 briefing+Today spine 仍显脚本 seed（未随空态清空），cosmetic 可后续 polish。HITL：英文/中文 copy 待审字 + 真机目测手感。feat-018 部署翻 live 默认。"
+    },
+    {
+      "id": "feat-018",
+      "name": "Dual deployment — 境内中文 + 海外英文双端",
+      "description": "ADR-0021 §5。前端静态 SPA 构建 → Vercel（海外 EN）+ 境内静态托管（ZH）；Python agent 服务 → 境内主机（brain=MiniMax/DeepSeek + 境内 embeddings/pgvector）+ 海外（brain=Claude）。env/secret 管理（key 不进 git，参考 eval-harness/.env 轮换提醒）；deployment protection（融资团队可访问）；双端 smoke。生产 promote 自动（先斩后奏，latest 上主域，不回滚/不待审字）；仅需 Danny 凭据的：项目 link + 域名 DNS + Vercel 面板。",
+      "dependencies": [
+        "feat-017"
+      ],
+      "status": "done",
+      "evidence": "2026-07-05 done（feat018-dual-deploy AFK 线，99 tool calls / 1113s；config+smoke+runbook，NOT 实际部署）。分支 feat/live-core-015-018。integrator 复验全绿：pytest 169 passed 零回归 + init.sh 绿 + dual-target build smoke 3/3（story-default 保留 / overseas-en mode=live locale=en / domestic-zh mode=live locale=zh，window.__AVERY_BUILD__ 戳全对）。产出：前端——.env.example（无密钥）+ vercel.json（海外 EN，与 landing 分离、Root=repo root 警示）+ vite.config.ts（打戳）+ src/i18n/index.ts（新增 VITE_AVERY_LOCALE 构建默认：境内 ZH 默认中文、?lang= 仍覆盖，补了 EN 硬编码 gap）+ src/vite-env.d.ts/main.tsx（env 类型+曝戳）。后端——eval-harness/Dockerfile+.dockerignore（一镜像双 host、env 换脑：境内 minimax/deepseek·海外 claude；非 root+healthcheck）+ service/.env.example（brain+embeddings+retrieval+pgvector 全 env 矩阵，key 空）+ service/ingest_api.py 新（POST /ingest·GET /team/{id}，薄包 feat-016 ingest_paths+registry）+ app.py 挂载 + company_context_id 经 seam 接进 /advise（补齐 feat-016 显式留给 018 的 ingestion HTTP 面；engine loop/redline/brain/ingest 零改写）。冒烟+runbook——scripts/deploy/{build-targets.mjs,ingest_http_smoke.py,dual-smoke.sh} + docs/deploy/dual-deploy-runbook.md。env 矩阵：海外 EN=live/en/claude；境内 ZH=live/zh/minimax(或 deepseek)；story-default 保留=story/en/mock。ingestion HTTP 冒烟 13/13 含红线（诱导简历只抽定性、人卡零评分键穿过 HTTP 面）；真 MiniMax 契约冒烟 1 passed 37s。无密钥入 git（.env.example 空、pgvector CHANGEME 占位；真 .env gitignored+未 tracked 已核）。Danny HITL（本线未做）：域名双端 + 境内/海外主机开通 + 真 key 入主机 secret + docker build+容器 /health 冒烟（本机 Docker daemon 未起，Dockerfile 静态校验过）+ Vercel 项目 Root=repo root(≠landing) + 境内静态托管上传 ZH dist+SPA fallback + 生产 promote 双端 + deployment protection 给融资团队(别锁 SAML) + 可选 vector RAG 开关。⚠ flag：AVERY_RETRIEVAL/EMBEDDINGS/PGVECTOR_URL 已进矩阵+代码 seam 在，但 pipeline 仍在代码里选 store、未从 env 读——lite 走默认 keyword 无碍，接真 embedder 时补 env-read（runbook §D，非阻塞）。"
+    },
+    {
+      "id": "feat-019",
+      "name": "酒店 vertical pack + skin + demo（换皮首例）",
+      "description": "ADR-0021 §3 换皮首例（D6）。客户=三亚绿杉壹居度假酒店（度假酒店，婚宴是其业务线之一，非\"婚庆公司\"）；包按度假酒店建模，婚宴作 showcase 亮点。三件：① Capabilities 包——用 /mmx-cli 调研酒店（组织/部门/岗位、运营流、婚宴业务线、酒店 PMS/OTA/CRM/钉钉）起草 v1，Danny 补内行 know-how（D7 混合），落成跟合伙人 HR 包同形的 cases/playbook/信号；② skin——度假酒店视觉主题，布局与交互机器不变；③ demo 流——酒店当场上传真文件 → 酒店 Your team 长出来 → advisor 落在他们数据 + 酒店/婚宴 Playbooks；办公软件 live 连接器仍 mock。调研走 /mmx-cli，结果落 D:/Boyle/research/（项目外）。AFK 门：eval-harness 跑酒店包（红线/cite/schema）+ ingestion 跑酒店样本。pack-authoring 研究部分可与内核并行立即起（D5）。详见 .issues/feat-019/kickoff.md。",
+      "dependencies": [
+        "feat-016",
+        "feat-017"
+      ],
+      "status": "in_progress",
+      "evidence": "2026-07-05 研究+包草稿 slice done（feat019-hotel-pack AFK 线，relaunch 后 48 tool calls / 603s；首 launch 被误打断，relaunch 复用前次 mmx raw dumps 省配额）。全部产出外置 D:/Boyle/research/sanya-lushan-yiju-hotel/，repo 未碰、git 未碰。mmx smoke ✅（mmx v1.0.16，mmx search query --q ... --region cn --output json，key 读 eval-harness/.env）。★客户已核实=三亚绿杉壹居度假酒店（三亚海棠湾豪华度假村，2024-12 开业，阳光保险投资约 6.7 亿，海南绿杉酒店管理公司运营；约 86 亩、211 房+30 别墅、鲁菜+粤菜、会议厅、962㎡ 阳光草坪=婚宴 showcase 钩子；森系+亲子+康养定位）——确认是酒店非婚庆公司。产出：00-findings.md（13KB 综述）+ raw/q01-q09.json；pack-draft/（README 8字段契约映射 + facts.md 行号 cite 契约 + cases/htl-001..005.md 5 案同 HR 包形状[草坪婚宴纠纷 showcase / 旺季跨部门排班 / 前厅新人爬坡 / 宴会销售真实低效 ADR-0016 / OTA差评+员工关怀] + playbooks-and-signals.md[5 PB+6 信号阈值+5 升级护栏] + manifest.draft.json[frozen:false]）。红线自检 ✅ 零人评分（5 案 Avery read/move/cite 全定性；baseline 故意带个人打分做护城河对比）；MOCK JSON 全 valid。自修 bug：前次 cases cite facts.md:47-62 但文件仅 44 行=15 条悬空 cite，已重建 facts.md 行→事实映射、15 cite 全解析。待 feat-016/017：skin 视觉主题 + demo 流 wiring + repo 集成（本 slice 不含）。HITL：Danny 补内行 know-how 9 条（pack-draft 9 个 TODO + 00-findings §F：实际 PMS/OTA/CRM 工具、婚宴一站式 vs 场地+外部婚庆、别墅管家团队、旺季排班工具、BEO 现状、可用真实脱敏婚宴纠纷样本、婚宴套餐桌标、各岗爬坡期、EAP 渠道）。"
+    },
+    {
+      "id": "feat-020",
+      "name": "建筑公司（Skeppsviken，瑞典）调研 + 办公软件集成可行性",
+      "description": "research deliverable（非代码 feature）。客户=Skeppsviken（瑞典建筑公司，skeppsviken.se；byggsamverkan.se 实为其所用 PM 软件 Next Project 厂商页）；境外→用普通 WebSearch/WebFetch（非 mmx-cli）。已知栈（合伙人问来）：Teams（施工沟通）+ Outlook（通用/邮件）+ CAD（画图）+ 一款纯建筑项目软件（查看费用/材料、类 Excel，需查清实际产品）。调研岗位/日常 + 逐个软件集成可行性：Teams/Outlook 走 MS Graph（开放 OAuth）、CAD 查 Autodesk APS、项目软件先定位产品再查 API/导出——API 是否开放、能拉什么、认证、成本。喂 live sync roadmap 叙事。结果落 D:/Boyle/research/skeppsviken-construction/（项目外）。AFK web 调研，立即可起，不阻塞其他线。酒店侧办公软件可行性归 feat-019 国内调研。详见 .issues/feat-020/kickoff.md。",
+      "dependencies": [],
+      "status": "done",
+      "evidence": "2026-07-05 done（feat020-bygg-research AFK 线，28 tool calls / 343s）。产出 D:/Boyle/research/skeppsviken-construction/（原名 byggsamverkan-construction，07-05 整合改名）：README.md（241 行全报告 + §0.A-C Skeppsviken 画像）+ feasibility-table.md + sources.md；未碰 git。★关键反转（07-05 已解）：byggsamverkan.se 不是客户官网，而是建筑 PM 软件 Next Project 的厂商产品页（agent 判断正确）——Danny 07-05 更正真实客户官网 = Skeppsviken（https://www.skeppsviken.se ），即客户 = Skeppsviken 承包商，byggsamverkan.se 只是其建筑团队所用的 PM 软件。Skeppsviken 公司画像 + 栈确认 supplement 07-05 已完成（同 feat020 agent resumed，约 480s）：Skeppsviken = 西瑞典建筑+地产开发集团（Göteborg+Skövde，2016 改名，被动房专长）；集团 Skeppsviken Holding AB 约 18 公司/152 人/约 1552 MSEK，主建筑臂 Skövde 93 人 + Göteborg 56 人；自营土建/结构，做学校/养老/体育馆/商业 + 自有住宅开发 + 物业租赁；岗位 platschef/arbetsledare/projektledare/kalkylator/projektör/yrkesarbetare——150 人多址自营承包商，Teams+Outlook+CAD+建筑 PM 系统教科书契合。PM 产品认出 = Byggsamordnaren（旧）→ Next Project（云，厂商 NEXT/Next One Technology），有文档化开放 REST API（next-tech.readme.io）。可行性：四款软件全部开放 API、无一封闭——Teams/Outlook 走 MS Graph（OAuth2 Entra，免费，高可行）；CAD 假设 Autodesk 走 APS（Model Derivative 拉图纸元数据/BOM，最重）；PM 走 Next Project REST（OAuth2 client-creds+DB#+一次性 key，可拉 项目/预算/材料价单/工时/发票/文档/工单，客户需向 NEXT 申请授权，约 1000 SEK/月，test 免费）。Roadmap：lite = 四者全走 导出→上传（即刻可发、不需客户 IT）；企业 live 连接器优先级 Graph（Teams+Outlook）> Next Project API > Autodesk APS。开放项：① 建筑客户真实公司名 → 已解 = Skeppsviken；② PM 版本（云 Next Project / 旧桌面 Byggsamordnaren）+ ③ CAD 产品——supplement 查过，二者内部工具公开均不可确认（skeppsviken.se 有 bot 防护、画像靠搜索快照+登记处 bolagsfakta/allabolag/LinkedIn），仍待合伙人一句话确认（决定 API 路径）。"
+    },
+    {
+      "id": "feat-021",
+      "name": "真向量语义检索(百炼 text-embedding-v4 接入 memory.recall)",
+      "description": "recall() 可选语义化:有 embedder 用向量余弦排序,无 key/失败退回关键词(离线 AFK 门保绿);embedder 从 env→service→engine→loop 一路穿透;cite 焊死 facts.md 行号不动、红线不动;/health 报 embeddings 口径。rerank(qwen3-rerank)有意不做。",
+      "dependencies": [
+        "feat-015",
+        "feat-016"
+      ],
+      "status": "done",
+      "evidence": "2026-07-07 done(实现于 07-07 早 session,复验+落 commit 于 07-07 晚 session,53e0ef6):tsc -b 零错;pytest 174 passed(含 test_semantic_recall.py 真打百炼 API:与目标行零共同词的查询被向量排到第一、关键词版搜不到);/health 报 embeddings:dashscope:text-embedding-v4/1024;流式 /advise 带 context_id 实测语义命中上传 xlsx 行并 cite(问 who leads design → facts.md:156 Chen Mingyuan 行,58s@M3)。已知质量缺口转 feat-022 gate 断言:top-k 漏了 Lin Qing|Design Director 最佳行。真 key 在 eval-harness/.env(gitignored)。"
+    },
+    {
+      "id": "feat-022",
+      "name": "seed 端到端验收 gate(双层机器门,先立必红)",
+      "description": "把 2026-07-07 手工复现固化成机器断言。离线层(每次必跑):golden-payload 回放+现有 pytest,无 key 绿。集成层(lite feature 标 done 前必跑):真起 service 真传 2 个 seed(LogiPulse-Roadmap.pdf + PrismDesign_TeamProfile_EN.xlsx,拷为 tracked fixtures),断言 xlsx≥15 人且具名含 Lin Qing/Chen Mingyuan、假人黑名单(No./Case ID/表头词)=0、pdf≥2 项目且标题≠文件名、人卡零数字、who leads design→cite 命中 Lin Qing 行、facts 无 mojibake;前端真浏览器 agent 自驱 live 全流程(上传→卡→薄详情→askLive),DOM 扫 story 专有名词黑名单=0。立完必红(现状必挂)——红是成功,绿等 023/024。Danny 只抽查不设闸。见 .issues/feat-022/kickoff.md + .issues/live-rescue-0707/plan.md。",
+      "dependencies": [
+        "feat-016",
+        "feat-017"
+      ],
+      "status": "done",
+      "evidence": "2026-07-07 S1 done——门立起来且如预期是红的(红是成功,ADR-0022 §3)。后端双层门 eval-harness/tests/test_seed_gate.py:离线层 2 passed(TestClient 真 HTTP 线、heuristic 强制、红线+契约形状+facts 物化+无 mojibake,无 key 绿);集成层 @seedgate(真 uvicorn :8137 minimax+dashscope、真 POST /ingest 两个 tracked seed)3 failed/3 passed:RED=xlsx 具名团队(实际 1 人 \"No.\")、假人黑名单(\"No.\" 命中)、pdf≥2 项目(实际 1 个文件名项目);GREEN=人卡零数字/无禁键(红线在真线上稳)、无 U+FFFD、/advise \"who leads design\" cite 命中 Lin Qing 行(07-07 漏检今实测已命中,留作回归守卫)。前端门 scripts/gates/live-frontend-gate.{md,snippet.js}(浏览器自驱协议+断言包),实跑 verdict RED:emptyStateClean=false(7 story 名词渗漏:Venus/Smart Shopping Guide/Kate/Jason/Wang/Venus Pitch/Lin Qing story 文案)、teamRendered=false(1 假人卡)、detailIsLive=false(点卡=\"Unknown teammate\" 实证)、ingested/postUploadClean/composerCheck(静态)=true。seed 固化 tests/fixtures/seed/。注意:Lin Qing/Chen Mingyuan/Sun Xiaomei/Zheng Zixuan 四名 story 与真 seed 复用,黑名单只用 story 独占名词+文案句式。"
+    },
+    {
+      "id": "feat-023",
+      "name": "LLM 抽取引擎(LLMExtractor 接 pluggable brain,修绿 022 后端断言)",
+      "description": "抽取主位换 LLM:喂带行号解析文本→一次结构化输出多 Person/Project/Signal,每实体带来源行号(cite 链不断)→产物过同一 redline_extract 门(PersonEntity 类型层无数字字段不变);brain 现实可用=M3+DeepSeek(claude 仅代码路径无 key,不得假设);无 key/失败自动退 HeuristicExtractor(离线门保绿);pypdf mojibake 清洗;检索质量调到 gate 的 cite 断言绿。正则不修,降级测试/兜底。完工判定=feat-022 后端断言全绿,非自报。见 .issues/feat-023/kickoff.md。",
+      "dependencies": [
+        "feat-022"
+      ],
+      "status": "done",
+      "evidence": "2026-07-07 S1 done——完工判定 = feat-022 后端断言全绿(非自报):python -m pytest eval-harness/tests/test_seed_gate.py -m seedgate → 6 passed in 427s(真 uvicorn :8137 minimax+dashscope+llm:minimax、真 POST /ingest 两个 tracked seed):xlsx→20 人含 Lin Qing(Design Director):8/Chen Mingyuan(Founder/CEO):7 且行号全对、假人黑名单=0、pdf 单传→2 项目(LogiPulse Phase 1 done/Phase 2 on-track,非文件名)、人卡零数字零禁键、无 U+FFFD、/advise \"who leads design\" cite 命中 Lin Qing 行。实现:avery/ingest/llm_extract.py(LLMExtractor 接 pluggable brain,逐窗容错+单窗重试,每实体带来源行号,三层红线=白名单 sanitizer→抽取器内 validate_extraction 门→pipeline 复验;任何失败退 HeuristicExtractor)+ service/extractor_factory.py(AVERY_EXTRACTOR auto/llm/heuristic,brain 现实=M3+DeepSeek,32k 输出预算防 M3 思考截断 JSON,240s per-call timeout 防 provider 吊死——旧无超时实测吊死 20min)+ parse.py mojibake/连字/软连字清洗 + /health 曝 extractor。离线电池 tests/test_llm_extract.py 13 passed(FakeBrain 无网络:行号 cite 链、走私评分键只杀单条、正文评分整篇退兜底、garbage JSON/异常/空退兜底、表头假人/文件名标题拒收、factory 三档、无 key 降级、mojibake 清洗);离线 seed gate 2 passed;全量回归 187 passed;init.sh 绿。正则未修,降级为测试/兜底(HeuristicExtractor 原样)。【flake 根因(已定谳)】pdf 项目断言间歇红,最初疑限流——错:server 日志显示 M3 有概率把 pdf 团队表的人均 Allocation %(~10%–80%)抄进人字段,redline person-score-value ×8 → 整篇退 heuristic → 文件名项目。红线在工作;修法不改弱红线:sanitizer 剥离 rating 形数字(_strip_person_ratings,redline 同源正则,纯 % 条目整条丢,词库类违规如 low performer 仍整篇回退、有测试钉住)+ prompt 禁抄 allocation % + 两 seed 单窗(320 行/窗)+ 逐窗 3 试带退避 + 240s per-call timeout + gate 落 uvicorn 日志(runs/seed-gate-uvicorn.log)。离线电池 14 passed;修后 -m seedgate 复跑 6 passed。【终态】-m seedgate 连续两跑 6 passed(356s/342s)、server 日志零 fallback。前端门 023 后复驱:teamRendered ✅(30 卡含 Lin Qing/Chen Mingyuan、零血条)、postUploadClean ✅;途中抓到 collaboration 契约崩(team_cards 发 list[str],transport.ts 误写 string,LLM 第一次真发时 HomeScene 白屏)已修 7ef9e31;emptyStateClean/detailIsLive 按计划留红给 S2。"
+    },
+    {
+      "id": "feat-024",
+      "name": "story/lite 同仓立墙 + lite 3 屏壳(ADR-0022,修绿 022 前端断言)",
+      "description": "src/story/**(fixtures/cases/rail/满血场景,冻结路演资产)/ src/lite/**(3 屏:上传空态·Your team·The room 薄建 + 薄只读详情浮层,零 fixtures)/ src/shared/**(卡片/字体/CSS 原子);ESLint no-restricted-imports 把 lite→story import 变红灯(机器闸)。composer 接 askLive;live 空态左脊柱不渲染 scripted 占位;HOME_CLOSING 类 story 文案出 lite。硬门:feat-022 前端断言全绿 且 story 回归(rail 26 拍)仍绿;story 资产 URL/构建不变;红线人卡零数字。EN copy act-first,ZH 走 M3。见 .issues/feat-024/kickoff.md。",
+      "dependencies": [
+        "feat-022"
+      ],
+      "status": "done",
+      "evidence": "2026-07-08 S2 done——完工判定全是机器门输出(非自报)。【前端门 verdict 全绿,原文】{\"pass\":true,\"phases\":{\"emptyStateClean\":true,\"ingested\":true,\"teamRendered\":true,\"postUploadClean\":true,\"detailIsLive\":true,\"composerIsLive\":true},\"results\":{\"storyNouns\":[{\"storyNounHits\":0,\"hits\":[],\"pass\":true},{\"storyNounHits\":0,\"hits\":[],\"pass\":true}],\"inject\":{\"pass\":true,\"error\":null,\"sourceChips\":[\"LogiPulse-Roadmap.pdf\",\"PrismDesign_TeamProfile_EN.xlsx\"]},\"team\":{\"personCards\":30,\"hasLinQing\":true,\"hasChenMingyuan\":true,\"bloodBarLeak\":null,\"pass\":true},\"detail\":{\"opened\":true,\"unknownEntity\":false,\"showsName\":true,\"pass\":true},\"composer\":{\"prefill\":\"Ask about your team…\",\"storyHits\":[],\"pass\":true},\"composerLive\":{\"question\":\"Who leads design, and what do they own?\",\"framesSeen\":18,\"sawManifest\":true,\"adviceRendered\":true,\"liveError\":false,\"pass\":true}}}(真 uvicorn :8137 minimax+dashscope+llm:minimax、真上传两 tracked seed、浏览器自驱;空态渗漏 S1 的 7→0、详情零 Unknown、F2 动态=S2 新立:18 帧 SSE 到 DOM+manifest+8 字段卡)。【story 回归】rail 26 拍/29 步 DOM 断言 {\"pass\":true,\"totalSteps\":29,\"beatTotalOk\":true,\"failures\":[]}(idx1 主页 4 卡/8 人/6 项目/零 %、idx3 focus 簇 8、idx12 structured-output、idx16 grown CAUGHT AND SETTLED、idx28 capabilities、末拍 26/26);story 资产哈希不变(sprite 哈希全同)。【后端复证】pytest eval-harness -q → 195 passed, 1 skipped in 474.94s(=189 离线+6 seedgate 全绿;skip=test_schema_field_list_matches_frontend_agentoutput 因 fixtures.ts 移居 story/ 路径失效,按纪律未动 eval-harness,S3 重指——见 progress.md Notes)。【墙红灯实证】lite 注入 story import → npm run lint exit 1(no-restricted-imports 带 ADR-0022 口径);移除 → exit 0;已挂 init.sh;noInlineConfig 使行内 disable 失效。【构建】init.sh 绿(lint+tsc+build 459 模块)、双 target smoke 3/3、global.css 拆 10 chunk 串联逐字节等原(cascade 零漂移)。【门首跑抓到两条真 bug 并修】① transport.ts SSE 分帧只找 \\n\\n 而 sse-starlette 发 CRLF(od -c 实证)→ 零帧,修 /\\r?\\n\\r?\\n/;② snippet input[type=text] 选不到无 type 属性 input → F1 静默空转,修 .composer-main-row input 主路径。commits:b133210(墙+壳+闸)+ 收盘 fixes/docs。红线:LitePerson 类型层无数字键+运行时 stripPersonNumbers,verdict bloodBarLeak=null 实证。"
     }
   ]
 }

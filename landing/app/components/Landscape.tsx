@@ -1,6 +1,6 @@
 // Deck slide 07 (HR AI landscape) capability matrix. Text from i18n dictionary;
 // the ✓/~/× marks are language-agnostic data kept here, aligned by index to the
-// dictionary's groups/rows. Columns are CATEGORIES (no brand names). ⚠ 待 Danny 审字.
+// dictionary's groups/rows. Columns are CATEGORIES (no brand names).
 
 import { Fragment } from "react";
 import type { Dict } from "../i18n";

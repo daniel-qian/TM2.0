@@ -2,6 +2,18 @@
 
 Avery（旧称 TeamMaster 2.0）—— 面向小公司 manager 的管理平台 **demo 原型**（Vite + React + framer-motion + zustand）。品牌已锁定 Avery（ADR-0015）；老字眼清理见 `.to-issues/P7-01`。代码只服务 demo 叙事，不按产品工程标准要求（见 ADR-0001）；领域术语表在 `CONTEXT.md`，架构决策在 `docs/adr/`，动手前先读与所改区域相关的条目。
 
+## Autonomy & gates（先斩后奏，2026-07-06）
+
+Danny 一个人背 N 个项目，没时间逐项审。默认 **act first, report after**：copy 定稿、UI/审美取舍、commit、push、deploy/生产 promote —— agent 自己拍板、自己上线，事后在 `progress.md` 给结论+证据。**不设人工闸、不阻塞、不标 `待审字`。**
+
+只有这几类才停下来交给 Danny：
+
+- **不可逆销毁**：硬删除、`git push --force`/改写历史、删未合并分支、drop 表/删数据。
+- **对外/涉第三方或花钱**：给真人发邮件/消息、公开发布（ProductHunt 等）、付款、授予他人访问权限。
+- **需要他凭据/账号才能做的**：真 key、选/开托管商、Vercel 面板、域名 DNS —— 这是"没权限"不是"要审核"，agent 把能做的都做完、只把这一步交出去。
+
+质量不靠 Danny 复看，靠 maker≠checker 的 checker 子 agent 兜（见 global + `roles.md`）。审美/口味类分歧记进报告供事后抽查，不阻塞发布。
+
 ## Startup Workflow
 
 Before writing code:
@@ -32,7 +44,7 @@ Before writing code:
 
 1. `./init.sh` 通过，输出摘要记入 `feature_list.json` 的 `evidence`。
 2. 行为经 `npm run dev` 目测确认（看了什么、结果如何，写进 evidence 或 `progress.md`）。
-3. Venus-facing 的新英文 copy 就地标 `⚠ 待 Danny 审字`，不自行定稿。
+3. Venus-facing 新 copy 由 agent 直接定稿并上线（EN 自写；中文走 M3，见记忆 [[chinese-copy-via-m3]]）——不再标 `待 Danny 审字`、不阻塞。定稿后 `progress.md` 记一行，Danny 事后可抽查。
 4. `progress.md` 已更新。
 
 ## End of Session

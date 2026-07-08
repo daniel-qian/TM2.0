@@ -1,0 +1,819 @@
+
+/* nexus-brief 里的最新 follow-up 提问回显。 */
+.nexus-brief-followup {
+  margin-top: 2px;
+  color: rgba(108, 99, 181, 0.95);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* alternatives Manifest 卡：Jason 替代人选分析（余量 / 技能匹配 / 风险）。
+   宽度对齐 cases.ts 锚点 half {w:400}；slot 内常规块流（同修订 4 其它卡）。 */
+.alternatives-card {
+  width: 800px;
+  padding: 20px;
+  border: 1px solid rgba(108, 99, 181, 0.3);
+  border-radius: var(--radius);
+  background: rgba(255, 253, 248, 0.94);
+  box-shadow: 0 30px 110px rgba(50, 45, 36, 0.22);
+  backdrop-filter: blur(18px);
+  animation: alternatives-card-in 0.5s ease-out both;
+}
+
+@keyframes alternatives-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.alternatives-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 10px;
+}
+
+.alternatives-header h2 {
+  margin: 0;
+  color: var(--ink);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 28px;
+  font-weight: 500;
+  line-height: 1.05;
+}
+
+.alternatives-header > span {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  flex: 0 0 auto;
+  padding: 4px 10px;
+  border: 1px solid rgba(108, 99, 181, 0.4);
+  border-radius: 999px;
+  background: rgba(108, 99, 181, 0.12);
+  color: rgba(108, 99, 181, 0.95);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.alternatives-question {
+  margin-bottom: 14px;
+  color: var(--ink-soft);
+  font-size: 14px;
+  font-style: italic;
+}
+
+.alternatives-list {
+  display: grid;
+  gap: 10px;
+}
+
+.alternatives-intro {
+  margin-bottom: 12px;
+  color: var(--ink-soft);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.alternatives-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.44);
+}
+
+.alternatives-person {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.alternatives-person strong {
+  display: block;
+  color: var(--ink);
+  font-size: 15px;
+}
+
+.alternatives-person span {
+  display: block;
+  color: var(--ink-faint);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.alternatives-note {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.alternatives-verdict {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid rgba(105, 128, 109, 0.4);
+  border-radius: var(--radius);
+  background: rgba(105, 128, 109, 0.09);
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+/* ── P6-04 · context-window HUD（修订：单行 subtle）──
+   ADR-0013 决策 7：数值纯派生自 active thread steps.length × case stepContextPct——
+   store 零新增字段、seek 自洽。压成一行：step 过程标签并排（二级小字）+ 数字读数
+   （强调色，tabular-nums 防跳宽）；>40% warn（amber）、>70% alert（rust）。meter 条已移除。 */
+.nexus-brief-card .nexus-context-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 10px 0 0;
+  line-height: 1.3;
+}
+
+.nexus-context-step-label {
+  color: var(--ink-soft, rgba(60, 64, 58, 0.62));
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* 红线修复（ADR-0015）：原 .nexus-context-stats（Context X% 读数，含 amber/rust 警示色）
+   退役——brief 只留人话的步骤进度。中性 subtle，无警示着色。 */
+.nexus-brief-step {
+  color: var(--ink-soft, rgba(60, 64, 58, 0.62));
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+
+/* ── P6-05 · web-search errand case：浏览器预览卡 + policy gist 卡 + 合规判定卡 ──
+   守 ADR-0002：入场只动 transform/opacity；动画被全局 reduced-motion 毯式规则覆盖。
+   卡宽 = 2 × cases.ts 锚点 half.w（660px）；slot 内常规块流（同既有 Manifest 卡）。 */
+
+/* ① 浏览器预览卡：迷你浏览器窗。fixture 截图（public/ 资产），零运行时网络依赖。 */
+.browser-preview-card {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  width: 660px;
+  border: 1px solid rgba(52, 48, 40, 0.26);
+  border-radius: 14px;
+  background: #f3f1ec;
+  box-shadow: 0 30px 110px rgba(50, 45, 36, 0.24);
+  animation: p6-card-in 0.5s ease-out both;
+}
+
+@keyframes p6-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.browser-chrome-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(52, 48, 40, 0.16);
+  background: #e8e5de;
+}
+
+.browser-dots {
+  display: flex;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.browser-dots i {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: rgba(52, 48, 40, 0.22);
+}
+
+.browser-dots i:nth-child(1) {
+  background: rgba(188, 92, 73, 0.75);
+}
+
+.browser-dots i:nth-child(2) {
+  background: rgba(196, 148, 58, 0.75);
+}
+
+.browser-dots i:nth-child(3) {
+  background: rgba(105, 128, 109, 0.75);
+}
+
+/* URL 栏：真实可核的 developer.apple.com 地址 + padlock。 */
+.browser-url-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+  flex: 1;
+  min-width: 0;
+  padding: 7px 14px;
+  border: 1px solid rgba(52, 48, 40, 0.14);
+  border-radius: 999px;
+  background: rgba(255, 253, 248, 0.95);
+  color: var(--ink-soft);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.browser-padlock {
+  flex: 0 0 auto;
+  width: 11px;
+  height: 13px;
+  color: rgba(105, 128, 109, 0.95);
+}
+
+/* 卡内视口：可滚动看高清长图（演示时现场滚一把就是"真页面"的证据）。 */
+.browser-viewport {
+  height: 760px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: #fff;
+}
+
+.browser-screenshot {
+  display: block;
+  width: 100%;
+  height: auto;
+  user-select: none;
+}
+
+/* ② policy gist 卡：agent 的实际回答——要点 + 引文 + 回链 URL。 */
+.policy-gist-card {
+  width: 660px;
+  padding: 20px;
+  border: 1px solid rgba(105, 128, 109, 0.34);
+  border-radius: var(--radius);
+  background: rgba(255, 253, 248, 0.94);
+  box-shadow: 0 30px 110px rgba(50, 45, 36, 0.22);
+  backdrop-filter: blur(18px);
+  animation: p6-card-in 0.5s ease-out both;
+}
+
+.policy-gist-header,
+.compliance-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.policy-gist-header h2,
+.compliance-header h2 {
+  margin: 0;
+  color: var(--ink);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 25px;
+  font-weight: 500;
+  line-height: 1.1;
+}
+
+.policy-gist-header > span,
+.compliance-header > span {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  flex: 0 0 auto;
+  padding: 4px 10px;
+  border: 1px solid rgba(105, 128, 109, 0.4);
+  border-radius: 999px;
+  background: rgba(105, 128, 109, 0.1);
+  color: rgba(83, 104, 87, 0.98);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.policy-gist-list {
+  display: grid;
+  gap: 10px;
+}
+
+.policy-gist-row {
+  padding: 12px 14px;
+  border: 1px solid var(--rule);
+  border-left: 3px solid rgba(105, 128, 109, 0.55);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.44);
+}
+
+.policy-gist-row strong {
+  display: block;
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.policy-gist-quote {
+  margin: 5px 0 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+  font-style: italic;
+  line-height: 1.5;
+}
+
+/* 回链 URL 引用：agent 给出处（是 agent 不是搜索引擎的证据）。 */
+.policy-gist-ref {
+  display: block;
+  margin-top: 6px;
+  color: rgba(83, 104, 87, 0.92);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  word-break: break-all;
+}
+
+.policy-gist-verdict {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid rgba(105, 128, 109, 0.4);
+  border-radius: var(--radius);
+  background: rgba(105, 128, 109, 0.09);
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+/* ③ follow-up 合规判定卡：2–3 bullet 结论 + guideline 引用（短 Manifest）。 */
+.compliance-card {
+  width: 660px;
+  padding: 20px;
+  border: 1px solid rgba(108, 99, 181, 0.3);
+  border-radius: var(--radius);
+  background: rgba(255, 253, 248, 0.94);
+  box-shadow: 0 30px 110px rgba(50, 45, 36, 0.22);
+  backdrop-filter: blur(18px);
+  animation: p6-card-in 0.5s ease-out both;
+}
+
+.compliance-header > span {
+  border-color: rgba(108, 99, 181, 0.4);
+  background: rgba(108, 99, 181, 0.12);
+  color: rgba(108, 99, 181, 0.95);
+}
+
+.compliance-question {
+  margin-bottom: 12px;
+  color: var(--ink-soft);
+  font-size: 14px;
+  font-style: italic;
+}
+
+.compliance-list {
+  display: grid;
+  gap: 8px;
+}
+
+.compliance-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 11px 14px;
+  border: 1px solid var(--rule);
+  border-left-width: 3px;
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.44);
+}
+
+.compliance-row.is-pass {
+  border-left-color: rgba(105, 128, 109, 0.7);
+}
+
+.compliance-row.is-attention {
+  border-left-color: rgba(196, 148, 58, 0.7);
+}
+
+.compliance-status {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  margin-top: 1px;
+  border-radius: 50%;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.compliance-row.is-pass .compliance-status {
+  background: rgba(105, 128, 109, 0.16);
+  color: rgba(83, 104, 87, 0.98);
+}
+
+.compliance-row.is-attention .compliance-status {
+  background: rgba(196, 148, 58, 0.18);
+  color: rgba(151, 110, 37, 1);
+}
+
+.compliance-row p {
+  margin: 0;
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.compliance-guideline {
+  display: block;
+  margin-top: 4px;
+  color: var(--ink-faint);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.compliance-verdict {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid rgba(196, 148, 58, 0.42);
+  border-radius: var(--radius);
+  background: rgba(196, 148, 58, 0.09);
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+/* ── P6-06 · email errand case：memo 附件 chip + 可编辑草稿卡 + email-tool 卡 + Slack 小卡 ──
+   守 ADR-0002：入场动画复用 p6-card-in（只动 transform/opacity），被全局 reduced-motion
+   毯式规则覆盖。卡宽 = 2 × cases.ts 锚点 half.w（660px），同 P6-05 errand 卡组。 */
+
+/* feat-004 (ADR-0014 决策 9)：memo 附件 chip 改终端首行打印（.terminal-attachment-chip）。 */
+
+/* ① 可编辑草稿卡：agent 邮件文本预填的 textarea。编辑 = 组件本地态（不入 replay）。 */
+.memo-draft-card {
+  width: 660px;
+  padding: 20px;
+  border: 1px solid rgba(196, 148, 58, 0.36);
+  border-radius: var(--radius);
+  background: rgba(255, 253, 248, 0.94);
+  box-shadow: 0 30px 110px rgba(50, 45, 36, 0.22);
+  backdrop-filter: blur(18px);
+  animation: p6-card-in 0.5s ease-out both;
+}
+
+.memo-draft-header,
+.email-tool-header,
+.slack-message-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.memo-draft-header h2,
+.email-tool-header h2,
+.slack-message-header h2 {
+  margin: 0;
+  color: var(--ink);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 25px;
+  font-weight: 500;
+  line-height: 1.1;
+}
+
+.memo-draft-header > span,
+.slack-message-header > span {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  flex: 0 0 auto;
+  padding: 4px 10px;
+  border: 1px solid rgba(196, 148, 58, 0.42);
+  border-radius: 999px;
+  background: rgba(196, 148, 58, 0.1);
+  color: rgba(151, 110, 37, 1);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.memo-draft-textarea {
+  display: block;
+  width: 100%;
+  min-height: 300px;
+  padding: 12px 14px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.62);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.55;
+  resize: vertical;
+}
+
+.memo-draft-textarea:focus-visible {
+  border-color: rgba(196, 148, 58, 0.6);
+  outline: 2px solid rgba(196, 148, 58, 0.3);
+  outline-offset: 1px;
+}
+
+.memo-draft-hint {
+  margin: 10px 0 0;
+  color: var(--ink-faint);
+  font-size: 12px;
+  font-style: italic;
+}
+
+/* ② email-tool 卡：To/Subject/Body 已填，Send 按钮待命 → Sent ✓。 */
+.email-tool-card {
+  width: 660px;
+  padding: 20px;
+  border: 1px solid rgba(105, 128, 109, 0.34);
+  border-radius: var(--radius);
+  background: rgba(255, 253, 248, 0.94);
+  box-shadow: 0 30px 110px rgba(50, 45, 36, 0.22);
+  backdrop-filter: blur(18px);
+  animation: p6-card-in 0.5s ease-out both;
+}
+
+/* Staged → Sent badge：状态翻转只换底色/字色（无布局动画）。 */
+.email-tool-status {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  flex: 0 0 auto;
+  padding: 4px 10px;
+  border: 1px solid rgba(52, 48, 40, 0.24);
+  border-radius: 999px;
+  background: rgba(52, 48, 40, 0.06);
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.email-tool-status.is-sent {
+  border-color: rgba(105, 128, 109, 0.45);
+  background: rgba(105, 128, 109, 0.12);
+  color: rgba(83, 104, 87, 0.98);
+}
+
+.email-field {
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  align-items: start;
+  gap: 10px;
+  padding: 10px 0;
+  border-top: 1px solid var(--rule);
+}
+
+.email-field-label {
+  margin-top: 3px;
+  color: var(--ink-faint);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.email-recipient-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.email-recipient-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px 4px 5px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.6);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.email-recipient-address {
+  color: var(--ink-faint);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 600;
+}
+
+.email-subject {
+  margin: 0;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.email-from {
+  margin: 0;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.email-body {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.email-tool-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--rule);
+}
+
+/* Send 按钮：待命态醒目（这是"人扣扳机"的 beat）；Sent 态翻绿、禁点（dedupe 可见）。 */
+.email-send-button {
+  padding: 9px 26px;
+  border: 1px solid rgba(83, 104, 87, 0.5);
+  border-radius: 999px;
+  background: rgba(105, 128, 109, 0.92);
+  color: #fffdf8;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.email-send-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.email-send-button.is-sent {
+  border-color: rgba(105, 128, 109, 0.4);
+  background: rgba(105, 128, 109, 0.14);
+  color: rgba(83, 104, 87, 0.98);
+  cursor: default;
+}
+
+/* ③ follow-up Slack-message 小卡：#eng 频道里的一条 app 消息。 */
+.slack-message-card {
+  width: 660px;
+  padding: 20px;
+  border: 1px solid rgba(108, 99, 181, 0.3);
+  border-radius: var(--radius);
+  background: rgba(255, 253, 248, 0.94);
+  box-shadow: 0 30px 110px rgba(50, 45, 36, 0.22);
+  backdrop-filter: blur(18px);
+  animation: p6-card-in 0.5s ease-out both;
+}
+
+.slack-message-header > span {
+  border-color: rgba(108, 99, 181, 0.4);
+  background: rgba(108, 99, 181, 0.12);
+  color: rgba(108, 99, 181, 0.95);
+}
+
+.slack-message-question {
+  margin-bottom: 12px;
+  color: var(--ink-soft);
+  font-size: 14px;
+  font-style: italic;
+}
+
+.slack-message-bubble {
+  padding: 12px 14px;
+  border: 1px solid var(--rule);
+  border-left: 3px solid rgba(108, 99, 181, 0.55);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.slack-message-author {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.slack-message-author i {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(52, 48, 40, 0.1);
+  color: var(--ink-faint);
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.slack-message-bubble p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.slack-message-byline {
+  display: block;
+  margin-top: 6px;
+  color: var(--ink-faint);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+/* ── P6-07 · rail 三幕：case 间隔 title card 浮层（ADR-0013 决策 8–9） ─────────
+   rail chrome——由 SCRIPT step 元数据驱动、渲染在 DemoControls 层，不进 canvasStore；
+   toggleHidden / 删 rail 层即无 title card（ADR-0003 litmus，core 行为零损失）。
+   屏幕居中、低调引导；pointer-events:none——浮层在场也不挡画板 free-click。
+   入场动效只动 transform/opacity（ADR-0002 / P6 铁律）；reduced-motion 全局 1ms 守卫兜底。 */
+
+.rail-title-card {
+  position: fixed;
+  z-index: 70;
+  top: 50%;
+  left: 50%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+  max-width: min(560px, calc(100vw - 48px));
+  padding: 26px 46px;
+  border: 1px solid rgba(40, 35, 29, 0.12);
+  border-radius: var(--radius);
+  background: rgba(255, 253, 248, 0.92);
+  box-shadow: 0 30px 110px rgba(50, 45, 36, 0.22);
+  backdrop-filter: blur(14px);
+  text-align: center;
+  pointer-events: none;
+  animation: rail-title-card-in 0.5s ease-out both;
+}
+
+@keyframes rail-title-card-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) translateY(14px) scale(0.97);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) translateY(0) scale(1);
+  }
+}
+
+.rail-title-card-eyebrow {
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.rail-title-card h2 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 26px;
+  font-weight: 750;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+/* ── Onboarding · connect 段：GitHub/Slack 动态事实注入的本地存储承诺（产物永不上云） ── */
+.onboarding-local-note {
+  margin: 10px 0 0;
+  color: var(--ink-soft, rgba(60, 64, 58, 0.62));
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+  letter-spacing: 0.01em;
+}
+

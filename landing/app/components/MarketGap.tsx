@@ -3,7 +3,7 @@
 // TAM/SOM are an ILLUSTRATIVE bottom-up model — formula shown on the page IS
 // the annotation (inputs documented in en.ts). The old decision-strip and
 // vs-rows were cut (overlapped the panels); the Landscape matrix folds in
-// below. ⚠ 待 Danny 审字.
+// below.
 
 import type { Dict } from "../i18n";
 import { Fold } from "./Fold";

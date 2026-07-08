@@ -2,7 +2,7 @@
 // (ADR-0018 restructure; content from the partner's revenue-model deck,
 // 2026-07-02): pricing architecture + component ranges + revenue mix at scale
 // + condensed roadmap. Prices are the DESIGNED pricing model (pre-revenue);
-// mix percentages are the at-scale design, not bookings. ⚠ 待 Danny 审字.
+// mix percentages are the at-scale design, not bookings.
 
 import type { Dict } from "../i18n";
 

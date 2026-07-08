@@ -1,6 +1,6 @@
 // Playbooks proof — the 6 partner-authored SCN playbooks surfaced as concrete
 // "situations Avery handles". "Playbooks" is a locked do-not-translate term.
-// Strings from the i18n dictionary. ⚠ 待 Danny 审字.
+// Strings from the i18n dictionary.
 
 import type { Dict } from "../i18n";
 

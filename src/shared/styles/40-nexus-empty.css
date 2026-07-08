@@ -1,0 +1,104 @@
+/* ── P6-02 · Nexus 空态（无 active thread）：composer 待命 ── */
+
+.nexus-empty {
+  position: absolute;
+  z-index: 40;
+  top: 42%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(560px, calc(100vw - 56px));
+  padding: 28px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: rgba(255, 253, 248, 0.92);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(12px);
+  text-align: center;
+}
+
+.nexus-empty h2 {
+  margin-bottom: 8px;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 30px;
+  font-weight: 500;
+}
+
+.nexus-empty > p:not(.eyebrow) {
+  color: var(--ink-soft);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.nexus-empty-composer {
+  display: flex;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.nexus-empty-composer input {
+  flex: 1;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: rgba(255, 253, 248, 0.95);
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.nexus-empty-composer input::placeholder {
+  color: var(--ink-faint);
+}
+
+.nexus-empty-composer input:focus-visible {
+  outline: none;
+  border-color: var(--ink);
+}
+
+.nexus-empty-composer button {
+  min-width: 88px;
+  min-height: 44px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--paper);
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: var(--shadow-soft);
+}
+
+.nexus-empty-composer button:hover,
+.nexus-empty-composer button:focus-visible {
+  outline: none;
+  background: #2b2822;
+}
+
+.nexus-empty-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.nexus-empty-suggestion {
+  padding: 7px 14px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: none;
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    opacity var(--medium) ease,
+    transform var(--medium) ease;
+}
+
+.nexus-empty-suggestion:hover,
+.nexus-empty-suggestion:focus-visible {
+  outline: none;
+  color: var(--ink);
+  transform: translateY(-1px);
+}
+

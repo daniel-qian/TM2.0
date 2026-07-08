@@ -1,4 +1,4 @@
-// ⚠ 待 Danny 审字. Strings come from the i18n dictionary (app/i18n).
+// Strings come from the i18n dictionary (app/i18n).
 // 2026-07-03 (ADR-0018): slug switched to "Managers need safer HR decisions";
 // "senior at your ear" retired from slug/footer surfaces. Ghost CTA now jumps
 // to the revenue screen (investor audience). VISUAL: editorial deck cover

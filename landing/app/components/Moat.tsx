@@ -2,7 +2,7 @@
 // general model just do this": playbook IP + benchmark data + trust
 // architecture (absorbs old TrustLayer). Hosts fold-outs for Playbooks /
 // Modules / the eval section; the honesty strip keeps the locked eval promise
-// (no scorecard numbers until real human ratings). ⚠ 待 Danny 审字.
+// (no scorecard numbers until real human ratings).
 
 import type { Dict } from "../i18n";
 import { Fold } from "./Fold";

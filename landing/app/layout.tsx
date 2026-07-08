@@ -17,7 +17,7 @@ const manrope = Manrope({
 });
 
 export const metadata: Metadata = {
-  // ⚠ external strings await Danny 审字 before launch (kept out of the rendered page).
+  // external strings kept out of the rendered page.
   // ADR-0018: "senior at your ear" slug retired; surviving slug below.
   title: "Avery — managers need safer HR decisions",
   description:

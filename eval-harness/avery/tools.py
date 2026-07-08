@@ -42,6 +42,9 @@ class ToolContext:
     cites: list[Cite] = field(default_factory=list)
     advice: Advice | None = None
     read_case_called: bool = False
+    # Optional embedder -> recall() ranks memory lines semantically (vs keyword). None = keyword.
+    # Set by the service from env (key stays server-side); the offline gate leaves it None.
+    embedder: Any = None
 
 
 class ToolError(Exception):
@@ -126,7 +129,7 @@ def _read_case(args: dict, ctx: ToolContext) -> str:
 
 def _recall(args: dict, ctx: ToolContext) -> str:
     query = (args or {}).get("query", "")
-    hits = memory.recall(query, ctx.memory_dir)
+    hits = memory.recall(query, ctx.memory_dir, embedder=ctx.embedder)
     if not hits:
         return f"(no memory lines matched '{query}')"
     return "\n".join(h.as_line() for h in hits)

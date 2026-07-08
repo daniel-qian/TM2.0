@@ -3,6 +3,9 @@ set -e
 
 echo "=== Harness Initialization ==="
 
+echo "=== npm run lint (story/lite wall, ADR-0022) ==="
+npm run lint
+
 echo "=== npm run typecheck ==="
 npm run typecheck
 
