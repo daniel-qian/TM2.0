@@ -59,6 +59,31 @@ export const en = {
   lite: {
     tabTeam: 'Your team',
     tabRoom: 'The room',
+    tabPlaybooks: 'Playbooks',
+
+    // ── Team grouping view (feat-025 Q2: cluster people cards by department/role) ──
+    groupAllLabel: 'Grouped by team',
+    groupUngrouped: 'Everyone else',
+    groupCollapse: 'Collapse',
+    groupExpand: 'Expand',
+    groupCountOne: 'person',
+    groupCountMany: 'people',
+
+    // ── The room — thin pan/zoom canvas (feat-025 Q3) ──
+    roomCanvasHint: 'Drag to move · scroll to zoom',
+    roomCanvasReset: 'Reset view',
+
+    // ── Playbooks screen (feat-025 Q1: honest empty state, anchored to future capability) ──
+    playbooksEyebrow: 'Coming soon',
+    playbooksTitle: 'Playbooks grow from the way your team already works',
+    playbooksBody:
+      'Once Avery is wired into your own SOPs, checklists, and past decisions, it distills them into reusable playbooks — so the next time a familiar situation lands, the room already knows your house rules.',
+    playbooksSlotRoster: 'Your onboarding and handover SOPs become step-by-step playbooks.',
+    playbooksSlotIncident: 'Recurring situations turn into a saved play the room runs the same way each time.',
+    playbooksSlotPack: 'Industry packs (starting with the hospitality pack) drop in pre-built plays you can adapt.',
+    playbooksSlotLabel: 'What will live here',
+    playbooksComingSoon: 'Not connected yet — this is a preview of where Avery is headed.',
+    playbooksEmptyTag: 'No playbooks yet',
 
     // Your team — briefing header (real numbers from ingestion) + weak handoffs
     briefingEyebrow: 'From your uploads',

@@ -1,8 +1,11 @@
+import { useState } from 'react'
 import { useLite } from '../store'
 import { useDict } from '../../shared/i18n/useDict'
 import { UploadPanel } from '../UploadPanel'
 import { InitialAvatar } from '../InitialAvatar'
 import { LiteComposer } from '../LiteComposer'
+import { groupPeople } from '../teamGroups'
+import type { LitePerson } from '../teamData'
 
 // feat-024 · lite 屏 1+2：上传空态 · Your team——ADR-0022 决策 1。
 // 空态：左脊柱是 live 自己的引导文案（不渲染任何 scripted 占位——story 渗漏的第一现场）；
@@ -25,6 +28,72 @@ function statusTone(status: string) {
 
 function classNames(parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(' ')
+}
+
+// 单张人卡（分组视图与兜底 flat 视图共用）。🔴 红线：永不渲染任何数字/评分/排名。
+function PersonCard({
+  person,
+  onOpen,
+}: {
+  person: LitePerson
+  onOpen: (id: string) => void
+}) {
+  return (
+    <button
+      type="button"
+      className={classNames(['home-person-card', person.read && `home-tone-${person.tone}`])}
+      onClick={() => onOpen(person.id)}
+      aria-label={`Open ${person.name}${person.read ? ` — ${person.read}` : ''}`}
+    >
+      <InitialAvatar name={person.name} size={44} className="home-person-avatar" />
+      <span className="home-person-body">
+        <h3>{person.name}</h3>
+        <p className="home-person-role">{person.role}</p>
+        {person.read ? <p className="home-person-read">{person.read}</p> : null}
+      </span>
+      {/* 🔴 红线：人卡永不渲染任何数字 —— 无 moodPct/capacityPct/% */}
+    </button>
+  )
+}
+
+// 一个可折叠的人卡分组容器（feat-025 Q2：分组标题 + 人数 + 折叠）。
+function PeopleGroup({
+  title,
+  people,
+  onOpen,
+}: {
+  title: string
+  people: LitePerson[]
+  onOpen: (id: string) => void
+}) {
+  const { t } = useDict()
+  const [open, setOpen] = useState(true)
+  const countLabel = people.length === 1 ? t.lite.groupCountOne : t.lite.groupCountMany
+  return (
+    <section className="home-people-group" aria-label={title}>
+      <button
+        type="button"
+        className="home-people-group-head"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <span className="home-people-group-title">{title}</span>
+        <span className="home-people-group-count">
+          {people.length} {countLabel}
+        </span>
+        <span className="home-people-group-toggle">
+          {open ? t.lite.groupCollapse : t.lite.groupExpand}
+        </span>
+      </button>
+      {open ? (
+        <div className="home-lane home-lane-people" aria-label={title}>
+          {people.map((person) => (
+            <PersonCard key={person.id} person={person} onOpen={onOpen} />
+          ))}
+        </div>
+      ) : null}
+    </section>
+  )
 }
 
 export function TeamScreen() {
@@ -108,24 +177,18 @@ export function TeamScreen() {
               <UploadPanel />
               <div className="home-lanes-head">
                 <p className="eyebrow">{t.lite.peopleLane}</p>
+                <p className="eyebrow home-people-group-caption">{t.lite.groupAllLabel}</p>
               </div>
-              <div className="home-lane home-lane-people" aria-label={t.lite.peopleLane}>
-                {team.people.map((person) => (
-                  <button
-                    key={person.id}
-                    type="button"
-                    className={classNames(['home-person-card', person.read && `home-tone-${person.tone}`])}
-                    onClick={() => openDetail('person', person.id)}
-                    aria-label={`Open ${person.name}${person.read ? ` — ${person.read}` : ''}`}
-                  >
-                    <InitialAvatar name={person.name} size={44} className="home-person-avatar" />
-                    <span className="home-person-body">
-                      <h3>{person.name}</h3>
-                      <p className="home-person-role">{person.role}</p>
-                      {person.read ? <p className="home-person-read">{person.read}</p> : null}
-                    </span>
-                    {/* 🔴 红线：人卡永不渲染任何数字 —— 无 moodPct/capacityPct/% */}
-                  </button>
+              {/* feat-025 Q2：轻量分组视图——按部门/项目归属/角色聚类，带分组容器 + 折叠。
+                  人卡本身零改（.home-person-card 仍在 DOM、仍可点，门相位 C/E 不受影响）。 */}
+              <div className="home-people-groups" aria-label={t.lite.peopleLane}>
+                {groupPeople(team.people, team.projects, t.lite.groupUngrouped).map((group) => (
+                  <PeopleGroup
+                    key={group.key}
+                    title={group.title}
+                    people={group.people}
+                    onOpen={(id) => openDetail('person', id)}
+                  />
                 ))}
               </div>
 

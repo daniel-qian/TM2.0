@@ -28,7 +28,15 @@
      **相位 F2**(S2/feat-024 补齐):真提交 composer → askLive → /advise SSE 事件到帧
      (终端行渲染 → manifest → 8 字段卡),真后端实跑 ~1–3 分钟。verdict 的
      `composerIsLive` = F1 静态 **且** F2 动态,漏跑 F2 = 红。
-   - `__seedGate.verdict()` — 聚合判定。
+   - `__seedGate.assertTeamGrouped()` — **相位 G**(feat-025 Q2):Your team 人栏 = 分组
+     容器(分组块 `.home-people-group` + 分组标题 + 折叠 toggle),人卡仍在 DOM/可点;
+     断折叠真生效(折叠后卡数减、复展后复原)。
+   - `__seedGate.assertRoomCanvas()` — **相位 H**(feat-025 Q3):The room 有薄 pan/zoom
+     画布 `.lite-room-canvas`(含 board + react-zoom-pan-pinch wrapper + 复位控件),
+     composer 留画布外(恒可点)。
+   - `__seedGate.assertPlaybooksEmpty()` — **相位 I**(feat-025 Q1):Playbooks 屏空态
+     (引导标题 + coming-soon 标 + 未来数据槽),该屏 story 名词黑名单 = 0。
+   - `__seedGate.verdict()` — 聚合判定(9 相位:原 6 + teamGrouped/roomCanvas/playbooksEmpty)。
 5. **收尾**:停 dev server、杀 8137 uvicorn。verdict JSON 原样贴进
    `feature_list.json` evidence / progress.md。
 

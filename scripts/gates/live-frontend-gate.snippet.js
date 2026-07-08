@@ -24,7 +24,10 @@
  *   await __seedGate.composerAskLive('Who leads design, and what do they own?')
  *                                                                 // phase F2: askLive dynamic — SSE events to frames
  *                                                                 // (real backend run, ~1-3 min on M3; added S2/feat-024)
- *   __seedGate.verdict()                                          // aggregate
+ *   await __seedGate.assertTeamGrouped()                          // phase G: People lane = collapsible groups (feat-025)
+ *   await __seedGate.assertRoomCanvas()                           // phase H: room pan/zoom canvas (call AFTER askLive)
+ *   await __seedGate.assertPlaybooksEmpty()                       // phase I: Playbooks honest empty state
+ *   __seedGate.verdict()                                          // aggregate (9 phases)
  */
 (() => {
   // Story-EXCLUSIVE nouns. NOTE: 'Lin Qing' / 'Chen Mingyuan' / 'Sun Xiaomei' / 'Zheng Zixuan'
@@ -249,6 +252,156 @@
       return out;
     },
 
+    // Re-derive the phase-B (ingest) result from the already-settled DOM without re-uploading.
+    // Identical checks to injectSeeds' post-settle block — for driver sessions that re-inject the
+    // snippet (fresh `results`) after an ingest already landed, so the aggregate verdict is honest
+    // without a second ~150s real /ingest round-trip. Pass the expected source-file count.
+    recordInjectFromDom(expectedCount) {
+      const err = $('.upload-error');
+      const ready = $('.upload-ready');
+      const chips = $$('.upload-source-chip').map((c) => c.textContent.trim());
+      results.inject = {
+        pass: !err && !!ready && chips.length === (expectedCount || chips.length) && chips.length > 0,
+        error: err ? (($('.upload-error-detail') || {}).textContent || 'ingest error') : null,
+        sourceChips: chips,
+        reconstructedFromDom: true,
+      };
+      return results.inject;
+    },
+
+    // ── feat-025 (S5) new-module phases ──────────────────────────────────────
+    // Tab-nav helper: click a lite topbar .scene-tab by (case-insensitive) label.
+    _clickTab(label) {
+      const tab = $$('.scene-tabs .scene-tab').find(
+        (b) => (b.textContent || '').trim().toLowerCase() === label.toLowerCase(),
+      );
+      if (tab) tab.click();
+      return !!tab;
+    },
+
+    async assertTeamGrouped() {
+      // Phase G (feat-025 Q2): the People lane must render as grouped, collapsible containers
+      // (group blocks + group heads with titles + a toggle) — NOT a flat card grid. The person
+      // cards themselves stay in the DOM and clickable (grouping only wraps them in containers).
+      this._clickTab('Your team');
+      // React re-renders on the next tick after the tab click — poll for the grouped lane to mount.
+      try {
+        await poll(() => ($('.home-people-groups') ? true : null), 8000, 'grouped people lane to mount');
+      } catch (e) { /* fall through — assertions below will report absence */ }
+      const groups = $$('.home-people-group');
+      const heads = $$('.home-people-group-head');
+      const titles = $$('.home-people-group-title')
+        .map((t) => (t.textContent || '').trim())
+        .filter(Boolean);
+      const cardsUnderGroups = $$('.home-people-group .home-person-card');
+      // Collapse the first group, then re-expand, to prove the toggle actually works.
+      // React re-renders on the next tick after each click — poll for the card-count change
+      // rather than reading synchronously (the collapsed <div> unmounts asynchronously).
+      let collapseWorks = false;
+      if (heads[0]) {
+        const before = $$('.home-people-group .home-person-card').length;
+        const firstGroupCards = $$('.home-people-group')[0].querySelectorAll('.home-person-card').length;
+        heads[0].click();
+        let collapsed = before;
+        try {
+          collapsed = await poll(() => {
+            const n = $$('.home-people-group .home-person-card').length;
+            return n < before ? n : null;
+          }, 4000, 'first group to collapse');
+        } catch (e) { /* stays === before → collapseWorks false */ }
+        heads[0].click(); // re-expand (leave DOM full for later phases)
+        let restored = collapsed;
+        try {
+          restored = await poll(() => {
+            const n = $$('.home-people-group .home-person-card').length;
+            return n === before ? n : null;
+          }, 4000, 'first group to re-expand');
+        } catch (e) { /* stays collapsed → collapseWorks false */ }
+        collapseWorks =
+          collapsed === before - firstGroupCards && collapsed < before && restored === before;
+      }
+      const out = {
+        groupContainers: groups.length,
+        groupHeads: heads.length,
+        groupTitles: titles.slice(0, 8),
+        cardsUnderGroups: cardsUnderGroups.length,
+        collapseWorks,
+        // At least one titled group, cards live inside group containers, and collapse toggles.
+        pass: groups.length >= 1 && heads.length >= 1 && titles.length >= 1 &&
+          cardsUnderGroups.length >= 1 && collapseWorks,
+      };
+      results.teamGrouped = out;
+      return out;
+    },
+
+    async assertRoomCanvas() {
+      // Phase H (feat-025 Q3): The room must carry a thin pan/zoom canvas wrapper in the DOM,
+      // holding the terminal board. react-zoom-pan-pinch renders a .react-transform-wrapper /
+      // .react-transform-component under our .lite-room-canvas. The composer stays OUTSIDE it.
+      // NOTE: the canvas only mounts once a run has started (hasStarted) — call this AFTER
+      // composerAskLive so the terminal board exists.
+      this._clickTab('The room');
+      try {
+        await poll(() => ($('.lite-room-canvas') ? true : null), 8000, 'room canvas to mount');
+      } catch (e) { /* fall through */ }
+      const canvas = $('.lite-room-canvas');
+      const board = $('.lite-room-canvas .lite-room-board');
+      // react-zoom-pan-pinch injects these class names (both our wrapperClass and its own).
+      const transformWrapper =
+        $('.lite-room-canvas .lite-panzoom-wrapper') ||
+        $('.lite-room-canvas .react-transform-wrapper');
+      const resetBtn = $('.lite-room-canvas .lite-room-canvas-reset');
+      // Composer must be present and NOT nested inside the canvas (stays pinned/interactive).
+      const composerInCanvas = !!$('.lite-room-canvas .nexus-followup-composer');
+      const composerOutside = !!$('.lite-room .nexus-followup-composer') && !composerInCanvas;
+      const out = {
+        canvasPresent: !!canvas,
+        boardPresent: !!board,
+        panZoomWrapperPresent: !!transformWrapper,
+        resetControlPresent: !!resetBtn,
+        composerOutsideCanvas: composerOutside,
+        pass: !!canvas && !!board && !!transformWrapper && composerOutside,
+      };
+      results.roomCanvas = out;
+      return out;
+    },
+
+    async assertPlaybooksEmpty() {
+      // Phase I (feat-025 Q1): a Playbooks screen exists, shows an honest empty state with
+      // guide copy anchored to future capability + a coming-soon marker + future-data slots,
+      // and leaks ZERO story nouns on that screen (no scripted case-review port).
+      this._clickTab('Playbooks');
+      try {
+        await poll(() => ($('.lite-playbooks') ? true : null), 8000, 'playbooks screen to mount');
+      } catch (e) { /* fall through */ }
+      const screen = $('.lite-playbooks');
+      const emptyCard = $('.lite-playbooks-empty');
+      const heading = emptyCard && emptyCard.querySelector('h2');
+      const comingSoon = $('.lite-playbooks-comingsoon');
+      const slots = $$('.lite-playbooks-slot');
+      const text = (screen && screen.innerText) || '';
+      // Story-noun blacklist must be clean on the Playbooks surface (no ported story case cards).
+      const storyHits = [];
+      for (const noun of STORY_NOUNS) {
+        const re = noun.includes(' ')
+          ? new RegExp(noun.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')
+          : new RegExp('\\b' + noun + '\\b');
+        if (re.test(text)) storyHits.push(noun);
+      }
+      const out = {
+        screenPresent: !!screen,
+        emptyStatePresent: !!emptyCard,
+        hasGuideHeading: !!(heading && (heading.textContent || '').trim().length > 0),
+        hasComingSoon: !!comingSoon,
+        futureSlots: slots.length,
+        storyHits,
+        pass: !!screen && !!emptyCard && !!heading && !!comingSoon &&
+          slots.length >= 1 && storyHits.length === 0,
+      };
+      results.playbooks = out;
+      return out;
+    },
+
     verdict() {
       const phases = {
         emptyStateClean: !!(results.storyNouns && results.storyNouns[0] && results.storyNouns[0].pass),
@@ -261,6 +414,10 @@
         composerIsLive:
           !!(results.composer && results.composer.pass) &&
           !!(results.composerLive && results.composerLive.pass),
+        // feat-025 (S5) new modules — grouping view, room pan/zoom canvas, Playbooks empty state.
+        teamGrouped: !!(results.teamGrouped && results.teamGrouped.pass),
+        roomCanvas: !!(results.roomCanvas && results.roomCanvas.pass),
+        playbooksEmpty: !!(results.playbooks && results.playbooks.pass),
       };
       return { pass: Object.values(phases).every(Boolean), phases, results };
     },

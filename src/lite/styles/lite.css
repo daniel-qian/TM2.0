@@ -430,3 +430,270 @@
 .lite-shell .home-lane-people:hover {
   border-color: var(--rule);
 }
+
+/* ── feat-025 Q2 · Your team 轻量分组视图（部门/项目归属/角色聚类，可折叠）────────
+   分组只包容器 + 标题 + 折叠；人卡本身零改（.home-person-card 仍在 DOM、仍可点）。
+   限高自滚（Bug4）从 .home-lane-people 上移到整个分组列 .home-people-groups——
+   多分组时整列有界，projects 栏立即可达；组内 .home-lane-people 不再单独限高。 */
+.lite-shell .home-people-group-caption {
+  color: var(--ink-faint);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.lite-shell .home-people-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-height: min(58vh, 620px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 4px;
+  margin: -4px -4px 0;
+  scrollbar-width: thin;
+}
+
+/* 分组视图接管限高后，组内人栏本身不再单独限高（否则双层滚动打架）。 */
+.lite-shell .home-people-groups .home-lane-people {
+  max-height: none;
+  overflow: visible;
+  padding: 0;
+  margin: 0;
+  border: 0;
+}
+.lite-shell .home-people-groups .home-lane-people:hover {
+  border-color: transparent;
+}
+
+.lite-shell .home-people-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.lite-shell .home-people-group-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: rgba(29, 27, 23, 0.03);
+  text-align: left;
+  transition:
+    background var(--fast) ease,
+    border-color var(--fast) ease;
+}
+
+.lite-shell .home-people-group-head:hover,
+.lite-shell .home-people-group-head:focus-visible {
+  background: rgba(29, 27, 23, 0.06);
+  border-color: var(--rule);
+  outline: none;
+}
+
+.lite-shell .home-people-group-title {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.lite-shell .home-people-group-count {
+  color: var(--ink-faint);
+  font-size: 11.5px;
+}
+
+.lite-shell .home-people-group-toggle {
+  margin-left: auto;
+  color: var(--ink-faint);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* ── feat-025 Q3 · The room 薄可拖拽/缩放画布（LitePanZoom）─────────────────────
+   画布填满 room scene（顶让 topbar、底让 composer）；board 内把原本 viewport-fixed
+   absolute 的终端/结果卡改成随 board 流动布局（scope 在 .lite-shell .lite-room-board，
+   story 的 .nexus-terminal/.lite-room-card 一像素不动）。composer 留在画布外恒可点。 */
+.lite-shell .lite-room-canvas {
+  position: absolute;
+  inset: 68px 20px 92px;
+  overflow: hidden;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background:
+    radial-gradient(circle at 1px 1px, rgba(29, 27, 23, 0.06) 1px, transparent 0) 0 0 / 22px 22px,
+    rgba(255, 253, 248, 0.55);
+}
+
+.lite-shell .lite-panzoom-wrapper {
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+}
+.lite-shell .lite-panzoom-wrapper:active {
+  cursor: grabbing;
+}
+
+.lite-shell .lite-panzoom-content {
+  display: block;
+}
+
+/* board = 一块自然流动的画面（终端 + HUD + 结果卡），随 pan/zoom 整体移动缩放 */
+.lite-shell .lite-room-board {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 20px;
+  width: 1180px;
+  max-width: none;
+  padding: 24px;
+}
+
+/* board 内解除 story 的 viewport-fixed absolute：终端与结果卡进入 flow */
+.lite-shell .lite-room-board .nexus-terminal {
+  position: static;
+  top: auto;
+  left: auto;
+  bottom: auto;
+  width: min(440px, 100%);
+  height: 420px;
+}
+
+.lite-shell .lite-room-board .nexus-brief-hud {
+  position: static;
+  flex: 1 1 260px;
+}
+
+.lite-shell .lite-room-board .lite-room-card {
+  position: static;
+  inset: auto;
+  flex: 1 1 520px;
+  min-width: 300px;
+  max-height: 560px;
+  overflow: auto;
+}
+
+.lite-shell .lite-room-canvas-controls {
+  position: absolute;
+  z-index: 5;
+  top: 10px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  /* .lite-room-canvas 无 pointer-events 限制；控件自身即可点 */
+}
+
+.lite-shell .lite-room-canvas-hint {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(255, 253, 248, 0.86);
+  border: 1px solid var(--rule);
+  color: var(--ink-faint);
+  font-size: 11px;
+  backdrop-filter: blur(8px);
+}
+
+.lite-shell .lite-room-canvas-reset {
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--rule);
+  background: rgba(255, 253, 248, 0.86);
+  color: var(--ink-soft);
+  font-size: 11px;
+  font-weight: 700;
+  backdrop-filter: blur(8px);
+  transition:
+    background var(--fast) ease,
+    color var(--fast) ease;
+}
+.lite-shell .lite-room-canvas-reset:hover,
+.lite-shell .lite-room-canvas-reset:focus-visible {
+  background: var(--ink);
+  color: var(--paper);
+  outline: none;
+}
+
+/* ── feat-025 Q1 · Playbooks 空态屏（诚实标 coming-soon，文案锚未来能力）──────────
+   复用 .nexus-empty 卡壳，但内容更长 → 放宽宽度 + 允许纵向滚动；左对齐读作叙事。 */
+.lite-shell .lite-playbooks-empty {
+  width: min(680px, calc(100vw - 56px));
+  max-height: min(78vh, 640px);
+  overflow-y: auto;
+  text-align: left;
+}
+
+.lite-shell .lite-playbooks-eyebrow {
+  color: var(--ink-faint);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.lite-shell .lite-playbooks-empty h2 {
+  margin-bottom: 10px;
+  font-size: clamp(22px, 2.6vw, 28px);
+  line-height: 1.28;
+}
+
+.lite-shell .lite-playbooks-slots {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--rule);
+}
+
+.lite-shell .lite-playbooks-slots-label {
+  margin-bottom: 12px;
+  color: var(--ink-faint);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.lite-shell .lite-playbooks-slot-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lite-shell .lite-playbooks-slot {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px dashed var(--rule);
+  border-radius: var(--radius);
+  background: rgba(29, 27, 23, 0.02);
+}
+
+.lite-shell .lite-playbooks-slot-tag {
+  flex: none;
+  margin-top: 1px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(29, 27, 23, 0.06);
+  color: var(--ink-faint);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.lite-shell .lite-playbooks-slot-text {
+  color: var(--ink-soft);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+.lite-shell .lite-playbooks-comingsoon {
+  margin-top: 20px;
+  color: var(--ink-faint);
+  font-size: 12px;
+  font-style: italic;
+}

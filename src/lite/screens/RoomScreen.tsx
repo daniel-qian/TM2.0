@@ -2,11 +2,14 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useLite } from '../store'
 import { useDict } from '../../shared/i18n/useDict'
 import { LiteAdviceCard } from '../LiteAdviceCard'
+import { LitePanZoom } from '../LitePanZoom'
 import type { LiteStreamLine, LiteSpeaker } from '../streamSource'
 
 // feat-024 · lite 屏 3：The room 薄建——ADR-0022 决策 1。
 // live SSE 控制台（终端 chrome 与 story 同 CSS，代码独立）+ 8 字段卡。
-// 不搬 1400 行剧场 NexusScene：无 PanZoom 板、无 rail、无 case 编排。
+// 不搬 1400 行剧场 NexusScene：无 rail、无 case 编排、无 world 坐标。
+// feat-025 Q3(a)：加一层薄可拖拽/缩放画布（LitePanZoom，lite 自有 wrapper，不碰 story
+// PanZoomCanvas）容纳终端 + 8 字段卡；composer 留在画布外恒定可点（门相位 F2 驱动它）。
 
 const SPEAKER_META: Record<LiteSpeaker, { label: string; className: string }> = {
   agent: { label: 'AVERY', className: 'is-agent' },
@@ -106,24 +109,29 @@ export function RoomScreen() {
     <section className="scene scene-nexus is-active lite-room" aria-label="The room">
       {hasStarted ? (
         <>
-          <LiteTerminal lines={run.lines} running={running} />
-          <div className="nexus-brief-hud">
-            <div className="nexus-brief-bar" aria-label={t.nexus.liveThinking}>
-              <span className="nexus-brief-bar-eyebrow">{t.nexus.liveThinking}</span>
-              <span className="nexus-brief-step">
-                {run.status === 'error'
-                  ? t.nexus.liveError
-                  : running
-                    ? t.nexus.liveRunning
-                    : t.nexus.liveReady}
-              </span>
+          {/* 薄画布：终端 + brief HUD + 8 字段卡随 pan/zoom 移动缩放；composer 留画布外 */}
+          <LitePanZoom>
+            <div className="lite-room-board">
+              <LiteTerminal lines={run.lines} running={running} />
+              <div className="nexus-brief-hud">
+                <div className="nexus-brief-bar" aria-label={t.nexus.liveThinking}>
+                  <span className="nexus-brief-bar-eyebrow">{t.nexus.liveThinking}</span>
+                  <span className="nexus-brief-step">
+                    {run.status === 'error'
+                      ? t.nexus.liveError
+                      : running
+                        ? t.nexus.liveRunning
+                        : t.nexus.liveReady}
+                  </span>
+                </div>
+              </div>
+              {advice ? (
+                <div className="lite-room-card">
+                  <LiteAdviceCard advice={advice} />
+                </div>
+              ) : null}
             </div>
-          </div>
-          {advice ? (
-            <div className="lite-room-card">
-              <LiteAdviceCard advice={advice} />
-            </div>
-          ) : null}
+          </LitePanZoom>
           <LiteAskComposer
             placeholder={t.nexus.askPlaceholder}
             submitLabel={t.nexus.ask}
