@@ -3,6 +3,7 @@ import { LiteTopbar } from './LiteTopbar'
 import { TeamScreen } from './screens/TeamScreen'
 import { RoomScreen } from './screens/RoomScreen'
 import { PlaybooksScreen } from './screens/PlaybooksScreen'
+import { VisionScreen } from './screens/VisionScreen'
 import { DetailOverlay } from './DetailOverlay'
 
 // feat-024（ADR-0022 决策 1）· lite 壳 = 产品本体。v1 三屏：上传空态 · Your team
@@ -19,6 +20,8 @@ export function LiteApp() {
           <TeamScreen />
         ) : screen === 'playbooks' ? (
           <PlaybooksScreen />
+        ) : screen === 'vision' ? (
+          <VisionScreen />
         ) : (
           <RoomScreen />
         )}

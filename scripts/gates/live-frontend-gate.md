@@ -36,7 +36,12 @@
      composer 留画布外(恒可点)。
    - `__seedGate.assertPlaybooksEmpty()` — **相位 I**(feat-025 Q1):Playbooks 屏空态
      (引导标题 + coming-soon 标 + 未来数据槽),该屏 story 名词黑名单 = 0。
-   - `__seedGate.verdict()` — 聚合判定(9 相位:原 6 + teamGrouped/roomCanvas/playbooksEmpty)。
+   - `__seedGate.assertVisionSurface()` — **相位 J**(feat-026):Vision 定位叙事页
+     (三拍叙事 `.lite-vision-beat` ≥3 + 能力边界 mock `.lite-vision-mock` ≥3,**每张 mock
+     必带 `.lite-vision-tag` preview/coming 标注**——零未标注 mock);若 mock 含示例人
+     (`.lite-vision-person`)则**零数字**(红线);该屏 story 名词黑名单 = 0。
+   - `__seedGate.verdict()` — 聚合判定(10 相位:原 6 + teamGrouped/roomCanvas/playbooksEmpty
+     + visionSurface)。
 5. **收尾**:停 dev server、杀 8137 uvicorn。verdict JSON 原样贴进
    `feature_list.json` evidence / progress.md。
 

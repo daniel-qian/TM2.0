@@ -21,9 +21,9 @@ import { liteTeamFromPayload, type LiteTeam } from './teamData'
 
 export type IngestStatus = 'idle' | 'ingesting' | 'ready' | 'error'
 
-// lite 壳的 scene：Your team（含上传空态）· The room · Playbooks（feat-025 空态屏）。
-// 详情是浮层不是 scene。
-export type LiteScreen = 'team' | 'room' | 'playbooks'
+// lite 壳的 scene：Your team（含上传空态）· The room · Playbooks（feat-025 空态屏）·
+// Vision（feat-026 定位叙事 + 能力边界 mock）。详情是浮层不是 scene。
+export type LiteScreen = 'team' | 'room' | 'playbooks' | 'vision'
 
 export type LiteDetail = { kind: 'person' | 'project'; id: string } | null
 

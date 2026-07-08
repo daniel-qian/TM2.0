@@ -27,7 +27,8 @@
  *   await __seedGate.assertTeamGrouped()                          // phase G: People lane = collapsible groups (feat-025)
  *   await __seedGate.assertRoomCanvas()                           // phase H: room pan/zoom canvas (call AFTER askLive)
  *   await __seedGate.assertPlaybooksEmpty()                       // phase I: Playbooks honest empty state
- *   __seedGate.verdict()                                          // aggregate (9 phases)
+ *   await __seedGate.assertVisionSurface()                        // phase J: Vision surface — narrative + labeled mock
+ *   __seedGate.verdict()                                          // aggregate (10 phases)
  */
 (() => {
   // Story-EXCLUSIVE nouns. NOTE: 'Lin Qing' / 'Chen Mingyuan' / 'Sun Xiaomei' / 'Zheng Zixuan'
@@ -402,6 +403,71 @@
       return out;
     },
 
+    // ── feat-026 (S6) new-surface phase ──────────────────────────────────────
+    async assertVisionSurface() {
+      // Phase J (feat-026): the Vision surface exists and does two jobs honestly.
+      //  1. Positioning narrative — the three-beat frame (what you see now = a lite you
+      //     tried with your own files → the real product = a custom agent service, your data
+      //     + private deploy → what this demo shows = UIUX + judgment + the red line).
+      //  2. Capability-boundary MOCK — each future-capability card MUST carry a visible
+      //     preview/coming marker (this is a fundraising surface; an unlabeled mock that
+      //     reads as shipped is a trust break). We assert: >=1 mock card, and EVERY mock card
+      //     carries a .lite-vision-tag marker — zero unlabeled mock cards.
+      //  Red line (same as everywhere): if a mock shows an example PERSON, that person carries
+      //  ZERO numbers/score/rank. And the story-noun blacklist stays 0 on this surface.
+      // The Vision tab's visible label is product copy ("Where this goes"), not "Vision" — click
+      // by that label, with a fallback that clicks whichever tab mounts the .lite-vision screen.
+      if (!this._clickTab('Where this goes')) {
+        for (const tab of $$('.scene-tabs .scene-tab')) {
+          tab.click();
+          if ($('.lite-vision')) break;
+        }
+      }
+      try {
+        await poll(() => ($('.lite-vision') ? true : null), 8000, 'vision surface to mount');
+      } catch (e) { /* fall through — assertions below report absence */ }
+      const screen = $('.lite-vision');
+      const narrative = $('.lite-vision-narrative');
+      // Three narrative beats — each a labeled block.
+      const beats = $$('.lite-vision-beat');
+      // Mock capability cards + their honesty markers.
+      const mockCards = $$('.lite-vision-mock');
+      const taggedMockCards = mockCards.filter((c) => c.querySelector('.lite-vision-tag'));
+      const unlabeledMockCards = mockCards.length - taggedMockCards.length;
+      // Example-person red line: any person chip inside a mock must carry NO number.
+      const mockPersonEls = $$('.lite-vision-mock .lite-vision-person');
+      const personNumberLeak = mockPersonEls
+        .map((el) => el.innerText || '')
+        .filter((txt) => BLOOD_BAR_RE.test(txt) || /\b\d/.test(txt));
+      // Story-noun blacklist on the Vision surface.
+      const text = (screen && screen.innerText) || '';
+      const storyHits = [];
+      for (const noun of STORY_NOUNS) {
+        const re = noun.includes(' ')
+          ? new RegExp(noun.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')
+          : new RegExp('\\b' + noun + '\\b');
+        if (re.test(text)) storyHits.push(noun);
+      }
+      const out = {
+        screenPresent: !!screen,
+        narrativePresent: !!narrative,
+        narrativeBeats: beats.length,
+        mockCards: mockCards.length,
+        taggedMockCards: taggedMockCards.length,
+        unlabeledMockCards,
+        mockPersonCount: mockPersonEls.length,
+        personNumberLeak,
+        storyHits,
+        // Screen mounts; narrative has its 3 beats; >=3 mock cards ALL labeled preview/coming;
+        // zero example-person number leak; story-noun blacklist clean.
+        pass: !!screen && !!narrative && beats.length >= 3 &&
+          mockCards.length >= 3 && unlabeledMockCards === 0 &&
+          personNumberLeak.length === 0 && storyHits.length === 0,
+      };
+      results.vision = out;
+      return out;
+    },
+
     verdict() {
       const phases = {
         emptyStateClean: !!(results.storyNouns && results.storyNouns[0] && results.storyNouns[0].pass),
@@ -418,6 +484,8 @@
         teamGrouped: !!(results.teamGrouped && results.teamGrouped.pass),
         roomCanvas: !!(results.roomCanvas && results.roomCanvas.pass),
         playbooksEmpty: !!(results.playbooks && results.playbooks.pass),
+        // feat-026 (S6) new surface — positioning narrative + honestly-labeled capability mock.
+        visionSurface: !!(results.vision && results.vision.pass),
       };
       return { pass: Object.values(phases).every(Boolean), phases, results };
     },
