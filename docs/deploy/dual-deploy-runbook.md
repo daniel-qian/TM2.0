@@ -59,8 +59,13 @@ Two independent artifacts, four targets, one env matrix:
 | `AVERY_RETRIEVAL` | `keyword` (lite) → `vector` (turn-on §D) | same | `avery/ingest/store.py` |
 | `AVERY_EMBEDDINGS` | `openai`/`voyage` (when vector) | `bge-m3`/`minimax` (when vector) | `avery/ingest/store.py` |
 | `PGVECTOR_URL` | 🧑 **HITL** (when vector) | 🧑 **HITL** (when vector) | vector store |
+| `AVERY_INGEST_CONCURRENCY` | `4` (default) | `4` (default) | `avery/ingest/extract.py` (feat-027 parallel ingest) |
 | `PORT` | `8137` | `8137` | uvicorn |
-| `AVERY_CORS_ORIGINS` | frontend origin(s) | frontend origin(s) | CORS (when enabled) |
+| `AVERY_CORS_ORIGINS` | frontend origin(s) — **SET this** | frontend origin(s) — **SET this** | `service/app.py` CORS (always on) |
+
+- `AVERY_INGEST_CONCURRENCY` (feat-027): how many documents extract in parallel per `/ingest` upload
+  (bounded thread pool). Default `4`; set `1` to force the old sequential path. The cap is the
+  rate-limit guardrail — a bursty fan-out tripped M3 429s.
 
 - Template: **`eval-harness/service/.env.example`**. The real `eval-harness/.env` is **gitignored**;
   keys rotate there per `eval-harness/.env.example` note. In production, inject via the host's
@@ -181,10 +186,18 @@ VITE_AVERY_MODE=live VITE_AVERY_LOCALE=zh VITE_AVERY_API_BASE=https://<境内-se
 - **API base per target** is the load-bearing wire: the 境内 frontend must call the 境内 service
   (fast, no 翻墙), the overseas frontend the overseas service. Set `VITE_AVERY_API_BASE` accordingly
   at **build** time (§B) — it is baked into the bundle.
-- **CORS**: if a target's frontend origin ≠ its service origin, the browser needs the service to send
-  CORS headers. The service does not enable CORS by default (same-origin / reverse-proxy is
-  simplest). To enable cross-origin, add FastAPI `CORSMiddleware` allowing `AVERY_CORS_ORIGINS`
-  (this is a small, isolated follow-up; the env var is already reserved in the matrix).
+- **CORS**: the service **enables CORS by default** — `service/app.py` adds FastAPI `CORSMiddleware`
+  **unconditionally** (not a follow-up), reading the allowed origins from `AVERY_CORS_ORIGINS`
+  (comma-separated; default `http://localhost:5173,http://127.0.0.1:5173` for local dev). So if a
+  target's frontend origin ≠ its service origin, the **deploy action is to SET `AVERY_CORS_ORIGINS`**
+  to the production frontend origin(s) in the host env — no code change. Leaving it unset falls back
+  to the localhost dev origins, which will **block** a deployed browser frontend.
+- **TLS / mixed content** ⚠️: a Vercel (HTTPS) frontend calling an **HTTP** backend is
+  mixed-content, which browsers **hard-block** (the request never leaves the page). The deployed
+  backend must therefore be **HTTPS** (TLS termination / a reverse proxy in front of uvicorn — e.g.
+  the ECS load balancer or an nginx/Caddy sidecar) **or** served same-origin with the frontend.
+  `VITE_AVERY_API_BASE` (§1) must then be an `https://` URL. This applies to `/advise` **and** the
+  SSE stream and `/ingest` uploads alike.
 - **Ingestion HTTP surface** (`POST /ingest`, `GET /team/{id}`) ships **in the image** (feat-018
   wired it over feat-016's `ingest_paths` + registry). The live upload flow ("上传→当场看团队长出")
   works end-to-end on the deployed service — proven by `scripts/deploy/ingest_http_smoke.py`.

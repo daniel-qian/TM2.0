@@ -29,6 +29,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, UploadFile
 from fastapi import File
+from starlette.concurrency import run_in_threadpool
 
 from avery.ingest import ingest_paths
 from avery.ingest.registry import REGISTRY, CompanyContext
@@ -74,8 +75,16 @@ async def ingest(files: list[UploadFile] = File(...)) -> dict:
 
         # feat-023: pluggable extraction (LLM when keyed, heuristic otherwise/forced) — the
         # red-line gate inside ingest_paths is unchanged and still refuses a scoring extraction.
-        report = ingest_paths([str(p) for p in saved], registry=REGISTRY, name="company",
-                              extractor=extractor_factory.make_extractor())
+        # feat-028: the whole synchronous ingest is minutes-long — BOTH building the LLM extractor
+        # brain (make_extractor constructs an OpenAI client, ~seconds) AND the parse+extraction fan-
+        # out (ingest_paths). Running either inline would block the single-worker event loop —
+        # freezing /health and letting the Docker HEALTHCHECK restart the container mid-extraction.
+        # Offload the entire synchronous unit to a worker thread; behavior is otherwise identical.
+        def _extract_and_ingest() -> object:
+            return ingest_paths([str(p) for p in saved], registry=REGISTRY, name="company",
+                                extractor=extractor_factory.make_extractor())
+
+        report = await run_in_threadpool(_extract_and_ingest)
 
         if not report.ok or report.context is None:
             # Red-line gate (or an all-unparseable batch) refused to publish a context.
