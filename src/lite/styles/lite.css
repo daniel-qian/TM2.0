@@ -356,6 +356,32 @@
   font-size: 12px;
 }
 
+/* ── 上传原生 input 隐藏（试玩 bug：双上传按钮 + 弹两次文件框）─────────────────
+   UploadPanel 的 <input.upload-input> 本意是隐藏、只由自定义「Choose files」按钮 +
+   dropzone onClick 程序化 .click() 触发；但它从来没有隐藏样式 → 浏览器原生「选择文件」
+   控件与自定义按钮同时可见（= 两个上传按钮），且直接点原生 input 会冒泡到 dropzone
+   的 onClick 再 .click() 一次 = 文件框弹两次。隐藏原生 input（程序化 click 仍有效）。 */
+.lite-shell .upload-input {
+  display: none;
+}
+
+/* ── The room 空态 composer 不再盖住描述文字（试玩 bug：空态 UI 重叠）───────────
+   空态复用了 .nexus-followup-composer——它默认 position:absolute; left:16px; bottom:20px
+   （run 态锚场景底用）。塞进 .nexus-empty 卡（本身 absolute）后，composer 绝对定位到卡底、
+   盖住正常流里的 h2/subtitle。空态里让它回到正常流、卡内自然堆叠。
+   仅作用于 lite 空态包裹（.nexus-empty-composer-wrap 是 lite 专有）——run 态 composer
+   （在包裹之外）仍绝对锚底，story 的 followup composer 一律不受影响。 */
+.lite-shell .nexus-empty-composer-wrap {
+  margin-top: 18px;
+}
+
+.lite-shell .nexus-empty-composer-wrap .nexus-followup-composer {
+  position: static;
+  left: auto;
+  bottom: auto;
+  width: 100%;
+}
+
 /* ── 顶栏 mode 开关（Story/Live）补样式（S4 · 试玩 bug 5「按钮风格丢失」）──────
    根因：`.mode-switch-btn` 由 feat-017（fae493f，WIP 被 session limit 截断）引入却
    从未配 CSS——拆分前 global.css 与拆分后 chunk 里都只有 `.mode-switch` 的 pointer-events，
