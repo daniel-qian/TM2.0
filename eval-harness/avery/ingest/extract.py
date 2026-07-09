@@ -25,7 +25,9 @@ Extractor is pluggable (mirrors the pluggable brain):
 """
 from __future__ import annotations
 
+import os
 import re
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Protocol
 
@@ -431,13 +433,52 @@ class HeuristicExtractor:
         return res
 
 
-def extract_docs(docs: list[ParsedDoc], extractor: Extractor | None = None) -> ExtractionResult:
+def _default_max_workers() -> int:
+    """Concurrency for document-level extraction. `AVERY_INGEST_CONCURRENCY` (default 4).
+
+    The cap IS the rate-limit guardrail: LLM extraction fans out one blocking `brain.respond()` per
+    doc, and a bursty fan-out is what tripped the earlier M3 429. Bounded on purpose."""
+    try:
+        n = int(os.environ.get("AVERY_INGEST_CONCURRENCY", "4"))
+    except ValueError:
+        n = 4
+    return max(1, n)
+
+
+def extract_docs(docs: list[ParsedDoc], extractor: Extractor | None = None,
+                 max_workers: int | None = None) -> ExtractionResult:
     """Run an extractor across many docs and merge. Then resolve project ownerName -> ownerId
-    against extracted people so cards link up."""
+    against extracted people so cards link up.
+
+    Documents are extracted CONCURRENTLY with a bounded ThreadPoolExecutor — each
+    `extractor.extract(doc)` makes blocking `brain.respond()` HTTP calls (which release the GIL
+    during network I/O), so a 10-file upload runs in ~max(one file) instead of ~sum. Concurrency is
+    bounded by `max_workers` (env `AVERY_INGEST_CONCURRENCY`, default 4); the cap is the rate-limit
+    guardrail. Results are merged in ORIGINAL input order, so the output is byte-identical to the
+    sequential path — only wall-time changes. `_link_owners` runs ONCE, post-merge, single-threaded.
+
+    Exception semantics are UNCHANGED from the sequential loop: a raising extractor propagates and
+    sinks the batch (the pool surfaces the first exception via `future.result()`); errors are never
+    newly swallowed. (In practice `LLMExtractor.extract` catches internally and falls back per-doc.)
+    """
     ex = extractor or HeuristicExtractor()
+    workers = max_workers if max_workers is not None else _default_max_workers()
+    effective = min(workers, len(docs))
+
     out = ExtractionResult()
-    for d in docs:
-        out.merge(ex.extract(d))
+    if effective <= 1:
+        # Sequential fast-path — byte-identical to the original loop (single doc / heuristic /
+        # AVERY_INGEST_CONCURRENCY=1). No threads, no pool overhead.
+        for d in docs:
+            out.merge(ex.extract(d))
+    else:
+        # Concurrent across documents; merge in ORIGINAL order for deterministic output. Surface the
+        # first exception (future.result re-raises) so behavior matches sequential except wall-time.
+        with ThreadPoolExecutor(max_workers=effective) as pool:
+            futures = [pool.submit(ex.extract, d) for d in docs]
+            for f in futures:
+                out.merge(f.result())
+
     _link_owners(out)
     return out
 
