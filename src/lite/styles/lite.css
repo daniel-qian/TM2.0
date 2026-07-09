@@ -710,7 +710,11 @@
 
 .lite-shell .lite-vision-scroll {
   width: min(860px, calc(100vw - 48px));
-  max-height: calc(100vh - 148px);
+  /* 填满场景内容框自滚——Vision 无 composer，不能像 team/room 那样按 100vh-148px
+     给底部 composer 预留空间（那会在本屏留出一条空白带，S6 试玩 bug）。
+     min-height:0 让 flex 子项可收缩、内部 overflow 生效。 */
+  height: 100%;
+  min-height: 0;
   overflow-y: auto;
   padding-right: 4px;
 }
