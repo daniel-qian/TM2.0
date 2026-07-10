@@ -53,6 +53,11 @@ FORBIDDEN_PERSON_KEYS_ZH = (
     "评分", "打分", "得分", "评级", "定级", "分级", "评估", "排名", "排序", "画像",
     "绩效", "考核", "潜力", "情绪值", "情绪分", "产能", "工时利用", "利用率", "饱和度",
     "离职风险", "流失风险", "末位淘汰", "淘汰", "分数",
+    # feat-029 round 2 — star ratings / ranking labels on a person. Traditional keys are folded to
+    # Simplified before this substring match (redline_extract.validate_person_dict), so 星級/名次/評比
+    # trip these too. (末流/垫底/差评 rank synonyms are caught as CONTENT by the advice gate, so they
+    # stay out of the KEY list to keep it narrow.)
+    "星级", "名次", "评比",
 )
 
 

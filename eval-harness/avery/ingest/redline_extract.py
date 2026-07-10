@@ -71,11 +71,15 @@ _RATING_NUMBER = re.compile(
 _SCORE_WORD_NEAR_NUM = re.compile(
     r"\b(?:score|scored|scoring|rating|rated|rank|ranked|ranking|tier|grade|graded|"
     r"percentile|potential|mood|capacity)\b\D{0,12}\d"
-    # feat-029 — Chinese scoring word next to a number in a PERSON field ('绩效评分2分',
-    # 'KPI评分88分', '情绪状态值3', '排名第2'). Tenures/counts ('入职18个月', '8年经验', '带队交付
-    # v2') carry no scoring word, so they still pass. Qualitative labels with no digit
-    # ('绩效评级：不合格', '排名倒数第一') are NOT stripped here — the content gate catches them.
-    r"|(?:评分|打分|得分|评级|定级|评估|排名|绩效|潜力|情绪|画像|考核|KPI|kpi|产能|工时)\D{0,8}\d",
+    # feat-029 — Chinese scoring word next to a SCORE-SHAPED number in a PERSON field ('绩效评分2分',
+    # 'KPI评分88分', '情绪状态值3', '排名第2'). ROUND 2 number-shape: the digit fires only when it is
+    # a score (N分/bare rating), NOT a YEAR (2023), a TENURE (8年/18个月) or a COUNT (5万用户). The
+    # gap forbids ASCII letters so a JOB-GRADE token ('定级为P7') breaks the chain and passes.
+    # Qualitative labels with no digit ('绩效评级：不合格', '排名倒数第一') are NOT stripped here — the
+    # content gate catches them.
+    r"|(?:评分|打分|得分|评级|定级|评估|排名|绩效|潜力|情绪|画像|考核|KPI|kpi|产能|工时)"
+    r"[^\dA-Za-z]{0,8}(?!19\d{2}|20\d{2})\d{1,3}"
+    r"(?!\s*(?:年|个月|月|周|天|日|人|名|位|万|个|次|条|封|件|台|轮|页|字|号|元|块|亿|千|百|米|公里|小时|分钟|岁))",
     re.I)
 
 
@@ -107,8 +111,9 @@ def validate_person_dict(name: str, data: dict) -> list[ExtractionViolation]:
     for key in data.keys():
         # feat-029 — keep CJK through normalization so a Chinese scoring key survives (the ASCII
         # path is byte-identical: English keys have no CJK). English = exact match; Chinese =
-        # substring, so '绩效评分' trips '评分' and '离职风险' trips '离职风险'.
-        norm = re.sub(r"[^a-z0-9一-鿿]", "", str(key).lower())
+        # substring, so '绩效评分' trips '评分' and '离职风险' trips '离职风险'. ROUND 2 — fold
+        # Traditional→Simplified first so 績效評分/離職風險 (Traditional keys) trip the same substrings.
+        norm = re.sub(r"[^a-z0-9一-鿿]", "", redline.zh_normalize(str(key).lower()))
         if norm in FORBIDDEN_PERSON_KEYS or any(z in norm for z in FORBIDDEN_PERSON_KEYS_ZH):
             out.append(ExtractionViolation(
                 kind="person-score-key", person=name,

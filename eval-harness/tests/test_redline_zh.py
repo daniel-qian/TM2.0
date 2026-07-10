@@ -201,3 +201,188 @@ def test_zh_scoring_lexicon_falls_back_whole_doc():
     assert validate_extraction(res).ok, "回退后的产物必须通过同一道红线闸"
     blob = " ".join(o for p in res.people for o in p.owns)
     assert "不合格" not in blob and "倒数第一" not in blob, "中文评分不得泄漏进人员字段"
+
+
+# =============================================================================================
+# feat-029 RED LINE (adversarial round 2) — the crafted-input battery that found REAL defects in
+# BOTH directions: the ZH logic was simultaneously TOO BROAD (false-positives on legit rosters) and
+# TOO NARROW (real Chinese scores bypassed it). Part A = false-positives to STOP; Part B = bypasses
+# to CATCH. The reconciliation is WORK-SUPPRESSION + NUMBER-SHAPE: a score OF a person is caught; a
+# person who BUILDS scoring / has a job grade / has a year-or-tenure number PASSES.
+# =============================================================================================
+
+# ---------------------------------------------------------------------------------------------
+# PART A — FALSE-POSITIVES to STOP (legit inputs wrongly REJECTED; must PASS). Highest priority.
+# ---------------------------------------------------------------------------------------------
+
+# A1 — WORK-vs-PERSON: a score word bound to a WORK ARTIFACT (系统/体系/模型/算法/逻辑…) that the
+# person BUILDS/OWNS is about their WORK, not a score OF them. Or the sentence explicitly says the
+# person is not scored (本人不参与考核). Must PASS.
+ZH_A1_WORK_NOT_PERSON = [
+    "她负责设计绩效评分系统，本人不参与考核。",
+    "他负责搭建绩效评审体系。",
+    "她主导设计了KPI评分系统。",
+    "他是评分模型的负责人，主导打分逻辑开发。",
+    "她负责搜索排名算法的优化。",
+]
+
+
+@pytest.mark.parametrize("text", ZH_A1_WORK_NOT_PERSON)
+def test_zh_work_artifact_not_person_score_passes(text):
+    res = redline.validate(text)
+    assert res.passed, f"人在建评分系统被误伤 ({res.summary()}): {text!r}"
+
+
+# A2 — JOB-GRADE / leveling is NOT a performance score (P7/P8/高级工程师 on a career track). Must PASS.
+ZH_A2_JOB_GRADE = [
+    "把他定级为P7，走技术专家通道。",
+    "这位同事的职级定级为P8。",
+    "员工定级为高级工程师。",
+]
+
+
+@pytest.mark.parametrize("text", ZH_A2_JOB_GRADE)
+def test_zh_job_grade_leveling_passes(text):
+    res = redline.validate(text)
+    assert res.passed, f"职级定级被误当人员评分 ({res.summary()}): {text!r}"
+
+
+# A5 — OTHER-SUBJECT ranking with an incidental pronoun: the grammatical subject is 公司/项目, not
+# the person. Must PASS.
+ZH_A5_OTHER_SUBJECT = [
+    "我们公司排名行业第一。",
+    "这个项目排期第2优先级。",
+]
+
+
+@pytest.mark.parametrize("text", ZH_A5_OTHER_SUBJECT)
+def test_zh_other_subject_ranking_passes(text):
+    res = redline.validate(text)
+    assert res.passed, f"公司/项目排名被误伤 ({res.summary()}): {text!r}"
+
+
+# A1/A2/A3 on the EXTRACTION layer — the "she:" wrapper makes _has_person always true, so bare
+# anchors used to fire for ANY person field mentioning 打分/评分/排名 as WORK. These must extract ok.
+ZH_A_LEGIT_OWNS = [
+    ["负责绩效评审系统", "搭建评估平台架构"],        # A1 — builds scoring systems
+    ["负责排名算法优化"],                            # A1 — owns a ranking algorithm
+    ["负责评分模型迭代"],                            # A1 — iterates a scoring model
+    ["季度定级为P7"],                                # A2 — a job grade, not a score
+    ["8年经验做过绩效体系"],                          # A3 — tenure number, not a rating
+    ["服务5万用户"],                                 # A3 — a count, not a rating
+]
+
+
+@pytest.mark.parametrize("owns", ZH_A_LEGIT_OWNS)
+def test_zh_legit_work_owns_extracts_ok(owns):
+    res = validate_extraction(ExtractionResult(people=[PersonEntity(id="u_x", name="安某", owns=owns)]))
+    assert res.ok, f"合法工作/职级/计数被抽取红线误伤 ({res.summary()}): {owns!r}"
+
+
+def test_zh_number_adjacency_needs_score_shape():
+    """A topic word near a digit fires ONLY if the number is SCORE-SHAPED (N分/N/M/%/满分/N星), NOT a
+    year (2023), tenure (8年), or count (5万用户)."""
+    for role, owns in (
+        ("安全工程师", ["风险评估报告2023"]),           # a year, not a score
+        ("", ["8年经验做过绩效体系"]),                   # tenure
+        ("", ["服务5万用户"]),                          # count
+    ):
+        res = validate_extraction(ExtractionResult(people=[PersonEntity(id="u_y", name="安某", role=role, owns=owns)]))
+        assert res.ok, f"年份/工龄/计数被误当评分数字 ({res.summary()}): role={role!r} owns={owns!r}"
+
+
+# ---------------------------------------------------------------------------------------------
+# PART B — BYPASSES to CATCH (real scores that currently slip; must now hard-FAIL/refuse).
+# ---------------------------------------------------------------------------------------------
+
+# B6 — Traditional Chinese: EVERY lexicon term in its Traditional glyphs must fire (dependency-free
+# glyph normalization).
+ZH_B6_TRADITIONAL = [
+    "他的績效評分是2分。",
+    "她屬於高離職風險人員。",
+    "對他做一次員工畫像。",
+    "他的潛力評級是C。",
+    "她的情緒值只有3。",
+    "把他列入末位淘汰名單。",
+    "同事們給他評比墊底。",
+]
+
+
+@pytest.mark.parametrize("text", ZH_B6_TRADITIONAL)
+def test_zh_traditional_person_scoring_hard_fails(text):
+    res = redline.validate(text)
+    assert not res.passed, f"繁体中文人员评分逃过了红线闸: {text!r}"
+
+
+def test_zh_traditional_forbidden_keys_rejected():
+    for bad in ({"name": "王芳", "績效評分": 85}, {"name": "李強", "離職風險": "高"}):
+        assert validate_person_dict(bad["name"], bad), f"应拒绝繁体评分键: {bad}"
+
+
+# B7 — negation-lookalikes: 不得不 / 不得已 are AFFIRMATIVE ("have no choice but to"), NOT negation.
+ZH_B7_FALSE_NEGATION = [
+    "我不得不给他评分：只有2分。",
+    "不得已给他排名倒数第一。",
+]
+
+
+@pytest.mark.parametrize("text", ZH_B7_FALSE_NEGATION)
+def test_zh_affirmative_budé_not_treated_as_negation(text):
+    res = redline.validate(text)
+    assert not res.passed, f"不得不/不得已被误当否定,评分逃逸: {text!r}"
+
+
+# B8 — person + a pure score-number on the advice layer (no scoring verb needed).
+ZH_B8_PERSON_NUMBER = [
+    "王小明 92分，李雷 78分。",
+    "他的分数是2。",
+    "他的 KPI=90。",
+]
+
+
+@pytest.mark.parametrize("text", ZH_B8_PERSON_NUMBER)
+def test_zh_person_plus_score_number_hard_fails(text):
+    res = redline.validate(text)
+    assert not res.passed, f"人+分数逃过了红线闸: {text!r}"
+
+
+# B9 — ranking synonyms, person-anchored.
+ZH_B9_RANK_SYNONYMS = [
+    "他属于末流员工。",
+    "同事们给他差评。",
+    "他名列前茅，她垫底。",
+]
+
+
+@pytest.mark.parametrize("text", ZH_B9_RANK_SYNONYMS)
+def test_zh_ranking_synonyms_hard_fail(text):
+    res = redline.validate(text)
+    assert not res.passed, f"排名同义词逃过了红线闸: {text!r}"
+
+
+# B10 — star ratings on a person.
+ZH_B10_STARS = [
+    "他是五星员工，她是一星。",
+    "给这位下属打三颗星。",
+]
+
+
+@pytest.mark.parametrize("text", ZH_B10_STARS)
+def test_zh_star_ratings_hard_fail(text):
+    res = redline.validate(text)
+    assert not res.passed, f"星级评分逃过了红线闸: {text!r}"
+
+
+def test_zh_star_and_ranking_forbidden_keys_rejected():
+    for bad in ({"name": "A", "星级": 5}, {"name": "B", "名次": 3}, {"name": "C", "评比": "优"}):
+        assert validate_person_dict(bad["name"], bad), f"应拒绝星级/名次/评比键: {bad}"
+
+
+# xfail — space-separated glyphs (绩 效 评 分) are a documented residual: the gate matches contiguous
+# lexicon glyphs, and chasing arbitrary interior whitespace would over-fire on legit prose. The LLM
+# judge (011c) is the second hard-gate dimension for such exotic paraphrases.
+@pytest.mark.xfail(reason="space-separated lexicon glyphs are a documented residual; caught by the LLM judge (011c), not this pattern gate", strict=True)
+def test_zh_space_separated_glyphs_residual():
+    # 绩 效 评 分 with interior spaces and no score number never reassembles into a contiguous
+    # lexicon match; chasing arbitrary whitespace would over-fire on legit prose.
+    assert not redline.validate("他 的 绩 效 评 分 很 低。").passed

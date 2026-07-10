@@ -111,8 +111,13 @@ def _negated(text: str, start: int, window: int = 32) -> bool:
     """True if a negation cue sits just before the match — so advice AGAINST scoring a person
     ('don't start a scorecard on her', 'never rate her') is NOT itself a red-line violation.
     Surfaced by the first real run, where a baseline got falsely flagged for telling the manager
-    not to score the hire."""
-    return bool(_NEG.search(text[max(0, start - window): start]))
+    not to score the hire.
+
+    feat-029 round 2 — 不得不 / 不得已 are AFFIRMATIVE ("have no choice but to"), NOT negation. They
+    are neutralised whole BEFORE the scan, so neither the '不得' cue NOR the '不给' that '不得不给'
+    would otherwise expose reads as a negation, and '不得不给他评分' still fires."""
+    seg = text[max(0, start - window): start].replace("不得不", "").replace("不得已", "")
+    return bool(_NEG.search(seg))
 
 
 def _has_person(seg: str) -> bool:
@@ -215,11 +220,51 @@ _ALWAYS = [
 # Domestic users feed Chinese docs to MiniMax-M3; the English-only gate let a Chinese person score
 # (绩效评分 / 排名 / 画像 / 评级 / 潜力评估 / 情绪值 / 离职风险 / 末位淘汰 …) bypass every layer.
 # Same two-tier design as the English gate, minus \b (CJK has no word boundary):
-#   * _ZH_* ALWAYS — compounds inherently about a PERSON fire unconditionally (negation still
-#     suppresses). A PERSON-domain qualifier is baked into every compound, so the customer/product/
-#     work analogues (用户画像 / 信用评级 / 市场情绪 / 产品排名) are NOT person scores and pass —
-#     the ADR-0016 asymmetry (work/customer MAY be quantified), extended to Chinese.
-#   * _ZH_ANCHOR — bare scoring verbs (打分/评分/评级/排名/定级) fire ONLY with a person in view.
+#   * _ZH_ALWAYS — compounds inherently about a PERSON fire unconditionally (negation + WORK
+#     suppression + JOB-GRADE suppression still apply). A PERSON-domain qualifier is baked into every
+#     compound, so the customer/product/work analogues (用户画像 / 信用评级 / 市场情绪 / 产品排名)
+#     are NOT person scores and pass — the ADR-0016 asymmetry (work/customer MAY be quantified).
+#   * _ZH_ANCHOR — bare scoring verbs (打分/评分/评级/排名/定级) fire ONLY with a person in view, no
+#     work-artifact/job-grade suppression tripped, AND a scoring TARGET (score number or rank/label).
+#
+# feat-029 round 2 — an adversarial battery EXECUTED against the round-1 gate found it was
+# simultaneously TOO BROAD and TOO NARROW. The reconciliation, applied uniformly below:
+#   WORK-SUPPRESSION  a score word bound to a work ARTIFACT the person builds/owns (评分系统 /
+#                     排名算法 / 打分逻辑), or a sentence that says the person is NOT scored, is about
+#                     WORK → do not fire (ports the English _work_not_person idea to ZH compounds).
+#   JOB-GRADE         定级/评级/分级 into a career grade (P7 / 高级工程师 / 职级通道) is leveling,
+#                     not a performance score → do not fire (甲乙丙丁/ABCD stay caught — those ARE
+#                     performance grades).
+#   NUMBER-SHAPE      a topic word near a digit fires only if the number is SCORE-SHAPED (N分 / N/M /
+#                     % / 满分 / N星), NOT a year (2023), tenure (8年), or count (5万用户).
+#   TRADITIONAL       a dependency-free glyph normaliser folds Traditional→Simplified BEFORE
+#                     matching, so 績效評分/離職風險/員工畫像/潛力評級 behave exactly like the
+#                     Simplified forms (per-glyph, length-preserving — no opencc).
+
+# Traditional→Simplified glyph fold for the lexicon (and the work/job-grade/person context words it
+# leans on). Length-preserving 1:1 map, so offsets/snippets survive; folding Traditional to
+# Simplified only makes Traditional behave IDENTICALLY to Simplified — it can never introduce a
+# false-positive that Simplified would not also produce. Simplified input contains none of these
+# Traditional glyphs, so it is untouched.
+_ZH_TRAD = ("績評級數結潛緒狀態離職風險員團隊屬應選畫劃優單檔問題顆墊紅產飽統體邏輯開發負設導維護"
+            "報項機晉專總監經資師時綜這顧戶圖標動傾業訊較歲週車華話語說論讀認證據觀見覺慮廠銷營額場縣")
+_ZH_SIMP = ("绩评级数结潜绪状态离职风险员团队属应选画划优单档问题颗垫红产饱统体逻辑开发负设导维护"
+            "报项机晋专总监经资师时综这顾户图标动倾业讯较岁周车华话语说论读认证据观见觉虑厂销营额场县")
+assert len(_ZH_TRAD) == len(_ZH_SIMP), "ZH trad/simp fold tables must align 1:1"
+_ZH_T2S = str.maketrans(_ZH_TRAD, _ZH_SIMP)
+
+_CJK = re.compile(r"[一-鿿]")
+
+
+def zh_normalize(text: str) -> str:
+    """Fold the Traditional glyphs of the red-line lexicon to their Simplified forms so a single set
+    of Simplified patterns covers both scripts. Length-preserving; a no-op on English/Simplified."""
+    return (text or "").translate(_ZH_T2S)
+
+
+def _has_cjk(text: str) -> bool:
+    return bool(_CJK.search(text))
+
 
 # person performance score / grade / profile / mood-number
 _ZH_SCORE = re.compile(
@@ -241,17 +286,155 @@ _ZH_TIER = re.compile(
     r"|(?:员工|人才)(?:分级|定级|评级)",
     re.I)
 
-_ALWAYS += [
+# person-anchored ranking/verdict SYNONYMS and STAR ratings (round 2 §B9/§B10). Complete labels, so
+# they need only a PERSON in view + work-suppression (no scoring-target requirement).
+_ZH_RANK_SYN = re.compile(r"末流|垫底|名列前茅|优等生|差生|差评|红黑榜|黑榜|评比", re.I)
+_ZH_STAR = re.compile(r"(?:[一二三四五六七八九十两]|\d)\s*颗?\s*星(?!期|座|球|系|云|辰|巴克)|星级|星等", re.I)
+
+_ZH_ALWAYS = [
     ("PERSON-SCORE", _ZH_SCORE, "中文人员评分/评级/画像/情绪值构造"),
     ("PERSON-RISK", _ZH_RISK, "中文离职/流失风险标签(钉在人身上)"),
     ("PERSON-TIER", _ZH_TIER, "中文排名/末位淘汰/人员分级标签"),
 ]
+# person-anchored (require a person referenced in the segment; work-suppressed)
+_ZH_ANCHORED_LABELS = [
+    ("PERSON-TIER", _ZH_RANK_SYN, "中文排名同义词(末流/垫底/差评/名列前茅…),主体是人"),
+    ("PERSON-SCORE", _ZH_STAR, "中文星级评分,主体是人"),
+]
 
-# Bare scoring verbs — weak signal; only a PERSON subject makes them a person score, and the
-# work/product subject suppresses them (产品排名第一 / 数据排序 pass). '画像' is deliberately NOT
-# here: bare 画像 is usually 用户/客户画像 (a customer artifact) — only the person-qualified
+# Bare scoring verbs — weak signal; a person subject + a scoring TARGET makes them a person score,
+# while the work/product subject and job-grade context suppress them (产品排名第一 / 定级为P7 pass).
+# '画像' is deliberately NOT here: bare 画像 is usually 用户/客户画像 — only the person-qualified
 # compounds in _ZH_SCORE fire.
 _ZH_ANCHOR = re.compile(r"打分|评分|评级|排名|定级", re.I)
+
+# --- round-2 suppression + target machinery -------------------------------------------------
+# WORK-ARTIFACT nouns: when a score word names/builds one of these, it is WORK, not a person score.
+_ZH_ARTIFACT = (r"系统|体系|模型|算法|逻辑|工具|平台|机制|框架|引擎|报告|方案|项目|模块|功能|服务"
+                r"|架构|流程|看板|中台|指标|规则|标准|页面|接口|数据库|能力|表")
+# build/own verbs — the person is the BUILDER of the scoring thing, not its subject.
+_ZH_BUILD = r"负责|设计|搭建|开发|优化|主导|维护|迭代|构建|研发|编写|实现|做过|建设|重构|升级|落地|架构"
+# an explicit "this person is NOT scored" cue near the hit.
+_ZH_NOT_SCORED = re.compile(r"本人不参与|不参与考核|不被打分|不做考核|不打分|本人不被|本人不")
+_ZH_AFTER_ARTIFACT = re.compile(rf"[的了之与和、\s]{{0,3}}(?:{_ZH_ARTIFACT})")
+_ZH_BUILD_RE = re.compile(_ZH_BUILD)
+_ZH_ARTIFACT_RE = re.compile(_ZH_ARTIFACT)
+
+# JOB-GRADE: a career-track grade token or leveling context — leveling, not a performance score.
+# NOTE: 甲乙丙丁/ABCD/优良中差 are deliberately EXCLUDED — those ARE performance grades and stay caught.
+_ZH_GRADE_TOKEN = re.compile(r"[PpTtMmEe]\d|高级|资深|高工|专家|工程师|架构师|总监|经理|主管|序列|职级|通道|晋升|职等|岗级")
+_ZH_JOBGRADE_VERB = re.compile(r"定级|评级|分级|定为|评为")
+
+# a SCORING TARGET a bare verb needs: a rank position/number, or a rank/grade label.
+_ZH_SCORE_TARGET = re.compile(
+    r"第?\s*\d"                                              # 第3 / 3 / 8/10
+    r"|倒数|垫底|末位|末尾|末流|前茅|榜首|榜尾|吊车尾"
+    r"|不合格|不达标|优秀|优良|良好|及格|不及格"
+    r"|[甲乙丙丁][等级]|[优良中差][等级]?"
+    r"|[：:]\s*\S")
+
+# a SCORE-SHAPED number pinned to a person (round 2 §B8): N分 / 满分N / 分数=N / KPI=N. Year/tenure/
+# count exclusions live in the lookarounds so 2023 / 8年 / 5万用户 do not fire.
+_ZH_SCORE_NUM = re.compile(
+    r"(?<![年月周天日个万千百次条名位])\d{1,3}\s*分(?!钟|之|米|贝|红|钱|成|类)"   # N分 (points)
+    r"|满分\s*\d{1,3}"
+    r"|分数\s*(?:是|为|=|＝|:|：)?\s*\d{1,3}"
+    r"|(?:KPI|kpi|绩效|得分|评分)\s*(?:是|为|=|＝|:|：)\s*\d{1,3}",
+    re.I)
+_ZH_NAME_BEFORE = re.compile(r"([一-鿿]{2,4})[\s，、,]*$")
+_ZH_NAME_STOP = {
+    "季度", "本次", "上次", "这个", "那个", "今年", "去年", "明年", "全年", "本年", "上月", "本月",
+    "合计", "总共", "满分", "及格", "平均", "均分", "总分", "得分", "本季", "上季", "累计", "目前",
+    "当前", "整体", "团队", "公司", "项目", "产品", "本周", "上周", "覆盖", "进度",
+}
+
+
+def _zh_about_work(text: str, m: re.Match) -> bool:
+    """The score word names or is used to BUILD a work artifact, or the person is explicitly NOT
+    scored → it is WORK, not a score OF the person. Ports the English _work_not_person asymmetry."""
+    after = text[m.end(): m.end() + 12]
+    if _ZH_AFTER_ARTIFACT.match(after):                       # 评分系统 / 排名算法 / 打分逻辑
+        return True
+    seg = text[max(0, m.start() - 24): m.end() + 24]
+    if _ZH_NOT_SCORED.search(seg):                            # 本人不参与考核
+        return True
+    before = text[max(0, m.start() - 12): m.start()]
+    if _ZH_BUILD_RE.search(before) and _ZH_ARTIFACT_RE.search(after):  # builds a scoring artifact
+        return True
+    return False
+
+
+def _zh_job_grade(text: str, m: re.Match) -> bool:
+    """A 定级/评级/分级 that lands a career-grade token (P7 / 高级工程师 / 职级通道) is leveling, not
+    a performance score. Performance grades (甲乙丙丁 / ABCD) are NOT grade tokens, so they stay caught."""
+    span = text[m.start(): m.end() + 8]
+    if not _ZH_JOBGRADE_VERB.search(span):
+        return False
+    return bool(_ZH_GRADE_TOKEN.search(text[m.start(): m.end() + 10]))
+
+
+def _zh_has_target(text: str, m: re.Match) -> bool:
+    """A bare scoring verb (打分/排名/…) is only a person score when a scoring TARGET follows — a
+    rank position/number or a rank/grade label. '她主导排名工作' (no target) is not a score."""
+    return bool(_ZH_SCORE_TARGET.match(text[m.end(): m.end() + 10]))
+
+
+def _zh_name_before(text: str, start: int) -> bool:
+    """A CJK name-like token immediately before a score number ('王小明 92分') — not a time/aggregate
+    word. Lets '姓名 分数' roster rows fire without a pronoun."""
+    seg = text[max(0, start - 6): start]
+    mm = _ZH_NAME_BEFORE.search(seg)
+    return bool(mm and mm.group(1) not in _ZH_NAME_STOP)
+
+
+def _zh_person_score_number(text: str) -> list[Violation]:
+    """Round 2 §B8 — a person + a pure score-number ('王小明 92分', '他的分数是2', 'KPI=90'), reusing
+    the year/tenure/count exclusions baked into _ZH_SCORE_NUM so a project/count number does not fire."""
+    out: list[Violation] = []
+    for m in _ZH_SCORE_NUM.finditer(text):
+        if _negated(text, m.start()) or _zh_about_work(text, m):
+            continue
+        seg, _ss, _se = _seg(text, m.start(), m.end())
+        if _has_person(seg) or _zh_name_before(text, m.start()):
+            out.append(Violation("PERSON-SCORE", _ctx(text, m.start(), m.end()),
+                                 "中文人员+分数(评分数字钉在人身上)"))
+    return out
+
+
+def _zh_violations(text: str) -> list[Violation]:
+    """All Chinese person-scoring hits, with the round-2 work/job-grade/number-shape reconciliation.
+    Runs only on CJK-bearing text, so English advice is wholly untouched by any ZH rule."""
+    out: list[Violation] = []
+    if not _has_cjk(text):
+        return out
+    # ALWAYS compounds — unconditional, minus negation / work / job-grade suppression.
+    for rule_id, rx, note in _ZH_ALWAYS:
+        for m in rx.finditer(text):
+            if _negated(text, m.start()) or _zh_about_work(text, m) or _zh_job_grade(text, m):
+                continue
+            out.append(Violation(rule_id, _ctx(text, m.start(), m.end()), note))
+    # person-anchored complete labels (rank synonyms / stars) — require a person, suppress work.
+    for rule_id, rx, note in _ZH_ANCHORED_LABELS:
+        for m in rx.finditer(text):
+            if _negated(text, m.start()):
+                continue
+            seg, _ss, _se = _seg(text, m.start(), m.end())
+            if not _has_person(seg) or _zh_about_work(text, m):
+                continue
+            out.append(Violation(rule_id, _ctx(text, m.start(), m.end()), note))
+    # bare scoring verbs — person + not-work + not-job-grade + a scoring target.
+    for m in _ZH_ANCHOR.finditer(text):
+        if _negated(text, m.start()):
+            continue
+        seg, _ss, _se = _seg(text, m.start(), m.end())
+        if not _has_person(seg):
+            continue
+        if _zh_about_work(text, m) or _zh_job_grade(text, m) or not _zh_has_target(text, m):
+            continue
+        out.append(Violation("PERSON-SCORE", _ctx(text, m.start(), m.end()),
+                             "中文评分/排名动作,主体是人且带评分目标"))
+    out += _zh_person_score_number(text)
+    return out
 
 
 # === ANCHORED patterns (fire only when the subject is a PERSON) ===============================
@@ -335,7 +518,9 @@ def _bare_scale(text: str) -> list[Violation]:
 def validate(text: str, cited_snippets: list[str] | None = None) -> RedlineResult:
     """Run the red line over a final-advice string. `cited_snippets` powers only the soft
     UNCITED-NUMBER signal; the hard gate is pure content-pattern."""
-    text = text or ""
+    # feat-029 round 2 — fold Traditional glyphs to Simplified (length-preserving) so one Simplified
+    # lexicon covers both scripts; a no-op on English/Simplified input.
+    text = zh_normalize(text or "")
     violations: list[Violation] = []
 
     for rule_id, rx, note in _ALWAYS:
@@ -357,16 +542,9 @@ def validate(text: str, cited_snippets: list[str] | None = None) -> RedlineResul
             if ok:
                 violations.append(Violation("PERSON-TIER", _ctx(text, m.start(), m.end()), note))
 
-    # feat-029 — Chinese bare scoring verbs: require a PERSON in view (like _ANCH_TIER), so
-    # 产品排名第一 / 数据排序 (work) pass while 给这位同事打分 / 她排名倒数 fire.
-    for m in _ZH_ANCHOR.finditer(text):
-        if _negated(text, m.start()):
-            continue
-        seg, _ss, _se = _seg(text, m.start(), m.end())
-        if _has_person(seg):
-            violations.append(Violation(
-                "PERSON-SCORE", _ctx(text, m.start(), m.end()),
-                "中文评分/排名动作,主体是人"))
+    # feat-029 — the Chinese red line (ALWAYS compounds + anchored labels + bare verbs + person
+    # score-numbers), reconciled by work-suppression / job-grade / number-shape. CJK-gated inside.
+    violations += _zh_violations(text)
 
     violations += _scored_number(text)
     violations += _bare_scale(text)
