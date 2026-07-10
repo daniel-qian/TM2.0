@@ -386,3 +386,157 @@ def test_zh_space_separated_glyphs_residual():
     # 绩 效 评 分 with interior spaces and no score number never reassembles into a contiguous
     # lexicon match; chasing arbitrary whitespace would over-fire on legit prose.
     assert not redline.validate("他 的 绩 效 评 分 很 低。").passed
+
+
+# =============================================================================================
+# feat-029 RED LINE (adversarial round 3) — the round-2 work-suppression machinery was OVER-BROAD:
+# it started letting genuine Chinese person-scores slip (one a REGRESSION vs round-1) and its
+# extraction layer diverged from the advice layer. Part A = TIGHTEN the over-broad suppression
+# (real scores must hard-FAIL again); Part B = extraction⇄advice PARITY (legit work rosters must
+# extract ok); Part C = lexicon gaps (评定/分级 verbs, letter-grade-after-score-word).
+# =============================================================================================
+
+# ---------------------------------------------------------------------------------------------
+# PART A — over-broad suppression now lets real scores slip (must hard-FAIL). Highest priority.
+# ---------------------------------------------------------------------------------------------
+
+# A-r3.1 — _ZH_NOT_SCORED bare 本人不 was a wildcard: 本人不服 / 本人不同意 / 本人不知情 (I object /
+# I disagree) suppressed ANY nearby person score. The not-scored cue must attach to a SCORING sense.
+ZH_R3_NOT_SCORED_WILDCARD = [
+    "她的绩效评分是2分，本人不服。",
+    "他离职风险很高，本人不知情。",
+    "他排名倒数第一，本人不服。",
+]
+
+
+@pytest.mark.parametrize("text", ZH_R3_NOT_SCORED_WILDCARD)
+def test_zh_r3_bare_benren_bu_no_longer_suppresses(text):
+    res = redline.validate(text)
+    assert not res.passed, f"本人不X 被误当『未被评分』,人员评分逃逸: {text!r}"
+
+
+def test_zh_r3_not_scored_wildcard_extraction():
+    for owns, collab in ((["绩效评分2分，本人不服"], []), ([], ["离职风险高，本人不知情"])):
+        res = validate_extraction(ExtractionResult(people=[
+            PersonEntity(id="u_r3a", name="安某", owns=owns, collaboration=collab)]))
+        assert not res.ok, f"本人不X 让抽取层漏抓人员评分: owns={owns!r} collab={collab!r}"
+
+
+def test_zh_r3_specific_not_scored_cue_still_passes():
+    # the SPECIFIC scoring-anchored cue still suppresses (person BUILDS scoring, opts out of it)
+    assert redline.validate("她负责设计绩效评分系统，本人不参与考核。").passed
+
+
+# A-r3.2 — _ZH_ARTIFACT bare morphemes 系/表现/标准/指标 collided with 系统性/表现/标准/指标 as SCORE
+# continuations. Whole-word artifacts only, so these no longer read as artifacts.
+ZH_R3_ARTIFACT_MORPHEME = [
+    "他绩效评分系统性偏低。",
+    "他的绩效评分表现很差。",
+    "他绩效评级标准差。",
+]
+
+
+@pytest.mark.parametrize("text", ZH_R3_ARTIFACT_MORPHEME)
+def test_zh_r3_artifact_morpheme_no_longer_suppresses(text):
+    res = redline.validate(text)
+    assert not res.passed, f"系统性/表现/标准 被误当工作产物,人员评分逃逸: {text!r}"
+
+
+def test_zh_r3_artifact_morpheme_extraction():
+    res = validate_extraction(ExtractionResult(people=[
+        PersonEntity(id="u_r3b", name="安某", role="绩效评分表现差")]))
+    assert not res.ok, "绩效评分表现差 应被抽取红线抓到"
+
+
+ZH_R3_ARTIFACT_LEGIT = [
+    "她负责设计绩效评分系统。",
+    "他是评分模型的负责人。",
+]
+
+
+@pytest.mark.parametrize("text", ZH_R3_ARTIFACT_LEGIT)
+def test_zh_r3_whole_word_artifact_still_passes(text):
+    assert redline.validate(text).passed, f"人在建评分系统/模型被误伤: {text!r}"
+
+
+# A-r3.3 — _zh_has_target anchored at verb end: a 为/被 connective pushed the verdict label out, so
+# 定级为.../排名为.../评定为... found no target and the bare-verb violation dropped.
+ZH_R3_CONNECTIVE_VERDICT = [
+    "把他定级为不合格。",
+    "他被定级为低绩效。",
+    "把他排名为倒数。",
+    "他定级为差。",
+    "他的职级评定为差。",
+]
+
+
+@pytest.mark.parametrize("text", ZH_R3_CONNECTIVE_VERDICT)
+def test_zh_r3_connective_verdict_label_hard_fails(text):
+    res = redline.validate(text)
+    assert not res.passed, f"定级为/排名为 + 结论标签逃逸: {text!r}"
+
+
+ZH_R3_CONNECTIVE_JOBGRADE = [
+    "把他定级为P7。",
+    "员工定级为高级工程师。",
+]
+
+
+@pytest.mark.parametrize("text", ZH_R3_CONNECTIVE_JOBGRADE)
+def test_zh_r3_connective_jobgrade_passes(text):
+    assert redline.validate(text).passed, f"职级定级(P7/高级工程师)被误伤: {text!r}"
+
+
+# ---------------------------------------------------------------------------------------------
+# PART B — extraction⇄advice PARITY: legit work rosters must extract ok (work-suppression + a
+# complete number-shape exclusion set, matching the advice gate). A genuine person-score still fails.
+# ---------------------------------------------------------------------------------------------
+ZH_R3_LEGIT_WORK_OWNS = [
+    ["绩效系统2.0"],
+    ["排名算法优化3成"],
+    ["KPI体系迭代3版"],
+    ["设计评分项5项"],
+    ["排名报告3份"],
+]
+
+
+@pytest.mark.parametrize("owns", ZH_R3_LEGIT_WORK_OWNS)
+def test_zh_r3_legit_work_owns_extracts_ok(owns):
+    res = validate_extraction(ExtractionResult(people=[PersonEntity(id="u_r3c", name="安某", owns=owns)]))
+    assert res.ok, f"合法工作交付被抽取红线误伤 ({res.summary()}): {owns!r}"
+
+
+def test_zh_r3_scoring_group_role_passes():
+    res = validate_extraction(ExtractionResult(people=[
+        PersonEntity(id="u_r3d", name="安某", role="评分组第3组组长")]))
+    assert res.ok, f"评分组组长(工作角色)被误伤: {res.summary()}"
+
+
+def test_zh_r3_genuine_person_score_number_still_caught():
+    res = validate_extraction(ExtractionResult(people=[
+        PersonEntity(id="u_r3e", name="安某", owns=["绩效评分2分"])]))
+    assert not res.ok, "真正的人员评分数字(绩效评分2分)必须仍被抓到"
+
+
+# ---------------------------------------------------------------------------------------------
+# PART C — lexicon gaps: 评定 / 分级 verbs (person-scoped), and a letter grade after a scoring word.
+# Job grades (P7/T5/高级) must NOT be swept in by the letter-grade rule.
+# ---------------------------------------------------------------------------------------------
+ZH_R3_NEW_VERBS_AND_LETTERS = [
+    "他绩效分级为差。",
+    "他被评定为不合格。",
+    "他绩效评分为C。",
+    "他评定为D级。",
+    "他KPI等级E。",
+]
+
+
+@pytest.mark.parametrize("text", ZH_R3_NEW_VERBS_AND_LETTERS)
+def test_zh_r3_new_verbs_and_letter_grades_hard_fail(text):
+    res = redline.validate(text)
+    assert not res.passed, f"评定/分级/字母等级(人)逃逸: {text!r}"
+
+
+def test_zh_r3_job_grade_not_swept_by_letter_rule():
+    for text in ("把他定级为P7。", "员工定级为高级工程师。", "这位同事的职级定级为P8。"):
+        assert redline.validate(text).passed, f"职级(P7/P8/高级)被字母等级规则误伤: {text!r}"

@@ -268,8 +268,8 @@ def _has_cjk(text: str) -> bool:
 
 # person performance score / grade / profile / mood-number
 _ZH_SCORE = re.compile(
-    r"绩效(?:评分|评级|打分|得分|评估|定级|排名|分数|考核结果)"           # 绩效评分/评级/排名…
-    r"|(?:KPI|kpi|考核|季度|年度|综合|工作)\s*(?:评分|评级|打分|得分|定级)"  # KPI评分/考核评级…
+    r"绩效(?:评分|评级|打分|得分|评估|定级|分级|排名|分数|考核结果|等级)"     # 绩效评分/评级/分级/等级…
+    r"|(?:KPI|kpi|考核|季度|年度|综合|工作)\s*(?:评分|评级|打分|得分|定级|等级)"  # KPI评分/KPI等级/考核评级…
     r"|潜力(?:评分|评级|评估|定级|值|分)"                                    # 潜力评估/评级/值…
     r"|能力(?:评分|评级|评估|定级)"
     r"|(?:员工|人才|人物|个人|团队成员|下属|同事|应聘者|候选人)画像"         # 员工/人才画像(非用户画像)
@@ -305,18 +305,29 @@ _ZH_ANCHORED_LABELS = [
 # Bare scoring verbs — weak signal; a person subject + a scoring TARGET makes them a person score,
 # while the work/product subject and job-grade context suppress them (产品排名第一 / 定级为P7 pass).
 # '画像' is deliberately NOT here: bare 画像 is usually 用户/客户画像 — only the person-qualified
-# compounds in _ZH_SCORE fire.
-_ZH_ANCHOR = re.compile(r"打分|评分|评级|排名|定级", re.I)
+# compounds in _ZH_SCORE fire. round-3 adds 评定/分级 (realistic HR verbs) — still person-scoped
+# (need a person + a scoring target + no work/job-grade suppression).
+_ZH_ANCHOR = re.compile(r"打分|评分|评级|评定|排名|定级|分级", re.I)
 
 # --- round-2 suppression + target machinery -------------------------------------------------
 # WORK-ARTIFACT nouns: when a score word names/builds one of these, it is WORK, not a person score.
-_ZH_ARTIFACT = (r"系统|体系|模型|算法|逻辑|工具|平台|机制|框架|引擎|报告|方案|项目|模块|功能|服务"
-                r"|架构|流程|看板|中台|指标|规则|标准|页面|接口|数据库|能力|表")
+# round-3 — WHOLE-WORD artifacts only. The round-2 list leaked bare morphemes (系/表现/标准/指标/能力/表)
+# that collided with SCORE continuations — 评分系统『性』偏低 / 评分『表现』差 / 评级『标准』差 read as a
+# score OF the person, NOT as an artifact the person builds. Dropped those; a trailing (?!性|化) on the
+# match (below) stops 系统→系统性 leaking.
+_ZH_ARTIFACT = (r"系统|体系|平台|算法|模型|逻辑|工具|引擎|框架|机制|报告|方案|项目|模块|架构|中台"
+                r"|看板|数据库|接口")
 # build/own verbs — the person is the BUILDER of the scoring thing, not its subject.
 _ZH_BUILD = r"负责|设计|搭建|开发|优化|主导|维护|迭代|构建|研发|编写|实现|做过|建设|重构|升级|落地|架构"
-# an explicit "this person is NOT scored" cue near the hit.
-_ZH_NOT_SCORED = re.compile(r"本人不参与|不参与考核|不被打分|不做考核|不打分|本人不被|本人不")
-_ZH_AFTER_ARTIFACT = re.compile(rf"[的了之与和、\s]{{0,3}}(?:{_ZH_ARTIFACT})")
+# an explicit "this person is NOT scored" cue near the hit. round-3 — the cue MUST attach to a SCORING
+# sense; the bare 本人不 / 本人不被 alternatives were a wildcard that swallowed 本人不服/不同意/不知情
+# (I object / I disagree) and suppressed any nearby person score. Only scoring-verb-anchored cues remain.
+_ZH_NOT_SCORED = re.compile(
+    r"本人不参与(?:考核|评分|打分|定级)"
+    r"|不被(?:打分|评分|评级|定级|考核)"
+    r"|不做(?:考核|评估|评分)"
+    r"|未参与评分")
+_ZH_AFTER_ARTIFACT = re.compile(rf"[的了之与和、\s]{{0,3}}(?:{_ZH_ARTIFACT})(?!性|化)")
 _ZH_BUILD_RE = re.compile(_ZH_BUILD)
 _ZH_ARTIFACT_RE = re.compile(_ZH_ARTIFACT)
 
@@ -325,13 +336,20 @@ _ZH_ARTIFACT_RE = re.compile(_ZH_ARTIFACT)
 _ZH_GRADE_TOKEN = re.compile(r"[PpTtMmEe]\d|高级|资深|高工|专家|工程师|架构师|总监|经理|主管|序列|职级|通道|晋升|职等|岗级")
 _ZH_JOBGRADE_VERB = re.compile(r"定级|评级|分级|定为|评为")
 
-# a SCORING TARGET a bare verb needs: a rank position/number, or a rank/grade label.
+# a SCORING TARGET a bare verb needs: a rank position/number, or a rank/grade/verdict label. round-3 —
+# an OPTIONAL connective (为|评为|定为|被|列为) may sit between the verb and the label, since 定级『为』
+# 不合格 / 排名『为』倒数 push the label off the verb end; and verdict labels (不合格/差/低绩效/待改进/
+# 末等) + a letter grade [CDE]级 are recognised. Job grades (P7/T5/高级) are NOT letter grades and are
+# separately suppressed by _zh_job_grade, so they stay PASS.
 _ZH_SCORE_TARGET = re.compile(
-    r"第?\s*\d"                                              # 第3 / 3 / 8/10
-    r"|倒数|垫底|末位|末尾|末流|前茅|榜首|榜尾|吊车尾"
-    r"|不合格|不达标|优秀|优良|良好|及格|不及格"
+    r"(?:为|评为|定为|被|列为)?\s*"
+    r"(?:第?\s*\d"                                           # 第3 / 3 / 8/10
+    r"|倒数|垫底|末位|末尾|末流|末等|末档|前茅|榜首|榜尾|吊车尾"
+    r"|不合格|不达标|不及格|待改进|待提升|低绩效"
+    r"|优秀|优良|良好|及格"
     r"|[甲乙丙丁][等级]|[优良中差][等级]?"
-    r"|[：:]\s*\S")
+    r"|[CDEcde]级"                                           # 评为C级 / 评定为D级(绩效字母档)
+    r"|[：:]\s*\S)")
 
 # a SCORE-SHAPED number pinned to a person (round 2 §B8): N分 / 满分N / 分数=N / KPI=N. Year/tenure/
 # count exclusions live in the lookarounds so 2023 / 8年 / 5万用户 do not fire.
