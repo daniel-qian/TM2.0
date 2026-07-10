@@ -30,7 +30,9 @@ from dataclasses import dataclass, field
 
 from avery import redline
 
-from .extract import ExtractionResult, PersonEntity, FORBIDDEN_PERSON_KEYS
+from .extract import (
+    ExtractionResult, PersonEntity, FORBIDDEN_PERSON_KEYS, FORBIDDEN_PERSON_KEYS_ZH,
+)
 
 
 @dataclass
@@ -68,7 +70,13 @@ _RATING_NUMBER = re.compile(
     r"|\b\d(?:\.\d+)?\s*stars?\b", re.I)
 _SCORE_WORD_NEAR_NUM = re.compile(
     r"\b(?:score|scored|scoring|rating|rated|rank|ranked|ranking|tier|grade|graded|"
-    r"percentile|potential|mood|capacity)\b\D{0,12}\d", re.I)
+    r"percentile|potential|mood|capacity)\b\D{0,12}\d"
+    # feat-029 — Chinese scoring word next to a number in a PERSON field ('绩效评分2分',
+    # 'KPI评分88分', '情绪状态值3', '排名第2'). Tenures/counts ('入职18个月', '8年经验', '带队交付
+    # v2') carry no scoring word, so they still pass. Qualitative labels with no digit
+    # ('绩效评级：不合格', '排名倒数第一') are NOT stripped here — the content gate catches them.
+    r"|(?:评分|打分|得分|评级|定级|评估|排名|绩效|潜力|情绪|画像|考核|KPI|kpi|产能|工时)\D{0,8}\d",
+    re.I)
 
 
 def _person_text_fields(p: PersonEntity) -> list[str]:
@@ -97,8 +105,11 @@ def validate_person_dict(name: str, data: dict) -> list[ExtractionViolation]:
     forbidden scoring key. Call this BEFORE constructing a PersonEntity from model output."""
     out: list[ExtractionViolation] = []
     for key in data.keys():
-        norm = re.sub(r"[^a-z0-9]", "", str(key).lower())
-        if norm in FORBIDDEN_PERSON_KEYS:
+        # feat-029 — keep CJK through normalization so a Chinese scoring key survives (the ASCII
+        # path is byte-identical: English keys have no CJK). English = exact match; Chinese =
+        # substring, so '绩效评分' trips '评分' and '离职风险' trips '离职风险'.
+        norm = re.sub(r"[^a-z0-9一-鿿]", "", str(key).lower())
+        if norm in FORBIDDEN_PERSON_KEYS or any(z in norm for z in FORBIDDEN_PERSON_KEYS_ZH):
             out.append(ExtractionViolation(
                 kind="person-score-key", person=name,
                 detail=f"forbidden scoring key on a person: '{key}'"))

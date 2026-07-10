@@ -72,14 +72,24 @@ _SCALEWORD = r"(?:five|ten|hundred|100|10|5)"
 _PERSON_REF = re.compile(
     r"\b(?:she|he|they|her|hers|him|his|their|theirs|them|she's|he's|they're|"
     r"employee|teammate|colleague|engineer|coworker|report|hire|person|individual|"
-    r"contributor|she'd|he'd)\b", re.I)
+    r"contributor|she'd|he'd)\b"
+    # feat-029 — Chinese person references (CJK has no \b; match literal substrings). 他 excludes
+    # 其他/吉他 so "其他项目" never anchors a person.
+    r"|(?:她|(?<![其吉])他|他们|她们|员工|同事|下属|职员|雇员|组员|团队成员|成员|该员工|这位|"
+    r"那位|本人|人才|队员|候选人|应聘者|下家)",
+    re.I)
 _WORK_SUBJECT = re.compile(
     r"\b(?:team|squad|velocity|throughput|audit|project|projects|product|products|service|"
     r"services|code|codebase|output|deliverable|deliverables|sprint|sprints|deadline|deadlines|"
     r"delivery|release|metric|metrics|result|results|quarter|company|org|system|systems|test|"
     r"tests|pipeline|ticket|tickets|task|tasks|item|items|postmortem|incident|proposal|"
     r"architecture|roadmap|backlog|design|document|doc|feature|api|build|essay|draft|"
-    r"response|score\s+on\s+the|grade\s+on\s+the)\b",
+    r"response|score\s+on\s+the|grade\s+on\s+the)\b"
+    # feat-029 — Chinese work/project/customer subjects. A number here is fine (project & customer
+    # quantification is not a person score — ADR-0016 asymmetry, extended to ZH).
+    r"|(?:项目|团队|产品|系统|代码|模块|功能|需求|迭代|冲刺|发布|版本|进度|里程碑|任务|工单|"
+    r"流程|服务|接口|架构|路线图|待办|公司|组织|部门|业务|市场|客户|用户|方案|文档|报告|"
+    r"数据|样本|信用|供应商|渠道|门店|销量|营收|图片|图像|颜色)",
     re.I)
 
 
@@ -89,7 +99,12 @@ def _ctx(text: str, s: int, e: int, pad: int = 24) -> str:
 
 _NEG = re.compile(
     r"\b(?:don'?t|do\s+not|never|not|no|avoid|without|isn'?t|aren'?t|won'?t|wouldn'?t|"
-    r"shouldn'?t|stop|refrain|resist|rather\s+than|instead\s+of)\b", re.I)
+    r"shouldn'?t|stop|refrain|resist|rather\s+than|instead\s+of)\b"
+    # feat-029 — Chinese negation lead-ins so advice AGAINST scoring a person passes ('不要给她
+    # 打分', '别评级', '无需画像', '避免标成离职风险'). CJK has no \b; these are literal cues. Bare
+    # 不 is deliberately NOT here (it lives inside 不合格/不在线 and would over-suppress).
+    r"|(?:不要|不用|不应|不该|不得|不做|不搞|不给|别|勿|请勿|无需|无须|毋须|避免|杜绝|拒绝|"
+    r"而非|而不是)", re.I)
 
 
 def _negated(text: str, start: int, window: int = 32) -> bool:
@@ -196,6 +211,49 @@ _ALWAYS = [
 ]
 
 
+# === feat-029: the RED LINE in Chinese =======================================================
+# Domestic users feed Chinese docs to MiniMax-M3; the English-only gate let a Chinese person score
+# (绩效评分 / 排名 / 画像 / 评级 / 潜力评估 / 情绪值 / 离职风险 / 末位淘汰 …) bypass every layer.
+# Same two-tier design as the English gate, minus \b (CJK has no word boundary):
+#   * _ZH_* ALWAYS — compounds inherently about a PERSON fire unconditionally (negation still
+#     suppresses). A PERSON-domain qualifier is baked into every compound, so the customer/product/
+#     work analogues (用户画像 / 信用评级 / 市场情绪 / 产品排名) are NOT person scores and pass —
+#     the ADR-0016 asymmetry (work/customer MAY be quantified), extended to Chinese.
+#   * _ZH_ANCHOR — bare scoring verbs (打分/评分/评级/排名/定级) fire ONLY with a person in view.
+
+# person performance score / grade / profile / mood-number
+_ZH_SCORE = re.compile(
+    r"绩效(?:评分|评级|打分|得分|评估|定级|排名|分数|考核结果)"           # 绩效评分/评级/排名…
+    r"|(?:KPI|kpi|考核|季度|年度|综合|工作)\s*(?:评分|评级|打分|得分|定级)"  # KPI评分/考核评级…
+    r"|潜力(?:评分|评级|评估|定级|值|分)"                                    # 潜力评估/评级/值…
+    r"|能力(?:评分|评级|评估|定级)"
+    r"|(?:员工|人才|人物|个人|团队成员|下属|同事|应聘者|候选人)画像"         # 员工/人才画像(非用户画像)
+    r"|情绪(?:状态)?值|情绪分|情绪评分|心情值",                             # 情绪值/情绪状态值(mood 数字)
+    re.I)
+
+# attrition / flight-risk label pinned to a PERSON — NOT a project '有风险/at-risk'
+_ZH_RISK = re.compile(r"离职风险|流失风险|流动风险|离职倾向|跑路风险", re.I)
+
+# stack-rank / bottom-tier / person tiering
+_ZH_TIER = re.compile(
+    r"末位淘汰|末尾淘汰|末位排名|优化名单|淘汰名单|末等|末档"
+    r"|(?:高危|问题|低效|低绩效|高潜)(?:员工|人才|同事|下属|成员)"
+    r"|(?:员工|人才)(?:分级|定级|评级)",
+    re.I)
+
+_ALWAYS += [
+    ("PERSON-SCORE", _ZH_SCORE, "中文人员评分/评级/画像/情绪值构造"),
+    ("PERSON-RISK", _ZH_RISK, "中文离职/流失风险标签(钉在人身上)"),
+    ("PERSON-TIER", _ZH_TIER, "中文排名/末位淘汰/人员分级标签"),
+]
+
+# Bare scoring verbs — weak signal; only a PERSON subject makes them a person score, and the
+# work/product subject suppresses them (产品排名第一 / 数据排序 pass). '画像' is deliberately NOT
+# here: bare 画像 is usually 用户/客户画像 (a customer artifact) — only the person-qualified
+# compounds in _ZH_SCORE fire.
+_ZH_ANCHOR = re.compile(r"打分|评分|评级|排名|定级", re.I)
+
+
 # === ANCHORED patterns (fire only when the subject is a PERSON) ===============================
 
 # Quantile / percentile-band tier (suppressed when it's a work/team metric).
@@ -298,6 +356,17 @@ def validate(text: str, cited_snippets: list[str] | None = None) -> RedlineResul
             ok = _has_person(seg) if rx is _ANCH_TIER else (not _work_not_person(seg))
             if ok:
                 violations.append(Violation("PERSON-TIER", _ctx(text, m.start(), m.end()), note))
+
+    # feat-029 — Chinese bare scoring verbs: require a PERSON in view (like _ANCH_TIER), so
+    # 产品排名第一 / 数据排序 (work) pass while 给这位同事打分 / 她排名倒数 fire.
+    for m in _ZH_ANCHOR.finditer(text):
+        if _negated(text, m.start()):
+            continue
+        seg, _ss, _se = _seg(text, m.start(), m.end())
+        if _has_person(seg):
+            violations.append(Violation(
+                "PERSON-SCORE", _ctx(text, m.start(), m.end()),
+                "中文评分/排名动作,主体是人"))
 
     violations += _scored_number(text)
     violations += _bare_scale(text)

@@ -44,6 +44,17 @@ FORBIDDEN_PERSON_KEYS = (
     "potential", "risk", "flightrisk", "stars", "star",
 )
 
+# feat-029 — the same red line in Chinese. A person dict key CONTAINING any of these is a scoring
+# key on a person (绩效评分 / 离职风险 / 排名 / 画像 / 潜力评级 …). Matched by substring on the
+# CJK-preserving normalized key (see redline_extract.validate_person_dict), so 绩效评分 trips '评分'
+# and 离职风险 trips '离职风险'. Person-QUALIFIED profiling only: '用户画像'/'客户画像' are customer
+# artifacts and are NOT here (a person key would read '员工画像'/'人才画像', still tripped by '画像').
+FORBIDDEN_PERSON_KEYS_ZH = (
+    "评分", "打分", "得分", "评级", "定级", "分级", "评估", "排名", "排序", "画像",
+    "绩效", "考核", "潜力", "情绪值", "情绪分", "产能", "工时利用", "利用率", "饱和度",
+    "离职风险", "流失风险", "末位淘汰", "淘汰", "分数",
+)
+
 
 # --- entity shapes ----------------------------------------------------------------------------
 # NOTE: PersonEntity deliberately has NO numeric field. This is the moat as a type.

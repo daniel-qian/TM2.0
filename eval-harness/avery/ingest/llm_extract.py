@@ -56,17 +56,24 @@ MAX_LINES_PER_CALL = 320
 _ALLOWED_STATUS = {"on-track", "at-risk", "blocked", "done", ""}
 
 _SYSTEM = """You extract structured company data from ONE workplace document (roster, roadmap,
-resume, weekly, handbook...). You return STRICT JSON only — no prose, no markdown fences.
+resume, weekly, handbook...). Documents may be in English or Chinese. You return STRICT JSON only
+— no prose, no markdown fences.
 
 HARD RULES (a compliance gate rejects your output if you break them):
 - PEOPLE ARE QUALITATIVE ONLY. Never output a score, rating, ranking, tier, grade, percentage,
   mood or capacity number about a person — not as a field, not inside text. This INCLUDES
   allocation/utilization percentages from staffing tables ('80%', '~10%'): drop the number,
   keep the qualitative part ('project lead, throughout' — never '80% allocated').
+- 人只做定性描述,绝不评分。中文同样禁止:对某个人输出 评分/打分/得分、评级/定级、排名、绩效分、
+  KPI分、潜力评估/潜力值、员工画像/人才画像、情绪值/情绪状态值、离职风险/流失风险、末位淘汰、
+  甲乙丙丁等级 —— 无论作为字段还是写进文本。把数字/等级/标签删掉,只保留定性内容:
+  '主导支付网关交付、与设计紧密协作'(而不是 '绩效评分2分' 或 '排名倒数')。
+  注意区分:项目可以量化(进度70%、状态:有风险),客户/产品可以有 用户画像/产品排名 —— 这些不是
+  给人打分,照常抽取;只有把数字/名次/等级/风险标签钉在【某个人】身上才违规。
 - NEVER invent. Only entities the document actually states. A field the document does not state
   is "" (or [] for lists).
-- Header/label cells are NOT people: "No.", "Name", "Case ID", "Role", "Title", column headers,
-  numbering — never a person. Real people have real human names.
+- Header/label cells are NOT people: "No.", "Name", "Case ID", "Role", "Title", "姓名", "序号",
+  "编号", column headers, numbering — never a person. Real people have real human names.
 - Every entity carries "line": the 1-based line number (from the numbered input) where that
   entity is defined or first appears. This is the audit trail; it must point at a real line.
 """
