@@ -42,6 +42,7 @@ same data' is true by construction. psycopg (3) is imported lazily; the offline 
 from __future__ import annotations
 
 import dataclasses
+import logging
 import os
 from dataclasses import asdict
 from pathlib import Path
@@ -52,6 +53,8 @@ from .extract import (
 from .redline_extract import validate_extraction
 from .registry import CompanyContext, data_root, materialize_memory
 from .store import Embedder, KeywordStore, PgVectorStore, VectorStore, _vec_literal
+
+logger = logging.getLogger(__name__)
 
 _MIGRATIONS_DIR = Path(__file__).resolve().parent.parent.parent / "db" / "migrations"
 
@@ -79,6 +82,11 @@ def _entity(cls, fields: set[str], payload: dict):
 
 class PostgresContextRegistry:
     """id -> CompanyContext, persisted in Postgres. Company data survives restarts/redeploys."""
+
+    # feat-031 cost gate: this registry PERSISTS material embeddings and get() rebuilds a pgvector
+    # store that the recall side actually queries — so embedding the corpus has a reader. The /ingest
+    # handler opens the vector path (prefer_vector) only behind a persistent registry like this one.
+    persistent = True
 
     def __init__(self, url: str, *, data_dir: str | Path | None = None,
                  embedder: Embedder | None = None) -> None:
@@ -161,20 +169,41 @@ class PostgresContextRegistry:
         None) so a mis-sized embedder degrades to keyword instead of crashing the INSERT.
 
         Embedding is done OUTSIDE the DB transaction (it may hit a network endpoint); only the
-        already-computed vectors cross into put()'s transaction."""
+        already-computed vectors cross into put()'s transaction.
+
+        feat-031 honesty: if vectors ARE produced but their dim != the vector(N) column (a wrong-dim
+        embedder against feat-030's frozen 1024), we still degrade to NULL/keyword — but LOUDLY, via
+        a warning naming actual vs expected dim, so the quality drop is visible in logs, not silent."""
         mats = ctx.extraction.materials
         if not mats:
             return None
         dim = _embed_dim()
+
+        def _fits(vecs: list[list[float]]) -> bool:
+            return len(vecs) == len(mats) and all(len(v) == dim for v in vecs)
+
+        # Prefer the vectors the pipeline already computed (embed once); else the registry's embedder.
         store = getattr(ctx, "store", None)
+        vecs: list[list[float]] | None = None
         if isinstance(store, VectorStore) and store.available:
-            vecs = store.persisted_vectors()
-            if len(vecs) == len(mats) and all(len(v) == dim for v in vecs):
-                return vecs
+            candidate = store.persisted_vectors()
+            if _fits(candidate):
+                return candidate
+            vecs = candidate           # kept only to report its (wrong) dim if the embedder also fails
         if self._embedder is not None:
-            vecs = self._embedder.embed([m.text for m in mats])
-            if len(vecs) == len(mats) and all(len(v) == dim for v in vecs):
-                return vecs
+            candidate = self._embedder.embed([m.text for m in mats])
+            if _fits(candidate):
+                return candidate
+            vecs = candidate
+
+        # A dim that does not match the vector(N) column can't be stored. Degrade to keyword, but say
+        # so — a wrong-dim embedder is a config error that would otherwise vanish into a silent NULL.
+        if vecs and any(len(v) != dim for v in vecs):
+            actual = len(vecs[0])
+            logger.warning(
+                "embedder produced %d-dim vectors but avery.materials.embedding is vector(%d); "
+                "storing NULL embeddings for context %s — retrieval degraded to keyword",
+                actual, dim, ctx.context_id)
         return None
 
     # --- the ContextRegistry API -----------------------------------------------------------------

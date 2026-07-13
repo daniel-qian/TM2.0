@@ -115,6 +115,11 @@ class ContextRegistry:
     what the AFK suite runs). feat-030 delivered the promised DB-backed twin behind the same get/put
     API (`pg_registry.PostgresContextRegistry`); `active_registry()` picks between them by env."""
 
+    # feat-031 cost gate: this registry does NOT persist a store's vectors and advise never reads its
+    # in-memory CompanyContext.store, so embedding a corpus for it is pure spend with no reader. The
+    # /ingest handler consults this flag to open the vector path ONLY behind a persistent registry.
+    persistent = False
+
     def __init__(self) -> None:
         self._by_id: dict[str, CompanyContext] = {}
 

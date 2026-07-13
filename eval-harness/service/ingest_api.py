@@ -81,14 +81,20 @@ async def ingest(files: list[UploadFile] = File(...)) -> dict:
         # out (ingest_paths). Running either inline would block the single-worker event loop —
         # freezing /health and letting the Docker HEALTHCHECK restart the container mid-extraction.
         # Offload the entire synchronous unit to a worker thread; behavior is otherwise identical.
-        # feat-031: open the real vector path when an embedder is configured (DashScope when keyed,
-        # None -> keyword). prefer_vector rides on the SAME env gate the service uses for advise
-        # recall; with the Postgres registry these embeddings are then persisted to pgvector.
+        # feat-031: open the real vector path only when an embedder is configured (DashScope when
+        # keyed) AND a PERSISTENT registry will actually store the vectors and hand them to a
+        # pgvector store at recall time. Under the in-memory registry that VectorStore is never read
+        # by advise (it recalls via avery.memory.recall over facts.md, not CompanyContext.store), so
+        # embedding the corpus there is pure DashScope spend with no reader — stay honest keyword
+        # (feat-031 cost gate; feat-035 will add the per-tenant spend ceiling).
         def _extract_and_ingest() -> object:
+            registry = active_registry()
             embedder = embedding_factory.make_embedder()
-            return ingest_paths([str(p) for p in saved], registry=active_registry(), name="company",
+            prefer_vector = embedder is not None and getattr(registry, "persistent", False)
+            return ingest_paths([str(p) for p in saved], registry=registry, name="company",
                                 extractor=extractor_factory.make_extractor(),
-                                embedder=embedder, prefer_vector=embedder is not None)
+                                embedder=embedder if prefer_vector else None,
+                                prefer_vector=prefer_vector)
 
         try:
             report = await run_in_threadpool(_extract_and_ingest)
