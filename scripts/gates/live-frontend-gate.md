@@ -45,6 +45,45 @@
 5. **收尾**:停 dev server、杀 8137 uvicorn。verdict JSON 原样贴进
    `feature_list.json` evidence / progress.md。
 
+## Ask 卡相位(feat-034 阶段 B,独立聚合 `askVerdict()`)
+
+后端 ask 端点(阶段 C)未落地前,本组相位跑在**确定性 stub transport**下:
+`http://localhost:5175/?mode=live&transport=stub`(不占 5173/8137;stub 全程离线,
+`src/lite/stubTransport.ts`,同一 LiveTransport seam,零真 LLM/零网络)。阶段 C 接线后
+换真后端重跑同一组断言。stub 模式下上面 10 个既有相位同样可跑(seed 内容任意字节即可,
+stub ingest 确定性返回 16 人 2 项目、含 Lin Qing / Chen Mingyuan)。
+
+在 `composerAskLive(...)`(stub 流会多带一帧 `manifest{kind:'ask-draft'}`)之后按序:
+
+- `await __seedGate.assertAskDraft()` — **相位 K1**:AskCard 以 draft 态挂载
+  (`.lite-ask-card[data-ask-status]`);题数 1~3;具名受访者 chips(aria-pressed);
+  **逐字编辑真生效**(native setter 注入后 value 回读);**1~3 内增删真生效**;
+  诚实红线提示 `.ask-redline-note` 在 DOM(保存时才过服务端红线门,预览未跑,不假装已校验)。
+- `await __seedGate.assertAskShare()` — **相位 K2**:确认 → shared;链接数 = 选中受访者数;
+  每条 `https://avery.ima-read.com/r/{token}`(host/协议/路径逐条校验);每链接一个复制按钮,
+  点击不崩(clipboard 被拒也不崩)。
+- `await __seedGate.assertAskCollect(2)` — **相位 K3**:拉取式刷新推进
+  shared → collecting(回收 chip "1/2 replied")→ closed。
+- `__seedGate.assertAskReceipts('multi')` — **相位 K4** 🔴:多人同题回执 = **一段定性汇总**
+  (`.ask-receipt-summary`);零 `.ask-receipt-single`;卡内零 table/score/rank 结构;
+  **任一受访者名与数字/yes/no 在 60 字符内零共现**(ADR-0023 边界 3 的机器化)。
+- (重跑 `composerAskLive(...)` 得到新草稿)
+- `await __seedGate.assertAskSingleFlow()` — **相位 K5**:受访者点选到 1 人 → 1 链 →
+  回收 → 单人回执:数值/是否 + **"本人自述"标注**(`.ask-self-label`)+ 原话短评
+  (`.ask-receipt-comment`)。
+- `await __seedGate.assertAskRedline()` — **相位 K6** 🔴(全 DOM 结构闸):人卡零数字
+  (连裸数字都不许,回执值/标注不得漏上人卡)、全文档零分数表结构、story 名词黑名单 = 0。
+- `__seedGate.askVerdict()` — 6 相位独立聚合(不并进 `verdict()`:真后端跑既有 10 相位时
+  ask 相位可能尚未接线,两本账各自诚实)。
+
+### Ask 相位已知坑
+
+- **隐藏 pane 计时器深度节流**:Browser pane 隐藏超 ~5 分钟后 Chrome 把链式 setTimeout
+  钳到 ~1 次/分——不止慢,**会把 4s/10s 级 poll 预算直接打超时(假红)**。驱动侧先装
+  MessageChannel setTimeout shim(消息不被节流;只影响驱动环境,断言零改动)或保持 pane 可见。
+- tab 切换后组件下一 tick 才挂载:重跑 `composerAskLive` 前先 poll `.composer-card` 出现
+  (K1/K5 内部已自带挂载 poll)。
+
 ## 黑名单口径(与 snippet 内 STORY_NOUNS 同步,snippet 为准)
 
 story 独占:Venus · Smart Shopping Guide · Kate/Jason/Cecily/Kenan/Nasim/Aidy/

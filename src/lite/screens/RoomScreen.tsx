@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useLite } from '../store'
 import { useDict } from '../../shared/i18n/useDict'
 import { LiteAdviceCard } from '../LiteAdviceCard'
+import { AskCard } from '../AskCard'
 import { LitePanZoom } from '../LitePanZoom'
 import type { LiteStreamLine, LiteSpeaker } from '../streamSource'
 
@@ -98,6 +99,7 @@ function LiteAskComposer({
 
 export function RoomScreen() {
   const run = useLite((s) => s.run)
+  const ask = useLite((s) => s.ask)
   const askLive = useLite((s) => s.askLive)
   const { t } = useDict()
 
@@ -128,6 +130,12 @@ export function RoomScreen() {
               {advice ? (
                 <div className="lite-room-card">
                   <LiteAdviceCard advice={advice} />
+                </div>
+              ) : null}
+              {/* feat-034：第二种 artifact 卡——agent 起草的 Quick ask（manager 确认后出门） */}
+              {ask ? (
+                <div className="lite-room-card lite-room-ask">
+                  <AskCard />
                 </div>
               ) : null}
             </div>

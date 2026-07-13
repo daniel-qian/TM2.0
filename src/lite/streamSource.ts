@@ -5,7 +5,16 @@
 // LiveAgentSource：调 feat-015 /advise SSE，把 think/tool/observe 事件映射成终端行，
 // manifest.advice 映射成 8 字段 LiteAdvice（服务端 contract.py 已投影 + 重跑红线）。
 
-import type { LiveAgentEvent, LiveTransport, AdviseRequest } from './transport'
+import type {
+  AdviseRequest,
+  AskDraft,
+  AskQuestion,
+  AskReceipt,
+  AskRecipient,
+  AskStatus,
+  LiveAgentEvent,
+  LiveTransport,
+} from './transport'
 
 // ── lite 终端行（与 story 终端同 CSS chrome，类型独立）───────────────────────
 export type LiteSpeaker = 'agent' | 'tool' | 'system'
@@ -45,6 +54,9 @@ export interface LiveRunState {
   status: 'idle' | 'running' | 'complete' | 'error'
   lines: LiteStreamLine[] // 逐拍累积的终端流行
   advice: LiteAdvice | null // manifest.advice（8 字段）——ready 后填
+  // feat-034：manifest{kind:'ask-draft'} 落进来的 Quick ask 草稿（出生帧）。
+  // 后续编辑/分享/回执的活体状态归 store 持有——这里只是"流里出生了一张草稿"的快照。
+  askDraft: AskDraft | null
   contractOk: boolean | null
   redlinePassed: boolean | null
   error: string | null
@@ -55,6 +67,7 @@ export function emptyRunState(): LiveRunState {
     status: 'idle',
     lines: [],
     advice: null,
+    askDraft: null,
     contractOk: null,
     redlinePassed: null,
     error: null,
@@ -133,6 +146,16 @@ export function applyEvent(
       push('system', 'thought', nudgeText(ev.gate))
       break
     case 'manifest': {
+      // feat-034 契约提案：可选判别字段 kind（缺省 = advice，现有路径零破坏）。
+      if (ev.kind === 'ask-draft') {
+        const draft = coerceAskDraft(ev.ask)
+        if (draft) {
+          state.askDraft = draft
+          push('system', 'manifest', 'A quick ask is drafted — yours to confirm')
+        }
+        // ask-draft 帧不判 run 完成——advice 帧（或流自然收尾）才收 status。
+        break
+      }
       const advice = coerceAdvice(ev.advice)
       state.advice = advice
       state.contractOk = ev.contract_ok ?? null
@@ -210,5 +233,79 @@ export function coerceAdvice(raw: unknown): LiteAdvice | null {
     },
     metrics_to_track: strArr(r.metrics_to_track),
     conversation_script: typeof r.conversation_script === 'string' ? r.conversation_script : '',
+  }
+}
+
+// manifest{kind:'ask-draft'}.ask 的防御性形状归一（与 coerceAdvice 同规格）。
+// 契约硬边界（PRD Q5 / ADR-0023）：题数 1..3、题型仅 scale|yesno；坏形状返回 null
+// （宁可不出卡，不出一张半坏的卡）。回执只存在于 recipients[].receipt——没有任何
+// 可挂到"人"身上的槽位（结构性红线）。
+export function coerceAskDraft(raw: unknown): AskDraft | null {
+  if (!raw || typeof raw !== 'object') return null
+  const r = raw as Record<string, unknown>
+  if (typeof r.id !== 'string' || !r.id) return null
+
+  const questions: AskQuestion[] = Array.isArray(r.questions)
+    ? (r.questions as unknown[])
+        .filter((q): q is Record<string, unknown> => !!q && typeof q === 'object')
+        .map((q, i) => ({
+          id: typeof q.id === 'string' && q.id ? q.id : `q${i + 1}`,
+          kind: (q.kind === 'yesno' ? 'yesno' : 'scale') as AskQuestion['kind'],
+          text: typeof q.text === 'string' ? q.text : '',
+        }))
+        .filter((q) => q.text.trim().length > 0)
+        .slice(0, 3)
+    : []
+  if (questions.length < 1) return null
+
+  const recipients: AskRecipient[] = Array.isArray(r.recipients)
+    ? (r.recipients as unknown[])
+        .filter((x): x is Record<string, unknown> => !!x && typeof x === 'object')
+        .map((x, i) => ({
+          id: typeof x.id === 'string' && x.id ? x.id : `r${i + 1}`,
+          name: typeof x.name === 'string' ? x.name : '',
+          token: typeof x.token === 'string' ? x.token : undefined,
+          link: typeof x.link === 'string' ? x.link : undefined,
+          receipt: coerceAskReceipt(x.receipt),
+        }))
+        .filter((x) => x.name.trim().length > 0)
+    : []
+
+  const status: AskStatus =
+    r.status === 'shared' || r.status === 'collecting' || r.status === 'closed'
+      ? r.status
+      : 'draft'
+
+  return {
+    id: r.id,
+    status,
+    questions,
+    recipients,
+    comment_prompt: typeof r.comment_prompt === 'string' ? r.comment_prompt : undefined,
+    company_context_id:
+      typeof r.company_context_id === 'string' ? r.company_context_id : undefined,
+    created_at: typeof r.created_at === 'string' ? r.created_at : undefined,
+    expires_at: typeof r.expires_at === 'string' ? r.expires_at : undefined,
+    receipts_summary: typeof r.receipts_summary === 'string' ? r.receipts_summary : undefined,
+  }
+}
+
+function coerceAskReceipt(raw: unknown): AskReceipt | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const r = raw as Record<string, unknown>
+  const answers = Array.isArray(r.answers)
+    ? (r.answers as unknown[])
+        .filter((a): a is Record<string, unknown> => !!a && typeof a === 'object')
+        .map((a) => ({
+          question_id: typeof a.question_id === 'string' ? a.question_id : '',
+          value: typeof a.value === 'number' || typeof a.value === 'boolean' ? a.value : false,
+        }))
+        .filter((a) => a.question_id)
+    : []
+  if (answers.length === 0) return undefined
+  return {
+    answers,
+    comment: typeof r.comment === 'string' && r.comment.trim() ? r.comment : undefined,
+    answered_at: typeof r.answered_at === 'string' ? r.answered_at : '',
   }
 }

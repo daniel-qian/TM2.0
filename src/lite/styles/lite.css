@@ -939,3 +939,359 @@
   font-size: 12px;
   font-style: italic;
 }
+
+/* ── feat-034 · Ask（Quick ask / 快问）卡 ───────────────────────────────────────
+   lite 第二种 artifact 卡，与 .lite-room-card 内的 8 字段卡并列进 board flow。
+   🔴 ADR-0023：多人回执只有 .ask-receipt-summary 一段——没有任何"每人一行×数值"的样式钩子。 */
+.lite-shell .lite-room-board .lite-room-ask {
+  flex: 1 1 420px;
+  min-width: 300px;
+  max-width: 520px;
+}
+
+.lite-ask-card {
+  background: var(--paper-strong);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-soft);
+  padding: 22px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.lite-ask-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--rule);
+  padding-bottom: 12px;
+}
+
+.lite-ask-header h2 {
+  margin: 2px 0 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 20px;
+  color: var(--ink);
+}
+
+.ask-status-chip {
+  flex: 0 0 auto;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--rule-strong);
+  background: rgba(105, 128, 109, 0.12);
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.lite-ask-card .ask-lede {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+/* 诚实提示：保存时才过红线门（服务端、阶段 C）——不是"已校验"的绿标 */
+.lite-ask-card .ask-redline-note {
+  margin: 0;
+  padding: 8px 12px;
+  border-left: 3px solid var(--honey);
+  background: rgba(178, 123, 43, 0.08);
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.lite-ask-card .ask-questions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lite-ask-card .ask-q-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lite-ask-card .ask-q-kind {
+  flex: 0 0 auto;
+  min-width: 52px;
+  text-align: center;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  border: 1px solid var(--rule-strong);
+  color: var(--ink-soft);
+  background: rgba(82, 123, 145, 0.1);
+}
+.lite-ask-card .ask-q-kind.is-yesno {
+  background: rgba(108, 99, 181, 0.1);
+}
+
+.lite-ask-card .ask-q-input {
+  flex: 1 1 auto;
+  padding: 8px 10px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.4;
+}
+.lite-ask-card .ask-q-input:focus {
+  outline: 2px solid rgba(105, 128, 109, 0.45);
+  outline-offset: 1px;
+}
+
+.lite-ask-card .ask-q-remove {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid var(--rule-strong);
+  background: transparent;
+  color: var(--ink-faint);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+.lite-ask-card .ask-q-remove:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.lite-ask-card .ask-q-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.lite-ask-card .ask-q-add {
+  padding: 5px 10px;
+  border: 1px dashed var(--rule-strong);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 12px;
+  cursor: pointer;
+}
+.lite-ask-card .ask-q-add:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.lite-ask-card .ask-q-hint {
+  color: var(--ink-faint);
+  font-size: 11px;
+}
+
+.lite-ask-card .ask-comment-prompt {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.lite-ask-card .ask-section-label {
+  margin: 0 0 2px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.lite-ask-card .ask-recipients-hint {
+  margin: 0 0 8px;
+  color: var(--ink-faint);
+  font-size: 12px;
+}
+
+.lite-ask-card .ask-recipient-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-height: 132px;
+  overflow: auto;
+}
+
+.lite-ask-card .ask-recipient-chip {
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--rule-strong);
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 12px;
+  cursor: pointer;
+}
+.lite-ask-card .ask-recipient-chip.is-selected {
+  background: rgba(105, 128, 109, 0.16);
+  border-color: var(--sage);
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.lite-ask-card .ask-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  border-top: 1px solid var(--rule);
+  padding-top: 12px;
+}
+
+.lite-ask-card .ask-confirm,
+.lite-ask-card .ask-refresh {
+  padding: 8px 16px;
+  border-radius: 6px;
+  border: 1px solid var(--rule-strong);
+  background: var(--ink);
+  color: var(--paper-strong);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.lite-ask-card .ask-refresh {
+  background: transparent;
+  color: var(--ink);
+}
+.lite-ask-card .ask-confirm:disabled,
+.lite-ask-card .ask-refresh:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.lite-ask-card .ask-links {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lite-ask-card .ask-link-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lite-ask-card .ask-link-name {
+  flex: 0 0 auto;
+  min-width: 110px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.lite-ask-card .ask-link-url {
+  flex: 1 1 auto;
+  padding: 5px 8px;
+  border: 1px solid var(--rule);
+  border-radius: 5px;
+  background: var(--paper);
+  color: var(--ink-soft);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lite-ask-card .ask-copy-btn {
+  flex: 0 0 auto;
+  padding: 5px 10px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.lite-ask-card .ask-receipts {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.lite-ask-card .ask-receipt-who {
+  margin: 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 15px;
+  color: var(--ink);
+}
+
+.lite-ask-card .ask-self-label {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--sage);
+}
+.lite-ask-card .ask-self-hint {
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink-faint);
+  font-size: 11px;
+}
+
+.lite-ask-card .ask-receipt-q {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px dashed var(--rule);
+}
+
+.lite-ask-card .ask-receipt-q-text {
+  font-size: 13px;
+  color: var(--ink-soft);
+  line-height: 1.45;
+}
+
+.lite-ask-card .ask-receipt-value {
+  flex: 0 0 auto;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 15px;
+  color: var(--ink);
+}
+
+.lite-ask-card .ask-receipt-comment {
+  margin: 4px 0 0;
+  padding: 8px 12px;
+  border-left: 3px solid var(--sage);
+  background: rgba(105, 128, 109, 0.07);
+  color: var(--ink);
+  font-size: 13px;
+  font-style: italic;
+  line-height: 1.55;
+}
+
+.lite-ask-card .ask-receipt-when {
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: 11px;
+}
+
+.lite-ask-card .ask-receipt-summary {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink);
+  line-height: 1.6;
+}
+
+.lite-ask-card .ask-error {
+  margin: 0;
+  color: var(--terracotta);
+  font-size: 12px;
+}

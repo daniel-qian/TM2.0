@@ -29,6 +29,19 @@
  *   await __seedGate.assertPlaybooksEmpty()                       // phase I: Playbooks honest empty state
  *   await __seedGate.assertVisionSurface()                        // phase J: Vision surface — narrative + labeled mock
  *   __seedGate.verdict()                                          // aggregate (10 phases)
+ *
+ * feat-034 stage B — Ask (Quick ask) card phases, SEPARATE aggregate (askVerdict below).
+ * Driven with `?mode=live&transport=stub` (deterministic LiveTransport stub) until the ask
+ * backend (stage C) exists; then re-run against the real service. Run AFTER composerAskLive
+ * (the stub advise stream carries a manifest{kind:'ask-draft'}):
+ *   await __seedGate.assertAskDraft()          // K1: card mounts draft, verbatim edit works, 1..3 add/remove
+ *   await __seedGate.assertAskShare()          // K2: confirm -> links == recipients, host avery.ima-read.com
+ *   await __seedGate.assertAskCollect(2)       // K3: pull-refresh -> partial chip -> closed
+ *   __seedGate.assertAskReceipts('multi')      // K4: qualitative summary, NO cross-person score rows
+ *   (re-run composerAskLive -> fresh draft)
+ *   await __seedGate.assertAskSingleFlow()     // K5: deselect to 1 recipient -> link -> receipt w/ self-reported
+ *   await __seedGate.assertAskRedline()        // K6: whole-DOM — person cards zero numbers, no score tables, story nouns 0
+ *   __seedGate.askVerdict()                    // aggregate (6 ask phases)
  */
 (() => {
   // Story-EXCLUSIVE nouns. NOTE: 'Lin Qing' / 'Chen Mingyuan' / 'Sun Xiaomei' / 'Zheng Zixuan'
@@ -466,6 +479,285 @@
       };
       results.vision = out;
       return out;
+    },
+
+    // ── feat-034 stage B (lite Ask / Quick ask card, stub-driven) ─────────────
+    // BORN RED (2026-07-13, before implementation): no .lite-ask-card exists anywhere.
+    // ADR-0023 structural red lines are machine asserts here, not copy discipline:
+    // receipts never on person cards, no cross-person score table in the whole DOM.
+    // Value-ish tokens a per-person score row would carry (digits / yes / no).
+    _askValueRe(name) {
+      const esc = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      // name ... value  OR  value ... name, within 60 chars — a "row" pairing person with a score.
+      return new RegExp('(?:' + esc + '[^]{0,60}?(?:[0-9]|\\byes\\b|\\bno\\b))|(?:(?:[0-9]|\\byes\\b|\\bno\\b)[^]{0,60}?' + esc + ')', 'i');
+    },
+
+    async assertAskDraft() {
+      // Phase K1: after composerAskLive the advise stream carried manifest{kind:'ask-draft'} —
+      // the AskCard mounts in DRAFT state: 1..3 questions each verbatim-editable, named roster
+      // recipients, and the HONEST red-line note (check happens at save, server-side, not yet run).
+      this._clickTab('The room');
+      try { await poll(() => ($('.lite-ask-card') ? true : null), 20000, 'ask card to mount'); } catch (e) { /* report below */ }
+      const card = $('.lite-ask-card');
+      if (!card) return (results.askDraft = { pass: false, error: 'no .lite-ask-card in DOM' });
+      const statusAttr = card.getAttribute('data-ask-status');
+      const qInputs = $$('.ask-q-input', card);
+      const chips = $$('.ask-recipient-chip', card);
+      const selected = chips.filter((c) => c.getAttribute('aria-pressed') === 'true');
+      results._askRecipientNames = selected.map((c) => (c.textContent || '').trim());
+      const note = $('.ask-redline-note', card);
+      // Verbatim edit through the native setter (React-controlled input).
+      const EDIT_MARKER = 'How confident are you that this launch lands on the edited date?';
+      let editWorks = false;
+      if (qInputs[0]) {
+        const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+        setter.call(qInputs[0], EDIT_MARKER);
+        qInputs[0].dispatchEvent(new Event('input', { bubbles: true }));
+        try {
+          await poll(() => (($$('.ask-q-input', card)[0] || {}).value === EDIT_MARKER ? true : null), 4000, 'question edit to stick');
+          editWorks = true;
+        } catch (e) { /* editWorks stays false */ }
+      }
+      // Add/remove within 1..3: grow by one (if room), then remove the added row back.
+      let addRemoveWorks = false;
+      const before = $$('.ask-q-row', card).length;
+      const addBtn = $$('.ask-q-add', card).find((b) => !b.disabled);
+      if (addBtn && before < 3) {
+        addBtn.click();
+        let grew = false;
+        try {
+          await poll(() => ($$('.ask-q-row', card).length === before + 1 ? true : null), 4000, 'question row to add');
+          grew = true;
+        } catch (e) { /* no growth */ }
+        if (grew) {
+          const rows = $$('.ask-q-row', card);
+          const rm = rows[rows.length - 1].querySelector('.ask-q-remove');
+          if (rm) rm.click();
+          try {
+            await poll(() => ($$('.ask-q-row', card).length === before ? true : null), 4000, 'question row to remove');
+            addRemoveWorks = true;
+          } catch (e) { /* stays grown */ }
+        }
+      }
+      const out = {
+        statusAttr,
+        questions: $$('.ask-q-row', card).length,
+        questionsInRange: $$('.ask-q-row', card).length >= 1 && $$('.ask-q-row', card).length <= 3,
+        recipientChips: chips.length,
+        selectedRecipients: selected.length,
+        recipientNames: results._askRecipientNames,
+        redlineNotePresent: !!note,
+        editWorks,
+        addRemoveWorks,
+        pass: statusAttr === 'draft' && qInputs.length >= 1 && qInputs.length <= 3 &&
+          selected.length >= 1 && !!note && editWorks && addRemoveWorks,
+      };
+      results.askDraft = out;
+      return out;
+    },
+
+    async assertAskShare() {
+      // Phase K2: confirm -> SHARED: one link per selected recipient, every link
+      // https://avery.ima-read.com/r/{token}, one copy button per link (manual share = human gate).
+      const card = $('.lite-ask-card');
+      if (!card) return (results.askShare = { pass: false, error: 'no .lite-ask-card' });
+      const expected = $$('.ask-recipient-chip[aria-pressed="true"]', card).length ||
+        (results._askRecipientNames || []).length;
+      const confirm = $('.ask-confirm', card);
+      if (!confirm) return (results.askShare = { pass: false, error: 'no .ask-confirm button' });
+      confirm.click();
+      try {
+        await poll(() => (card.getAttribute('data-ask-status') === 'shared' ? true : null), 15000, 'ask to reach shared');
+      } catch (e) {
+        return (results.askShare = { pass: false, error: String(e), statusAttr: card.getAttribute('data-ask-status') });
+      }
+      const links = $$('.ask-link-url', card).map((el) => (el.textContent || '').trim());
+      const copyBtns = $$('.ask-copy-btn', card);
+      let hostOk = links.length > 0;
+      const badLinks = [];
+      for (const l of links) {
+        let u = null;
+        try { u = new URL(l); } catch (e) { /* invalid */ }
+        if (!u || u.protocol !== 'https:' || u.host !== 'avery.ima-read.com' ||
+            !u.pathname.startsWith('/r/') || u.pathname.length <= 3) {
+          hostOk = false; badLinks.push(l);
+        }
+      }
+      // Copy button must not crash the page (clipboard may be denied headless — handler catches).
+      let copyClickSafe = true;
+      try { if (copyBtns[0]) copyBtns[0].click(); } catch (e) { copyClickSafe = false; }
+      const out = {
+        expectedRecipients: expected,
+        links: links.length,
+        linkSample: links[0] || null,
+        badLinks,
+        hostOk,
+        copyButtons: copyBtns.length,
+        copyClickSafe,
+        pass: links.length === expected && links.length > 0 && hostOk &&
+          copyBtns.length === links.length && copyClickSafe,
+      };
+      results.askShare = out;
+      return out;
+    },
+
+    async assertAskCollect(expectedTotal) {
+      // Phase K3: manager pull-refresh (v1 = no push) advances deterministically:
+      // shared -> collecting (partial chip "1/2 replied") -> closed (all in).
+      const card = $('.lite-ask-card');
+      if (!card) return (results.askCollect = { pass: false, error: 'no .lite-ask-card' });
+      const total = expectedTotal || 2;
+      const chipTexts = [];
+      let sawPartial = total <= 1; // single-recipient asks may go straight to closed
+      for (let i = 0; i < total + 1 && card.getAttribute('data-ask-status') !== 'closed'; i++) {
+        const refresh = $('.ask-refresh', card);
+        if (!refresh) return (results.askCollect = { pass: false, error: 'no .ask-refresh button', chipTexts });
+        const beforeChip = ($('.ask-status-chip', card) || {}).textContent || '';
+        refresh.click();
+        try {
+          await poll(() => {
+            const chip = ($('.ask-status-chip', card) || {}).textContent || '';
+            return chip !== beforeChip || card.getAttribute('data-ask-status') === 'closed' ? true : null;
+          }, 10000, 'refresh to advance ask state');
+        } catch (e) {
+          return (results.askCollect = { pass: false, error: String(e), chipTexts, statusAttr: card.getAttribute('data-ask-status') });
+        }
+        const chip = ($('.ask-status-chip', card) || {}).textContent || '';
+        chipTexts.push(chip);
+        if (card.getAttribute('data-ask-status') === 'collecting' && /\d\s*\/\s*\d/.test(chip)) sawPartial = true;
+      }
+      const out = {
+        chipTexts,
+        sawPartialChip: sawPartial,
+        finalStatus: card.getAttribute('data-ask-status'),
+        pass: sawPartial && card.getAttribute('data-ask-status') === 'closed',
+      };
+      results.askCollect = out;
+      return out;
+    },
+
+    assertAskReceipts(expect) {
+      // Phase K4 (multi) / receipt half of K5 (single).
+      // ADR-0023: single = number + "self-reported" label + verbatim comment;
+      // multi = ONE qualitative summary paragraph — structurally NO per-person score row:
+      // zero .ask-receipt-single, zero tables, and no recipient name within 60 chars of a
+      // digit / yes / no anywhere in the receipts zone.
+      const card = $('.lite-ask-card');
+      const slot = expect === 'single' ? 'askReceiptsSingle' : 'askReceiptsMulti';
+      if (!card) return (results[slot] = { pass: false, error: 'no .lite-ask-card' });
+      const zone = $('.ask-receipts', card) || card;
+      const zoneText = zone.innerText || '';
+      const single = $$('.ask-receipt-single', card);
+      const summary = $('.ask-receipt-summary', card);
+      const selfLabel = $('.ask-self-label', card);
+      const comment = $('.ask-receipt-comment', card);
+      const valueEls = $$('.ask-receipt-value', card);
+      const tables = $$('table', card).length +
+        $$('[class*="score"], [class*="rank"], [class*="leaderboard"]', card).length;
+      const names = results._askRecipientNames || [];
+      const nameValuePairs = names.filter((n) => n && this._askValueRe(n).test(zoneText));
+      let out;
+      if (expect === 'single') {
+        out = {
+          singleBlocks: single.length,
+          selfReportedLabel: !!selfLabel,
+          verbatimComment: !!comment && (comment.textContent || '').trim().length > 0,
+          valuesShown: valueEls.length,
+          tables,
+          pass: single.length === 1 && !!selfLabel && !!comment &&
+            (comment.textContent || '').trim().length > 0 && valueEls.length >= 1 && tables === 0,
+        };
+      } else {
+        out = {
+          singleBlocks: single.length,
+          summaryPresent: !!summary && (summary.textContent || '').trim().length > 0,
+          tables,
+          nameValuePairs,
+          pass: single.length === 0 && !!summary && (summary.textContent || '').trim().length > 0 &&
+            tables === 0 && nameValuePairs.length === 0,
+        };
+      }
+      results[slot] = out;
+      return out;
+    },
+
+    async assertAskSingleFlow() {
+      // Phase K5: a FRESH ask (composerAskLive re-ran) — deselect down to ONE recipient,
+      // share (1 link), collect, then the single-receipt shape: number + self-reported + verbatim.
+      this._clickTab('The room');
+      try {
+        await poll(() => {
+          const c = $('.lite-ask-card');
+          return c && c.getAttribute('data-ask-status') === 'draft' ? true : null;
+        }, 20000, 'fresh draft ask card');
+      } catch (e) {
+        return (results.askSingle = { pass: false, error: String(e) });
+      }
+      const card = $('.lite-ask-card');
+      // Deselect all but the first selected recipient.
+      for (;;) {
+        const selected = $$('.ask-recipient-chip[aria-pressed="true"]', card);
+        if (selected.length <= 1) break;
+        selected[selected.length - 1].click();
+        try {
+          await poll(() => ($$('.ask-recipient-chip[aria-pressed="true"]', card).length === selected.length - 1 ? true : null), 4000, 'recipient to deselect');
+        } catch (e) {
+          return (results.askSingle = { pass: false, error: 'recipient deselect did not stick' });
+        }
+      }
+      results._askRecipientNames = $$('.ask-recipient-chip[aria-pressed="true"]', card)
+        .map((c) => (c.textContent || '').trim());
+      const share = await this.assertAskShare();
+      const collect = await this.assertAskCollect(1);
+      const receipts = this.assertAskReceipts('single');
+      const out = {
+        deselectedToOne: results._askRecipientNames.length === 1,
+        share, collect, receipts,
+        pass: results._askRecipientNames.length === 1 && share.pass && collect.pass && receipts.pass,
+      };
+      results.askSingle = out;
+      return out;
+    },
+
+    async assertAskRedline() {
+      // Phase K6 (ADR-0023 structural gate, whole DOM): after receipts are in —
+      //  · person cards carry ZERO numbers (receipts never leak onto people),
+      //  · no cross-person score structure anywhere in the document,
+      //  · story-noun blacklist stays 0.
+      this._clickTab('Your team');
+      try { await poll(() => ($$('.home-person-card').length > 0 ? true : null), 8000, 'person cards to mount'); } catch (e) { /* report below */ }
+      const cards = $$('.home-person-card');
+      const cardText = cards.map((c) => c.innerText).join('\n');
+      const bloodBar = BLOOD_BAR_RE.test(cardText) ? cardText.match(BLOOD_BAR_RE)[0] : null;
+      const digitOnPerson = /\d/.test(cardText) ? (cardText.match(/[^\n]*\d[^\n]*/) || [null])[0] : null;
+      const receiptLeak = /self-reported|out of 5|本人自述/i.test(cardText);
+      const docTables = $$('table').length +
+        $$('[class*="score-table"], [class*="leaderboard"], [class*="ranking"]').length;
+      const nounScan = this.scanStoryNouns();
+      const out = {
+        personCards: cards.length,
+        bloodBarLeak: bloodBar,
+        digitOnPersonCard: digitOnPerson,
+        receiptLeakOnPersonCard: receiptLeak,
+        docScoreTables: docTables,
+        storyNounHits: nounScan.storyNounHits,
+        pass: cards.length > 0 && !bloodBar && !digitOnPerson && !receiptLeak &&
+          docTables === 0 && nounScan.pass,
+      };
+      results.askRedline = out;
+      return out;
+    },
+
+    askVerdict() {
+      const phases = {
+        askDraft: !!(results.askDraft && results.askDraft.pass),
+        askShare: !!(results.askShare && results.askShare.pass),
+        askCollect: !!(results.askCollect && results.askCollect.pass),
+        askReceiptsMulti: !!(results.askReceiptsMulti && results.askReceiptsMulti.pass),
+        askSingle: !!(results.askSingle && results.askSingle.pass),
+        askRedline: !!(results.askRedline && results.askRedline.pass),
+      };
+      return { pass: Object.values(phases).every(Boolean), phases, results };
     },
 
     verdict() {
