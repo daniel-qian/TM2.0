@@ -38,7 +38,8 @@ from .extract import (
 from .llm_extract import LLMExtractor, FallbackExtractor
 from .redline_extract import validate_extraction, ExtractionRedlineResult, ExtractionViolation
 from .store import (
-    KeywordStore, VectorStore, RetrievalStore, RetrievalHit, Embedder, HashingEmbedder, build_store,
+    KeywordStore, VectorStore, PgVectorStore, RetrievalStore, RetrievalHit, Embedder,
+    HashingEmbedder, build_store,
 )
 from .registry import CompanyContext, ContextRegistry, REGISTRY
 from .pipeline import ingest_paths, ingest_docs, IngestReport
@@ -49,7 +50,7 @@ __all__ = [
     "ExtractionResult", "HeuristicExtractor", "Extractor", "extract_docs",
     "LLMExtractor", "FallbackExtractor",
     "validate_extraction", "ExtractionRedlineResult", "ExtractionViolation",
-    "KeywordStore", "VectorStore", "RetrievalStore", "RetrievalHit", "Embedder",
+    "KeywordStore", "VectorStore", "PgVectorStore", "RetrievalStore", "RetrievalHit", "Embedder",
     "HashingEmbedder", "build_store",
     "CompanyContext", "ContextRegistry", "REGISTRY",
     "ingest_paths", "ingest_docs", "IngestReport",

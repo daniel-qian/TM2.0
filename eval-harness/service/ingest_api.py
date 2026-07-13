@@ -35,7 +35,7 @@ from starlette.concurrency import run_in_threadpool
 from avery.ingest import ingest_paths
 from avery.ingest.registry import CompanyContext, active_registry
 
-from . import extractor_factory
+from . import embedding_factory, extractor_factory
 
 router = APIRouter()
 
@@ -81,9 +81,14 @@ async def ingest(files: list[UploadFile] = File(...)) -> dict:
         # out (ingest_paths). Running either inline would block the single-worker event loop —
         # freezing /health and letting the Docker HEALTHCHECK restart the container mid-extraction.
         # Offload the entire synchronous unit to a worker thread; behavior is otherwise identical.
+        # feat-031: open the real vector path when an embedder is configured (DashScope when keyed,
+        # None -> keyword). prefer_vector rides on the SAME env gate the service uses for advise
+        # recall; with the Postgres registry these embeddings are then persisted to pgvector.
         def _extract_and_ingest() -> object:
+            embedder = embedding_factory.make_embedder()
             return ingest_paths([str(p) for p in saved], registry=active_registry(), name="company",
-                                extractor=extractor_factory.make_extractor())
+                                extractor=extractor_factory.make_extractor(),
+                                embedder=embedder, prefer_vector=embedder is not None)
 
         try:
             report = await run_in_threadpool(_extract_and_ingest)

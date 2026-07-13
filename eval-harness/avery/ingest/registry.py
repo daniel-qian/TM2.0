@@ -174,7 +174,10 @@ def active_registry() -> ContextRegistry:
     reg = _PG_REGISTRIES.get(url)
     if reg is None:
         from .pg_registry import PostgresContextRegistry  # lazy: offline suite never imports this
-        reg = _PG_REGISTRIES[url] = PostgresContextRegistry(url)
+        from avery.embeddings import make_embedder_from_env  # feat-031: same gate the service uses
+        # feat-031: a configured embedder turns the DB registry into real pgvector RAG (put() fills
+        # embeddings, get() rebuilds a pgvector store). None (keyword / no key) -> KeywordStore.
+        reg = _PG_REGISTRIES[url] = PostgresContextRegistry(url, embedder=make_embedder_from_env())
     return reg  # type: ignore[return-value]  # duck-typed: same get/put/resolve/__contains__ API
 
 

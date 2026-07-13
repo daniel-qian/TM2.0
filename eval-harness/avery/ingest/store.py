@@ -7,12 +7,17 @@ Two retrieval backends behind ONE interface (`RetrievalStore`):
     This is what the AFK gate uses, so retrieval is verifiable with no model or DB. It is the
     ingestion analogue of `avery/memory.py`'s keyword recall.
 
-  * VectorStore   — real vector RAG. Embeds each material chunk with a pluggable `Embedder`
-    (domestic BGE-M3/MiniMax or overseas OpenAI/Voyage) and does cosine kNN. The default backend is
-    in-memory numpy cosine (self-hostable, runs anywhere numpy is present); pgvector is the
-    production persistence target and plugs in behind the same `RetrievalStore` interface. When no
-    embedding service is configured, the VectorStore path is a NEEDS-SERVICE no-op and the pipeline
-    falls back to KeywordStore — the AFK gate never depends on a live embedding endpoint.
+  * VectorStore   — real vector RAG, in-memory. Embeds each material chunk with a pluggable
+    `Embedder` (domestic BGE-M3/MiniMax or overseas OpenAI/Voyage) and does cosine kNN in Python
+    (self-hostable, runs anywhere). When no embedding service is configured, the VectorStore path is
+    a NEEDS-SERVICE no-op and the pipeline falls back to KeywordStore — the AFK gate never depends on
+    a live embedding endpoint.
+
+  * PgVectorStore — the SAME vector RAG, persisted (feat-031). Cosine kNN runs IN Postgres via
+    pgvector's `<=>` operator over `avery.materials.embedding`, scoped to one context_id. Rows are
+    written by `pg_registry.put()`; this reads them. It is the production persistence target and the
+    reason retrieval is STILL VECTOR after a restart — a fresh process rebuilds it and queries the DB
+    directly, never pulling the whole corpus back into memory. Behind the same `RetrievalStore`.
 
 Embeddings are pluggable via the `Embedder` protocol: any object with `.embed(list[str]) ->
 list[list[float]]`. `HashingEmbedder` is a deterministic, dependency-free stand-in (a hashed
@@ -125,13 +130,19 @@ def _cosine(a: Sequence[float], b: Sequence[float]) -> float:
 
 # --- vector backend ---------------------------------------------------------------------------
 
-class VectorStore:
-    """Real vector RAG. Default persistence = in-memory numpy/py cosine (self-hostable anywhere);
-    pgvector is the production target behind this same interface. Needs an `Embedder`; if none is
-    available it reports `available=False` and callers fall back to keyword.
+def _vec_literal(vec: Sequence[float]) -> str:
+    """pgvector text literal ('[0.1,0.2,...]') for a `%s::vector` bind — dependency-free, no need
+    for the `pgvector` python adapter. repr keeps floats round-trippable."""
+    return "[" + ",".join(repr(float(x)) for x in vec) + "]"
 
-    `persistence` records the intended production store ('pgvector') for the handoff even when the
-    offline default (in-memory) is what actually runs here.
+
+class VectorStore:
+    """Real vector RAG, in-memory (Python cosine, self-hostable anywhere). Needs an `Embedder`; if
+    none is available it reports `available=False` and callers fall back to keyword. `PgVectorStore`
+    is the persisted twin behind the same interface — this stays honest about being in-memory.
+
+    `persistence` is a label only ('in-memory' by default). It NEVER claims 'pgvector' unless a real
+    DB is behind it (it isn't, here) — the persisted path is `PgVectorStore`, not a string on this.
     """
 
     def __init__(self, embedder: Embedder | None = None, *, persistence: str = "in-memory") -> None:
@@ -157,6 +168,12 @@ class VectorStore:
             self._chunks.append(c)
             self._embs.append(e)
 
+    def persisted_vectors(self) -> list[list[float]]:
+        """The computed embeddings, aligned to add() insertion order (== extraction.materials order).
+        A persistent backend (pg_registry.put()) reuses these so a corpus is embedded ONCE, not
+        re-embedded (and re-billed) on the way to the DB."""
+        return list(self._embs)
+
     def query(self, text: str, limit: int = 8) -> list[RetrievalHit]:
         if not self.available or not self._chunks:
             return []
@@ -170,12 +187,62 @@ class VectorStore:
         return len(self._chunks)
 
 
+class PgVectorStore:
+    """Real pgvector RAG: cosine kNN IN Postgres via the `<=>` operator over
+    `avery.materials.embedding`, scoped to one `context_id`. The DB is the store.
+
+    Rows (text + embedding) are written atomically by `pg_registry.put()` as part of the context
+    snapshot; this store is the READ side a rebuilt CompanyContext gets after a restart. It needs an
+    `Embedder` only to embed the (one short) query string at search time; the corpus vectors already
+    live in the DB, so a query never pulls the whole corpus into memory. Connections are short-lived
+    (one per query, context-managed), matching pg_registry's no-pooling model. psycopg is imported
+    lazily so importing this module never requires the driver (the offline suite stays driver-free).
+    """
+
+    def __init__(self, url: str, context_id: str, embedder: Embedder | None,
+                 *, dim: int | None = None) -> None:
+        self._url = url
+        self._context_id = context_id
+        self.embedder = embedder
+        self._dim = dim
+
+    @property
+    def backend(self) -> str:
+        return f"vector({self.embedder.name if self.embedder else 'no-embedder'}/pgvector)"
+
+    @property
+    def available(self) -> bool:
+        return self.embedder is not None
+
+    def add(self, chunks: Sequence[MaterialChunk]) -> None:
+        """No-op. Materials + embeddings are written by pg_registry.put() as one atomic snapshot
+        (a context is never a merge of two ingests); the query-side store only reads."""
+        return
+
+    def query(self, text: str, limit: int = 8) -> list[RetrievalHit]:
+        if not self.available:
+            return []
+        qe = self.embedder.embed([text])[0]
+        lit = _vec_literal(qe)
+        import psycopg  # lazy: only the DB path ever imports the driver
+        with psycopg.connect(self._url) as conn:
+            rows = conn.execute(
+                "SELECT source, text, 1 - (embedding <=> %s::vector) AS score "
+                "FROM avery.materials "
+                "WHERE context_id = %s AND embedding IS NOT NULL "
+                "ORDER BY embedding <=> %s::vector "
+                "LIMIT %s",
+                (lit, self._context_id, lit, limit)).fetchall()
+        return [RetrievalHit(source=src, text=txt, score=float(score)) for src, txt, score in rows]
+
+
 def build_store(embedder: Embedder | None = None, *, prefer_vector: bool = False,
-                persistence: str = "pgvector") -> RetrievalStore:
+                persistence: str = "in-memory") -> RetrievalStore:
     """Factory honoring the pluggable-retrieval default.
 
     prefer_vector=False (AFK default) -> KeywordStore (offline, deterministic).
-    prefer_vector=True with an embedder -> VectorStore (real RAG; pgvector in prod, in-memory here).
+    prefer_vector=True with an embedder -> VectorStore (real RAG, in-memory; the PERSISTED twin is
+        PgVectorStore, rebuilt by pg_registry.get() when a context has stored embeddings).
     prefer_vector=True with NO embedder -> falls back to KeywordStore (vector path = needs-service).
     """
     if prefer_vector and embedder is not None:

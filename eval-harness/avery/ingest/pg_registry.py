@@ -8,14 +8,20 @@ db/migrations/0001_avery_persistence.sql):
 
     contexts       id / name / source_files (+ owner_token reserved for feat-034)
     entities       people / projects / signals as ordered JSONB rows
-    materials      RAG chunks as rows (+ embedding vector(N) reserved NULL for feat-031)
+    materials      RAG chunks as rows (+ embedding vector(1024) — feat-031 fills it when keyed)
     memory_files   facts.md / notes.md FULL TEXT — the re-materialization source
 
 `get()` rebuilds a full CompanyContext from those rows: entities -> ExtractionResult, materials ->
-a fresh KeywordStore (offline retrieval; feat-031 swaps in real pgvector behind the same
-RetrievalStore interface), and — the restart story — if the local memory_dir files are missing
-(new machine / redeploy wiped the disk) they are RE-MATERIALIZED byte-identically from the DB, so
-the loop's recall/cite run unchanged over a company ingested before the restart.
+a RetrievalStore, and — the restart story — if the local memory_dir files are missing (new machine /
+redeploy wiped the disk) they are RE-MATERIALIZED byte-identically from the DB, so the loop's
+recall/cite run unchanged over a company ingested before the restart.
+
+feat-031 — real vector RAG that survives the restart: given an `embedder` (env-selected, same one
+the service builds) `put()` writes each chunk's embedding into `materials.embedding`, and `get()`
+rebuilds a `PgVectorStore` (cosine kNN in the DB via `<=>`) instead of a KeywordStore — so retrieval
+is STILL VECTOR after a redeploy, the pgvector twin of the memory_dir re-materialization story. With
+NO embedder (or a keyword-mode context whose embeddings are NULL) it stays the offline KeywordStore:
+honest, never a vector store that silently returns nothing.
 
 RED LINE AT THE STORAGE DOOR (structural, two independent layers — feat-030 P1):
   * Python (put): the FULL red-line scan `redline_extract.validate_extraction` (person value fields
@@ -36,6 +42,7 @@ same data' is true by construction. psycopg (3) is imported lazily; the offline 
 from __future__ import annotations
 
 import dataclasses
+import os
 from dataclasses import asdict
 from pathlib import Path
 
@@ -44,9 +51,20 @@ from .extract import (
 )
 from .redline_extract import validate_extraction
 from .registry import CompanyContext, data_root, materialize_memory
-from .store import KeywordStore
+from .store import Embedder, KeywordStore, PgVectorStore, VectorStore, _vec_literal
 
 _MIGRATIONS_DIR = Path(__file__).resolve().parent.parent.parent / "db" / "migrations"
+
+# avery.materials.embedding is vector(1024) (= AVERY_EMBED_DIM, DashScope text-embedding dim). An
+# embedding of a different dim cannot be stored — feat-031 leaves the column NULL rather than crash.
+_DEFAULT_EMBED_DIM = 1024
+
+
+def _embed_dim() -> int:
+    try:
+        return int(os.environ.get("AVERY_EMBED_DIM", str(_DEFAULT_EMBED_DIM)))
+    except (TypeError, ValueError):
+        return _DEFAULT_EMBED_DIM
 
 _PERSON_FIELDS = {f.name for f in dataclasses.fields(PersonEntity)}
 _PROJECT_FIELDS = {f.name for f in dataclasses.fields(ProjectEntity)}
@@ -62,12 +80,14 @@ def _entity(cls, fields: set[str], payload: dict):
 class PostgresContextRegistry:
     """id -> CompanyContext, persisted in Postgres. Company data survives restarts/redeploys."""
 
-    def __init__(self, url: str, *, data_dir: str | Path | None = None) -> None:
+    def __init__(self, url: str, *, data_dir: str | Path | None = None,
+                 embedder: Embedder | None = None) -> None:
         import psycopg  # lazy: only the DB-configured path ever imports the driver
 
         self._psycopg = psycopg
         self._url = url
         self._data_dir = Path(data_dir) if data_dir else None
+        self._embedder = embedder   # feat-031: present -> put() fills embeddings, get() -> pgvector
         self._schema_ready = False
 
     # --- plumbing ------------------------------------------------------------------------------
@@ -130,6 +150,33 @@ class PostgresContextRegistry:
             raise ValueError(
                 "unsupported control character (NUL / 0x00) in the upload — cannot be stored")
 
+    # --- feat-031: real vector RAG at the storage door -------------------------------------------
+
+    def _material_vectors(self, ctx: CompanyContext) -> list[list[float]] | None:
+        """Embeddings aligned to `ctx.extraction.materials` to persist into materials.embedding, or
+        None (keyword mode -> the column stays NULL, an HONEST 'no vectors here'). It PREFERS the
+        vectors the pipeline already computed (`ctx.store`, a VectorStore) so a corpus is embedded
+        ONCE — no second, billable DashScope pass — and only re-embeds with the registry's own
+        embedder as a fallback. A dim that does not match the vector(N) column is refused (returns
+        None) so a mis-sized embedder degrades to keyword instead of crashing the INSERT.
+
+        Embedding is done OUTSIDE the DB transaction (it may hit a network endpoint); only the
+        already-computed vectors cross into put()'s transaction."""
+        mats = ctx.extraction.materials
+        if not mats:
+            return None
+        dim = _embed_dim()
+        store = getattr(ctx, "store", None)
+        if isinstance(store, VectorStore) and store.available:
+            vecs = store.persisted_vectors()
+            if len(vecs) == len(mats) and all(len(v) == dim for v in vecs):
+                return vecs
+        if self._embedder is not None:
+            vecs = self._embedder.embed([m.text for m in mats])
+            if len(vecs) == len(mats) and all(len(v) == dim for v in vecs):
+                return vecs
+        return None
+
     # --- the ContextRegistry API -----------------------------------------------------------------
 
     def put(self, ctx: CompanyContext) -> str:
@@ -137,6 +184,10 @@ class PostgresContextRegistry:
 
         # Gate BEFORE connecting — a violating context never touches the DB.
         self._gate_red_line(ctx)
+
+        # feat-031: embed the material corpus (or reuse pipeline vectors) BEFORE opening the tx —
+        # keeps a possibly-slow embedding call off the transaction. None -> embeddings stay NULL.
+        vecs = self._material_vectors(ctx)
 
         people = [asdict(p) for p in ctx.extraction.people]
         projects = [asdict(p) for p in ctx.extraction.projects]
@@ -176,9 +227,11 @@ class PostgresContextRegistry:
                                         ("signal", signals))
                      for i, payload in enumerate(rows)])
                 cur.executemany(
-                    "INSERT INTO avery.materials (context_id, idx, chunk_id, text, source, doc_kind) "
-                    "VALUES (%s, %s, %s, %s, %s, %s)",   # embedding stays NULL (feat-031 fills it)
-                    [(ctx.context_id, i, m.id, m.text, m.source, m.doc_kind)
+                    "INSERT INTO avery.materials "
+                    "(context_id, idx, chunk_id, text, source, doc_kind, embedding) "
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s::vector)",   # feat-031 fills embedding
+                    [(ctx.context_id, i, m.id, m.text, m.source, m.doc_kind,
+                      _vec_literal(vecs[i]) if vecs is not None else None)  # None -> NULL::vector
                      for i, m in enumerate(ctx.extraction.materials)])
                 cur.executemany(
                     "INSERT INTO avery.memory_files (context_id, filename, content) "
@@ -204,6 +257,11 @@ class PostgresContextRegistry:
             memfiles = dict(conn.execute(
                 "SELECT filename, content FROM avery.memory_files WHERE context_id = %s",
                 (context_id,)).fetchall())
+            # feat-031: does this context actually carry vectors? (An embedder may be configured
+            # while a context was ingested in keyword mode — then vector retrieval would be empty.)
+            emb_count = conn.execute(
+                "SELECT count(*) FROM avery.materials "
+                "WHERE context_id = %s AND embedding IS NOT NULL", (context_id,)).fetchone()[0]
 
         extraction = ExtractionResult(
             people=[_entity(PersonEntity, _PERSON_FIELDS, pl) for k, pl in ents if k == "person"],
@@ -211,8 +269,16 @@ class PostgresContextRegistry:
             signals=[_entity(SignalEntity, _SIGNAL_FIELDS, pl) for k, pl in ents if k == "signal"],
             materials=[MaterialChunk(id=cid, text=text, source=src, doc_kind=dk)
                        for cid, text, src, dk in mats])
-        store = KeywordStore()
-        store.add(extraction.materials)
+
+        # feat-031: real vector retrieval that SURVIVES the restart — an embedder configured AND
+        # vectors actually stored -> a pgvector-backed store (cosine kNN in the DB, no corpus pulled
+        # into memory). Otherwise the offline KeywordStore (no embedder, or a keyword-mode context):
+        # HONEST — never a vector store that would silently return nothing.
+        if self._embedder is not None and emb_count > 0:
+            store = PgVectorStore(self._url, context_id, self._embedder, dim=_embed_dim())
+        else:
+            store = KeywordStore()
+            store.add(extraction.materials)
 
         # THE RESTART STORY: rebuild facts.md/notes.md byte-identically from the DB so the loop's
         # recall/cite run unchanged after a restart / on a fresh machine. feat-030 P2: the DB is the
