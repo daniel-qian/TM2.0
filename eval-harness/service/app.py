@@ -25,7 +25,7 @@ import os
 from pathlib import Path
 from typing import Any, Iterator
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -92,10 +92,23 @@ def _system_prompt() -> str:
     return skills.build_system_prompt(SKILLS_DIR, MEMORY_DIR, scaffold="full")
 
 
+def _context_registered(company_context_id: str) -> bool:
+    """feat-028: is this id ACTUALLY in the ingest registry? This distinguishes the two cases the old
+    silent fallback conflated — 'no id -> demo memory (legit)' vs 'id GIVEN but not found -> error'.
+    A wiped/restarted registry must surface an error, never a silent answer over the demo company
+    (Isadora: identity must never silently default). Lazy import so the service runs without ingest."""
+    try:
+        from avery.ingest.registry import REGISTRY
+        return company_context_id in REGISTRY
+    except Exception:
+        return False
+
+
 def _resolve_memory_dir(company_context_id: str | None) -> Path:
     """feat-018: route an ingested company_context_id to its materialized facts.md/notes.md dir so
     the loop's own recall + cite gate run over the manager's UPLOADED facts (feat-016 seam). Falls
-    back to the default demo memory for an unset/unknown id. Import is lazy so the service still runs
+    back to the default demo memory for an UNSET id (the /advise handler rejects a given-but-unknown
+    id up front, so this only ever sees a known id or none). Import is lazy so the service still runs
     if the ingest package is absent."""
     if not company_context_id:
         return MEMORY_DIR
@@ -153,6 +166,11 @@ def health() -> dict:
 
 @app.post("/advise")
 def advise(req: AdviseRequest):
+    # feat-028: a GIVEN-but-unknown company_context_id must 404 (consistent with GET /team/{id}),
+    # not silently answer over the demo company. A missing id is the legitimate demo default.
+    if req.company_context_id and not _context_registered(req.company_context_id):
+        raise HTTPException(status_code=404,
+                            detail=f"unknown company_context_id: {req.company_context_id}")
     sit = live_input.LiveSituation(
         situation=req.situation, title=req.title,
         company_context_id=req.company_context_id)

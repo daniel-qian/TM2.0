@@ -30,7 +30,9 @@ from dataclasses import dataclass, field
 
 from avery import redline
 
-from .extract import ExtractionResult, PersonEntity, FORBIDDEN_PERSON_KEYS
+from .extract import (
+    ExtractionResult, PersonEntity, FORBIDDEN_PERSON_KEYS, FORBIDDEN_PERSON_KEYS_ZH,
+)
 
 
 @dataclass
@@ -66,9 +68,50 @@ _RATING_NUMBER = re.compile(
     r"\b\d{1,3}(?:\.\d+)?\s*(?:/|out\s+of)\s*\d{1,3}\b"      # 8/10, 3 out of 5
     r"|\b\d{1,3}(?:\.\d+)?\s*%"                                # 82%
     r"|\b\d(?:\.\d+)?\s*stars?\b", re.I)
-_SCORE_WORD_NEAR_NUM = re.compile(
+# English scoring word next to a number. Kept as its own pattern so the GATE (`_scan_person_value`)
+# can pair it with the precise, suppression-aware ZH scan below — while `_SCORE_WORD_NEAR_NUM`
+# (English + a broad ZH strip) stays byte-stable for llm_extract._strip_person_ratings' pre-gate salvage.
+_SCORE_WORD_NEAR_NUM_EN = re.compile(
     r"\b(?:score|scored|scoring|rating|rated|rank|ranked|ranking|tier|grade|graded|"
     r"percentile|potential|mood|capacity)\b\D{0,12}\d", re.I)
+
+# feat-029 ROUND 3 — the ZH person-score-number scan for the GATE. The topic word is GROUP 1 so
+# work-suppression can test whether it is bound to a WORK ARTIFACT (评分系统 / 排名算法 / KPI体系), in
+# lock-step with the advice gate's `_zh_about_work`. Number-shape: the digit fires only when it is a
+# SCORE (N分/bare rating), NOT a YEAR (2023), a TENURE (8年/18个月), a COUNT (5万用户), a classifier/
+# counter (3成/3组/3版/5项/3份/…), or a VERSION dot-number (系统2.0). The gap forbids ASCII letters so a
+# JOB-GRADE token ('定级为P7') breaks the chain and passes. Qualitative labels with no digit
+# ('绩效评级：不合格', '排名倒数第一') are NOT scanned here — the content gate catches them.
+_ZH_SCORE_NEAR_NUM = re.compile(
+    r"(评分|打分|得分|评级|定级|评估|排名|绩效|潜力|情绪|画像|考核|KPI|kpi|产能|工时)"
+    r"[^\dA-Za-z]{0,8}(?!19\d{2}|20\d{2})\d{1,3}"
+    r"(?!\s*(?:年|个月|月|周|天|日|人|名|位|万|个|千|百|亿|次|条|封|件|台|轮|页|字|号|元|块|"
+    r"米|公里|小时|分钟|岁|成|组|版本|版|项|份|期|章|节))"
+    r"(?!\.\d)",
+    re.I)
+
+# Combined pattern retained for `llm_extract._strip_person_ratings` (a broad pre-gate salvage strip;
+# the GATE below uses `_SCORE_WORD_NEAR_NUM_EN` + `_ZH_SCORE_NEAR_NUM`, which are suppression-aware).
+_SCORE_WORD_NEAR_NUM = re.compile(
+    _SCORE_WORD_NEAR_NUM_EN.pattern
+    + r"|(?:评分|打分|得分|评级|定级|评估|排名|绩效|潜力|情绪|画像|考核|KPI|kpi|产能|工时)"
+      r"[^\dA-Za-z]{0,8}(?!19\d{2}|20\d{2})\d{1,3}"
+      r"(?!\s*(?:年|个月|月|周|天|日|人|名|位|万|个|次|条|封|件|台|轮|页|字|号|元|块|亿|千|百|米|公里|小时|分钟|岁))",
+    re.I)
+
+
+def _zh_score_num_is_work(fld: str, m: re.Match) -> bool:
+    """Port of redline._zh_about_work to the extraction number scan: the score topic word (group 1)
+    NAMES or is used to BUILD a work artifact (评分系统 / 排名算法 / KPI体系), so the adjacent number is
+    about WORK, not a score OF the person. Reuses redline's artifact/build lexicon so the extraction
+    layer never rejects a work deliverable the advice gate would accept."""
+    after = fld[m.end(1): m.end(1) + 12]
+    if redline._ZH_AFTER_ARTIFACT.match(after):
+        return True
+    before = fld[max(0, m.start(1) - 12): m.start(1)]
+    if redline._ZH_BUILD_RE.search(before) and redline._ZH_ARTIFACT_RE.search(after):
+        return True
+    return False
 
 
 def _person_text_fields(p: PersonEntity) -> list[str]:
@@ -85,7 +128,16 @@ def _scan_person_value(p: PersonEntity) -> list[ExtractionViolation]:
     for fld in _person_text_fields(p):
         if not fld:
             continue
-        if _RATING_NUMBER.search(fld) or _SCORE_WORD_NEAR_NUM.search(fld):
+        hit = bool(_RATING_NUMBER.search(fld) or _SCORE_WORD_NEAR_NUM_EN.search(fld))
+        if not hit:
+            # ZH: a score topic word next to a score-shaped number, UNLESS it is bound to a work
+            # artifact (parity with the advice gate's work-suppression). Iterate so a suppressed
+            # first match ('排名算法…3') doesn't mask a later genuine one.
+            for zm in _ZH_SCORE_NEAR_NUM.finditer(fld):
+                if not _zh_score_num_is_work(fld, zm):
+                    hit = True
+                    break
+        if hit:
             out.append(ExtractionViolation(
                 kind="person-score-value", person=p.name,
                 detail=f"rating-shaped number in a person field: «{fld[:80]}»"))
@@ -97,8 +149,12 @@ def validate_person_dict(name: str, data: dict) -> list[ExtractionViolation]:
     forbidden scoring key. Call this BEFORE constructing a PersonEntity from model output."""
     out: list[ExtractionViolation] = []
     for key in data.keys():
-        norm = re.sub(r"[^a-z0-9]", "", str(key).lower())
-        if norm in FORBIDDEN_PERSON_KEYS:
+        # feat-029 — keep CJK through normalization so a Chinese scoring key survives (the ASCII
+        # path is byte-identical: English keys have no CJK). English = exact match; Chinese =
+        # substring, so '绩效评分' trips '评分' and '离职风险' trips '离职风险'. ROUND 2 — fold
+        # Traditional→Simplified first so 績效評分/離職風險 (Traditional keys) trip the same substrings.
+        norm = re.sub(r"[^a-z0-9一-鿿]", "", redline.zh_normalize(str(key).lower()))
+        if norm in FORBIDDEN_PERSON_KEYS or any(z in norm for z in FORBIDDEN_PERSON_KEYS_ZH):
             out.append(ExtractionViolation(
                 kind="person-score-key", person=name,
                 detail=f"forbidden scoring key on a person: '{key}'"))

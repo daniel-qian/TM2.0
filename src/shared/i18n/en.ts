@@ -59,6 +59,97 @@ export const en = {
   lite: {
     tabTeam: 'Your team',
     tabRoom: 'The room',
+    tabPlaybooks: 'Playbooks',
+    tabVision: 'Where this goes',
+
+    // ── Team grouping view (feat-025 Q2: cluster people cards by department/role) ──
+    groupAllLabel: 'Grouped by team',
+    groupUngrouped: 'Everyone else',
+    groupCollapse: 'Collapse',
+    groupExpand: 'Expand',
+    groupCountOne: 'person',
+    groupCountMany: 'people',
+
+    // ── The room — thin pan/zoom canvas (feat-025 Q3) ──
+    roomCanvasHint: 'Drag to move · scroll to zoom',
+    roomCanvasReset: 'Reset view',
+
+    // ── Playbooks screen (feat-025 Q1: honest empty state, anchored to future capability) ──
+    playbooksEyebrow: 'Coming soon',
+    playbooksTitle: 'Playbooks grow from the way your team already works',
+    playbooksBody:
+      'Once Avery is wired into your own SOPs, checklists, and past decisions, it distills them into reusable playbooks — so the next time a familiar situation lands, the room already knows your house rules.',
+    playbooksSlotRoster: 'Your onboarding and handover SOPs become step-by-step playbooks.',
+    playbooksSlotIncident: 'Recurring situations turn into a saved play the room runs the same way each time.',
+    playbooksSlotPack: 'Industry packs (starting with the hospitality pack) drop in pre-built plays you can adapt.',
+    playbooksSlotLabel: 'What will live here',
+    playbooksComingSoon: 'Not connected yet — this is a preview of where Avery is headed.',
+    playbooksEmptyTag: 'No playbooks yet',
+
+    // ── Vision surface (feat-026: positioning narrative + honestly-labeled capability mock) ──
+    // The narrative is deliberately calm and does not interrupt the trial flow — it's its own tab.
+    // Beats 1→2→3: what you're seeing now → what the real product is → what this demo is proving.
+    visionEyebrow: 'Where this goes',
+    visionTitle: 'You just tried the demo. Here is the product behind it.',
+    visionLede:
+      "Everything in the other tabs ran on files you uploaded yourself. That's on purpose — it's the fastest way to feel how Avery reads a team. The real product is a step past this.",
+
+    // Beat 1 — what you're looking at now (honest about the demo)
+    visionNowLabel: 'What you just used',
+    visionNowTitle: 'A demo you drove with your own files',
+    visionNowBody:
+      "You dropped in a roster and a plan, watched your team grow out of them, and asked the room a real question. Nothing here was scripted for you — it read what you gave it. This is a public, try-it-yourself build, not the deployed product.",
+
+    // Beat 2 — what the real product is (custom agent, your data, private deploy)
+    visionRealLabel: 'What Avery actually is',
+    visionRealTitle: 'A custom agent, built around one company',
+    visionRealBody:
+      "In production, Avery is set up for your company specifically — wired into your own systems and documents, and deployed inside your own secure environment, not a shared one. It stays a narrow, domain-specific agent that knows your team and only your team, so access stays scoped and auditable instead of one giant model reaching everywhere.",
+
+    // Beat 3 — what this demo is really proving (UIUX + judgment + red line)
+    visionProofLabel: 'What this demo is proving',
+    visionProofTitle: 'Three things worth judging today',
+    visionProofUiux: 'The interface — how a team and a live read actually feel to move through.',
+    visionProofJudgment: "The judgment — whether the room's read of a real situation is one you'd trust.",
+    visionProofRedline:
+      'The red line — people are never scored, ranked, or profiled, and no instruction can turn that off.',
+
+    // ── Capability-boundary mock (honestly labeled; NOT built — a preview of the boundary) ──
+    visionMockEyebrow: 'After your data is wired in',
+    visionMockTitle: 'What the boundary opens up',
+    visionMockLede:
+      "These are previews, not features you can click today. We show them so you can judge the direction honestly — each one is marked so nothing here reads as already shipped.",
+
+    // Honest markers (every mock card carries one of these — the gate asserts zero unlabeled cards)
+    visionTagPreview: 'Preview',
+    visionTagComing: 'Coming',
+    visionTagMock: 'Mock',
+
+    // Mock 1 — the agent's own file system (Schroeder: sandbox file system as a primitive)
+    visionMockFilesTitle: "The agent's own workspace",
+    visionMockFilesBody:
+      'Avery keeps its own private file space per company — a place to hold your documents, its working notes, and the artifacts it produces, so a read can build on the last one instead of starting cold every time.',
+
+    // Mock 2 — custom skills / tools / SOP (Pocock: skills as the unit of repeatable behaviour)
+    visionMockSkillsTitle: 'Skills, tools, and SOPs made yours',
+    visionMockSkillsBody:
+      'Your recurring work — how you onboard, how you run a review, how you handle a stuck project — becomes a named skill the agent runs the same way every time. Predictable by design, not improvised per prompt.',
+
+    // Mock 3 — background batch loops (Steinberger: attention is the bottleneck; loops run while away)
+    visionMockLoopTitle: 'Work that runs while you are away',
+    visionMockLoopBody:
+      "Point Avery at a batch of situations and it works through them in the background, on its own schedule. You come back to results to check — not a live session to babysit. The scarce thing is your attention, so the product spends it last.",
+
+    // Mock 4 — the red line as a deterministic gate (Martin-Dye: prompt is a request, permission is a check)
+    visionMockGateTitle: 'The red line is a gate, not a wish',
+    visionMockGateBody:
+      "Reading a team the wrong way costs trust you can't refund. So the no-scoring rule on people isn't a line in a prompt that a clever request could bend — it's a deterministic check every answer passes before it reaches you.",
+
+    // A tiny illustrative person chip inside a mock — red line holds: a name and a role, no numbers.
+    visionMockPersonName: 'A teammate',
+    visionMockPersonRole: 'Read as what they do and own — never a number.',
+
+    visionComingSoon: 'None of the four is live yet. This tab is a preview of the boundary, kept honest on purpose.',
 
     // Your team — briefing header (real numbers from ingestion) + weak handoffs
     briefingEyebrow: 'From your uploads',

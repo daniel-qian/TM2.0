@@ -16,6 +16,8 @@ export function LiteTopbar() {
   const tabs: { label: string; screen: LiteScreen }[] = [
     { label: t.lite.tabTeam, screen: 'team' },
     { label: t.lite.tabRoom, screen: 'room' },
+    { label: t.lite.tabPlaybooks, screen: 'playbooks' },
+    { label: t.lite.tabVision, screen: 'vision' },
   ]
 
   const switchMode = (next: AveryMode) => {
