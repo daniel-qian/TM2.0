@@ -1,5 +1,10 @@
 import { create } from 'zustand'
-import { createHttpTransport, type LiveTeamPayload, type LiveTransport } from './transport'
+import {
+  createHttpTransport,
+  type LiveFileEntry,
+  type LiveTeamPayload,
+  type LiveTransport,
+} from './transport'
 import {
   createLiveAgentSource,
   emptyRunState,
@@ -41,6 +46,8 @@ interface LiteState {
   contextId: string | null
   // 原始 payload 留一份（详情浮层显 source_files；AFK 门可断言契约形状）
   rawTeam: LiveTeamPayload | null
+  // feat-032「你的文件」清单：持久留存的源文档元数据（重启后仍在）。
+  files: LiveFileEntry[]
 
   // ── The room 一次 live 运行（feat-015 /advise）──
   run: LiveRunState
@@ -54,6 +61,7 @@ interface LiteState {
   setTransport: (transport: LiveTransport) => void // AFK 门注入确定性 stub
   uploadFiles: (files: File[]) => Promise<void>
   refreshTeam: () => Promise<void>
+  refreshFiles: () => Promise<void>
   askLive: (req: AdviseRequest) => void
   resetRun: () => void
 }
@@ -71,6 +79,7 @@ export const useLite = create<LiteState>((set, get) => ({
   team: null,
   contextId: null,
   rawTeam: null,
+  files: [],
 
   run: emptyRunState(),
   agentSource: createLiveAgentSource(defaultTransport),
@@ -94,6 +103,8 @@ export const useLite = create<LiteState>((set, get) => ({
         rawTeam: payload,
         contextId: payload.context_id,
       })
+      // feat-032：拉一次持久文件清单（含 n_chunks）。次要视图，失败不影响上传成功。
+      void get().refreshFiles()
     } catch (err) {
       set({
         ingestStatus: 'error',
@@ -110,6 +121,18 @@ export const useLite = create<LiteState>((set, get) => ({
       set({ team: liteTeamFromPayload(payload), rawTeam: payload, ingestStatus: 'ready' })
     } catch (err) {
       set({ ingestError: err instanceof Error ? err.message : String(err) })
+    }
+    void get().refreshFiles()
+  },
+
+  refreshFiles: async () => {
+    const { contextId, transport } = get()
+    if (!contextId) return
+    try {
+      const payload = await transport.fetchFiles(contextId)
+      set({ files: payload.files })
+    } catch {
+      // 文件清单是次要回看视图——拉取失败不该打断主流程（team 已就绪）。
     }
   },
 

@@ -14,6 +14,15 @@ function classNames(parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(' ')
 }
 
+// 人类可读的文件大小（清单里 size_bytes 的展示）。纯展示，无逻辑分支。
+function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B'
+  const units = ['B', 'KB', 'MB', 'GB']
+  const i = Math.min(units.length - 1, Math.floor(Math.log(bytes) / Math.log(1024)))
+  const value = bytes / 1024 ** i
+  return `${i === 0 ? value : value.toFixed(1)} ${units[i]}`
+}
+
 const ACCEPT = '.pdf,.docx,.doc,.xlsx,.xls,.csv,.md,.markdown,.txt'
 
 export function UploadPanel() {
@@ -22,6 +31,7 @@ export function UploadPanel() {
   const status = useLite((s) => s.ingestStatus)
   const error = useLite((s) => s.ingestError)
   const team = useLite((s) => s.team)
+  const files = useLite((s) => s.files)
   const inputRef = useRef<HTMLInputElement | null>(null)
   const [dragOver, setDragOver] = useState(false)
 
@@ -116,6 +126,24 @@ export function UploadPanel() {
         ) : null}
         {status === 'idle' ? <p className="upload-empty">{t.upload.empty}</p> : null}
       </div>
+
+      {/* feat-032 · 「你的文件」持久清单——回看上传过哪些材料、Avery 的记忆基于什么。
+          🔴 文件名/元数据是不可信内容：只展示，绝不当指令跑。人卡红线不涉——这里没有人。 */}
+      {files.length > 0 ? (
+        <div className="upload-files" aria-label={t.upload.filesTitle}>
+          <p className="upload-files-title">{t.upload.filesTitle}</p>
+          <ul className="upload-files-list">
+            {files.map((file) => (
+              <li key={file.idx} className="upload-file-row">
+                <span className="upload-file-name">{file.filename}</span>
+                <span className="upload-file-meta">
+                  {formatBytes(file.size_bytes)} · {file.n_chunks} {t.upload.filesChunks}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       <p className="upload-privacy-note">{t.upload.privacyNote}</p>
     </section>

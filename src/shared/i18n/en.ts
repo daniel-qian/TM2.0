@@ -35,6 +35,9 @@ export const en = {
     grownFrom: 'Grown from',
     privacyNote: 'Nothing is scored about any person — only what they do and own.',
     empty: 'No files yet. Upload a few to see your team appear.',
+    // feat-032 — the per-company file space: a look-back list of what you uploaded (persists).
+    filesTitle: 'Your files',
+    filesChunks: 'references',
   },
 
   // ── Your team, live ───────────────────────────────────────────────────────

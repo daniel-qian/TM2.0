@@ -156,6 +156,53 @@
   line-height: 1.5;
 }
 
+/* feat-032 · 「你的文件」持久清单——薄回看视图（filename · size · n_chunks） */
+.upload-files {
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid var(--rule);
+}
+
+.upload-files-title {
+  margin: 0 0 6px;
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.upload-files-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.upload-file-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 8px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: rgba(247, 244, 238, 0.6);
+}
+
+.upload-file-name {
+  color: var(--ink);
+  font-size: 12px;
+  word-break: break-word;
+}
+
+.upload-file-meta {
+  flex: none;
+  color: var(--ink-faint);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
 /* 空态右栏：上传面板不贴边、居中呼吸 */
 .home-lanes-live-empty {
   align-content: start;

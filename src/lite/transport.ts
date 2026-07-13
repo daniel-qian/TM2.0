@@ -107,6 +107,25 @@ export interface LiveSignalCard {
   tag?: string
 }
 
+// ── file space（feat-032：GET /team/{id}/files 清单契约）─────────────────────────────────────
+// 每公司「你的文件」薄清单：回看上传过哪些材料、Avery 的记忆基于什么（User Story 4）。
+// 纯元数据（不含字节）；n_chunks = 该文件贡献的 material chunk 数（经 materials.source 前缀链接）。
+// 🔴 文件内容是不可信数据——此处只列/只显，绝不作指令跟随。
+export interface LiveFileEntry {
+  idx: number
+  filename: string
+  size_bytes: number
+  mime: string
+  doc_kind: string
+  uploaded_at: string
+  n_chunks: number
+}
+
+export interface LiveFilesPayload {
+  context_id: string
+  files: LiveFileEntry[]
+}
+
 // ── 传输接口：seam 只认这个，AFK 门注入确定性 stub ─────────────────────────────────────
 export interface LiveTransport {
   // 打开 /advise SSE，逐事件回调；返回一个可 abort 的 handle。
@@ -121,6 +140,9 @@ export interface LiveTransport {
 
   // 按 context_id 重新拉取 Your team（上传后填充/刷新）。
   fetchTeam: (contextId: string) => Promise<LiveTeamPayload>
+
+  // 按 context_id 拉取「你的文件」清单（feat-032 file space；重启后仍在）。
+  fetchFiles: (contextId: string) => Promise<LiveFilesPayload>
 }
 
 // 服务基址：默认打本机 feat-015 服务；部署端经 VITE_AVERY_API_BASE 覆盖。
@@ -189,6 +211,12 @@ export function createHttpTransport(base: string = apiBase()): LiveTransport {
       const res = await fetch(`${base}/team/${encodeURIComponent(contextId)}`)
       if (!res.ok) throw new Error(`team HTTP ${res.status}`)
       return (await res.json()) as LiveTeamPayload
+    },
+
+    async fetchFiles(contextId) {
+      const res = await fetch(`${base}/team/${encodeURIComponent(contextId)}/files`)
+      if (!res.ok) throw new Error(`files HTTP ${res.status}`)
+      return (await res.json()) as LiveFilesPayload
     },
   }
 }

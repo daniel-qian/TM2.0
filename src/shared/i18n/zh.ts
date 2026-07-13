@@ -25,7 +25,9 @@ export const zh: Dict = {
     "retry": "重试",
     "grownFrom": "取材自",
     "privacyNote": "不给任何人打分 —— 只看他们做什么、负责什么。",
-    "empty": "还没有文件。上传几份，团队就会出现。"
+    "empty": "还没有文件。上传几份，团队就会出现。",
+    "filesTitle": "你的文件",
+    "filesChunks": "处引用"
   },
   "team": {
     "liveEyebrow": "从你上传的文件里",
