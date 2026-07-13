@@ -196,6 +196,49 @@ export const en = {
     detailSource: 'From your uploads',
     detailGone: 'This card is no longer in your uploads.',
   },
+
+  // ── Ask / Quick ask (feat-034 stage B — ADR-0023 voice: asks about the WORK, never rates
+  // a person; answers are the employee's own words, never a person's attribute) ─────────────
+  ask: {
+    eyebrow: 'Quick ask',
+    draftTitle: 'Worth asking them directly',
+    draftLede:
+      "The missing piece isn't in the documents — it's in their own read of the situation. Review the questions, then hand each person their own link.",
+    // HONEST note: the red-line check on question text runs server-side at save time.
+    // That backend isn't wired in this preview — say so, don't pretend it already ran.
+    redlineNote:
+      'Questions ask about the work, never rate a person. Each question passes the red-line check when saved — that check runs on the server and has not run in this preview yet.',
+    kindScale: '1–5',
+    kindYesNo: 'Yes / No',
+    questionAria: 'Question text',
+    removeQuestion: 'Remove',
+    addScale: 'Add a 1–5 question',
+    addYesNo: 'Add a yes / no question',
+    maxQuestionsHint: 'Up to three questions — it should take ten seconds to answer.',
+    commentPromptLabel: 'They can add one line in their own words:',
+    recipientsLabel: 'Who to ask',
+    recipientsHint: 'Named people from your roster — each gets their own private link.',
+    confirm: 'Confirm and get links',
+    confirmBusy: 'Getting links…',
+    sharedTitle: 'Links ready — you share them',
+    sharedLede:
+      'Paste each link to that person yourself, wherever you talk — nothing goes out until you send it.',
+    copy: 'Copy link',
+    copied: 'Copied',
+    repliesChip: '{answered}/{total} replied',
+    closedChip: 'All replies in',
+    refresh: 'Check for replies',
+    refreshing: 'Checking…',
+    receiptsTitle: 'What they said',
+    selfReported: 'Self-reported',
+    selfReportedHint: 'Their own words about this piece of work — not a rating of them.',
+    receiptYes: 'Yes',
+    receiptNo: 'No',
+    receiptScaleSuffix: 'out of 5',
+    summaryTitle: 'Taken together',
+    answeredAt: 'answered',
+    errorGeneric: "Couldn't reach the ask service — try again.",
+  },
 }
 
 export type Dict = typeof en
