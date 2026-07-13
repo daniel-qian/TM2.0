@@ -345,6 +345,49 @@ def test_notes_qualitative_observation_passes(impl, tmp_path):
 
 
 # ==============================================================================================
+# feat-033 POLICY PIVOT (2026-07-13) — the AVERY_ALLOW_PERSON_SCORING switch, tested BIDIRECTIONALLY
+# at the storage door. The in-memory and Postgres registries share ONE gate (gate_note_red_line), so
+# these prove BOTH honor the switch — the pg case (@needs_db) rules out a memory-only bypass. OFF (the
+# shipped default) still blocks; ON persists the SAME observation; the detector stays untouched.
+# ==============================================================================================
+
+_SWITCH = "AVERY_ALLOW_PERSON_SCORING"
+_SCORING_OBS = "She is a low performer — score her 2 out of 10 on delivery."
+
+
+def test_notes_switch_off_still_blocks_a_scoring_observation(impl, tmp_path, monkeypatch):
+    """Regression guard (fail-closed direction): with the switch UNSET the moat holds exactly as
+    shipped — the scoring observation is refused and nothing lands."""
+    monkeypatch.delenv(_SWITCH, raising=False)
+    reg, cid, _ = _ingest(impl, tmp_path / "mem")
+    with pytest.raises(ValueError, match="red line"):
+        reg.append_note(cid, _SCORING_OBS, "how is she doing this quarter")
+    assert reg.list_notes(cid) == [], "switch OFF must keep blocking a scoring observation"
+
+
+def test_notes_switch_on_persists_a_scoring_observation(impl, tmp_path, monkeypatch):
+    """Unblock direction: with the switch ON the SAME scoring observation — and a scoring excerpt —
+    now lands and is user-visible. Runs against memory AND Postgres, so pg's append_note is proven to
+    honor the switch through the shared gate (not a memory-only code path)."""
+    monkeypatch.setenv(_SWITCH, "1")
+    reg, cid, _ = _ingest(impl, tmp_path / "mem")
+    note = reg.append_note(cid, _SCORING_OBS, "李雷:9分,排名第一")   # both fields would cross when OFF
+    got = reg.list_notes(cid)
+    assert len(got) == 1 and got[0].text == _SCORING_OBS, "switch ON must persist the scoring note"
+    assert got[0].source_excerpt == "李雷:9分,排名第一", "a scoring excerpt persists too when unblocked"
+
+
+def test_notes_switch_on_still_refuses_a_nul(impl, tmp_path, monkeypatch):
+    """The switch unblocks the RED LINE only. A NUL (0x00) is a storage-safety guard (it crashes the
+    Postgres text write), NOT a red-line policy, so it is STILL refused with scoring unblocked."""
+    monkeypatch.setenv(_SWITCH, "1")
+    reg, cid, _ = _ingest(impl, tmp_path / "mem")
+    with pytest.raises(ValueError, match="control character|NUL"):
+        reg.append_note(cid, "a note with a\x00hidden nul", "a real question")
+    assert reg.list_notes(cid) == [], "a NUL note must never land, switch on or off"
+
+
+# ==============================================================================================
 # DURABILITY CONTRACT — postgres only (@needs_db). A process dict cannot pass these; that gap is
 # exactly what feat-030 closes.
 # ==============================================================================================

@@ -1,5 +1,5 @@
 {
-  "manifest_hash": "a7d97c0867116d1a4131350453811b059ae7c4097116041de87b3037344482b5",
+  "manifest_hash": "bb59a7db985d832556a3df53297185ab625eadeb2da98cf4211f7e741ba994c2",
   "files": [
     {
       "path": "cases/jordan-brilliant-but-corrosive.md",
@@ -51,7 +51,7 @@
     },
     {
       "path": "redline_rules.md",
-      "sha256": "a69c480d3d9ca9e26fa29af13577a66d55d4448345feae1f561185bb85c1a288"
+      "sha256": "b59c3151806820342359da9c31b3f0d21b7fcd8115797a4f4854e89bc3017842"
     },
     {
       "path": "scenarios/manifest.json",
@@ -70,6 +70,6 @@
       "sha256": "aecee90e76cabd6d9b4092ac80d518ce5ad65a9ae74b40fff4ae0804808ef676"
     }
   ],
-  "git_commit": "546da5e4829148253154c4b19b587650c16129b9",
+  "git_commit": "66dd9b9b7ed440ca61f04c7675ecbf912cabc7cb",
   "git_dirty": true
 }

@@ -93,14 +93,23 @@ def gate_note_red_line(text: str, source_excerpt: str = "") -> None:
     SEPARATELY, never concatenated. Concatenating let a negation cue in one field bleed across the
     boundary and mask a real person-score in the other (e.g. an advice read ending '…never on the
     person' would suppress a scoring excerpt like '李雷:9分,排名第一'). Each field is displayed on its
-    own, so each must independently pass — strictly stronger than the joined check."""
+    own, so each must independently pass — strictly stronger than the joined check.
+
+    feat-033 (policy pivot, 2026-07-13) — when the operator has EXPLICITLY unblocked person scoring
+    (`AVERY_ALLOW_PERSON_SCORING`, see avery.scoring_policy), the person-scoring raise is SKIPPED so a
+    scoring note lands (both the in-memory and the Postgres append_note funnel through here, so one
+    switch covers both). Default OFF keeps the moat: the detector (`avery.redline`) is untouched —
+    only THIS enforcement decision consults the switch. The NUL / 0x00 storage-safety check is NOT a
+    red-line policy and ALWAYS runs, switch or no switch."""
     from avery import redline   # core, offline, stdlib-only — safe for the offline path
-    for part in (text, source_excerpt):
-        if not part:
-            continue
-        rl = redline.validate(part)
-        if not rl.passed:
-            raise ValueError(f"red line: refusing to persist a scoring note ({rl.summary()})")
+    from avery.scoring_policy import person_scoring_allowed
+    if not person_scoring_allowed():
+        for part in (text, source_excerpt):
+            if not part:
+                continue
+            rl = redline.validate(part)
+            if not rl.passed:
+                raise ValueError(f"red line: refusing to persist a scoring note ({rl.summary()})")
     if "\x00" in (text or "") or "\x00" in (source_excerpt or ""):
         raise ValueError("unsupported control character (NUL / 0x00) in a note — cannot be stored")
 

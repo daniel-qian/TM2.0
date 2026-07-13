@@ -288,7 +288,7 @@ _ZH_TIER = re.compile(
 
 # person-anchored ranking/verdict SYNONYMS and STAR ratings (round 2 §B9/§B10). Complete labels, so
 # they need only a PERSON in view + work-suppression (no scoring-target requirement).
-_ZH_RANK_SYN = re.compile(r"末流|垫底|末位|名列前茅|优等生|差生|差评|红黑榜|黑榜|评比", re.I)
+_ZH_RANK_SYN = re.compile(r"末流|垫底|名列前茅|优等生|差生|差评|红黑榜|黑榜|评比", re.I)
 _ZH_STAR = re.compile(r"(?:[一二三四五六七八九十两]|\d)\s*颗?\s*星(?!期|座|球|系|云|辰|巴克)|星级|星等", re.I)
 
 _ZH_ALWAYS = [
@@ -351,7 +351,6 @@ _ZH_JOBGRADE_VERB = re.compile(r"定级|评级|分级|定为|评为")
 _ZH_SCORE_TARGET = re.compile(
     r"(?:为|评为|定为|被|列为)?\s*"
     r"(?:第?\s*\d"                                           # 第3 / 3 / 8/10
-    r"|第\s*[一二三四五六七八九十百千两]"                     # feat-033: 排名第一 (Chinese-numeral rank)
     r"|倒数|垫底|末位|末尾|末流|末等|末档|前茅|榜首|榜尾|吊车尾"
     r"|最差|最低档|最低|最末|最次|最后一名|最烂|最菜"          # round-4: superlative verdicts (+口语最烂/最菜)
     r"|不合格|不达标|不及格|待改进|待提升|低绩效"
@@ -368,14 +367,7 @@ _ZH_SCORE_NUM = re.compile(
     r"|分数\s*(?:是|为|=|＝|:|：)?\s*\d{1,3}"
     r"|(?:KPI|kpi|绩效|得分|评分)\s*(?:是|为|=|＝|:|：)\s*\d{1,3}",
     re.I)
-# feat-033 — allow an ASCII/fullwidth colon as a name↔score separator so a bare-name roster row with a
-# colon ('李雷:9分', '王小明：88分') anchors just like the space/comma form. Superset of the old class,
-# so it only ever matches MORE; work/aggregate heads stay excluded by _ZH_NAME_STOP.
-_ZH_NAME_BEFORE = re.compile(r"([一-鿿]{2,4})[\s，、,：:]*$")
-# feat-033 — a name that REQUIRES an explicit separator before a ranking verb/label ('张三 排名第一',
-# '王五、末位'). The mandatory separator is what keeps a run-on like '评测里排名' (a work phrase, no
-# separator) from anchoring a phantom person — the load-bearing guard against work false-positives.
-_ZH_NAME_BEFORE_SEP = re.compile(r"([一-鿿]{2,4})[\s，、,：:]+$")
+_ZH_NAME_BEFORE = re.compile(r"([一-鿿]{2,4})[\s，、,]*$")
 _ZH_NAME_STOP = {
     "季度", "本次", "上次", "这个", "那个", "今年", "去年", "明年", "全年", "本年", "上月", "本月",
     "合计", "总共", "满分", "及格", "平均", "均分", "总分", "得分", "本季", "上季", "累计", "目前",
@@ -430,16 +422,6 @@ def _zh_name_before(text: str, start: int) -> bool:
     return bool(mm and mm.group(1) not in _ZH_NAME_STOP)
 
 
-def _zh_name_before_sep(text: str, start: int) -> bool:
-    """feat-033 — a bare CJK name with an EXPLICIT separator immediately before a ranking verb/label
-    ('张三 排名第一', '王五、末位') anchors a person WITHOUT a pronoun. The required separator (and the
-    stop-word / work-subject exclusion) keeps a run-on work phrase ('评测里排名', '产品 末位') from
-    anchoring a phantom person — narrow by design, so it never over-fires on legit work rankings."""
-    seg = text[max(0, start - 6): start]
-    mm = _ZH_NAME_BEFORE_SEP.search(seg)
-    return bool(mm and mm.group(1) not in _ZH_NAME_STOP and not _has_work(mm.group(1)))
-
-
 def _zh_person_score_number(text: str) -> list[Violation]:
     """Round 2 §B8 — a person + a pure score-number ('王小明 92分', '他的分数是2', 'KPI=90'), reusing
     the year/tenure/count exclusions baked into _ZH_SCORE_NUM so a project/count number does not fire."""
@@ -466,23 +448,21 @@ def _zh_violations(text: str) -> list[Violation]:
             if _negated(text, m.start()) or _zh_about_work(text, m) or _zh_job_grade(text, m):
                 continue
             out.append(Violation(rule_id, _ctx(text, m.start(), m.end()), note))
-    # person-anchored complete labels (rank synonyms / stars) — require a person (pronoun/noun OR a
-    # bare name with a separator, feat-033), suppress work.
+    # person-anchored complete labels (rank synonyms / stars) — require a person, suppress work.
     for rule_id, rx, note in _ZH_ANCHORED_LABELS:
         for m in rx.finditer(text):
             if _negated(text, m.start()):
                 continue
             seg, _ss, _se = _seg(text, m.start(), m.end())
-            if not (_has_person(seg) or _zh_name_before_sep(text, m.start())) or _zh_about_work(text, m):
+            if not _has_person(seg) or _zh_about_work(text, m):
                 continue
             out.append(Violation(rule_id, _ctx(text, m.start(), m.end()), note))
-    # bare scoring verbs — person + not-work + not-job-grade + a scoring target. feat-033: a bare CJK
-    # name with a separator ('张三 排名第一') also anchors the person; work/job-grade/target gates unchanged.
+    # bare scoring verbs — person + not-work + not-job-grade + a scoring target.
     for m in _ZH_ANCHOR.finditer(text):
         if _negated(text, m.start()):
             continue
         seg, _ss, _se = _seg(text, m.start(), m.end())
-        if not (_has_person(seg) or _zh_name_before_sep(text, m.start())):
+        if not _has_person(seg):
             continue
         if _zh_about_work(text, m) or _zh_job_grade(text, m) or not _zh_has_target(text, m):
             continue
@@ -568,96 +548,6 @@ def _bare_scale(text: str) -> list[Violation]:
     return out
 
 
-# === feat-033: person blood-bar % + person ranking (EN + code-switched) =======================
-# Two forms the first gate missed, each a DIRECT moat breach when it lands in Avery's user-visible
-# notebook: a mood/capacity blood-bar percentage on a PERSON (the moodPct/capacityPct team_cards
-# deliberately omit), and a leaderboard/position ranking of NAMED people (# / ordinal / "ranks #1").
-# Both are PERSON-ANCHORED: the work/team/project analogues (project 40% done, team morale, server
-# capacity 80%, team throughput ranks bottom 20%, 产品排名第一) stay legal (ADR-0016 asymmetry).
-
-# a mood/energy/capacity word that, next to a %, is a per-person bar. Tightly person-anchored below.
-_MOODWORD = re.compile(
-    r"\b(?:mood|morale|energy|capacity|bandwidth|stress|headspace|well-?being)\b"
-    r"|(?:情绪|心情|精力|负荷|状态|带宽)", re.I)
-_PCT_ONLY = re.compile(r"\d{1,3}(?:\.\d+)?\s*%")
-
-
-def _person_moodbar(text: str) -> list[Violation]:
-    """A percentage whose nearest preceding mood/capacity word is TIGHTLY bound to a person (a person
-    ref in the ~12 chars right before the word, and NOT a team/work subject). 'Her mood is at 30%',
-    '她的情绪30%', 'his capacity 40%' fire; 'team morale', 'server capacity 80%', 'project 40% done',
-    "Her team's morale 30%" (work subject between person and word) do NOT."""
-    out = []
-    for pm in _PCT_ONLY.finditer(text):
-        pre_start = max(0, pm.start() - 24)
-        pre = text[pre_start: pm.start()]
-        mw = None
-        for cand in _MOODWORD.finditer(pre):
-            mw = cand                                    # closest mood word before the percent
-        if mw is None:
-            continue
-        mw_abs = pre_start + mw.start()                  # anchor from the FULL text, not the window
-        anchor = text[max(0, mw_abs - 12): mw_abs]
-        if not _has_person(anchor) or _has_work(anchor):
-            continue
-        if _negated(text, pm.start()):
-            continue
-        out.append(Violation("PERSON-SCORE", _ctx(text, pm.start(), pm.end()),
-                             "a mood/capacity blood-bar percentage pinned to a person"))
-    return out
-
-
-# a position marker that pins a person in a ranking (#N / ordinal / bare rank word).
-_POS_MARK = (r"(?:#\s*\d{1,3}|\d{1,3}(?:st|nd|rd|th)|first|second|third|fourth|fifth|last|dead\s+last)")
-_NAME_TOK = r"[A-Z][a-z]{1,}"                # a proper-name-like token — ALL-CAPS (PR/API) excluded
-_RANK_CUE = re.compile(r"\brank(?:ing|ed|s)?\b|\bstack[\s-]?rank\w*|\bleaderboard\b|\bstandings?\b", re.I)
-# a PRONOUN ranked by position — inherently a person, fires (negation still respected).
-_PRONOUN_RANK = re.compile(
-    rf"\b(?:she|he|they)\s+(?:ranks?|ranked|places?|placed|finished|came(?:\s+in)?|sits?\s+at)\s+"
-    rf"(?:in\s+)?{_POS_MARK}\b", re.I)
-# a NAMED person bound to a position: 'Marcus #1' / 'Marcus ranks #1' / 'Anna 5th' / 'Anna last'.
-_NAME_RANK = re.compile(
-    rf"\b({_NAME_TOK})\s*#\s*\d{{1,3}}\b"
-    rf"|\b({_NAME_TOK})\s+(?:ranks?|ranked|places?|placed|finished|came(?:\s+in)?)\s+(?:in\s+)?{_POS_MARK}\b"
-    rf"|\b({_NAME_TOK})\s+{_POS_MARK}\b")
-# capitalized tokens that are NOT people — days/months/sentence heads/common work heads. Work-subject
-# nouns are additionally excluded via _has_work(), so this only needs the non-work extras.
-_NAME_RANK_STOP = {
-    "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday",
-    "January", "February", "March", "April", "May", "June", "July", "August", "September",
-    "October", "November", "December", "The", "This", "That", "Our", "We", "It", "They",
-    "Rank", "Ranking", "Priority", "Revenue", "Sales", "Cost", "Growth", "Region", "Release",
-}
-
-
-def _person_rank_names(text: str) -> list[Violation]:
-    """Ranking a PERSON by position. A pronoun ranked by a position fires directly; a NAMED
-    leaderboard fires only in a ranking context, for name tokens that are not work-subject/stop
-    words, and only as an explicit 'rank:'-style list OR ≥2 ranked names (the person-leaderboard
-    shape). Narrow by design — a single capitalized common-noun ranking ('Revenue ranks #1') is left
-    to the LLM judge rather than risk false-positiving legit work stats."""
-    out = []
-    for m in _PRONOUN_RANK.finditer(text):
-        if not _negated(text, m.start()):
-            out.append(Violation("PERSON-TIER", _ctx(text, m.start(), m.end()),
-                                 "a person ranked by position"))
-    if _RANK_CUE.search(text):
-        marks = []
-        for m in _NAME_RANK.finditer(text):
-            name = next((g for g in m.groups() if g), "")
-            if not name or name in _NAME_RANK_STOP or _has_work(name.lower()):
-                continue
-            if _negated(text, m.start()):
-                continue
-            marks.append(m)
-        colon_list = re.search(r"\b(?:rank(?:ing|ings)?|leaderboard|standings?)\b\s*:", text, re.I)
-        if marks and (colon_list or len(marks) >= 2):
-            m = marks[0]
-            out.append(Violation("PERSON-TIER", _ctx(text, m.start(), m.end()),
-                                 "ranking positions pinned to named people"))
-    return out
-
-
 # === the validator ===========================================================
 
 def validate(text: str, cited_snippets: list[str] | None = None) -> RedlineResult:
@@ -693,10 +583,6 @@ def validate(text: str, cited_snippets: list[str] | None = None) -> RedlineResul
 
     violations += _scored_number(text)
     violations += _bare_scale(text)
-    # feat-033 — person blood-bar % and named/pronoun person ranking (EN + code-switched). Both are
-    # tightly person-anchored so legit work/team/project quantification is untouched.
-    violations += _person_moodbar(text)
-    violations += _person_rank_names(text)
 
     # de-dup overlapping hits at the same location
     seen, uniq = set(), []

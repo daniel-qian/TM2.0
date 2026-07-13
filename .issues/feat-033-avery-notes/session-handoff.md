@@ -176,3 +176,96 @@ on an out-of-suite EN probe of 14 legit + 6 person-score strings.
   the work FP). Space-separated lexicon glyphs remain the pre-existing documented xfail.
 - The separate-field note validation trades an (unrealistic) cross-field split score for removing the
   negation-bleed leak + a latent FP — correct for the actual threat model, but worth a probe.
+
+---
+
+# Policy pivot (2026-07-13, Danny) — hard-block REVERTED, replaced by an UNBLOCK SWITCH
+
+status: done (AFK, gate-first bidirectional) · scope: NON-frozen enforcement layer only.
+
+**Danny reversed the "a person is never scored / ranked / profiled" red line** for REAL companies:
+scoring their people on performance / mood is now considered unavoidable. Execution口径 = **unblock
+only, do NOT build a feature**; leave the mechanism in place behind a switch, wrap up the current
+chain, do not dismantle, do not touch frozen files.
+
+## Step 1 — the adversarial-closure hard-block was REVERTED to baseline
+
+The round above hardened `avery/redline.py` (frozen) with new regex to catch 3 escaping forms. That
+path is now void. Reverted to `feat/032` tip `e060224`, byte-for-byte:
+`avery/redline.py` · `redline_rules.md` · `scenarios/FROZEN.lock.json`.
+- `runner.py --check-frozen` → back to baseline `manifest_hash bb59a7db…` (was `a7d97c08…`).
+  `test_rules_doc_in_sync` green.
+- **Removed** the two test files that existed ONLY to lock in that reverted hard-block:
+  `tests/test_redline_bloodbar_rank.py` (named for removal) **and** `tests/test_notes_redline_feat033.py`
+  (its e2e twin — 37 items ALL parametrized over the exact 8 escaping forms the reverted rules caught;
+  post-revert 35/37 fail because those forms no longer cross at baseline. Judgment call: it is the
+  direct analog of the bloodbar file; its non-form coverage — "clean obs still lands", HTTP surface —
+  is already held by `test_notes_redline.py` + `test_notes_http.py`, so no unique coverage is lost).
+- **Kept** (non-frozen, pure correctness): the concat-fix in `registry.gate_note_red_line` +
+  `service.notes.write_note_from_manifest` (observation and excerpt validated INDEPENDENTLY, never
+  concatenated). It is a strict-stronger correctness improvement, not part of the hard-block.
+
+## Step 2 — the unblock switch (`AVERY_ALLOW_PERSON_SCORING`)
+
+New module `avery/scoring_policy.py`: `person_scoring_allowed()` — True only for `1|true|yes|on`
+(case/space-insensitive), read LIVE per call (no import-time capture; monkeypatch-friendly). **Default
+OFF = the shipped moat, unchanged.** A typo / garbage / `0` fails CLOSED (keeps blocking).
+
+The switch is consulted at the THREE non-frozen enforcement seams; the DETECTOR (`avery.redline`,
+`redline_extract`) and the frozen engine are byte-for-byte untouched — only the enforcement DECISION
+changes:
+
+| Seam | File | OFF (default) | ON |
+|---|---|---|---|
+| storage door (memory + Postgres) | `registry.gate_note_red_line` | raise → nothing lands | skip raise → note persists |
+| post-advise hook | `service.notes.write_note_from_manifest` | discard (no note/nudge) | keep → note persists |
+| upload extraction | `pipeline.ingest_docs` | `ok=False` → 422, no context | build context normally |
+
+Both `append_note` twins funnel through `gate_note_red_line`, so ONE switch governs memory AND
+Postgres (verified against real pg). `validate_extraction` only ever reports person-scoring
+violations, so honoring the switch in `ingest_docs` unblocks person scoring and NOTHING else.
+
+**NOT unblocked (fail-closed by design):**
+- The **advisor engine's own red-line gate + Room nudge** (frozen `engine.py`/`loop.py`) — an /advise
+  answer that OVERTLY reports a person score is later work (needs the frozen engine); the write hook
+  still only derives a note from an advice that PASSED the advice gate (`redline_passed is True`). So
+  via HTTP the unblocked scoring surfaces through the echoed QUESTION excerpt, not a scored answer.
+- **NUL / 0x00** in a note — storage-safety guard, always refused (switch on or off).
+- **Parse-failure ingest** (`paths and not docs`) — a different hard failure, still 422.
+- **No feature built**: `PersonEntity` and `team_cards()` are unchanged — person cards carry NO
+  moodPct/capacityPct/score field even with the switch on (guarded by a test).
+
+## Step 3 — bidirectional test evidence
+
+Every switch test asserts BOTH directions on the SAME input (OFF blocks, ON allows) so the switch can
+neither silently fail-open (always allow) nor fail-closed (always block).
+- New `tests/test_notes_scoring_toggle.py`: switch parsing (16 cases incl. fail-closed garbage), the
+  post-advise hook (obs + excerpt, EN+ZH), `ingest_docs` (scored PersonEntity), the HTTP surface
+  (`POST /advise → GET /team/{id}/notes`), the "no feature built" card guard, and the non-red-line
+  guards (NUL, unparseable batch still refused when ON).
+- New storage-door pair in `tests/test_registry_contract.py` (memory **AND** Postgres via the shared
+  fixture) — proves pg `append_note` truly honors the switch (INSERT runs when ON, FK satisfied via a
+  real ingested context; blocked when OFF; NUL still refused when ON).
+
+**Three-layer numbers:**
+- **Offline (zero network, switch OFF, empty keys, no DB)**: `420 passed`, 1 xfailed, 0 failures.
+  (Was 463 at the reverted commit; −37 bloodbar file, −~35 feat033-e2e file, +~29 new switch tests.
+  The moat behavior at default-OFF is unchanged: existing `test_notes_redline.py` / `test_notes_http.py`
+  / extraction-refusal tests all green.)
+- **@needs_db (local Docker pg :5433)**: `33 passed` (incl. the 3 pg switch tests: OFF blocks, ON
+  persists, NUL refused).
+- **Frontend**: `./init.sh` exit 0 (lint wall + tsc + build). `src/**` untouched this round.
+- **check-frozen**: back to baseline `bb59a7db…`.
+
+## Self-assessed weak points (probe here)
+
+- **Always-allow / always-block audit**: all three seams gate symmetrically on the SAME
+  `person_scoring_allowed()` read, and each has a passing OFF-blocks + ON-allows pair — no seam has a
+  path that ignores the switch. The switch is read live (no cached import value to go stale).
+- **pg honors the switch?** YES — verified against real Postgres: `test_notes_switch_on_persists_a_
+  scoring_observation[postgres]` INSERTs a scoring note (would raise when OFF). Both twins share
+  `gate_note_red_line`, so there is no memory-only bypass.
+- The switch is process-env global (not per-tenant / per-request). Per-company opt-in is a later
+  concern (feat-034 tenancy). Documented, not built.
+- Advise-answer overt scoring is deliberately NOT unblocked this round (frozen engine). If Danny wants
+  the /advise answer itself to report scores, that is a follow-up that must touch the frozen engine.

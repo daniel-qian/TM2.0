@@ -22,6 +22,7 @@ import logging
 
 from avery import redline
 from avery.ingest.registry import CompanyNote
+from avery.scoring_policy import person_scoring_allowed
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +67,14 @@ def write_note_from_manifest(registry, context_id: str | None, manifest: dict | 
     # question excerpt is DISCARDED — no note, no nudge, no placeholder. feat-033: validate the two
     # fields SEPARATELY (never concatenated) so a negation in the advice read ('…never on the person')
     # cannot bleed across and mask a person-score in the echoed question excerpt ('李雷:9分,排名第一').
-    if not redline.validate(observation).passed or (excerpt and not redline.validate(excerpt).passed):
+    #
+    # feat-033 (policy pivot, 2026-07-13): when person scoring is EXPLICITLY unblocked
+    # (AVERY_ALLOW_PERSON_SCORING, see avery.scoring_policy), skip this discard so the scoring
+    # observation persists. Default OFF preserves the moat behavior exactly. The storage door
+    # (registry.append_note -> gate_note_red_line) consults the SAME switch, so both stay in lock-step.
+    if not person_scoring_allowed() and (
+            not redline.validate(observation).passed
+            or (excerpt and not redline.validate(excerpt).passed)):
         logger.info("feat-033: discarding a note whose observation/excerpt crossed the red line")
         return None
 

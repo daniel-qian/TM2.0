@@ -24,6 +24,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from avery.scoring_policy import person_scoring_allowed
+
 from .parse import ParsedDoc, parse_file, ParseError
 from .extract import ExtractionResult, extract_docs, Extractor
 from .redline_extract import validate_extraction, ExtractionRedlineResult, ExtractionViolation
@@ -109,8 +111,17 @@ def ingest_docs(docs: list[ParsedDoc], *, extractor: Extractor | None = None,
     extraction = extract_docs(docs, extractor=extractor)
 
     # THE HARD GATE — a person-scoring extraction never becomes a context.
+    #
+    # feat-033 (policy pivot, 2026-07-13): when person scoring is EXPLICITLY unblocked
+    # (AVERY_ALLOW_PERSON_SCORING, see avery.scoring_policy) the person-scoring extraction is allowed
+    # to persist — we do NOT flip ok=False, so the scored document builds a context normally. Default
+    # OFF keeps the hard gate exactly as shipped. `validate_extraction` ONLY ever reports person-
+    # scoring violations (key/value/text on a PersonEntity), so honoring the switch here unblocks
+    # person scoring and NOTHING else. Non-scoring hard failures live on other branches (a parse
+    # failure -> the `paths and not docs` 422 above) and are untouched. `rl` is still carried in the
+    # returned report either way, so the violations stay auditable.
     rl = validate_extraction(extraction)
-    if not rl.ok:
+    if not rl.ok and not person_scoring_allowed():
         return IngestReport(ok=False, context=None, redline=rl, parsed=docs, extraction=extraction)
 
     # Build the RAG store and load material.
