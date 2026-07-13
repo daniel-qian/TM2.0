@@ -30,7 +30,7 @@ Manager 问 Avery"A 能不能负责跟乙方谈价"这类问题时，靠已有�
 | Q6 | 答题页住哪 | **FastAPI 后端直接服务（ECS，国内节点）**，URL 形如 `https://{域名}/r/{token}`。理由：国内可达性（Vercel 不可靠）；每链接独立 OG meta 需服务端渲染；员工永不进 manager SPA（actor 天然隔离）。 |
 | Q7 | 回执回流 | 问卷卡显示回收状态（"2/3 已回"），**manager 打开 Thread 时 HTTP 拉取刷新**；回执织进 Thread 作证据，可 Follow-up"基于回执再判断"。不做推送通知/SSE 实时刷（v1）。 |
 | Q8 | 生命周期 | **7 天过期；答完即锁定**（证据要稳定，防被要求改口）；manager 可撤回作废；过期/已答/已撤回各有状态页文案。催答提醒 v1 不做。 |
-| Q9 | 平台优先级 | 验收顺序：**飞书+钉钉 first**（零安装体验最好）→ 企微接受降级（"谨慎访问"中间页仍走得通）→ Slack/Teams 验 OG 卡。同一条链接全平台通用，只是测试排序。**域名+ICP 备案+国内节点是企微体面的前提，Danny 已拍启动备案**（凭据墙，见"待 Danny"）。 |
+| Q9 | 平台优先级 | 验收顺序（2026-07-13 补正，Danny 告知备案域名+ECS 已在手）：**企微+飞书+钉钉同档 first**（备案域名消除企微"谨慎访问"最大诱因，国内 prospect 企微占比最大）→ Slack/Teams 验 OG 卡。同一条链接全平台通用，只是测试排序。原"飞书钉钉先行、企微降级"基于无备案假设，作废。 |
 | Q10 | 命名 | 领域名 **Ask**；surface EN **"Quick ask"** / ZH **"快问"**。avoid: survey/问卷、poll/投票、打分。CONTEXT.md 已收录。 |
 
 ## 平台兼容性调研结论（2026-07-13，全文见 platform-compat-research.md）
@@ -71,10 +71,14 @@ Manager 问 Avery"A 能不能负责跟乙方谈价"这类问题时，靠已有�
 - Dashboard 独立"发问卷"入口；story mode 任何改动；IM 平台 API 直发消息（v1 分享=manager 手动粘贴）。
 - 完整受访者身份体系（v1 = token 即身份）。
 
+## 基建现状（2026-07-13 Danny 告知，改写原凭据墙假设）
+
+- **ICP 备案已有、域名已有、ECS 可直接 SSH**（agent 可自行部署——deploy 属先斩后奏范围）。原"启动备案 2~4 周关键路径"作废；企微风险降为低（残余=被举报误伤，可申诉）。
+- 待补事实（已问 Danny）：① DNS 解析在哪管/agent 可否自加记录；② ECS 系统/规格/在跑服务/HTTPS 证书现状；③ 备案主体公司 or 个人。
+
 ## 待 Danny（凭据墙/对外闸，不阻塞设计与离线开发）
 
-- **启动 ICP 备案**（已拍板启动）：选定自有域名 → 企业主体备案（2~4 周）→ 国内节点。备案完成前国内 demo 约钉钉/飞书客户，避开企微。
-- ECS host / 域名 DNS / 证书 / Supabase 连接串（与 lite-v1 共用，见 runbook §F）。
+- Supabase 项目 + 连接串；真 LLM key 进服务器 secret（与 lite-v1 共用，见 runbook §F）。
 - push 授权（本分支 + main ahead 照旧未 push）。
 
 ## 指针

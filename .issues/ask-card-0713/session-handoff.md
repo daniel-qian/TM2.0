@@ -15,8 +15,8 @@
 3. gate 先行：PRD "Testing Decisions" 的断言先进门必红再修绿（沿用 ADR-0022 纪律）。
 
 ## Blockers
-- lite-v1 持久化未建（硬依赖）。
-- Danny 凭据墙：ICP 备案（已拍板启动，2~4 周长周期，宜尽早）、ECS host、域名 DNS、Supabase 连接串。
+- lite-v1 持久化未建（硬依赖，唯一真 blocker）。
+- Danny 凭据墙（已缩小）：Supabase 项目/连接串、真 LLM key 进服务器、push 授权。**ICP 备案域名 + 可 SSH 的 ECS 已在手**（2026-07-13 Danny 告知）——部署在 agent 手里；待补事实：DNS 管理权、ECS 现状、备案主体（已问）。
 
 ## Files Modified（本会话）
 - `CONTEXT.md`（+Ask 术语）
