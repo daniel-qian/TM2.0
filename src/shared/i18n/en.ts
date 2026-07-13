@@ -62,6 +62,7 @@ export const en = {
   lite: {
     tabTeam: 'Your team',
     tabRoom: 'The room',
+    tabNotes: "Avery's notes",
     tabPlaybooks: 'Playbooks',
     tabVision: 'Where this goes',
 
@@ -153,6 +154,29 @@ export const en = {
     visionMockPersonRole: 'Read as what they do and own — never a number.',
 
     visionComingSoon: 'None of the four is live yet. This tab is a preview of the boundary, kept honest on purpose.',
+
+    // ── Avery's notes surface (feat-033: write-side, accumulating, user-visible memory) ──
+    // Copy per avery-notes-ux-draft.md §5. The red-line trust note stays on-message with the
+    // existing family (upload.privacyNote / emptyHintPrivacy / visionProofRedline): a DETERMINISTIC
+    // gate, never "we try" — never scored/ranked/profiled, and no instruction can turn that off.
+    notesEyebrow: 'Field notes',
+    notesTitle: 'What Avery has noticed about your company',
+    notesLede:
+      'Every time you ask the room a real question, Avery writes down what it observed — in its own words, for you to read. It builds up the longer you work together.',
+    notesRedlineNote:
+      'These notes describe work — projects, handoffs, load. They never score, rank, or profile a person, and no instruction can turn that off.',
+    notesCountSince: 'observations · since', // "12 observations · since Mar 3"
+    notesCountOne: 'observation', // per-day group count (singular)
+    notesCountMany: 'observations', // per-day group count (plural)
+    notesToday: 'Today',
+    notesSourcePrefix: 'From your question about', // + excerpt + " →"
+    notesOpenRoom: 'Open the room →',
+    notesEmptyEyebrow: 'Nothing written yet',
+    notesEmptyTitle: "Avery hasn't taken its first note",
+    notesEmptyBody:
+      'Ask the room a real question about your team. When Avery notices something worth keeping — a pattern, a risk, a dependency — it writes it here.',
+    notesEmptyCta: 'Ask the room',
+    notesNudge: 'Avery added a note', // Room chip after a note lands
 
     // Your team — briefing header (real numbers from ingestion) + weak handoffs
     briefingEyebrow: 'From your uploads',

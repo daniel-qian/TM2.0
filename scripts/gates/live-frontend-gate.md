@@ -40,8 +40,13 @@
      (三拍叙事 `.lite-vision-beat` ≥3 + 能力边界 mock `.lite-vision-mock` ≥3,**每张 mock
      必带 `.lite-vision-tag` preview/coming 标注**——零未标注 mock);若 mock 含示例人
      (`.lite-vision-person`)则**零数字**(红线);该屏 story 名词黑名单 = 0。
-   - `__seedGate.verdict()` — 聚合判定(10 相位:原 6 + teamGrouped/roomCanvas/playbooksEmpty
-     + visionSurface)。
+   - `await __seedGate.assertNotesSurface()` — **相位 K**(feat-033):Avery's notes 写侧笔记屏。
+     **在 composerAskLive 之后跑**——一次真 advise 现在会写一条真笔记,故此时应已 POPULATED。
+     断言:屏挂载 + **常驻红线信任条 `.lite-notes-redline-note`** + 观察条目(`.lite-notes-entry-text`)
+     **零人卡数字**(红线,写侧后端门已拦,此处在渲染面复核)+ 条目**只读**(观察正文非 button)
+     + 该屏 story 名词黑名单 = 0。空态(没跑 advise)也容忍(空态卡 + 信任条)。
+   - `__seedGate.verdict()` — 聚合判定(11 相位:原 6 + teamGrouped/roomCanvas/playbooksEmpty
+     + visionSurface + notesSurface)。
 5. **收尾**:停 dev server、杀 8137 uvicorn。verdict JSON 原样贴进
    `feature_list.json` evidence / progress.md。
 

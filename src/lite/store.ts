@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import {
   createHttpTransport,
   type LiveFileEntry,
+  type LiveNoteEntry,
   type LiveTeamPayload,
   type LiveTransport,
 } from './transport'
@@ -26,9 +27,9 @@ import { liteTeamFromPayload, type LiteTeam } from './teamData'
 
 export type IngestStatus = 'idle' | 'ingesting' | 'ready' | 'error'
 
-// lite 壳的 scene：Your team（含上传空态）· The room · Playbooks（feat-025 空态屏）·
-// Vision（feat-026 定位叙事 + 能力边界 mock）。详情是浮层不是 scene。
-export type LiteScreen = 'team' | 'room' | 'playbooks' | 'vision'
+// lite 壳的 scene：Your team（含上传空态）· The room · Avery's notes（feat-033 写侧笔记）·
+// Playbooks（feat-025 空态屏）· Vision（feat-026 定位叙事 + 能力边界 mock）。详情是浮层不是 scene。
+export type LiteScreen = 'team' | 'room' | 'notes' | 'playbooks' | 'vision'
 
 export type LiteDetail = { kind: 'person' | 'project'; id: string } | null
 
@@ -48,6 +49,10 @@ interface LiteState {
   rawTeam: LiveTeamPayload | null
   // feat-032「你的文件」清单：持久留存的源文档元数据（重启后仍在）。
   files: LiveFileEntry[]
+  // feat-033「Avery's notes」：写侧、跨会话累积的 agent 自写观察（只读，新→旧，重启后仍在）。
+  notes: LiveNoteEntry[]
+  // advise 完成且后端确认新笔记落库 → Room 内出一次 nudge（丢弃则不出）。切屏即消。
+  noteJustAdded: boolean
 
   // ── The room 一次 live 运行（feat-015 /advise）──
   run: LiveRunState
@@ -62,6 +67,7 @@ interface LiteState {
   uploadFiles: (files: File[]) => Promise<void>
   refreshTeam: () => Promise<void>
   refreshFiles: () => Promise<void>
+  refreshNotes: () => Promise<void>
   askLive: (req: AdviseRequest) => void
   resetRun: () => void
 }
@@ -80,12 +86,15 @@ export const useLite = create<LiteState>((set, get) => ({
   contextId: null,
   rawTeam: null,
   files: [],
+  notes: [],
+  noteJustAdded: false,
 
   run: emptyRunState(),
   agentSource: createLiveAgentSource(defaultTransport),
   _abort: null,
 
-  goScreen: (screen) => set({ screen, detail: null }),
+  // 切屏消掉 Room 内的一次性 nudge（用户已离开事发现场；nudge 是瞬态感知，不是持久红点）。
+  goScreen: (screen) => set({ screen, detail: null, noteJustAdded: false }),
   openDetail: (kind, id) => set({ detail: { kind, id } }),
   closeDetail: () => set({ detail: null }),
 
@@ -136,14 +145,43 @@ export const useLite = create<LiteState>((set, get) => ({
     }
   },
 
+  refreshNotes: async () => {
+    const { contextId, transport } = get()
+    if (!contextId) return
+    try {
+      const payload = await transport.fetchNotes(contextId)
+      set({ notes: payload.notes })
+    } catch {
+      // 笔记是次要只读视图——拉取失败不该打断主流程。
+    }
+  },
+
   askLive: (req) => {
     // 中止上一轮（切问题不叠流）。
     get()._abort?.()
-    const { agentSource, contextId } = get()
-    set({ run: { ...emptyRunState(), status: 'running' } })
+    const { agentSource, contextId, notes } = get()
+    const notesBefore = notes.length
+    set({ run: { ...emptyRunState(), status: 'running' }, noteJustAdded: false })
+    let settled = false
     const handle = agentSource.run(
       { ...req, company_context_id: req.company_context_id ?? contextId ?? undefined },
-      (state) => set({ run: state }),
+      (state) => {
+        set({ run: state })
+        // 一次 advise 落定后：拉一次笔记，**后端确认新笔记落库**（计数增长）才亮 nudge——
+        // 观察被红线门丢弃时后端不落库、计数不变、nudge 不出（诚实降级，不显占位）。
+        if (!settled && (state.status === 'complete' || state.status === 'error')) {
+          settled = true
+          const { contextId: cid, transport } = get()
+          if (cid) {
+            void transport
+              .fetchNotes(cid)
+              .then((payload) => set({ notes: payload.notes, noteJustAdded: payload.notes.length > notesBefore }))
+              .catch(() => {
+                /* 次要——失败不打断，只是这次不亮 nudge */
+              })
+          }
+        }
+      },
     )
     set({ _abort: handle.abort })
   },

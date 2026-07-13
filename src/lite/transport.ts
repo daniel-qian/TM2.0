@@ -126,6 +126,21 @@ export interface LiveFilesPayload {
   files: LiveFileEntry[]
 }
 
+// ── Avery's notes（feat-033：GET /team/{id}/notes 契约）──────────────────────────────────────
+// 写侧、可见、跨会话累积的 agent 自写观察。只读；🔴 红线：写侧后端 redline.validate（EN+ZH）
+// 已把评分/排名/画像文本拦在落库前——本清单永不含人卡数字/评分文本。新→旧（newest first）。
+export interface LiveNoteEntry {
+  id: string
+  created_at: string // ISO8601 UTC
+  text: string // Avery 的观察正文（1–3 句，work-focused）
+  source_excerpt: string // 触发该笔记的提问前 ~60 字符（来源指引）
+}
+
+export interface LiveNotesPayload {
+  context_id: string
+  notes: LiveNoteEntry[]
+}
+
 // ── 传输接口：seam 只认这个，AFK 门注入确定性 stub ─────────────────────────────────────
 export interface LiveTransport {
   // 打开 /advise SSE，逐事件回调；返回一个可 abort 的 handle。
@@ -143,6 +158,9 @@ export interface LiveTransport {
 
   // 按 context_id 拉取「你的文件」清单（feat-032 file space；重启后仍在）。
   fetchFiles: (contextId: string) => Promise<LiveFilesPayload>
+
+  // 按 context_id 拉取「Avery's notes」累积笔记（feat-033；只读、新→旧、重启后仍在）。
+  fetchNotes: (contextId: string) => Promise<LiveNotesPayload>
 }
 
 // 服务基址：默认打本机 feat-015 服务；部署端经 VITE_AVERY_API_BASE 覆盖。
@@ -217,6 +235,12 @@ export function createHttpTransport(base: string = apiBase()): LiveTransport {
       const res = await fetch(`${base}/team/${encodeURIComponent(contextId)}/files`)
       if (!res.ok) throw new Error(`files HTTP ${res.status}`)
       return (await res.json()) as LiveFilesPayload
+    },
+
+    async fetchNotes(contextId) {
+      const res = await fetch(`${base}/team/${encodeURIComponent(contextId)}/notes`)
+      if (!res.ok) throw new Error(`notes HTTP ${res.status}`)
+      return (await res.json()) as LiveNotesPayload
     },
   }
 }

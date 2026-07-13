@@ -99,6 +99,8 @@ function LiteAskComposer({
 export function RoomScreen() {
   const run = useLite((s) => s.run)
   const askLive = useLite((s) => s.askLive)
+  const noteJustAdded = useLite((s) => s.noteJustAdded)
+  const goScreen = useLite((s) => s.goScreen)
   const { t } = useDict()
 
   const running = run.status === 'running'
@@ -128,6 +130,17 @@ export function RoomScreen() {
               {advice ? (
                 <div className="lite-room-card">
                   <LiteAdviceCard advice={advice} />
+                  {/* feat-033：advise 完成且后端确认新笔记落库才出 nudge（丢弃则不出、不显占位）。
+                      样式对齐 .lite-metric-chip / .upload-source-chip 视觉族；点击切到 notes tab。 */}
+                  {noteJustAdded ? (
+                    <button
+                      type="button"
+                      className="lite-notes-nudge"
+                      onClick={() => goScreen('notes')}
+                    >
+                      {t.lite.notesNudge} →
+                    </button>
+                  ) : null}
                 </div>
               ) : null}
             </div>

@@ -9,6 +9,9 @@ import type { Dict } from "./index";
 //  full re-run re-translates every story-shared section (drift + token risk the kickoff warns
 //  against). Source keys live in en.ts. Fold these into M3 on the next DIRECTED zh pass (a targeted
 //  M3 splice, or accept a full regen) so they stop masquerading as generated output.
+// ⚠ HAND-WRITTEN, NOT YET M3 (feat-033): the whole lite."notes*" block + lite.tabNotes were typed
+//  in by hand for the same reason (full-regen only → drift/token risk). Source keys live in en.ts.
+//  Danny 审字 pending; fold into the next DIRECTED M3 zh pass.
 export const zh: Dict = {
   "mode": {
     "storyLabel": "演示",
@@ -50,6 +53,7 @@ export const zh: Dict = {
   "lite": {
     "tabTeam": "你的团队",
     "tabRoom": "议事室",
+    "tabNotes": "Avery 的笔记",
     "tabPlaybooks": "操作手册",
     "tabVision": "未来方向",
     "groupAllLabel": "按团队分组",
@@ -100,6 +104,21 @@ export const zh: Dict = {
     "visionMockPersonName": "一位团队成员",
     "visionMockPersonRole": "读的是他做什么、扛什么——不是一个数字。",
     "visionComingSoon": "这四项目前都尚未上线。这个标签页是这条边界的预览，故意保持诚实。",
+    "notesEyebrow": "实录笔记",
+    "notesTitle": "Avery 记下的、关于你公司的观察",
+    "notesLede": "每当你在议事室问一个真实的问题，Avery 都会用它自己的话把观察到的记下来，供你翻阅。你们合作得越久，这本笔记就越厚。",
+    "notesRedlineNote": "这些笔记只描述工作——项目、交接、负荷。它永远不会给任何人打分、排名或贴标签，任何指令都关不掉这条红线。",
+    "notesCountSince": "条观察 · 始于",
+    "notesCountOne": "条观察",
+    "notesCountMany": "条观察",
+    "notesToday": "今天",
+    "notesSourcePrefix": "来自你的提问：",
+    "notesOpenRoom": "进议事室 →",
+    "notesEmptyEyebrow": "还没有记录",
+    "notesEmptyTitle": "Avery 还没写下第一条笔记",
+    "notesEmptyBody": "去议事室问一个关于你团队的真实管理问题。当 Avery 注意到值得留存的东西——一个模式、一处风险、一条依赖——它就会记在这里。",
+    "notesEmptyCta": "去议事室提问",
+    "notesNudge": "Avery 记了一条笔记",
     "briefingEyebrow": "来自你上传的文件",
     "metricsLabel": "团队一览",
     "handoffsTitle": "今天值得你留意",
