@@ -27,6 +27,13 @@
 - i18n：EN act-first 定稿；ZH 新 key 定向走 M3（scripts/i18n-zh.mjs，避全量超 token 坑）；M3 key 缺失则 EN 定稿 + handoff 记 ZH pending。
 - done = 集成层证据（ADR-0022），不 merge 不 push（合流由本线编排者做，push 留 Danny）。
 
+## Polish 波（2026-07-13，Danny 试玩三反馈，feat/034-polish→main 4125e7a）
+
+- A1/A2 拍改**钉状态**语义（`pinThreadProgress` 幂等钉点位）：快按/双击/先 free-click 均不再跳过等待态或空拍；连带根修 chip 同 tick 双击连跳（阶段 A 非阻塞观察转正修复）。
+- QuickAskCard 等待态加分享排（WeCom/Teams/Slack/Email chip + Copy link 真复制虚构链接 + Copied ✓）；已答态收敛一行 "Shared via one link · answered in 40s"。
+- mode 开关（Story/Live）两壳默认隐藏，`?modeSwitch=1` 显示（`shared/mode.ts showModeSwitch()`）；`?mode=` URL 机器不动。事实澄清：开关是 feat-024/ADR-0020 决策 3 的设计，非分支不同步。
+- 验证：maker 全套攻击断言 + 编排者合流后 5174 真机复验（28 连发攻击下 A1 仍等待态/分享排在/A2 已答/4 of 5 全页 1 处/开关默认无 param 有）。init.sh 绿。
+
 ## 阶段 C 追加清单（2026-07-13 合流收线，来自两路对抗验证的非阻塞 findings）
 
 - **F1（接线时必先对齐，真雷）**：status 词表已锁进 PRD 数据模型行——`draft|shared|collecting|closed|revoked|expired`。现 `coerceAskDraft` 对未知状态折回 `draft`，后端若回 `revoked`/`expired`/其他词，已发出/已撤回的 ask 会以**可编辑草稿复活**。阶段 C 第一件事：coerce 改 fail-loud 或折 `closed`，并补 `revoked`/`expired` 两态 UI。
