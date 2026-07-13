@@ -287,6 +287,64 @@ def test_source_documents_with_duplicate_filenames_survive_the_round_trip(impl, 
 
 
 # ==============================================================================================
+# feat-033 — the "Avery's notes" write-side contract (shared: memory + postgres). Agent-written
+# observations accumulate, list new->old, and — the whole point — a person-scoring observation is
+# REFUSED at append() before anything lands. The SAME red-line gate (`redline.validate`, EN+ZH) the
+# advisor output passes governs the self-written note, so the new write path is not a back door
+# around "no numbers on a person".
+# ==============================================================================================
+
+def test_notes_append_then_list_new_to_old(impl, tmp_path):
+    reg, cid, _ = _ingest(impl, tmp_path / "mem")
+    assert reg.list_notes(cid) == [], "a fresh context has no notes"
+    n1 = reg.append_note(
+        cid, "The onboarding backlog keeps landing on one squad — a load problem, not a person.",
+        "the onboarding backlog")
+    n2 = reg.append_note(
+        cid, "Two handoffs bounced back this week; the coordination seam is where to look.",
+        "the two bounced handoffs")
+    got = reg.list_notes(cid)
+    assert [n.text for n in got] == [n2.text, n1.text], "notes must list new->old (newest first)"
+    assert got[0].source_excerpt == "the two bounced handoffs"
+    assert all(n.id and n.created_at for n in got), "every note carries an id + created_at"
+    assert got[0].id != got[1].id, "note ids are distinct"
+
+
+@pytest.mark.parametrize("bad", [
+    "She is a low performer — score her 2 out of 10 on delivery.",   # EN: two ALWAYS hits
+    "综合来看，她这个季度的绩效评分是2分，明显偏低。",                    # ZH: 绩效评分 + 分数
+])
+def test_notes_redline_refuses_a_scoring_observation(impl, tmp_path, bad):
+    """A self-written observation that scores/ranks a PERSON (EN or ZH) is refused at append_note —
+    the same moat the advisor output crosses. Nothing lands; the notebook stays clean."""
+    reg, cid, _ = _ingest(impl, tmp_path / "mem")
+    with pytest.raises(ValueError, match="red line"):
+        reg.append_note(cid, bad, "how is she doing this quarter")
+    assert reg.list_notes(cid) == [], "a refused scoring observation must NOT land in the notebook"
+
+
+def test_notes_redline_refuses_a_scoring_source_excerpt(impl, tmp_path):
+    """The source excerpt is echoed onto the (user-visible) notes surface, so a person-score in the
+    manager's OWN quoted question must not land there either — even with a clean observation. The
+    notes surface never displays scoring text, regardless of origin."""
+    reg, cid, _ = _ingest(impl, tmp_path / "mem")
+    with pytest.raises(ValueError, match="red line"):
+        reg.append_note(cid, "There is a real coordination gap worth a direct conversation.",
+                        "why did I score her 2/10 last cycle")
+    assert reg.list_notes(cid) == []
+
+
+def test_notes_qualitative_observation_passes(impl, tmp_path):
+    """The gate is not a blunt number-blocker: a qualitative, work-focused observation (the normal
+    case) lands. Guards against the red-line write gate over-blocking legitimate notes."""
+    reg, cid, _ = _ingest(impl, tmp_path / "mem")
+    note = reg.append_note(
+        cid, "Design and delivery keep colliding on the same week — worth a sequencing chat.",
+        "the design/delivery overlap")
+    assert reg.list_notes(cid)[0].text == note.text
+
+
+# ==============================================================================================
 # DURABILITY CONTRACT — postgres only (@needs_db). A process dict cannot pass these; that gap is
 # exactly what feat-030 closes.
 # ==============================================================================================
@@ -330,6 +388,41 @@ def test_pg_source_documents_survive_a_new_registry_instance(pg, tmp_path):
     # the bytes are still there, byte-for-byte, on a fresh instance (the restart claim).
     assert reg_b.source_document_bytes(cid, 0) == HANDBOOK.read_bytes()
     assert reg_b.source_document_bytes(cid, 1) == ROSTER.read_bytes()
+
+
+@needs_db
+def test_pg_notes_accumulate_and_survive_a_new_registry_instance(pg, tmp_path):
+    """feat-033 the restart story for Avery's notes: observations appended by one registry instance
+    are visible — in order, new->old — to a BRAND-NEW instance (the redeploy). This is what makes
+    the notebook 'get thicker the longer you work together' across sessions, not just in-process."""
+    reg_a, cid, _ = _ingest(pg, tmp_path / "mem")
+    reg_a.append_note(cid, "First: the onboarding backlog concentrates on one squad.", "onboarding backlog")
+    reg_a.append_note(cid, "Second: two handoffs bounced — a coordination seam to watch.", "bounced handoffs")
+
+    reg_b = pg.fresh()   # a fresh instance / new connections — the simulated restart
+    got = reg_b.list_notes(cid)
+    assert [n.text for n in got] == [
+        "Second: two handoffs bounced — a coordination seam to watch.",
+        "First: the onboarding backlog concentrates on one squad.",
+    ], "notes did not survive the restart in new->old order"
+    # appending on the new instance keeps accumulating on top of the persisted history.
+    reg_b.append_note(cid, "Third: sequencing design and delivery would ease the crunch.", "sequencing")
+    assert reg_b.list_notes(cid)[0].text.startswith("Third"), "post-restart append did not accumulate"
+    assert len(reg_b.list_notes(cid)) == 3
+
+
+@needs_db
+def test_pg_notes_refuse_a_scoring_observation_before_insert(pg, tmp_path):
+    """feat-033: the Python storage gate on the notes write path runs the FULL red-line scan BEFORE
+    any INSERT — a scoring self-written observation (EN or ZH) never touches the DB and never lands
+    in the notebook. This is the moat feat-030's storage door promised the new write path inherits."""
+    reg = pg.fresh()
+    reg_seed, cid, _ = _ingest(pg, tmp_path / "mem")
+    for bad in ("Give him a red rating and mark him a flight risk.",             # EN ALWAYS hits
+                "把张伟的KPI评分压到60分，其余人往上提。"):                          # ZH KPI评分 + 分数
+        with pytest.raises(ValueError, match="red line"):
+            reg.append_note(cid, bad, "how is the team doing")
+    assert reg.list_notes(cid) == [], "a scoring observation LANDED despite the append gate"
 
 
 @needs_db

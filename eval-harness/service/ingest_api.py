@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import mimetypes
 import tempfile
+from dataclasses import asdict
 from pathlib import Path
 from urllib.parse import quote
 
@@ -178,6 +179,18 @@ def team(context_id: str) -> dict:
     if ctx is None:
         raise HTTPException(status_code=404, detail=f"unknown company_context_id: {context_id}")
     return _team_payload(ctx)
+
+
+@router.get("/team/{context_id}/notes")
+def team_notes(context_id: str) -> dict:
+    """feat-033 — Avery's notes: the accumulating, agent-WRITTEN observations about this company,
+    NEWEST FIRST. Read-only surface (v1 has no delete). Every note here already passed the write-side
+    red line (`redline.validate`, EN+ZH) at append time — the notebook never contains scoring text."""
+    reg = active_registry()
+    ctx = reg.get(context_id)
+    if ctx is None:
+        raise HTTPException(status_code=404, detail=f"unknown company_context_id: {context_id}")
+    return {"context_id": context_id, "notes": [asdict(n) for n in reg.list_notes(context_id)]}
 
 
 @router.get("/team/{context_id}/files")

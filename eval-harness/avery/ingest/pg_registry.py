@@ -51,7 +51,10 @@ from .extract import (
     ExtractionResult, MaterialChunk, PersonEntity, ProjectEntity, SignalEntity,
 )
 from .redline_extract import validate_extraction
-from .registry import CompanyContext, SourceDocument, data_root, materialize_memory
+from .registry import (
+    CompanyContext, CompanyNote, SourceDocument, data_root, gate_note_red_line, materialize_memory,
+    new_note_id,
+)
 from .store import Embedder, KeywordStore, PgVectorStore, VectorStore, _vec_literal
 
 logger = logging.getLogger(__name__)
@@ -371,6 +374,36 @@ class PostgresContextRegistry:
         if row is None or row[0] is None:
             return None
         return bytes(row[0])
+
+    # --- feat-033: Avery's notes (write-side, accumulating, user-visible, survives restarts) ------
+
+    def append_note(self, context_id: str, text: str, source_excerpt: str = "") -> CompanyNote:
+        """Persist one agent observation to avery.company_notes. The write-side red line runs BEFORE
+        any INSERT (a scoring/ranking/profiling note raises ValueError — nothing touches the DB), so
+        this new write path inherits feat-030's storage-door moat. The FK to avery.contexts means an
+        unknown context is refused by construction. Notes accumulate across sessions/restarts."""
+        gate_note_red_line(text, source_excerpt)   # raises before we connect — nothing lands
+        self._ensure_schema()
+        note_id = new_note_id()
+        with self._connect() as conn, conn.transaction():
+            row = conn.execute(
+                "INSERT INTO avery.company_notes (id, context_id, text, source_excerpt) "
+                "VALUES (%s, %s, %s, %s) RETURNING created_at",
+                (note_id, context_id, text, source_excerpt)).fetchone()
+        created_at = row[0]
+        return CompanyNote(id=note_id, created_at=created_at.isoformat(),
+                           text=text, source_excerpt=source_excerpt)
+
+    def list_notes(self, context_id: str) -> list[CompanyNote]:
+        """This company's notes, NEWEST FIRST (ORDER BY seq DESC — monotonic insert order, so rapid
+        appends that share a created_at still order deterministically)."""
+        self._ensure_schema()
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT id, created_at, text, source_excerpt FROM avery.company_notes "
+                "WHERE context_id = %s ORDER BY seq DESC", (context_id,)).fetchall()
+        return [CompanyNote(id=nid, created_at=ca.isoformat(), text=txt, source_excerpt=se or "")
+                for nid, ca, txt, se in rows]
 
     def resolve_memory_dir(self, context_id: str) -> Path | None:
         ctx = self.get(context_id)

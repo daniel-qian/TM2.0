@@ -145,16 +145,39 @@ def _run_events(sit: live_input.LiveSituation) -> tuple[Iterator[dict[str, Any]]
     return events, case
 
 
-def _sse(events: Iterator[dict[str, Any]], case) -> EventSourceResponse:
-    """Wrap engine events as Server-Sent Events. Each event: `event:` = type, `data:` = JSON."""
+def _sse(events: Iterator[dict[str, Any]], case, on_manifest=None) -> EventSourceResponse:
+    """Wrap engine events as Server-Sent Events. Each event: `event:` = type, `data:` = JSON.
+
+    feat-033: `on_manifest(ev)` runs the post-advise note hook the moment the terminal manifest is
+    seen — BEFORE it is yielded — so the note is persisted by the time the client's stream ends and
+    a follow-up GET /team/{id}/notes reliably sees it. The manifest stays the terminal event (no
+    extra frame is emitted); the Room nudge is driven by the client re-reading the notebook."""
     def gen():
         try:
             for ev in events:
+                if on_manifest is not None and ev.get("type") == "manifest":
+                    try:
+                        on_manifest(ev)
+                    except Exception:   # a note-write problem must never break the stream
+                        pass
                 yield {"event": ev.get("type", "message"),
                        "data": json.dumps(ev, ensure_ascii=False)}
         finally:
             live_input.discard(case)
     return EventSourceResponse(gen())
+
+
+def _post_advise_note(company_context_id: str | None, situation: str, manifest: dict) -> None:
+    """feat-033 post-advise hook: append Avery's observation to the company notebook (write-side red
+    line inside). Best-effort — a failure here never affects the advise response."""
+    if not company_context_id:
+        return
+    try:
+        from avery.ingest.registry import active_registry
+        from . import notes
+        notes.write_note_from_manifest(active_registry(), company_context_id, manifest, situation)
+    except Exception:   # lazy import / registry problems must not surface to the caller
+        pass
 
 
 @app.get("/health")
@@ -179,7 +202,8 @@ def advise(req: AdviseRequest):
     events, case = _run_events(sit)
 
     if req.stream:
-        return _sse(events, case)
+        return _sse(events, case,
+                    on_manifest=lambda m: _post_advise_note(req.company_context_id, req.situation, m))
 
     # Buffered: drain to the terminal manifest (or error) and return one JSON body.
     try:
@@ -187,6 +211,9 @@ def advise(req: AdviseRequest):
     finally:
         live_input.discard(case)
     manifest = next((e for e in reversed(collected) if e["type"] == "manifest"), None)
+    # feat-033: write Avery's observation to the company notebook (write-side red line inside).
+    if manifest is not None:
+        _post_advise_note(req.company_context_id, req.situation, manifest)
     if manifest is None:
         err = next((e for e in collected if e["type"] == "error"), None)
         return JSONResponse(status_code=502,

@@ -62,6 +62,42 @@ def _now_iso() -> str:
 
 
 @dataclass
+class CompanyNote:
+    """feat-033 — one agent-WRITTEN observation in the company's persistent, user-visible notebook.
+
+    `text` is Avery's observation about the company (work-focused, never a person score — the write
+    gate enforces that); `source_excerpt` is the ~60-char lead of the manager's question that
+    triggered it (the notes surface shows 'From your question about <excerpt>'). Free text — the red
+    line is a CONTENT scan run BEFORE this ever exists (see `gate_note_red_line`)."""
+    id: str
+    created_at: str          # ISO8601 UTC
+    text: str
+    source_excerpt: str = ""
+
+
+def new_note_id() -> str:
+    return "note_" + uuid.uuid4().hex[:16]
+
+
+def gate_note_red_line(text: str, source_excerpt: str = "") -> None:
+    """🔴 The WRITE-SIDE red line for Avery's self-written notes — the moat's most load-bearing new
+    face. Reuses the UNCHANGED advisor gate `avery.redline.validate` (EN+ZH); it does NOT add or
+    weaken any red-line mechanism. A note that scores / ranks / profiles a PERSON (in the observation
+    OR in the echoed question excerpt shown on the surface) raises ValueError, so NOTHING is stored —
+    the self-written memory can never be a back door around 'no numbers on a person'.
+
+    Both registries call this before persisting, and the service's post-advise hook re-checks
+    independently (belt-and-suspenders, like feat-030's storage door)."""
+    from avery import redline   # core, offline, stdlib-only — safe for the offline path
+    blob = text if not source_excerpt else f"{text}\n{source_excerpt}"
+    rl = redline.validate(blob)
+    if not rl.passed:
+        raise ValueError(f"red line: refusing to persist a scoring note ({rl.summary()})")
+    if "\x00" in (text or "") or "\x00" in (source_excerpt or ""):
+        raise ValueError("unsupported control character (NUL / 0x00) in a note — cannot be stored")
+
+
+@dataclass
 class CompanyContext:
     """The resolved company context an advisor retrieves against, keyed by `context_id`."""
     context_id: str
@@ -191,10 +227,28 @@ class ContextRegistry:
 
     def __init__(self) -> None:
         self._by_id: dict[str, CompanyContext] = {}
+        self._notes: dict[str, list[CompanyNote]] = {}   # feat-033: agent-written notes, per context
 
     def put(self, ctx: CompanyContext) -> str:
         self._by_id[ctx.context_id] = ctx
         return ctx.context_id
+
+    # --- feat-033: Avery's notes (write-side, accumulating, user-visible) ----------------------
+
+    def append_note(self, context_id: str, text: str, source_excerpt: str = "") -> CompanyNote:
+        """Append one agent observation to this company's notebook. Runs the write-side red line
+        FIRST (raises ValueError on a scoring/ranking/profiling note — nothing lands), then stores
+        it in insertion order. In-memory holds the notes for the process; the Postgres twin persists
+        them so they accumulate across sessions/restarts (same duck-typed API)."""
+        gate_note_red_line(text, source_excerpt)
+        note = CompanyNote(id=new_note_id(), created_at=_now_iso(), text=text,
+                           source_excerpt=source_excerpt)
+        self._notes.setdefault(context_id, []).append(note)
+        return note
+
+    def list_notes(self, context_id: str) -> list[CompanyNote]:
+        """This company's notes, NEWEST FIRST (the notebook reads new->old)."""
+        return list(reversed(self._notes.get(context_id, [])))
 
     def get(self, context_id: str) -> CompanyContext | None:
         return self._by_id.get(context_id)
@@ -218,6 +272,7 @@ class ContextRegistry:
 
     def clear(self) -> None:
         self._by_id.clear()
+        self._notes.clear()
 
 
 # Process-wide default registry (the offline in-memory instance).
