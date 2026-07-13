@@ -71,15 +71,19 @@ Manager 问 Avery"A 能不能负责跟乙方谈价"这类问题时，靠已有�
 - Dashboard 独立"发问卷"入口；story mode 任何改动；IM 平台 API 直发消息（v1 分享=manager 手动粘贴）。
 - 完整受访者身份体系（v1 = token 即身份）。
 
-## 基建现状（2026-07-13 Danny 告知，改写原凭据墙假设）
+## 基建现状（2026-07-13 Danny 告知 + 实机 SSH 只读核对；单一事实源=D:\Boyle\agent-os\infra-brief.md，项目外）
 
-- **ICP 备案已有、域名已有、ECS 可直接 SSH**（agent 可自行部署——deploy 属先斩后奏范围）。原"启动备案 2~4 周关键路径"作废；企微风险降为低（残余=被举报误伤，可申诉）。
-- 待补事实（已问 Danny）：① DNS 解析在哪管/agent 可否自加记录；② ECS 系统/规格/在跑服务/HTTPS 证书现状；③ 备案主体公司 or 个人。
+- **ICP 备案已有（主体=imaread 公司）、域名已有（ima-read.com 等，注册+解析都在阿里云云解析）、ECS 可 SSH**（agent 可自行部署——deploy 属先斩后奏范围）。原"启动备案 2~4 周关键路径"作废；企微风险降为低。
+- **ECS = 唯一生产机**（120.55.97.151，杭州，2C/3.5G/79G，宝塔+nginx 1.24 全站 HTTPS）,已跑 ImaRead 全线。**⚠ 内存紧：实测 available ~540M、无 swap**——Avery 后端容器上去前必须解决资源问题（见"待 Danny"Q12），且无论如何要带硬内存帽（docker --memory）+ 低并发 + 上传硬门，防 OOM 波及 ImaRead 生产。
+- 部署期动作清单（开工时执行，现在不动服务器）：阿里云加 A 记录（子域→120.55.97.151）→ 宝塔 vhost + Let's Encrypt 证书 → Avery 容器（内存帽）→ nginx 反代。
+- v2 企微可信域名对第三方 SaaS 的"主体须关联客户企业"要求不因我方备案而解——该结论不变。
 
-## 待 Danny（凭据墙/对外闸，不阻塞设计与离线开发）
+## 待 Danny（凭据墙/对外闸/花钱闸，不阻塞设计与离线开发）
 
 - Supabase 项目 + 连接串；真 LLM key 进服务器 secret（与 lite-v1 共用，见 runbook §F）。
 - push 授权（本分支 + main ahead 照旧未 push）。
+- **Q11 域名形态**（待拍）：A. v1 用 ima-read.com 子域（如 avery.ima-read.com，零等待零花钱）；B. Avery 专属新域名+备案新增（品牌净，管局 1~2 周+域名费）。
+- **Q12 ECS 资源**（花钱闸，待拍）：A. 现有 ECS 升配内存（3.5G→8G 档，推荐）；B. 不升配，Avery 容器硬帽挤进 ~540M available（能跑，演示期大上传有容器级重启风险，host 受内存帽保护）；C. 新开小 ECS 专跑 Avery。
 
 ## 指针
 
