@@ -96,10 +96,12 @@ def _context_registered(company_context_id: str) -> bool:
     """feat-028: is this id ACTUALLY in the ingest registry? This distinguishes the two cases the old
     silent fallback conflated — 'no id -> demo memory (legit)' vs 'id GIVEN but not found -> error'.
     A wiped/restarted registry must surface an error, never a silent answer over the demo company
-    (Isadora: identity must never silently default). Lazy import so the service runs without ingest."""
+    (Isadora: identity must never silently default). feat-030: the env-selected registry — with
+    AVERY_DB_URL set this is the Postgres registry, so an id ingested BEFORE a restart resolves
+    (no more 404 on a known company). Lazy import so the service runs without ingest."""
     try:
-        from avery.ingest.registry import REGISTRY
-        return company_context_id in REGISTRY
+        from avery.ingest.registry import active_registry
+        return company_context_id in active_registry()
     except Exception:
         return False
 

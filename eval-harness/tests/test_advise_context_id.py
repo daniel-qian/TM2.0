@@ -30,6 +30,11 @@ ROSTER = FIX / "Team_Roster.xlsx"
 @pytest.fixture()
 def client(monkeypatch):
     monkeypatch.setenv("AVERY_BRAIN", "mock")
+    # feat-030: pin the IN-MEMORY registry path — these gates register into the process-global
+    # REGISTRY, so the service must resolve that same registry regardless of whether the machine
+    # env carries a DB URL (the DB-backed path has its own contract + restart gates).
+    monkeypatch.delenv("AVERY_DB_URL", raising=False)
+    monkeypatch.delenv("PGVECTOR_URL", raising=False)
     from service.app import app
     return TestClient(app)
 

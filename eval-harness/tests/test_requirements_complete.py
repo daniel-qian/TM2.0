@@ -61,3 +61,21 @@ def test_python_multipart_declared_when_service_uses_forms():
         f"service/ uses FastAPI form/file parsing ({where}) which REQUIRES the `python-multipart` "
         f"package, but it is NOT declared in {REQUIREMENTS.name}. The Docker image installs only "
         f"requirements.txt, so /ingest will 500 in the container. Add `python-multipart>=0.0.9`.")
+
+
+def test_psycopg_declared_when_a_db_registry_exists():
+    """feat-030, same failure shape as the multipart gate: `avery/ingest/pg_registry.py` imports
+    psycopg LAZILY, so every offline test passes without it — but a deploy that sets AVERY_DB_URL
+    would 500 on first /ingest if the Docker image (which installs ONLY requirements.txt) doesn't
+    ship the driver. Static scan, no import, no network."""
+    pg_module = HERE / "avery" / "ingest" / "pg_registry.py"
+    if not pg_module.exists():
+        return  # no DB registry, nothing needs the driver
+    text = pg_module.read_text(encoding="utf-8")
+    if "import psycopg" not in text:
+        return
+    declared = _declared_packages()
+    assert "psycopg" in declared, (
+        f"avery/ingest/pg_registry.py imports psycopg (lazily — offline tests can't catch the "
+        f"absence) but `psycopg` is NOT declared in {REQUIREMENTS.name}; a DB-configured deploy "
+        f"would 500 on first use. Add `psycopg[binary]>=3.1`.")

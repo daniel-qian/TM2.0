@@ -123,6 +123,10 @@ def offline_client(monkeypatch):
     monkeypatch.setenv("AVERY_BRAIN", "mock")
     monkeypatch.setenv("AVERY_EMBEDDINGS", "keyword")
     monkeypatch.setenv("AVERY_EXTRACTOR", "heuristic")   # feat-023 knob; harmless before it lands
+    # feat-030: fully-offline includes NO database — pin the in-memory registry even on a machine
+    # whose env carries a DB URL (the DB path has its own @needs_db contract + restart gates).
+    monkeypatch.delenv("AVERY_DB_URL", raising=False)
+    monkeypatch.delenv("PGVECTOR_URL", raising=False)
     from fastapi.testclient import TestClient
     from service.app import app
     return TestClient(app)

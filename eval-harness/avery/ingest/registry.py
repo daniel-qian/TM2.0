@@ -17,6 +17,7 @@ minimum: the advisor cites real lines that came from the manager's own uploads.
 """
 from __future__ import annotations
 
+import os
 import tempfile
 import uuid
 from dataclasses import dataclass, field
@@ -110,8 +111,9 @@ class CompanyContext:
 
 
 class ContextRegistry:
-    """In-memory id -> CompanyContext map. Process-local (a session-scoped handle, like the sampler's
-    ephemeral cases). A DB-backed registry would plug in behind the same get/put API."""
+    """In-memory id -> CompanyContext map. Process-local — the OFFLINE default (no external service,
+    what the AFK suite runs). feat-030 delivered the promised DB-backed twin behind the same get/put
+    API (`pg_registry.PostgresContextRegistry`); `active_registry()` picks between them by env."""
 
     def __init__(self) -> None:
         self._by_id: dict[str, CompanyContext] = {}
@@ -135,8 +137,45 @@ class ContextRegistry:
         self._by_id.clear()
 
 
-# Process-wide default registry (the service imports this).
+# Process-wide default registry (the offline in-memory instance).
 REGISTRY = ContextRegistry()
+
+
+# --- feat-030: env-selected persistence -------------------------------------------------------
+
+def db_url() -> str | None:
+    """The persistence connection string: `AVERY_DB_URL`, with `PGVECTOR_URL` accepted as the alias
+    that service/.env.example already names. Unset -> the in-memory registry (offline default)."""
+    return (os.environ.get("AVERY_DB_URL") or os.environ.get("PGVECTOR_URL") or "").strip() or None
+
+
+def data_root() -> Path:
+    """Where materialized memory (facts.md/notes.md) lives: `AVERY_DATA_DIR` when set (a STABLE
+    data dir — survives reboots; pair it with the DB registry so a restart re-materializes into
+    it), else the pre-030 OS-temp default (fine for the ephemeral in-memory registry)."""
+    env = (os.environ.get("AVERY_DATA_DIR") or "").strip()
+    if env:
+        return Path(env)
+    return Path(tempfile.gettempdir()) / "avery-contexts"
+
+
+_PG_REGISTRIES: dict[str, object] = {}   # url -> PostgresContextRegistry (per-process cache)
+
+
+def active_registry() -> ContextRegistry:
+    """THE registry the service should use right now. `AVERY_DB_URL`/`PGVECTOR_URL` set -> the
+    Postgres-backed registry (company data survives restarts/redeploys); unset -> the in-memory
+    REGISTRY (offline default, no external service, suite stays green with no DB).
+
+    The DB module is imported lazily so the offline path NEVER needs psycopg installed."""
+    url = db_url()
+    if not url:
+        return REGISTRY
+    reg = _PG_REGISTRIES.get(url)
+    if reg is None:
+        from .pg_registry import PostgresContextRegistry  # lazy: offline suite never imports this
+        reg = _PG_REGISTRIES[url] = PostgresContextRegistry(url)
+    return reg  # type: ignore[return-value]  # duck-typed: same get/put/resolve/__contains__ API
 
 
 def new_context_id() -> str:

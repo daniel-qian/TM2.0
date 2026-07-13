@@ -19,8 +19,9 @@ Red line: `team_cards()` emits QUALITATIVE-ONLY person cards (no moodPct/capacit
 the same structural guarantee the frontend `LivePersonCard` type encodes. The gate lives in the
 engine (`avery/ingest/redline_extract.py`); this layer just surfaces its verdict as an HTTP status.
 
-Persistence is the process-local `REGISTRY` (sampler = ephemeral session, ADR-0021 §6). A DB-backed
-registry would plug in behind the same get/put with no change here.
+Persistence (feat-030, ADR-0023): `active_registry()` — Postgres-backed when AVERY_DB_URL /
+PGVECTOR_URL is set (company data survives restarts/redeploys), else the process-local in-memory
+registry (offline default, the pre-030 ADR-0021 §6 ephemeral behavior). Same get/put seam either way.
 """
 from __future__ import annotations
 
@@ -32,7 +33,7 @@ from fastapi import File
 from starlette.concurrency import run_in_threadpool
 
 from avery.ingest import ingest_paths
-from avery.ingest.registry import REGISTRY, CompanyContext
+from avery.ingest.registry import CompanyContext, active_registry
 
 from . import extractor_factory
 
@@ -81,7 +82,7 @@ async def ingest(files: list[UploadFile] = File(...)) -> dict:
         # freezing /health and letting the Docker HEALTHCHECK restart the container mid-extraction.
         # Offload the entire synchronous unit to a worker thread; behavior is otherwise identical.
         def _extract_and_ingest() -> object:
-            return ingest_paths([str(p) for p in saved], registry=REGISTRY, name="company",
+            return ingest_paths([str(p) for p in saved], registry=active_registry(), name="company",
                                 extractor=extractor_factory.make_extractor())
 
         report = await run_in_threadpool(_extract_and_ingest)
@@ -113,7 +114,7 @@ async def ingest(files: list[UploadFile] = File(...)) -> dict:
 @router.get("/team/{context_id}")
 def team(context_id: str) -> dict:
     """Re-fetch the Your-team payload for a registered context_id (post-upload refresh)."""
-    ctx = REGISTRY.get(context_id)
+    ctx = active_registry().get(context_id)
     if ctx is None:
         raise HTTPException(status_code=404, detail=f"unknown company_context_id: {context_id}")
     return _team_payload(ctx)

@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .registry import ContextRegistry, REGISTRY
+from .registry import ContextRegistry, active_registry
 
 
 def resolve_memory_dir(company_context_id: str | None, default: Path,
@@ -29,9 +29,11 @@ def resolve_memory_dir(company_context_id: str | None, default: Path,
     """Return the ingested context's memory_dir for a registered id, else the default demo memory.
 
     This is what turns the `company_context_id` stub real: a registered id routes the advisor to the
-    facts.md/notes.md materialized from the manager's own uploads.
+    facts.md/notes.md materialized from the manager's own uploads. registry=None -> the env-selected
+    registry (feat-030): Postgres when AVERY_DB_URL is set — a restart re-materializes the memory
+    from the DB, so a pre-restart id keeps resolving — else the in-memory default.
     """
-    registry = registry if registry is not None else REGISTRY
+    registry = registry if registry is not None else active_registry()
     if company_context_id:
         mem = registry.resolve_memory_dir(company_context_id)
         if mem is not None:

@@ -29,7 +29,8 @@ from .extract import ExtractionResult, extract_docs, Extractor
 from .redline_extract import validate_extraction, ExtractionRedlineResult, ExtractionViolation
 from .store import RetrievalStore, Embedder, build_store
 from .registry import (
-    CompanyContext, ContextRegistry, REGISTRY, new_context_id, materialize_memory,
+    CompanyContext, ContextRegistry, active_registry, data_root, new_context_id,
+    materialize_memory,
 )
 
 
@@ -56,8 +57,11 @@ def ingest_docs(docs: list[ParsedDoc], *, extractor: Extractor | None = None,
 
     prefer_vector=False (default) uses the offline KeywordStore so the AFK gate needs no embedding
     service. prefer_vector=True with an `embedder` uses the real VectorStore (pgvector in prod).
+
+    registry=None -> `active_registry()` (feat-030): the Postgres registry when AVERY_DB_URL is
+    set (company data survives restarts), else the in-memory default (offline, no DB needed).
     """
-    registry = registry if registry is not None else REGISTRY
+    registry = registry if registry is not None else active_registry()
 
     extraction = extract_docs(docs, extractor=extractor)
 
@@ -71,8 +75,10 @@ def ingest_docs(docs: list[ParsedDoc], *, extractor: Extractor | None = None,
     store.add(extraction.materials)
 
     # Materialize facts.md/notes.md so the EXISTING loop recall + cite gate work over ingested data.
+    # feat-030: the default base is a STABLE data dir (AVERY_DATA_DIR) when configured — the OS temp
+    # fallback (pre-030 behavior) remains for the ephemeral offline default.
     cid = context_id or new_context_id()
-    base = Path(work_dir) if work_dir else Path(__import__("tempfile").gettempdir()) / "avery-contexts"
+    base = Path(work_dir) if work_dir else data_root()
     mem_dir = materialize_memory(extraction, base / cid)
 
     ctx = CompanyContext(
