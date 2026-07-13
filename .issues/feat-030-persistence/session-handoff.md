@@ -88,8 +88,32 @@ memory_files  (context_id FK cascade, filename∈facts.md|notes.md) PK · conten
 7. **restart 集成测试的 /advise 用 mock 脑**:持久化主张已证,但"重启后真 LLM 引用重物化 facts 行"未在本 feature 真机跑过(@seedgate 全链在,需要时把 AVERY_DB_URL 加进 seed gate env 即可复用)。
 8. **Windows 本地验证**:全部证据出自 Windows + Docker;Linux 容器内(ECS 目标)未跑(代码无平台分支,pathlib 全程,风险低但如实记)。
 
-## 9. commits(本 feature,时序)
+## 9. 独立对抗验证:发现 → 修复 → 复跑(2026-07-13 第二轮)
+
+5 视角真机验证结论:核心成立(持久化扛重启、seam-regression clean、红线在 /ingest 出货路径未破),无 CRITICAL/HIGH,但 6 项真实缺口(全在 feat/030 自有文件,未碰冻结)已按 gate-first 修实。§8 的薄弱点 #3(P2)、#4(P1)、#6(P5)由本轮直接闭合。
+
+| # | 缺口 | repro | 修前 | 修后 |
+|---|---|---|---|---|
+| **P1** | 存储门只查 key,自由文本打分 + 中文键/复合英文键漏 | 构造 PersonEntity(owns=["ranked 2/10"])→put();raw SQL 插 {"绩效评分":88}/{"zscore":1.4} | free-text 经 put() 落库并被 /team 原样返回;中文/复合键过 SQL CHECK | put() 跑 **validate_extraction 全扫**(value+文本)→ ValueError 拦下;migration 0002 把 CHECK 从 denylist 改 **allowlist**(顶层键 ⊆ 8 个 PersonEntity 字段)→ DB 结构性拒中文/复合键(无词表)。测试:`test_pg_put_refuses_free_text_scoring`、`test_pg_schema_refuses_a_scoring_person_row`(扩 7 恶意 payload + 1 clean-accepted) |
+| **P2** | get() 读陈旧 memory_dir(split-brain) | reader 本地 facts.md 早于同 id re-put;get() 只补缺失不校验 | 陈旧本地文件被沿用,loop recall 读到旧真相 | get() **compare-then-write**:本地 != DB 则用 DB 真相覆盖。测试:`test_pg_get_refreshes_stale_memory_dir`(写 "STALE" 后断言被刷回) |
+| **P3** | NUL(0x00)崩 put()→裸 500 | material text 含 \x00 | psycopg 抛未处理 DataError → HTTP 500 | parse `_normalize` **剥 NUL+C0 控制符**(留 \n\t);put() 加防御 guard(clean ValueError);ingest_api catch→**422** "upload rejected"。测试:`test_parse_strips_nul_and_c0_control_chars`(离线)+`test_pg_put_rejects_nul_bytes_cleanly` |
+| **P4** | 迁移 vector 类型不限定 schema(卡受限角色首建库) | 受限 search_path 角色首次 CREATE `vector(1024)` | 可能解析失败 | 迁移 prepend `SET search_path = avery, public, extensions`(session-local,本地 public / Supabase extensions 两边都解析)。Supabase 已复跑 apply 无误 |
+| **P5** | _ensure_schema 吞 InsufficientPrivilege 后盲设 ready | 无 CREATE 权限且 avery 未 provision | 下游冒 confusing UndefinedTable | catch 后先 `SELECT to_regclass('avery.contexts')`,不在则 **re-raise RuntimeError**(可诉的 bootstrap 报错);多迁移文件按序跑,break-on-exists |
+| **P6** | Python 存储门无测试(schema-refuse 走 raw SQL 没走 put()) | — | Python gate 非 load-bearing | 新增驱动打分 payload 过 put() 的测试 + schema-refuse 扩中文/复合键 → 两道门都 load-bearing |
+
+复跑三层数字(闭合确认):
+- **离线**(无 URL)= **337 passed / 13 skipped / 7 deselected / 1 xfailed**(+1 offline parse 门;+3 新 @needs_db 干净 skip)。
+- **@needs_db**(本地 pgvector:pg17):`test_registry_contract.py` = **18 passed**(原 10 + 新 4 + 扩 4 断言);restart 集成 = **1 passed**;离线全套带 URL = **350 passed / 1 xfailed**。
+- **Supabase**:migration 0002 apply 成功;entities 约束 = `entities_person_keys_allowlist`(旧 denylist 已 DROP),与本地 `pg_get_constraintdef` byte-identical;行为烟测 7 恶意 payload(含 绩效评分/排名/离职风险/zscore/stack_rank/nine_box)全被 check_violation 拒 + clean 行通过,烟测行清零;public 仍 40 表零触碰。
+- **init.sh** exit 0。
+
+修法说明:docstring(pg_registry L20-31)+ 迁移注释已改写与实现相符——SQL = 键 allowlist(结构性,无词表);Python = 全 value/文本扫描;不再过度声称。IDOR(feat-034)保持诚实标注未动(§7.4)。
+
+## 10. commits(本 feature,时序)
 
 - `d33c4e5` test(feat-030): persistence gates first, born red
 - `cbd6a4d` feat(030): Postgres persistence behind the ContextRegistry seam — gates green
-- (收盘 commit:ADR-0023 + feature_list + 本 handoff,见 git log)
+- `869aae5` docs(feat-030): ADR-0023 + feature_list entry + session handoff
+- `fe977e8` test(feat-030): adversarial-gap gates, born red (P1/P2/P3/P6)
+- `6a56ba6` fix(feat-030): close 6 adversarial-validation gaps — gates green
+- (收盘 commit:handoff §9 追加,见 git log)
