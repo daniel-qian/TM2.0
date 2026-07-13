@@ -5,7 +5,8 @@
 
 ## Current State
 
-**Last Updated:** 2026-07-07（**S1 执行完毕**：feat-022 done（双层机器门，出生即红——红是成功）+ feat-023 done（LLM 抽取修绿全部后端断言，`-m seedgate` 6 passed）；**前端断言按计划保持红 = S2 feat-024 的活**；见文末 `## Update — 2026-07-07 · S1` + 根 `session-handoff.md` S1 收盘版）
+**Last Updated:** 2026-07-13（**pre-ECS 硬化三波收盘 + lean-real PRD**：feat/027 并行摄取 / feat/028 cluster-1 止血 / feat/029 红线中文 全 CONFIRMED_SAFE，**已 merge 本地 main（`34cfaf9`→`83630b8`，ahead origin 17，未 push）**。会话结尾 grill 出 Avery lite v1 = 精悍准真产品定位并产出 PRD（`.issues/lite-v1-lean-real-0713/PRD.md`, status: ready-for-agent）。下个 session AFK 从此 PRD 接：接 Supabase 持久化 → agent 基本功做真 → 基本抗压 → 真上 ECS/Vercel。详见根 `session-handoff.md` 07-13 收盘块。）
+**上一条：** 2026-07-07（**S1 执行完毕**：feat-022 done（双层机器门，出生即红——红是成功）+ feat-023 done（LLM 抽取修绿全部后端断言，`-m seedgate` 6 passed）；**前端断言按计划保持红 = S2 feat-024 的活**；见文末 `## Update — 2026-07-07 · S1` + 根 `session-handoff.md` S1 收盘版）
 **上一条：** 2026-07-07 晚（救 15–20：确诊 + grill 六岔口 Danny 全拍 → **ADR-0022** + feat-021 done / feat-022..024 teed up；见文末 `## Update — 2026-07-07` + `.issues/live-rescue-0707/plan.md`）
 **上一条：** 2026-07-05（双线战略圆桌：架构锁定，feat-015..020 teed up；见 `## Update — 2026-07-05` + `docs/strategy/2026-07-05-dual-line-strategy-roundtable.md`）
 **上一条：** 2026-07-03 晚（投资人路演 landing 重构已合并 main，2588dc7）

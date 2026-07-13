@@ -3,6 +3,12 @@
 > **接续只靠本文件 + git,不回放聊天。** 上一版(07-09 S3 收盘 = 救援线 merge)见 `git show 9dbccf5:session-handoff.md`;更早 S2/S1 见其内指针。
 > 本波 = Danny 2026-07-09 试玩反馈 7 项的落地(S4 考古+bug 修 / S5 模块补齐 / S6 定位叙事+能力 mock)。ADR-0022 救援线已于 S3 closed;本波是其上的产品打磨,红线与 standing 约束一字未动。
 
+> **⟳ 07-13 收盘(★下个 session 从这里接)**:pre-ECS 硬化三波(feat/027 并行摄取 / feat/028 cluster-1 止血 / feat/029 红线中文,均 4/3 路对抗验证 CONFIRMED_SAFE)**已全部 merge 进本地 main**(merge `34cfaf9` → PRD docs `83630b8`,ahead origin 17,**未 push**=对外闸留 Danny)。会话结尾 grill 清产品定位并产出 PRD:
+> - **定位翻新**:Avery lite = **精悍准真产品**——融资团队把链接甩给真实公司、公司**用自己真数据实际玩**,目的=钓鱼(lead-gen)让公司想请 Danny 深入搭 agent。**推翻 07-10 的「受控演示优先/策展假数据集」**(就绪册 §0.5 已过时);showcase/分析归 story 面;完整「agent 文件空间」留 Vision mock 当钩子。
+> - **下个 session 的活(AFK,gate-first + 独立对抗验证)**:接 **Supabase(Postgres+pgvector)持久化**(替内存 REGISTRY;骑在 `ContextRegistry` get/put + `RetrievalStore`/`Embedder` 既有接缝)→ 真记忆+真RAG → 每公司文件空间 → **「Avery 的笔记」写侧可见记忆(必过红线)** → 基础租户隔离 → 上传硬门+基本抗压 → 真上 ECS/Vercel → 端到端/压测。**不上 Java Spring**(别推倒已跑通带红线闸的引擎)。取代 ADR-0021 §6 ephemeral。
+> - **入口件**:`.issues/lite-v1-lean-real-0713/PRD.md`(status: ready-for-agent)+ 同目录 `session-close-and-direction.md`(方向+接缝:**该动** registry/store、**别动** 红线门/advisor 引擎/冻结集)+ 就绪册 `.issues/live-polish-0709/pre-ecs-readiness-open-loop.md`。
+> - **Danny 会在下个 session 先清账号/凭据墙**(ECS host / 真 LLM key / DNS / Vercel 连接+`VITE_AVERY_API_BASE` / Supabase 项目+连接串),再据 PRD 进 AFK。
+
 > **⟳ 07-09 追加(试玩后续,handoff 收盘之后落的)**:Danny 试玩又报 2 UI bug + 提 2 问,已全部落地:
 > - **playtest bug 修**:`76543ab`(Vision 底部空白带 — 滚动容器不再为不存在的 composer 预留 148px)、`929b697`(上传双按钮/双弹 = `.upload-input` 无隐藏样式;room 空态 composer 与描述重叠 = 追问态 `position:absolute` composer 塞进居中空态卡)。两修全 `.lite-shell` 作用域,story 够不到。
 > - **feat/027-parallel-ingest(`9b9787e` = 新 tip)**:Q1「上传十几个文件要并行」。`extract_docs` 加有界并发线程池(`AVERY_INGEST_CONCURRENCY` 默认 4,上限即限流护栏)、保序合并(输出与串行逐字节一致)、`并发≤1||单文件` 走原串行快路径、异常语义不动、红线门仍在合并后单线程照跑。真机 6 文件 **52s→14s(~3.7×)人数一致**;离线 197 passed/0 skipped(+8 新并发测试);gate-first 红→绿(旧串行代码上并发断言真红);4 路对抗验证(竞态/红线绕过/测试真伪/行为保真)**全 CONFIRMED_SAFE**。**⚠ 本项修改了 eval-harness(Danny 明确授权、解除本波「只读」)——§0「eval-harness 零改」对全链已不成立。** 未做:上传进度 UI(job 队列+前端轮询,更大面,标为后续)。
