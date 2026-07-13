@@ -87,7 +87,92 @@ verified. `public` (imaread) untouched. Runtime connect = set `AVERY_DB_URL` (sc
 
 ## Discipline check
 
-Untouched (git-verified): `avery/redline.py`, `avery/ingest/redline_extract.py`, `PersonEntity`,
-`scenarios/FROZEN.lock.json`, `avery/loop.py`, `avery/tools.py`, `avery/memory.py`,
-extractor↔advisor separation, `src/story/**`. Red-line reused, never weakened. Not pushed (对外闸 =
-Danny).
+Untouched (git-verified): `PersonEntity`, `avery/loop.py`, `avery/engine.py`, `avery/tools.py`,
+`avery/memory.py`, extractor↔advisor separation, `src/story/**`. Not pushed (对外闸 = Danny).
+NOTE — `avery/redline.py` + `redline_rules.md` + `FROZEN.lock.json` WERE changed in the
+adversarial-closure round below (authorized hardening; re-frozen). Red-line only ADDED to, never
+weakened.
+
+---
+
+# Adversarial-closure round (2026-07-13) — CONFIRMED CRITICAL red-line hole CLOSED
+
+status: done (AFK, gate-first RED→GREEN→re-freeze) · scope: harden `avery/redline.py` at the source.
+
+## The breach (independently verified, real-machine crafted input)
+
+The deterministic gate `avery.redline.validate` let **three person-scoring forms** through; they pass
+the notes write-side gate, persist, and show on the user-visible `GET /team/{id}/notes` — a direct
+moat + PRD User-Story-8/25 violation:
+
+1. **EN name-anchored ordinal ranking** — `rank: Marcus #1, Anna #5` (`#N` not a `_NUMBER`; no
+   she/he/employee anchor → `_has_person` false).
+2. **EN person blood-bar %** — `Her mood is at 30% and capacity 40%` (the `moodPct`/`capacityPct`
+   bars `team_cards` deliberately omits; no `_SCORING_NOUN` beside the % → never fired).
+3. **ZH bare-name + score + rank** — `李雷:9分,排名第一` / `张三 排名第一` / `王五 末位` (bare CJK name is
+   not a person-ref; ASCII colon broke `_zh_name_before`; Chinese-numeral rank `第一` was not a target).
+
+## Fix (single source of truth — `avery/redline.py`, add-only, person-anchored)
+
+- **Person blood-bar %** — new `_person_moodbar`: a mood/capacity/energy word (EN `mood|morale|energy|
+  capacity|bandwidth|…`, ZH `情绪|精力|负荷|状态|带宽`) next to a `%` fires **only** when tightly bound
+  to a person (person ref in the ~12 chars before the word) and **not** a team/work subject.
+- **Named/pronoun ranking** — new `_person_rank_names`: a pronoun ranked by position fires directly
+  (`She ranks #1`, `He placed 5th`); a NAMED leaderboard fires only in a ranking context, for name
+  tokens that are not work/stop words, as an explicit `rank:`-list **or** ≥2 ranked names.
+- **ZH bare-name anchoring** — `_ZH_NAME_BEFORE` now accepts a colon separator (`李雷:9分`);
+  new `_zh_name_before_sep` (separator REQUIRED) anchors a bare name before a ranking verb/label
+  (`张三 排名第一`, `王五 末位`) while a run-on work phrase (`评测里排名`) does NOT anchor;
+  `_ZH_SCORE_TARGET` gains Chinese-numeral rank `第[一…十]`; `末位` added to the rank-synonym labels.
+
+Because both the extraction gate (`redline_extract`) and the notes gate (`registry.gate_note_red_line`
++ `service.notes`) call the SAME `redline.validate`, all layers inherit the fix.
+
+## Bonus fix found writing the e2e repro — write-side negation bleed (also a real breach)
+
+The notes gate validated `observation + "\n" + excerpt` **concatenated**. An advice read ending
+"…never on the person" let its `never` bleed across the newline and mask a scoring EXCERPT
+(`李雷:9分,排名第一` landed via HTTP). Fixed in `registry.gate_note_red_line` **and**
+`service.notes.write_note_from_manifest`: the two fields are now validated **independently** (each is
+displayed separately, so each must independently pass). Strictly stronger — and it also removes a
+latent FALSE-POSITIVE (a legit work-audit-score observation + a person pronoun in the question no
+longer falsely combine).
+
+## Evidence
+
+- **RED→GREEN**: `tests/test_redline_bloodbar_rank.py` (37) — 17 escape-asserts were RED before the
+  patch, all GREEN after; 20 no-harm asserts green throughout.
+- **Offline (empty keys, no DB)**: `463 passed` (389 prior baseline preserved byte-for-byte + 74
+  new), 1 xfailed (documented space-separated-glyph residual), 0 regressions.
+- **@needs_db (local Docker pg :5433)**: `46 passed` (30 prior + 16 new: the 3 forms refused BEFORE
+  INSERT on the Postgres storage door too).
+- **End-to-end closure** (`tests/test_notes_redline_feat033.py`): all 3 forms DROPPED across
+  `append_note` (memory + Postgres), the post-advise hook (observation body AND echoed excerpt), and
+  live HTTP `POST /advise → GET /team/{id}/notes` (0 notes); a clean work observation (`40% cleared`)
+  still lands (control).
+- **Re-freeze**: `redline_rules.md` documents the new rules; `FROZEN.lock.json` regenerated →
+  `manifest_hash a7d97c08…` (was `bb59a7db…`); `test_rules_doc_in_sync` + `runner.py --check-frozen` green.
+
+## False-positive (误伤) regression — legit WORK quantification still PASSES
+
+Verified PASS (probe + tests): `the project is 40% done` · `progress: 60%` · `the roadmap is 60% done` ·
+`项目完成 40%` · `该项目进度70%…状态有风险` · `team morale is low` · `团队士气低落` · `server capacity is
+at 80%` · `系统负荷80%` · `joined 14 months ago` · `9 open requests` · `Team throughput ranks in the
+bottom 20%` · `产品…排名第一` · `我们公司排名行业第一` · `这个项目排期第2优先级` · work leaderboard of work
+nouns (`Sprint #1, Feature #2`) · `Her team's morale is at 30%` (team subject between person & word).
+EN byte-stability: `test_redline.py` (EN adversarial battery) unchanged-green; 0 new FP / 0 regression
+on an out-of-suite EN probe of 14 legit + 6 person-score strings.
+
+## Self-assessed weak points (should re-run adversarial + a 误伤 special)
+
+- **Narrow-by-design residuals (LLM-judge backstopped, not swept):** (a) a single capitalized
+  COMMON-NOUN ranking with no person context (`Revenue ranks #1`) is deliberately NOT gated — it is
+  usually a work stat, and gating it would risk false-positiving legit advice; a person literally
+  named a common word escapes here (011c judge covers it). (b) A person-leaderboard whose items are
+  capitalized non-work PROPER nouns that are actually product code-names could theoretically over- or
+  under-fire; the `rank:`-list + ≥2-names + work-suppression shape keeps it tight but not perfect.
+- **ZH bare-name anchoring** leans on a 2–4 CJK token + REQUIRED separator + stop/work exclusion; an
+  exotic name adjacent with no separator (`评测里排名`-shaped) is intentionally not anchored (avoids
+  the work FP). Space-separated lexicon glyphs remain the pre-existing documented xfail.
+- The separate-field note validation trades an (unrealistic) cross-field split score for removing the
+  negation-bleed leak + a latent FP — correct for the actual threat model, but worth a probe.

@@ -63,9 +63,10 @@ def write_note_from_manifest(registry, context_id: str | None, manifest: dict | 
     excerpt = source_excerpt(situation)
 
     # Independent re-validation (belt-and-suspenders). A crossing observation OR a crossing echoed
-    # question excerpt is DISCARDED — no note, no nudge, no placeholder.
-    blob = observation if not excerpt else f"{observation}\n{excerpt}"
-    if not redline.validate(blob).passed:
+    # question excerpt is DISCARDED — no note, no nudge, no placeholder. feat-033: validate the two
+    # fields SEPARATELY (never concatenated) so a negation in the advice read ('…never on the person')
+    # cannot bleed across and mask a person-score in the echoed question excerpt ('李雷:9分,排名第一').
+    if not redline.validate(observation).passed or (excerpt and not redline.validate(excerpt).passed):
         logger.info("feat-033: discarding a note whose observation/excerpt crossed the red line")
         return None
 

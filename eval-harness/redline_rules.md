@@ -29,9 +29,9 @@ demands is its own failure (see `HARD-AVOID` below), not kindness.
 
 | id | What it catches | Example that FAILS |
 |---|---|---|
-| `PERSON-SCORE` | a scoring noun (score, rating, grade, rank, percentile, tier, flight-risk, risk-score) co-located with a number or N/M | "flight risk: **8/10**", "performance **rating: 2/5**", "she's in the **bottom 10%**" |
+| `PERSON-SCORE` | a scoring noun (score, rating, grade, rank, percentile, tier, flight-risk, risk-score) co-located with a number or N/M; **or a mood/capacity/energy blood-bar % pinned to a person** (feat-033); **or a bare name + a score number** (`王小明:88分`) | "flight risk: **8/10**", "performance **rating: 2/5**", "she's in the **bottom 10%**", "**Her mood is at 30%**", "**她的情绪30%**", "**李雷:9分**" |
 | `PERSON-RISK` | a risk/level verdict pinned to the person | "**flight risk: high**", "**retention risk: medium**", "**high-risk employee**" |
-| `PERSON-TIER` | a ranking/tier label applied to the person | "**low performer**", "**underperformer**" (as a noun for the person), "**C-player**", "**bottom performer**", "**weak link**" |
+| `PERSON-TIER` | a ranking/tier label applied to the person; **or a leaderboard/position ranking of named/pronoun people** (feat-033: `#N`, ordinals, "ranks #1/first/last", `排名第一`, `末位`) | "**low performer**", "**C-player**", "**weak link**", "**rank: Marcus #1, Anna #5**", "**She ranks #1**", "**张三 排名第一**", "**王五 末位**" |
 | `PERSON-DIAGNOSIS` | a clinical / character verdict on the person | "**toxic**", "**narcissist**", "**incompetent**", "**lazy**", clinical "**burnout**" as a diagnosis |
 | `UNCITED-NUMBER` | a specific quantitative claim with no registered `cite()` backing it (logged secondary signal, see note) | "she's missed **40%** of standups" with nothing cited |
 
@@ -68,6 +68,38 @@ artifact** with no person referenced. So these correctly **PASS**:
 
 while "She's in the bottom 10% of the team" still **FAILS** (a person ranked within a group).
 This is the ADR-0016 protection in code: describing the work decisively is never a person-score.
+
+### feat-033 — two person-anchored forms the first gate missed (CONFIRMED CRITICAL, now closed)
+
+An independent adversarial verification (real-machine crafted input) found three person-scoring
+forms that slipped the gate, landed in Avery's self-written notebook, and showed on the user-visible
+`GET /team/{id}/notes`. They are closed **at the source** (`avery/redline.py`), so the advice gate,
+the extraction gate, and the notes write-side gate all inherit the fix (single source of truth):
+
+- **Person blood-bar %** — a `mood` / `morale` / `energy` / `capacity` / `bandwidth` (情绪/精力/负荷/
+  状态/带宽) word next to a `%`, fires **only** when that word is tightly bound to a person (a person
+  ref in the ~12 chars right before it) and **not** to a team/work subject. These are exactly the
+  per-person `moodPct` / `capacityPct` bars `team_cards` deliberately omit. So **"Her mood is at 30%"**,
+  **"her capacity 40%"**, **"她的情绪30%"** FAIL, while **"team morale is low"**, **"server capacity is
+  at 80%"**, **"the project is 40% done"**, **"系统负荷80%"**, **"Her team's morale is at 30%"** (a
+  team subject sits between the person and the word) all PASS.
+- **Named/pronoun ranking** — a leaderboard/position ranking of people (`#N`, ordinals,
+  "ranks #1 / first / last", ZH `排名第一` / `末位`). A **pronoun** ranked by a position fires directly
+  ("She ranks #1", "He placed 5th"). A **named** leaderboard fires only in a ranking context, for name
+  tokens that are not work-subject/stop words, and only as an explicit `rank:`-style list **or** ≥2
+  ranked names. So **"rank: Marcus #1, Anna #5"**, **"Marcus ranks #1, Anna last"**, **"张三 排名第一"**
+  FAIL, while **"team throughput ranks in the bottom 20%"**, **"产品排名第一"**, **"我们公司排名行业
+  第一"**, and a work leaderboard of work nouns (`Sprint #1, Feature #2`) all PASS.
+- **Bare name + score number** — a CJK name with an explicit separator (space / comma / **ASCII or
+  fullwidth colon**) before a score number or a ranking verb now anchors a person without a pronoun
+  (`李雷:9分`, `王小明:88分`, `张三 排名第一`), closing the `_zh_name_before` colon/bare-name blind spot.
+  The required separator is the guard that keeps a run-on work phrase (`评测里排名`) from anchoring a
+  phantom person.
+
+**Discipline: add-only, person-anchored, narrow.** No prior assertion was removed or relaxed; the
+entire pre-existing suite still passes byte-for-byte. Deliberately narrow residual (LLM-judge
+backstopped, not silently swept): a single capitalized **common-noun** ranking with no person context
+("Revenue ranks #1") is left to the 011c judge rather than risk false-positiving a legit work stat.
 
 ## Scope & the LLM-judge backstop (honest limits)
 

@@ -87,12 +87,20 @@ def gate_note_red_line(text: str, source_excerpt: str = "") -> None:
     the self-written memory can never be a back door around 'no numbers on a person'.
 
     Both registries call this before persisting, and the service's post-advise hook re-checks
-    independently (belt-and-suspenders, like feat-030's storage door)."""
+    independently (belt-and-suspenders, like feat-030's storage door).
+
+    feat-033 (adversarial closure) — the observation and the echoed excerpt are validated
+    SEPARATELY, never concatenated. Concatenating let a negation cue in one field bleed across the
+    boundary and mask a real person-score in the other (e.g. an advice read ending '…never on the
+    person' would suppress a scoring excerpt like '李雷:9分,排名第一'). Each field is displayed on its
+    own, so each must independently pass — strictly stronger than the joined check."""
     from avery import redline   # core, offline, stdlib-only — safe for the offline path
-    blob = text if not source_excerpt else f"{text}\n{source_excerpt}"
-    rl = redline.validate(blob)
-    if not rl.passed:
-        raise ValueError(f"red line: refusing to persist a scoring note ({rl.summary()})")
+    for part in (text, source_excerpt):
+        if not part:
+            continue
+        rl = redline.validate(part)
+        if not rl.passed:
+            raise ValueError(f"red line: refusing to persist a scoring note ({rl.summary()})")
     if "\x00" in (text or "") or "\x00" in (source_excerpt or ""):
         raise ValueError("unsupported control character (NUL / 0x00) in a note — cannot be stored")
 
