@@ -282,3 +282,16 @@
 18. 编码检测(§4-2)、lockfile+pip-audit(§4-1)、移动断点(§3-JJ)、"early access" 框定(§4-6)。
 
 **判定规则**:Phase 0-3 全绿才可碰 ECS 并交给真实公司;Phase 4 与代码并行但**在任何真实公司上传前必须落地**;Phase 5 可上线首周补齐但要有 owner + 日期。
+
+---
+
+## ⟳ 07-13 合并仪式时的新鲜证据(抽取降级诚实,wave-4 的活案)
+
+合并前门跑(feat/029 tip,带 key 全套):`1 failed, 335 passed, 1 xfailed`。唯一红 =
+`test_seed_gate.py::test_pdf_yields_real_projects`,server 日志定谳:
+`LLM extraction for LogiPulse-Roadmap.pdf failed the red line -> heuristic fallback:
+EXTRACTION-REDLINE FAIL[person-score-text:Noah Williams]`——**词库层**(非 S1 已修的数字形)
+在 M3 对 Noah Williams 的措辞上开火,按设计整篇退 heuristic → 文件名项目 → 断言红。
+红线在工作;flake 的本质是「模型措辞方差 × 词库严格度」。与 025..029 链正交(main 侧同在),
+不阻塞合并。**处置归 wave-4**:抽取降级必须显式报警/诚实标注(而非静默吐 heuristic 结果),
+可选加"词库违规时仅剔除该人重验"的窄化策略(仿 S1 数字形剥离,但须先过对抗验证,别改弱门)。
