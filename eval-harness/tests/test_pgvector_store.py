@@ -232,6 +232,58 @@ def test_pgvector_registry_without_embedder_falls_back_to_keyword(tmp_path):
 
 
 @needs_db
+def test_ingest_over_http_persists_pgvector_and_survives_restart(monkeypatch, tmp_path):
+    """Agent as first user on the PRIMARY seam (HTTP): POST /ingest with a real DB + a deterministic
+    embedder writes embeddings to pgvector, and a BRAND-NEW registry (the restart) rebuilds a
+    pgvector-backed store whose recall() does DB kNN. The full upload -> persist -> restart-still-
+    vector chain, end to end, WITHOUT an embedding key (HashingEmbedder(1024))."""
+    url = _skip_without_db()
+    monkeypatch.setenv("AVERY_BRAIN", "mock")
+    monkeypatch.setenv("AVERY_EXTRACTOR", "heuristic")
+    monkeypatch.setenv("AVERY_DB_URL", url)
+    monkeypatch.delenv("PGVECTOR_URL", raising=False)
+    emb = HashingEmbedder(dim=DIM)
+    # Inject the deterministic embedder wherever the env gate resolves one — no network, no key,
+    # for BOTH the /ingest pipeline (embedding_factory) and the registry's own query embedder.
+    import avery.embeddings as embmod
+    from service import embedding_factory
+    from avery.ingest import registry as regmod
+    monkeypatch.setattr(embmod, "make_embedder_from_env", lambda env=None: emb)
+    monkeypatch.setattr(embedding_factory, "make_embedder", lambda: emb)
+    regmod._PG_REGISTRIES.clear()   # force active_registry() to rebuild with the injected embedder
+
+    from fastapi.testclient import TestClient
+    from service.app import app
+    client = TestClient(app)
+    cid = None
+    try:
+        r = client.post("/ingest", files=[
+            ("files", ("Studio_Handbook.md", HANDBOOK.read_bytes(), "application/octet-stream")),
+            ("files", ("Team_Roster.xlsx", ROSTER.read_bytes(), "application/octet-stream"))])
+        assert r.status_code == 200, r.text[:400]
+        cid = r.json()["context_id"]
+
+        import psycopg
+        with psycopg.connect(url) as conn:
+            filled, total = conn.execute(
+                "SELECT count(embedding), count(*) FROM avery.materials WHERE context_id = %s",
+                (cid,)).fetchone()
+        assert total > 0 and filled == total, (
+            f"HTTP /ingest did not persist embeddings to pgvector: {filled}/{total}")
+
+        reg_b = _pg(url, tmp_path, embedder=emb, sub="http")   # the restart
+        got = reg_b.get(cid)
+        assert got is not None and "pgvector" in got.store.backend, (
+            f"retrieval not pgvector-backed after an HTTP-ingest restart: {got and got.store.backend!r}")
+        assert got.recall("weekly written status update Friday", limit=3), (
+            "pgvector kNN returned nothing after the HTTP-ingest restart")
+    finally:
+        regmod._PG_REGISTRIES.clear()
+        if cid:
+            _pg(url, tmp_path, embedder=None, sub="cl").delete(cid)
+
+
+@needs_db
 def test_pgvector_honest_keyword_when_context_has_no_stored_embeddings(tmp_path):
     """A context ingested in keyword mode (NULL embeddings) read by an embedder-configured registry
     must rebuild a KEYWORD store — vector only when vectors actually exist (no silent empty kNN)."""
