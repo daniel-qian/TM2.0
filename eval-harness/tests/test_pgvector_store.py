@@ -10,8 +10,12 @@ after a restart. Behavior, not internals, is the contract.
       (the "fake pgvector name" is gone: a store is real pgvector, honest in-memory, or keyword);
     * a VectorStore exposes its computed embeddings for persistence, aligned to insertion order —
       the interface pg_registry.put() reuses so a corpus is embedded ONCE, not billed twice;
-    * the /ingest handler opens the vector path (prefer_vector) exactly when an embedder is present,
-      and stays honest keyword otherwise (the AFK gate never needs a live embedding endpoint).
+    * the /ingest handler opens the vector path (prefer_vector) exactly when a PERSISTENT (Postgres)
+      registry AND an embedder are both present; the in-memory registry stays honest keyword and does
+      NOT embed — its VectorStore would have no reader (advise recalls over facts.md), so embedding it
+      is pure spend (feat-031 cost gate). The AFK gate never needs a live embedding endpoint;
+    * a wrong-dim embedder (dim != the vector(1024) column) degrades to keyword LOUDLY — put()'s
+      vector step logs a warning (actual vs expected dim) instead of silently dropping quality.
 
   @needs_db (a REAL Postgres + pgvector, HashingEmbedder(1024) — NO embedding key needed):
     * put() through a registry WITH an embedder writes avery.materials.embedding (NULL in 030);
@@ -28,6 +32,7 @@ the offline default suite stays green with no external service.
 """
 from __future__ import annotations
 
+import logging
 import os
 import re
 import uuid
@@ -99,18 +104,59 @@ def _offline_client(monkeypatch, embedder):
     return TestClient(app)
 
 
-def test_ingest_handler_opens_vector_path_when_embedder_present(monkeypatch):
-    """The /ingest wiring: an embedder present -> prefer_vector -> a real (in-memory here) vector
-    store behind the ingested context. Deterministic HashingEmbedder, no DB, no network."""
-    client = _offline_client(monkeypatch, HashingEmbedder(dim=64))
+def test_ingest_in_memory_registry_does_not_embed_even_with_embedder(monkeypatch):
+    """feat-031 COST GATE: with the in-memory registry (no DB) the /ingest handler must NOT embed
+    the corpus even when an embedder is configured. That in-memory VectorStore is never read by
+    advise (which recalls via avery.memory.recall over facts.md, not CompanyContext.store), so
+    embedding it is pure DashScope spend with no reader. The store stays honest keyword and embed()
+    is called ZERO times."""
+    emb = HashingEmbedder(dim=64)
+    calls = {"n": 0}
+    real_embed = emb.embed
+
+    def _counting_embed(texts):
+        calls["n"] += 1
+        return real_embed(texts)
+
+    monkeypatch.setattr(emb, "embed", _counting_embed)
+
+    client = _offline_client(monkeypatch, emb)
     r = client.post("/ingest", files=[("files",
         ("Studio_Handbook.md", HANDBOOK.read_bytes(), "application/octet-stream"))])
     assert r.status_code == 200, r.text[:400]
     from avery.ingest.registry import active_registry
     ctx = active_registry().get(r.json()["context_id"])
     assert ctx is not None
-    assert ctx.store.backend.startswith("vector("), (
-        f"prefer_vector not wired on /ingest: store backend {ctx.store.backend!r}")
+    assert ctx.store.backend == "keyword", (
+        f"in-memory registry has no reader for vectors — must stay keyword: {ctx.store.backend!r}")
+    assert calls["n"] == 0, (
+        f"embedder was called {calls['n']}x on the in-memory /ingest path — wasted DashScope spend")
+
+
+def test_pg_registry_warns_on_wrong_dim_embedder_and_degrades_to_keyword(tmp_path, caplog):
+    """feat-031 HONESTY: an embedder whose dim != the vector(1024) column can't be stored — the
+    embeddings go NULL and retrieval degrades to keyword. That degrade must be LOUD: the vector step
+    put() runs logs a clear warning (actual dim vs expected 1024, 'degraded to keyword') rather than
+    silently dropping quality. No DB is contacted — the wrong-dim decision happens before any INSERT."""
+    pytest.importorskip("psycopg")
+    from avery.ingest.pg_registry import PostgresContextRegistry
+    from avery.ingest.registry import CompanyContext, materialize_memory
+
+    wrong = HashingEmbedder(dim=64)                 # column is vector(1024) -> a hard mismatch
+    reg = PostgresContextRegistry("postgresql://unused/never-connects", embedder=wrong)
+    chunks = [MaterialChunk(id="m0", text="alpha beta gamma", source="doc:1"),
+              MaterialChunk(id="m1", text="delta epsilon zeta", source="doc:2")]
+    extraction = ExtractionResult(materials=chunks)
+    mem = materialize_memory(extraction, tmp_path / "wd")
+    ctx = CompanyContext(context_id="ctx_wrongdim", extraction=extraction,
+                         store=KeywordStore(), memory_dir=mem, name="x", source_files=["doc"])
+
+    with caplog.at_level(logging.WARNING):
+        vecs = reg._material_vectors(ctx)           # the exact step put() runs before its tx
+    assert vecs is None, "a wrong-dim embedder must yield NULL embeddings (honest keyword, no crash)"
+    msg = " ".join(r.getMessage() for r in caplog.records)
+    assert "64" in msg and "1024" in msg, f"warning must name actual vs expected dim: {msg!r}"
+    assert "keyword" in msg.lower(), f"warning must say retrieval degraded to keyword: {msg!r}"
 
 
 def test_ingest_handler_stays_keyword_when_no_embedder(monkeypatch):
