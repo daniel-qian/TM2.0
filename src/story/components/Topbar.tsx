@@ -1,7 +1,7 @@
 import { useCanvas, type Scene } from '../store/canvasStore'
 import { applyModeToUrl, useMode } from '../../shared/modeStore'
 import { useDict } from '../../shared/i18n/useDict'
-import type { AveryMode } from '../../shared/mode'
+import { showModeSwitch, type AveryMode } from '../../shared/mode'
 
 // 导航 scene tab。Capabilities 既经 Nexus 钻入（rail B4 / PM agent 卡按钮），
 // 也给个 free-click tab（litmus：每个 beat 自由点击可达）。detail 仍走钻入。
@@ -43,27 +43,31 @@ export function Topbar() {
           </button>
         ))}
       </nav>
-      {/* mode 开关（ADR-0020 决策 3）：story = 路演/视频剧场；live = 上你团队试玩 */}
-      <div className="mode-switch" role="group" aria-label="Data mode">
-        <button
-          type="button"
-          className={`mode-switch-btn${mode === 'story' ? ' is-active' : ''}`}
-          aria-pressed={mode === 'story'}
-          title={t.mode.storyHint}
-          onClick={() => switchMode('story')}
-        >
-          {t.mode.storyLabel}
-        </button>
-        <button
-          type="button"
-          className={`mode-switch-btn${mode === 'live' ? ' is-active' : ''}`}
-          aria-pressed={mode === 'live'}
-          title={t.mode.liveHint}
-          onClick={() => switchMode('live')}
-        >
-          {t.mode.liveLabel}
-        </button>
-      </div>
+      {/* mode 开关（ADR-0020 决策 3）：story = 路演/视频剧场；live = 上你团队试玩。
+          feat-034 polish：默认不渲染（?modeSwitch=1 显示，shared/mode.ts）——整块条件
+          渲染，缺席时 DOM/aria 零残留、flex 布局自然收拢不留空洞。 */}
+      {showModeSwitch() ? (
+        <div className="mode-switch" role="group" aria-label="Data mode">
+          <button
+            type="button"
+            className={`mode-switch-btn${mode === 'story' ? ' is-active' : ''}`}
+            aria-pressed={mode === 'story'}
+            title={t.mode.storyHint}
+            onClick={() => switchMode('story')}
+          >
+            {t.mode.storyLabel}
+          </button>
+          <button
+            type="button"
+            className={`mode-switch-btn${mode === 'live' ? ' is-active' : ''}`}
+            aria-pressed={mode === 'live'}
+            title={t.mode.liveHint}
+            onClick={() => switchMode('live')}
+          >
+            {t.mode.liveLabel}
+          </button>
+        </div>
+      ) : null}
     </header>
   )
 }

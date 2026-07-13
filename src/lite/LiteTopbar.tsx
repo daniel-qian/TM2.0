@@ -1,7 +1,7 @@
 import { applyModeToUrl, useMode } from '../shared/modeStore'
 import { useDict } from '../shared/i18n/useDict'
 import { useLite, type LiteScreen } from './store'
-import type { AveryMode } from '../shared/mode'
+import { showModeSwitch, type AveryMode } from '../shared/mode'
 
 // lite 壳的顶栏：两屏 tab + mode 开关。复用 story 顶栏的 CSS chrome
 //（.prototype-topbar 容器 pointer-events:none——可点子元素 .scene-tabs/.mode-switch
@@ -39,26 +39,30 @@ export function LiteTopbar() {
           </button>
         ))}
       </nav>
-      <div className="mode-switch" role="group" aria-label="Data mode">
-        <button
-          type="button"
-          className={`mode-switch-btn${mode === 'story' ? ' is-active' : ''}`}
-          aria-pressed={mode === 'story'}
-          title={t.mode.storyHint}
-          onClick={() => switchMode('story')}
-        >
-          {t.mode.storyLabel}
-        </button>
-        <button
-          type="button"
-          className={`mode-switch-btn${mode === 'live' ? ' is-active' : ''}`}
-          aria-pressed={mode === 'live'}
-          title={t.mode.liveHint}
-          onClick={() => switchMode('live')}
-        >
-          {t.mode.liveLabel}
-        </button>
-      </div>
+      {/* feat-034 polish：Story/Live 开关默认不渲染（?modeSwitch=1 显示，shared/mode.ts
+          小工具——lite 只 import shared，墙不破）。缺席时整块不出 DOM，布局无空洞。 */}
+      {showModeSwitch() ? (
+        <div className="mode-switch" role="group" aria-label="Data mode">
+          <button
+            type="button"
+            className={`mode-switch-btn${mode === 'story' ? ' is-active' : ''}`}
+            aria-pressed={mode === 'story'}
+            title={t.mode.storyHint}
+            onClick={() => switchMode('story')}
+          >
+            {t.mode.storyLabel}
+          </button>
+          <button
+            type="button"
+            className={`mode-switch-btn${mode === 'live' ? ' is-active' : ''}`}
+            aria-pressed={mode === 'live'}
+            title={t.mode.liveHint}
+            onClick={() => switchMode('live')}
+          >
+            {t.mode.liveLabel}
+          </button>
+        </div>
+      ) : null}
     </header>
   )
 }

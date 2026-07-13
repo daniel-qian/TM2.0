@@ -134,3 +134,44 @@ lint（story/lite 墙）+ `tsc -b` 零错 + vite build ✓（465 modules，dist 
 ## Restart 指引
 
 worktree：`D:/avery/.claude/worktrees/ask-story`（分支 feat/034-story-ask）。复验：`npm install && ./init.sh`，`npm run dev -- --port 5174` 后开 `http://localhost:5174/?mode=story`，→ 键走到 26/28、27/28 两拍即 Ask beat；或 free-click：Nexus 走完 hero + follow-up 后点 alternatives 卡 → chip → Advance。
+
+---
+
+# polish 波 2026-07-13（feat/034-polish，Danny 试玩反馈三件）
+
+> 分支：`feat/034-polish`（base = main @ e6f0f91，worktree `D:/avery/.claude/worktrees/ask-polish`）。不 merge、不 push。
+> 改动面（`git diff main --stat`，8 文件全在约定内）：shared/mode.ts · story/Topbar.tsx · lite/LiteTopbar.tsx · story/canvasStore.ts · story/railStore.ts · story/NexusScene.tsx · story/QuickAskCard.tsx · story/59-quick-ask.css。**未触碰**：eval-harness/**、冻结集、cases.ts、其他 case/beats、`?mode=` URL 机器。
+
+## 修复 1 · A1/A2 改"钉状态"语义（root cause 修法）
+
+- **改法**：canvasStore 契约唯一追加 `pinThreadProgress(caseId, followUpCount, stepCount)`——幂等地把 thread 钉到确定点位（followUps = 段序列前缀、steps = threadPlan 前缀；已消费段的显示问题文本保留，free-click 自由文本不被覆盖）。rail A1/A2 的 run 从"askFollowUp+runAgent 增量 consume"（落点 = f(当前状态)）换成 pin（落点 = f(参数)），点位常量全部从 case 数据派生（railStore 无魔法数）。
+- **连带修**：NexusScene `handleFollowUp` 防连跳——读 fresh state 确认这一发真的消费了段落才 runAgent；chip 同 tick 双击第二发整发 no-op（阶段 A 已知"双击连跳"观察的根修，非防抖计时器）。free-click 路径（chip → Advance）原样可用，到达状态与钉出来的逐字段相同。
+- **证据（真浏览器 :5179 `?mode=story`，DOM 断言，console 零 error）**：
+  - 慢步走全 rail（31 拍逐拍等渲染，caption 序列与改前一致）：A1 = `{"status":"Link shared — waiting on Fred","shareRow":true,"hasFourOfFive":false,"receiptBlocks":0,"transparency":true}`；A2 = `{"status":"Answered — in his own words","hasFourOfFive":true,"selfReported":["Self-reported — his read on the hand-off, not a score","Self-reported"],"comment":"…walkthrough of the guide flow with Lin Qing…","verdictBlock":true}`；B11 = capabilities 场景正常。
+  - 快按攻击：同 tick 连发 30 个 ArrowRight → 落 B11；seek 回 A1 → 等待态正确；同 tick `→←→←` 抖动 → A1 等待态恒定。
+  - 乱序攻击：CL 拍 free-click chip **同 tick 双击** → 卡 = 等待态（连跳已修）→ 点 Advance → 已答 → 按 `→` 进 A1 → **卡回等待态（钉状态生效）** → A2 已答；倒放 A2→A1→A2 状态正确。
+  - 回归：W3/W4、E2/E4 卡槽坐标与 Step 读数 = 改前 evidence 逐字段相等（W4：browser-preview 530/740 · policy-gist 1570/620 · compliance 1570/1240，Step 3 of 3）；CL = 原 5 卡原坐标 + Step 7 of 7 + 无 Ask 卡（replay 前缀不变）；A1 六卡坐标 = 阶段 A evidence（quick-ask 1570/2680）；B9b 员工页零 Ask 泄漏；A2 全页 "4 of 5" 仅 1 次且在卡内、卡外 self-report = 0。
+
+## 修复 2 · 等待态分享排 + Copy link
+
+- **改法**：QuickAskCard 等待态在受访者行（"One link, just for him…"）下加 `.quick-ask-share` 一排：hint（"Drop it where he already is"）+ 四个平台 chip（WeCom / Teams / Slack / Email，剧场展示：CSS :active 按压反馈、不跳转）+ **Copy link**（真写剪贴板：navigator.clipboard → execCommand 降级，虚构链接 `https://avery.ima-read.com/r/fred-demo`，成功才翻 "Copied ✓" 1.8s）。已答态收敛为一行小字 `.quick-ask-share-meta`："Shared via one link · answered in 40s"。CSS 贴 59-quick-ask.css 既有语言（药丸、紫/绿色族）。
+- **证据**：clipboard.writeText 被 call-through spy 记录到恰好一次、参数 = 虚构链接全串；本环境 pane 无焦点（docHidden）→ writeText 被浏览器拒 → **execCommand 降级路径实测**：fallback textarea.value = 同一链接、"Copied ✓" 出现后 ~2s 翻回 "Copy link"（不假装复制成功的诚实降级同 lite AskCard 口径）。卡片长高无重叠：A1 高 507px / A2 高 648px，与上方 structured-output 卡间距 276/206px（half.h 380 预留仍富余）。
+- 🔴 ADR-0023：分享排全部文案零打分/评价语义；数字仍只以"本人自述"形态在卡内（上面 A2 断言复验）。
+
+## 修复 3 · mode 开关默认隐藏
+
+- **改法**：shared/mode.ts 加 `showModeSwitch()`（`?modeSwitch=1` 才真，读取风格同 `?mode=` / `?capture=`）；story Topbar 与 LiteTopbar 的 `.mode-switch` 整块条件渲染——缺席时 DOM/aria 零残留，topbar flex 自然收拢（children 只剩 `scene-tabs`，无空洞）。`?mode=` 机器与 applyModeToUrl 未动。
+- **证据**：默认 `?mode=story` 与 `?mode=live` 两壳 `.mode-switch` 均 null、topbarChildren=["scene-tabs"]；`?modeSwitch=1` 两壳恢复显示且真可切换（story 点 Live → lite 壳、URL 变 `?mode=live&modeSwitch=1`、aria-pressed 翻转；点 Story 切回），开关经 URL 写回后跨切换存活。
+
+## lite 回归 gate（stub 模式，:5179 `?mode=live&transport=stub`）
+
+`verdict()` 10 相位全绿（emptyStateClean/ingested/teamRendered/postUploadClean/detailIsLive/composerIsLive/teamGrouped/roomCanvas/playbooksEmpty/visionSurface 全 true）；`askVerdict()` 6 相位全绿（askDraft/askShare/askCollect/askReceiptsMulti/askSingle/askRedline 全 true，linkSample `https://avery.ima-read.com/r/tok_ask_stub_*` host 校验过）。驱动侧坑复现并按 gate doc 处理：隐藏 pane 计时器节流 → MessageChannel setTimeout shim；K5 重跑 composerAskLive 前需回 Your team 屏等 `.composer-card` 挂载（room 屏此时是 `.nexus-followup-composer`，gate doc"下一 tick 挂载"坑的变体，记录在案）。
+
+## 取舍（自拍板，供抽查）
+
+1. **"企业微信" chip 以官方英文名 WeCom 出卡**：story demo 全英文是 ADR-0015 钉死约束（阶段 A handoff 同口径），卡面出汉字破声音；语义即企业微信。
+2. **pin 是 canvasStore 契约的显式追加**（P6 冻结注释已更新说明）：增量 consume 在快按/乱序下无法保证落拍状态唯一，这是 root cause 层的修法；free-click 仍走原 action 对，ADR-0003 同构保持。
+3. **平台 chip 不跳转**：demo 无真 IM 可跳，按压反馈（:active scale）即"剧场诚实"——不假装分享已发生；真分享动作属阶段 C/D。
+4. **"answered in 40s" 是 scripted fixture 数字**：与卡内其余 scripted 回执同口径（代码注释标注性质），非实测口径伪造。
+5. **Copied ✓ 只在复制真成功时亮**：headless/无焦点环境两条路径都失败时按钮不变——与 lite AskCard 同策略。
+6. **package-lock.json 的 npm 版本噪音已回滚**（`peer:true` 注解），改动面保持 8 文件。
