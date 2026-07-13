@@ -240,23 +240,111 @@ def test_pg_memory_dir_rematerializes_after_local_wipe(pg, tmp_path):
 
 @needs_db
 def test_pg_schema_refuses_a_scoring_person_row(pg, tmp_path):
-    """The red line is structural IN THE SCHEMA: a person payload carrying a scoring key is refused
-    by the DB itself (CHECK constraint), so even a buggy future writer cannot open the hole."""
+    """The red line is structural IN THE SCHEMA: a person payload with ANY key outside PersonEntity's
+    own qualitative fields is refused by the DB itself (ALLOWLIST CHECK). feat-030 P1: this is an
+    allowlist, not a denylist — so it catches Chinese scoring keys (绩效评分/排名/离职风险) and
+    compound English keys (zscore/stack_rank/attrition_risk/nine_box) a wordlist would miss, by
+    construction (the 'moat as a type' at the storage layer)."""
     import psycopg
     from psycopg.types.json import Jsonb
 
     reg, cid, _ = _ingest(pg, tmp_path / "mem")
+    bad_payloads = [
+        # the original denylist cases (must still be refused)
+        {"name": "Mallory", "score": 88},
+        {"name": "Mallory", "rank": 1},
+        {"name": "Mallory", "tier": "B"},
+        {"name": "Mallory", "moodPct": 40},
+        {"name": "Mallory", "capacityPct": 90},
+        # Chinese scoring keys — a denylist of English words misses these entirely
+        {"name": "Mallory", "绩效评分": 88},
+        {"name": "Mallory", "排名": 1},
+        {"name": "Mallory", "离职风险": "high"},
+        # compound English keys — substring/exact English denylists miss these
+        {"name": "Mallory", "zscore": 1.4},
+        {"name": "Mallory", "stack_rank": 3},
+        {"name": "Mallory", "attrition_risk": 0.7},
+        {"name": "Mallory", "nine_box": "1A"},
+    ]
     with psycopg.connect(_db_url()) as conn:
-        for bad in ({"name": "Mallory", "score": 88},
-                    {"name": "Mallory", "rank": 1},
-                    {"name": "Mallory", "tier": "B"},
-                    {"name": "Mallory", "moodPct": 40},
-                    {"name": "Mallory", "capacityPct": 90}):
+        for bad in bad_payloads:
             with pytest.raises(psycopg.errors.CheckViolation):
                 with conn.transaction():
                     conn.execute(
                         "INSERT INTO avery.entities (context_id, kind, idx, payload) "
                         "VALUES (%s, 'person', 9999, %s)", (cid, Jsonb(bad)))
+    # a CLEAN person payload (only PersonEntity fields) must still be accepted.
+    with psycopg.connect(_db_url()) as conn, conn.transaction():
+        conn.execute(
+            "INSERT INTO avery.entities (context_id, kind, idx, payload) "
+            "VALUES (%s, 'person', 9998, %s)",
+            (cid, Jsonb({"id": "u_ok", "name": "Ok Person", "role": "Engineer",
+                         "team": "Eng", "tenure": "2 years", "owns": ["the flow"],
+                         "collaboration": ["Design"], "source": "roster:2"})))
+
+
+@needs_db
+def test_pg_put_refuses_free_text_scoring(pg, tmp_path):
+    """feat-030 P1: the Python storage gate is LOAD-BEARING and does the FULL red-line scan (value +
+    free text), not just a key check — so a person whose qualitative fields SMUGGLE a score
+    ('ranked 2/10', 'bottom quartile performer') is refused by put() before any INSERT. This is the
+    gate feat-033 (Avery's self-written notes) will rely on when it adds a new write path."""
+    from avery.ingest.extract import PersonEntity, MaterialChunk, ExtractionResult
+    from avery.ingest.registry import CompanyContext, materialize_memory
+    from avery.ingest.store import KeywordStore
+
+    reg = pg.fresh()
+    for owns, collab in (["ranked 2/10 on delivery"], []), ([], ["bottom quartile performer"]):
+        cid = _new_cid()   # NOT tracked: the whole point is nothing lands
+        person = PersonEntity(id="u_mal", name="Mallory", role="Engineer",
+                              owns=owns, collaboration=collab)
+        extraction = ExtractionResult(
+            people=[person], materials=[MaterialChunk(id="m1", text="hello", source="x:1")])
+        mem = materialize_memory(extraction, tmp_path / "leak" / cid)
+        ctx = CompanyContext(context_id=cid, extraction=extraction, store=KeywordStore(),
+                             memory_dir=mem, name="leaky", source_files=["x"])
+        with pytest.raises(ValueError, match="red line"):
+            reg.put(ctx)
+        assert cid not in reg, "a scoring person's context LANDED despite the put() gate"
+
+
+@needs_db
+def test_pg_get_refreshes_stale_memory_dir(pg, tmp_path):
+    """feat-030 P2: the DB is the source of truth for the (pure) materialized memory. If a reader
+    host has a STALE local facts.md (older than a re-put over the same id), get() must overwrite it
+    to match the DB — never serve the stale copy to the loop's recall/cite (split-brain)."""
+    reg, cid, _ = _ingest(pg, tmp_path / "mem")
+    mem = Path(reg.resolve_memory_dir(cid))
+    truth = (mem / "facts.md").read_text(encoding="utf-8")
+    assert truth.strip()
+
+    # simulate a stale reader host: local file diverges from the DB truth.
+    (mem / "facts.md").write_text("STALE — from an older ingest", encoding="utf-8")
+
+    mem2 = Path(pg.fresh().resolve_memory_dir(cid))
+    assert (mem2 / "facts.md").read_text(encoding="utf-8") == truth, (
+        "get() served a STALE local facts.md instead of refreshing from the DB truth")
+
+
+@needs_db
+def test_pg_put_rejects_nul_bytes_cleanly(pg, tmp_path):
+    """feat-030 P3: a NUL (0x00) that slipped past parse must fail put() with a clean ValueError
+    (which /ingest maps to 422), NOT a raw psycopg DataError surfacing as an opaque HTTP 500."""
+    from avery.ingest.extract import PersonEntity, MaterialChunk, ExtractionResult
+    from avery.ingest.registry import CompanyContext, materialize_memory
+    from avery.ingest.store import KeywordStore
+
+    reg = pg.fresh()
+    cid = _new_cid()   # not tracked — must not land
+    extraction = ExtractionResult(
+        people=[PersonEntity(id="u_a", name="Ann", role="Engineer")],
+        materials=[MaterialChunk(id="m1", text="contains a \x00 null byte", source="x:1")])
+    mem = materialize_memory(extraction, tmp_path / "nulbytes" / cid)
+    ctx = CompanyContext(context_id=cid, extraction=extraction, store=KeywordStore(),
+                         memory_dir=mem, name="nulcase", source_files=["x"])
+    with pytest.raises(ValueError, match="control character"):
+        reg.put(ctx)
+    assert cid not in reg
 
 
 @needs_db
