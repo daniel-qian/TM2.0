@@ -17,11 +17,17 @@ RetrievalStore interface), and — the restart story — if the local memory_dir
 (new machine / redeploy wiped the disk) they are RE-MATERIALIZED byte-identically from the DB, so
 the loop's recall/cite run unchanged over a company ingested before the restart.
 
-RED LINE AT THE STORAGE DOOR (structural, both layers):
-  * Python: every person payload passes `redline_extract.validate_person_dict` (full EN+ZH scoring-
-    key lexicon) BEFORE any INSERT — a violating payload raises and NOTHING is written.
-  * SQL: `entities_person_no_scoring_keys` CHECK — the DB itself refuses a person row carrying a
-    scoring key, so even a future writer that skips this module cannot open the hole.
+RED LINE AT THE STORAGE DOOR (structural, two independent layers — feat-030 P1):
+  * Python (put): the FULL red-line scan `redline_extract.validate_extraction` (person value fields
+    AND rendered free text, EN+ZH) runs BEFORE any INSERT — a smuggled score in a qualitative field
+    (owns=['ranked 2/10'], collaboration=['bottom quartile performer']) raises and NOTHING is
+    written. This mirrors the pipeline's own gate, so ANY direct put() writer (e.g. feat-033's
+    self-written notes) inherits it.
+  * SQL (`entities_person_keys_allowlist`, migration 0002): the DB refuses a person row whose payload
+    carries ANY key outside PersonEntity's own qualitative fields — an ALLOWLIST, so Chinese
+    (绩效评分/排名) and compound English (zscore/nine_box) scoring keys are refused by construction,
+    no wordlist to maintain. Even a writer that bypasses this module cannot persist a scoring KEY.
+Together: a scoring KEY is stopped by the DB, a scoring VALUE in an allowed field is stopped by put().
 
 Connections are short-lived (one per operation, context-managed) — no pooling, no shared state, so
 the registry is trivially safe under FastAPI's threadpool offloading and 'a new instance sees the
@@ -36,11 +42,11 @@ from pathlib import Path
 from .extract import (
     ExtractionResult, MaterialChunk, PersonEntity, ProjectEntity, SignalEntity,
 )
-from .redline_extract import validate_person_dict
+from .redline_extract import validate_extraction
 from .registry import CompanyContext, data_root, materialize_memory
 from .store import KeywordStore
 
-_MIGRATION = Path(__file__).resolve().parent.parent.parent / "db" / "migrations" / "0001_avery_persistence.sql"
+_MIGRATIONS_DIR = Path(__file__).resolve().parent.parent.parent / "db" / "migrations"
 
 _PERSON_FIELDS = {f.name for f in dataclasses.fields(PersonEntity)}
 _PROJECT_FIELDS = {f.name for f in dataclasses.fields(ProjectEntity)}
@@ -74,43 +80,65 @@ class PostgresContextRegistry:
         return self._data_dir if self._data_dir is not None else data_root()
 
     def _ensure_schema(self) -> None:
-        """Idempotent bootstrap (CREATE ... IF NOT EXISTS) from the SAME migration file that is
-        applied to Supabase — local/prod schema equivalence by construction. A permission error is
-        tolerated (a locked-down prod role means the schema was provisioned out-of-band); a real
-        problem then surfaces loudly on the first actual read/write."""
+        """Idempotent bootstrap: replay EVERY migration file (sorted) — the SAME files applied to
+        Supabase, so local/prod schema equivalence holds by construction. Each is CREATE ... IF NOT
+        EXISTS / DROP ... IF EXISTS + ADD, safe to re-run.
+
+        feat-030 P5: a permission error means a locked-down prod role whose schema was provisioned
+        out-of-band — TOLERATED only if `avery.contexts` actually exists; if it does NOT, re-raise a
+        clear bootstrap error rather than letting a downstream `UndefinedTable` confuse the caller."""
         if self._schema_ready:
             return
-        sql = _MIGRATION.read_text(encoding="utf-8")
-        try:
-            with self._connect() as conn:
-                conn.execute(sql)
-        except self._psycopg.errors.InsufficientPrivilege:
-            pass
+        for path in sorted(_MIGRATIONS_DIR.glob("*.sql")):
+            sql = path.read_text(encoding="utf-8")
+            try:
+                with self._connect() as conn:
+                    conn.execute(sql)
+            except self._psycopg.errors.InsufficientPrivilege as e:
+                with self._connect() as conn:
+                    exists = conn.execute("SELECT to_regclass('avery.contexts')").fetchone()[0]
+                if exists is None:
+                    raise RuntimeError(
+                        "avery schema is not provisioned and this DB role lacks CREATE privilege; "
+                        "apply eval-harness/db/migrations/*.sql out-of-band (or grant CREATE)."
+                    ) from e
+                break   # schema exists, role just can't (re)create it — assume provisioned in full
         self._schema_ready = True
 
     # --- red line at the storage door ------------------------------------------------------------
 
     @staticmethod
-    def _gate_person_payloads(payloads: list[dict]) -> None:
-        """No person JSON with a scoring key (EN+ZH lexicon) ever reaches an INSERT. PersonEntity
-        structurally cannot hold one (the moat as a type) — this guards the SERIALIZED dict, so a
-        future refactor that bypasses the dataclass still cannot open the hole."""
-        for p in payloads:
-            violations = validate_person_dict(str(p.get("name", "")), p)
-            if violations:
-                details = "; ".join(v.detail for v in violations)
-                raise ValueError(
-                    f"red line: refusing to persist a scoring person payload ({details})")
+    def _gate_red_line(ctx: CompanyContext) -> None:
+        """feat-030 P1: the FULL red-line scan (value + free text, EN+ZH) — the same gate the
+        pipeline runs — BEFORE any INSERT. A smuggled score in a qualitative field (owns=['ranked
+        2/10']) is refused here, so ANY direct put() writer (feat-033 notes) inherits the moat, not
+        just the /ingest path. PersonEntity has no numeric field; this catches free-text smuggling."""
+        rl = validate_extraction(ctx.extraction)
+        if not rl.ok:
+            raise ValueError(f"red line: refusing to persist a scoring extraction ({rl.summary()})")
+
+    @staticmethod
+    def _assert_no_control_chars(ctx: CompanyContext, facts: str, notes: str) -> None:
+        """feat-030 P3: a NUL (0x00) is illegal in a Postgres text value and would crash the driver
+        with an opaque error surfacing as HTTP 500. Parse scrubs C0 controls for the /ingest path;
+        this guard makes a bypass (a directly-built context) fail LOUD and CLEAN (ValueError -> 422)
+        instead. Checks every text that reaches a column."""
+        blobs = [facts, notes, ctx.name, *ctx.source_files]
+        blobs += [m.text for m in ctx.extraction.materials]
+        blobs += [p.name for p in ctx.extraction.people]
+        if any("\x00" in (b or "") for b in blobs):
+            raise ValueError(
+                "unsupported control character (NUL / 0x00) in the upload — cannot be stored")
 
     # --- the ContextRegistry API -----------------------------------------------------------------
 
     def put(self, ctx: CompanyContext) -> str:
         from psycopg.types.json import Jsonb
 
-        self._ensure_schema()
+        # Gate BEFORE connecting — a violating context never touches the DB.
+        self._gate_red_line(ctx)
 
         people = [asdict(p) for p in ctx.extraction.people]
-        self._gate_person_payloads(people)
         projects = [asdict(p) for p in ctx.extraction.projects]
         signals = [asdict(s) for s in ctx.extraction.signals]
 
@@ -122,6 +150,9 @@ class PostgresContextRegistry:
             materialize_memory(ctx.extraction, mem)
         facts = (mem / "facts.md").read_text(encoding="utf-8")
         notes = (mem / "notes.md").read_text(encoding="utf-8") if (mem / "notes.md").exists() else ""
+
+        self._assert_no_control_chars(ctx, facts, notes)   # P3: fail clean, not a raw driver 500
+        self._ensure_schema()
 
         with self._connect() as conn, conn.transaction():
             conn.execute(
@@ -183,15 +214,18 @@ class PostgresContextRegistry:
         store = KeywordStore()
         store.add(extraction.materials)
 
-        # THE RESTART STORY: if the local materialization is gone (fresh machine / wiped disk),
-        # rebuild facts.md/notes.md byte-identically from the DB so the loop's recall/cite run
-        # unchanged. Present local files are left alone (they ARE the materialization).
+        # THE RESTART STORY: rebuild facts.md/notes.md byte-identically from the DB so the loop's
+        # recall/cite run unchanged after a restart / on a fresh machine. feat-030 P2: the DB is the
+        # source of truth for these PURE materializations — compare-then-write, so a STALE local file
+        # (older than a re-put over the same id, a split-brain reader) is refreshed, not served.
+        # Compare first to avoid needless mtime churn when the local copy already matches.
         mem_dir = self._root() / context_id
         for filename in ("facts.md", "notes.md"):
             f = mem_dir / filename
-            if not f.exists():
+            want = memfiles.get(filename, "")
+            if not f.exists() or f.read_text(encoding="utf-8") != want:
                 mem_dir.mkdir(parents=True, exist_ok=True)
-                f.write_text(memfiles.get(filename, ""), encoding="utf-8")
+                f.write_text(want, encoding="utf-8")
 
         return CompanyContext(
             context_id=context_id, extraction=extraction, store=store, memory_dir=mem_dir,

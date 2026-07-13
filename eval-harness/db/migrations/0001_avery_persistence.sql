@@ -7,16 +7,25 @@
 -- DROPs anything. The same file bootstraps a blank local Docker Postgres (pgvector/pgvector:pg17)
 -- for the @needs_db test layer, so schema equivalence local<->Supabase is by construction.
 --
--- Red line, structurally, at the storage layer: `entities_person_no_scoring_keys` — the DB itself
--- refuses a person payload carrying a scoring key (score/rank/tier/moodPct/capacityPct/...). The
--- Python write path additionally runs the full EN+ZH lexicon (redline_extract.validate_person_dict)
--- before any INSERT; this CHECK is the belt under that suspender, so even a buggy future writer
--- cannot open the hole. PersonEntity itself still has no numeric field (the moat as a type).
+-- Red line, structurally, at the storage layer: the person-entity CHECK is an ALLOWLIST — a person
+-- payload may ONLY carry PersonEntity's own qualitative fields; ANY extra key (score / 绩效评分 /
+-- zscore / nine_box / ...) is refused by the DB itself, no wordlist involved (that is migration
+-- 0002; 0001 ships the initial denylist form and 0002 tightens it to the allowlist). The Python
+-- write path additionally runs the FULL red-line scan (redline_extract.validate_extraction — value +
+-- free-text lexicon, EN+ZH) before any INSERT, catching smuggled scores in free text like
+-- owns=['ranked 2/10']. Together: even a writer that skips the Python layer cannot persist a scoring
+-- KEY, and even a writer that crafts an allowed key cannot smuggle a scoring VALUE past put().
+-- PersonEntity itself still has no numeric field (the moat as a type).
 --
 -- Reserved seams (columns land now, logic lands later — see kickoff):
 --   * avery.materials.embedding vector(1024)  — feat-031 real pgvector RAG fills it; NULL in 030.
 --     (1024 = AVERY_EMBED_DIM in eval-harness/.env — DashScope text-embedding dim.)
 --   * avery.contexts.owner_token              — feat-034 tenant isolation validates it; unused in 030.
+
+-- feat-030 P4: pgvector lives in `extensions` on Supabase but `public` on the local Docker image.
+-- A session-local search_path spanning both makes the unqualified `vector` type resolve on either,
+-- even for a restricted role whose default search_path omits the extension schema.
+SET search_path = avery, public, extensions;
 
 CREATE SCHEMA IF NOT EXISTS avery;
 

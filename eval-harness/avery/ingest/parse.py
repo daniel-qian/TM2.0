@@ -82,9 +82,17 @@ _MOJIBAKE_MAP = {
 _MOJIBAKE_TRANS = str.maketrans(_MOJIBAKE_MAP)
 
 
+# feat-030 P3: a NUL (0x00) is ILLEGAL in a Postgres text value — a stray one in a PDF/xlsx text
+# layer would crash the DB write with an opaque error. Other C0 control chars corrupt the citable
+# corpus. Scrub them all at the parse seam (every format flows through here), preserving TAB (0x09)
+# and NEWLINE (0x0a) which are legitimate layout. \r is already folded to \n above.
+_C0_CONTROL_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
+
+
 def _normalize(text: str) -> str:
     text = (text or "").replace("\r\n", "\n").replace("\r", "\n")
     text = text.translate(_MOJIBAKE_TRANS)
+    text = _C0_CONTROL_RE.sub("", text)   # strip NUL + other C0 controls (keep \t and \n)
     # collapse >2 blank lines, strip trailing spaces per line
     text = re.sub(r"[ \t]+\n", "\n", text)
     text = re.sub(r"\n{3,}", "\n\n", text)

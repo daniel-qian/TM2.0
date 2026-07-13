@@ -85,7 +85,15 @@ async def ingest(files: list[UploadFile] = File(...)) -> dict:
             return ingest_paths([str(p) for p in saved], registry=active_registry(), name="company",
                                 extractor=extractor_factory.make_extractor())
 
-        report = await run_in_threadpool(_extract_and_ingest)
+        try:
+            report = await run_in_threadpool(_extract_and_ingest)
+        except ValueError as e:
+            # feat-030 P3: a persistence guard (e.g. a NUL/control char that slipped past parse)
+            # rejects the write with a clean ValueError — surface it as 422, never a raw 500.
+            raise HTTPException(
+                status_code=422,
+                detail={"error": "upload rejected", "reason": str(e)},
+            )
 
         if not report.ok or report.context is None:
             # Red-line gate (or an all-unparseable batch) refused to publish a context.
