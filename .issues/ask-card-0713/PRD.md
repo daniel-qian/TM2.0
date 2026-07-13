@@ -1,11 +1,11 @@
 ---
-status: designed-blocked
-feature: ask-card (Ask / Quick ask / 快问 — 员工自述式快问卡 + 分享链接回执闭环)
+status: in-progress (feat-034; 前端双面施工中, 后端阶段 deferred)
+feature: ask-card / feat-034 (Ask / Quick ask / 快问 — 员工自述式快问卡 + 分享链接回执闭环)
 date: 2026-07-13
-blocked-by: lite-v1-lean-real 持久化(.issues/lite-v1-lean-real-0713/PRD.md §3.3 步骤1-2, Supabase 落地)
-source: 融资团队点名功能; grill 会话 2026-07-13 十决策全拍板
+blocked-by: 仅后端阶段 — 等 lite-v1 持久化链(feat/030 已 DONE 未合 main)合 main 后骑上;期间不碰 eval-harness/**(避让持久化线,见其 07-13 广播)
+source: 融资团队点名功能; grill 会话 2026-07-13 十二决策全拍板 + Danny 同日指令"story+lite 双面上"
 adr: docs/adr/0023-ask-employee-selfreport-redline-boundaries.md
-tracker-note: 项目原生 tracker = 本地 .issues/;未建 GitHub issue(对外闸留 Danny)。
+tracker-note: 项目原生 tracker = 本地 .issues/;未建 GitHub issue(对外闸留 Danny)。feature 号避撞:持久化线已用 feat/030-033,本线=feat-034。
 ---
 
 # PRD — Ask 卡：agent 生成快问，链接分享到 IM，员工点按回传
@@ -33,6 +33,7 @@ Manager 问 Avery"A 能不能负责跟乙方谈价"这类问题时，靠已有�
 | Q9 | 平台优先级 | 验收顺序（2026-07-13 补正，Danny 告知备案域名+ECS 已在手）：**企微+飞书+钉钉同档 first**（备案域名消除企微"谨慎访问"最大诱因，国内 prospect 企微占比最大）→ Slack/Teams 验 OG 卡。同一条链接全平台通用，只是测试排序。原"飞书钉钉先行、企微降级"基于无备案假设，作废。 |
 | Q10 | 命名 | 领域名 **Ask**；surface EN **"Quick ask"** / ZH **"快问"**。avoid: survey/问卷、poll/投票、打分。CONTEXT.md 已收录。 |
 | Q11 | 域名 | **v1 用 `avery.ima-read.com` 子域**（零等待零花钱；答题链接 = `avery.ima-read.com/r/{token}`）。Avery 专属新域名后置。 |
+| Q13 | 双面 scope（2026-07-13 Danny 指令，修订 Q1 的"不碰 story"半句） | **story 面也上**：一个 scripted Ask beat（agent 提议快问 → 卡片 → 回执归来），纯剧本、无真链接。**加性解冻**：只新增 beat/卡，既有 beats/rail/资产一律不动，story 冻结纪律对其余照旧；墙照旧（story/lite 各自实现，共用只走 shared 原子）。scripted 内容同样受 ADR-0023 约束（mock 人也不吃分数）。 |
 | Q12 | ECS 资源 | **升配（A）但按需触发，现在不花钱**：先以硬内存帽（docker --memory）+ 低并发 + 上传硬门挤进 available ~540M；**部署时必装"内存哨兵"**——OOMKilled/重启计数/内存高水位被侦测到就主动冒泡给 Danny"该升配了"信号（进错误追捕/健康报告，不做完整监控栈）；真机压测把大上传内存峰值写进 evidence，给升配决策供数。 |
 
 ## 平台兼容性调研结论（2026-07-13，全文见 platform-compat-research.md）
