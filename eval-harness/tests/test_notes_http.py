@@ -41,29 +41,31 @@ def client(monkeypatch):
     return TestClient(app)
 
 
-def _ingest(client) -> str:
+def _ingest(client):
+    """feat-038: /ingest now returns the owner_token too; every later read/advise must present it."""
     files = [("files", (p.name, p.read_bytes(), "application/octet-stream"))
              for p in (HANDBOOK, ROSTER)]
     r = client.post("/ingest", files=files)
     assert r.status_code == 200, f"/ingest failed: {r.text[:300]}"
-    return r.json()["context_id"]
+    body = r.json()
+    return body["context_id"], {"X-Avery-Token": body["owner_token"]}
 
 
-def _advise(client, cid: str, situation: str):
+def _advise(client, cid: str, situation: str, hdr: dict):
     return client.post("/advise", json={"situation": situation, "company_context_id": cid,
-                                         "stream": False})
+                                         "stream": False}, headers=hdr)
 
 
 def test_advise_writes_one_note(client):
-    cid = _ingest(client)
-    r = client.get(f"/team/{cid}/notes")
+    cid, hdr = _ingest(client)
+    r = client.get(f"/team/{cid}/notes", headers=hdr)
     assert r.status_code == 200
     assert r.json()["notes"] == [], "a fresh company has no notes yet"
 
-    ar = _advise(client, cid, "The onboarding backlog keeps landing on one squad. How do I rebalance it?")
+    ar = _advise(client, cid, "The onboarding backlog keeps landing on one squad. How do I rebalance it?", hdr)
     assert ar.status_code == 200 and ar.json()["redline_passed"] is True
 
-    notes = client.get(f"/team/{cid}/notes").json()["notes"]
+    notes = client.get(f"/team/{cid}/notes", headers=hdr).json()["notes"]
     assert len(notes) == 1, "one advise round should leave one observation"
     note = notes[0]
     for k in ("id", "created_at", "text", "source_excerpt"):
@@ -73,16 +75,16 @@ def test_advise_writes_one_note(client):
 
 
 def test_notes_accumulate_new_to_old(client):
-    cid = _ingest(client)
+    cid, hdr = _ingest(client)
     questions = [
         "How do I rebalance the onboarding backlog across the squads?",
         "Two handoffs bounced back this week — how do I tighten the seam?",
         "Design and delivery keep colliding on the same week; how should I sequence them?",
     ]
     for q in questions:
-        assert _advise(client, cid, q).status_code == 200
+        assert _advise(client, cid, q, hdr).status_code == 200
 
-    notes = client.get(f"/team/{cid}/notes").json()["notes"]
+    notes = client.get(f"/team/{cid}/notes", headers=hdr).json()["notes"]
     assert len(notes) == 3, "three advise rounds should accumulate three notes"
     # newest first: the last question's excerpt heads the list.
     assert "sequence" in notes[0]["source_excerpt"] or "colliding" in notes[0]["source_excerpt"]
@@ -107,10 +109,10 @@ def test_redline_discards_a_note_when_the_question_scores_a_person(client):
     """End-to-end write-side red line: the advice itself is clean (passes), but the manager's OWN
     quoted question carries a person score. The write-side gate refuses to echo that onto the
     persistent, user-visible notes surface — the note is DISCARDED, the notebook stays empty."""
-    cid = _ingest(client)
-    ar = _advise(client, cid, "Why did I score her 2/10 at the last review, and how do I coach her back?")
+    cid, hdr = _ingest(client)
+    ar = _advise(client, cid, "Why did I score her 2/10 at the last review, and how do I coach her back?", hdr)
     assert ar.status_code == 200
     # The advice output is clean (the read never scores a person); the DISCARD is about the note's
     # echoed question excerpt, not the advice.
-    notes = client.get(f"/team/{cid}/notes").json()["notes"]
+    notes = client.get(f"/team/{cid}/notes", headers=hdr).json()["notes"]
     assert notes == [], "a scoring question must not become a persisted note (write-side red line)"

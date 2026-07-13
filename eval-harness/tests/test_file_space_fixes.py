@@ -54,20 +54,21 @@ def test_duplicate_filenames_are_both_ingested_and_counted_per_document(client):
     r = client.post("/ingest", files=files)
     assert r.status_code == 200, r.text
     cid = r.json()["context_id"]
+    hdr = {"X-Avery-Token": r.json()["owner_token"]}   # feat-038: reads require the owner_token
 
     ctx = _registry().get(cid)
     corpus = "\n".join(m.text for m in ctx.extraction.materials)
     assert "AlphaUnique" in corpus, "the first same-named file was SILENTLY LOST from memory/RAG"
     assert "BetaUnique" in corpus, "the second same-named file is missing from memory/RAG"
 
-    manifest = client.get(f"/team/{cid}/files").json()["files"]
+    manifest = client.get(f"/team/{cid}/files", headers=hdr).json()["files"]
     assert [f["filename"] for f in manifest] == ["report.txt", "report.txt"]
     # Each row counts ONLY its own document (2 each), not the filename-merged sum (4/4 pre-fix).
     assert manifest[0]["n_chunks"] == 2 and manifest[1]["n_chunks"] == 2, manifest
     assert sum(f["n_chunks"] for f in manifest) == len(ctx.extraction.materials)
 
-    assert client.get(f"/team/{cid}/files/0").content == alpha
-    assert client.get(f"/team/{cid}/files/1").content == beta
+    assert client.get(f"/team/{cid}/files/0", headers=hdr).content == alpha
+    assert client.get(f"/team/{cid}/files/1", headers=hdr).content == beta
 
 
 # ============================================================================================== P2
@@ -82,8 +83,9 @@ def test_mixed_batch_marks_the_failed_file_and_reconciles_the_briefing(client):
     assert r.status_code == 200, r.text
     body = r.json()
     cid = body["context_id"]
+    hdr = {"X-Avery-Token": body["owner_token"]}   # feat-038
 
-    manifest = client.get(f"/team/{cid}/files").json()["files"]
+    manifest = client.get(f"/team/{cid}/files", headers=hdr).json()["files"]
     by = {f["filename"]: f for f in manifest}
     assert set(by) == {"good.txt", "broken.xyz"}, "the failed file dropped off the manifest"
     assert by["good.txt"]["status"] == "ingested" and by["good.txt"]["n_chunks"] > 0
@@ -94,7 +96,7 @@ def test_mixed_batch_marks_the_failed_file_and_reconciles_the_briefing(client):
     assert "1 of 2" in body["briefing"]["headline"], body["briefing"]["headline"]
 
     # Look-back honesty: the failed file's original bytes are still downloadable.
-    assert client.get(f"/team/{cid}/files/1").status_code == 200
+    assert client.get(f"/team/{cid}/files/1", headers=hdr).status_code == 200
 
 
 def test_all_unparseable_batch_is_a_real_422(client):
@@ -114,7 +116,8 @@ def test_download_response_sets_nosniff(client):
     files = [("files", ("doc.txt", b"a content line long enough to chunk here\n", "text/plain"))]
     r = client.post("/ingest", files=files)
     cid = r.json()["context_id"]
-    dl = client.get(f"/team/{cid}/files/0")
+    hdr = {"X-Avery-Token": r.json()["owner_token"]}   # feat-038
+    dl = client.get(f"/team/{cid}/files/0", headers=hdr)
     assert dl.status_code == 200
     assert dl.headers.get("x-content-type-options") == "nosniff"
     assert "attachment" in dl.headers.get("content-disposition", "")

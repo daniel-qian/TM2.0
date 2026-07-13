@@ -124,6 +124,12 @@ class CompanyContext:
     name: str = "company"
     source_files: list[str] = field(default_factory=list)
     source_documents: list[SourceDocument] = field(default_factory=list)  # feat-032 file space
+    owner_token: str = ""                   # feat-038 tenant isolation: the unguessable holder
+                                            # credential set at /ingest. A read path validates a
+                                            # header token against this; empty == pre-038 / no auth
+                                            # required (v1 back-compat — new /ingest always sets it).
+                                            # NEVER travels in a URL (header only); the context_id
+                                            # in the URL is not sufficient to read the data.
 
     # --- retrieval surface (what the advisor uses) --------------------------------------------
 

@@ -6,7 +6,7 @@ HTTP handlers — `active_registry()` (registry.py) picks it whenever `AVERY_DB_
 is set. Everything a company workspace is made of goes to Postgres (schema `avery`, see
 db/migrations/0001_avery_persistence.sql):
 
-    contexts       id / name / source_files (+ owner_token reserved for feat-034)
+    contexts       id / name / source_files / owner_token (feat-038 tenant-isolation credential)
     entities       people / projects / signals as ordered JSONB rows
     materials      RAG chunks as rows (+ embedding vector(1024) — feat-031 fills it when keyed)
     memory_files   facts.md / notes.md FULL TEXT — the re-materialization source
@@ -244,13 +244,16 @@ class PostgresContextRegistry:
         self._ensure_schema()
 
         with self._connect() as conn, conn.transaction():
+            # feat-038: owner_token is the tenant-isolation credential. NULL when a direct caller/
+            # test builds a tokenless context (v1 back-compat); the /ingest handler always sets it.
             conn.execute(
-                "INSERT INTO avery.contexts (context_id, name, source_files) "
-                "VALUES (%s, %s, %s) "
+                "INSERT INTO avery.contexts (context_id, name, source_files, owner_token) "
+                "VALUES (%s, %s, %s, %s) "
                 "ON CONFLICT (context_id) DO UPDATE SET "
                 "  name = EXCLUDED.name, source_files = EXCLUDED.source_files, "
-                "  updated_at = now()",
-                (ctx.context_id, ctx.name, Jsonb(list(ctx.source_files))))
+                "  owner_token = EXCLUDED.owner_token, updated_at = now()",
+                (ctx.context_id, ctx.name, Jsonb(list(ctx.source_files)),
+                 (ctx.owner_token or None)))
             # re-put = replace: a context is one atomic snapshot, never a merge of two ingests.
             conn.execute("DELETE FROM avery.entities WHERE context_id = %s", (ctx.context_id,))
             conn.execute("DELETE FROM avery.materials WHERE context_id = %s", (ctx.context_id,))
@@ -295,11 +298,12 @@ class PostgresContextRegistry:
         self._ensure_schema()
         with self._connect() as conn:
             row = conn.execute(
-                "SELECT name, source_files FROM avery.contexts WHERE context_id = %s",
+                "SELECT name, source_files, owner_token FROM avery.contexts "
+                "WHERE context_id = %s",
                 (context_id,)).fetchone()
             if row is None:
                 return None
-            name, source_files = row
+            name, source_files, owner_token = row
             ents = conn.execute(
                 "SELECT kind, payload FROM avery.entities WHERE context_id = %s "
                 "ORDER BY kind, idx", (context_id,)).fetchall()
@@ -360,7 +364,8 @@ class PostgresContextRegistry:
 
         return CompanyContext(
             context_id=context_id, extraction=extraction, store=store, memory_dir=mem_dir,
-            name=name, source_files=list(source_files), source_documents=source_documents)
+            name=name, source_files=list(source_files), source_documents=source_documents,
+            owner_token=owner_token or "")   # feat-038: NULL -> "" (a tokenless, pre-038 context)
 
     def source_document_bytes(self, context_id: str, idx: int) -> bytes | None:
         """feat-032 download seam: the raw bytea of one uploaded file, pulled on demand (never in

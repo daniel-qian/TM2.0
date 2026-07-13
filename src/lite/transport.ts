@@ -63,6 +63,11 @@ export interface LiveTeamPayload {
   projects: LiveProjectCard[]
   briefing: LiveBriefingPayload
   signals?: LiveSignalCard[]
+  // feat-038 租户隔离：/ingest 首帧回传本公司的不可猜 owner_token（经理凭据）。
+  // 客户端存下（按 context_id）、后续所有读端点（team/files/notes/advise）以 HTTP header 带上。
+  // 🔴 只走 header，绝不进 URL（URL 会进 Referer/access log/CDN log/浏览器历史）。
+  // /team/{id} 刷新帧不回传此字段（那次调用本就已用 token 证过身）。
+  owner_token?: string
 }
 
 // 人卡：定性 ONLY。🔴 红线：moodPct/capacityPct 等血条字段 live 永不出现——
@@ -170,9 +175,48 @@ export function apiBase(): string {
   return (fromEnv && String(fromEnv).replace(/\/$/, '')) || 'http://127.0.0.1:8137'
 }
 
+// ── feat-038 租户隔离：owner_token 客户端存储（按 context_id）─────────────────────────────────
+// /ingest 首帧回传 owner_token；transport 存下，后续 team/files/notes/advise 以 header 带上。
+// 落 localStorage 让一次会话内刷新页面仍持有 token（后端持久化让数据本身也还在）。
+// 🔴 token 只进 header，绝不拼进 URL；读/写失败静默降级（不阻断主流程）。
+const TOKEN_STORE_KEY = 'avery.ownerTokens'
+export const OWNER_TOKEN_HEADER = 'X-Avery-Token'
+
+function loadTokenStore(): Record<string, string> {
+  try {
+    if (typeof localStorage === 'undefined') return {}
+    const raw = localStorage.getItem(TOKEN_STORE_KEY)
+    return raw ? (JSON.parse(raw) as Record<string, string>) : {}
+  } catch {
+    return {}
+  }
+}
+
+function persistTokenStore(store: Record<string, string>): void {
+  try {
+    if (typeof localStorage === 'undefined') return
+    localStorage.setItem(TOKEN_STORE_KEY, JSON.stringify(store))
+  } catch {
+    /* private-mode / quota — in-memory map still carries the token for this session */
+  }
+}
+
 // ── 真 HTTP/SSE 传输（浏览器 fetch + 流式解析）──────────────────────────────────────────
 // 用 fetch + ReadableStream 手解 SSE（而非 EventSource）：POST body + Abort 都需要，EventSource 只支持 GET。
 export function createHttpTransport(base: string = apiBase()): LiveTransport {
+  // Per-context owner_token map, seeded from localStorage so a page reload keeps the credential.
+  const tokens: Record<string, string> = loadTokenStore()
+  const rememberToken = (contextId: string | undefined, token: string | undefined): void => {
+    if (!contextId || !token) return
+    tokens[contextId] = token
+    persistTokenStore(tokens)
+  }
+  // 🔴 header-only：给某 context 的读/写调用附上 owner_token（有则带，无则空），绝不进 URL。
+  const authHeader = (contextId: string | undefined): Record<string, string> => {
+    const tok = contextId ? tokens[contextId] : undefined
+    return tok ? { [OWNER_TOKEN_HEADER]: tok } : {}
+  }
+
   return {
     streamAdvise(req, onEvent, onDone) {
       const controller = new AbortController()
@@ -180,7 +224,11 @@ export function createHttpTransport(base: string = apiBase()): LiveTransport {
         try {
           const res = await fetch(`${base}/advise`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+            headers: {
+              'Content-Type': 'application/json',
+              Accept: 'text/event-stream',
+              ...authHeader(req.company_context_id), // feat-038: tenant token (header only)
+            },
             body: JSON.stringify({ ...req, stream: true }),
             signal: controller.signal,
           })
@@ -222,23 +270,32 @@ export function createHttpTransport(base: string = apiBase()): LiveTransport {
       for (const f of files) form.append('files', f, f.name)
       const res = await fetch(`${base}/ingest`, { method: 'POST', body: form })
       if (!res.ok) throw new Error(`ingest HTTP ${res.status}`)
-      return (await res.json()) as LiveTeamPayload
+      const payload = (await res.json()) as LiveTeamPayload
+      // feat-038: store this company's owner_token so every later read/advise can present it.
+      rememberToken(payload.context_id, payload.owner_token)
+      return payload
     },
 
     async fetchTeam(contextId) {
-      const res = await fetch(`${base}/team/${encodeURIComponent(contextId)}`)
+      const res = await fetch(`${base}/team/${encodeURIComponent(contextId)}`, {
+        headers: authHeader(contextId),
+      })
       if (!res.ok) throw new Error(`team HTTP ${res.status}`)
       return (await res.json()) as LiveTeamPayload
     },
 
     async fetchFiles(contextId) {
-      const res = await fetch(`${base}/team/${encodeURIComponent(contextId)}/files`)
+      const res = await fetch(`${base}/team/${encodeURIComponent(contextId)}/files`, {
+        headers: authHeader(contextId),
+      })
       if (!res.ok) throw new Error(`files HTTP ${res.status}`)
       return (await res.json()) as LiveFilesPayload
     },
 
     async fetchNotes(contextId) {
-      const res = await fetch(`${base}/team/${encodeURIComponent(contextId)}/notes`)
+      const res = await fetch(`${base}/team/${encodeURIComponent(contextId)}/notes`, {
+        headers: authHeader(contextId),
+      })
       if (!res.ok) throw new Error(`notes HTTP ${res.status}`)
       return (await res.json()) as LiveNotesPayload
     },

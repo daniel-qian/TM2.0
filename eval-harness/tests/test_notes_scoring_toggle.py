@@ -198,9 +198,11 @@ def _http_client(monkeypatch):
 
 
 def _ingest_context(client):
+    """feat-038: returns (context_id, owner-token header) — later reads/advise present the token."""
     files = [("files", (p.name, p.read_bytes(), "application/octet-stream"))
              for p in (FIX / "Studio_Handbook.md", FIX / "Team_Roster.xlsx")]
-    return client.post("/ingest", files=files).json()["context_id"]
+    body = client.post("/ingest", files=files).json()
+    return body["context_id"], {"X-Avery-Token": body["owner_token"]}
 
 
 # a question whose ~60-char lead (the echoed excerpt) carries a baseline-caught scoring form.
@@ -211,19 +213,21 @@ def test_http_scoring_question_dropped_when_off(monkeypatch):
     pytest.importorskip("fastapi.testclient")
     monkeypatch.delenv(ENV_VAR, raising=False)
     client = _http_client(monkeypatch)
-    cid = _ingest_context(client)
+    cid, hdr = _ingest_context(client)
     assert client.post("/advise", json={"situation": SCORING_QUESTION,
-                                        "company_context_id": cid, "stream": False}).status_code == 200
-    assert client.get(f"/team/{cid}/notes").json()["notes"] == [], "switch OFF: no scoring note"
+                                        "company_context_id": cid, "stream": False},
+                       headers=hdr).status_code == 200
+    assert client.get(f"/team/{cid}/notes", headers=hdr).json()["notes"] == [], "switch OFF: no scoring note"
 
 
 def test_http_scoring_question_persists_when_on(monkeypatch):
     pytest.importorskip("fastapi.testclient")
     monkeypatch.setenv(ENV_VAR, "1")
     client = _http_client(monkeypatch)
-    cid = _ingest_context(client)
+    cid, hdr = _ingest_context(client)
     assert client.post("/advise", json={"situation": SCORING_QUESTION,
-                                        "company_context_id": cid, "stream": False}).status_code == 200
-    notes = client.get(f"/team/{cid}/notes").json()["notes"]
+                                        "company_context_id": cid, "stream": False},
+                       headers=hdr).status_code == 200
+    notes = client.get(f"/team/{cid}/notes", headers=hdr).json()["notes"]
     assert len(notes) == 1, "switch ON: the scoring question's note is persisted and user-visible"
     assert "score her 2/10" in notes[0]["source_excerpt"], "the scoring excerpt is what now shows"

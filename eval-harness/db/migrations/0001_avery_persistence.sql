@@ -20,7 +20,7 @@
 -- Reserved seams (columns land now, logic lands later — see kickoff):
 --   * avery.materials.embedding vector(1024)  — feat-031 real pgvector RAG fills it; NULL in 030.
 --     (1024 = AVERY_EMBED_DIM in eval-harness/.env — DashScope text-embedding dim.)
---   * avery.contexts.owner_token              — feat-034 tenant isolation validates it; unused in 030.
+--   * avery.contexts.owner_token              — feat-038 tenant isolation validates it; unused in 030.
 
 -- feat-030 P4: pgvector lives in `extensions` on Supabase but `public` on the local Docker image.
 -- A session-local search_path spanning both makes the unqualified `vector` type resolve on either,
@@ -38,7 +38,8 @@ CREATE TABLE IF NOT EXISTS avery.contexts (
     context_id   text PRIMARY KEY,
     name         text NOT NULL DEFAULT 'company',
     source_files jsonb NOT NULL DEFAULT '[]'::jsonb,   -- uploaded filenames (feat-032 grows this)
-    owner_token  text,                                 -- feat-034 seam: reserved, NOT validated yet
+    owner_token  text,                                 -- feat-038 tenant-isolation credential (nullable:
+                                                       -- pre-038 rows / tokenless contexts stay NULL)
     created_at   timestamptz NOT NULL DEFAULT now(),
     updated_at   timestamptz NOT NULL DEFAULT now()
 );

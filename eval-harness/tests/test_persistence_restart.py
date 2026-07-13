@@ -115,8 +115,11 @@ def test_company_survives_a_service_restart(tmp_path):
         payload = r.json()
         cid = payload["context_id"]
         assert set(payload["source_files"]) == {SEED_XLSX.name, SEED_PDF.name}
+        # feat-038: the owner_token minted here must persist to the DB and still authorize a read
+        # from a BRAND-NEW process in life 2 (the restart) — the tenant-isolation restart story.
+        hdr = {"X-Avery-Token": payload["owner_token"]}
 
-        r_team = httpx.get(f"{base1}/team/{cid}", timeout=30)
+        r_team = httpx.get(f"{base1}/team/{cid}", headers=hdr, timeout=30)
         assert r_team.status_code == 200
         team_before = r_team.json()
     finally:
@@ -127,17 +130,26 @@ def test_company_survives_a_service_restart(tmp_path):
     proc2, lf2, base2 = _start_service(
         port2, {**base_env, "AVERY_DATA_DIR": str(tmp_path / "data-life2")}, log)
     try:
-        r_team2 = httpx.get(f"{base2}/team/{cid}", timeout=60)
+        # feat-038: the SAME owner_token from life 1 authorizes the read in the new process (it came
+        # back from the DB with the context) — proof the isolation credential survives the restart.
+        r_team2 = httpx.get(f"{base2}/team/{cid}", headers=hdr, timeout=60)
         assert r_team2.status_code == 200, (
             f"the company VANISHED across a restart (HTTP {r_team2.status_code}) — "
             f"this is the pre-030 in-memory registry failure mode")
         assert r_team2.json() == team_before, "the team payload drifted across the restart"
 
+        # feat-038: after a restart, the WRONG/absent token must still 404 (the credential is real,
+        # persisted, and checked in the fresh process — not reset to open by the redeploy).
+        assert httpx.get(f"{base2}/team/{cid}", timeout=30).status_code == 404, (
+            "a read with NO token succeeded after restart — isolation did not survive the redeploy")
+        assert httpx.get(f"{base2}/team/{cid}", headers={"X-Avery-Token": "wrong"},
+                         timeout=30).status_code == 404
+
         r_adv = httpx.post(f"{base2}/advise", json={
             "situation": "Give me a read on where the team stands from what I uploaded.",
             "company_context_id": cid,
             "stream": False,
-        }, timeout=180)
+        }, headers=hdr, timeout=180)
         assert r_adv.status_code == 200, (
             f"a KNOWN context id 404'd after restart: {r_adv.status_code} {r_adv.text[:300]}")
         assert r_adv.json().get("contract_ok") is True
@@ -145,7 +157,7 @@ def test_company_survives_a_service_restart(tmp_path):
         # feat-028 behavior preserved: a ghost id is still a loud 404, not a silent demo answer.
         r_ghost = httpx.post(f"{base2}/advise", json={
             "situation": "Anything?", "company_context_id": "ctx_never_registered",
-            "stream": False}, timeout=30)
+            "stream": False}, headers=hdr, timeout=30)
         assert r_ghost.status_code == 404
     finally:
         _stop_hard(proc2, lf2)
@@ -192,8 +204,9 @@ def test_file_space_survives_a_service_restart(tmp_path):
         r = httpx.post(f"{base1}/ingest", files=files, timeout=300)
         assert r.status_code == 200, f"/ingest failed on the seeds: {r.text[:400]}"
         cid = r.json()["context_id"]
+        hdr = {"X-Avery-Token": r.json()["owner_token"]}   # feat-038
 
-        r_files = httpx.get(f"{base1}/team/{cid}/files", timeout=30)
+        r_files = httpx.get(f"{base1}/team/{cid}/files", headers=hdr, timeout=30)
         assert r_files.status_code == 200
         manifest_before = r_files.json()["files"]
         names = [f["filename"] for f in manifest_before]
@@ -202,7 +215,7 @@ def test_file_space_survives_a_service_restart(tmp_path):
         assert sum(f["n_chunks"] for f in manifest_before) > 0, "no file linked to any material chunk"
 
         xlsx_idx = names.index(SEED_XLSX.name)
-        r_dl = httpx.get(f"{base1}/team/{cid}/files/{xlsx_idx}", timeout=30)
+        r_dl = httpx.get(f"{base1}/team/{cid}/files/{xlsx_idx}", headers=hdr, timeout=30)
         assert r_dl.status_code == 200
         assert r_dl.content == xlsx_bytes, "downloaded bytes are not the uploaded file byte-for-byte"
         assert "attachment" in r_dl.headers.get("content-disposition", ""), (
@@ -215,7 +228,7 @@ def test_file_space_survives_a_service_restart(tmp_path):
     proc2, lf2, base2 = _start_service(
         port2, {**base_env, "AVERY_DATA_DIR": str(tmp_path / "data-life2")}, log)
     try:
-        r_files2 = httpx.get(f"{base2}/team/{cid}/files", timeout=60)
+        r_files2 = httpx.get(f"{base2}/team/{cid}/files", headers=hdr, timeout=60)   # feat-038 token
         assert r_files2.status_code == 200, (
             f"the file manifest VANISHED across a restart (HTTP {r_files2.status_code})")
         manifest_after = r_files2.json()["files"]
@@ -224,12 +237,16 @@ def test_file_space_survives_a_service_restart(tmp_path):
 
         names2 = [f["filename"] for f in manifest_after]
         xlsx_idx2 = names2.index(SEED_XLSX.name)
-        r_dl2 = httpx.get(f"{base2}/team/{cid}/files/{xlsx_idx2}", timeout=30)
+        r_dl2 = httpx.get(f"{base2}/team/{cid}/files/{xlsx_idx2}", headers=hdr, timeout=30)
         assert r_dl2.status_code == 200, "the raw bytes vanished across the restart"
         assert r_dl2.content == xlsx_bytes, "downloaded bytes drifted across the restart"
 
+        # feat-038: the file download is gated in the fresh process too — no token / wrong token 404.
+        assert httpx.get(f"{base2}/team/{cid}/files/{xlsx_idx2}",
+                         timeout=30).status_code == 404, "file download open without a token post-restart"
+
         # unknown context id is still a loud 404 (feat-028 behavior preserved on the new endpoints).
-        r_ghost = httpx.get(f"{base2}/team/ctx_never_registered/files", timeout=30)
+        r_ghost = httpx.get(f"{base2}/team/ctx_never_registered/files", headers=hdr, timeout=30)
         assert r_ghost.status_code == 404
     finally:
         _stop_hard(proc2, lf2)

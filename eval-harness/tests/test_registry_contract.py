@@ -21,7 +21,7 @@ internals, is the contract:
       and the loop's own `avery.memory.recall` works over the restored dir;
     * the DB itself refuses a person row carrying a scoring key (CHECK constraint — the red
       line is structural in the schema, not just in Python);
-    * schema reserves the feat-031/034 seams: `materials.embedding vector` + `contexts.owner_token`.
+    * schema reserves the feat-031/038 seams: `materials.embedding vector` + `contexts.owner_token`.
 
 `@needs_db` follows the @seedgate/@smoke convention: no AVERY_DB_URL/PGVECTOR_URL -> clean skip,
 so the offline default suite stays green with no external service.
@@ -103,14 +103,14 @@ def impl(request, tmp_path):
 
 
 def _ingest(impl: _Impl, work_dir: Path, files: list[Path] | None = None,
-            source_documents=None):
+            source_documents=None, owner_token: str = ""):
     """Drive the REAL pipeline (parse -> extract -> red-line gate -> store -> put) at the registry
     under test — the contract exercises the same write path the service uses."""
     reg = impl.fresh()
     cid = impl.track(_new_cid())
     paths = [str(p) for p in (files or [HANDBOOK, ROSTER])]
     rep = ingest_paths(paths, registry=reg, work_dir=work_dir, context_id=cid, name="prism",
-                       source_documents=source_documents)
+                       source_documents=source_documents, owner_token=owner_token)
     assert rep.ok, f"fixture ingest failed the red-line gate: {rep.redline.summary()}"
     return reg, cid, rep
 
@@ -187,6 +187,30 @@ def test_resolve_memory_dir_points_at_materialized_memory(impl, tmp_path):
     mem = reg.resolve_memory_dir(cid)
     assert mem is not None
     assert (Path(mem) / "facts.md").exists(), "resolved memory_dir has no facts.md — recall would find nothing"
+
+
+# ==============================================================================================
+# feat-038 — the owner_token persistence contract (shared: memory + postgres). The tenant-isolation
+# credential minted at /ingest must round-trip through put/get on BOTH backends, so the HTTP read
+# gate (authorize_context) validates against a token that actually survived storage. A tokenless
+# context (a pre-038 / direct caller) round-trips as "" (no auth required — v1 back-compat).
+# ==============================================================================================
+
+def test_owner_token_round_trips_through_storage(impl, tmp_path):
+    reg, cid, _ = _ingest(impl, tmp_path / "mem", owner_token="tok_secret_holder_credential_xyz")
+    got = reg.get(cid)
+    assert got is not None
+    assert got.owner_token == "tok_secret_holder_credential_xyz", (
+        "owner_token did not survive the put/get round-trip — the read gate would validate against "
+        "an empty token and let anyone in")
+
+
+def test_tokenless_context_round_trips_as_empty(impl, tmp_path):
+    """A context ingested WITHOUT an owner_token (the pre-038 / direct-caller path) reads back with
+    an empty token — never a crash, never a spurious credential. Back-compat: such a context is
+    readable without a token (the HTTP gate only enforces when owner_token is non-empty)."""
+    reg, cid, _ = _ingest(impl, tmp_path / "mem")
+    assert reg.get(cid).owner_token == ""
 
 
 def test_ingest_materializes_under_avery_data_dir(monkeypatch, tmp_path):
@@ -414,6 +438,18 @@ def test_pg_context_survives_a_new_registry_instance(pg, tmp_path):
 
 
 @needs_db
+def test_pg_owner_token_survives_a_new_registry_instance(pg, tmp_path):
+    """feat-038 the restart story for tenant isolation: the owner_token put by one registry instance
+    is read back by a BRAND-NEW instance/connection (the redeploy). This is what lets a company still
+    prove ownership after the service restarts — the credential lives in the DB, not process memory."""
+    reg_a, cid, _ = _ingest(pg, tmp_path / "mem", owner_token="tok_survives_the_redeploy")
+    reg_b = pg.fresh()
+    assert reg_b.get(cid).owner_token == "tok_survives_the_redeploy", (
+        "owner_token vanished across a new registry instance — isolation would reset to open on a "
+        "redeploy")
+
+
+@needs_db
 def test_pg_source_documents_survive_a_new_registry_instance(pg, tmp_path):
     """feat-032 durability: the raw uploads (bytes + metadata) put by one registry instance are
     visible to a BRAND-NEW instance — metadata AND the bytea content — after a simulated restart."""
@@ -604,8 +640,8 @@ def test_pg_put_rejects_nul_bytes_cleanly(pg, tmp_path):
 
 @needs_db
 def test_pg_schema_reserves_the_next_seams(pg, tmp_path):
-    """feat-031 (embedding vector column, nullable, unfilled here) and feat-034 (owner_token,
-    column only, no auth logic here) are pinned in the schema so the next features land on it."""
+    """feat-031 (embedding vector column, nullable, unfilled here) and feat-038 (owner_token, the
+    tenant-isolation credential) are pinned in the schema so those features land on it."""
     import psycopg
 
     reg, cid, _ = _ingest(pg, tmp_path / "mem")   # also forces schema bootstrap on a blank DB
@@ -616,6 +652,6 @@ def test_pg_schema_reserves_the_next_seams(pg, tmp_path):
         emb_filled = conn.execute(
             "SELECT count(*) FROM avery.materials WHERE context_id = %s "
             "AND embedding IS NOT NULL", (cid,)).fetchone()[0]
-    assert ("contexts", "owner_token", "text") in cols, "feat-034 seam missing: contexts.owner_token"
+    assert ("contexts", "owner_token", "text") in cols, "feat-038 seam missing: contexts.owner_token"
     assert ("materials", "embedding", "vector") in cols, "feat-031 seam missing: materials.embedding"
     assert emb_filled == 0, "feat-030 must NOT fill embeddings (that is feat-031's job)"

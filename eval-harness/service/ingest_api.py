@@ -26,22 +26,75 @@ registry (offline default, the pre-030 ADR-0021 §6 ephemeral behavior). Same ge
 from __future__ import annotations
 
 import mimetypes
+import secrets
 import tempfile
 from dataclasses import asdict
 from pathlib import Path
 from urllib.parse import quote
 
-from fastapi import APIRouter, HTTPException, UploadFile
+from fastapi import APIRouter, Header, HTTPException, UploadFile
 from fastapi import File
 from fastapi import Response
 from starlette.concurrency import run_in_threadpool
 
 from avery.ingest import ingest_paths
-from avery.ingest.registry import CompanyContext, SourceDocument, active_registry
+from avery.ingest.registry import CompanyContext, ContextRegistry, SourceDocument, active_registry
 
 from . import embedding_factory, extractor_factory
 
 router = APIRouter()
+
+
+# ── feat-038 tenant isolation: the read-path holder check ────────────────────────────────────────
+# THE critical IDOR (readiness §2-A): before feat-038, any caller holding a context_id could read a
+# company's whole workspace. Now /ingest mints an unguessable owner_token (secrets.token_urlsafe),
+# returns it to the uploader, and every read path validates a caller-supplied token against it.
+#
+# TRANSPORT RULE: the token travels ONLY in an HTTP header (X-Avery-Token, or Authorization: Bearer)
+# — NEVER in the URL path/query, which would leak into Referer / access logs / CDN logs / browser
+# history. The context_id stays in the URL (it always was), but on its own it no longer reads data.
+#
+# FAILURE MODE: a missing / wrong token (or an unknown id) is a 404 with the SAME body as an unknown
+# id — NOT a 403 — so the surface never confirms whether a given context_id exists (no enumeration
+# oracle; sticks with feat-028's loud-404-for-unknown-id semantics). Comparison is constant-time
+# (secrets.compare_digest). A tokenless context (owner_token == "") requires no token — v1 back-compat
+# for direct/test callers; every real /ingest context carries one.
+
+TOKEN_BYTES = 32   # secrets.token_urlsafe(32) -> ~43 url-safe chars, ~256 bits of entropy
+
+
+def mint_owner_token() -> str:
+    """A fresh, unguessable owner_token for a newly ingested company workspace."""
+    return secrets.token_urlsafe(TOKEN_BYTES)
+
+
+def extract_owner_token(x_avery_token: str | None, authorization: str | None) -> str | None:
+    """Pull the caller's token from the request headers: prefer the explicit `X-Avery-Token`, else a
+    `Authorization: Bearer <token>`. Returns None when neither is present. Header-only by design —
+    this function never looks at the URL."""
+    if x_avery_token and x_avery_token.strip():
+        return x_avery_token.strip()
+    if authorization:
+        parts = authorization.split(None, 1)
+        if len(parts) == 2 and parts[0].lower() == "bearer" and parts[1].strip():
+            return parts[1].strip()
+    return None
+
+
+def authorize_context(reg: ContextRegistry, context_id: str,
+                      token: str | None) -> CompanyContext:
+    """Resolve a context the caller is authorized to read, or raise 404. Unknown id AND wrong/missing
+    token both raise the SAME 404 (no existence oracle). A context whose owner_token is empty (pre-038
+    / a direct caller) requires no token. Constant-time compare avoids a token-timing side channel."""
+    ctx = reg.get(context_id)
+    unknown = HTTPException(status_code=404, detail=f"unknown company_context_id: {context_id}")
+    if ctx is None:
+        raise unknown
+    required = getattr(ctx, "owner_token", "") or ""
+    if required:
+        if not token or not secrets.compare_digest(token, required):
+            raise unknown
+    return ctx
 
 
 def _unique_parse_names(display_names: list[str]) -> list[str]:
@@ -91,6 +144,10 @@ async def ingest(files: list[UploadFile] = File(...)) -> dict:
     if not files:
         raise HTTPException(status_code=400, detail="no files uploaded")
 
+    # feat-038: mint the owner_token BEFORE ingest so it is persisted with the context in the SAME
+    # write (no second put()), and returned to the uploader below. Header-transported thereafter.
+    owner_token = mint_owner_token()
+
     tmp = Path(tempfile.mkdtemp(prefix="avery-upload-"))
     saved: list[Path] = []
     src_docs: list[SourceDocument] = []
@@ -136,7 +193,8 @@ async def ingest(files: list[UploadFile] = File(...)) -> dict:
                                 extractor=extractor_factory.make_extractor(),
                                 embedder=embedder if prefer_vector else None,
                                 prefer_vector=prefer_vector,
-                                source_documents=src_docs)
+                                source_documents=src_docs,
+                                owner_token=owner_token)
 
         try:
             report = await run_in_threadpool(_extract_and_ingest)
@@ -161,7 +219,12 @@ async def ingest(files: list[UploadFile] = File(...)) -> dict:
                     "parse_errors": report.parse_errors,
                 },
             )
-        return _team_payload(report.context)
+        # feat-038: hand the freshly-minted owner_token back to the UPLOADER (once, at creation) so
+        # the client can store it and present it as a header on every later read. It is NOT included
+        # in the /team/{id} refetch payload (that call already had to prove ownership to reach it).
+        payload = _team_payload(report.context)
+        payload["owner_token"] = owner_token
+        return payload
     finally:
         # Ephemeral: never persist the raw upload.
         for p in saved:
@@ -173,48 +236,58 @@ async def ingest(files: list[UploadFile] = File(...)) -> dict:
 
 
 @router.get("/team/{context_id}")
-def team(context_id: str) -> dict:
-    """Re-fetch the Your-team payload for a registered context_id (post-upload refresh)."""
-    ctx = active_registry().get(context_id)
-    if ctx is None:
-        raise HTTPException(status_code=404, detail=f"unknown company_context_id: {context_id}")
+def team(context_id: str,
+         x_avery_token: str | None = Header(None),
+         authorization: str | None = Header(None)) -> dict:
+    """Re-fetch the Your-team payload for a registered context_id (post-upload refresh).
+
+    feat-038: gated — the caller must present the owner_token (header) minted at /ingest, else 404."""
+    reg = active_registry()
+    ctx = authorize_context(reg, context_id, extract_owner_token(x_avery_token, authorization))
     return _team_payload(ctx)
 
 
 @router.get("/team/{context_id}/notes")
-def team_notes(context_id: str) -> dict:
+def team_notes(context_id: str,
+               x_avery_token: str | None = Header(None),
+               authorization: str | None = Header(None)) -> dict:
     """feat-033 — Avery's notes: the accumulating, agent-WRITTEN observations about this company,
     NEWEST FIRST. Read-only surface (v1 has no delete). Every note here already passed the write-side
-    red line (`redline.validate`, EN+ZH) at append time — the notebook never contains scoring text."""
+    red line (`redline.validate`, EN+ZH) at append time — the notebook never contains scoring text.
+
+    feat-038: gated — the owner_token (header) is required, else 404."""
     reg = active_registry()
-    ctx = reg.get(context_id)
-    if ctx is None:
-        raise HTTPException(status_code=404, detail=f"unknown company_context_id: {context_id}")
+    authorize_context(reg, context_id, extract_owner_token(x_avery_token, authorization))
     return {"context_id": context_id, "notes": [asdict(n) for n in reg.list_notes(context_id)]}
 
 
 @router.get("/team/{context_id}/files")
-def team_files(context_id: str) -> dict:
+def team_files(context_id: str,
+               x_avery_token: str | None = Header(None),
+               authorization: str | None = Header(None)) -> dict:
     """feat-032 — the per-company FILE SPACE manifest: what this company uploaded, so a manager can
     see what Avery's memory is built on (User Story 4). METADATA ONLY (filename / size / mime /
     doc_kind / uploaded_at / n_chunks); the bytes live behind the /files/{idx} download seam. The
-    manifest is derived from stored data — nothing in a file's CONTENT is executed here."""
-    ctx = active_registry().get(context_id)
-    if ctx is None:
-        raise HTTPException(status_code=404, detail=f"unknown company_context_id: {context_id}")
+    manifest is derived from stored data — nothing in a file's CONTENT is executed here.
+
+    feat-038: gated — the owner_token (header) is required, else 404."""
+    reg = active_registry()
+    ctx = authorize_context(reg, context_id, extract_owner_token(x_avery_token, authorization))
     return {"context_id": ctx.context_id, "files": ctx.file_cards()}
 
 
 @router.get("/team/{context_id}/files/{idx}")
-def team_file_download(context_id: str, idx: int) -> Response:
+def team_file_download(context_id: str, idx: int,
+                       x_avery_token: str | None = Header(None),
+                       authorization: str | None = Header(None)) -> Response:
     """feat-032 — download one uploaded file's ORIGINAL bytes (look-back enhancement). The bytes are
     UNTRUSTED user content, so they are served as an attachment with a generic content-type — a
     browser must never render/execute them inline. The filename is RFC 5987 percent-encoded, which
-    also neutralizes header injection (newlines/quotes/CJK in a stored filename)."""
+    also neutralizes header injection (newlines/quotes/CJK in a stored filename).
+
+    feat-038: gated — the owner_token (header) is required, else 404 (BEFORE any bytes are read)."""
     reg = active_registry()
-    ctx = reg.get(context_id)
-    if ctx is None:
-        raise HTTPException(status_code=404, detail=f"unknown company_context_id: {context_id}")
+    ctx = authorize_context(reg, context_id, extract_owner_token(x_avery_token, authorization))
     if idx < 0 or idx >= len(ctx.source_documents):
         raise HTTPException(status_code=404, detail=f"no file at idx {idx}")
     data = reg.source_document_bytes(context_id, idx)

@@ -94,7 +94,8 @@ def ingest_docs(docs: list[ParsedDoc], *, extractor: Extractor | None = None,
                 embedder: Embedder | None = None, prefer_vector: bool = False,
                 registry: ContextRegistry | None = None, work_dir: Path | None = None,
                 name: str = "company", context_id: str | None = None,
-                source_documents: list[SourceDocument] | None = None) -> IngestReport:
+                source_documents: list[SourceDocument] | None = None,
+                owner_token: str = "") -> IngestReport:
     """Ingest already-parsed docs. Runs extract -> red-line gate -> store -> CompanyContext.
 
     prefer_vector=False (default) uses the offline KeywordStore so the AFK gate needs no embedding
@@ -105,6 +106,11 @@ def ingest_docs(docs: list[ParsedDoc], *, extractor: Extractor | None = None,
 
     source_documents (feat-032): the raw uploads (bytes + metadata) to persist in the per-company
     file space; None keeps the pre-032 behavior (no file space, empty manifest).
+
+    owner_token (feat-038): the unguessable holder credential the /ingest handler mints and returns
+    to the uploader; it is stamped onto the CompanyContext and persisted so every read path can
+    validate a caller. Empty (the default for direct callers/tests) => no auth is required for that
+    context (v1 back-compat).
     """
     registry = registry if registry is not None else active_registry()
 
@@ -138,7 +144,8 @@ def ingest_docs(docs: list[ParsedDoc], *, extractor: Extractor | None = None,
     ctx = CompanyContext(
         context_id=cid, extraction=extraction, store=store, memory_dir=mem_dir, name=name,
         source_files=[d.name for d in docs],
-        source_documents=_finalize_source_documents(source_documents, docs, extraction))
+        source_documents=_finalize_source_documents(source_documents, docs, extraction),
+        owner_token=owner_token)
     registry.put(ctx)
 
     return IngestReport(ok=True, context=ctx, redline=rl, parsed=docs, extraction=extraction,
@@ -149,7 +156,8 @@ def ingest_paths(paths: list[str | Path], *, extractor: Extractor | None = None,
                  embedder: Embedder | None = None, prefer_vector: bool = False,
                  registry: ContextRegistry | None = None, work_dir: Path | None = None,
                  name: str = "company", context_id: str | None = None,
-                 source_documents: list[SourceDocument] | None = None) -> IngestReport:
+                 source_documents: list[SourceDocument] | None = None,
+                 owner_token: str = "") -> IngestReport:
     """Ingest files from disk: parse each (skipping unparseable ones), then `ingest_docs`."""
     docs: list[ParsedDoc] = []
     errors: list[str] = []
@@ -167,6 +175,6 @@ def ingest_paths(paths: list[str | Path], *, extractor: Extractor | None = None,
         return IngestReport(ok=False, context=None, redline=empty_rl, parsed=[], parse_errors=errors)
     report = ingest_docs(docs, extractor=extractor, embedder=embedder, prefer_vector=prefer_vector,
                          registry=registry, work_dir=work_dir, name=name, context_id=context_id,
-                         source_documents=source_documents)
+                         source_documents=source_documents, owner_token=owner_token)
     report.parse_errors = errors
     return report

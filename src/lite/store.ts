@@ -45,6 +45,9 @@ interface LiteState {
   ingestError: string | null
   team: LiteTeam | null
   contextId: string | null
+  // feat-038 租户隔离：本公司 owner_token（经理凭据）。transport 已按 context_id 存下并在读端点
+  // 以 header 带上；store 也挂一份供 UI/调试可见。🔴 只读展示不入 URL。
+  ownerToken: string | null
   // 原始 payload 留一份（详情浮层显 source_files；AFK 门可断言契约形状）
   rawTeam: LiveTeamPayload | null
   // feat-032「你的文件」清单：持久留存的源文档元数据（重启后仍在）。
@@ -84,6 +87,7 @@ export const useLite = create<LiteState>((set, get) => ({
   ingestError: null,
   team: null,
   contextId: null,
+  ownerToken: null,
   rawTeam: null,
   files: [],
   notes: [],
@@ -111,6 +115,8 @@ export const useLite = create<LiteState>((set, get) => ({
         team: liteTeamFromPayload(payload),
         rawTeam: payload,
         contextId: payload.context_id,
+        // feat-038: 挂上本公司 owner_token（transport 已存并按 context_id 带 header）。
+        ownerToken: payload.owner_token ?? null,
       })
       // feat-032：拉一次持久文件清单（含 n_chunks）。次要视图，失败不影响上传成功。
       void get().refreshFiles()

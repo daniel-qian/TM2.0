@@ -10,13 +10,17 @@ POST /advise
         Default streams SSE: think/tool/observe events, then a terminal `manifest` event with the
         8-field contract payload. Set {"stream": false} (or Accept: application/json) for a single
         buffered JSON body with the same manifest content.
-
-GET  /advise/sample
-        Zero-body SSE demo against a built-in situation — handy for a browser / curl smoke.
+        feat-038: when company_context_id is set, the request MUST carry that context's owner_token
+        (header X-Avery-Token or Authorization: Bearer); a missing/wrong token 404s (tenant isolation).
 
 The service WRAPS the existing engine (`avery/loop.py`, `avery/redline.py`, `avery/brain.py`). The
 red line + cite gate + 8-field schema are enforced through this API by `service/contract.py`.
 Keys stay server-side (`service/brain_factory.py`); the frontend only ever sees SSE events.
+
+feat-038 (tenant isolation): /ingest mints an unguessable owner_token per company and returns it to
+the uploader; every read path (/team/{id}[/notes|/files|/files/{idx}] and /advise-with-context)
+validates a header-supplied token against it (404 on mismatch). The interactive docs (/docs, /redoc,
+/openapi.json) and the token-burning /advise/sample demo are removed.
 """
 from __future__ import annotations
 
@@ -25,7 +29,7 @@ import os
 from pathlib import Path
 from typing import Any, Iterator
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -37,6 +41,7 @@ from avery.env import load_dotenv
 from . import brain_factory, embedding_factory, extractor_factory, live_input
 from .engine import stream_advice
 from .ingest_api import router as ingest_router  # feat-018: /ingest + /team/{id} (compose over feat-016)
+from .ingest_api import authorize_context, extract_owner_token  # feat-038: reuse the read-path gate
 
 HERE = Path(__file__).resolve().parent.parent          # eval-harness/
 SKILLS_DIR = HERE / "skills"
@@ -45,10 +50,16 @@ MEMORY_DIR = HERE / "memory"
 # Pick up MINIMAX_*/DEEPSEEK_*/ANTHROPIC_* from eval-harness/.env if present (real shell wins).
 load_dotenv(HERE / ".env")
 
+# feat-038: close the interactive docs surface (readiness §2-A). /docs, /redoc, and /openapi.json
+# turn an IDOR into a clickable console and expose the API shape; a lead-gen deploy has no need for
+# them. docs_url=None + redoc_url=None + openapi_url=None make all three 404.
 app = FastAPI(
     title="Avery agent service",
     version="0.1.0",
     summary="LiveAgentSource backend — advisor engine (think->tool->observe) over FastAPI + SSE.",
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
 )
 
 # Browser live mode (frontend :5173 -> this service :8137) needs CORS. Origins are env-configurable
@@ -71,13 +82,6 @@ app.add_middleware(
 # ingest_paths + registry; nothing in the engine changes. Endpoints: POST /ingest, GET /team/{id}.
 app.include_router(ingest_router)
 
-SAMPLE_SITUATION = (
-    "One of my most reliable engineers has been slipping for a few weeks — a couple of missed "
-    "status updates and two handoffs that bounced back onto the team. I don't know if something "
-    "is going on in her life or if she's checked out. How do I bring it up without it turning "
-    "into an interrogation?"
-)
-
 
 class AdviseRequest(BaseModel):
     situation: str = Field(..., min_length=1,
@@ -90,20 +94,6 @@ class AdviseRequest(BaseModel):
 
 def _system_prompt() -> str:
     return skills.build_system_prompt(SKILLS_DIR, MEMORY_DIR, scaffold="full")
-
-
-def _context_registered(company_context_id: str) -> bool:
-    """feat-028: is this id ACTUALLY in the ingest registry? This distinguishes the two cases the old
-    silent fallback conflated — 'no id -> demo memory (legit)' vs 'id GIVEN but not found -> error'.
-    A wiped/restarted registry must surface an error, never a silent answer over the demo company
-    (Isadora: identity must never silently default). feat-030: the env-selected registry — with
-    AVERY_DB_URL set this is the Postgres registry, so an id ingested BEFORE a restart resolves
-    (no more 404 on a known company). Lazy import so the service runs without ingest."""
-    try:
-        from avery.ingest.registry import active_registry
-        return company_context_id in active_registry()
-    except Exception:
-        return False
 
 
 def _resolve_memory_dir(company_context_id: str | None) -> Path:
@@ -190,12 +180,19 @@ def health() -> dict:
 
 
 @app.post("/advise")
-def advise(req: AdviseRequest):
+def advise(req: AdviseRequest,
+           x_avery_token: str | None = Header(None),
+           authorization: str | None = Header(None)):
     # feat-028: a GIVEN-but-unknown company_context_id must 404 (consistent with GET /team/{id}),
     # not silently answer over the demo company. A missing id is the legitimate demo default.
-    if req.company_context_id and not _context_registered(req.company_context_id):
-        raise HTTPException(status_code=404,
-                            detail=f"unknown company_context_id: {req.company_context_id}")
+    # feat-038: it must ALSO carry the owner_token (header) — otherwise advising over another
+    # company's context (RAG over their facts + notes-write to their notebook) would be an IDOR. A
+    # missing/wrong token 404s exactly like an unknown id (no existence oracle). A tokenless (pre-038)
+    # context requires none. The token NEVER rides the URL — header only.
+    if req.company_context_id:
+        from avery.ingest.registry import active_registry
+        authorize_context(active_registry(), req.company_context_id,
+                          extract_owner_token(x_avery_token, authorization))
     sit = live_input.LiveSituation(
         situation=req.situation, title=req.title,
         company_context_id=req.company_context_id)
@@ -222,8 +219,7 @@ def advise(req: AdviseRequest):
     return JSONResponse(content={**manifest, "events": collected})
 
 
-@app.get("/advise/sample")
-def advise_sample():
-    sit = live_input.LiveSituation(situation=SAMPLE_SITUATION, title="Sample — reliable engineer slipping")
-    events, case = _run_events(sit)
-    return _sse(events, case)
+# feat-038: /advise/sample is TAKEN DOWN. It was a zero-body, unauthenticated, unrate-limited SSE
+# demo (readiness §2-A: a clickable IDOR console that also BURNS real LLM tokens — denial-of-wallet
+# on a public URL). v1 has no need for it; the real surface is POST /advise with a situation. The
+# route no longer exists, so GET /advise/sample now 404s.
