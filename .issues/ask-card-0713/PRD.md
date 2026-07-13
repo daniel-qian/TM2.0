@@ -48,7 +48,7 @@ Manager 问 Avery"A 能不能负责跟乙方谈价"这类问题时，靠已有�
 
 ## Implementation Direction（施工期可细调，方向不改）
 
-- **数据模型（骑在 lite-v1 Supabase 层上）**：`ask`（id、company_context_id、thread 关联、题组 JSON、状态 draft/sent/closed/revoked、created_at/expires_at）+ `ask_recipient`（ask_id、受访者名/roster 关联、不可猜 token、answered_at、answers JSON、comment 文本）。token 与 lite-v1 的 company token 同规格（不可猜、读路径校验、未知 token 大声 404）。
+- **数据模型（骑在 lite-v1 Supabase 层上）**：`ask`（id、company_context_id、thread 关联、题组 JSON、状态、created_at/expires_at）+ `ask_recipient`（ask_id、受访者名/roster 关联、不可猜 token、answered_at、answers JSON、comment 文本）。**status 词表锁定（2026-07-13 合流收线，对抗验证 F1）**：`draft | shared | collecting | closed | revoked | expired`——前端已实现前四态（feat/034-lite-ask），`revoked`/`expired` 后端接线时补；前端 coerce 遇未知状态必须 fail-loud 或折 `closed`，**绝不折回 `draft`**（否则已发出/已撤回的 ask 会以可编辑草稿复活）。token 与 lite-v1 的 company token 同规格（不可猜、读路径校验、未知 token 大声 404）。
 - **后端端点（FastAPI）**：创建 ask（服务端 M3 生成题目→红线门）·保存/编辑题目（红线门）·生成受访者链接·`GET /r/{token}`（服务端渲染 H5：per-link OG meta + 大按钮 + 透明三要素"谁在问/问什么/给谁看"）·`POST /r/{token}/answer`（单次、答完锁定）·ask 状态读取（manager 卡）·撤回。
 - **前端（src/lite）**：Ask 卡 = lite 第二种 artifact 卡（与 LiteAdvice 并列，新数据形状+组件）；Thread 内出生：agent 判断"该问本人"时在 manifest 里产出草稿卡 → manager 编辑/确认 → 逐人复制链接分享（v1 手动复制粘贴到 IM，即"分享=人闸"）。墙照旧：不 import story，共用走 shared。
 - **红线机器闸（ADR-0023 后果落地）**：问句门（生成+手改均 validate，EN+ZH）；回执结构隔离（类型层不给 PersonEntity/LitePerson 挂数字）；多人视图 DOM 断言无每人一行分数表；员工页透明三要素 DOM 断言。

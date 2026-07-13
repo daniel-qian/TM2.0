@@ -1,4 +1,14 @@
-# ask-card per-line handoff（2026-07-13 grill 会话）
+# ask-card per-line handoff（2026-07-13 grill 会话 → 同日双面施工合流）
+
+## 2026-07-13 深夜 · 合流收线（最新状态）
+
+- **阶段 A（story beat）+ 阶段 B（lite AskCard, stub）双双完工并经独立对抗验证 CONFIRMED_SAFE**，已 merge 本地 main（`3e79e9e` + `d1934bf`），合流后 `./init.sh` 复绿。两侧实现细节与验证 verdict 见 `story-beat-handoff.md` / `lite-ask-handoff.md`。
+- Q13（Danny 指令）：story 面加性解冻，scripted Ask beat 落 bill/acme case。
+- 非阻塞 findings（F1 status 词表 / F2 stub 假链接标记 / F3 coerce 收紧）已锁进 `kickoff-dev.md` 阶段 C 追加清单 + PRD 数据模型行。
+- **阶段 C（后端）仍 deferred**：等持久化线（feat/030+）合 main；阶段 D（部署+内存哨兵）随 lite-v1 部署波。
+- feature_list.json feat-034 evidence 已更新（含双验证 + 合流哈希）。push 照旧留 Danny。
+
+---
 
 ## What's Done
 - 融资团队点名的"生成式快问卡"完成**全套 grill 设计**：十个决策（Q1-Q10）Danny 全部拍板，见 `PRD.md` 决策表——不 re-litigate。
