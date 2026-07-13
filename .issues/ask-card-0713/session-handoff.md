@@ -16,7 +16,7 @@
 
 ## Blockers
 - lite-v1 持久化未建（硬依赖，唯一真 blocker）。
-- Danny 凭据墙（已缩小）：Supabase 项目/连接串、真 LLM key 进服务器、push 授权；两个新决策待拍：Q11 域名形态（子域 vs 新域名）、Q12 ECS 资源（升配 vs 内存帽硬挤 vs 新机）。
+- Danny 凭据墙（已缩小）：Supabase 项目/连接串、真 LLM key 进服务器、push 授权。Q11/Q12 已拍（2026-07-13）：域名=avery.ima-read.com 子域；ECS 不预先升配，内存帽硬挤 + **部署时必装内存哨兵**（OOM/重启/高水位 → 主动冒泡给 Danny"该升配了"），压测内存峰值进 evidence。
 - 基建事实已核实（单一事实源=D:\Boyle\agent-os\infra-brief.md）：备案主体 imaread 公司；DNS 在阿里云云解析；ECS=唯一生产机（2C/3.5G，跑 ImaRead 全线，**available ~540M 无 swap**——Avery 容器必须带内存帽+低并发+上传硬门）。
 
 ## Files Modified（本会话）

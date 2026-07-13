@@ -32,6 +32,8 @@ Manager 问 Avery"A 能不能负责跟乙方谈价"这类问题时，靠已有�
 | Q8 | 生命周期 | **7 天过期；答完即锁定**（证据要稳定，防被要求改口）；manager 可撤回作废；过期/已答/已撤回各有状态页文案。催答提醒 v1 不做。 |
 | Q9 | 平台优先级 | 验收顺序（2026-07-13 补正，Danny 告知备案域名+ECS 已在手）：**企微+飞书+钉钉同档 first**（备案域名消除企微"谨慎访问"最大诱因，国内 prospect 企微占比最大）→ Slack/Teams 验 OG 卡。同一条链接全平台通用，只是测试排序。原"飞书钉钉先行、企微降级"基于无备案假设，作废。 |
 | Q10 | 命名 | 领域名 **Ask**；surface EN **"Quick ask"** / ZH **"快问"**。avoid: survey/问卷、poll/投票、打分。CONTEXT.md 已收录。 |
+| Q11 | 域名 | **v1 用 `avery.ima-read.com` 子域**（零等待零花钱；答题链接 = `avery.ima-read.com/r/{token}`）。Avery 专属新域名后置。 |
+| Q12 | ECS 资源 | **升配（A）但按需触发，现在不花钱**：先以硬内存帽（docker --memory）+ 低并发 + 上传硬门挤进 available ~540M；**部署时必装"内存哨兵"**——OOMKilled/重启计数/内存高水位被侦测到就主动冒泡给 Danny"该升配了"信号（进错误追捕/健康报告，不做完整监控栈）；真机压测把大上传内存峰值写进 evidence，给升配决策供数。 |
 
 ## 平台兼容性调研结论（2026-07-13，全文见 platform-compat-research.md）
 
@@ -82,8 +84,7 @@ Manager 问 Avery"A 能不能负责跟乙方谈价"这类问题时，靠已有�
 
 - Supabase 项目 + 连接串；真 LLM key 进服务器 secret（与 lite-v1 共用，见 runbook §F）。
 - push 授权（本分支 + main ahead 照旧未 push）。
-- **Q11 域名形态**（待拍）：A. v1 用 ima-read.com 子域（如 avery.ima-read.com，零等待零花钱）；B. Avery 专属新域名+备案新增（品牌净，管局 1~2 周+域名费）。
-- **Q12 ECS 资源**（花钱闸，待拍）：A. 现有 ECS 升配内存（3.5G→8G 档，推荐）；B. 不升配，Avery 容器硬帽挤进 ~540M available（能跑，演示期大上传有容器级重启风险，host 受内存帽保护）；C. 新开小 ECS 专跑 Avery。
+- ~~Q11/Q12~~ 已拍（2026-07-13，见决策表补行）。
 
 ## 指针
 
