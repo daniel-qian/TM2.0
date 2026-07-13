@@ -45,6 +45,8 @@ import {
 import { PanZoomCanvas } from '../PanZoomCanvas'
 import { flyToTarget, useRailCamera, type CameraTarget, type SafeInsets } from '../../lib/useRailCamera'
 import { PixelAvatar } from '../PixelAvatar'
+// feat-034 阶段 A（ADR-0023）：scripted Ask（Quick ask）卡——独立组件文件，本 scene 只加性接线。
+import { QuickAskCard } from './QuickAskCard'
 
 // feat-004 (ADR-0014 决策 1)：终端 = viewport-fixed 左栏 HUD。镜头只对 Manifest 区取景，
 // insets.left 加宽为终端栏宽（440 + 边距）；其余薄边清 Topbar / advance-bar。
@@ -1327,6 +1329,10 @@ function ScriptedNexusScene() {
   const showStructuredOutput = reached('structured-output')
   const showChat = reached('human-loop')
   const showAlternatives = reached('follow-up-alternatives')
+  // feat-034 阶段 A：Ask 卡显形条件。'quick-ask-reply' 无独立锚点——回执是同一张卡的
+  // 状态推进（answered 翻转），镜头因 lastCardStep 不变而稳在卡上（ADR-0023 卡内叙事）。
+  const showQuickAsk = reached('quick-ask')
+  const quickAskAnswered = reached('quick-ask-reply')
   // P6-05：web-search errand case 的卡显形条件（步骤 kind 只存在于该 case 的 thread——
   // bill/acme thread 永远 reached() === false，零串扰）。
   const showWebPreview = reached('web-search')
@@ -1452,6 +1458,7 @@ function ScriptedNexusScene() {
   const alternativesQuestion = followUpQuestionFor('follow-up-alternatives')
   const complianceQuestion = followUpQuestionFor('follow-up-compliance')
   const slackQuestion = followUpQuestionFor('follow-up-slack')
+  const quickAskQuestion = followUpQuestionFor('quick-ask') // feat-034 阶段 A
 
   return (
     <section className="scene scene-nexus is-active" aria-label="The room">
@@ -1526,6 +1533,18 @@ function ScriptedNexusScene() {
             chip={chipStep === 'follow-up-alternatives' ? followUpChip : undefined}
           >
             <AlternativesCard question={alternativesQuestion} />
+          </CardSlot>
+        ) : null}
+        {/* feat-034 阶段 A（ADR-0023）：Ask 卡——回执归来是同卡状态推进（answered），
+            isActive 覆盖两个 step；数字只以"本人自述"形态留在卡内（QuickAskCard 注释详述）。 */}
+        {showQuickAsk ? (
+          <CardSlot
+            anchor={caseDef.cardAnchors['quick-ask']}
+            isActive={activeStep === 'quick-ask' || activeStep === 'quick-ask-reply'}
+            onInspect={() => inspectCard('quick-ask')}
+            chip={chipStep === 'quick-ask' ? followUpChip : undefined}
+          >
+            <QuickAskCard question={quickAskQuestion} answered={quickAskAnswered} />
           </CardSlot>
         ) : null}
         {/* P6-05：web-search errand case 的 Manifest 卡组（CardSlot 接法同上）。 */}

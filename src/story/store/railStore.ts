@@ -222,6 +222,28 @@ export const SCRIPT: RailStep[] = [
     },
   },
   {
+    // ── feat-034 阶段 A（PRD Q13 加性解冻 / ADR-0023）：scripted Ask beat ×2 ──
+    // 位置钉在 CL 之后、B11 之前：CL 及之前所有既有拍的 replay 前缀 byte 级不变
+    //（加性验证锚点——插在 B9f 后会改变 B9b..CL 的重放状态，否决）。叙事顺位也对：
+    // hero thread 刚回屏（alternatives 卡在镜头里），Ask 作为收官 follow-up 递给 Act 3。
+    // 与 B9f 同构：askFollowUp（第 2 次调用消费 fred-quick-ask 段）+ runAgent 连发；
+    // 重放幂等：段耗尽 askFollowUp no-op、编排表走完 runAgent 只置 complete。
+    beat: 'A1',
+    label: 'Quick ask — check with Fred himself', // （caption）
+    run: () => {
+      const canvas = useCanvas.getState()
+      canvas.askFollowUp(BILL_ACME_CASE.followUps[1].suggestedQuestion)
+      canvas.runAgent()
+    },
+  },
+  {
+    // 回执归来拍：同一张 Ask 卡状态推进（answered 翻转，镜头不动——lastCardStep 不变）。
+    // 🔴 ADR-0023：回执 = Fred 自述 + 原话短评，数字只留在 Ask 卡（"本人自述"标注）。
+    beat: 'A2',
+    label: "The reply — Fred, in his own words", // （caption）
+    run: () => useCanvas.getState().runAgent(),
+  },
+  {
     // ── Act 3 ──。P5-01 (ADR-0007)：Capabilities 收尾 beat 原样 = 护城河 + 营收收束。
     beat: 'B11',
     label: 'The playbooks behind the call',

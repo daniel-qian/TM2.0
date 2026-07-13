@@ -11,6 +11,9 @@ import './shared/styles/40-nexus-empty.css'
 import './story/styles/50-followup-chip.css'
 import './shared/styles/55-ask-composer.css'
 import './story/styles/58-threads-errands.css'
+// feat-034 阶段 A：Ask（Quick ask）卡样式——纯新增 selector（.quick-ask-*），插在 58 后
+// 不触碰既有 chunk 的相对顺序（cascade 对既有 selector 零漂移）。
+import './story/styles/59-quick-ask.css'
 import './shared/styles/60-terminal.css'
 import './shared/styles/70-home-cards.css'
 import './lite/styles/lite.css'
