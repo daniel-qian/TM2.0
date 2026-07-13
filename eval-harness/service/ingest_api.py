@@ -25,15 +25,18 @@ registry (offline default, the pre-030 ADR-0021 §6 ephemeral behavior). Same ge
 """
 from __future__ import annotations
 
+import mimetypes
 import tempfile
 from pathlib import Path
+from urllib.parse import quote
 
 from fastapi import APIRouter, HTTPException, UploadFile
 from fastapi import File
+from fastapi import Response
 from starlette.concurrency import run_in_threadpool
 
 from avery.ingest import ingest_paths
-from avery.ingest.registry import CompanyContext, active_registry
+from avery.ingest.registry import CompanyContext, SourceDocument, active_registry
 
 from . import embedding_factory, extractor_factory
 
@@ -66,13 +69,23 @@ async def ingest(files: list[UploadFile] = File(...)) -> dict:
 
     tmp = Path(tempfile.mkdtemp(prefix="avery-upload-"))
     saved: list[Path] = []
+    src_docs: list[SourceDocument] = []
     try:
         for f in files:
             # Guard against path traversal in the client-provided filename.
             safe = Path(f.filename or "upload").name or "upload"
+            raw = await f.read()
             dest = tmp / safe
-            dest.write_bytes(await f.read())
+            dest.write_bytes(raw)
             saved.append(dest)
+            # feat-032: keep the raw upload (bytes + metadata) for the per-company file space —
+            # we already have the bytes, so build the SourceDocument here rather than re-reading.
+            # The temp file is STILL deleted below (disk hygiene); the bytes are what persist, in
+            # the DB (Postgres registry) or in memory (offline). Content is UNTRUSTED — stored and
+            # listed, never followed as instructions.
+            mime = f.content_type or mimetypes.guess_type(safe)[0] or "application/octet-stream"
+            src_docs.append(SourceDocument(filename=safe, mime=mime, size_bytes=len(raw),
+                                           content=raw))
 
         # feat-023: pluggable extraction (LLM when keyed, heuristic otherwise/forced) — the
         # red-line gate inside ingest_paths is unchanged and still refuses a scoring extraction.
@@ -94,7 +107,8 @@ async def ingest(files: list[UploadFile] = File(...)) -> dict:
             return ingest_paths([str(p) for p in saved], registry=registry, name="company",
                                 extractor=extractor_factory.make_extractor(),
                                 embedder=embedder if prefer_vector else None,
-                                prefer_vector=prefer_vector)
+                                prefer_vector=prefer_vector,
+                                source_documents=src_docs)
 
         try:
             report = await run_in_threadpool(_extract_and_ingest)
@@ -137,3 +151,36 @@ def team(context_id: str) -> dict:
     if ctx is None:
         raise HTTPException(status_code=404, detail=f"unknown company_context_id: {context_id}")
     return _team_payload(ctx)
+
+
+@router.get("/team/{context_id}/files")
+def team_files(context_id: str) -> dict:
+    """feat-032 — the per-company FILE SPACE manifest: what this company uploaded, so a manager can
+    see what Avery's memory is built on (User Story 4). METADATA ONLY (filename / size / mime /
+    doc_kind / uploaded_at / n_chunks); the bytes live behind the /files/{idx} download seam. The
+    manifest is derived from stored data — nothing in a file's CONTENT is executed here."""
+    ctx = active_registry().get(context_id)
+    if ctx is None:
+        raise HTTPException(status_code=404, detail=f"unknown company_context_id: {context_id}")
+    return {"context_id": ctx.context_id, "files": ctx.file_cards()}
+
+
+@router.get("/team/{context_id}/files/{idx}")
+def team_file_download(context_id: str, idx: int) -> Response:
+    """feat-032 — download one uploaded file's ORIGINAL bytes (look-back enhancement). The bytes are
+    UNTRUSTED user content, so they are served as an attachment with a generic content-type — a
+    browser must never render/execute them inline. The filename is RFC 5987 percent-encoded, which
+    also neutralizes header injection (newlines/quotes/CJK in a stored filename)."""
+    reg = active_registry()
+    ctx = reg.get(context_id)
+    if ctx is None:
+        raise HTTPException(status_code=404, detail=f"unknown company_context_id: {context_id}")
+    if idx < 0 or idx >= len(ctx.source_documents):
+        raise HTTPException(status_code=404, detail=f"no file at idx {idx}")
+    data = reg.source_document_bytes(context_id, idx)
+    if data is None:
+        raise HTTPException(status_code=404, detail="file content is not available")
+    safe_name = Path(ctx.source_documents[idx].filename).name or "download"
+    disposition = "attachment; filename*=UTF-8''" + quote(safe_name)
+    return Response(content=data, media_type="application/octet-stream",
+                    headers={"Content-Disposition": disposition})

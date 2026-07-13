@@ -51,7 +51,7 @@ from .extract import (
     ExtractionResult, MaterialChunk, PersonEntity, ProjectEntity, SignalEntity,
 )
 from .redline_extract import validate_extraction
-from .registry import CompanyContext, data_root, materialize_memory
+from .registry import CompanyContext, SourceDocument, data_root, materialize_memory
 from .store import Embedder, KeywordStore, PgVectorStore, VectorStore, _vec_literal
 
 logger = logging.getLogger(__name__)
@@ -154,6 +154,11 @@ class PostgresContextRegistry:
         blobs = [facts, notes, ctx.name, *ctx.source_files]
         blobs += [m.text for m in ctx.extraction.materials]
         blobs += [p.name for p in ctx.extraction.people]
+        # feat-032: the source-document TEXT columns (filename/mime/storage_ref) must be NUL-free too
+        # — the raw `content` is bytea (a NUL there is legal and preserved byte-for-byte).
+        blobs += [sd.filename for sd in ctx.source_documents]
+        blobs += [sd.mime for sd in ctx.source_documents]
+        blobs += [sd.storage_ref for sd in ctx.source_documents]
         if any("\x00" in (b or "") for b in blobs):
             raise ValueError(
                 "unsupported control character (NUL / 0x00) in the upload — cannot be stored")
@@ -246,6 +251,8 @@ class PostgresContextRegistry:
             conn.execute("DELETE FROM avery.entities WHERE context_id = %s", (ctx.context_id,))
             conn.execute("DELETE FROM avery.materials WHERE context_id = %s", (ctx.context_id,))
             conn.execute("DELETE FROM avery.memory_files WHERE context_id = %s", (ctx.context_id,))
+            conn.execute("DELETE FROM avery.source_documents WHERE context_id = %s",
+                         (ctx.context_id,))
 
             with conn.cursor() as cur:
                 cur.executemany(
@@ -266,6 +273,17 @@ class PostgresContextRegistry:
                     "INSERT INTO avery.memory_files (context_id, filename, content) "
                     "VALUES (%s, %s, %s)",
                     [(ctx.context_id, "facts.md", facts), (ctx.context_id, "notes.md", notes)])
+                # feat-032: the per-company file space — raw uploads (bytea + metadata). The bytes
+                # are UNTRUSTED content: stored here, served for download, never followed. content
+                # is bound as a Python `bytes` (psycopg maps it to bytea); NULL when absent.
+                cur.executemany(
+                    "INSERT INTO avery.source_documents "
+                    "(context_id, idx, filename, mime, size_bytes, doc_kind, content, storage_ref, "
+                    " uploaded_at) "
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, COALESCE(%s::timestamptz, now()))",
+                    [(ctx.context_id, i, sd.filename, sd.mime, sd.size_bytes, sd.doc_kind,
+                      sd.content, sd.storage_ref, sd.uploaded_at or None)
+                     for i, sd in enumerate(ctx.source_documents)])
         return ctx.context_id
 
     def get(self, context_id: str) -> CompanyContext | None:
@@ -291,6 +309,13 @@ class PostgresContextRegistry:
             emb_count = conn.execute(
                 "SELECT count(*) FROM avery.materials "
                 "WHERE context_id = %s AND embedding IS NOT NULL", (context_id,)).fetchone()[0]
+            # feat-032: the file-space manifest is METADATA ONLY — the bytea `content` is NOT pulled
+            # here (a listing must not drag every uploaded file into memory); the download seam
+            # (source_document_bytes) fetches one file's bytes on demand.
+            srcdocs = conn.execute(
+                "SELECT idx, filename, mime, size_bytes, doc_kind, storage_ref, uploaded_at "
+                "FROM avery.source_documents WHERE context_id = %s ORDER BY idx",
+                (context_id,)).fetchall()
 
         extraction = ExtractionResult(
             people=[_entity(PersonEntity, _PERSON_FIELDS, pl) for k, pl in ents if k == "person"],
@@ -322,9 +347,28 @@ class PostgresContextRegistry:
                 mem_dir.mkdir(parents=True, exist_ok=True)
                 f.write_text(want, encoding="utf-8")
 
+        source_documents = [
+            SourceDocument(
+                filename=fn, mime=mime, size_bytes=sz, doc_kind=dk, storage_ref=sr,
+                uploaded_at=ua.isoformat() if ua is not None else "", content=None)
+            for _idx, fn, mime, sz, dk, sr, ua in srcdocs]
+
         return CompanyContext(
             context_id=context_id, extraction=extraction, store=store, memory_dir=mem_dir,
-            name=name, source_files=list(source_files))
+            name=name, source_files=list(source_files), source_documents=source_documents)
+
+    def source_document_bytes(self, context_id: str, idx: int) -> bytes | None:
+        """feat-032 download seam: the raw bytea of one uploaded file, pulled on demand (never in
+        get()). None for an unknown context / idx or a NULL content. Short-lived connection, same
+        no-pooling model as every other op."""
+        self._ensure_schema()
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT content FROM avery.source_documents WHERE context_id = %s AND idx = %s",
+                (context_id, idx)).fetchone()
+        if row is None or row[0] is None:
+            return None
+        return bytes(row[0])
 
     def resolve_memory_dir(self, context_id: str) -> Path | None:
         ctx = self.get(context_id)

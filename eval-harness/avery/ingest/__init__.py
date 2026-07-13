@@ -41,7 +41,7 @@ from .store import (
     KeywordStore, VectorStore, PgVectorStore, RetrievalStore, RetrievalHit, Embedder,
     HashingEmbedder, build_store,
 )
-from .registry import CompanyContext, ContextRegistry, REGISTRY
+from .registry import CompanyContext, ContextRegistry, SourceDocument, REGISTRY
 from .pipeline import ingest_paths, ingest_docs, IngestReport
 
 __all__ = [
@@ -52,6 +52,6 @@ __all__ = [
     "validate_extraction", "ExtractionRedlineResult", "ExtractionViolation",
     "KeywordStore", "VectorStore", "PgVectorStore", "RetrievalStore", "RetrievalHit", "Embedder",
     "HashingEmbedder", "build_store",
-    "CompanyContext", "ContextRegistry", "REGISTRY",
+    "CompanyContext", "ContextRegistry", "SourceDocument", "REGISTRY",
     "ingest_paths", "ingest_docs", "IngestReport",
 ]

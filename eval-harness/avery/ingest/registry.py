@@ -21,10 +21,36 @@ import os
 import tempfile
 import uuid
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 
 from .extract import ExtractionResult
 from .store import RetrievalStore, RetrievalHit, KeywordStore
+
+
+@dataclass
+class SourceDocument:
+    """feat-032 — a persisted RAW upload: the original bytes + metadata, kept in the per-company
+    file space so a manager can look back at what Avery's memory is built on (User Story 4).
+
+    The bytes are UNTRUSTED content: stored and served for download, NEVER interpreted as
+    instructions (readiness §2-I injection surface — this layer only stores/lists, it does not
+    follow anything inside a file). `content` is held in memory by the in-memory registry and left
+    None by the Postgres registry's metadata read (get()); the bytea is pulled on demand by the
+    download seam (`source_document_bytes`). `storage_ref` is the feat-035 object-store seam
+    (PRD: 'may include an object-store reference') — v1 keeps bytes inline in avery.source_documents.
+    """
+    filename: str
+    mime: str = "application/octet-stream"
+    size_bytes: int = 0
+    doc_kind: str = "company"
+    uploaded_at: str = ""                  # ISO8601 UTC; set at ingest, or read back from the DB
+    content: bytes | None = None           # raw upload bytes (in-memory) / None (pg metadata read)
+    storage_ref: str = ""                  # feat-035 seam: object-store pointer; inline bytea in v1
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
 @dataclass
@@ -36,6 +62,7 @@ class CompanyContext:
     memory_dir: Path                       # holds materialized facts.md / notes.md
     name: str = "company"
     source_files: list[str] = field(default_factory=list)
+    source_documents: list[SourceDocument] = field(default_factory=list)  # feat-032 file space
 
     # --- retrieval surface (what the advisor uses) --------------------------------------------
 
@@ -109,6 +136,29 @@ class CompanyContext:
         return {"tone": "alert" if at_risk else "calm", "headline": headline, "subhead": subhead,
                 "metrics": metrics}
 
+    # --- feat-032 file space (per-company uploaded-file manifest) ------------------------------
+
+    def _chunks_per_file(self) -> dict[str, int]:
+        """How many material chunks each uploaded file contributed, linked via a chunk's
+        `<filename>:<line>` source prefix (the same cite seam the advisor uses)."""
+        counts: dict[str, int] = {}
+        for m in self.extraction.materials:
+            src = m.source or ""
+            fname = src.rsplit(":", 1)[0] if ":" in src else src
+            if fname:
+                counts[fname] = counts.get(fname, 0) + 1
+        return counts
+
+    def file_cards(self) -> list[dict]:
+        """The per-file manifest the 'your files' view renders — METADATA ONLY (no bytes): filename,
+        size, mime, doc_kind, uploaded_at, and n_chunks (material chunks the file produced). Content
+        is untrusted data; the manifest lists it, the download seam serves the bytes separately."""
+        counts = self._chunks_per_file()
+        return [{"idx": i, "filename": sd.filename, "size_bytes": sd.size_bytes, "mime": sd.mime,
+                 "doc_kind": sd.doc_kind, "uploaded_at": sd.uploaded_at,
+                 "n_chunks": counts.get(sd.filename, 0)}
+                for i, sd in enumerate(self.source_documents)]
+
 
 class ContextRegistry:
     """In-memory id -> CompanyContext map. Process-local — the OFFLINE default (no external service,
@@ -134,6 +184,15 @@ class ContextRegistry:
         """The seam live_input wants: an id -> a memory_dir the loop's recall() reads."""
         ctx = self.get(context_id)
         return ctx.memory_dir if ctx else None
+
+    def source_document_bytes(self, context_id: str, idx: int) -> bytes | None:
+        """feat-032 download seam: the raw bytes of the idx-th uploaded file, or None (unknown
+        context / out-of-range idx / no content). In-memory holds the bytes; the pg twin reads
+        bytea. Same duck-typed API so the /team/{id}/files/{idx} handler is registry-agnostic."""
+        ctx = self.get(context_id)
+        if ctx is None or idx < 0 or idx >= len(ctx.source_documents):
+            return None
+        return ctx.source_documents[idx].content
 
     def __contains__(self, context_id: str) -> bool:
         return context_id in self._by_id

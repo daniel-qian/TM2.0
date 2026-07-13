@@ -102,15 +102,30 @@ def impl(request, tmp_path):
     _pg_cleanup(pg)
 
 
-def _ingest(impl: _Impl, work_dir: Path, files: list[Path] | None = None):
+def _ingest(impl: _Impl, work_dir: Path, files: list[Path] | None = None,
+            source_documents=None):
     """Drive the REAL pipeline (parse -> extract -> red-line gate -> store -> put) at the registry
     under test — the contract exercises the same write path the service uses."""
     reg = impl.fresh()
     cid = impl.track(_new_cid())
     paths = [str(p) for p in (files or [HANDBOOK, ROSTER])]
-    rep = ingest_paths(paths, registry=reg, work_dir=work_dir, context_id=cid, name="prism")
+    rep = ingest_paths(paths, registry=reg, work_dir=work_dir, context_id=cid, name="prism",
+                       source_documents=source_documents)
     assert rep.ok, f"fixture ingest failed the red-line gate: {rep.redline.summary()}"
     return reg, cid, rep
+
+
+def _sample_source_docs():
+    """The raw uploads (bytes + metadata) a company's file space keeps (feat-032). Mirrors what the
+    /ingest handler builds from `await f.read()`."""
+    from avery.ingest.registry import SourceDocument
+    return [
+        SourceDocument(filename=HANDBOOK.name, mime="text/markdown",
+                       size_bytes=HANDBOOK.stat().st_size, content=HANDBOOK.read_bytes()),
+        SourceDocument(filename=ROSTER.name,
+                       mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                       size_bytes=ROSTER.stat().st_size, content=ROSTER.read_bytes()),
+    ]
 
 
 # ==============================================================================================
@@ -188,6 +203,48 @@ def test_ingest_materializes_under_avery_data_dir(monkeypatch, tmp_path):
 
 
 # ==============================================================================================
+# feat-032 — the per-company FILE SPACE contract (shared: memory + postgres). The raw uploads are
+# kept (bytes + metadata), a manifest projects them with n_chunks, and the bytes are retrievable.
+# ==============================================================================================
+
+def test_source_documents_round_trip(impl, tmp_path):
+    """put(context with source_documents) -> get() returns the same file MANIFEST (filename / mime /
+    size / doc_kind), each file's n_chunks links to the material chunks it produced, and the raw
+    bytes are retrievable through the registry — the same behavior memory and postgres both owe."""
+    src_docs = _sample_source_docs()
+    reg, cid, _ = _ingest(impl, tmp_path / "mem", source_documents=src_docs)
+
+    got = reg.get(cid)
+    assert got is not None
+    cards = got.file_cards()
+    assert [c["filename"] for c in cards] == [HANDBOOK.name, ROSTER.name], (
+        "the file manifest lost/ reordered the uploaded files")
+    by_name = {c["filename"]: c for c in cards}
+    assert by_name[HANDBOOK.name]["size_bytes"] == HANDBOOK.stat().st_size
+    assert by_name[HANDBOOK.name]["mime"] == "text/markdown"
+    # n_chunks links a file to the material chunks it produced (materials.source '<filename>:<line>').
+    assert by_name[HANDBOOK.name]["n_chunks"] > 0, "handbook produced material but manifest shows 0"
+    assert sum(c["n_chunks"] for c in cards) == len(got.extraction.materials), (
+        "manifest n_chunks must account for every material chunk")
+
+    # The raw bytes survive the round-trip and are retrievable by (context_id, idx) — memory holds
+    # them, postgres reads them back from bytea. Both must return the ORIGINAL upload byte-for-byte.
+    fresh = impl.fresh()
+    assert fresh.source_document_bytes(cid, 0) == HANDBOOK.read_bytes()
+    assert fresh.source_document_bytes(cid, 1) == ROSTER.read_bytes()
+    assert fresh.source_document_bytes(cid, 99) is None, "out-of-range idx must be None, not a crash"
+
+
+def test_source_documents_absent_is_empty_manifest(impl, tmp_path):
+    """A context ingested WITHOUT source_documents (the pre-032 path) has an empty file manifest and
+    None bytes — never a crash. Backward-compatible with every existing ingest."""
+    reg, cid, _ = _ingest(impl, tmp_path / "mem")
+    got = reg.get(cid)
+    assert got.file_cards() == []
+    assert impl.fresh().source_document_bytes(cid, 0) is None
+
+
+# ==============================================================================================
 # DURABILITY CONTRACT — postgres only (@needs_db). A process dict cannot pass these; that gap is
 # exactly what feat-030 closes.
 # ==============================================================================================
@@ -211,6 +268,26 @@ def test_pg_context_survives_a_new_registry_instance(pg, tmp_path):
     assert got.team_cards() == rep.context.team_cards()
     assert got.project_cards() == rep.context.project_cards()
     assert got.source_files == rep.context.source_files
+
+
+@needs_db
+def test_pg_source_documents_survive_a_new_registry_instance(pg, tmp_path):
+    """feat-032 durability: the raw uploads (bytes + metadata) put by one registry instance are
+    visible to a BRAND-NEW instance — metadata AND the bytea content — after a simulated restart."""
+    src_docs = _sample_source_docs()
+    reg_a, cid, _ = _ingest(pg, tmp_path / "mem", source_documents=src_docs)
+
+    reg_b = pg.fresh()
+    got = reg_b.get(cid)
+    assert got is not None
+    cards = got.file_cards()
+    assert [c["filename"] for c in cards] == [HANDBOOK.name, ROSTER.name]
+    # metadata read must NOT require pulling the bytea content (the manifest is metadata-only).
+    assert all(sd.content is None for sd in got.source_documents), (
+        "get() eagerly loaded bytea content — the manifest read should be metadata-only")
+    # the bytes are still there, byte-for-byte, on a fresh instance (the restart claim).
+    assert reg_b.source_document_bytes(cid, 0) == HANDBOOK.read_bytes()
+    assert reg_b.source_document_bytes(cid, 1) == ROSTER.read_bytes()
 
 
 @needs_db

@@ -29,8 +29,8 @@ from .extract import ExtractionResult, extract_docs, Extractor
 from .redline_extract import validate_extraction, ExtractionRedlineResult, ExtractionViolation
 from .store import RetrievalStore, Embedder, build_store
 from .registry import (
-    CompanyContext, ContextRegistry, active_registry, data_root, new_context_id,
-    materialize_memory,
+    CompanyContext, ContextRegistry, SourceDocument, active_registry, data_root, new_context_id,
+    materialize_memory, _now_iso,
 )
 
 
@@ -49,10 +49,28 @@ class IngestReport:
         return self.redline.violations
 
 
+def _finalize_source_documents(source_documents: list[SourceDocument] | None,
+                               docs: list[ParsedDoc]) -> list[SourceDocument]:
+    """feat-032: enrich the raw uploads the caller handed in (the /ingest handler builds them from
+    `await f.read()`) with the doc_kind the parser sniffed and a size / upload timestamp — so the
+    file manifest carries accurate metadata without re-reading any bytes."""
+    src_docs = list(source_documents or [])
+    kind_by_name = {d.name: d.doc_kind for d in docs}
+    for sd in src_docs:
+        if sd.doc_kind in ("", "company") and sd.filename in kind_by_name:
+            sd.doc_kind = kind_by_name[sd.filename]
+        if not sd.size_bytes and sd.content is not None:
+            sd.size_bytes = len(sd.content)
+        if not sd.uploaded_at:
+            sd.uploaded_at = _now_iso()
+    return src_docs
+
+
 def ingest_docs(docs: list[ParsedDoc], *, extractor: Extractor | None = None,
                 embedder: Embedder | None = None, prefer_vector: bool = False,
                 registry: ContextRegistry | None = None, work_dir: Path | None = None,
-                name: str = "company", context_id: str | None = None) -> IngestReport:
+                name: str = "company", context_id: str | None = None,
+                source_documents: list[SourceDocument] | None = None) -> IngestReport:
     """Ingest already-parsed docs. Runs extract -> red-line gate -> store -> CompanyContext.
 
     prefer_vector=False (default) uses the offline KeywordStore so the AFK gate needs no embedding
@@ -60,6 +78,9 @@ def ingest_docs(docs: list[ParsedDoc], *, extractor: Extractor | None = None,
 
     registry=None -> `active_registry()` (feat-030): the Postgres registry when AVERY_DB_URL is
     set (company data survives restarts), else the in-memory default (offline, no DB needed).
+
+    source_documents (feat-032): the raw uploads (bytes + metadata) to persist in the per-company
+    file space; None keeps the pre-032 behavior (no file space, empty manifest).
     """
     registry = registry if registry is not None else active_registry()
 
@@ -83,7 +104,8 @@ def ingest_docs(docs: list[ParsedDoc], *, extractor: Extractor | None = None,
 
     ctx = CompanyContext(
         context_id=cid, extraction=extraction, store=store, memory_dir=mem_dir, name=name,
-        source_files=[d.name for d in docs])
+        source_files=[d.name for d in docs],
+        source_documents=_finalize_source_documents(source_documents, docs))
     registry.put(ctx)
 
     return IngestReport(ok=True, context=ctx, redline=rl, parsed=docs, extraction=extraction,
@@ -93,7 +115,8 @@ def ingest_docs(docs: list[ParsedDoc], *, extractor: Extractor | None = None,
 def ingest_paths(paths: list[str | Path], *, extractor: Extractor | None = None,
                  embedder: Embedder | None = None, prefer_vector: bool = False,
                  registry: ContextRegistry | None = None, work_dir: Path | None = None,
-                 name: str = "company", context_id: str | None = None) -> IngestReport:
+                 name: str = "company", context_id: str | None = None,
+                 source_documents: list[SourceDocument] | None = None) -> IngestReport:
     """Ingest files from disk: parse each (skipping unparseable ones), then `ingest_docs`."""
     docs: list[ParsedDoc] = []
     errors: list[str] = []
@@ -103,6 +126,7 @@ def ingest_paths(paths: list[str | Path], *, extractor: Extractor | None = None,
         except ParseError as e:
             errors.append(str(e))
     report = ingest_docs(docs, extractor=extractor, embedder=embedder, prefer_vector=prefer_vector,
-                         registry=registry, work_dir=work_dir, name=name, context_id=context_id)
+                         registry=registry, work_dir=work_dir, name=name, context_id=context_id,
+                         source_documents=source_documents)
     report.parse_errors = errors
     return report
