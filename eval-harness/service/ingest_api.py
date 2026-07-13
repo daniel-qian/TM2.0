@@ -43,6 +43,29 @@ from . import embedding_factory, extractor_factory
 router = APIRouter()
 
 
+def _unique_parse_names(display_names: list[str]) -> list[str]:
+    """feat-032 P1: give each upload in a batch a DISTINCT on-disk basename, so two files that share
+    a display name (both 'report.txt') no longer clobber the SAME temp path — which silently dropped
+    the first file's content from parse -> memory/RAG. The returned name is the parsed doc's name and
+    the SourceDocument.source_key (the per-document n_chunks join key); the ORIGINAL display name is
+    kept separately on SourceDocument.filename. Collisions get a `(1)`/`(2)` suffix, deduped against
+    every name already assigned (so it never re-collides with another original)."""
+    used: set[str] = set()
+    out: list[str] = []
+    for name in display_names:
+        candidate = name
+        if candidate in used:
+            stem, suffix = Path(name).stem, Path(name).suffix
+            k = 1
+            candidate = f"{stem}({k}){suffix}"
+            while candidate in used:
+                k += 1
+                candidate = f"{stem}({k}){suffix}"
+        used.add(candidate)
+        out.append(candidate)
+    return out
+
+
 def _team_payload(ctx: CompanyContext) -> dict:
     """Project a CompanyContext onto the exact LiveTeamPayload shape transport.ts expects."""
     return {
@@ -71,21 +94,25 @@ async def ingest(files: list[UploadFile] = File(...)) -> dict:
     saved: list[Path] = []
     src_docs: list[SourceDocument] = []
     try:
-        for f in files:
-            # Guard against path traversal in the client-provided filename.
-            safe = Path(f.filename or "upload").name or "upload"
+        # Guard against path traversal in the client-provided filename (basename only), then give
+        # the batch DISTINCT on-disk names so two same-named uploads don't clobber one temp path.
+        display_names = [Path(f.filename or "upload").name or "upload" for f in files]
+        parse_names = _unique_parse_names(display_names)
+        for f, display, parse_name in zip(files, display_names, parse_names):
             raw = await f.read()
-            dest = tmp / safe
+            dest = tmp / parse_name
             dest.write_bytes(raw)
             saved.append(dest)
             # feat-032: keep the raw upload (bytes + metadata) for the per-company file space —
             # we already have the bytes, so build the SourceDocument here rather than re-reading.
             # The temp file is STILL deleted below (disk hygiene); the bytes are what persist, in
             # the DB (Postgres registry) or in memory (offline). Content is UNTRUSTED — stored and
-            # listed, never followed as instructions.
-            mime = f.content_type or mimetypes.guess_type(safe)[0] or "application/octet-stream"
-            src_docs.append(SourceDocument(filename=safe, mime=mime, size_bytes=len(raw),
-                                           content=raw))
+            # listed, never followed as instructions. `filename` keeps the ORIGINAL display name;
+            # `source_key` is the disambiguated per-document key (== parse_name) the manifest counts
+            # n_chunks on, so two 'report.txt' rows attribute chunks to their OWN document.
+            mime = f.content_type or mimetypes.guess_type(display)[0] or "application/octet-stream"
+            src_docs.append(SourceDocument(filename=display, source_key=parse_name, mime=mime,
+                                           size_bytes=len(raw), content=raw))
 
         # feat-023: pluggable extraction (LLM when keyed, heuristic otherwise/forced) — the
         # red-line gate inside ingest_paths is unchanged and still refuses a scoring extraction.
@@ -182,5 +209,9 @@ def team_file_download(context_id: str, idx: int) -> Response:
         raise HTTPException(status_code=404, detail="file content is not available")
     safe_name = Path(ctx.source_documents[idx].filename).name or "download"
     disposition = "attachment; filename*=UTF-8''" + quote(safe_name)
+    # feat-032 P3: defense in depth on fully-untrusted bytes — nosniff stops a browser from MIME-
+    # sniffing the generic octet-stream into an executable type (on top of attachment, which already
+    # forces a download rather than inline rendering).
     return Response(content=data, media_type="application/octet-stream",
-                    headers={"Content-Disposition": disposition})
+                    headers={"Content-Disposition": disposition,
+                             "X-Content-Type-Options": "nosniff"})

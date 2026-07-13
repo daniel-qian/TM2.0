@@ -244,6 +244,48 @@ def test_source_documents_absent_is_empty_manifest(impl, tmp_path):
     assert impl.fresh().source_document_bytes(cid, 0) is None
 
 
+def test_source_documents_with_duplicate_filenames_survive_the_round_trip(impl, tmp_path):
+    """feat-032 P1 durability: two uploads sharing a display `filename` but with DISTINCT
+    `source_key`s keep their OWN n_chunks and OWN bytes across the storage round-trip (postgres reads
+    source_key back from the column; a filename-only join would silently MERGE them). This is the
+    persisted twin of the /ingest-time repro."""
+    from avery.ingest.registry import SourceDocument
+
+    alpha = b"AlphaUnique line one is quite long enough\nalpha second line also long enough here\n"
+    beta = b"BetaUnique line one is quite long enough now\nbeta second line also long enough here\n"
+    up = tmp_path / "up"
+    up.mkdir()
+    # DISTINCT on-disk names (what the /ingest handler now writes) -> distinct ParsedDoc names ->
+    # distinct material source prefixes; the SourceDocument.filename stays the shared display name.
+    pa = up / "report.txt"
+    pa.write_bytes(alpha)
+    pb = up / "report(1).txt"
+    pb.write_bytes(beta)
+    src_docs = [
+        SourceDocument(filename="report.txt", source_key="report.txt", mime="text/plain",
+                       size_bytes=len(alpha), content=alpha),
+        SourceDocument(filename="report.txt", source_key="report(1).txt", mime="text/plain",
+                       size_bytes=len(beta), content=beta),
+    ]
+    reg, cid, _ = _ingest(impl, tmp_path / "mem", files=[pa, pb], source_documents=src_docs)
+
+    got = reg.get(cid)
+    cards = got.file_cards()
+    assert [c["filename"] for c in cards] == ["report.txt", "report.txt"], (
+        "duplicate-named uploads were dropped/reordered")
+    # Each row attributes ONLY its own document's chunks (>0 each); a filename merge would double one
+    # row and zero the other, or sum both onto both.
+    assert all(c["n_chunks"] > 0 for c in cards), f"a duplicate-named file lost its chunks: {cards}"
+    assert sum(c["n_chunks"] for c in cards) == len(got.extraction.materials)
+    assert cards[0]["n_chunks"] == cards[1]["n_chunks"], (
+        "two equal-sized same-named files should each own an equal share of chunks")
+
+    # Each file's OWN bytes survive, addressed by idx (postgres reads bytea back per row).
+    fresh = impl.fresh()
+    assert fresh.source_document_bytes(cid, 0) == alpha
+    assert fresh.source_document_bytes(cid, 1) == beta
+
+
 # ==============================================================================================
 # DURABILITY CONTRACT — postgres only (@needs_db). A process dict cannot pass these; that gap is
 # exactly what feat-030 closes.

@@ -95,3 +95,58 @@ PRIMARY KEY (context_id, idx)
 ## 独立对抗验证前置
 
 收盘必经独立对抗验证。建议 crafted 输入打点:重名上传、解析失败混列、跨腿 uploaded_at、下载不可信 HTML 是否 inline、未知/越界 idx、re-put 替换语义、bytea NUL 往返、CJK/含引号文件名的 Content-Disposition 注入面。
+
+---
+
+## round-2 对抗验证收口(2026-07-13 · feat/032 修复子代理 · gate-first 红→绿 · 未 push)
+
+独立对抗验证(4 视角真机 crafted 输入)守住:下载端点安全 4 项全 VERIFIED(无 header 注入/inline 执行/路径穿越/NUL 干净往返)、跨 context 隔离、冻结文件零改、迁移 avery-scoped 安全、离线 343 零外网。抓到 1 HIGH + 1 MEDIUM + 1 LOW,全修实(都在 feat-032 自有文件,未碰 redline/PersonEntity/loop/engine/tools/memory/FROZEN.lock.json)。
+
+### 修复(每项:发现 → 根因 → 修 → repro 前后对比)
+
+**P1(HIGH)— 重名文件静默数据丢失 + 清单假计数**
+- 发现:POST /ingest 两个都叫 `report.txt`(内容 AlphaUnique / BetaUnique)。
+- 根因:`service/ingest_api.py` 每个上传写 `tmp/<basename>` → 两个同名 clobber 同一 temp 路径 → 只有最后写入的 BetaUnique 被解析进 materials/facts.md,AlphaUnique **从 Avery 记忆/RAG 静默消失**;但两个 SourceDocument 各留自己的字节(都可下载),`n_chunks` 按 filename 求和 → 两行都显示同一错误计数。
+- 修:(a) `ingest_api._unique_parse_names()` 批内 basename 去歧义(`report.txt` / `report(1).txt`)写**不同 temp 路径**,每文件都真解析;`SourceDocument.filename` 保留原始显示名,新增 `source_key`=去歧义名(穿过 `ParsedDoc.name` → 材料 `<source_key>:<line>` 前缀)。(b) `file_cards()`/`_chunks_per_file()` 按 `source_key`(fallback filename)**按文档**归属 n_chunks。
+- repro 前:materials sources `['report.txt:1','report.txt:2','report.txt:1','report.txt:2']`,AlphaUnique 缺失,两行 n_chunks 都=4。
+- repro 后:materials sources `['report.txt:1','report.txt:2','report(1).txt:1','report(1).txt:2']`,**Alpha+Beta 都在**,两行 n_chunks 各=2,idx0/idx1 下载各自字节。
+
+**P2(MEDIUM)— 解析失败文件混列 + briefing 计数矛盾 + all-unparseable 假 200**
+- 根因:`pipeline.ingest_paths` 丢弃解析失败的 docs 但全部 source_documents 原样入库 → 失败文件以 `doc_kind='company'/n_chunks=0` **伪装成正常条目**;`briefing()` 用 `len(source_files)`(仅成功)→ 与清单(全部上传)矛盾;all-unparseable 批次 `docs=[]` → 仍发布空 context 返 200(422 分支有洞)。
+- 修:(a) 每 `SourceDocument` 打 **`status`**(`ingested`/`failed`/`empty`,`_finalize_source_documents` 按 source_key 是否进解析成功 docs + 每 key chunk 数判定),`file_cards()` 露出 `status`。(b) `briefing()` headline 和解为 **`"Ingested N of M file(s)"`**。(c) `ingest_paths` 补 all-unparseable 守卫(paths 非空但 docs 空 → `ok=False`/`context=None` → handler 422 `"no parseable content"`,字节丢弃)。
+- repro 后:混合批 `broken.xyz` status=`failed`/n_chunks=0、`good.txt` status=`ingested`、briefing=`"Ingested 1 of 2 file(s)"`、失败文件仍可下载(回看诚实);all-unparseable → **422**。
+
+**P3(LOW,纵深防御)— 下载端点加 nosniff**
+- 修:`/team/{id}/files/{idx}` 下载 Response headers 加 `"X-Content-Type-Options": "nosniff"`(叠加既有 attachment + octet-stream)。repro 后:下载响应带该 header + 仍 attachment。
+
+### 持久化改动
+- `db/migrations/0005_source_documents_status.sql` — `ALTER TABLE ... ADD COLUMN IF NOT EXISTS source_key text / status text`(avery-scoped,只增不 DROP,`_ensure_schema` 按序 replay 0001..0005)。
+- `pg_registry.put/get` 读写 `source_key`+`status` 两列;NUL 守卫扩到 `source_key`。
+- 新增契约 `test_source_documents_with_duplicate_filenames_survive_the_round_trip`(memory+postgres 腿)证 source_key **重启后仍按文档归属**(filename-only join 会合并)。
+
+### 新测试(gate-first 先红后绿)
+- `tests/test_file_space_fixes.py` — 4 例 TestClient(离线内存 registry + 启发式)驱动 HTTP 面:P1 重名双入/按文档计数/各自下载、P2 混合批 status 区分 + briefing 和解、P2b all-unparseable 422、P3 nosniff。
+- `tests/test_registry_contract.py` — +1 契约(dup-filename source_key 往返,memory+postgres 参数化)。
+
+### 三层复跑(新测计入)
+| 层 | 命令 | 结果 |
+|---|---|---|
+| 离线(零外网) | `DASHSCOPE_API_KEY='' MINIMAX_API_KEY='' pytest -m "not seedgate and not smoke and not needs_keys" -q` | **348 passed** / 23 skipped / 8 deselected / 1 xfailed(round-1 343 +5) |
+| @needs_db | `AVERY_DB_URL=…:5433 pytest -m needs_db -q` | **23 passed**(round-1 22 +1;migration 0005 自动 replay 入本地 DB,`avery.source_documents` 列校验 source_key/status 在位) |
+| 前端 | `./init.sh`(eslint + tsc + vite build) | **绿**(改动仅 zh.ts 头部诚实注释) |
+
+### zh.ts 诚实化(LOW)
+生成脚本 `scripts/i18n-zh.mjs` 是 **full-regen only,无定向模式**(跑全量=重译所有 story-shared 区块 → 漂移 + token 坑,kickoff 明确告诫)。故按 kickoff「脚本不支持定向」分支:未跑脚本,改为在 `zh.ts` 头部**显式标注** `upload.filesTitle`(你的文件)/`upload.filesChunks`(处引用)为 **HAND-WRITTEN / NOT YET M3**、待下次定向 M3 pass;`en.ts` 源 key 在位。值本身准确(短 UI 标签),问题是 provenance——已诚实披露,不再「悄悄漂」。
+
+### 延后项(owner 明确,别扩范围)
+- **migration 0005 → Supabase prod-apply**:仅本地 DB replay 已验。共享 imaread Supabase 项目的 prod-apply **未做**,部署前必须应用(与 0004 同规格 additive/avery-scoped;属对外闸,不擅动共享 prod)。**owner:部署/Danny**。
+- **push 授权**(对外闸)— 未 push。**owner:Danny**。
+- **feat-034**:`/files`、`/files/{idx}` 纳入 owner_token 校验(与 /team、/advise 同规格)。**owner:feat-034**。
+- **feat-035**:整文件缓冲进内存 → size 上限 + 流式(`storage_ref` seam 已留)。**owner:feat-035**。
+- **zh 两 key 定向 M3 审字**(见上)。**owner:下次 directed zh pass**。
+
+### round-2 自评薄弱点
+1. **migration 0005 Supabase 未 apply**(见延后项)——本地 @needs_db 已完整验证 replay + 列在位 + 契约往返,但共享 prod 需部署前手动应用。
+2. **status='empty'**(解析成功但 0 chunk)已接线,主 repro 覆盖 `ingested`/`failed`,`empty` 未重点测(边角:仅短行 <12 字符的可解析文件触发)。
+3. **source_key 去歧义命名**(`report(1).txt`)是内部 join key,非用户可见(filename 仍显示原始名);极端 3+ 同名有 while 去重循环,未穷举测试但逻辑封闭。
+4. **前端仅露 filename·size·n_chunks**,新 `status` 字段 API 已具备但薄视图未渲染 failed 徽标(scope 纪律:回看清单;失败文件在 API 层已可区分)。

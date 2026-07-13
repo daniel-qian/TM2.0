@@ -41,9 +41,17 @@ class SourceDocument:
     (PRD: 'may include an object-store reference') — v1 keeps bytes inline in avery.source_documents.
     """
     filename: str
+    source_key: str = ""                   # feat-032 P1: the DISAMBIGUATED per-document join key
+                                           # (== the parsed doc's name == a material's '<key>:<line>'
+                                           # source prefix). Distinct even when two uploads share a
+                                           # `filename`, so n_chunks attributes per DOCUMENT, not per
+                                           # display name. Empty -> fall back to `filename` (pre-032).
     mime: str = "application/octet-stream"
     size_bytes: int = 0
     doc_kind: str = "company"
+    status: str = "ingested"               # feat-032 P2: 'ingested' | 'failed' (unparseable) |
+                                           # 'empty' (parsed, produced no material). The manifest
+                                           # surfaces it so a failed file is not disguised as valid.
     uploaded_at: str = ""                  # ISO8601 UTC; set at ingest, or read back from the DB
     content: bytes | None = None           # raw upload bytes (in-memory) / None (pg metadata read)
     storage_ref: str = ""                  # feat-035 seam: object-store pointer; inline bytea in v1
@@ -129,7 +137,14 @@ class CompanyContext:
                    {"label": "active projects", "value": str(n_proj)}]
         if at_risk:
             metrics.append({"label": "need a look", "value": str(len(at_risk))})
-        headline = f"Ingested {len(self.source_files)} file(s): {n_people} people, {n_proj} projects."
+        # feat-032 P2: reconcile with the file manifest. source_files counts only the PARSED docs;
+        # source_documents counts everything UPLOADED (incl. parse-failures the manifest still shows).
+        # Say "N of M" when they differ so the headline never claims fewer files than the manifest
+        # lists. (No source_documents = pre-032 path -> just N.)
+        n_ingested = len(self.source_files)
+        n_uploaded = len(self.source_documents) or n_ingested
+        files_phrase = f"{n_ingested} of {n_uploaded}" if n_uploaded != n_ingested else str(n_ingested)
+        headline = f"Ingested {files_phrase} file(s): {n_people} people, {n_proj} projects."
         subhead = ("Everything below is drawn from your uploads — nothing invented. "
                    + (f"{len(at_risk)} project(s) worth a closer look." if at_risk
                       else "No risk signals surfaced from the documents."))
@@ -139,24 +154,28 @@ class CompanyContext:
     # --- feat-032 file space (per-company uploaded-file manifest) ------------------------------
 
     def _chunks_per_file(self) -> dict[str, int]:
-        """How many material chunks each uploaded file contributed, linked via a chunk's
-        `<filename>:<line>` source prefix (the same cite seam the advisor uses)."""
+        """How many material chunks each parsed document contributed, keyed by a chunk's
+        `<key>:<line>` source PREFIX (== the parsed doc's name == a SourceDocument.source_key). The
+        prefix is per-DOCUMENT, so two uploads sharing a display `filename` do not merge their counts
+        (feat-032 P1). Same cite seam the advisor uses."""
         counts: dict[str, int] = {}
         for m in self.extraction.materials:
             src = m.source or ""
-            fname = src.rsplit(":", 1)[0] if ":" in src else src
-            if fname:
-                counts[fname] = counts.get(fname, 0) + 1
+            key = src.rsplit(":", 1)[0] if ":" in src else src
+            if key:
+                counts[key] = counts.get(key, 0) + 1
         return counts
 
     def file_cards(self) -> list[dict]:
         """The per-file manifest the 'your files' view renders — METADATA ONLY (no bytes): filename,
-        size, mime, doc_kind, uploaded_at, and n_chunks (material chunks the file produced). Content
-        is untrusted data; the manifest lists it, the download seam serves the bytes separately."""
+        size, mime, doc_kind, status, uploaded_at, and n_chunks (material chunks the file produced).
+        n_chunks joins on source_key (the per-document key), falling back to filename for a pre-032
+        row that has none. Content is untrusted data; the manifest lists it, the download seam serves
+        the bytes separately."""
         counts = self._chunks_per_file()
         return [{"idx": i, "filename": sd.filename, "size_bytes": sd.size_bytes, "mime": sd.mime,
-                 "doc_kind": sd.doc_kind, "uploaded_at": sd.uploaded_at,
-                 "n_chunks": counts.get(sd.filename, 0)}
+                 "doc_kind": sd.doc_kind, "status": sd.status, "uploaded_at": sd.uploaded_at,
+                 "n_chunks": counts.get(sd.source_key or sd.filename, 0)}
                 for i, sd in enumerate(self.source_documents)]
 
 

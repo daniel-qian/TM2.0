@@ -50,15 +50,37 @@ class IngestReport:
 
 
 def _finalize_source_documents(source_documents: list[SourceDocument] | None,
-                               docs: list[ParsedDoc]) -> list[SourceDocument]:
+                               docs: list[ParsedDoc],
+                               extraction: ExtractionResult | None = None) -> list[SourceDocument]:
     """feat-032: enrich the raw uploads the caller handed in (the /ingest handler builds them from
-    `await f.read()`) with the doc_kind the parser sniffed and a size / upload timestamp — so the
-    file manifest carries accurate metadata without re-reading any bytes."""
+    `await f.read()`) with the doc_kind the parser sniffed, a size / upload timestamp, and a
+    parse-status — so the file manifest carries accurate metadata without re-reading any bytes.
+
+    The join key is `source_key` (the disambiguated per-document name the /ingest handler sets, ==
+    the ParsedDoc.name) with a fallback to `filename` for a caller that supplies no source_key
+    (pre-032 direct callers / the registry contract fixtures). feat-032 P2: a file whose key did not
+    produce a ParsedDoc is 'failed' (unparseable); one that parsed but yielded no material is
+    'empty'; otherwise 'ingested'."""
     src_docs = list(source_documents or [])
-    kind_by_name = {d.name: d.doc_kind for d in docs}
+    kind_by_key = {d.name: d.doc_kind for d in docs}
+    parsed_keys = set(kind_by_key)
+    # material chunks per document key (same '<key>:<line>' prefix the manifest counts on).
+    chunk_counts: dict[str, int] = {}
+    for m in (extraction.materials if extraction else []):
+        src = m.source or ""
+        key = src.rsplit(":", 1)[0] if ":" in src else src
+        if key:
+            chunk_counts[key] = chunk_counts.get(key, 0) + 1
     for sd in src_docs:
-        if sd.doc_kind in ("", "company") and sd.filename in kind_by_name:
-            sd.doc_kind = kind_by_name[sd.filename]
+        key = sd.source_key or sd.filename
+        if sd.doc_kind in ("", "company") and key in kind_by_key:
+            sd.doc_kind = kind_by_key[key]
+        if key not in parsed_keys:
+            sd.status = "failed"
+        elif chunk_counts.get(key, 0) == 0:
+            sd.status = "empty"
+        else:
+            sd.status = "ingested"
         if not sd.size_bytes and sd.content is not None:
             sd.size_bytes = len(sd.content)
         if not sd.uploaded_at:
@@ -105,7 +127,7 @@ def ingest_docs(docs: list[ParsedDoc], *, extractor: Extractor | None = None,
     ctx = CompanyContext(
         context_id=cid, extraction=extraction, store=store, memory_dir=mem_dir, name=name,
         source_files=[d.name for d in docs],
-        source_documents=_finalize_source_documents(source_documents, docs))
+        source_documents=_finalize_source_documents(source_documents, docs, extraction))
     registry.put(ctx)
 
     return IngestReport(ok=True, context=ctx, redline=rl, parsed=docs, extraction=extraction,
@@ -125,6 +147,13 @@ def ingest_paths(paths: list[str | Path], *, extractor: Extractor | None = None,
             docs.append(parse_file(p))
         except ParseError as e:
             errors.append(str(e))
+    # feat-032 P2: files were uploaded but NONE parsed -> refuse to publish an (empty) context. The
+    # pre-fix code fell through and registered a context with 0 people/projects/materials AND kept
+    # the unparseable bytes, so /ingest answered 200 for a batch it could not read at all. Now the ok
+    # =False report reaches the handler's 422 branch ("no parseable content"); the bytes are dropped.
+    if paths and not docs:
+        empty_rl = validate_extraction(ExtractionResult())   # ok=True, no violations (empty input)
+        return IngestReport(ok=False, context=None, redline=empty_rl, parsed=[], parse_errors=errors)
     report = ingest_docs(docs, extractor=extractor, embedder=embedder, prefer_vector=prefer_vector,
                          registry=registry, work_dir=work_dir, name=name, context_id=context_id,
                          source_documents=source_documents)

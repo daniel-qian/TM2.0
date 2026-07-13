@@ -4,6 +4,11 @@ import type { Dict } from "./index";
 // Do NOT hand-edit; re-run the script after editing en.ts. ⚠ Draft / 待 Danny 审字.
 // (feat-025: only the NEW lite keys were re-run through M3; existing story-shared sections
 //  kept byte-identical to the prior committed translation to leave story copy untouched.)
+// ⚠ HAND-WRITTEN, NOT YET M3 (feat-032): upload.filesTitle ("你的文件") and upload.filesChunks
+//  ("处引用") were typed in by hand — the generator is FULL-REGEN only (no targeted mode), and a
+//  full re-run re-translates every story-shared section (drift + token risk the kickoff warns
+//  against). Source keys live in en.ts. Fold these into M3 on the next DIRECTED zh pass (a targeted
+//  M3 splice, or accept a full regen) so they stop masquerading as generated output.
 export const zh: Dict = {
   "mode": {
     "storyLabel": "演示",

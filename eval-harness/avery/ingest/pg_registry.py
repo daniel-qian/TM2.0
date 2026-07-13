@@ -154,9 +154,10 @@ class PostgresContextRegistry:
         blobs = [facts, notes, ctx.name, *ctx.source_files]
         blobs += [m.text for m in ctx.extraction.materials]
         blobs += [p.name for p in ctx.extraction.people]
-        # feat-032: the source-document TEXT columns (filename/mime/storage_ref) must be NUL-free too
-        # — the raw `content` is bytea (a NUL there is legal and preserved byte-for-byte).
+        # feat-032: the source-document TEXT columns (filename/source_key/mime/storage_ref) must be
+        # NUL-free too — the raw `content` is bytea (a NUL there is legal and preserved byte-for-byte).
         blobs += [sd.filename for sd in ctx.source_documents]
+        blobs += [sd.source_key for sd in ctx.source_documents]
         blobs += [sd.mime for sd in ctx.source_documents]
         blobs += [sd.storage_ref for sd in ctx.source_documents]
         if any("\x00" in (b or "") for b in blobs):
@@ -278,11 +279,12 @@ class PostgresContextRegistry:
                 # is bound as a Python `bytes` (psycopg maps it to bytea); NULL when absent.
                 cur.executemany(
                     "INSERT INTO avery.source_documents "
-                    "(context_id, idx, filename, mime, size_bytes, doc_kind, content, storage_ref, "
-                    " uploaded_at) "
-                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, COALESCE(%s::timestamptz, now()))",
-                    [(ctx.context_id, i, sd.filename, sd.mime, sd.size_bytes, sd.doc_kind,
-                      sd.content, sd.storage_ref, sd.uploaded_at or None)
+                    "(context_id, idx, filename, source_key, mime, size_bytes, doc_kind, status, "
+                    " content, storage_ref, uploaded_at) "
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, "
+                    "        COALESCE(%s::timestamptz, now()))",
+                    [(ctx.context_id, i, sd.filename, sd.source_key, sd.mime, sd.size_bytes,
+                      sd.doc_kind, sd.status, sd.content, sd.storage_ref, sd.uploaded_at or None)
                      for i, sd in enumerate(ctx.source_documents)])
         return ctx.context_id
 
@@ -313,8 +315,8 @@ class PostgresContextRegistry:
             # here (a listing must not drag every uploaded file into memory); the download seam
             # (source_document_bytes) fetches one file's bytes on demand.
             srcdocs = conn.execute(
-                "SELECT idx, filename, mime, size_bytes, doc_kind, storage_ref, uploaded_at "
-                "FROM avery.source_documents WHERE context_id = %s ORDER BY idx",
+                "SELECT idx, filename, source_key, mime, size_bytes, doc_kind, status, storage_ref, "
+                "uploaded_at FROM avery.source_documents WHERE context_id = %s ORDER BY idx",
                 (context_id,)).fetchall()
 
         extraction = ExtractionResult(
@@ -349,9 +351,9 @@ class PostgresContextRegistry:
 
         source_documents = [
             SourceDocument(
-                filename=fn, mime=mime, size_bytes=sz, doc_kind=dk, storage_ref=sr,
-                uploaded_at=ua.isoformat() if ua is not None else "", content=None)
-            for _idx, fn, mime, sz, dk, sr, ua in srcdocs]
+                filename=fn, source_key=sk, mime=mime, size_bytes=sz, doc_kind=dk, status=st,
+                storage_ref=sr, uploaded_at=ua.isoformat() if ua is not None else "", content=None)
+            for _idx, fn, sk, mime, sz, dk, st, sr, ua in srcdocs]
 
         return CompanyContext(
             context_id=context_id, extraction=extraction, store=store, memory_dir=mem_dir,
