@@ -1431,10 +1431,17 @@ function ScriptedNexusScene() {
       : null
 
   // chip / composer 共用出口：追加 follow-up 段（确定性 append）后立即推进一步——
-  // 两个都是核心 action，free-click 与 rail 同构（rail P6-07 同序脚本化即可）。
+  // 两个都是核心 action，free-click 与 rail 同构（rail 的钉状态拍到达同一状态）。
+  // feat-034 polish：快速双击防连跳——第二发落在同 tick（chip 还没来得及从 DOM 消失），
+  // askFollowUp 因段耗尽 no-op，但裸 runAgent 会把下一步也推掉（等待态被跳过 =
+  // Danny 试玩看到的"双击连跳"）。修法：读 fresh state 确认这一发真的消费了段落
+  // 才推进；没消费 = 整发 no-op（不是防抖计时器，语义上就该如此）。
   const handleFollowUp = (text: string) => {
+    const caseId = useCanvas.getState().activeCaseId ?? DEFAULT_CASE_ID
+    const before = useCanvas.getState().threads[caseId]?.followUps.length ?? 0
     askFollowUp(text)
-    runAgent()
+    const after = useCanvas.getState().threads[caseId]?.followUps.length ?? 0
+    if (after > before) runAgent()
   }
 
   const followUpChip =

@@ -19,6 +19,8 @@ import {
 //   runAgent / dispatchTask / regenBriefing / askQuestion /
 //   goScene / setFocus / openDetail / back /
 //   openThread / closeThread / askFollowUp / sendEmail
+//   + pinThreadProgress（feat-034 polish 唯一追加：rail"钉状态"拍的显式 set 接口，
+//     见其注释——增量 consume 在快按/乱序下无法保证落拍状态唯一，故开此口）
 // ADR-0006 / ADR-0012 的「不扩 canvasStore」自本 pass 后读作「不扩本契约」。
 // 镜头命令仍不进 store（ADR-0012）；rail replay 机器（pristine 快照 + replay-to-target）
 // 原样工作——所有 action 幂等友好 / append 序确定，seek 任意 index 自洽。
@@ -132,6 +134,8 @@ interface CanvasState {
   closeThread: (caseId: CaseId) => void // 只翻 isOpen，状态全保留；幂等
   askFollowUp: (text: string) => void // 追加 active case 的下一个 follow-up 段；确定性
   sendEmail: () => void // email case 的 Send；dedupe-guarded（不进 SCRIPT，同 dispatchTask）
+  // feat-034 polish：把 thread 的编排进度"钉"到确定点位（rail 钉状态拍 A1/A2 专用）。
+  pinThreadProgress: (caseId: CaseId, followUpCount: number, stepCount: number) => void
 }
 
 export const useCanvas = create<CanvasState>((set, get) => ({
@@ -255,6 +259,50 @@ export const useCanvas = create<CanvasState>((set, get) => ({
             ...thread,
             followUps: [...thread.followUps, { question: text, segmentId: segment.id }],
             status: 'running', // 编排表延长，等 runAgent 继续走
+          },
+        },
+      }
+    }),
+
+  // ── feat-034 polish：钉状态（pin）语义 ─────────────────────────────────────
+  // 把 caseId thread 的编排进度钉到确定点位：followUps 恰好 = case 段序列的前
+  // followUpCount 段前缀，steps 恰好 = 有效编排表（threadPlan）的前 stepCount 步前缀。
+  // 幂等：同参调用结果恒定——与此前 chip 是否被点过、按键多快、来路顺序全部无关。
+  //
+  // 为什么不用 askFollowUp+runAgent（增量 consume）：增量式的落点 = f(当前状态)，
+  // 快按（同 tick 多发 runAgent）会越过等待态、free-click 先消费过段落则 rail 拍变
+  // 空拍——"钉"把落点变成 f(参数)，rail 拍所见即所得（root cause 修法，非防抖贴膏药）。
+  //
+  // 细节：已消费段的显示问题文本保留（free-click 自由文本不被 pin 覆盖，只补缺）；
+  // isOpen 强制 true（钉的拍卡必须在屏上）；status 由步数与编排表长度派生；
+  // 只触碰该 caseId 的 thread——其他 case / tasks / briefing 一概不动。
+  pinThreadProgress: (caseId, followUpCount, stepCount) =>
+    set((s) => {
+      const def = CASES[caseId]
+      if (!def) return s
+      const base = s.threads[caseId] ?? { ...pristineThread(caseId), question: def.question }
+      const followUps = def.followUps
+        .slice(0, Math.max(0, Math.min(followUpCount, def.followUps.length)))
+        .map((segment, i) =>
+          base.followUps[i]?.segmentId === segment.id
+            ? base.followUps[i]
+            : { question: segment.suggestedQuestion, segmentId: segment.id },
+        )
+      const pinned: Thread = { ...base, isOpen: true, followUps, steps: [], status: 'running' }
+      const plan = threadPlan(pinned)
+      const steps = plan
+        .slice(0, Math.max(0, Math.min(stepCount, plan.length)))
+        .map((next) =>
+          next.followUpId ? { kind: next.kind, followUpId: next.followUpId } : { kind: next.kind },
+        )
+      return {
+        activeCaseId: caseId,
+        threads: {
+          ...s.threads,
+          [caseId]: {
+            ...pinned,
+            steps,
+            status: steps.length >= plan.length ? 'complete' : 'running',
           },
         },
       }

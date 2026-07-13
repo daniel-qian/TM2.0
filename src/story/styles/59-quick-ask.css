@@ -108,6 +108,85 @@
   font-weight: 600;
 }
 
+/* ── polish 波：分享排（等待态）——"一人一链怎么出门"的具象 affordance。
+   平台 chip 是剧场展示：:active 按压反馈、不跳转；Copy link 真写剪贴板，
+   成功后短暂翻 "Copied ✓"（绿，同 answered 色族）。已答态收敛为一行小字。 ── */
+.quick-ask-share {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.quick-ask-share-hint {
+  color: var(--ink-faint);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.quick-ask-share-chip {
+  padding: 5px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.6);
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    transform 0.08s ease,
+    background 0.12s ease,
+    border-color 0.12s ease;
+}
+
+.quick-ask-share-chip:hover,
+.quick-ask-share-chip:focus-visible {
+  border-color: rgba(108, 99, 181, 0.45);
+  color: rgba(108, 99, 181, 0.95);
+}
+
+.quick-ask-share-chip:active {
+  transform: scale(0.94);
+  background: rgba(108, 99, 181, 0.1);
+}
+
+.quick-ask-share-copy {
+  padding: 5px 12px;
+  border: 1px dashed rgba(108, 99, 181, 0.45);
+  border-radius: 999px;
+  background: rgba(108, 99, 181, 0.08);
+  color: rgba(108, 99, 181, 0.95);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    transform 0.08s ease,
+    background 0.12s ease,
+    border-color 0.12s ease,
+    color 0.12s ease;
+}
+
+.quick-ask-share-copy:active {
+  transform: scale(0.94);
+}
+
+.quick-ask-share-copy.is-copied {
+  border-color: rgba(105, 128, 109, 0.5);
+  border-style: solid;
+  background: rgba(105, 128, 109, 0.12);
+  color: rgba(84, 108, 88, 0.98);
+}
+
+/* 已答态：分享排的一行小字收束（链接完成使命，不再占一排交互件）。 */
+.quick-ask-share-meta {
+  margin: 0 0 12px;
+  color: var(--ink-faint);
+  font-size: 12px;
+}
+
 .quick-ask-questions {
   display: grid;
   gap: 10px;

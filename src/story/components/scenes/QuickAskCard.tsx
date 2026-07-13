@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react'
 import { PEOPLE } from '../../data/fixtures'
 import { PixelAvatar } from '../PixelAvatar'
 
@@ -14,6 +15,14 @@ import { PixelAvatar } from '../PixelAvatar'
 // 卡内全部为 demo fixture 文案（scripted story 资产，同 AlternativesCard 口径）。
 
 const QUICK_ASK_RECIPIENT_ID = 'u_fred'
+
+// ── feat-034 polish：等待态分享排（Danny 试玩反馈——"链接怎么出门"要看得见）。──
+// 四个平台 chip 是剧场展示：点击只给按压反馈、不跳转（demo 里没有真 IM 可跳）；
+// Copy link 是真的——把虚构演示链接写进剪贴板（与 lite 侧 stub 链接同域同形状）。
+// 🔴 ADR-0023：分享排只谈"把问题递到 Fred 手边"，零打分/评价语义。
+// "企业微信"以官方英文名 WeCom 出卡（story demo 全英文是 ADR-0015 钉死约束）。
+const QUICK_ASK_SHARE_LINK = 'https://avery.ima-read.com/r/fred-demo'
+const QUICK_ASK_SHARE_TARGETS = ['WeCom', 'Teams', 'Slack', 'Email'] as const
 
 // 两个生成问句（问"事"）：主语是 hand-off / 所需材料，不是 Fred 这个人。
 const QUICK_ASK_QUESTIONS = {
@@ -35,6 +44,41 @@ const QUICK_ASK_RECEIPT = {
 
 export function QuickAskCard({ question, answered }: { question: string; answered: boolean }) {
   const recipient = PEOPLE.find((person) => person.id === QUICK_ASK_RECIPIENT_ID)
+
+  // Copy link 的"Copied ✓"短暂回执（组件本地态，不进 store——与草稿编辑同口径）。
+  const [copied, setCopied] = useState(false)
+  const copiedTimer = useRef<number | null>(null)
+  useEffect(
+    () => () => {
+      if (copiedTimer.current !== null) window.clearTimeout(copiedTimer.current)
+    },
+    [],
+  )
+
+  // clipboard 可能被拒（headless / 权限）——降级 execCommand；两条都失败则不亮
+  // "Copied ✓"（不假装复制成功）。与 lite AskCard.copyLink 同款策略（墙：各自实现）。
+  async function copyShareLink() {
+    let ok = false
+    try {
+      await navigator.clipboard.writeText(QUICK_ASK_SHARE_LINK)
+      ok = true
+    } catch {
+      try {
+        const ta = document.createElement('textarea')
+        ta.value = QUICK_ASK_SHARE_LINK
+        document.body.appendChild(ta)
+        ta.select()
+        ok = document.execCommand('copy')
+        document.body.removeChild(ta)
+      } catch {
+        ok = false
+      }
+    }
+    if (!ok) return
+    setCopied(true)
+    if (copiedTimer.current !== null) window.clearTimeout(copiedTimer.current)
+    copiedTimer.current = window.setTimeout(() => setCopied(false), 1800)
+  }
 
   return (
     <section className="quick-ask-card" aria-label="Follow-up: a quick ask for Fred">
@@ -58,6 +102,28 @@ export function QuickAskCard({ question, answered }: { question: string; answere
         </div>
         <span className="quick-ask-link-chip">One link, just for him — no login, ten seconds</span>
       </div>
+
+      {/* polish：分享排。等待态 = 四个平台 chip（剧场展示）+ 真 Copy link；
+          已答态 = 收敛成一行小字（链接已完成使命，不再占一排 affordance）。 */}
+      {answered ? (
+        <p className="quick-ask-share-meta">Shared via one link · answered in 40s</p>
+      ) : (
+        <div className="quick-ask-share" aria-label="Share the link with Fred">
+          <span className="quick-ask-share-hint">Drop it where he already is</span>
+          {QUICK_ASK_SHARE_TARGETS.map((target) => (
+            <button key={target} type="button" className="quick-ask-share-chip">
+              {target}
+            </button>
+          ))}
+          <button
+            type="button"
+            className={copied ? 'quick-ask-share-copy is-copied' : 'quick-ask-share-copy'}
+            onClick={copyShareLink}
+          >
+            {copied ? 'Copied ✓' : 'Copy link'}
+          </button>
+        </div>
+      )}
 
       <div className="quick-ask-questions">
         <article className="quick-ask-q">

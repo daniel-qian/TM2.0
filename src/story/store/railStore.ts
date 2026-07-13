@@ -23,6 +23,17 @@ type RailStep = {
 
 const INITIAL = useCanvas.getState()
 
+// ── feat-034 polish：A1/A2 的"钉状态"点位（全部从 case 数据派生，不写魔法数）。──
+// bill/acme 有效编排表 = 主段 6 步 + alternatives 段 1 步 + Ask 段 2 步；
+// A1 钉在 'quick-ask'（已分享/等待回执），A2 钉在 'quick-ask-reply'（已答）。
+const BILL_ASK_SEGMENT_COUNT = 2 // jason-alternatives + fred-quick-ask 两段都在表内
+const BILL_STEPS_BEFORE_ASK =
+  BILL_ACME_CASE.orchestration.length + BILL_ACME_CASE.followUps[0].steps.length
+const BILL_STEPS_THROUGH_QUICK_ASK =
+  BILL_STEPS_BEFORE_ASK + BILL_ACME_CASE.followUps[1].steps.indexOf('quick-ask') + 1
+const BILL_STEPS_THROUGH_QUICK_ASK_REPLY =
+  BILL_STEPS_BEFORE_ASK + BILL_ACME_CASE.followUps[1].steps.indexOf('quick-ask-reply') + 1
+
 // P6-07 (ADR-0013 决策 8)：三幕 SCRIPT。Act 1 = bill/acme hero（原样 + 开头 title card +
 // B9 后 follow-up 拍）；Act 2 = "daily driver"（两个 errand case 全程 Nexus 内，
 // title card 间隔 + 收束拍 closeThread/openThread 把 hero report 放回屏幕）；
@@ -226,22 +237,32 @@ export const SCRIPT: RailStep[] = [
     // 位置钉在 CL 之后、B11 之前：CL 及之前所有既有拍的 replay 前缀 byte 级不变
     //（加性验证锚点——插在 B9f 后会改变 B9b..CL 的重放状态，否决）。叙事顺位也对：
     // hero thread 刚回屏（alternatives 卡在镜头里），Ask 作为收官 follow-up 递给 Act 3。
-    // 与 B9f 同构：askFollowUp（第 2 次调用消费 fred-quick-ask 段）+ runAgent 连发；
-    // 重放幂等：段耗尽 askFollowUp no-op、编排表走完 runAgent 只置 complete。
+    //
+    // feat-034 polish（Danny 试玩反馈）：A1/A2 从"增量 consume"（askFollowUp+runAgent，
+    // 落点 = f(当前状态)，快按/乱序下会跳过等待态或变空拍）改为"钉状态"——
+    // pinThreadProgress 幂等地把卡钉在确定点位（落点 = f(参数)）。free-click chip 路径
+    // 不变，仍走 askFollowUp+runAgent，到达的 thread 状态与钉出来的逐字段相同（同构保持）。
     beat: 'A1',
     label: 'Quick ask — check with Fred himself', // （caption）
-    run: () => {
-      const canvas = useCanvas.getState()
-      canvas.askFollowUp(BILL_ACME_CASE.followUps[1].suggestedQuestion)
-      canvas.runAgent()
-    },
+    run: () =>
+      useCanvas
+        .getState()
+        .pinThreadProgress(BILL_ACME_CASE_ID, BILL_ASK_SEGMENT_COUNT, BILL_STEPS_THROUGH_QUICK_ASK),
   },
   {
     // 回执归来拍：同一张 Ask 卡状态推进（answered 翻转，镜头不动——lastCardStep 不变）。
     // 🔴 ADR-0023：回执 = Fred 自述 + 原话短评，数字只留在 Ask 卡（"本人自述"标注）。
+    // polish：同样钉状态——无论此前处于草稿/等待/已答，落拍即"已答"，倒放回 A1 再来也恒定。
     beat: 'A2',
     label: "The reply — Fred, in his own words", // （caption）
-    run: () => useCanvas.getState().runAgent(),
+    run: () =>
+      useCanvas
+        .getState()
+        .pinThreadProgress(
+          BILL_ACME_CASE_ID,
+          BILL_ASK_SEGMENT_COUNT,
+          BILL_STEPS_THROUGH_QUICK_ASK_REPLY,
+        ),
   },
   {
     // ── Act 3 ──。P5-01 (ADR-0007)：Capabilities 收尾 beat 原样 = 护城河 + 营收收束。

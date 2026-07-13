@@ -47,3 +47,18 @@ export function resolveMode(search?: string): AveryMode {
 export function isLive(mode: AveryMode): boolean {
   return mode === 'live'
 }
+
+// feat-034 polish（2026-07-13 Danny 试玩反馈）：Story/Live 开关默认不渲染——试玩者
+// 误触一键换壳、且产品面不该常驻演示机关。`?modeSwitch=1` 时显示（读取方式与上面的
+// `?mode=` / railStore 的 `?capture=` 同风格）。⚠ 只藏 UI 开关：`?mode=` 的 URL 机器
+// 与 applyModeToUrl 原样——URL 仍随时可切模式，开关只是它的可视快捷方式。
+export function showModeSwitch(search?: string): boolean {
+  const qs =
+    search ??
+    (typeof window !== 'undefined' && window.location ? window.location.search : '')
+  try {
+    return new URLSearchParams(qs).get('modeSwitch') === '1'
+  } catch {
+    return false
+  }
+}
