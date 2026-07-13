@@ -43,6 +43,11 @@ _Avoid_: new question（暗示开新 Thread）、reply（暗示聊天往复，�
 Nexus thread **内部**、在编排需要人判断时由 **agent 发起**开出的多人协同面（相关同事 + 在场 agents 来回）。三条约束让它**不是 Slack / ChatGPT**：① **agent 发起**——只在靠信号 / Capabilities 推不出、必须要人裁断时召集，不是随手能开的频道；② **绑定单个决策、用完即合**——只围绕该 thread 的问题，结论达成即关，非常驻；③ agent 是**在场协同方**（主动抛具体 evidence + Capabilities），且对话产出**结构化沉淀进 report、成为 provenance（可追溯）**。是 pitch "经人确认" 唯一真正发生的地方。
 _Avoid_: Slack 频道 / 群聊（暗示常驻、随手开、什么都聊 = 把护城河稀释成"带 AI 的 Slack"）、聊天机器人（agent 不是被 @ 才动的 bot，是在场协同方）
 
+**Ask**：
+Thread 内由 agent 发起、经 manager 确认后递到**具名员工**手边的轻量快问（分享链接、免登录，1~3 题快答 + 选填短评），回执作为**情境证据**回到同一条 Thread。它问"事"不问"人"：员工自述对某件事的把握不是给人打的分——答案永不成为人的属性、永不跨人比分（边界见 [ADR-0023](docs/adr/0023-ask-employee-selfreport-redline-boundaries.md)）。是 Chat 之外第二个"经人确认"触点：Chat 拉同事进房间裁断，Ask 把一个具体问题递出门。
+_Surface label_：EN **"Quick ask"**、ZH **"快问"**；员工侧页面必须明写谁在问、问的什么事、回答会给谁看。
+_Avoid_: survey / 问卷（表单工具腔，暗示题海与匿名收集）、poll / 投票（匿名聚合语义，Ask 是具名自述）、打分 / 评分（撞红线语义——那是我们永远不做的事）
+
 **Briefing**：
 Dashboard 上呈现的一段**离散、可重新生成**的高管摘要（"组织天气"）。可以不止一条，manager 可以再取一条。
 _Avoid_: summary、report（report 专指 Nexus 的结构化输出）
