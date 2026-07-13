@@ -1,0 +1,240 @@
+/* ── feat-034 阶段 A（ADR-0023）：scripted Ask（Quick ask）Manifest 卡 ──
+   宽度对齐 cases.ts 锚点 half {w:330}；slot 内常规块流、翻牌入场——同 58 的
+   alternatives / compliance 卡口径。回执归来 = 同卡状态推进（answered 块渐显），
+   half.h 已按回执态预留，长高不越列。 */
+
+.quick-ask-card {
+  width: 660px;
+  padding: 20px;
+  border: 1px solid rgba(108, 99, 181, 0.3);
+  border-radius: var(--radius);
+  background: rgba(255, 253, 248, 0.94);
+  box-shadow: 0 30px 110px rgba(50, 45, 36, 0.22);
+  backdrop-filter: blur(18px);
+  animation: quick-ask-card-in 0.5s ease-out both;
+}
+
+@keyframes quick-ask-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.quick-ask-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 10px;
+}
+
+.quick-ask-header h2 {
+  margin: 0;
+  color: var(--ink);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 28px;
+  font-weight: 500;
+  line-height: 1.05;
+}
+
+/* 状态 pill：等待回执 = follow-up 紫；answered = 绿（同 verdict 色族）。 */
+.quick-ask-status {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  flex: 0 0 auto;
+  padding: 4px 10px;
+  border: 1px solid rgba(108, 99, 181, 0.4);
+  border-radius: 999px;
+  background: rgba(108, 99, 181, 0.12);
+  color: rgba(108, 99, 181, 0.95);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.quick-ask-status.is-answered {
+  border-color: rgba(105, 128, 109, 0.5);
+  background: rgba(105, 128, 109, 0.12);
+  color: rgba(84, 108, 88, 0.98);
+}
+
+.quick-ask-question {
+  margin-bottom: 12px;
+  color: var(--ink-soft);
+  font-size: 14px;
+  font-style: italic;
+}
+
+/* 受访者行：像素头像 + 名字/角色 + "一人一链"chip（模拟已分享链接态）。 */
+.quick-ask-recipient {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.44);
+}
+
+.quick-ask-recipient strong {
+  display: block;
+  color: var(--ink);
+  font-size: 15px;
+}
+
+.quick-ask-recipient > div > span {
+  display: block;
+  color: var(--ink-faint);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.quick-ask-link-chip {
+  margin-left: auto;
+  padding: 4px 10px;
+  border: 1px dashed rgba(108, 99, 181, 0.45);
+  border-radius: 999px;
+  color: rgba(108, 99, 181, 0.95);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.quick-ask-questions {
+  display: grid;
+  gap: 10px;
+}
+
+.quick-ask-q {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.44);
+}
+
+.quick-ask-q > p {
+  margin: 0;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.quick-ask-q-type {
+  justify-self: start;
+  padding: 2px 8px;
+  border: 1px solid rgba(108, 99, 181, 0.35);
+  border-radius: 999px;
+  color: rgba(108, 99, 181, 0.9);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.quick-ask-pending {
+  color: var(--ink-faint);
+  font-size: 12.5px;
+}
+
+/* 回执块：刻度点 + 自述数字 + 🔴 紧贴的 "Self-reported" 标注（ADR-0023）。 */
+.quick-ask-answer {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  animation: quick-ask-card-in 0.4s ease-out both;
+}
+
+.quick-ask-answer strong {
+  color: var(--ink);
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+
+.quick-ask-scale {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.quick-ask-scale i {
+  width: 12px;
+  height: 12px;
+  border: 1px solid rgba(108, 99, 181, 0.5);
+  border-radius: 50%;
+  background: transparent;
+}
+
+.quick-ask-scale i.is-filled {
+  border-color: rgba(108, 99, 181, 0.9);
+  background: rgba(108, 99, 181, 0.75);
+}
+
+.quick-ask-selfreport {
+  padding: 3px 9px;
+  border: 1px solid rgba(105, 128, 109, 0.45);
+  border-radius: 999px;
+  background: rgba(105, 128, 109, 0.09);
+  color: rgba(84, 108, 88, 0.98);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* Fred 的原话短评：回执里最值钱的一句——后续结论引用的证据。 */
+.quick-ask-comment {
+  margin: 12px 0 0;
+  padding: 12px 14px;
+  border-left: 3px solid rgba(108, 99, 181, 0.55);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  background: rgba(108, 99, 181, 0.07);
+}
+
+.quick-ask-comment p {
+  margin: 0 0 8px;
+  color: var(--ink);
+  font-size: 14.5px;
+  font-style: italic;
+  line-height: 1.55;
+}
+
+.quick-ask-comment footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink-faint);
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* 闭环 verdict（answered）：他的那句话进了 hand-off 计划。 */
+.quick-ask-verdict {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid rgba(105, 128, 109, 0.4);
+  border-radius: var(--radius);
+  background: rgba(105, 128, 109, 0.09);
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+/* 透明三要素脚注（等待态）：谁在问 / 问什么事 / 答案给谁看——ADR-0023 的道德地基。 */
+.quick-ask-transparency {
+  margin-top: 12px;
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  line-height: 1.5;
+}

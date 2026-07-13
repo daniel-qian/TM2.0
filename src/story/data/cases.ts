@@ -30,6 +30,11 @@ export type ThreadStepKind =
   | 'memo-draft' // agent 经 doc-reader 读 memo 照片、预填邮件文本（可编辑草稿卡显形）
   | 'email-ready' // email tool 卡待命：To/subject/body 已填、Send 等人点（sendEmail 不进 SCRIPT）
   | 'follow-up-slack' // follow-up：短版发 #team 的 Slack-message Manifest
+  // feat-034 阶段 A（PRD Q13 加性解冻 / ADR-0023）：bill/acme 的 scripted Ask（Quick ask）段。
+  // 🔴 红线（ADR-0023）：问句问"事"不问"人"；回执数字只以"本人自述"形态留在 Ask 卡，
+  // 永不进人卡 / 永不跨人比分——mock 人（Fred）同样适用。
+  | 'quick-ask' // agent 起草快问（1~5 + 是/否，问"事"）→ 你分享一人一链给 Fred，Ask 卡显形等回执
+  | 'quick-ask-reply' // 回执归来：Fred 自述回到同一条 thread（同卡状态推进，无独立锚点）
 
 // ── 终端流（ADR-0014 决策 2/4）────────────────────────────────────────────────
 // 每 step 一组 lines，终端 HUD 逐拍打印。行集合 = (caseDef, thread) 纯函数——
@@ -136,7 +141,11 @@ export const BILL_ACME_CASE: CaseDefinition = {
     'human-loop': 'Lin Qing enters the loop',
     timeline: 'Freezing scope and splitting the work',
     'structured-output': 'The read is ready',
-    'follow-up-alternatives': 'PM takes another look at who could help',  },
+    'follow-up-alternatives': 'PM takes another look at who could help',
+    // feat-034 阶段 A：scripted Ask（Quick ask）follow-up 段的 step labels。
+    'quick-ask': 'A quick ask goes out to Fred',
+    'quick-ask-reply': "Fred's reply comes back",
+  },
 
   // 每步脚本化 context-%（ADR-0013 决策 7）：重步骤可见地多耗
   //（human chat / report 占大头），主段收在 ~71%，follow-up 推到 ~80%。
@@ -148,6 +157,9 @@ export const BILL_ACME_CASE: CaseDefinition = {
     timeline: 58,
     'structured-output': 71,
     'follow-up-alternatives': 80,
+    // feat-034 阶段 A：Ask 段继续温和推高（快问是轻量步骤，不该像 human-loop 那样大口吃）。
+    'quick-ask': 84,
+    'quick-ask-reply': 88,
   },
 
   // 终端流脚本（ADR-0014 决策 2）。事实全部引自 fixtures（SIGNALS / MISMATCH /
@@ -321,6 +333,57 @@ export const BILL_ACME_CASE: CaseDefinition = {
       },
       { speaker: 'system', type: 'manifest', text: 'Alternatives for Jason', ref: 'follow-up-alternatives' },
     ],
+    // ── feat-034 阶段 A（ADR-0023）：scripted Ask（Quick ask）follow-up 段 ──
+    // 叙事：靠信号推不出 Fred 自己的把握 → agent 提议直接问本人 → 一人一链快问出门 →
+    // 回执（自述数字 + 一句原话）回到同一条 thread，原话短评成为 hand-off 结论引用的证据。
+    // 🔴 红线：问句问"事"（这次 hand-off / 需要什么），不问"人"（能力/评分）；
+    // 回执数字只以"本人自述"形态出现在 Ask 卡（见 QuickAskCard），不进人卡。
+    'quick-ask': [
+      {
+        speaker: 'pm',
+        type: 'thought',
+        text: "One thing the files can't tell me — the signals say Fred has room, but only Fred knows how this hand-off looks from where he sits.",
+      },
+      {
+        speaker: 'pm',
+        type: 'thought',
+        text: "Rather than guess on his behalf, let's ask him directly — two quick taps about the hand-off itself, nothing that grades anyone.",
+      },
+      {
+        speaker: 'pm',
+        type: 'tool-call',
+        text: 'Drafting a quick ask for Fred — a 1-to-5 on the hand-off, and a yes/no on what he needs to start',
+      },
+      {
+        speaker: 'tool',
+        type: 'tool-result',
+        text: 'Draft ready — one link, just for Fred · his answers come back to this thread only',
+      },
+      {
+        speaker: 'system',
+        type: 'thought',
+        text: "You shared the link with Fred. He sees who's asking, what it's about, and who reads his answer — ten seconds of his time, in his own words.",
+      },
+      { speaker: 'system', type: 'manifest', text: 'Quick ask — out to Fred, waiting on his reply', ref: 'quick-ask' },
+    ],
+    'quick-ask-reply': [
+      {
+        speaker: 'system',
+        type: 'thought',
+        text: 'Fred answered — his reply is back on this thread.',
+      },
+      {
+        speaker: 'tool',
+        type: 'tool-result',
+        text: 'Reply received · 1 of 1 · self-reported — it stays with this question, never on his profile',
+      },
+      {
+        speaker: 'pm',
+        type: 'thought',
+        text: 'His own read backs the hand-off — and he named the one thing he needs first: a quick walkthrough of the guide flow with Lin Qing. Adding that to the hand-off plan.',
+      },
+      { speaker: 'system', type: 'manifest', text: "Fred's reply — in his own words", ref: 'quick-ask' },
+    ],
   },
 
   manifestLabelPos: MANIFEST_LABEL_POS,
@@ -335,6 +398,10 @@ export const BILL_ACME_CASE: CaseDefinition = {
     ['timeline', { w: 293, h: 515 }], // 实测 586×1011（最高，原 350 严重不足）
     ['structured-output', { w: 475, h: 500 }],
     ['follow-up-alternatives', { w: 400, h: 300 }], // 实测 800×582
+    // feat-034 阶段 A：Ask 卡。⚠ 加性硬约束——只许 append 在栈尾：贪心瀑布按序放列，
+    // 尾部追加不改前面任何卡的锚点（既有回放的锚点/相机 byte 级不变）。
+    // half 按回执态（最高态）预留：同卡状态推进，卡长高不外扩锚点。
+    ['quick-ask', { w: 330, h: 380 }],
   ]),
 
   // bill/acme follow-up showcase（ADR-0013 决策 5）。
@@ -343,6 +410,15 @@ export const BILL_ACME_CASE: CaseDefinition = {
       id: 'jason-alternatives',
       anchorStep: 'structured-output',
       suggestedQuestion: 'I have a job for Jason — is there any alternative?',      steps: ['follow-up-alternatives'],
+    },
+    // feat-034 阶段 A（ADR-0023）：Ask 段。chip 锚在 alternatives 卡（该卡的结论正是
+    // "Fred 最合适"——下一问自然是"问问 Fred 本人"）。askFollowUp 第 2 次调用消费本段，
+    // rail A1/A2 与 free-click chip 同构。
+    {
+      id: 'fred-quick-ask',
+      anchorStep: 'follow-up-alternatives',
+      suggestedQuestion: 'Fred looks right — can we check with him directly before we hand it over?',
+      steps: ['quick-ask', 'quick-ask-reply'],
     },
   ],
 }
