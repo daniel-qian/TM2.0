@@ -540,3 +540,88 @@ def test_zh_r3_new_verbs_and_letter_grades_hard_fail(text):
 def test_zh_r3_job_grade_not_swept_by_letter_rule():
     for text in ("把他定级为P7。", "员工定级为高级工程师。", "这位同事的职级定级为P8。"):
         assert redline.validate(text).passed, f"职级(P7/P8/高级)被字母等级规则误伤: {text!r}"
+
+
+# =============================================================================================
+# PART D (round-4) — reconcile the round-3 over/under-corrections found by adversarial verify.
+#   D1: round-3 whole-word narrowing DROPPED 流程/规则 → legit HR-tooling builders wrongly rejected.
+#   D2: superlative verdict labels (最差/最低档) + 评为 verb were missing.
+#   D3: not-scored suppression was ±24-char window-blanket → a contrastive clause ("…但领导给他打了2分")
+#       let a co-located real score slip. Bind the cue to the same clause (no 但/其实/然而 between).
+# =============================================================================================
+
+# D1 — legit work-builders whose artifact word (流程/规则/制度) round-3 dropped: must PASS.
+ZH_R4_LEGIT_BUILDER_TEXTS = [
+    "他负责员工评级流程的设计。",
+    "他维护考核评分规则。",
+    "她搭建了绩效评定制度。",
+]
+
+
+@pytest.mark.parametrize("text", ZH_R4_LEGIT_BUILDER_TEXTS)
+def test_zh_r4_legit_process_ruleset_builder_passes_advice(text):
+    assert redline.validate(text).passed, f"建评分流程/规则/制度的人被误伤(建议门): {text!r}"
+
+
+ZH_R4_LEGIT_BUILDER_OWNS = [
+    ["负责员工评级流程的设计"],
+    ["维护考核评分规则"],
+    ["搭建绩效评定制度"],
+]
+
+
+@pytest.mark.parametrize("owns", ZH_R4_LEGIT_BUILDER_OWNS)
+def test_zh_r4_legit_process_ruleset_builder_passes_extraction(owns):
+    res = validate_extraction(ExtractionResult(people=[PersonEntity(id="u_r4a", name="安某", owns=owns)]))
+    assert res.ok, f"建评分流程/规则的人被抽取红线误伤: {owns!r} ({res.summary()})"
+
+
+# D1-guard — the round-3 catches (系统性/表现/标准) must STAY caught after restoring 流程/规则.
+ZH_R4_ARTIFACT_GUARD_STILL_FAIL = [
+    "他绩效评分系统性偏低。",
+    "他的绩效评分表现很差。",
+    "他绩效评级标准差。",
+]
+
+
+@pytest.mark.parametrize("text", ZH_R4_ARTIFACT_GUARD_STILL_FAIL)
+def test_zh_r4_artifact_morpheme_scores_still_fail(text):
+    assert not redline.validate(text).passed, f"round-3 命中被 round-4 放松: {text!r}"
+
+
+# D2 — superlative verdict labels + 评为: must FAIL (person); project subject still PASS.
+ZH_R4_SUPERLATIVE_HARD_FAIL = [
+    "他评定为最差。",
+    "他绩效评为最差。",
+    "他排名为最差。",
+    "他评定为最低档。",
+]
+
+
+@pytest.mark.parametrize("text", ZH_R4_SUPERLATIVE_HARD_FAIL)
+def test_zh_r4_superlative_verdict_hard_fail(text):
+    assert not redline.validate(text).passed, f"超级比较级人员判决逃逸: {text!r}"
+
+
+def test_zh_r4_superlative_on_project_passes():
+    for text in ("这个方案评为最差。", "产品质量评为最低档。"):
+        assert redline.validate(text).passed, f"项目/产品评价被人员规则误伤: {text!r}"
+
+
+# D3 — not-scored window bypass: a contrastive clause must NOT suppress a co-located real score.
+ZH_R4_NOTSCORED_BYPASS_HARD_FAIL = [
+    "本人不参与考核，但领导仍给他打了2分。",
+    "虽说不被打分，他其实排名末位。",
+]
+
+
+@pytest.mark.parametrize("text", ZH_R4_NOTSCORED_BYPASS_HARD_FAIL)
+def test_zh_r4_notscored_contrast_bypass_hard_fail(text):
+    assert not redline.validate(text).passed, f"否定+转折 掩护真分逃逸: {text!r}"
+
+
+def test_zh_r4_legit_not_scored_still_passes():
+    # the genuine "this person is not scored" cue (no contrast marker) must still suppress → PASS.
+    for text in ("她负责设计绩效评分系统，本人不参与考核。",
+                 "他负责搭建绩效评分体系，本人不参与考核。"):
+        assert redline.validate(text).passed, f"合法'本人不参与考核'被 round-4 收紧误伤: {text!r}"

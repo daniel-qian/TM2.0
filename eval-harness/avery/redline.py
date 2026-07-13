@@ -307,7 +307,7 @@ _ZH_ANCHORED_LABELS = [
 # '画像' is deliberately NOT here: bare 画像 is usually 用户/客户画像 — only the person-qualified
 # compounds in _ZH_SCORE fire. round-3 adds 评定/分级 (realistic HR verbs) — still person-scoped
 # (need a person + a scoring target + no work/job-grade suppression).
-_ZH_ANCHOR = re.compile(r"打分|评分|评级|评定|排名|定级|分级", re.I)
+_ZH_ANCHOR = re.compile(r"打分|评分|评级|评定|评为|排名|定级|分级", re.I)   # round-4: +评为
 
 # --- round-2 suppression + target machinery -------------------------------------------------
 # WORK-ARTIFACT nouns: when a score word names/builds one of these, it is WORK, not a person score.
@@ -316,7 +316,10 @@ _ZH_ANCHOR = re.compile(r"打分|评分|评级|评定|排名|定级|分级", re.
 # score OF the person, NOT as an artifact the person builds. Dropped those; a trailing (?!性|化) on the
 # match (below) stops 系统→系统性 leaking.
 _ZH_ARTIFACT = (r"系统|体系|平台|算法|模型|逻辑|工具|引擎|框架|机制|报告|方案|项目|模块|架构|中台"
-                r"|看板|数据库|接口")
+                r"|看板|数据库|接口|流程|规则|制度|页面")   # round-4: restored 流程/规则/制度/页面
+# (round-3 dropped these while killing bare 系/表现/标准 morphemes; they are whole-word artifacts a
+#  person BUILDS — 员工评级流程 / 考核评分规则 / 绩效评定制度 — and do NOT collide with 系统性/标准差,
+#  the (?!性|化) guard on the match still blocks 规则→规则性 etc.)
 # build/own verbs — the person is the BUILDER of the scoring thing, not its subject.
 _ZH_BUILD = r"负责|设计|搭建|开发|优化|主导|维护|迭代|构建|研发|编写|实现|做过|建设|重构|升级|落地|架构"
 # an explicit "this person is NOT scored" cue near the hit. round-3 — the cue MUST attach to a SCORING
@@ -330,6 +333,10 @@ _ZH_NOT_SCORED = re.compile(
 _ZH_AFTER_ARTIFACT = re.compile(rf"[的了之与和、\s]{{0,3}}(?:{_ZH_ARTIFACT})(?!性|化)")
 _ZH_BUILD_RE = re.compile(_ZH_BUILD)
 _ZH_ARTIFACT_RE = re.compile(_ZH_ARTIFACT)
+# round-4: an adversative/contrast marker between a not-scored cue and a score means the cue does NOT
+# govern that score ("本人不参与考核，但领导仍给他打了2分" = a REAL score after a contrast). Only a cue
+# in the SAME clause (no 但/其实/然而… between it and the score) suppresses.
+_ZH_CONTRAST = re.compile(r"但|可是|然而|其实|不过|却|仍|还是|反而|竟|居然")
 
 # JOB-GRADE: a career-track grade token or leveling context — leveling, not a performance score.
 # NOTE: 甲乙丙丁/ABCD/优良中差 are deliberately EXCLUDED — those ARE performance grades and stay caught.
@@ -345,6 +352,7 @@ _ZH_SCORE_TARGET = re.compile(
     r"(?:为|评为|定为|被|列为)?\s*"
     r"(?:第?\s*\d"                                           # 第3 / 3 / 8/10
     r"|倒数|垫底|末位|末尾|末流|末等|末档|前茅|榜首|榜尾|吊车尾"
+    r"|最差|最低档|最低|最末|最次|最后一名"                    # round-4: superlative verdicts
     r"|不合格|不达标|不及格|待改进|待提升|低绩效"
     r"|优秀|优良|良好|及格"
     r"|[甲乙丙丁][等级]|[优良中差][等级]?"
@@ -373,9 +381,18 @@ def _zh_about_work(text: str, m: re.Match) -> bool:
     after = text[m.end(): m.end() + 12]
     if _ZH_AFTER_ARTIFACT.match(after):                       # 评分系统 / 排名算法 / 打分逻辑
         return True
-    seg = text[max(0, m.start() - 24): m.end() + 24]
-    if _ZH_NOT_SCORED.search(seg):                            # 本人不参与考核
-        return True
+    seg_start = max(0, m.start() - 24)
+    seg = text[seg_start: m.end() + 24]
+    rel_s, rel_e = m.start() - seg_start, m.end() - seg_start
+    for nm in _ZH_NOT_SCORED.finditer(seg):                   # 本人不参与考核 — only if it GOVERNS this
+        if nm.end() <= rel_s:                                 # cue before the score
+            between = seg[nm.end(): rel_s]
+        elif nm.start() >= rel_e:                             # cue after the score
+            between = seg[rel_e: nm.start()]
+        else:
+            between = ""                                      # overlapping → governs
+        if not _ZH_CONTRAST.search(between):                 # no 但/其实/然而… between → suppress
+            return True
     before = text[max(0, m.start() - 12): m.start()]
     if _ZH_BUILD_RE.search(before) and _ZH_ARTIFACT_RE.search(after):  # builds a scoring artifact
         return True
