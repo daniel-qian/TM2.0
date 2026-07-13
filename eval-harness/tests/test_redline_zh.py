@@ -625,3 +625,11 @@ def test_zh_r4_legit_not_scored_still_passes():
     for text in ("她负责设计绩效评分系统，本人不参与考核。",
                  "他负责搭建绩效评分体系，本人不参与考核。"):
         assert redline.validate(text).passed, f"合法'本人不参与考核'被 round-4 收紧误伤: {text!r}"
+
+
+def test_zh_r4_colloquial_superlatives_hard_fail():
+    # GAP-1 from adversarial verify: colloquial 最烂/最菜 person verdicts must also fail.
+    for text in ("他评定为最烂。", "他绩效评为最菜。"):
+        assert not redline.validate(text).passed, f"口语超级比较级人员判决逃逸: {text!r}"
+    # project subject still passes.
+    assert redline.validate("这个方案评为最烂。").passed, "项目'最烂'被人员规则误伤"
