@@ -3,6 +3,18 @@
 > **接续只靠本文件 + git,不回放聊天。** 上一版(07-09 S3 收盘 = 救援线 merge)见 `git show 9dbccf5:session-handoff.md`;更早 S2/S1 见其内指针。
 > 本波 = Danny 2026-07-09 试玩反馈 7 项的落地(S4 考古+bug 修 / S5 模块补齐 / S6 定位叙事+能力 mock)。ADR-0022 救援线已于 S3 closed;本波是其上的产品打磨,红线与 standing 约束一字未动。
 
+> **⟳ 07-09 追加(试玩后续,handoff 收盘之后落的)**:Danny 试玩又报 2 UI bug + 提 2 问,已全部落地:
+> - **playtest bug 修**:`76543ab`(Vision 底部空白带 — 滚动容器不再为不存在的 composer 预留 148px)、`929b697`(上传双按钮/双弹 = `.upload-input` 无隐藏样式;room 空态 composer 与描述重叠 = 追问态 `position:absolute` composer 塞进居中空态卡)。两修全 `.lite-shell` 作用域,story 够不到。
+> - **feat/027-parallel-ingest(`9b9787e` = 新 tip)**:Q1「上传十几个文件要并行」。`extract_docs` 加有界并发线程池(`AVERY_INGEST_CONCURRENCY` 默认 4,上限即限流护栏)、保序合并(输出与串行逐字节一致)、`并发≤1||单文件` 走原串行快路径、异常语义不动、红线门仍在合并后单线程照跑。真机 6 文件 **52s→14s(~3.7×)人数一致**;离线 197 passed/0 skipped(+8 新并发测试);gate-first 红→绿(旧串行代码上并发断言真红);4 路对抗验证(竞态/红线绕过/测试真伪/行为保真)**全 CONFIRMED_SAFE**。**⚠ 本项修改了 eval-harness(Danny 明确授权、解除本波「只读」)——§0「eval-harness 零改」对全链已不成立。** 未做:上传进度 UI(job 队列+前端轮询,更大面,标为后续)。
+> - **新链尾**:`… → feat/026-vision-surface → feat/027-parallel-ingest(9b9787e = tip,含全链)`。**merge feat/027→main 即落 S4+S5+S6+playtest 修+并行摄取全部**;push=对外闸仍留 Danny。
+> - **已知开口(非本次引入)**:`test_seed_gate.py::test_advise_cites_the_design_lead`(@seedgate @needs_keys 真机)自 07-07 held-open——top-k 召回缺 Lin Qing 行、M3 抽取非确定性致 flaky,与并发正交;离线门不含它(deselected)。带 key 全套跑到它可能 1 failed,属既有账。
+
+> **⟳ 07-10(pre-ECS 就绪审计 + demo-first 拍板 + 两波落地)**:Danny 问「离上线还差多少 / ECS·Vercel 能否当后端」→ 只读部署审计 + open-loop 盲点扫描(17-agent workflow)落 `.issues/live-polish-0709/pre-ecs-readiness-open-loop.md`(权威就绪册)。
+> - **拍板:受控演示优先**(数据不持久、演示用策展安全数据集非真员工 PII;auth/持久化/PIPL/跨境 降 fast-follow)。**架构:ECS=后端容器(单 task)· Vercel=前端静态 · Vercel≠后端**(有状态 REGISTRY + 分钟级长任务 + SSE)。部署线 feat-018 已建好未部署(`Dockerfile`+`vercel.json`+`docs/deploy/dual-deploy-runbook.md`),剩下主要是 Danny 的账号/凭据墙。
+> - **feat/028-demo-harden-1(`6d1f46e`)= cluster-1 止血(已 CONFIRMED_SAFE)**:`python-multipart` 进 requirements(否则镜像 /ingest 500 而 /health 绿)· `/ingest` 移出 event loop(run_in_threadpool,否则长上传冻服务→healthcheck 反杀容器)· `/advise` 加超时 · 未知 context_id 大声 404(不静默回落 demo 记忆引用假同事)· runbook CORS 纠错 + TLS 提示。
+> - **feat/029-redline-zh(`d0913bd` = 新 tip)= 红线中文覆盖(已 CONFIRMED_SAFE)**:英文-only 红线是洞(境内 M3 面对中文公司)。四层补中文 + Trad→Simp 归一化 + 「人 vs 工作」抑制 + 数字收紧 + 判决标签/否定转折感知。**5 轮 impl↔对抗验证(真机执行 crafted 输入,非自评)** 收敛——每轮验证都真抓到洞(绕过+误伤双向),终态 329 passed / 冻结 OK / 英文逐字节稳定;残留仅刁钻/exotic(自相矛盾「不被打分…打了2分」/内部空格 xfail)→ 011c 跨族 LLM 判官兜底。
+> - **剩余 demo-first pre-ECS**:**wave-3** 上传硬门(size/count/type + 限流 + LLM 花费闸)· **wave-4** 演示安全网(策展安全数据集〔需 Danny 定内容〕+ 真实 /health 预检 + reset + 抽取降级诚实标注)。**链尾 = feat/029-redline-zh;merge 它→main 落全部(polish 波+feat/027+028+029);push 待 Danny 对外授权。**
+
 ## 0 · 一句话现状
 Danny 试玩反馈 7 项**全部落地并机器验收通过**,串行三分支链就绪、**未 merge/未 push**(留 Danny 拍板对外):
 - **分支链(线性,tip 含全部)**:`polish/s4-triage`(`4f90d1c` · S4)→ `feat/025-lite-modules`(`0a15628` · S5)→ **`feat/026-vision-surface`(`0ff8555` · S6 = tip,含 S4+S5+S6 全量)**。base = main `1f5a56a`(经 S3 收盘 commit `9dbccf5`)。
