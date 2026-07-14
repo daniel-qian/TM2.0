@@ -1,56 +1,56 @@
-# session-handoff · feat-036（v02 晨间分诊区 + Follow-ups 跟进区）
+# session-handoff · feat-044（v02 A closer look 矛盾点独立页）
 
-> 写于 2026-07-14。分支 `feat/036-v02-triage-followups`（从 `feat/035-v02-shell` 起），主 checkout 承接
-> （同编排形态：每 feature 一个 AFK 实现子代理在主 checkout 承接分支跑 gate-first 全流程）。
-> **未 merge main、未 push**。下一棒交给 main 编排做对抗验证，clean 后推进 feat-037（A closer look）。
+> 写于 2026-07-14。分支 `feat/044-v02-closer-look`（从 `feat/043-v02-triage-followups` 起），
+> 主 checkout 承接（同编排形态：每 feature 一个 AFK 实现子代理在主 checkout 承接分支跑
+> gate-first 全流程）。**未 merge main、未 push**。下一棒交给 main 编排做对抗验证，clean
+> 后推进 feat-045（onboarding 向导 + chips + 铃铛）。
 >
-> 本文件覆盖 feat-035 遗留的同名文件——鉴于本 epic 的既有约定是"每棒一份最新交接"，历史棒的细节
-> 留在各自 commit 与 `progress.md` 的对应 Update 节（feat-035 见 `progress.md` "2026-07-14 · feat-035"）。
+> 本文件覆盖 feat-043 遗留的同名文件——历史棒的细节留在各自 commit 与 `progress.md` 的
+> 对应 Update 节（feat-043 见 `progress.md` "2026-07-14 · feat-043"）。
 
 ## 分支与提交
 
 ```
-feat/036-v02-triage-followups（从 feat/035-v02-shell 起，落盘前请以 git log 实际输出为准）
+feat/044-v02-closer-look（从 feat/043-v02-triage-followups 起，落盘前请以 git log 实际输出为准）
 ```
 
 commit 顺序（按落盘时机，语义边界不变，粒度可能微调）：
 
-1. `docs(v02): 门先行 — flowVerdict B 组 4 相位 + 出生即红实证` — `scripts/gates/live-frontend-gate.snippet.js`
-   新增 `assertTriageRenders`/`assertTriageActions`/`assertFollowupsFlow`/`snapshotFollowups`/
-   `assertFollowupsPersist`/`flowVerdict`，头注释登记用法；实现前真跑一遍记录红态。
-2. `feat(v02): 晨间分诊三动作 + Follow-ups 真实屏 — flowStore + draftLinks + 五处改动`
+1. `docs(v02): 门先行 — gapVerdict C 组 3 相位 + 出生即红实证`
+   — `scripts/gates/live-frontend-gate.snippet.js` 新增 `assertGapsDerive`/`assertGapsResolve`/
+   `assertGapsToAsk`/`snapshotGaps`/`gapVerdict`，头注释登记用法；同 commit 内含
+   `stubTransport.ts` 的语料前置改动（给 `pr_portal` 加真实矛盾 blocker，供门跑出非零结果）
+   与三处旧注释的准确性更新；实现前真跑一遍记录红态。
+2. `feat(v02): A closer look 矛盾点独立页 — gapDerive.ts + CloserLookScreen 真实现`
    — 本节下方"实现清单"全部内容。
-3. `docs(v02): feat-036 done — evidence + progress + handoff`
+3. `docs(v02): feat-044 done — evidence + progress + handoff`
    — `feature_list.json` 状态更新 + `progress.md` 新节 + 本文件。
 
-## 实现清单（对照 kickoff-dev.md §feat-036）
+## 实现清单（对照 kickoff-dev.md §feat-044）
 
 | 项 | 落地 |
 |---|---|
-| triage 派生 | **不重新派生**——直接消费 `teamData.ts liveHandoffs()` 既有真派生（`team.handoffs`），`flowStore.ts` 只加 `triageMarks` + 三个纯函数选择器（`selectTriagePending/Handled/SetAside`）按 mark 分桶。理由：避免红线审计过的 handoff 派生逻辑在两处各长一份。 |
-| 三动作 | done→`.home-check`→`markTriageDone`；discard→`.home-discard`→`discardTriage`；带进议事室→新 `.lite-triage-room`→`setComposerDraft`+`goScreen('room')`（只预填不自动提交）。 |
-| "今天已照料"堆 | 复用 story 同款 `.home-drawer`/`.home-drawer-toggle`/`.home-drawer-list`/`.home-drawer-item`（`src/shared/styles/70-home-cards.css` 既有类，不新造视觉语言）；默认折叠。 |
-| Follow-ups slice | `flowStore.ts`：`FollowupItem{id,title,source,dueGroup,note?,done,doneAt?,createdAt}`，`addFollowup/completeFollowup/reopenFollowup/deleteFollowup/editFollowup`。 |
-| Follow-ups 屏 | `FollowupsScreen.tsx` 整屏重写：今天/本周/之后分组 + 手动添加表单 + Active/History 两个 subtab + 逐条编辑/删除/起草邮件。 |
-| 真接线（禁止假按钮） | 分诊卡"加入跟进"（`.lite-triage-addfollowup`）+ advice 卡 Recommended actions 每条一个"加入跟进"（`.lite-advice-add-followup`，source=room）均真写 `flowStore.addFollowup`。 |
-| mailto 起草深链 | `draftLinks.ts`：`draftMailForHandoff`/`draftMailForFollowup`，收件人留空，`encodeURIComponent` 手写（不用 `URLSearchParams`，避免 mailto 对 `+` 的解析歧义）。 |
-| localStorage 持久化 | `flowStore.ts` 手写同步 load/save（key `lite2:flow:v1`），**不用** zustand `persist` 中间件——其 `hydrate()` 走 Promise 链会有一帧空态闪烁窗口；手写版 store 创建时即最终态。 |
-| i18n | `en.ts` 新增 43 key（`triage*`/`followups*`/`adviceAddFollowup`/`followupAdded`），删 2 个不再用的 coming-soon 占位 key；`zh.ts` 经 `scripts/i18n-zh-lite2-delta.mjs` 重跑（84 复用 + 45 delta 送 M3）。 |
+| stub 语料前置 | `stubTransport.ts`：`pr_portal`（status on-track）加一条 blocker——原语料零"自述读稳但 blocker 说另一回事"的真实案例（`pr_pilot` 本就自认 at-risk，blocker 与自述一致非矛盾）。副作用：`teamData.ts liveHandoffs()` 现在也给 `pr_portal` 派生一张晨间分诊卡（诚实行为，非回归——已在 B 组门相位复跑确认零破坏，见下）。 |
+| 矛盾派生 | `gapDerive.ts`（新文件，纯函数）：`deriveGaps(team) -> GapCard[]`，只读 `LiteProject` 字段；启发式 = `status` 读稳（on-track/steady）且 `blockers` 非空 → 一张卡；`claim` 引 `project.summary` 原文，`evidence` 引 blocker 原文行，二者均可溯源零捏造；id = `gap_${projectId}_${blockerIdx}`（稳定）。已自述 at-risk/blocked 的项目不算矛盾。 |
+| marks + 持久化 | `flowStore.ts` 扩展：`gapMarks: Record<string,'resolved'\|'dismissed'>` + `resolveGap/dismissGap/restoreGap` + `selectGapsActive/Resolved/Dismissed`（同 triage marks 分桶模式，不重复派生）。并入既有 `lite2:flow:v1` localStorage blob（`PersistedShape` 加 `gapMarks` 字段，向后兼容旧 blob 缺该字段）。 |
+| 屏幕 | `CloserLookScreen.tsx` 整屏重写替换 feat-042 占位：对照卡（左 `.lite-gap-pane-claim` "What the files say" / 右 `.lite-gap-pane-evidence` "What the signals show"，sage/terracotta 左边条区分语气非红绿评判色）+ 四个卡操作（`.lite-gap-resolve` Settled 厘清 / `.lite-gap-dismiss` Let it go 先放一放 / `.lite-gap-ask` Ask them directly 直接问本人 / `.lite-gap-addfollowup` Add to follow-ups 加入跟进，source=`closer-look`）+ 历史折叠区（`.lite-gap-history*`，默认折叠，已厘清/已搁置两种徽章 `is-resolved`/`is-dismissed`）+ 空态（`.lite-gap-empty`，"Nothing worth a closer look right now"）。所有交互元素带 `data-gap-id`/`data-gap-status` 稳定属性（同 feat-043 打回教训：门断言按 id 追踪不按文本）。 |
+| 真接线 | "Ask them directly" 复用 feat-043 验证过的 `setComposerDraft(text)` + `goScreen('room')` 机制（RoomScreen 挂载时消费一次），预填 `${projectTitle}\n\n${claim}\n${evidence}`——含项目引用+矛盾上下文，零人身评判语。"Add to follow-ups" 真写 `flowStore.addFollowup({source:'closer-look', ...})`（`FollowupSource` 类型早在 feat-043 就含 `'closer-look'`，本棒是第一次真消费）。 |
+| CSS | `lite2.css` 新增 ~280 行，全 `.lite2-shell` 前缀，卡片语法沿用 `.home-handoff` 家族（hairline 边框/圆角/柔阴影），零新造视觉语言；aurora 皮下已抽查渲染正常（令牌自动消费，无需 `[data-skin]` 分支）。 |
+| i18n | `en.ts`：旧 4 个占位 key（`closerLookEyebrow/Title/Body/ComingSoon`）**整体退役**，不复用同名 key 承载新内容——规避"同 key 换新义、旧 ZH 译文误留"的风险（feat-043 硬提醒的同类坑）。新增 16 个 `gap*` key。`zh.ts` 经 `scripts/i18n-zh-lite2-delta.mjs` 重跑（老 key 自然从输出消失、16 新 key 全部当真 delta 送 M3，防复发规则命中"零旧 key 误保留"）；人工核对发现 `gapRestoreLabel` M3 首译"重新打开"与既有锁定词（`followupsRestore`/`triageRestoreLabel`，同源 EN "Bring it back"）已锁定的「放回来」不一致，已手工对齐——**delta 脚本不做跨 key 一致性校验**，此类同义词对齐仍需人工过一遍 diff。 |
 
-## 门证据（flowVerdict，B 组，实测，非模板）
+## 门证据（gapVerdict，C 组，实测，非模板）
 
 **实现前（真跑，红是成功）**：
 
 ```json
 {
   "pass": false,
-  "phases": {
-    "triageRenders": false,
-    "triageActions": false,
-    "followupsFlow": false,
-    "followupsPersist": false
-  },
-  "note": "2026-07-14 born red：?v=2&mode=live&transport=stub 下分诊区已渲染 1 张卡（既有 liveHandoffs() 派生），但卡上零 .home-check/.home-discard/.lite-triage-room/.lite-triage-addfollowup；Follow-ups 屏 .lite-followup-item 计数 0（仍是 feat-035 的 coming-soon 占位）。"
+  "phases": { "gapsDerive": false, "gapsResolve": false, "gapsToAsk": false },
+  "results": {
+    "gapsDerive": { "bannedHits": [], "gapCards": 0, "hasAddFollowup": false, "hasAsk": false, "hasClaimPane": false, "hasDismiss": false, "hasEvidencePane": false, "hasResolve": false, "nameDigitPairs": [], "pass": false },
+    "gapsResolve": { "error": "no gap cards to act on", "pass": false },
+    "gapsToAsk": { "error": "no gap card to act on", "pass": false }
+  }
 }
 ```
 
@@ -59,89 +59,102 @@ commit 顺序（按落盘时机，语义边界不变，粒度可能微调）：
 ```json
 {
   "pass": true,
-  "phases": {
-    "triageRenders": true,
-    "triageActions": true,
-    "followupsFlow": true,
-    "followupsPersist": true
-  },
+  "phases": { "gapsDerive": true, "gapsResolve": true, "gapsToAsk": true },
   "results": {
-    "triageRenders": { "triageCards": 1, "bloodBarLeak": null, "hasCheck": true, "hasDiscard": true, "hasTakeToRoom": true, "hasAddFollowup": true, "pass": true },
-    "triageActions": { "doneWorks": true, "drawerHasItem": true, "discardWorks": true, "roomWorks": true, "pass": true },
-    "followupsFlow": { "hasSourceLabel": true, "sourceLabelText": "From this morning", "leftActive": true, "movedToHistory": true, "restored": true, "pass": true },
-    "followupsPersist": { "pass": true }
+    "gapsDerive": { "bannedHits": [], "gapCards": 1, "hasAddFollowup": true, "hasAsk": true, "hasClaimPane": true, "hasDismiss": true, "hasEvidencePane": true, "hasResolve": true, "nameDigitPairs": [], "pass": true },
+    "gapsResolve": { "badgesDistinct": true, "dismissLeavesActive": true, "dismissPersisted": true, "dismissedBadgeText": "Let go", "dismissedInHistory": true, "gapId": "gap_pr_portal_0", "pass": true, "resolveLeavesActive": true, "resolvePersisted": true, "resolvedBadgeText": "Settled", "resolvedInHistory": true },
+    "gapsToAsk": { "composerValueSample": "Onboarding Portal RevampRebuilding the internal onboarding portal around the new checklist flow.The new checklist flow still needs sign-off from Ops — nobody ha", "containsProjectRef": true, "pass": true, "projectTitle": "Onboarding Portal Revamp", "switchedToRoom": true }
   }
 }
 ```
 
-- `triageRenders`：stub 语料（1 个 at-risk 项目、1 条 blocker）诚实产出 1 张分诊卡，卡上四个真控件全在、零人身数字泄漏（`BLOOD_BAR_RE` 零命中）。
-- `triageActions`：**同一张卡**做 done→撤销→discard→撤销→带进议事室 三段式序列（stub 只有 1 张诚实卡，不为凑测试虚构第二张）；done 后 pending 计数掉且条目进抽屉，discard 后立即消失，带进议事室后 composer 值含条目标题。
-- `followupsFlow`：分诊卡"加入跟进"→ Follow-ups 屏出现新条目、来源标签 "From this morning" → 勾完成离开 active 列表 → History tab 出现 → 点 Bring it back → 回到 active 列表。
-- `followupsPersist`：写入后整页 reload（`localStorage` 而非纯内存态），条目仍在（跨导航快照对比，模式同 `v2Verdict` 的 `readSkinSnapshot`/`assertSkinTokens`）。
+- `gapsDerive`：stub 语料（`pr_portal`，on-track 但有 blocker）诚实产出 1 张矛盾卡；`bannedHits:[]` = whole-screen 扫 `gap`/`Nexus`/`差距`/`现实差距` 零命中；`nameDigitPairs:[]` = 复用 Ask 红线的 `_askValueRe` 对全团队花名册（先在 Your team tab 收集，因屏幕互斥挂载）逐一扫描，人名与数字/yes/no 60 字符内零共现。
+- `gapsResolve`：resolve→撤销→dismiss→撤销 两段式序列在**同一张**诚实卡上复测（stub 只诚实产生 1 张矛盾卡，不为凑数虚构第二张，同 `triageActions`/`followupsFlow` 纪律）；两个 mark 均确认写进 `lite2:flow:v1` 的 `gapMarks` 字段（in-page 直读 `localStorage`）；两个历史徽章文案不同（Settled vs Let go，状态可视觉区分）。
+- `gapsToAsk`：卡上 "Ask them directly" → 切到 The room，composer 预填值含项目标题引用，不自动提交。
 
-## 零回归证据（同分支复跑，v01/story/v2Verdict A 组）
+### 补充证据：真实整页 reload 持久化（非 `gapVerdict()` 聚合内相位）
+
+kickoff-dev.md 对 C 组只列 3 个相位名（不同于 B 组明确列了独立的 `followupsPersist`），本棒解读
+为"聚合 key 数不变，但持久化证据仍要给够"——除 `assertGapsResolve` 内置的 in-page localStorage
+直读外，额外走了一遍真实 reload（同 `readSkinSnapshot`/`snapshotFollowups` 的驱动侧手工补充
+模式，`snapshotGaps()` 辅助函数已就位）：
+
+```
+resolve 一张卡 → localStorage.getItem('lite2:flow:v1') 读出 gapMarks:{"gap_pr_portal_0":"resolved"}
+→ 真实整页 reload（浏览器 navigate，非 SPA 内导航）→ 重新 fetch+eval 注入门
+→ 同 key 读出仍是 gapMarks:{"gap_pr_portal_0":"resolved"}
+```
+
+证明走的是 `flowStore.ts` 那条已被 feat-043 `followupsPersist` reload 实证过的同一条手写同步
+save/load 代码路径（`gapMarks` 只是复用同一个 `lite2:flow:v1` blob 里的新字段），不是新起一套
+持久化机制。若下一棒或对抗验证认为应该正式化为独立的 `gapsPersist` 聚合相位，改动成本低。
+
+## 零回归证据（同分支复跑，v01/story/v2Verdict A 组/flowVerdict B 组/askVerdict）
 
 ```json
 {
   "v01_verdict": { "pass": true, "phases": { "emptyStateClean": true, "ingested": true, "teamRendered": true, "postUploadClean": true, "detailIsLive": true, "composerIsLive": true, "teamGrouped": true, "roomCanvas": true, "playbooksEmpty": true, "visionSurface": true } },
   "askVerdict": { "pass": true, "phases": { "askDraft": true, "askShare": true, "askCollect": true, "askReceiptsMulti": true, "askSingle": true, "askRedline": true } },
-  "v2Verdict_A_group_recheck": { "v2Boots": true, "v1Untouched": true, "storyUntouched": true, "skinTokens": true, "wallRed": "见下方独立记录" }
+  "v2Verdict_A_group_recheck": { "v2Boots": true, "v1Untouched": true, "storyUntouched": true, "skinTokens": true },
+  "flowVerdict_B_group_recheck": {
+    "triageRenders": { "triageCards": 2, "bloodBarLeak": null, "hasCheck": true, "hasDiscard": true, "hasTakeToRoom": true, "hasAddFollowup": true, "pass": true },
+    "triageActions": { "doneWorks": true, "drawerHasItem": true, "discardWorks": true, "roomWorks": true, "pass": true, "title": "Take a look at Pilot Launch — Hangzhou Store" },
+    "followupsFlow": { "pass": true, "sourceLabelOk": true, "leftActive": true, "movedToHistory": true, "restored": true },
+    "followupsPersist": { "pass": true, "missing": [] }
+  }
 }
 ```
 
-- `wallRed`（本棒亲自复测，4 方向逐一临时注入违规 import → `npm run lint` exit 1 → 撤回 → exit 0）：
-  `lite2→story`/`story→lite2`/`lite→lite2`/`lite2→lite` 全部先红后绿；`git status`/
-  `git diff --stat main -- src/lite/ src/story/ eval-harness/` 复位后确认零字节改动（过程中撞到一次
-  Windows 下 `git status` 对 `src/lite/store.ts`/`src/story/lib/useRailCamera.ts` 报 `M` 但
-  `git diff --numstat` 显示零变更的 CRLF/LF 索引噪音——`git checkout --` 清理确认，非真实内容改动）。
+- `triageRenders.triageCards` 从 feat-043 记录的 1 变成 2——**诚实反映**本棒给 `pr_portal` 加的
+  blocker（`liveHandoffs()` 派生逻辑本就是"status=at-risk 或 blockers 非空"，未改此逻辑本身）；
+  `triageActions`/`followupsFlow` 仍定位到第一张卡（`pr_pilot`，payload.projects 数组顺序不变），
+  行为与断言目标零变化。
+- `wallRed`（本棒抽查 story→lite2 一个方向，临时注入违规 import → `npm run lint` exit 1 → 撤回
+  → exit 0）：未逐一复跑全部 4 方向，因 `eslint.config.js` 本棒零改动（`git diff
+  feat/043-v02-triage-followups -- eslint.config.js` 空输出确认，wallRed 机制本身未受任何触碰）。
+- `git diff feat/043-v02-triage-followups -- src/lite/ src/story/ eval-harness/`：空输出，v01/
+  story/eval-harness 冻结未破。
 
 ## init.sh
 
 ```
 npm run lint       — 0 errors, 4 warnings（3 条 story/lib/useRailCamera.ts 既有 noInlineConfig
-                      警告 + 1 条 RoomScreen.tsx 新增同款警告——eslint-disable-next-line 在本仓库
-                      noInlineConfig 配置下本就无效，是已知无害模式，不是新问题）
+                      警告 + 1 条 feat-043 遗留的 RoomScreen.tsx 同款警告——已知无害模式）
 npm run typecheck  — clean
-npm run build      — 496 modules（feat-035 基线 494，+2：flowStore.ts + draftLinks.ts）
+npm run build      — 497 modules（feat-043 基线 496，+1：gapDerive.ts）
 ```
 
-## 门辅助脚本的一个 bug（非产品代码，已修入 snippet.js）
+## i18n 自查（session-handoff 硬提醒的收口纪律）
 
-`snapshotFollowups()` 最初在点击 `.lite-followups-subtab` 后立刻同步读 DOM，捕获了 React 批处理
-提交前的旧渲染，误判"同一条目同时出现在 active 与 history 两个视图"。加 200ms settle 后复测：
-history 正确为空、active 正确只含 1 条。已在 `live-frontend-gate.snippet.js` 内加注释存档，
-避免下一棒（feat-037 写 C 组门相位时）踩同一个坑——**任何 subtab/tab 切换后紧跟着的 DOM 读取都
-应该走 poll 或至少一次 settle，不能假设点击后同步生效**。
+`git diff feat/043-v02-triage-followups -- src/shared/i18n/`：
+
+- `en.ts`：仅删 4 个旧 `closerLook*` 占位 key + 增 16 个新 `gap*` key，零其他改动。
+- `zh.ts`：同步仅此 20 个 key 的增删，其余既有 key（含 F2/F3 的 `triage*`/`followups*` 全家族、
+  `footerText`、`tabCloserLook` 等）逐字节零漂移——diff 输出已逐行核对，无意外改动。
 
 ## 偏离 kickoff 之处
 
-无重大偏离。本棒**严格执行了 gate-first**：先写 B 组 4 相位断言、对着未实现的代码真跑确认红
-（红态 JSON 见上）、再动手实现、再复跑绿——修正了 feat-035 交接记录里的纪律偏离（feat-035 的门
-文档是实现完之后才补的，DOM 相位没能证明"出生即红"）。
+1. **stub 语料前置改动超出"只加 gapDerive.ts + 屏 + 门"的字面描述**：给 `pr_portal` 加一条
+   blocker，是让 `gapsDerive` 门相位能脱离"0 卡恒红"状态的必要前提（原语料没有一个"自述读稳
+   但 blocker 说另一回事"的真实案例）。已在门文档三处旧注释（`assertTriageRenders`/
+   `assertTriageActions` 附近 + 头注释）同步更新，避免文档与语料脱节；副作用（分诊卡从 1 张
+   变 2 张）已在零回归证据里逐项确认非破坏。
+2. **C 组持久化证据未正式化为第 4 个聚合相位**：kickoff-dev.md 对 C 组只写"gapsDerive/
+   gapsResolve/gapsToAsk"3 个相位名（对比 B 组明确列了独立 `followupsPersist`）——本棒解读为
+   刻意的 3 相位设计，用 in-page localStorage 直读（`assertGapsResolve` 内置）+ 驱动侧手工补的
+   真 reload 快照对比（`snapshotGaps()`，不进 `gapVerdict()` 聚合）两条证据满足"reload 后状态
+   保持"的要求，未新增第 4 个聚合 key。若下一棒/对抗验证认为应该正式化，改动成本低。
 
-## 遗留 / 给 feat-037 的提示
+## 遗留 / 给 feat-045 的提示
 
-- Follow-ups 编辑目前只支持标题+分组，不支持改来源标签或 note——如果 feat-037/038 需要更丰富的
-  编辑，可以在 `flowStore.editFollowup` 的 patch 类型上直接扩展（已经是 `Partial<Pick<...>>` 形状，
-  加字段成本低）。
-- advice 卡的"加入跟进"是逐条 recommended action 一个按钮（`.lite-advice-add-followup`），视觉上
-  略密——非阻塞，可留 feat-039 aurora 精修阶段顺手收窄成单一"全部加入"或折叠态。
-- `src/lite2/flowStore.ts` 的 `composerDraft` 桥目前只服务"分诊→议事室"这一条路径；feat-037 的
-  "直接问问本人"→ room 预填快问语境，如果也要走 composer 预填（而非直接开一张新 Ask 草稿），可以
-  复用同一个 `setComposerDraft`/`consumeComposerDraft` 机制，不必另起一套状态。
-- `.home-drawer*`（今天已照料堆）与 `.home-check`/`.home-discard`（分诊三动作）现在被 v01 story
-  的 `70-home-cards.css`（shared，非 lite2 专属）和 lite2 的晨间分诊共用同一套类名与视觉语言——
-  这是有意为之（PRD 明确"沿用 sage/honey/terracotta 左边条语法"），feat-037 的矛盾卡"解决/忽略/
-  历史"如果视觉语言相近，可以考虑复用而非重新设计一套。
-
-## 追记 · i18n 打回复验（2026-07-14，fix commit）
-
-对抗验证 i18n 路打回后按修复单在本分支追加 fix commit（不改历史）：锁定词 `triageDrawerLabel`
-恢复「今天已照料」；5 个被 bf1fce0 越权重译的域外 ZH 值（closerLook* ×4 + footerText）用
-`git show feat/042-v02-shell` 原文精确恢复；「重新激活」→「放回来」；自查一并修掉三处同类
-锁定词违约（会议→议事室、随手一问→快问）；`assertFollowupsFlow` 加固为按 `data-followup-id`
-稳定 id 追踪 + 来源标签精确断言；`scripts/i18n-zh-lite2-delta.mjs` 加「已有 zh.lite2 译文优先
-保留」防复发（幂等实测：重跑 zh.ts hash 不变、零 M3 调用）。复验：tsc 绿、清 localStorage 重驱
-followupsFlow/followupsPersist 两相位绿、`?lang=zh` 运行时抽查命中、init.sh 绿。
-**给下一棒的硬提醒**：收口自查必须包含 `git diff <上一棒分支> -- src/shared/i18n/`，确认既有
-key 值零漂移——delta 脚本现在虽已防复发，但任何手工/脚本改动 zh.ts 都应过这一遍。
+- `gapRestoreLabel` 的 M3 首译（"重新打开"）与既有锁定词（`followupsRestore`/
+  `triageRestoreLabel`，同源 EN "Bring it back" 已锁定「放回来」）不一致，已手工对齐——**delta
+  脚本不做跨 key 译法一致性校验**，feat-045 继续加新 key（onboarding 向导/chips/铃铛的文案）时
+  仍需人工过一遍 `zh.ts` diff，抽查是否有同义 EN 源被 M3 译出不同的中文说法。
+- 历史折叠区现在有三套相似但不完全相同的折叠展开视觉语言：`.lite-gap-history*`（本棒新增）、
+  `.lite-followups-history-list` + subtab（feat-043）、`.home-drawer*`"Taken care of today"
+  （feat-043 沿用 story 既有类）。非阻塞，可留 feat-046 aurora 精修阶段视觉审计时一并考虑是否
+  收敛成一套通用折叠组件（当前三处均功能正确，只是三套 CSS/交互细节各自实现）。
+- `CloserLookScreen.tsx` 的"Ask them directly"与 feat-043 分诊卡的"带进议事室"共用同一个
+  `flowStore.composerDraft` 桥——如果 feat-045 的 chips（room 空态建议问题）也要做类似预填，
+  可以复用同一机制，不必另起一套状态。
