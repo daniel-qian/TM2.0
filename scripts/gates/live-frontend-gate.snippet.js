@@ -182,7 +182,9 @@
  *                                                    // fires a REAL askLive run — the terminal
  *                                                    // mounts and SSE frames render (same dynamic
  *                                                    // shape as phase F2), not a dead button
- *   E) [clear ALL `lite2:` keys -> reload, re-inject]
+ *   E) [clear ALL `lite2:` keys on a SETTLED page — wait for chipsAsk's run to finish first: a
+ *       notification push from a still-streaming run re-writes lite2:notify:v1 AFTER the clear
+ *       (caught live on the first green drive, 2026-07-14) — then reload, re-inject]
  *      await __seedGate.assertBellIsReal()           // bellIsReal: (skips the fresh wizard first)
  *                                                    // bell opens on a cleared state with ZERO
  *                                                    // notification items and an explicit empty

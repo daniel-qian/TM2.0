@@ -2,10 +2,14 @@ import { applyModeToUrl, useMode } from '../shared/modeStore'
 import { useDict } from '../shared/i18n/useDict'
 import { useLite, type LiteScreen } from './store'
 import { showModeSwitch, type AveryMode } from '../shared/mode'
+import { LiteBell } from './LiteBell'
 
 // feat-035 · lite2 壳的顶栏：6 tab + mode 开关。复用 story 顶栏的 CSS chrome
 //（.prototype-topbar 容器 pointer-events:none——可点子元素 .scene-tabs/.mode-switch
 // 各自 auto 回来，4e90966 的坑已由既有规则盖住）。
+// feat-045：加通知铃铛（LiteBell）——放在 .scene-tabs nav 之外（v2Boots 门相位按
+// `.scene-tabs .scene-tab` 数 6 个 tab，铃铛不得混进去）；.lite-bell 在 lite2.css 里
+// 自己 pointer-events:auto 回来（同 .scene-tabs/.mode-switch 的规矩）。
 export function LiteTopbar() {
   const screen = useLite((s) => s.screen)
   const goScreen = useLite((s) => s.goScreen)
@@ -43,6 +47,8 @@ export function LiteTopbar() {
           </button>
         ))}
       </nav>
+      {/* feat-045：通知铃铛——真事件驱动（notifyStore），nav 之外、mode 开关之前。 */}
+      <LiteBell />
       {/* feat-034 polish：Story/Live 开关默认不渲染（?modeSwitch=1 显示，shared/mode.ts
           小工具——lite 只 import shared，墙不破）。缺席时整块不出 DOM，布局无空洞。 */}
       {showModeSwitch() ? (

@@ -2032,3 +2032,551 @@
   font-size: 10.5px;
   line-height: 1.4;
 }
+
+/* ══ feat-045 · onboarding 向导 + 建议 chips + 通知铃铛（PRD F5+F7）══════════════════
+   全部 .lite2-shell 前缀（S4 教训：壳级作用域隔离）；组件样式只消费皮肤令牌
+   （--ink/--rule/--sage/--lite2-surface 等），aurora 皮自动跟随，零 [data-skin] 分支。 */
+
+/* ── 向导覆盖层（非路由）──────────────────────────────────────────────────────── */
+.lite2-shell .lite-onboard-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(30, 27, 22, 0.35);
+  backdrop-filter: blur(3px);
+}
+
+.lite2-shell .lite-onboard {
+  width: min(640px, 100%);
+  max-height: min(84vh, 720px);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--rule-strong);
+  border-radius: 16px;
+  background: var(--lite2-surface, rgba(255, 253, 248, 0.96));
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.lite2-shell .lite-onboard-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px 10px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.lite2-shell .lite-onboard-eyebrow {
+  margin: 0;
+  flex: 0 0 auto;
+}
+
+.lite2-shell .lite-onboard-dots {
+  display: flex;
+  gap: 6px;
+  flex: 1 1 auto;
+  justify-content: center;
+}
+
+.lite2-shell .lite-onboard-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--rule-strong);
+  opacity: 0.55;
+}
+
+.lite2-shell .lite-onboard-dot.is-active {
+  background: var(--sage);
+  opacity: 1;
+}
+
+.lite2-shell .lite-onboard-close {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--rule);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.lite2-shell .lite-onboard-close:hover,
+.lite2-shell .lite-onboard-close:focus-visible {
+  border-color: var(--rule-strong);
+  color: var(--ink);
+  outline: none;
+}
+
+.lite2-shell .lite-onboard-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 18px 22px;
+}
+
+.lite2-shell .lite-onboard-step h2 {
+  margin: 0 0 8px;
+  font-size: 21px;
+  line-height: 1.25;
+  color: var(--ink);
+}
+
+.lite2-shell .lite-onboard-step-body {
+  margin: 0 0 16px;
+  color: var(--ink-soft);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+/* 上传步 */
+.lite2-shell .lite-onboard-upload-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.lite2-shell .lite-onboard-upload-choose {
+  padding: 9px 16px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.lite2-shell .lite-onboard-upload-choose:hover,
+.lite2-shell .lite-onboard-upload-choose:focus-visible {
+  border-color: var(--sage);
+  color: var(--sage);
+  outline: none;
+}
+
+.lite2-shell .lite-onboard-upload-status {
+  margin-top: 12px;
+  font-size: 12.5px;
+}
+
+.lite2-shell .lite-onboard-upload-status p {
+  margin: 0;
+}
+
+.lite2-shell .lite-onboard-upload-idle {
+  color: var(--ink-faint);
+}
+
+.lite2-shell .lite-onboard-upload-reading {
+  color: var(--ink-soft);
+}
+
+.lite2-shell .lite-onboard-upload-ready {
+  color: var(--sage);
+  font-weight: 700;
+}
+
+.lite2-shell .lite-onboard-upload-error {
+  color: var(--terracotta);
+}
+
+/* 团队信息步 */
+.lite2-shell .lite-onboard-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 400px;
+}
+
+.lite2-shell .lite-onboard-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.lite2-shell .lite-onboard-field span {
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.lite2-shell .lite-onboard-field input {
+  padding: 9px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  background: var(--paper-strong, #fffdf8);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13.5px;
+}
+
+.lite2-shell .lite-onboard-field input:focus-visible {
+  border-color: var(--sage);
+  outline: none;
+}
+
+/* 选 playbooks 步 */
+.lite2-shell .lite-onboard-playbook-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.lite2-shell .lite-onboard-playbook {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 11px 13px;
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.lite2-shell .lite-onboard-playbook:hover,
+.lite2-shell .lite-onboard-playbook:focus-visible {
+  border-color: var(--rule-strong);
+  outline: none;
+}
+
+.lite2-shell .lite-onboard-playbook.is-on {
+  border-color: var(--sage);
+  box-shadow: inset 3px 0 0 var(--sage);
+  background: var(--lite2-glass, rgba(255, 253, 248, 0.82));
+}
+
+.lite2-shell .lite-onboard-playbook-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.lite2-shell .lite-onboard-playbook-body {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+
+/* 完成步 */
+.lite2-shell .lite-onboard-greeting {
+  font-size: 15px;
+  color: var(--ink);
+}
+
+.lite2-shell .lite-onboard-summary-lead {
+  margin: 0 0 8px;
+}
+
+.lite2-shell .lite-onboard-summary-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.lite2-shell .lite-onboard-summary-item {
+  padding: 8px 12px;
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--sage);
+  border-radius: 10px;
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--lite2-glass, rgba(255, 253, 248, 0.82));
+}
+
+.lite2-shell .lite-onboard-summary-none {
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: 12.5px;
+}
+
+/* 向导底部导航 */
+.lite2-shell .lite-onboard-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--rule);
+}
+
+.lite2-shell .lite-onboard-skip {
+  border: none;
+  background: transparent;
+  padding: 6px 2px;
+  color: var(--ink-faint);
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.lite2-shell .lite-onboard-skip:hover,
+.lite2-shell .lite-onboard-skip:focus-visible {
+  color: var(--ink-soft);
+  outline: none;
+}
+
+.lite2-shell .lite-onboard-nav-main {
+  display: flex;
+  gap: 8px;
+}
+
+.lite2-shell .lite-onboard-back {
+  padding: 8px 14px;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.lite2-shell .lite-onboard-back:hover,
+.lite2-shell .lite-onboard-back:focus-visible {
+  border-color: var(--rule-strong);
+  color: var(--ink);
+  outline: none;
+}
+
+.lite2-shell .lite-onboard-next,
+.lite2-shell .lite-onboard-finish {
+  padding: 8px 18px;
+  border: 1px solid var(--sage);
+  border-radius: 10px;
+  background: var(--sage);
+  color: var(--paper-strong, #fffdf8);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.lite2-shell .lite-onboard-next:hover,
+.lite2-shell .lite-onboard-next:focus-visible,
+.lite2-shell .lite-onboard-finish:hover,
+.lite2-shell .lite-onboard-finish:focus-visible {
+  filter: brightness(1.06);
+  outline: none;
+}
+
+/* ── The room 空态建议 chips ─────────────────────────────────────────────────── */
+.lite2-shell .lite-room-chips {
+  margin-top: 22px;
+}
+
+.lite2-shell .lite-room-chips-label {
+  margin: 0 0 10px;
+}
+
+.lite2-shell .lite-room-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.lite2-shell .lite-room-chip {
+  padding: 8px 14px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--lite2-glass, rgba(255, 253, 248, 0.82));
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  line-height: 1.35;
+  cursor: pointer;
+}
+
+.lite2-shell .lite-room-chip:hover,
+.lite2-shell .lite-room-chip:focus-visible {
+  border-color: var(--sage);
+  color: var(--ink);
+  outline: none;
+}
+
+/* ── 通知铃铛（LiteTopbar 内；.prototype-topbar 是 pointer-events:none 容器，
+   铃铛同 .scene-tabs/.mode-switch 的规矩自己 auto 回来）──────────────────────── */
+.lite2-shell .lite-bell {
+  position: relative;
+  pointer-events: auto;
+}
+
+.lite2-shell .lite-bell-toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--rule);
+  border-radius: 50%;
+  background: var(--lite2-glass, rgba(255, 253, 248, 0.82));
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.lite2-shell .lite-bell-toggle:hover,
+.lite2-shell .lite-bell-toggle:focus-visible {
+  border-color: var(--rule-strong);
+  color: var(--ink);
+  outline: none;
+}
+
+.lite2-shell .lite-bell-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--terracotta);
+  color: #fff;
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 15px;
+  text-align: center;
+}
+
+.lite2-shell .lite-bell-pop {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 90;
+  width: min(340px, 86vw);
+  border: 1px solid var(--rule-strong);
+  border-radius: 14px;
+  background: var(--lite2-surface, rgba(255, 253, 248, 0.96));
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.lite2-shell .lite-bell-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.lite2-shell .lite-bell-title {
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.lite2-shell .lite-bell-markall {
+  border: none;
+  background: transparent;
+  padding: 2px 0;
+  color: var(--sage);
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.lite2-shell .lite-bell-markall:hover,
+.lite2-shell .lite-bell-markall:focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  outline: none;
+}
+
+.lite2-shell .lite-bell-empty {
+  margin: 0;
+  padding: 16px 14px;
+  color: var(--ink-faint);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.lite2-shell .lite-bell-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.lite2-shell .lite-notif-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 14px;
+  border: none;
+  border-bottom: 1px solid var(--rule);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.lite2-shell .lite-bell-list li:last-child .lite-notif-item {
+  border-bottom: none;
+}
+
+.lite2-shell .lite-notif-item:hover,
+.lite2-shell .lite-notif-item:focus-visible {
+  background: var(--lite2-glass, rgba(255, 253, 248, 0.82));
+  outline: none;
+}
+
+.lite2-shell .lite-notif-dot {
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.lite2-shell .lite-notif-item.is-unread .lite-notif-dot {
+  background: var(--honey);
+}
+
+.lite2-shell .lite-notif-text {
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+
+.lite2-shell .lite-notif-item.is-unread .lite-notif-text {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* ── Playbooks 屏：勾选槽位补充（沿用 .lite-playbooks-slot 家族既有样式）──────── */
+.lite2-shell .lite-playbooks-company {
+  margin: -6px 0 14px;
+  color: var(--ink-faint);
+  font-size: 12px;
+}
+
+.lite2-shell .lite-playbooks-slot-title {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+@media (max-width: 720px) {
+  .lite2-shell .lite-onboard-playbook-grid {
+    grid-template-columns: 1fr;
+  }
+}

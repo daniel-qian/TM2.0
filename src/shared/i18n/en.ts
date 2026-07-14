@@ -426,6 +426,95 @@ export const en = {
     detailSource: 'From your uploads',
     detailGone: 'This card is no longer in your uploads.',
 
+    // ── Onboarding wizard (feat-045, PRD F7 — first-visit overlay; skippable; × pauses and
+    // resumes next visit. NO fake connect-tools step, NO fake create-account step — every step
+    // is real wiring: upload really ingests, picks really persist.) ──
+    onboardEyebrow: 'Getting set up',
+    onboardCloseAria: 'Close — it picks up where you left off next time',
+    onboardSkip: 'Skip the setup',
+    onboardBack: 'Back',
+    onboardNext: 'Next',
+    onboardFinish: 'Step in',
+    onboardStepsAria: 'Setup steps',
+
+    onboardUploadTitle: 'Start with a few files',
+    onboardUploadBody:
+      "Hand Avery what you'd hand a new manager on day one — a roster, a project plan, a weekly note. Your team grows out of them. Fine to skip; you can upload later from Your team.",
+    onboardUploadChoose: 'Choose files',
+    onboardUploadReading: 'Reading your files…',
+    onboardUploadReady: 'Your team is ready',
+    onboardUploadError: "Couldn't read those files — try again, or move on and upload later.",
+    onboardUploadIdle: 'Nothing uploaded yet — this step is fine to skip.',
+
+    onboardTeamTitle: 'A little about you',
+    onboardTeamBody:
+      'Used for greetings around the product. It stays in this browser — nothing is sent anywhere.',
+    onboardCompanyLabel: 'Company',
+    onboardCompanyPlaceholder: 'e.g. Harbor & Co.',
+    onboardDeptLabel: 'Team or department',
+    onboardDeptPlaceholder: 'e.g. Operations',
+    onboardNameLabel: 'What should Avery call you?',
+    onboardNamePlaceholder: 'e.g. Alex',
+
+    onboardPlaybooksTitle: 'Pick the plays that fit how you run things',
+    onboardPlaybooksBody:
+      'Your picks shape the Playbooks tab — it shows where each one will grow once Avery is wired into your own SOPs. Nothing is connected yet, and it says so.',
+
+    onboardDoneTitle: "You're set",
+    onboardDoneGreeting: 'Good to meet you, {name}.',
+    onboardDoneGreetingNoName: 'Good to meet you.',
+    onboardDoneSummaryLead: 'The plays you picked:',
+    onboardDoneNoPicks: 'No plays picked — the Playbooks tab keeps its general preview.',
+
+    // ── Playbook candidates (feat-045 — eight plays, each a title + one plain line; memo
+    // voice, no framework name-dropping. Semantics reference the partner build; copy rewritten.) ──
+    playbookOnboardingTitle: "A new joiner's first month",
+    playbookOnboardingBody:
+      'Your onboarding and handover routine, written down as a step-by-step play.',
+    playbookWeeklyTitle: 'The weekly read',
+    playbookWeeklyBody: 'A standing pass over projects and blockers, run the same way every week.',
+    playbookStuckTitle: 'When a project stalls',
+    playbookStuckBody: 'A calm sequence for finding where a stalled project is actually stuck.',
+    playbookHandoffTitle: 'Handoffs and cover',
+    playbookHandoffBody: 'Who picks up what when someone is away — agreed before it is needed.',
+    playbookToughTalkTitle: 'Before a tough conversation',
+    playbookToughTalkBody: 'Get the facts and a kind opening in hand before you sit down.',
+    playbookNinetyTitle: "A manager's first ninety days",
+    playbookNinetyBody: 'What to read, who to meet, and what to leave alone at first.',
+    playbookRisksTitle: 'Hearing about risks early',
+    playbookRisksBody: 'A habit of asking the team about the work before small worries grow.',
+    playbookShipTitle: 'After it ships',
+    playbookShipBody: 'A short look back — what to keep, what to change, noted while it is fresh.',
+
+    // Playbooks screen — the slots reflect the setup picks (feat-045; falls back to the
+    // general three-slot preview when nobody has picked yet). Honest grammar stays: every
+    // slot is tagged Coming until something is really wired in.
+    playbooksChosenLabel: 'Your picks from setup',
+    playbooksChosenTag: 'Coming',
+    playbooksForCompany: 'Set up for {company}.',
+
+    // ── The room — empty-state suggestion chips (feat-045, PRD F5: four generic openers;
+    // click = the question goes to the room for real. Wording presumes nothing about the
+    // uploaded corpus.) ──
+    roomChipsLabel: 'A few ways to start',
+    roomChipAttention: 'Who on the team could use a hand from me this week?',
+    roomChipRisk: 'Which project is most at risk of slipping, and why?',
+    roomChipHandoff: 'Is any handoff between people waiting on someone right now?',
+    roomChipPlanning: 'Help me sketch priorities for next week.',
+
+    // ── Notification bell (feat-045, PRD F5 — REAL events only; zero hardcoded items; copy
+    // never names an employee) ──
+    bellAria: 'Notifications',
+    bellTitle: 'What came in',
+    bellEmpty:
+      'Nothing yet. When your files finish reading or a run in the room completes, it lands here.',
+    bellMarkAll: 'Mark all read',
+    bellUnreadAria: '{count} unread',
+    notifIngest: 'Your team is ready — the files you brought in have been read.',
+    notifRun: 'The room has finished thinking it through — the read is ready.',
+    notifAsk: 'All replies to your quick ask are in.',
+    notifGap: 'Something in the files is worth a closer look.',
+
     // ── Compliance footer (PRD F6) — shell-global, memo tone (not regulatory tone). ──
     footerText:
       "Avery informs your judgment — it never replaces it. Every read here needs your own review before it becomes a decision, and none of it should be the sole basis for a serious call about a person's job, pay, or standing.",

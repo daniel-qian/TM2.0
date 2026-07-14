@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useLite } from '../store'
 import { useFlow } from '../flowStore'
 import { useDict } from '../../shared/i18n/useDict'
+import type { Dict } from '../../shared/i18n'
 import { LiteAdviceCard } from '../LiteAdviceCard'
 import { AskCard } from '../AskCard'
 import { LitePanZoom } from '../LitePanZoom'
@@ -102,6 +103,16 @@ function LiteAskComposer({
   )
 }
 
+// feat-045（PRD F5）· 空态建议问题 chips——4 个泛化开场问（不预设语料内容），点击即发问
+// （直接走同一个 askLive，不经 composer 预填——"点击即发问"是拍板原文）。稳定 data-chip-id
+// 供门相位（chipsAsk）断言；文案在 en.ts lite2.roomChip*。
+const ROOM_CHIPS: { id: string; text: (l: Dict['lite2']) => string }[] = [
+  { id: 'attention', text: (l) => l.roomChipAttention },
+  { id: 'project-risk', text: (l) => l.roomChipRisk },
+  { id: 'handoff', text: (l) => l.roomChipHandoff },
+  { id: 'next-week', text: (l) => l.roomChipPlanning },
+]
+
 export function RoomScreen() {
   const run = useLite((s) => s.run)
   const ask = useLite((s) => s.ask)
@@ -173,6 +184,23 @@ export function RoomScreen() {
               onAsk={(text) => askLive({ situation: text })}
               initialValue={composerDraft ?? undefined}
             />
+          </div>
+          {/* feat-045：建议问题 chips——点击即发问（同一个 askLive 路径，真 SSE）。 */}
+          <div className="lite-room-chips" aria-label={t.lite2.roomChipsLabel}>
+            <p className="eyebrow lite-room-chips-label">{t.lite2.roomChipsLabel}</p>
+            <div className="lite-room-chip-row">
+              {ROOM_CHIPS.map((chip) => (
+                <button
+                  key={chip.id}
+                  type="button"
+                  className="lite-room-chip"
+                  data-chip-id={chip.id}
+                  onClick={() => askLive({ situation: chip.text(t.lite2) })}
+                >
+                  {chip.text(t.lite2)}
+                </button>
+              ))}
+            </div>
           </div>
         </section>
       )}
