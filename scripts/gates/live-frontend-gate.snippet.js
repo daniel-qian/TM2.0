@@ -82,10 +82,16 @@
  *   await __seedGate.assertTriageActions()           // triageActions: done -> drawer + count
  *                                                    // drop; discard -> disappears; take-to-
  *                                                    // room -> screen switches + composer
- *                                                    // pre-filled (all three re-use the SAME
- *                                                    // stub card via restore-between-steps —
- *                                                    // the stub corpus only yields one honest
- *                                                    // at-risk handoff, no fabricated extras)
+ *                                                    // pre-filled (all three re-use the FIRST
+ *                                                    // stub card by DOM order via restore-
+ *                                                    // between-steps — as of feat-044 the stub
+ *                                                    // corpus carries a SECOND blocker-bearing
+ *                                                    // project too (pr_portal, on-track but
+ *                                                    // blocked — the deliberate self-report/
+ *                                                    // signal mismatch feat-044's gap cards
+ *                                                    // derive from), so this now honestly
+ *                                                    // yields two triage cards; this phase
+ *                                                    // still targets only the first (pr_pilot's)
  *   await __seedGate.assertFollowupsFlow()            // followupsFlow: triage "add to
  *                                                    // follow-ups" -> Follow-ups tab shows the
  *                                                    // NEW item (tracked by data-followup-id,
@@ -98,6 +104,47 @@
  *                                                    // title from `before` is still present
  *                                                    // (localStorage, not in-memory only)
  *   __seedGate.flowVerdict()                         // aggregate (4 phases)
+ *
+ * feat-044 (lite-live-v02, PRD F4 / decisions.md 拍板#4) — "A closer look" comparison-card
+ * phases, SEPARATE aggregate (gapVerdict below, phase group C). BORN RED (2026-07-14, before
+ * implementation): no `.lite-gap-card` anywhere — CloserLookScreen is still the feat-035
+ * coming-soon placeholder. Driven with `?v=2&mode=live&transport=stub`. The stub corpus
+ * (src/lite2/stubTransport.ts) carries exactly ONE genuine self-report/signal mismatch
+ * (pr_portal: status reads on-track, but a blocker says otherwise) — gapDerive.ts (pure
+ * function, LiteTeam -> GapCard[]) surfaces it as one comparison card; pr_pilot is NOT a gap
+ * (its own status already says at-risk, so its blocker is consistent, not a contradiction):
+ *   [on `?v=2&mode=live&transport=stub`]
+ *   __seedGate.defuseAnimations()
+ *   await __seedGate.assertGapsDerive()              // gapsDerive: >=1 derived comparison card
+ *                                                    // (claim pane + evidence pane + resolve/
+ *                                                    // dismiss/ask/add-followup controls all
+ *                                                    // present); whole-screen scan = zero
+ *                                                    // "gap"/"Nexus"/"差距"/"现实差距" text;
+ *                                                    // zero person-name+digit co-occurrence
+ *                                                    // (reuses the Ask redline's _askValueRe
+ *                                                    // against the FULL team roster, collected
+ *                                                    // from Your team first — screens are
+ *                                                    // mutually-exclusive mounts)
+ *   await __seedGate.assertGapsResolve()              // gapsResolve: resolve -> leaves active,
+ *                                                    // lands in the collapsible history section
+ *                                                    // with a "Settled"-shape badge, restorable;
+ *                                                    // dismiss -> same shape with a DIFFERENT
+ *                                                    // badge (both sub-checks reuse the SAME
+ *                                                    // single stub-derived card, restored
+ *                                                    // between steps — same pattern as
+ *                                                    // assertTriageActions); both marks
+ *                                                    // confirmed written into the SAME
+ *                                                    // `lite2:flow:v1` localStorage blob
+ *                                                    // flowStore.ts already reload-proved via
+ *                                                    // followupsPersist (feat-043) — same
+ *                                                    // save/load code path, extended with a
+ *                                                    // `gapMarks` field
+ *   await __seedGate.assertGapsToAsk()                // gapsToAsk: a card's "Ask them directly"
+ *                                                    // -> screen switches to The room with the
+ *                                                    // composer pre-filled with that card's
+ *                                                    // project title + claim/evidence context
+ *                                                    // (not auto-submitted)
+ *   __seedGate.gapVerdict()                          // aggregate (3 phases)
  */
 (() => {
   // Story-EXCLUSIVE nouns. NOTE: 'Lin Qing' / 'Chen Mingyuan' / 'Sun Xiaomei' / 'Zheng Zixuan'
@@ -946,10 +993,16 @@
     // ── feat-036 (lite-live-v02) — flowVerdict, independent aggregate, phase group B ──────────
     // Morning triage (ADR-0017 execution) + Follow-ups (PRD F3). Driven `?v=2&mode=live
     // &transport=stub` (deterministic, same lite2 stub roster/blockers as v2Verdict). The stub
-    // corpus (src/lite2/stubTransport.ts) only carries ONE at-risk project with a blocker, so
-    // there is honestly only one derived triage card — assertTriageActions exercises done/
-    // discard/take-to-room on that SAME card in sequence, restoring it between sub-checks,
-    // rather than fabricating extra corpus signal just to get more cards.
+    // corpus (src/lite2/stubTransport.ts) carries pr_pilot (status at-risk, one blocker — its
+    // own self-report already says "at risk", so the blocker is consistent, not a contradiction)
+    // and, as of feat-044, pr_portal (status on-track, one blocker — a DELIBERATE self-report/
+    // signal mismatch that feat-044's gapDerive.ts surfaces on the "A closer look" tab).
+    // teamData.ts liveHandoffs() picks up BOTH as morning-triage cards (any project with a
+    // blocker gets surfaced today, regardless of status) — so this now honestly yields TWO
+    // triage cards. assertTriageActions below targets only the FIRST one by DOM order
+    // (pr_pilot's, which sorts first — payload.projects array order), exercising done/discard/
+    // take-to-room on that SAME card in sequence, restoring it between sub-checks, rather than
+    // fabricating extra corpus signal just to get more cards.
     async assertTriageRenders() {
       // Phase triageRenders: the top of Your team renders >=1 derived triage card (from
       // team.handoffs, itself derived from real project blockers — teamData.ts liveHandoffs()),
@@ -983,8 +1036,10 @@
       // Phase triageActions: done -> pending count drops + item shows up inside the "Taken
       // care of today" drawer; discard -> item disappears from pending; take-to-room ->
       // screen switches to The room with the composer pre-filled with that card's context.
-      // All three sub-checks reuse the SAME single stub-derived card (restored between steps
-      // via the drawer's undo button) — see file-header note on why there is only one card.
+      // All three sub-checks reuse the SAME single stub-derived card — the FIRST one by DOM
+      // order (restored between steps via the drawer's undo button) — see the note above
+      // assertTriageRenders on why the corpus now yields two triage cards (feat-044) and why
+      // this phase always targets the first.
       this._clickTab('Your team');
       try {
         await poll(() => ($$('.home-handoff').length > 0 ? true : null), 8000, 'a triage card to act on');
@@ -1248,6 +1303,231 @@
         triageActions: !!(results.triageActions && results.triageActions.pass),
         followupsFlow: !!(results.followupsFlow && results.followupsFlow.pass),
         followupsPersist: !!(results.followupsPersist && results.followupsPersist.pass),
+      };
+      return { pass: Object.values(phases).every(Boolean), phases, results };
+    },
+
+    // ── feat-044 (lite-live-v02, PRD F4) — gapVerdict, independent aggregate, phase group C ──
+    // "A closer look" comparison cards: gapDerive.ts derives them purely from LiteTeam project
+    // fields (status reads steady, but a blocker says otherwise) — no person-level judgment, no
+    // point-naming. See the top-of-file usage doc for the full run order and rationale.
+    async assertGapsDerive() {
+      // Phase gapsDerive: collect the team roster on Your team FIRST (screens are mutually-
+      // exclusive mounts — Lite2App only renders one `screen` at a time, so `.home-person-card`
+      // isn't in the DOM once we switch to A closer look) — needed for the person-name+digit
+      // red-line scan below. Then switch tabs and assert: >=1 derived comparison card, each with
+      // a claim pane, an evidence pane, and all four action controls; a whole-screen scan for
+      // the banned vocabulary (ADR-0015 lock-in terms — PRD F4 explicitly bans "gap"/"差距"/
+      // "现实差距"/"Nexus" from ever reaching this user-facing surface); and zero person-name+
+      // digit co-occurrence (reuses the Ask redline's _askValueRe — same "no scored person"
+      // shape, ADR-0023).
+      this._clickTab('Your team');
+      try {
+        await poll(() => ($$('.home-person-card').length > 0 ? true : null), 8000, 'person cards to read roster');
+      } catch (e) { /* rosterNames stays whatever is in the DOM (possibly empty) */ }
+      const rosterNames = $$('.home-person-card h3').map((el) => (el.textContent || '').trim()).filter(Boolean);
+
+      this._clickTab('A closer look');
+      try {
+        await poll(() => ($('.lite-closerlook') ? true : null), 8000, 'closer look screen to mount');
+      } catch (e) { /* fall through — assertions below report absence */ }
+      try {
+        await poll(() => ($$('.lite-gap-card').length > 0 || $('.lite-gap-empty') ? true : null), 8000, 'gap cards or honest empty state to render');
+      } catch (e) { /* fall through */ }
+
+      const screen = $('.lite-closerlook');
+      const screenText = (screen && screen.innerText) || '';
+      const cards = $$('.lite-gap-card');
+
+      const BANNED_TERMS = [
+        { term: 'gap', re: /\bgap\b/i },
+        { term: 'Nexus', re: /\bnexus\b/i },
+        { term: '现实差距', re: /现实差距/ },
+        { term: '差距', re: /差距/ },
+      ];
+      const bannedHits = BANNED_TERMS.filter((b) => b.re.test(screenText)).map((b) => b.term);
+      const nameDigitPairs = rosterNames.filter((n) => n && this._askValueRe(n).test(screenText));
+
+      const first = cards[0];
+      const out = {
+        gapCards: cards.length,
+        bannedHits,
+        nameDigitPairs,
+        hasClaimPane: !!(first && $('.lite-gap-pane-claim', first)),
+        hasEvidencePane: !!(first && $('.lite-gap-pane-evidence', first)),
+        hasResolve: !!(first && $('.lite-gap-resolve', first)),
+        hasDismiss: !!(first && $('.lite-gap-dismiss', first)),
+        hasAsk: !!(first && $('.lite-gap-ask', first)),
+        hasAddFollowup: !!(first && $('.lite-gap-addfollowup', first)),
+        pass:
+          cards.length >= 1 && bannedHits.length === 0 && nameDigitPairs.length === 0 && !!first &&
+          !!$('.lite-gap-pane-claim', first) && !!$('.lite-gap-pane-evidence', first) &&
+          !!$('.lite-gap-resolve', first) && !!$('.lite-gap-dismiss', first) &&
+          !!$('.lite-gap-ask', first) && !!$('.lite-gap-addfollowup', first),
+      };
+      results.gapsDerive = out;
+      return out;
+    },
+
+    async assertGapsResolve() {
+      // Phase gapsResolve: resolve -> card leaves the active list, lands in the collapsible
+      // history section with a "Settled"-shape badge, restorable; dismiss -> same shape with a
+      // DIFFERENT badge (status must be visually distinguishable, not just "gone" — PRD F4).
+      // Both sub-checks reuse the SAME single stub-derived card in sequence (restored between
+      // steps) — the stub corpus honestly yields only one contradiction card (see the note above
+      // assertGapsDerive), same pattern as assertTriageActions/assertFollowupsFlow reusing their
+      // one honest stub card. Each mark is also confirmed written into the `lite2:flow:v1`
+      // localStorage blob directly (not just React state) — the SAME save/load code path
+      // flowStore.ts already had reload-proved for `followups` via followupsPersist (feat-043),
+      // now extended with a `gapMarks` field; snapshotGaps() below additionally lets the driver
+      // do a real full-page-reload check the same way snapshotFollowups()/assertFollowupsPersist
+      // did, as supplementary (non-aggregated) evidence.
+      this._clickTab('A closer look');
+      try {
+        await poll(() => ($$('.lite-gap-card').length > 0 ? true : null), 8000, 'a gap card to act on');
+      } catch (e) { /* report below */ }
+      const initialCount = $$('.lite-gap-card').length;
+      if (initialCount < 1) return (results.gapsResolve = { pass: false, error: 'no gap cards to act on' });
+      const gapId = $$('.lite-gap-card')[0].getAttribute('data-gap-id');
+      const findHistoryItem = () =>
+        $$('.lite-gap-history-item').find((el) => el.getAttribute('data-gap-id') === gapId) || null;
+      const findActiveCard = () =>
+        $$('.lite-gap-card').find((el) => el.getAttribute('data-gap-id') === gapId) || null;
+      const readPersistedMark = () => {
+        try {
+          const raw = window.localStorage.getItem('lite2:flow:v1');
+          if (!raw) return null;
+          const parsed = JSON.parse(raw);
+          return (parsed.gapMarks || {})[gapId] || null;
+        } catch (e) { return null; }
+      };
+      const openHistory = () => {
+        if (!$('.lite-gap-history-list')) {
+          const toggle = $('.lite-gap-history-toggle');
+          if (toggle) toggle.click();
+        }
+      };
+
+      // ── 1) RESOLVE ──
+      $('.lite-gap-resolve', $$('.lite-gap-card')[0]).click();
+      let resolveLeavesActive = false;
+      try {
+        await poll(() => ($$('.lite-gap-card').length < initialCount ? true : null), 4000, 'active count to drop after resolve');
+        resolveLeavesActive = true;
+      } catch (e) { /* stays false */ }
+      openHistory();
+      let resolvedInHistory = false;
+      let resolvedBadgeText = '';
+      try {
+        await poll(() => (findHistoryItem() ? true : null), 4000, 'resolved item to appear in history');
+        resolvedInHistory = true;
+        const el = findHistoryItem();
+        resolvedBadgeText = ((el && $('.lite-gap-history-badge', el)) || {}).textContent || '';
+      } catch (e) { /* stays false */ }
+      const resolvePersisted = readPersistedMark() === 'resolved';
+      const restoreBtn1 = findHistoryItem() && $('.lite-gap-restore', findHistoryItem());
+      if (restoreBtn1) restoreBtn1.click();
+      try {
+        await poll(() => ($$('.lite-gap-card').length === initialCount ? true : null), 4000, 'card restored after resolve undo');
+      } catch (e) { /* fall through — dismiss sub-check reports its own failure if this didn't stick */ }
+
+      // ── 2) DISMISS ──
+      let dismissLeavesActive = false;
+      let dismissedInHistory = false;
+      let dismissedBadgeText = '';
+      const cardAgain = findActiveCard();
+      if (cardAgain) {
+        $('.lite-gap-dismiss', cardAgain).click();
+        try {
+          await poll(() => ($$('.lite-gap-card').length < initialCount ? true : null), 4000, 'active count to drop after dismiss');
+          dismissLeavesActive = true;
+        } catch (e) { /* stays false */ }
+        openHistory();
+        try {
+          await poll(() => (findHistoryItem() ? true : null), 4000, 'dismissed item to appear in history');
+          dismissedInHistory = true;
+          const el = findHistoryItem();
+          dismissedBadgeText = ((el && $('.lite-gap-history-badge', el)) || {}).textContent || '';
+        } catch (e) { /* stays false */ }
+      }
+      const dismissPersisted = readPersistedMark() === 'dismissed';
+      // Restore back to active — leaves a clean baseline for assertGapsToAsk.
+      const restoreBtn2 = findHistoryItem() && $('.lite-gap-restore', findHistoryItem());
+      if (restoreBtn2) restoreBtn2.click();
+      try {
+        await poll(() => ($$('.lite-gap-card').length === initialCount ? true : null), 4000, 'card restored after dismiss undo');
+      } catch (e) { /* fall through */ }
+
+      const badgesDistinct = !!resolvedBadgeText && !!dismissedBadgeText && resolvedBadgeText !== dismissedBadgeText;
+      const out = {
+        gapId,
+        resolveLeavesActive, resolvedInHistory, resolvedBadgeText, resolvePersisted,
+        dismissLeavesActive, dismissedInHistory, dismissedBadgeText, dismissPersisted,
+        badgesDistinct,
+        pass: resolveLeavesActive && resolvedInHistory && resolvePersisted &&
+          dismissLeavesActive && dismissedInHistory && dismissPersisted && badgesDistinct,
+      };
+      results.gapsResolve = out;
+      return out;
+    },
+
+    snapshotGaps() {
+      // Helper (not a phase itself, matches readSkinSnapshot()/snapshotFollowups() pattern):
+      // read the gapMarks field straight out of the SAME `lite2:flow:v1` localStorage blob the
+      // marks are persisted to — used by the driver to prove the marks survive an actual
+      // full-page reload (supplementary to the in-page localStorage read inside
+      // assertGapsResolve, not folded into gapVerdict()'s 3-phase aggregate per kickoff-dev.md).
+      try {
+        const raw = window.localStorage.getItem('lite2:flow:v1');
+        if (!raw) return { gapMarks: {} };
+        const parsed = JSON.parse(raw);
+        return { gapMarks: parsed.gapMarks || {} };
+      } catch (e) {
+        return { gapMarks: {}, error: String(e) };
+      }
+    },
+
+    async assertGapsToAsk() {
+      // Phase gapsToAsk: a gap card's "Ask them directly" -> screen switches to The room with
+      // the composer pre-filled with that card's project title + claim/evidence context (NOT
+      // auto-submitted — manager reviews before it goes out, same authorship principle as the
+      // triage "take to the room" flow, feat-036/kickoff-dev.md §Feature 切分).
+      this._clickTab('A closer look');
+      try {
+        await poll(() => ($$('.lite-gap-card').length > 0 ? true : null), 8000, 'a gap card to act on');
+      } catch (e) { /* report below */ }
+      const card = $$('.lite-gap-card')[0];
+      if (!card) return (results.gapsToAsk = { pass: false, error: 'no gap card to act on' });
+      const titleEl = $('.lite-gap-project-title', card);
+      const projectTitle = ((titleEl && titleEl.textContent) || '').trim();
+      const askBtn = $('.lite-gap-ask', card);
+      if (!askBtn) return (results.gapsToAsk = { pass: false, error: 'no .lite-gap-ask button' });
+      askBtn.click();
+      let switchedToRoom = false;
+      let composerValue = '';
+      try {
+        await poll(() => ($('.lite-room') && $('.nexus-followup-composer input') ? true : null), 6000, 'room + composer to mount');
+        switchedToRoom = true;
+        const input = $('.nexus-followup-composer input');
+        composerValue = input ? input.value : '';
+      } catch (e) { /* switchedToRoom stays false */ }
+      const containsProjectRef = !!composerValue && !!projectTitle && composerValue.includes(projectTitle);
+      const out = {
+        projectTitle,
+        switchedToRoom,
+        composerValueSample: composerValue.slice(0, 160),
+        containsProjectRef,
+        pass: switchedToRoom && containsProjectRef,
+      };
+      results.gapsToAsk = out;
+      return out;
+    },
+
+    gapVerdict() {
+      const phases = {
+        gapsDerive: !!(results.gapsDerive && results.gapsDerive.pass),
+        gapsResolve: !!(results.gapsResolve && results.gapsResolve.pass),
+        gapsToAsk: !!(results.gapsToAsk && results.gapsToAsk.pass),
       };
       return { pass: Object.values(phases).every(Boolean), phases, results };
     },

@@ -68,6 +68,15 @@ const STUB_TEAM: LiveTeamPayload = {
       status: 'on-track',
       progress: 60,
       summary: 'Rebuilding the internal onboarding portal around the new checklist flow.',
+      // feat-044 (PRD F4): deliberate self-report/signal mismatch — the project's own status
+      // reads steady (on-track), but this blocker line says otherwise. This is the ONE genuine
+      // contradiction case in the stub corpus that gapDerive.ts can honestly surface as an
+      // "A closer look" card (pr_pilot is already status:'at-risk', so its blocker is consistent
+      // with its own self-report, not a contradiction). Side effect: teamData.ts liveHandoffs()
+      // also picks this project up as a second morning-triage card (any project with a blocker
+      // gets surfaced today, regardless of status) — see the updated note above
+      // assertTriageRenders/assertTriageActions for how the B-group phases stay honest about it.
+      blockers: ['The new checklist flow still needs sign-off from Ops — nobody has picked it up this week.'],
     },
   ],
   briefing: {
