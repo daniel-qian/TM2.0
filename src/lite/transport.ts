@@ -67,6 +67,11 @@ export interface LiveTeamPayload {
   projects: LiveProjectCard[]
   briefing: LiveBriefingPayload
   signals?: LiveSignalCard[]
+  // feat-038 租户隔离：/ingest 首帧回传本公司的不可猜 owner_token（经理凭据）。
+  // 客户端存下（按 context_id）、后续所有读端点（team/files/notes/advise）以 HTTP header 带上。
+  // 🔴 只走 header，绝不进 URL（URL 会进 Referer/access log/CDN log/浏览器历史）。
+  // /team/{id} 刷新帧不回传此字段（那次调用本就已用 token 证过身）。
+  owner_token?: string
 }
 
 // 人卡：定性 ONLY。🔴 红线：moodPct/capacityPct 等血条字段 live 永不出现——
@@ -157,6 +162,40 @@ export interface AskDraft {
   receipts_summary?: string
 }
 
+// ── file space（feat-032：GET /team/{id}/files 清单契约）─────────────────────────────────────
+// 每公司「你的文件」薄清单：回看上传过哪些材料、Avery 的记忆基于什么（User Story 4）。
+// 纯元数据（不含字节）；n_chunks = 该文件贡献的 material chunk 数（经 materials.source 前缀链接）。
+// 🔴 文件内容是不可信数据——此处只列/只显，绝不作指令跟随。
+export interface LiveFileEntry {
+  idx: number
+  filename: string
+  size_bytes: number
+  mime: string
+  doc_kind: string
+  uploaded_at: string
+  n_chunks: number
+}
+
+export interface LiveFilesPayload {
+  context_id: string
+  files: LiveFileEntry[]
+}
+
+// ── Avery's notes（feat-033：GET /team/{id}/notes 契约）──────────────────────────────────────
+// 写侧、可见、跨会话累积的 agent 自写观察。只读；🔴 红线：写侧后端 redline.validate（EN+ZH）
+// 已把评分/排名/画像文本拦在落库前——本清单永不含人卡数字/评分文本。新→旧（newest first）。
+export interface LiveNoteEntry {
+  id: string
+  created_at: string // ISO8601 UTC
+  text: string // Avery 的观察正文（1–3 句，work-focused）
+  source_excerpt: string // 触发该笔记的提问前 ~60 字符（来源指引）
+}
+
+export interface LiveNotesPayload {
+  context_id: string
+  notes: LiveNoteEntry[]
+}
+
 // ── 传输接口：seam 只认这个，AFK 门注入确定性 stub ─────────────────────────────────────
 export interface LiveTransport {
   // 打开 /advise SSE，逐事件回调；返回一个可 abort 的 handle。
@@ -179,6 +218,12 @@ export interface LiveTransport {
   shareAsk: (askId: string) => Promise<AskDraft>
   // manager 侧拉取状态/回执（PRD Q7：打开时 HTTP 拉取刷新，无推送）。
   fetchAsk: (askId: string) => Promise<AskDraft>
+
+  // 按 context_id 拉取「你的文件」清单（feat-032 file space；重启后仍在）。
+  fetchFiles: (contextId: string) => Promise<LiveFilesPayload>
+
+  // 按 context_id 拉取「Avery's notes」累积笔记（feat-033；只读、新→旧、重启后仍在）。
+  fetchNotes: (contextId: string) => Promise<LiveNotesPayload>
 }
 
 // 服务基址：默认打本机 feat-015 服务；部署端经 VITE_AVERY_API_BASE 覆盖。
@@ -188,9 +233,48 @@ export function apiBase(): string {
   return (fromEnv && String(fromEnv).replace(/\/$/, '')) || 'http://127.0.0.1:8137'
 }
 
+// ── feat-038 租户隔离：owner_token 客户端存储（按 context_id）─────────────────────────────────
+// /ingest 首帧回传 owner_token；transport 存下，后续 team/files/notes/advise 以 header 带上。
+// 落 localStorage 让一次会话内刷新页面仍持有 token（后端持久化让数据本身也还在）。
+// 🔴 token 只进 header，绝不拼进 URL；读/写失败静默降级（不阻断主流程）。
+const TOKEN_STORE_KEY = 'avery.ownerTokens'
+export const OWNER_TOKEN_HEADER = 'X-Avery-Token'
+
+function loadTokenStore(): Record<string, string> {
+  try {
+    if (typeof localStorage === 'undefined') return {}
+    const raw = localStorage.getItem(TOKEN_STORE_KEY)
+    return raw ? (JSON.parse(raw) as Record<string, string>) : {}
+  } catch {
+    return {}
+  }
+}
+
+function persistTokenStore(store: Record<string, string>): void {
+  try {
+    if (typeof localStorage === 'undefined') return
+    localStorage.setItem(TOKEN_STORE_KEY, JSON.stringify(store))
+  } catch {
+    /* private-mode / quota — in-memory map still carries the token for this session */
+  }
+}
+
 // ── 真 HTTP/SSE 传输（浏览器 fetch + 流式解析）──────────────────────────────────────────
 // 用 fetch + ReadableStream 手解 SSE（而非 EventSource）：POST body + Abort 都需要，EventSource 只支持 GET。
 export function createHttpTransport(base: string = apiBase()): LiveTransport {
+  // Per-context owner_token map, seeded from localStorage so a page reload keeps the credential.
+  const tokens: Record<string, string> = loadTokenStore()
+  const rememberToken = (contextId: string | undefined, token: string | undefined): void => {
+    if (!contextId || !token) return
+    tokens[contextId] = token
+    persistTokenStore(tokens)
+  }
+  // 🔴 header-only：给某 context 的读/写调用附上 owner_token（有则带，无则空），绝不进 URL。
+  const authHeader = (contextId: string | undefined): Record<string, string> => {
+    const tok = contextId ? tokens[contextId] : undefined
+    return tok ? { [OWNER_TOKEN_HEADER]: tok } : {}
+  }
+
   return {
     streamAdvise(req, onEvent, onDone) {
       const controller = new AbortController()
@@ -198,7 +282,11 @@ export function createHttpTransport(base: string = apiBase()): LiveTransport {
         try {
           const res = await fetch(`${base}/advise`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+            headers: {
+              'Content-Type': 'application/json',
+              Accept: 'text/event-stream',
+              ...authHeader(req.company_context_id), // feat-038: tenant token (header only)
+            },
             body: JSON.stringify({ ...req, stream: true }),
             signal: controller.signal,
           })
@@ -240,21 +328,32 @@ export function createHttpTransport(base: string = apiBase()): LiveTransport {
       for (const f of files) form.append('files', f, f.name)
       const res = await fetch(`${base}/ingest`, { method: 'POST', body: form })
       if (!res.ok) throw new Error(`ingest HTTP ${res.status}`)
-      return (await res.json()) as LiveTeamPayload
+      const payload = (await res.json()) as LiveTeamPayload
+      // feat-038: store this company's owner_token so every later read/advise can present it.
+      rememberToken(payload.context_id, payload.owner_token)
+      return payload
     },
 
     async fetchTeam(contextId) {
-      const res = await fetch(`${base}/team/${encodeURIComponent(contextId)}`)
+      const res = await fetch(`${base}/team/${encodeURIComponent(contextId)}`, {
+        headers: authHeader(contextId),
+      })
       if (!res.ok) throw new Error(`team HTTP ${res.status}`)
       return (await res.json()) as LiveTeamPayload
     },
 
     // ── Ask（feat-034 契约提案；阶段 C 的 FastAPI 端点落地前，这三个调用只会 4xx/网络错，
     // 全部大声失败——与 feat-028 的 404 纪律同规格，绝不静默回落假数据）──────────────────
+    // feat-038 对齐（阶段 C 对接契约）：manager 侧 ask 端点全部要求 owner_token header。
+    // saveAsk 有 company_context_id 可携带；share/fetch 只有 askId——header 接线整体归阶段 C
+    //（届时端点与 token 校验一起落地），此处不预造无凭据可携的假接线。
     async saveAsk(draft) {
       const res = await fetch(`${base}/ask`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeader(draft.company_context_id),
+        },
         body: JSON.stringify(draft),
       })
       if (!res.ok) throw new Error(`ask HTTP ${res.status}`)
@@ -271,6 +370,22 @@ export function createHttpTransport(base: string = apiBase()): LiveTransport {
       const res = await fetch(`${base}/ask/${encodeURIComponent(askId)}`)
       if (!res.ok) throw new Error(`ask HTTP ${res.status}`)
       return (await res.json()) as AskDraft
+    },
+
+    async fetchFiles(contextId) {
+      const res = await fetch(`${base}/team/${encodeURIComponent(contextId)}/files`, {
+        headers: authHeader(contextId),
+      })
+      if (!res.ok) throw new Error(`files HTTP ${res.status}`)
+      return (await res.json()) as LiveFilesPayload
+    },
+
+    async fetchNotes(contextId) {
+      const res = await fetch(`${base}/team/${encodeURIComponent(contextId)}/notes`, {
+        headers: authHeader(contextId),
+      })
+      if (!res.ok) throw new Error(`notes HTTP ${res.status}`)
+      return (await res.json()) as LiveNotesPayload
     },
   }
 }

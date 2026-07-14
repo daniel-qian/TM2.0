@@ -109,6 +109,27 @@ def make_dashscope_embedder(*, env: dict | None = None) -> DashScopeEmbedder | N
     )
 
 
+# --- the env gate (ONE place: service embeddings + the DB registry share it) -------------------
+# feat-031: the Postgres registry (avery.ingest) needs the SAME embedder the service builds, but must
+# not import `service`. This is that shared resolver, in the CORE module both sides already depend on.
+
+_DASHSCOPE_KINDS = ("dashscope", "bailian", "qwen", "text-embedding-v4")
+
+
+def resolve_embeddings_kind(env: dict | None = None) -> str:
+    env = env if env is not None else os.environ
+    return (env.get("AVERY_EMBEDDINGS") or "keyword").strip().lower()
+
+
+def make_embedder_from_env(env: dict | None = None):
+    """The AVERY_EMBEDDINGS gate: dashscope|bailian|qwen -> DashScopeEmbedder (None without a key);
+    anything else (keyword|none, the default) -> None, i.e. the offline keyword fallback. A
+    missing/rotated key can never flip retrieval to a broken vector path — it degrades to keyword."""
+    if resolve_embeddings_kind(env) in _DASHSCOPE_KINDS:
+        return make_dashscope_embedder(env=env)
+    return None
+
+
 # --- semantic ranking over line-addressable candidates ----------------------------------------
 # A tiny per-corpus cache so repeated recall() calls in ONE advise run embed the facts corpus once
 # (the query is embedded each call — one short string). Keyed by a caller-supplied cache_key that

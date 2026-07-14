@@ -1,0 +1,40 @@
+# feat-040 — RUNTIME deps for the Avery agent-service Docker image (eval-harness/Dockerfile).
+#
+# Source of truth for the FULL dev/test set is requirements.txt. This file is the RUNTIME SUBSET the
+# image ships, sized for the memory-/disk-tight production ECS box (2C/3.5G, ~150M free, disk 64%):
+# it DROPS the three packages the running service never imports and only the eval harness needs —
+#   scipy, numpy   (Cohen's kappa in judge.py — imported by the test runner, never by service/ or
+#                   avery/ at runtime; ~120 MB of wheels + libstdc++/openblas)
+#   pytest         (the test suite — no runtime path imports it)
+# Everything the service DOES need at runtime (including the two brains that are lazy-imported inside
+# avery/brain.py — anthropic for 海外, openai for 境内 minimax/deepseek) stays below. Verified by the
+# feat-040 local docker smoke: /health 200 + /ingest 200 on the real seed files (python-multipart
+# present => no 500) with THIS file installed. Keep in lockstep with requirements.txt when deps move.
+
+anthropic>=0.40          # RealBrain (claude-opus-4-8) — 海外 host; lazy-imported in avery/brain.py
+openai>=1.40             # 境内 minimax/deepseek via the OpenAI-compatible client; lazy in avery/brain.py
+
+# feat-015 — the agent service (FastAPI + SSE).
+fastapi>=0.110           # HTTP app
+uvicorn>=0.27            # ASGI server: python -m uvicorn service.app:app
+sse-starlette>=1.8       # Server-Sent Events streaming for /advise
+httpx>=0.27              # transport used by the openai/anthropic SDKs (kept explicit)
+python-multipart>=0.0.9  # feat-018 /ingest multipart parsing — ABSENT => /ingest 500s while /health stays green
+
+# feat-018/040 — document PARSERS for /ingest (avery/ingest/parse.py, lazy-imported). ABSENT => a real
+# PDF/xlsx/docx upload 422s "no parseable content" (the feat-040 docker smoke caught this gap: they
+# were installed ambiently in the dev venv but never DECLARED, so no image ever shipped them).
+pypdf>=4.0               # PDF text extract
+openpyxl>=3.1            # .xlsx worksheets
+python-docx>=1.1         # .docx paragraphs/tables (import name: docx)
+
+# feat-030 — Postgres persistence (avery/ingest/pg_registry.py, selected via AVERY_DB_URL / PGVECTOR_URL).
+# Imported LAZILY: keyless/offline never touches them at import, but the image must ship them or a
+# DB-configured deploy 500s on first /ingest.
+psycopg[binary]>=3.1     # Postgres driver (psycopg3, bundled libpq)
+pgvector>=0.3            # vector-type adapter (materials.embedding column; feat-031 fills it)
+
+# feat-039 — upload hard-gate + memory sentinel. Both imported LAZILY (degrade gracefully if absent),
+# but the image must ship them or the deploy loses XML-bomb hardening + RSS-based memory watch.
+defusedxml>=0.7          # avery/ingest/parse.py: defuse_stdlib() hardens openpyxl/xlsx XML vs entity bombs
+psutil>=5.9              # service/mem_sentinel.py: process RSS for the ECS memory sentinel (Danny Q12)

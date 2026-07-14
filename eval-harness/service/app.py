@@ -10,13 +10,17 @@ POST /advise
         Default streams SSE: think/tool/observe events, then a terminal `manifest` event with the
         8-field contract payload. Set {"stream": false} (or Accept: application/json) for a single
         buffered JSON body with the same manifest content.
-
-GET  /advise/sample
-        Zero-body SSE demo against a built-in situation — handy for a browser / curl smoke.
+        feat-038: when company_context_id is set, the request MUST carry that context's owner_token
+        (header X-Avery-Token or Authorization: Bearer); a missing/wrong token 404s (tenant isolation).
 
 The service WRAPS the existing engine (`avery/loop.py`, `avery/redline.py`, `avery/brain.py`). The
 red line + cite gate + 8-field schema are enforced through this API by `service/contract.py`.
 Keys stay server-side (`service/brain_factory.py`); the frontend only ever sees SSE events.
+
+feat-038 (tenant isolation): /ingest mints an unguessable owner_token per company and returns it to
+the uploader; every read path (/team/{id}[/notes|/files|/files/{idx}] and /advise-with-context)
+validates a header-supplied token against it (404 on mismatch). The interactive docs (/docs, /redoc,
+/openapi.json) and the token-burning /advise/sample demo are removed.
 """
 from __future__ import annotations
 
@@ -25,7 +29,7 @@ import os
 from pathlib import Path
 from typing import Any, Iterator
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -34,9 +38,11 @@ from sse_starlette.sse import EventSourceResponse
 from avery import skills
 from avery.env import load_dotenv
 
-from . import brain_factory, embedding_factory, extractor_factory, live_input
+from . import brain_factory, embedding_factory, extractor_factory, live_input, llm_budget, mem_sentinel
 from .engine import stream_advice
 from .ingest_api import router as ingest_router  # feat-018: /ingest + /team/{id} (compose over feat-016)
+from .ingest_api import authorize_context, extract_owner_token  # feat-038: reuse the read-path gate
+from .upload_guard import IngestGuardMiddleware  # feat-039: edge rate-limit + total-body size cap
 
 HERE = Path(__file__).resolve().parent.parent          # eval-harness/
 SKILLS_DIR = HERE / "skills"
@@ -45,11 +51,23 @@ MEMORY_DIR = HERE / "memory"
 # Pick up MINIMAX_*/DEEPSEEK_*/ANTHROPIC_* from eval-harness/.env if present (real shell wins).
 load_dotenv(HERE / ".env")
 
+# feat-038: close the interactive docs surface (readiness §2-A). /docs, /redoc, and /openapi.json
+# turn an IDOR into a clickable console and expose the API shape; a lead-gen deploy has no need for
+# them. docs_url=None + redoc_url=None + openapi_url=None make all three 404.
 app = FastAPI(
     title="Avery agent service",
     version="0.1.0",
     summary="LiveAgentSource backend — advisor engine (think->tool->observe) over FastAPI + SSE.",
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
 )
+
+# feat-039: the upload hard-gate EDGE — per-IP rate limit + total-body size cap on POST /ingest
+# (and /advise rate limit). Added BEFORE CORS so CORS ends up OUTERMOST and decorates the guard's
+# 429/413 responses with the ACAO headers a browser needs to read them. Pure ASGI (wraps `receive`
+# to count streamed bytes). Limits are env-configured (default off/generous — the ECS runbook tunes).
+app.add_middleware(IngestGuardMiddleware)
 
 # Browser live mode (frontend :5173 -> this service :8137) needs CORS. Origins are env-configurable
 # for deploy (AVERY_CORS_ORIGINS, comma-separated); dev defaults to the Vite dev ports.
@@ -71,13 +89,6 @@ app.add_middleware(
 # ingest_paths + registry; nothing in the engine changes. Endpoints: POST /ingest, GET /team/{id}.
 app.include_router(ingest_router)
 
-SAMPLE_SITUATION = (
-    "One of my most reliable engineers has been slipping for a few weeks — a couple of missed "
-    "status updates and two handoffs that bounced back onto the team. I don't know if something "
-    "is going on in her life or if she's checked out. How do I bring it up without it turning "
-    "into an interrogation?"
-)
-
 
 class AdviseRequest(BaseModel):
     situation: str = Field(..., min_length=1,
@@ -90,18 +101,6 @@ class AdviseRequest(BaseModel):
 
 def _system_prompt() -> str:
     return skills.build_system_prompt(SKILLS_DIR, MEMORY_DIR, scaffold="full")
-
-
-def _context_registered(company_context_id: str) -> bool:
-    """feat-028: is this id ACTUALLY in the ingest registry? This distinguishes the two cases the old
-    silent fallback conflated — 'no id -> demo memory (legit)' vs 'id GIVEN but not found -> error'.
-    A wiped/restarted registry must surface an error, never a silent answer over the demo company
-    (Isadora: identity must never silently default). Lazy import so the service runs without ingest."""
-    try:
-        from avery.ingest.registry import REGISTRY
-        return company_context_id in REGISTRY
-    except Exception:
-        return False
 
 
 def _resolve_memory_dir(company_context_id: str | None) -> Path:
@@ -143,11 +142,21 @@ def _run_events(sit: live_input.LiveSituation) -> tuple[Iterator[dict[str, Any]]
     return events, case
 
 
-def _sse(events: Iterator[dict[str, Any]], case) -> EventSourceResponse:
-    """Wrap engine events as Server-Sent Events. Each event: `event:` = type, `data:` = JSON."""
+def _sse(events: Iterator[dict[str, Any]], case, on_manifest=None) -> EventSourceResponse:
+    """Wrap engine events as Server-Sent Events. Each event: `event:` = type, `data:` = JSON.
+
+    feat-033: `on_manifest(ev)` runs the post-advise note hook the moment the terminal manifest is
+    seen — BEFORE it is yielded — so the note is persisted by the time the client's stream ends and
+    a follow-up GET /team/{id}/notes reliably sees it. The manifest stays the terminal event (no
+    extra frame is emitted); the Room nudge is driven by the client re-reading the notebook."""
     def gen():
         try:
             for ev in events:
+                if on_manifest is not None and ev.get("type") == "manifest":
+                    try:
+                        on_manifest(ev)
+                    except Exception:   # a note-write problem must never break the stream
+                        pass
                 yield {"event": ev.get("type", "message"),
                        "data": json.dumps(ev, ensure_ascii=False)}
         finally:
@@ -155,29 +164,67 @@ def _sse(events: Iterator[dict[str, Any]], case) -> EventSourceResponse:
     return EventSourceResponse(gen())
 
 
+def _post_advise_note(company_context_id: str | None, situation: str, manifest: dict) -> None:
+    """feat-033 post-advise hook: append Avery's observation to the company notebook (write-side red
+    line inside). Best-effort — a failure here never affects the advise response."""
+    if not company_context_id:
+        return
+    try:
+        from avery.ingest.registry import active_registry
+        from . import notes
+        notes.write_note_from_manifest(active_registry(), company_context_id, manifest, situation)
+    except Exception:   # lazy import / registry problems must not surface to the caller
+        pass
+
+
 @app.get("/health")
 def health() -> dict:
     kind = brain_factory.resolve_brain_kind()
+    # feat-039: sample the memory sentinel on the health hook and bubble a `degraded` flag when RSS
+    # crosses AVERY_MEM_WARN_MB (Danny Q12 — the "time to upsize the ECS box" signal).
+    mem = mem_sentinel.sample()
+    # /health must not lie about extraction. `extractor` is the CONFIGURED intent ('heuristic' or
+    # 'llm:<brain>'); `extraction_mode` is what it will ACTUALLY do right now — when a real brain is
+    # configured but the per-process LLM spend budget is exhausted, extraction degrades to the offline
+    # heuristic (denial-of-wallet fallback), so report 'degraded' and flip the operator `degraded`
+    # flag rather than claim a healthy 'llm'. A natively keyless deploy stays honestly 'heuristic',
+    # and a spent budget is moot there (no LLM extractor is in play).
+    extractor = extractor_factory.active_extractor()             # "heuristic" or "llm:<brain>"
+    llm_configured = extractor.startswith("llm:")
+    extraction_degraded = llm_configured and llm_budget.exhausted()
+    extraction_mode = "degraded" if extraction_degraded else ("llm" if llm_configured else "heuristic")
     return {"status": "ok", "service": "avery-agent", "brain": kind,
             "live": brain_factory.brain_is_live(),
             "embeddings": embedding_factory.active_embeddings(),  # "keyword" or "dashscope:<model>/<dim>"
-            "extractor": extractor_factory.active_extractor()}    # "heuristic" or "llm:<brain>"
+            "extractor": extractor,                               # configured intent
+            "extraction_mode": extraction_mode,                  # effective now: llm / heuristic / degraded
+            "memory": mem,                                        # {rss_mb, warn_mb, high, available}
+            "llm_calls_remaining": llm_budget.remaining(),        # None = unlimited (gate disabled)
+            "degraded": bool(mem.get("high")) or extraction_degraded}  # operator-facing: needs attention
 
 
 @app.post("/advise")
-def advise(req: AdviseRequest):
+def advise(req: AdviseRequest,
+           x_avery_token: str | None = Header(None),
+           authorization: str | None = Header(None)):
     # feat-028: a GIVEN-but-unknown company_context_id must 404 (consistent with GET /team/{id}),
     # not silently answer over the demo company. A missing id is the legitimate demo default.
-    if req.company_context_id and not _context_registered(req.company_context_id):
-        raise HTTPException(status_code=404,
-                            detail=f"unknown company_context_id: {req.company_context_id}")
+    # feat-038: it must ALSO carry the owner_token (header) — otherwise advising over another
+    # company's context (RAG over their facts + notes-write to their notebook) would be an IDOR. A
+    # missing/wrong token 404s exactly like an unknown id (no existence oracle). A tokenless (pre-038)
+    # context requires none. The token NEVER rides the URL — header only.
+    if req.company_context_id:
+        from avery.ingest.registry import active_registry
+        authorize_context(active_registry(), req.company_context_id,
+                          extract_owner_token(x_avery_token, authorization))
     sit = live_input.LiveSituation(
         situation=req.situation, title=req.title,
         company_context_id=req.company_context_id)
     events, case = _run_events(sit)
 
     if req.stream:
-        return _sse(events, case)
+        return _sse(events, case,
+                    on_manifest=lambda m: _post_advise_note(req.company_context_id, req.situation, m))
 
     # Buffered: drain to the terminal manifest (or error) and return one JSON body.
     try:
@@ -185,6 +232,9 @@ def advise(req: AdviseRequest):
     finally:
         live_input.discard(case)
     manifest = next((e for e in reversed(collected) if e["type"] == "manifest"), None)
+    # feat-033: write Avery's observation to the company notebook (write-side red line inside).
+    if manifest is not None:
+        _post_advise_note(req.company_context_id, req.situation, manifest)
     if manifest is None:
         err = next((e for e in collected if e["type"] == "error"), None)
         return JSONResponse(status_code=502,
@@ -193,8 +243,7 @@ def advise(req: AdviseRequest):
     return JSONResponse(content={**manifest, "events": collected})
 
 
-@app.get("/advise/sample")
-def advise_sample():
-    sit = live_input.LiveSituation(situation=SAMPLE_SITUATION, title="Sample — reliable engineer slipping")
-    events, case = _run_events(sit)
-    return _sse(events, case)
+# feat-038: /advise/sample is TAKEN DOWN. It was a zero-body, unauthenticated, unrate-limited SSE
+# demo (readiness §2-A: a clickable IDOR console that also BURNS real LLM tokens — denial-of-wallet
+# on a public URL). v1 has no need for it; the real surface is POST /advise with a situation. The
+# route no longer exists, so GET /advise/sample now 404s.

@@ -30,6 +30,37 @@ class ParseError(Exception):
     """A single file could not be parsed (unknown/again-unsupported format or missing lib)."""
 
 
+# feat-039 (readiness §2-D): defence-in-depth against XML entity-expansion / quadratic-blowup
+# ("billion laughs") bombs in docx/xlsx. IMPORTANT ATTRIBUTION (corrected): openpyxl AND python-docx
+# read OOXML XML via **lxml** when it is installed (both fall back to the stdlib xml.etree only when
+# lxml is absent). `defusedxml.defuse_stdlib()` patches the STDLIB stack (xml.etree, xml.sax, ...) in
+# place — so it hardens ONLY the lxml-absent fallback path, NOT lxml itself. On the common (lxml
+# present) path the billion-laughs protection actually comes from lxml/libxml2's own parser, which by
+# default does not resolve external/parameter entities and caps internal entity expansion; a crafted
+# bomb is refused there, not by defuse_stdlib. We still call defuse_stdlib() to cover the fallback
+# path (and it is cheap + idempotent). The residual attack surface via lxml's remaining internal-
+# entity handling is narrow, and the zip-bomb guard in guards.archive_reason is the primary
+# decompression-bomb defence at the HTTP edge regardless. Best-effort: if defusedxml is absent the
+# parse still works and lxml/libxml2's limits still apply.
+_XML_DEFUSED = False
+
+
+def _defuse_xml() -> None:
+    global _XML_DEFUSED
+    if _XML_DEFUSED:
+        return
+    try:
+        import warnings
+        with warnings.catch_warnings():
+            # defuse_stdlib touches the deprecated cElementTree shim; the hardening still applies.
+            warnings.simplefilter("ignore", DeprecationWarning)
+            import defusedxml
+            defusedxml.defuse_stdlib()
+    except Exception:  # pragma: no cover - env without defusedxml degrades gracefully
+        pass
+    _XML_DEFUSED = True
+
+
 # doc_kind: coarse routing hint for the extractor. Not authoritative — the extractor still inspects
 # content — but lets a resume vs a project weekly vs a roster take different heuristic paths.
 DOC_KINDS = ("resume", "project", "company", "roster", "roadmap", "unknown")
@@ -82,9 +113,17 @@ _MOJIBAKE_MAP = {
 _MOJIBAKE_TRANS = str.maketrans(_MOJIBAKE_MAP)
 
 
+# feat-030 P3: a NUL (0x00) is ILLEGAL in a Postgres text value — a stray one in a PDF/xlsx text
+# layer would crash the DB write with an opaque error. Other C0 control chars corrupt the citable
+# corpus. Scrub them all at the parse seam (every format flows through here), preserving TAB (0x09)
+# and NEWLINE (0x0a) which are legitimate layout. \r is already folded to \n above.
+_C0_CONTROL_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
+
+
 def _normalize(text: str) -> str:
     text = (text or "").replace("\r\n", "\n").replace("\r", "\n")
     text = text.translate(_MOJIBAKE_TRANS)
+    text = _C0_CONTROL_RE.sub("", text)   # strip NUL + other C0 controls (keep \t and \n)
     # collapse >2 blank lines, strip trailing spaces per line
     text = re.sub(r"[ \t]+\n", "\n", text)
     text = re.sub(r"\n{3,}", "\n\n", text)
@@ -99,6 +138,14 @@ def _parse_pdf(data: bytes) -> str:
     except Exception as e:  # pragma: no cover - env without pypdf
         raise ParseError(f"pypdf not available for PDF parse: {e}")
     reader = PdfReader(io.BytesIO(data))
+    # feat-039 (readiness §2-D): cap page count before extracting — a pathological PDF with a huge /
+    # cyclic page tree is a CPU/RAM DoS. `len(reader.pages)` reads the (cheap) page tree; refuse over
+    # the cap rather than iterate a hostile document. (A true wall-clock timeout is not portable to
+    # Windows dev; the page cap is the deterministic, cross-platform guard.)
+    from . import guards
+    n_pages = len(reader.pages)
+    if n_pages > guards.max_pdf_pages():
+        raise ParseError(f"PDF has {n_pages} pages (limit {guards.max_pdf_pages()}) — refused")
     return "\n\n".join((page.extract_text() or "") for page in reader.pages)
 
 
@@ -107,6 +154,7 @@ def _parse_docx(data: bytes) -> str:
         import docx  # python-docx
     except Exception as e:  # pragma: no cover - env without python-docx
         raise ParseError(f"python-docx not available for docx parse: {e}")
+    _defuse_xml()
     doc = docx.Document(io.BytesIO(data))
     parts = [p.text for p in doc.paragraphs]
     for tbl in doc.tables:
@@ -122,6 +170,7 @@ def _parse_xlsx(data: bytes) -> str:
         from openpyxl import load_workbook
     except Exception as e:  # pragma: no cover - env without openpyxl
         raise ParseError(f"openpyxl not available for xlsx parse: {e}")
+    _defuse_xml()
     wb = load_workbook(io.BytesIO(data), read_only=True, data_only=True)
     out: list[str] = []
     for ws in wb.worksheets:

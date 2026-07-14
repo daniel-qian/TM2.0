@@ -35,6 +35,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import threading
 import time
 
 log = logging.getLogger("avery.ingest.llm_extract")
@@ -186,8 +187,27 @@ class LLMExtractor:
         self._backoff = max(0.0, retry_backoff_s)   # tests pass 0 — no sleeping on a fake brain
         # deterministic material chunking (the citable RAG corpus) reuses the heuristic's path
         self._chunker = HeuristicExtractor()
+        # feat-039: honest-degradation telemetry — how many docs the MODEL handled vs how many fell
+        # back to the heuristic (429 / no key / red-line breach / budget exhausted / no entities). The
+        # /ingest handler reads `degraded` to label extraction_mode (llm vs degraded). extract_docs
+        # may call extract() concurrently over ONE instance, so the counters are lock-guarded.
+        self._tlock = threading.Lock()
+        self._llm_docs = 0
+        self._fallback_docs = 0
 
     # -- public -----------------------------------------------------------------------------
+
+    def _fell_back(self, doc: ParsedDoc) -> ExtractionResult:
+        with self._tlock:
+            self._fallback_docs += 1
+        return self._fallback.extract(doc)
+
+    @property
+    def degraded(self) -> bool:
+        """True when the model handled NO document (all fell back) OR at least one doc silently fell
+        back to the heuristic — the honest 'this extraction was (partly) low-quality' signal."""
+        with self._tlock:
+            return self._fallback_docs > 0 or self._llm_docs == 0
 
     def extract(self, doc: ParsedDoc) -> ExtractionResult:
         try:
@@ -195,17 +215,19 @@ class LLMExtractor:
         except Exception as e:
             log.warning("LLM extraction failed for %s -> heuristic fallback: %s: %s",
                         doc.name, type(e).__name__, str(e)[:300])
-            return self._fallback.extract(doc)
+            return self._fell_back(doc)
         # the same red-line gate, INSIDE the extractor: a scoring extraction never leaves here
         rl = validate_extraction(res)
         if not rl.ok:
             log.warning("LLM extraction for %s failed the red line -> heuristic fallback: %s",
                         doc.name, rl.summary())
-            return self._fallback.extract(doc)
+            return self._fell_back(doc)
         if not (res.people or res.projects or res.signals):
             # the model saw nothing structurable — the conservative regexes get a shot
             log.warning("LLM extraction for %s returned no entities -> heuristic fallback", doc.name)
-            return self._fallback.extract(doc)
+            return self._fell_back(doc)
+        with self._tlock:
+            self._llm_docs += 1
         return res
 
     # -- model round-trip -------------------------------------------------------------------

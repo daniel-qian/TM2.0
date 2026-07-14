@@ -760,6 +760,57 @@
       return { pass: Object.values(phases).every(Boolean), phases, results };
     },
 
+    // ── feat-033 new-surface phase ───────────────────────────────────────────
+    async assertNotesSurface() {
+      // The "Avery's notes" surface: the write-side, accumulating, READ-ONLY notebook.
+      // Called AFTER composerAskLive (a real advise now writes a real note), so the tab should be
+      // POPULATED. Asserts: the tab mounts; the RED-LINE trust note is present (deterministic gate,
+      // not "we try"); the observation entries carry ZERO person-score numbers (the red line the
+      // write-side backend gate enforces, re-checked on the rendered surface); entries are READ-ONLY
+      // (the observation body is not a button — only the source line jumps to the room); and the
+      // story-noun blacklist stays 0. An EMPTY notebook (no advise ran) is tolerated (empty-state +
+      // trust note), so this phase is honest whether or not a note landed.
+      this._clickTab("Avery's notes");
+      try {
+        await poll(() => ($('.lite-notes') ? true : null), 8000, 'notes surface to mount');
+      } catch (e) { /* fall through — assertions below report absence */ }
+      const screen = $('.lite-notes');
+      const trustNote = $('.lite-notes-redline-note');
+      const entries = $$('.lite-notes-entry');
+      const populated = entries.length > 0;
+      const emptyState = $('.lite-notes-empty');
+      // Red line on the RENDERED observations only (the trust note legitimately says "score/rank").
+      const entryText = $$('.lite-notes-entry-text').map((e) => e.innerText || '').join('\n');
+      const numberLeak = BLOOD_BAR_RE.test(entryText) || /\b\d\s*\/\s*\d\b/.test(entryText)
+        ? (entryText.match(BLOOD_BAR_RE) || entryText.match(/\b\d\s*\/\s*\d\b/) || [])[0] : null;
+      // Read-only: an observation entry must not be a <button> (only .lite-notes-entry-source is).
+      const entryIsButton = $$('.lite-notes-entry').some((e) => e.tagName === 'BUTTON');
+      const text = (screen && screen.innerText) || '';
+      const storyHits = [];
+      for (const noun of STORY_NOUNS) {
+        const re = noun.includes(' ')
+          ? new RegExp(noun.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')
+          : new RegExp('\\b' + noun + '\\b');
+        if (re.test(text)) storyHits.push(noun);
+      }
+      const out = {
+        screenPresent: !!screen,
+        trustNotePresent: !!trustNote,
+        populated,
+        entryCount: entries.length,
+        emptyStatePresent: !!emptyState,
+        numberLeak,
+        entryIsButton,
+        storyHits,
+        // Screen mounts; the red-line trust note is present; it is either populated (clean, read-only)
+        // or an honest empty state; zero number leak on observations; story-noun blacklist clean.
+        pass: !!screen && !!trustNote && (populated || !!emptyState) &&
+          !numberLeak && !entryIsButton && storyHits.length === 0,
+      };
+      results.notesSurface = out;
+      return out;
+    },
+
     verdict() {
       const phases = {
         emptyStateClean: !!(results.storyNouns && results.storyNouns[0] && results.storyNouns[0].pass),
@@ -778,6 +829,8 @@
         playbooksEmpty: !!(results.playbooks && results.playbooks.pass),
         // feat-026 (S6) new surface — positioning narrative + honestly-labeled capability mock.
         visionSurface: !!(results.vision && results.vision.pass),
+        // feat-033 new surface — the write-side, accumulating, read-only "Avery's notes" notebook.
+        notesSurface: !!(results.notesSurface && results.notesSurface.pass),
       };
       return { pass: Object.values(phases).every(Boolean), phases, results };
     },
