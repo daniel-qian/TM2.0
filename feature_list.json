@@ -275,9 +275,9 @@
       "evidence": "阶段 B(lite,stub 驱动)完成于 feat/034-lite-ask(本 entry 只记 B;A 归 story 线,C/D 未开)。契约形状按 kickoff-dev.md 后端提案:manifest 事件可选 kind:advice|ask-draft(缺省 advice 零破坏);AskDraft{id,status draft→shared→collecting→closed,questions 1..3(scale|yesno),recipients[](具名+token+link),comment_prompt,receipts_summary};LiveTransport 增 saveAsk/shareAsk/fetchAsk(=POST /ask · POST /ask/{id}/share · GET /ask/{id},未知 id 大声失败=feat-028 纪律)。AskCard=lite 第二种 artifact 卡(src/lite/AskCard.tsx,Room 画布内与 8 字段卡并列):draft 逐字编辑+1~3 增删+具名受访者点选+诚实提示(红线校验在保存时服务端跑,预览未跑不假装)→确认→一人一链 https://avery.ima-read.com/r/{token}+逐条复制→回收 chip→回执:单人=数值/是否+本人自述标注+原话短评;多人=仅一段定性汇总,组件树不存在每人一行分数表路径。回执只挂 AskDraft.recipients[].receipt,LitePerson 零新增字段(ADR-0023 结构闸)。stub=src/lite/stubTransport.ts(同一 LiveTransport seam,?transport=stub 激活,离线确定性)。gate 先行:live-frontend-gate.snippet.js 新增 K1-K6 相位+askVerdict(独立聚合),实现前必红({askDraft:false,...askRedline:false},no .lite-ask-card in DOM)→实现后全绿:askVerdict {askDraft,askShare,askCollect,askReceiptsMulti,askSingle,askRedline}=全 true,且既有 10 相位 verdict 在 stub 模式同会话全 true(零回归;真后端相位待阶段 C 重跑=skipped-needs-backend)。init.sh 绿(墙 lint+typecheck+build)。i18n:EN ask.* 定稿;ZH 经 M3 定向生成(i18n-zh.mjs 新增按 section 定向模式,术语锁「快问/本人自述」)。全文见 .issues/ask-card-0713/lite-ask-handoff.md。 【合流收线 2026-07-13】阶段 A(story beat, feat/034-story-ask@7b87cbd)+阶段 B(lite, feat/034-lite-ask@169e651)双双经独立对抗验证 CONFIRMED_SAFE(checker≠maker,真机执行):story 侧=main 基线 A/B 全 rail 逐拍 DOM 指纹前缀相等/乱序 free-click 攻击/31 拍红线扫描/diff 逐行加性审计全 CONFIRMED;lite 侧=16 相位独立重驱全 true/红线结构闸(LitePerson 零字段/多人零人名×数值共现)/默认 transport 404 纪律未弱化/story mode 零影响全 CONFIRMED。两分支已 merge 本地 main(3e79e9e+d1934bf),合流后 ./init.sh 复绿(lint+tsc+build 465 模块)。非阻塞 findings 记入 kickoff-dev.md 阶段 C 清单:F1 status 词表漂移(锁定 draft|shared|collecting|closed|revoked|expired,coerce 未知态不得折回 draft)/F2 stub shared 态需离线预览标记/F3 coerce 防御归一收紧。C(后端)/D(部署)未开。"
     },
     {
-      "id": "feat-035",
+      "id": "feat-042",
       "name": "v02 并排壳 + 皮肤基建（lite2）",
-      "description": "lite-live-v02 阶段B-1。src/lite2 全量并排壳（copy-then-wall，v01 冻结）+ ?v=2 版本开关 + eslint 墙三条 + ?skin=paper|aurora 令牌层 + 6-tab 骨架 + 合规页脚。规格 .issues/lite-live-v02-0713/{PRD,kickoff-dev,decisions}.md。",
+      "description": "lite-live-v02 阶段B-1。src/lite2 全量并排壳（copy-then-wall，v01 冻结）+ ?v=2 版本开关 + eslint 墙三条 + ?skin=paper|aurora 令牌层 + 6-tab 骨架 + 合规页脚。规格 .issues/lite-live-v02-0713/{PRD,kickoff-dev,decisions}.md。（改号自 feat-035，2026-07-14：持久化线占用 feat-030..041 号段，见 .issues/lite-live-v02-0713/kickoff-dev.md 合流契约附录）",
       "dependencies": [
         "feat-024"
       ],
@@ -285,41 +285,51 @@
       "evidence": "分支 feat/035-v02-shell（main 3a9cf5c 起）。实现：src/lite/** 整树复制到 src/lite2/**（19 文件），.lite-shell→.lite2-shell 根类迁移，样式落 src/lite2/styles/lite2.css（.lite-shell 76 处机械替换为 .lite2-shell，其余选择器/类名不变——v1/story CSS chunk 零字节改动）；新增 src/shared/version.ts（?v= 缺省 '1'）+ App.tsx 三路合成（story/LiteApp/Lite2App）；eslint.config.js 墙扩至三区两两互斥（lite2→story、story→lite2、lite→lite2、lite2→lite 全 error）；src/lite2/skin.ts（?skin=paper|aurora 缺省 paper）+ styles/skin-paper.css（:root 现值照搬，零回归锚点）+ styles/skin-aurora.css（decisions.md 色表：bg #edf6ff/ink #10223d/blue #496ee8/purple #6b5bd6/玻璃+极光渐变，令牌覆盖约八成组件，精修留 feat-039）；6-tab 骨架按 PRD 顺序（Your team·The room·Follow-ups·A closer look·Playbooks·Where this goes），FollowupsScreen/CloserLookScreen 两新空态占位屏（诚实 Coming 标注，零人卡零数字）；Lite2Footer 合规免责页脚（EN 定稿+ZH M3 真译，footerText 备忘录腔）；i18n lite2.* 命名空间（84 key 与 lite 共享文案原样复用+11 新 key，既有 lite/mode/upload/team/nexus/ask 五个 section byte-identical）。红灯实证：4 个新墙方向逐一临时注入违规 import→npm run lint exit 1→撤回→exit 0（全部验证，git diff --stat 复位后归零）。v2Verdict 5 相位（scripts/gates/live-frontend-gate.snippet.js 新增，driven ?transport=stub 离线）真机跑通：{v2Boots:true(.lite2-shell+6 tab 顺序精确匹配),v1Untouched:true(默认 URL 零 .lite2-shell 且 v01 十相位 verdict 同会话复跑 pass:true),storyUntouched:true(?mode=story 零 .lite2-shell),wallRed:true(4 方向红后绿),skinTokens:true(data-skin paper→aurora 切换 + backgroundImage 计算值随之变化)}，pass:true。零回归证据：v01 十相位 verdict() 同会话复跑 {emptyStateClean,ingested,teamRendered,postUploadClean,detailIsLive,composerIsLive,teamGrouped,roomCanvas,playbooksEmpty,visionSurface} 全 true；askVerdict() 六相位复跑 {askDraft,askShare,askCollect,askReceiptsMulti,askSingle,askRedline} 全 true；story-untouched 独立确认。init.sh 全绿（lint 0 error 3 条既有 warning、typecheck 0 错、build 494 模块，基线 467）。偏离 kickoff：门文档（snippet.js v2Verdict 相位）写在实现之后而非之前，非真正 gate-first（DOM 相位无法证明'出生即红'，只证明 wallRed 4 方向确有先红后绿；已在 progress.md 记录此偏离）；lite2 i18n 全量 M3 一次性翻译撞 token 预算（同 S5/S6 lite section 已知坑）失败 3 次，改写一次性配套脚本 scripts/i18n-zh-lite2-delta.mjs（复用 zh.lite 已核准译文 84 key + M3 只译 11 个新增 delta key）成功真译，tab 标签「跟进/多看一眼」与 PRD 锁定词表完全吻合。"
     },
     {
-      "id": "feat-036",
+      "id": "feat-043",
       "name": "v02 晨间分诊区 + Follow-ups 跟进区",
-      "description": "lite-live-v02 阶段B-2。ADR-0017 原判执行：今天需要你队列（真派生/三动作/定性人话）+ Follow-ups tab（来源标签/分组/历史/localStorage）+ 真接线的加入跟进 + mailto 起草深链。",
+      "description": "lite-live-v02 阶段B-2。ADR-0017 原判执行：今天需要你队列（真派生/三动作/定性人话）+ Follow-ups tab（来源标签/分组/历史/localStorage）+ 真接线的加入跟进 + mailto 起草深链。（改号自 feat-036，2026-07-14：持久化线占用 feat-030..041 号段，见 .issues/lite-live-v02-0713/kickoff-dev.md 合流契约附录）",
       "dependencies": [
-        "feat-035"
+        "feat-042"
       ],
       "status": "done",
       "evidence": "分支 feat/036-v02-triage-followups（从 feat/035-v02-shell 起）。严格 gate-first：先在 scripts/gates/live-frontend-gate.snippet.js 写 B 组 4 相位断言（triageRenders/triageActions/followupsFlow/followupsPersist），?v=2&mode=live&transport=stub 真跑确认红（triageCards:1 但 hasCheck/hasDiscard/hasTakeToRoom/hasAddFollowup 全 false，followupItemsInDom:0，Follow-ups 屏仍是 coming-soon 占位），再实现。实现：新文件 src/lite2/flowStore.ts（zustand，独立于 store.ts）——triageMarks（done/discarded，选择器 selectTriagePending/Handled/SetAside 纯函数分桶，派生本身仍是 teamData.ts liveHandoffs() 的既有真派生，不重复实现避免红线逻辑长两份）+ followups slice（FollowupItem{id,title,source∈{triage,room,ask,closer-look,manual},dueGroup∈{today,week,later},note?,done,doneAt?,createdAt}，addFollowup/completeFollowup/reopenFollowup/deleteFollowup/editFollowup）+ composerDraft 桥（setComposerDraft/consumeComposerDraft，供分诊'带进议事室'预填）。持久化手写同步 localStorage（key lite2:flow:v1）而非 zustand persist 中间件——persist 的 hydrate() 走 Promise 链会有一帧空态闪烁窗口，手写 load/save 在 store 创建时就是最终态，风格同仓库 story/homeStore.ts。新文件 src/lite2/draftLinks.ts（mailto 深链，收件人留空，subject/body 从条目上下文生成，encodeURIComponent 不用 URLSearchParams 避免 mailto 对 + 的解析歧义）。TeamScreen.tsx：分诊区三动作真接线——done→home-check 点击→markTriageDone→pending 计数掉、条目收进复用 story 同款 .home-drawer（.home-drawer-toggle/.home-drawer-list/.home-drawer-item，默认折叠）；discard→home-discard→discardTriage→条目消失（同样进抽屉'搁置'区）；带进议事室→.lite-triage-room→setComposerDraft(action+evidence)+goScreen('room')（不自动提交，manager 审过再发问，同 AskCard authorship 原则）；另加 .lite-triage-addfollowup（真写 flowStore，source=triage）+ .lite-triage-draftmail（mailto 深链）。RoomScreen.tsx：LiteAskComposer 加 initialValue prop，useEffect 挂载时消费一次 composerDraft（读入 useState 初值后立即 consumeComposerDraft 清空，不影响本次渲染，但避免下次导航复用旧草稿）。LiteAdviceCard.tsx：Recommended actions 每条加 .lite-advice-add-followup 按钮（source=room，点过一次禁用显示 Added，防重复堆）。FollowupsScreen.tsx 整屏重写替换 feat-035 的 coming-soon 占位：今天/本周/之后三组 + 手动添加表单（标题+分组）+ Active/History 两个 subtab（完成→移入 History，History 内可 Bring it back 恢复）+ 每条编辑（inline 标题+分组）/删除/起草邮件。CSS 新增约 340 行，全部 .lite2-shell 前缀（架构拍板 3）；复用 shared 70-home-cards.css 既有 .home-check/.home-discard/.home-drawer* 类名与配色语法（不新造一套视觉语言）。i18n：en.ts lite2 命名空间新增 43 个 key（triage* 10 个 + followups* 24 个 + adviceAddFollowup/followupAdded 2 个 + closerLook 相关沿用不变），移除 followupsBody/followupsComingSoon 两个不再用的占位 key；zh.ts 经 scripts/i18n-zh-lite2-delta.mjs 重跑（84 key 复用 zh.lite 已核准译文 + 45 delta key 送 M3 一次成功，含本次新增 + feat-035 遗留的 closerLook/footerText 一并归入 delta）。B 组门相位真机跑通（?transport=stub，stub 语料仅 1 个 at-risk 项目产生 1 张诚实分诊卡——triageActions 用同一张卡做 done→撤销→discard→撤销→带进议事室 三段式序列复测，不为凑数虚构第二张卡）：{triageRenders:{triageCards:1,bloodBarLeak:null,hasCheck:true,hasDiscard:true,hasTakeToRoom:true,hasAddFollowup:true,pass:true}, triageActions:{doneWorks:true,drawerHasItem:true,discardWorks:true,roomWorks:true(composer 值含条目标题),pass:true}, followupsFlow:{hasSourceLabel:true(sourceLabelText:'From this morning'),leftActive:true,movedToHistory:true,restored:true,pass:true}, followupsPersist:{pass:true(reload 后 localStorage 条目仍在)}}，flowVerdict pass:true 四相位全绿。零回归证据（同分支复跑）：v01 十相位 verdict() 全 true（16 人卡含 Lin Qing/Chen Mingyuan 零血条、composer 静态+动态、team 分组 4 组、room 画布、Playbooks 空态、Vision 三拍 4 mock）；askVerdict() 六相位全 true（K1-K6，ADR-0023 结构闸——多人零分数表、单人本人自述标注）；v2Verdict A 组 4 相位复跑 true（v2Boots 6-tab 顺序精确匹配、v1Untouched 默认 URL 零 .lite2-shell 泄漏且 v01 十相位同会话 pass、storyUntouched ?mode=story 零 .lite2-shell、skinTokens paper→aurora 计算值切换）；wallRed 4 方向（lite2→story/story→lite2/lite→lite2/lite2→lite）逐一临时注入违规 import → npm run lint exit 1 → 撤回 → exit 0，git status 复位确认 src/lite/**、src/story/**、eval-harness/** 对 main 零字节改动。init.sh 全绿（lint 0 error 4 条既有 noInlineConfig warning——RoomScreen.tsx 新增一条同款、typecheck 0 错、build 496 模块，feat-035 基线 494 +2）。改动文件：2 新增（flowStore.ts/draftLinks.ts）+ 6 修改（TeamScreen/RoomScreen/LiteAdviceCard/FollowupsScreen/lite2.css/en.ts/zh.ts/live-frontend-gate.snippet.js，含 gate 文档头注释更新）。偏离：无重大偏离——本棒严格执行 gate-first（先写断言真跑红，再实现，再复跑绿），修正了 feat-035 记录的'门文档写在实现之后'的纪律漂移。过程中发现并修复一个门辅助函数自身的 bug（非产品代码）：snapshotFollowups() 最初同步读 DOM 紧跟在 subtab 点击后，捕获了 React 批处理更新提交前的旧渲染，误判'同一条目同时出现在 active 与 history'；加 200ms settle 后复测准确（history 正确为空、active 正确含 1 条）——已修入 snippet.js 并加注释记录此坑。遗留：Follow-ups 编辑目前只支持标题+分组，不支持编辑来源标签或 note；advice 卡的加入跟进是逐条 action 一个按钮而非整卡打包，视觉略密（feat-039 aurora 精修阶段可考虑收窄）。"
     },
     {
-      "id": "feat-037",
+      "id": "feat-044",
       "name": "v02 A closer look 矛盾点独立页",
-      "description": "lite-live-v02 阶段B-3。Danny 07-14 拍板独立页照合伙人形态：对照卡（文件说法 vs 实际信号，纯项目级诚实派生）+ 解决/忽略/历史 + 直接问问本人→快问预填。锁定词族命名，零 gap/差距字样。",
+      "description": "lite-live-v02 阶段B-3。Danny 07-14 拍板独立页照合伙人形态：对照卡（文件说法 vs 实际信号，纯项目级诚实派生）+ 解决/忽略/历史 + 直接问问本人→快问预填。锁定词族命名，零 gap/差距字样。（改号自 feat-037，2026-07-14：持久化线占用 feat-030..041 号段，见 .issues/lite-live-v02-0713/kickoff-dev.md 合流契约附录）",
       "dependencies": [
-        "feat-036"
+        "feat-043"
       ],
       "status": "not-started",
       "evidence": ""
     },
     {
-      "id": "feat-038",
+      "id": "feat-045",
       "name": "v02 onboarding 向导 + 建议 chips + 通知铃铛",
-      "description": "lite-live-v02 阶段B-4。可跳过向导（上传真接 ingest/选 playbooks 持久化进 Playbooks 槽位；不做假连接工具/假账号步）+ room 空态 4 chips + 真事件驱动铃铛（零硬编码通知）。",
+      "description": "lite-live-v02 阶段B-4。可跳过向导（上传真接 ingest/选 playbooks 持久化进 Playbooks 槽位；不做假连接工具/假账号步）+ room 空态 4 chips + 真事件驱动铃铛（零硬编码通知）。（改号自 feat-038，2026-07-14：持久化线占用 feat-030..041 号段，见 .issues/lite-live-v02-0713/kickoff-dev.md 合流契约附录）",
       "dependencies": [
-        "feat-037"
+        "feat-044"
       ],
       "status": "not-started",
       "evidence": ""
     },
     {
-      "id": "feat-039",
+      "id": "feat-046",
       "name": "v02 aurora 皮精修（阶段C）",
-      "description": "lite-live-v02 阶段C。对照合伙人库逐屏精修 aurora 令牌 + 少量 [data-skin] 分支；两皮全屏截图对照；paper 计算值零漂移断言。",
+      "description": "lite-live-v02 阶段C。对照合伙人库逐屏精修 aurora 令牌 + 少量 [data-skin] 分支；两皮全屏截图对照；paper 计算值零漂移断言。（改号自 feat-039，2026-07-14：持久化线占用 feat-030..041 号段，见 .issues/lite-live-v02-0713/kickoff-dev.md 合流契约附录）",
       "dependencies": [
-        "feat-038"
+        "feat-045"
+      ],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "feat-047",
+      "name": "v02 引擎同步 + 笔记/文件面移植（阶段D）",
+      "description": "待持久化链（feat-030..041，tip feat/041-e2e-broadcast@9e5a725）合 main 后：把 src/lite 引擎 delta（transport owner_token/X-Avery-Token、store files/notes、NotesScreen、文件清单、note nudge）移植进 src/lite2，并给 v02 补笔记/文件用户面（tab 安排进 review 包给 Danny 拍）。token 三铁律见 kickoff 合流契约附录 §2。",
+      "dependencies": [
+        "feat-046"
       ],
       "status": "not-started",
       "evidence": ""
