@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { LiteHandoff, LiteTeam } from './teamData'
+import { deriveGaps, type GapCard } from './gapDerive'
 
 // feat-036 · lite2 晨间分诊 + Follow-ups 跟进（PRD F2+F3, ADR-0017 原判的真正执行）。
 // 独立于 store.ts（kickoff-dev.md §Feature 切分：减冲突面）——这里只管两件事：
@@ -13,10 +14,15 @@ import type { LiteHandoff, LiteTeam } from './teamData'
 //
 // 🔴 红线：分诊/跟进条目上只出现人名与定性描述，零数字/评分/排名——marks 与 FollowupItem
 // 结构本身就没有数字字段的位置（结构性护栏，同 teamData.ts 对 LitePerson 的做法）。
+//
+// feat-044（PRD F4）追加第三件事：③ "A closer look" 矛盾卡的 resolve/dismiss marks——同一
+// localStorage blob（`gapMarks` 字段），同一手写同步 load/save 机制（复用 followupsPersist
+// 已经过 reload 实证过的那条代码路径，不新起一套持久化）。
 
 const STORAGE_KEY = 'lite2:flow:v1'
 
 export type TriageMark = 'done' | 'discarded'
+export type GapMark = 'resolved' | 'dismissed'
 
 export type FollowupSource = 'triage' | 'room' | 'ask' | 'closer-look' | 'manual'
 export type FollowupDueGroup = 'today' | 'week' | 'later'
@@ -35,21 +41,27 @@ export interface FollowupItem {
 interface PersistedShape {
   triageMarks: Record<string, TriageMark>
   followups: FollowupItem[]
+  gapMarks: Record<string, GapMark>
 }
+
+const EMPTY_PERSISTED: PersistedShape = { triageMarks: {}, followups: [], gapMarks: {} }
 
 function loadPersisted(): PersistedShape {
   try {
-    if (typeof window === 'undefined' || !window.localStorage) return { triageMarks: {}, followups: [] }
+    if (typeof window === 'undefined' || !window.localStorage) return { ...EMPTY_PERSISTED }
     const raw = window.localStorage.getItem(STORAGE_KEY)
-    if (!raw) return { triageMarks: {}, followups: [] }
+    if (!raw) return { ...EMPTY_PERSISTED }
     const parsed = JSON.parse(raw) as Partial<PersistedShape>
     return {
       triageMarks: parsed.triageMarks && typeof parsed.triageMarks === 'object' ? parsed.triageMarks : {},
       followups: Array.isArray(parsed.followups) ? parsed.followups : [],
+      // gapMarks is new as of feat-044 — older persisted blobs (pre-feat-044) simply lack the
+      // field; default to {} rather than choking on it (forward-compatible read).
+      gapMarks: parsed.gapMarks && typeof parsed.gapMarks === 'object' ? parsed.gapMarks : {},
     }
   } catch {
     // 解析失败/无痕模式拒绝访问——退回内存态，不崩页面。
-    return { triageMarks: {}, followups: [] }
+    return { ...EMPTY_PERSISTED }
   }
 }
 
@@ -58,7 +70,7 @@ function savePersisted(state: PersistedShape) {
     if (typeof window === 'undefined' || !window.localStorage) return
     window.localStorage.setItem(
       STORAGE_KEY,
-      JSON.stringify({ triageMarks: state.triageMarks, followups: state.followups }),
+      JSON.stringify({ triageMarks: state.triageMarks, followups: state.followups, gapMarks: state.gapMarks }),
     )
   } catch {
     // 写满/被拒——本次操作仍在内存态生效，只是不持久化；不抛错不打断交互。
@@ -94,14 +106,21 @@ interface FlowState {
   composerDraft: string | null
   setComposerDraft: (text: string) => void
   consumeComposerDraft: () => void
+
+  // feat-044（PRD F4）· "A closer look" 矛盾卡的 resolve/dismiss marks——同一 localStorage
+  // blob，同一 mark-only 模式（不重新派生 gapDerive.ts 的结果，只按 id 分桶，同 triage marks）。
+  gapMarks: Record<string, GapMark>
+  resolveGap: (id: string) => void
+  dismissGap: (id: string) => void
+  restoreGap: (id: string) => void
 }
 
 export const useFlow = create<FlowState>((set, get) => {
   const initial = loadPersisted()
 
   function persist() {
-    const { triageMarks, followups } = get()
-    savePersisted({ triageMarks, followups })
+    const { triageMarks, followups, gapMarks } = get()
+    savePersisted({ triageMarks, followups, gapMarks })
   }
 
   return {
@@ -165,6 +184,24 @@ export const useFlow = create<FlowState>((set, get) => {
     composerDraft: null,
     setComposerDraft: (text) => set({ composerDraft: text }),
     consumeComposerDraft: () => set({ composerDraft: null }),
+
+    gapMarks: initial.gapMarks,
+    resolveGap: (id) => {
+      set((s) => ({ gapMarks: { ...s.gapMarks, [id]: 'resolved' } }))
+      persist()
+    },
+    dismissGap: (id) => {
+      set((s) => ({ gapMarks: { ...s.gapMarks, [id]: 'dismissed' } }))
+      persist()
+    },
+    restoreGap: (id) => {
+      set((s) => {
+        const marks = { ...s.gapMarks }
+        delete marks[id]
+        return { gapMarks: marks }
+      })
+      persist()
+    },
   }
 })
 
@@ -180,4 +217,18 @@ export function selectTriageHandled(team: LiteTeam | null, marks: Record<string,
 
 export function selectTriageSetAside(team: LiteTeam | null, marks: Record<string, TriageMark>): LiteHandoff[] {
   return (team?.handoffs ?? []).filter((h) => marks[h.id] === 'discarded')
+}
+
+// ── feat-044 · gap 纯函数选择器（输入 = deriveGaps(team)，gapDerive.ts 的真派生；这里同样
+// 不重新派生，只按 marks 分桶——同 triage 选择器的分工原则）。────────────────────────────
+export function selectGapsActive(team: LiteTeam | null, marks: Record<string, GapMark>): GapCard[] {
+  return deriveGaps(team).filter((g) => !marks[g.id])
+}
+
+export function selectGapsResolved(team: LiteTeam | null, marks: Record<string, GapMark>): GapCard[] {
+  return deriveGaps(team).filter((g) => marks[g.id] === 'resolved')
+}
+
+export function selectGapsDismissed(team: LiteTeam | null, marks: Record<string, GapMark>): GapCard[] {
+  return deriveGaps(team).filter((g) => marks[g.id] === 'dismissed')
 }

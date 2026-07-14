@@ -1296,31 +1296,306 @@
   font-size: 12px;
 }
 
-/* ── feat-035 · A closer look — 6-tab 骨架的空态占位屏（feat-037 未开工，原样保留） ──
-   复用 .nexus-empty 卡壳 + Playbooks 空态同款排版语法（左对齐叙事、诚实 coming-soon 尾注）。
-   Follow-ups 的同款占位规则已被 feat-036 的真实屏样式取代（见下方新块）。 */
-.lite2-shell .lite-closerlook-empty {
-  width: min(560px, calc(100vw - 56px));
-  text-align: left;
+/* ── feat-044 · A closer look — 矛盾点独立页（PRD F4 / decisions.md 拍板#4）。取代
+   feat-035 立的空态占位屏（同一屏，真实现）。布局与 Follow-ups 屏同口径（scroll/frame/
+   header），卡片语法沿用 .home-handoff 家族（hairline 边框、圆角、柔阴影），仅补一条对照
+   卡专属的左右两栏（claim vs evidence）。 */
+.lite2-shell .lite-closerlook-scroll {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
-.lite2-shell .lite-closerlook-eyebrow {
+.lite2-shell .lite-closerlook-frame {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 84px 36px 90px;
+}
+
+.lite2-shell .lite-closerlook-header {
+  margin-bottom: 22px;
+}
+
+.lite2-shell .lite-closerlook-header h1 {
+  margin: 4px 0 8px;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: clamp(21px, 2.4vw, 27px);
+  font-weight: 500;
+  line-height: 1.32;
+}
+
+.lite2-shell .lite-closerlook-lede {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.6;
+  max-width: 58ch;
+}
+
+.lite2-shell .lite-gap-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lite2-shell .lite-gap-card {
+  padding: 16px 18px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--paper-strong);
+  box-shadow: var(--shadow-soft);
+}
+
+.lite2-shell .lite-gap-compare {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.lite2-shell .lite-gap-pane {
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(29, 27, 23, 0.03);
+}
+
+/* 左"文件里的说法"= sage 语气（读稳）；右"实际信号"= terracotta 语气（矛盾处）——
+   同一张卡上左右两栏用语气温度区分，不用红绿这类评判色。 */
+.lite2-shell .lite-gap-pane-claim {
+  border-left: 3px solid rgba(105, 128, 109, 0.6);
+}
+
+.lite2-shell .lite-gap-pane-evidence {
+  border-left: 3px solid rgba(188, 92, 73, 0.62);
+}
+
+.lite2-shell .lite-gap-pane-label {
+  margin: 0 0 5px;
   color: var(--ink-faint);
+  font-size: 10.5px;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
-.lite2-shell .lite-closerlook-empty h2 {
-  margin-bottom: 10px;
-  font-size: clamp(22px, 2.6vw, 28px);
-  line-height: 1.28;
+.lite2-shell .lite-gap-pane-text {
+  margin: 0;
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.55;
 }
 
-.lite2-shell .lite-closerlook-comingsoon {
-  margin-top: 20px;
+.lite2-shell .lite-gap-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.lite2-shell .lite-gap-project-link {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--ink);
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.lite2-shell .lite-gap-project-link:hover,
+.lite2-shell .lite-gap-project-link:focus-visible {
+  text-decoration: underline;
+  outline: none;
+}
+
+.lite2-shell .lite-gap-owner {
   color: var(--ink-faint);
-  font-size: 12px;
-  font-style: italic;
+  font-size: 11.5px;
+}
+
+.lite2-shell .lite-gap-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--rule);
+}
+
+.lite2-shell .lite-gap-resolve,
+.lite2-shell .lite-gap-dismiss,
+.lite2-shell .lite-gap-ask,
+.lite2-shell .lite-gap-addfollowup {
+  min-height: 28px;
+  padding: 0 12px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 11.5px;
+  font-weight: 700;
+  transition:
+    color var(--fast) ease,
+    border-color var(--fast) ease,
+    background var(--fast) ease;
+}
+
+.lite2-shell .lite-gap-resolve:hover,
+.lite2-shell .lite-gap-resolve:focus-visible {
+  border-color: rgba(105, 128, 109, 0.85);
+  background: rgba(105, 128, 109, 0.08);
+  color: var(--ink);
+  outline: none;
+}
+
+.lite2-shell .lite-gap-dismiss:hover,
+.lite2-shell .lite-gap-dismiss:focus-visible {
+  border-color: var(--rule-strong);
+  background: rgba(29, 27, 23, 0.04);
+  color: var(--ink);
+  outline: none;
+}
+
+.lite2-shell .lite-gap-ask {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+.lite2-shell .lite-gap-ask:hover,
+.lite2-shell .lite-gap-ask:focus-visible {
+  background: var(--ink);
+  color: var(--paper-strong);
+  outline: none;
+}
+
+.lite2-shell .lite-gap-addfollowup:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* 空态——沿用 Playbooks/Follow-ups 同款备忘录腔尾注语法（诚实、不喧哗）。 */
+.lite2-shell .lite-gap-empty {
+  padding: 20px 20px 18px;
+  border: 1px solid rgba(105, 128, 109, 0.3);
+  border-radius: var(--radius);
+  background: rgba(105, 128, 109, 0.06);
+}
+
+.lite2-shell .lite-gap-empty h2 {
+  margin: 0 0 6px;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 16.5px;
+  font-weight: 500;
+}
+
+.lite2-shell .lite-gap-empty p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* 历史折叠区——同 .home-drawer 家族语法（已解决/已忽略两种徽章区分状态）。 */
+.lite2-shell .lite-gap-history {
+  margin-top: 20px;
+}
+
+.lite2-shell .lite-gap-history-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--ink-faint);
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.lite2-shell .lite-gap-history-toggle:hover,
+.lite2-shell .lite-gap-history-toggle:focus-visible {
+  color: var(--ink);
+  outline: none;
+}
+
+.lite2-shell .lite-gap-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lite2-shell .lite-gap-history-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: rgba(255, 253, 248, 0.7);
+}
+
+.lite2-shell .lite-gap-history-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--ink-soft);
+  font-size: 12.5px;
+}
+
+.lite2-shell .lite-gap-history-badge {
+  flex: 0 0 auto;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.lite2-shell .lite-gap-history-badge.is-resolved {
+  background: rgba(105, 128, 109, 0.14);
+  color: rgba(74, 96, 78, 0.95);
+}
+
+.lite2-shell .lite-gap-history-badge.is-dismissed {
+  background: rgba(29, 27, 23, 0.06);
+  color: var(--ink-faint);
+}
+
+.lite2-shell .lite-gap-restore {
+  flex: 0 0 auto;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--ink-faint);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.lite2-shell .lite-gap-restore:hover,
+.lite2-shell .lite-gap-restore:focus-visible {
+  color: var(--ink);
+  text-decoration: underline;
+  outline: none;
+}
+
+@media (max-width: 720px) {
+  .lite2-shell .lite-closerlook-frame {
+    padding: 84px 20px 90px;
+  }
+
+  .lite2-shell .lite-gap-compare {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* ── feat-036 · 晨间分诊三动作的次级链接（Take to the room / Add to follow-ups /

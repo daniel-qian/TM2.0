@@ -257,13 +257,38 @@ export const en = {
     // Advice card — "add to follow-ups" on each recommended action (feat-036, source=room)
     adviceAddFollowup: 'Add to follow-ups',
 
-    // ── A closer look screen (feat-035 skeleton — honest empty state; feat-037 wires the real
-    // comparison-card derivation, resolve/dismiss, history, and the ask-them-directly link) ──
-    closerLookEyebrow: 'Coming soon',
-    closerLookTitle: "Where the file and the read don't quite line up",
-    closerLookBody:
-      "When a project's own status reads one way but its blockers tell a different story, a comparison card will show up here — what the file says next to what the signals say, with a way to resolve it or ask the person directly.",
-    closerLookComingSoon: 'Not built yet — this tab is a preview of the boundary, kept honest on purpose.',
+    // ── A closer look screen (feat-035 laid the skeleton as an honest empty placeholder;
+    // feat-044 replaces it with the real comparison-card derivation — PRD F4 / decisions.md
+    // 拍板#4. The old closerLookEyebrow/Title/Body/ComingSoon placeholder keys are retired
+    // outright, not reused — a fresh key set avoids any risk of a stale ZH translation surviving
+    // under an old key name with new meaning, per session-handoff's i18n discipline note.) ──
+    gapPageEyebrow: 'A closer look',
+    gapPageTitle: "Where the file and the read don't quite line up",
+    gapPageBody:
+      "When a project's own status reads steady but something in the files says otherwise, it shows up here — what the files say next to what the signals show, with a way to settle it, let it go, or ask the person directly.",
+
+    // Comparison card — left pane vs. right pane.
+    gapCardClaimLabel: 'What the files say',
+    gapCardEvidenceLabel: 'What the signals show',
+    gapOwnerPrefix: 'Owned by',
+
+    // Card actions (memo-voiced, not SaaS "Resolve"/"Dismiss" verbs).
+    gapResolveLabel: 'Settled',
+    gapDismissLabel: 'Let it go',
+    gapAskLabel: 'Ask them directly',
+    gapAddFollowupLabel: 'Add to follow-ups',
+
+    // History (resolved + dismissed, collapsed by default — same drawer language as the
+    // morning-triage "Taken care of today" pattern, feat-036).
+    gapHistoryToggleLabel: 'Looked into',
+    gapResolvedBadge: 'Settled',
+    gapDismissedBadge: 'Let go',
+    gapRestoreLabel: 'Bring it back',
+
+    // Honest empty state — nothing derived from the current corpus.
+    gapEmptyTitle: 'Nothing worth a closer look right now',
+    gapEmptyBody:
+      "When a project's own status and its blockers tell different stories, it'll show up here.",
 
     // ── Playbooks screen (feat-025 Q1: honest empty state, anchored to future capability) ──
     playbooksEyebrow: 'Coming soon',
