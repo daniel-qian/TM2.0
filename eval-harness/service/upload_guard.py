@@ -135,7 +135,7 @@ class IngestGuardMiddleware:
             log.warning("rate limit: %s from %s -> 429", route, _client_ip(scope))
             return await _send_json(send, 429, {
                 "error": "rate limited",
-                "detail": f"too many {route} requests from your address — slow down and retry"})
+                "detail": f"too many {route} requests from your address - slow down and retry"})
 
         if route != "ingest":
             return await self.app(scope, receive, send)
