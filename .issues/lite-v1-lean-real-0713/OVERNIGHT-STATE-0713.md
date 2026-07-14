@@ -6,7 +6,7 @@
 
 **feat-030 → 041 全部 clean，链尾 feat/041 端到端 + 基本压测 + 广播已落盘。** 三层证据：离线 474 passed（无 DB 无 key）· @needs_db 41 passed（真 PG，含 e2e 1 + 压测 3）· `./init.sh` 绿。广播落 `.issues/lite-v1-lean-real-0713/broadcast-to-ask-line.md`（供 Danny 转发 feat-034 Ask 卡线）。剩下的全是 Danny 醒来的第二波 HITL（凭据墙 + push + 真机试玩，见文末）。
 
-## 链条状态（本地 main = 2bda603，本线未 merge 未 push）
+## 链条状态（✅ 已并入 main：integrate `cb11a2c` + 报告 `integrate/041-into-main` 6bf6b0e；main tip 8452032=Ask 卡线阶段 C 骑其上；main 仅本地、领先 origin **64** 未 push；feat/041 为已归档链尾）
 
 | feat | 内容 | 状态 | tip commit |
 |---|---|---|---|
@@ -18,6 +18,13 @@
 | 039 | 上传硬门 + 限流 + LLM 花费闸 + **内存哨兵** | ✅ clean | 0bd1257 |
 | 040 | 部署预备(ECS 内存帽/哨兵 + Vercel)；真部署=Danny 凭据 | ✅ clean | 6d0f1e5 |
 | 041 | 端到端 + 基本压测 + **广播回 feat-034 线** | ✅ clean（收尾环） | feat/041-e2e-broadcast |
+
+## ✅ 07-14 真 key + 真 Supabase 复核（Danny 清了凭据路径后补做）
+
+- **真 key 质量闸 `@seedgate` 6/6 PASS**（真 uvicorn + MiniMax 抽取 + DashScope 召回，425s）：20 人花名册→≥15 人（含 Lin Qing/Design Director、Chen Mingyuan/Founder-CEO）、无表头假人、PDF→≥2 真项目非文件名、人卡红线守住、无 mojibake，**且 `/advise "谁管设计"` 引用证据真出现 Lin Qing 那行**——即 **07-07 一直 held-open 的召回 flaky 现真 key 下绿**。uvicorn 日志零 fallback/降级。LLM key 本就在 `eval-harness/.env`（DeepSeek/MiniMax/DashScope），无需新配。
+- **真 Supabase `avery` schema 只读复核**（项目 `nunsbijtntreynoyeilp`，只碰 avery、没写、没动 imaread public）：6 表全在（contexts/entities/materials/memory_files/source_documents/company_notes）、0 行未污染、迁移 0001–0006 已落。
+- **⚠ Supabase 顾问报 avery 6 表 RLS 关**。**核实=非当下真暴露**：anon/authenticated 对 avery schema 无 USAGE、对 avery.* 零 GRANT、authenticator 无 `pgrst.db_schemas` 覆盖（PostgREST 只暴露 public，avery 未暴露）→ 公开 anon key 够不到。Avery 隔离靠应用层 owner_token（feat-038），后端 service_role/直连串绕过 RLS。**防御纵深建议（Danny 定，DDL 动共享生产=不自动执行）**：`ALTER TABLE avery.<t> ENABLE ROW LEVEL SECURITY;`（6 表，不加 policy=对 anon/authenticated deny-all，service_role/owner 仍通，后端零影响）——共享项目里防"日后误开放 schema/误授 anon"。
+- **真缺的一个值**：`AVERY_DB_URL`（`postgresql://` 直连串，带 DB 密码）——imaread `.env.local` 只有 REST `SUPABASE_SERVICE_KEY`，**没有**直连串；那密码在 Supabase 后台 Settings→Database。本地验证不需要（本地 pg 同 schema 已绿）；**只在部署时往 ECS 容器 env 粘一行**。
 
 ## 🔴 最重要的一件事：红线政策转向（Danny 2026-07-13 拍板）
 
@@ -52,4 +59,8 @@
 
 - 真机试玩；抽查点：笔记 UX（`.issues/lite-v1-lean-real-0713/avery-notes-ux-draft.md`）、数据处理口径（`data-handling-copy-draft.md`）、Supabase schema。
 - 凭据墙：ECS host/真 key/DNS/Vercel 连接+VITE_AVERY_API_BASE/Supabase 连接串 → 真部署。
-- **push 授权**（对外闸）。是否要 Avery 独立 Supabase 项目（现共用 ImaRead 生产）。是否解禁 advise 答案 overtly 报分（要动冻结引擎）。
+- **push 授权**（对外闸）。是否解禁 advise 答案 overtly 报分（要动冻结引擎）。
+- ⚠ **07-14 晚 推翻/重议**：原"Avery 不要独立 Supabase 项目、共用 ImaRead `avery` schema"——现倾向**独立、就近的新项目**（新加坡区、Danny 另一账号建）。理由：现有共享项目在**美东 us-east-2**（国内 ECS 直连 ~200–300ms/来回，慢）；独立项目同解 延迟+隔离+RLS 告警+污染顾虑。落地：新库重跑迁移 0001–0006 + 只读核对；Danny 给新项目直连串（新建自设密码）或连 MCP。imaread 从不用直连密码（走 client library/REST），所以"共享项目重置密码"不建议。
+- ⚠ **07-14 晚 记下**：**第二台阿里云 ECS 正在路上**，解"唯一生产机 ~150M free"死结；拿到 infra 后第一时间分析+迁移腾空间（Avery 后端很可能落新机、物理隔离 ImaRead）。
+- 📌 连接串澄清：Avery 后端走**直连 Postgres + pgvector**（psycopg，feat-030/031），**不改用 client library/REST**（会重写整层召回+跨国 REST 更慢）。真缺值仍是 `AVERY_DB_URL` 直连串——但改用新项目后，Danny 建库时自设密码即得，无 imaread 纠缠。
+- ✅ 广播（Danny 07-14）：给 v02 UIUX 线（feat/036-v02-triage-followups）的集成广播已落 `broadcast-to-uiux-v02-line.md`（后端 HTTP 契约 + owner_token 隔离 + src/lite 集成点 + 红线开关对 UI 的影响 + 三方合流注意）。
