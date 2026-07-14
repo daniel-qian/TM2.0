@@ -260,7 +260,11 @@ def receipts_summary(ask: Ask) -> str | None:
 
 # ── building an Ask from a request body (shape door + red-line door -> 422) ─────────────────────
 
-def _build_ask(body: AskBody, *, ask_id: str, created_at: str, expires_at: str) -> Ask:
+def _build_ask(body: AskBody, *, ask_id: str, created_at: str, expires_at: str,
+               context_id: str | None = None) -> Ask:
+    # context binding is immutable after create: an edit MUST pass context_id=ask.context_id so a
+    # crafted body.company_context_id can't rebind the ask into another tenant (adversarial finding
+    # — owner lockout + cross-tenant injection). create passes None -> takes the (authorized) body.
     if body.questions:   # the manager wrote/kept questions -> verbatim, strictly validated below
         questions = [AskQuestion(id=(q.id or f"q{i + 1}"), kind=q.kind, text=(q.text or "").strip())
                      for i, q in enumerate(body.questions)]
@@ -271,7 +275,7 @@ def _build_ask(body: AskBody, *, ask_id: str, created_at: str, expires_at: str) 
     recipients = [AskRecipient(id=(r.id or f"r{i + 1}"), name=(r.name or "").strip())
                   for i, r in enumerate(body.recipients)]
     comment_prompt = (body.comment_prompt or "").strip() or DEFAULT_COMMENT_PROMPT
-    return Ask(id=ask_id, context_id=body.company_context_id, status="draft",
+    return Ask(id=ask_id, context_id=context_id or body.company_context_id, status="draft",
                questions=questions, recipients=recipients, comment_prompt=comment_prompt,
                thread_hint=(body.thread_hint or "").strip(), generation_mode=mode,
                created_at=created_at, expires_at=expires_at)
@@ -324,7 +328,8 @@ def save_ask(ask_id: str, body: AskBody,
         raise HTTPException(status_code=409, detail={
             "error": "not editable",
             "reason": f"ask is {effective_status(ask)} — questions are frozen after sharing"})
-    edited = _build_ask(body, ask_id=ask.id, created_at=ask.created_at, expires_at=ask.expires_at)
+    edited = _build_ask(body, ask_id=ask.id, created_at=ask.created_at, expires_at=ask.expires_at,
+                        context_id=ask.context_id)  # pin: context is immutable on edit (see _build_ask)
     _gate_or_422(edited)
     try:
         reg.put_ask(edited)
@@ -606,7 +611,10 @@ def _parse_answers(ask: Ask, form) -> tuple[list[dict] | None, str | None]:
     for q in ask.questions:
         raw = (form.get(f"q_{q.id}") or "").strip()
         if q.kind == "scale":
-            if not raw.isdigit() or not (SCALE_MIN <= int(raw) <= SCALE_MAX):
+            # isdecimal() (not isdigit()): isdigit() is True for superscripts/enclosed
+            # digits like ² ① that int() then rejects → guard against a crafted-POST 500
+            # (adversarial finding F-1). Real H5 radios only emit 1–5; this is defense-in-depth.
+            if not raw.isdecimal() or not (SCALE_MIN <= int(raw) <= SCALE_MAX):
                 return None, f"question {q.id} needs a value {SCALE_MIN}..{SCALE_MAX}"
             answers.append({"question_id": q.id, "value": int(raw)})
         else:

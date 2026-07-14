@@ -151,6 +151,42 @@ def test_save_edit_revalidates_and_share_freezes(client):
     assert r.status_code == 409
 
 
+def test_save_edit_cannot_rebind_context_to_another_tenant(client):
+    """Adversarial finding: save_ask authorized against the ask's ORIGINAL context, then rebuilt
+    with the body's company_context_id — an authorized owner could rebind their ask into another
+    tenant (owner lockout + cross-tenant injection). Context is immutable on edit: a crafted body
+    context is ignored, the ask stays bound to A, and A keeps reading it."""
+    cid_a, tok_a = _ingest(client)
+    cid_b, tok_b = _ingest(client)
+    assert cid_a != cid_b
+    ask = _create(client, cid_a, tok_a)
+    # A edits its own ask but smuggles B's context into the body
+    r = client.post(f"/ask/{ask['id']}", json=_draft_body(cid_b, questions=[
+        {"kind": "yesno", "text": "Is the vendor quote signed yet?"}]),
+        headers={"X-Avery-Token": tok_a})
+    assert r.status_code == 200
+    assert r.json()["company_context_id"] == cid_a  # NOT rebound to B
+    # A is not locked out of its own ask
+    assert client.get(f"/ask/{ask['id']}", headers={"X-Avery-Token": tok_a}).status_code == 200
+    # B's owner cannot read A's ask (no cross-tenant injection landed)
+    assert client.get(f"/ask/{ask['id']}", headers={"X-Avery-Token": tok_b}).status_code == 404
+
+
+def test_answer_rejects_non_decimal_digit_lookalikes(client):
+    """Adversarial finding F-1: superscript/enclosed unicode 'digits' (² ①) pass str.isdigit()
+    but int() rejects them -> crafted POST reached a 500. Now a clean 422, link stays unanswered."""
+    cid, tok = _ingest(client)
+    ask = _create(client, cid, tok, questions=[{"kind": "scale", "text": "How doable is it?"}])
+    share = _share(client, ask["id"], tok)
+    token = share["recipients"][0]["token"]
+    qid = ask["questions"][0]["id"]
+    for lookalike in ("²", "①"):  # ² , ①
+        r = client.post(f"/r/{token}/answer", data={f"q_{qid}": lookalike})
+        assert r.status_code == 422, f"{lookalike!r} -> {r.status_code} (expected 422, not 500)"
+    # a real answer still lands (the link was never locked by the failed attempts)
+    assert client.post(f"/r/{token}/answer", data={f"q_{qid}": "4"}).status_code == 200
+
+
 # ==============================================================================================
 # 2) 🔴 the two-tier question red line at the HTTP door
 # ==============================================================================================
