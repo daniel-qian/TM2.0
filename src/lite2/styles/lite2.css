@@ -12,7 +12,7 @@
   flex: none;
   border: 1px solid var(--rule-strong);
   border-radius: 10px;
-  background: linear-gradient(135deg, rgba(105, 128, 109, 0.16), rgba(82, 123, 145, 0.14));
+  background: linear-gradient(135deg, rgba(var(--lite2-accent-rgb), 0.16), rgba(var(--lite2-sky-rgb), 0.14));
   color: var(--ink-soft);
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -25,13 +25,13 @@
   padding: 16px;
   border: 1px solid var(--rule);
   border-radius: var(--radius);
-  background: rgba(255, 253, 248, 0.86);
+  background: rgba(var(--lite2-surface-rgb), 0.86);
   box-shadow: var(--shadow-soft);
 }
 
 .upload-panel-head h2 {
   margin: 0 0 4px;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--lite2-heading-font);
   font-size: 17px;
   font-weight: 500;
 }
@@ -50,7 +50,7 @@
   padding: 22px 16px;
   border: 1.5px dashed var(--rule-strong);
   border-radius: var(--radius);
-  background: rgba(247, 244, 238, 0.7);
+  background: rgba(var(--lite2-paper-rgb), 0.7);
   text-align: center;
   cursor: pointer;
   transition: border-color var(--fast) ease, background var(--fast) ease;
@@ -58,7 +58,7 @@
 
 .upload-dropzone.is-dragover {
   border-color: var(--sage);
-  background: rgba(105, 128, 109, 0.08);
+  background: rgba(var(--lite2-accent-rgb), 0.08);
 }
 
 .upload-dropzone.is-busy {
@@ -86,7 +86,7 @@
 .upload-choose:hover,
 .upload-choose:focus-visible {
   outline: none;
-  background: #2b2822;
+  background: var(--lite2-ink-hover);
 }
 
 .upload-accepted {
@@ -121,7 +121,7 @@
   padding: 2px 8px;
   border: 1px solid var(--rule);
   border-radius: 999px;
-  background: rgba(247, 244, 238, 0.9);
+  background: rgba(var(--lite2-paper-rgb), 0.9);
   font-size: 11px;
 }
 
@@ -210,7 +210,7 @@
   padding: 4px 12px;
   border: 1px solid var(--rule);
   border-radius: 999px;
-  background: rgba(255, 253, 248, 0.9);
+  background: rgba(var(--lite2-surface-rgb), 0.9);
   color: var(--ink-soft);
   font-size: 12px;
 }
@@ -241,7 +241,7 @@
   position: absolute;
   inset: 0;
   border: 0;
-  background: rgba(29, 27, 23, 0.32);
+  background: rgba(var(--lite2-ink-rgb), 0.32);
   backdrop-filter: blur(3px);
   cursor: default;
 }
@@ -289,7 +289,7 @@
 
 .lite-detail-head h2 {
   margin: 0;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--lite2-heading-font);
   font-size: 22px;
   font-weight: 500;
 }
@@ -396,7 +396,7 @@
   padding: 5px;
   border: 1px solid var(--rule);
   border-radius: 999px;
-  background: rgba(255, 253, 248, 0.78);
+  background: rgba(var(--lite2-surface-rgb), 0.78);
   box-shadow: var(--shadow-soft);
   backdrop-filter: blur(12px);
 }
@@ -417,7 +417,7 @@
 
 .lite2-shell .mode-switch-btn:hover,
 .lite2-shell .mode-switch-btn:focus-visible {
-  background: rgba(29, 27, 23, 0.06);
+  background: rgba(var(--lite2-ink-rgb), 0.06);
   color: var(--ink);
   outline: none;
 }
@@ -428,7 +428,7 @@
 }
 
 .lite2-shell .mode-switch-btn:focus-visible {
-  outline: 2px solid rgba(82, 123, 145, 0.75);
+  outline: 2px solid rgba(var(--lite2-sky-rgb), 0.75);
   outline-offset: 2px;
 }
 
@@ -505,7 +505,7 @@
   padding: 6px 8px;
   border: 1px solid transparent;
   border-radius: var(--radius);
-  background: rgba(29, 27, 23, 0.03);
+  background: rgba(var(--lite2-ink-rgb), 0.03);
   text-align: left;
   transition:
     background var(--fast) ease,
@@ -514,13 +514,13 @@
 
 .lite2-shell .home-people-group-head:hover,
 .lite2-shell .home-people-group-head:focus-visible {
-  background: rgba(29, 27, 23, 0.06);
+  background: rgba(var(--lite2-ink-rgb), 0.06);
   border-color: var(--rule);
   outline: none;
 }
 
 .lite2-shell .home-people-group-title {
-  font-family: Georgia, 'Times New Roman', serif;
+  font-family: var(--lite2-heading-font);
   font-size: 14px;
   font-weight: 500;
   color: var(--ink);
@@ -551,8 +551,8 @@
   border: 1px solid var(--rule);
   border-radius: var(--radius);
   background:
-    radial-gradient(circle at 1px 1px, rgba(29, 27, 23, 0.06) 1px, transparent 0) 0 0 / 22px 22px,
-    rgba(255, 253, 248, 0.55);
+    radial-gradient(circle at 1px 1px, rgba(var(--lite2-ink-rgb), 0.06) 1px, transparent 0) 0 0 / 22px 22px,
+    rgba(var(--lite2-surface-rgb), 0.55);
 }
 
 .lite2-shell .lite-panzoom-wrapper {
@@ -618,7 +618,7 @@
 .lite2-shell .lite-room-canvas-hint {
   padding: 4px 10px;
   border-radius: 999px;
-  background: rgba(255, 253, 248, 0.86);
+  background: rgba(var(--lite2-surface-rgb), 0.86);
   border: 1px solid var(--rule);
   color: var(--ink-faint);
   font-size: 11px;
@@ -629,7 +629,7 @@
   padding: 4px 12px;
   border-radius: 999px;
   border: 1px solid var(--rule);
-  background: rgba(255, 253, 248, 0.86);
+  background: rgba(var(--lite2-surface-rgb), 0.86);
   color: var(--ink-soft);
   font-size: 11px;
   font-weight: 700;
@@ -695,7 +695,7 @@
   padding: 14px 16px;
   border: 1px dashed var(--rule);
   border-radius: var(--radius);
-  background: rgba(29, 27, 23, 0.02);
+  background: rgba(var(--lite2-ink-rgb), 0.02);
 }
 
 .lite2-shell .lite-playbooks-slot-tag {
@@ -703,7 +703,7 @@
   margin-top: 1px;
   padding: 3px 9px;
   border-radius: 999px;
-  background: rgba(29, 27, 23, 0.06);
+  background: rgba(var(--lite2-ink-rgb), 0.06);
   color: var(--ink-faint);
   font-size: 10.5px;
   font-weight: 700;
@@ -748,7 +748,7 @@
 /* ── ① 定位叙事 ─────────────────────────────────────────────────────────── */
 .lite2-shell .lite-vision-head h2 {
   margin: 6px 0 10px;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--lite2-heading-font);
   font-size: clamp(22px, 2.8vw, 30px);
   font-weight: 500;
   line-height: 1.24;
@@ -786,14 +786,14 @@
   padding: 18px 20px;
   border: 1px solid var(--rule);
   border-radius: var(--radius);
-  background: rgba(255, 253, 248, 0.7);
+  background: rgba(var(--lite2-surface-rgb), 0.7);
   box-shadow: var(--shadow-soft);
 }
 
 /* 第二拍（真正的产品）微微加重——叙事重心 */
 .lite2-shell .lite-vision-beat-real {
   border-color: var(--rule-strong);
-  background: rgba(105, 128, 109, 0.06);
+  background: rgba(var(--lite2-accent-rgb), 0.06);
 }
 
 .lite2-shell .lite-vision-beat-step {
@@ -848,7 +848,7 @@
 
 .lite2-shell .lite-vision-mocks-head h2 {
   margin: 6px 0 10px;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--lite2-heading-font);
   font-size: clamp(19px, 2.3vw, 24px);
   font-weight: 500;
   line-height: 1.26;
@@ -869,7 +869,7 @@
   /* dashed 边框 = 视觉上就读作「未落地的预览」，与实心的实用卡区分 */
   border: 1px dashed var(--rule-strong);
   border-radius: var(--radius);
-  background: rgba(29, 27, 23, 0.02);
+  background: rgba(var(--lite2-ink-rgb), 0.02);
 }
 
 .lite2-shell .lite-vision-mock-top {
@@ -893,7 +893,7 @@
   padding: 3px 10px;
   border-radius: 999px;
   border: 1px solid var(--honey);
-  background: rgba(178, 123, 43, 0.12);
+  background: rgba(var(--lite2-warn-rgb), 0.12);
   color: var(--honey);
   font-size: 10.5px;
   font-weight: 700;
@@ -918,7 +918,7 @@
   padding: 10px 12px;
   border: 1px solid var(--rule);
   border-radius: var(--radius);
-  background: rgba(255, 253, 248, 0.72);
+  background: rgba(var(--lite2-surface-rgb), 0.72);
 }
 
 .lite2-shell .lite-vision-person-name {
@@ -971,7 +971,7 @@
 
 .lite-ask-header h2 {
   margin: 2px 0 0;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--lite2-heading-font);
   font-size: 20px;
   color: var(--ink);
 }
@@ -981,7 +981,7 @@
   padding: 4px 10px;
   border-radius: 999px;
   border: 1px solid var(--rule-strong);
-  background: rgba(105, 128, 109, 0.12);
+  background: rgba(var(--lite2-accent-rgb), 0.12);
   color: var(--ink-soft);
   font-size: 12px;
   font-weight: 700;
@@ -1000,7 +1000,7 @@
   margin: 0;
   padding: 8px 12px;
   border-left: 3px solid var(--honey);
-  background: rgba(178, 123, 43, 0.08);
+  background: rgba(var(--lite2-warn-rgb), 0.08);
   color: var(--ink-soft);
   font-size: 12px;
   line-height: 1.5;
@@ -1029,10 +1029,10 @@
   letter-spacing: 0.04em;
   border: 1px solid var(--rule-strong);
   color: var(--ink-soft);
-  background: rgba(82, 123, 145, 0.1);
+  background: rgba(var(--lite2-sky-rgb), 0.1);
 }
 .lite-ask-card .ask-q-kind.is-yesno {
-  background: rgba(108, 99, 181, 0.1);
+  background: rgba(var(--lite2-violet-rgb), 0.1);
 }
 
 .lite-ask-card .ask-q-input {
@@ -1046,7 +1046,7 @@
   line-height: 1.4;
 }
 .lite-ask-card .ask-q-input:focus {
-  outline: 2px solid rgba(105, 128, 109, 0.45);
+  outline: 2px solid rgba(var(--lite2-accent-rgb), 0.45);
   outline-offset: 1px;
 }
 
@@ -1133,7 +1133,7 @@
   cursor: pointer;
 }
 .lite-ask-card .ask-recipient-chip.is-selected {
-  background: rgba(105, 128, 109, 0.16);
+  background: rgba(var(--lite2-accent-rgb), 0.16);
   border-color: var(--sage);
   color: var(--ink);
   font-weight: 700;
@@ -1220,7 +1220,7 @@
 
 .lite-ask-card .ask-receipt-who {
   margin: 0;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--lite2-heading-font);
   font-size: 15px;
   color: var(--ink);
 }
@@ -1261,7 +1261,7 @@
 
 .lite-ask-card .ask-receipt-value {
   flex: 0 0 auto;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--lite2-heading-font);
   font-size: 15px;
   color: var(--ink);
 }
@@ -1270,7 +1270,7 @@
   margin: 4px 0 0;
   padding: 8px 12px;
   border-left: 3px solid var(--sage);
-  background: rgba(105, 128, 109, 0.07);
+  background: rgba(var(--lite2-accent-rgb), 0.07);
   color: var(--ink);
   font-size: 13px;
   font-style: italic;
@@ -1319,7 +1319,7 @@
 
 .lite2-shell .lite-closerlook-header h1 {
   margin: 4px 0 8px;
-  font-family: Georgia, 'Times New Roman', serif;
+  font-family: var(--lite2-heading-font);
   font-size: clamp(21px, 2.4vw, 27px);
   font-weight: 500;
   line-height: 1.32;
@@ -1360,17 +1360,17 @@
   min-width: 0;
   padding: 10px 12px;
   border-radius: 8px;
-  background: rgba(29, 27, 23, 0.03);
+  background: rgba(var(--lite2-ink-rgb), 0.03);
 }
 
 /* 左"文件里的说法"= sage 语气（读稳）；右"实际信号"= terracotta 语气（矛盾处）——
    同一张卡上左右两栏用语气温度区分，不用红绿这类评判色。 */
 .lite2-shell .lite-gap-pane-claim {
-  border-left: 3px solid rgba(105, 128, 109, 0.6);
+  border-left: 3px solid rgba(var(--lite2-accent-rgb), 0.6);
 }
 
 .lite2-shell .lite-gap-pane-evidence {
-  border-left: 3px solid rgba(188, 92, 73, 0.62);
+  border-left: 3px solid rgba(var(--lite2-danger-rgb), 0.62);
 }
 
 .lite2-shell .lite-gap-pane-label {
@@ -1447,8 +1447,8 @@
 
 .lite2-shell .lite-gap-resolve:hover,
 .lite2-shell .lite-gap-resolve:focus-visible {
-  border-color: rgba(105, 128, 109, 0.85);
-  background: rgba(105, 128, 109, 0.08);
+  border-color: rgba(var(--lite2-accent-rgb), 0.85);
+  background: rgba(var(--lite2-accent-rgb), 0.08);
   color: var(--ink);
   outline: none;
 }
@@ -1456,7 +1456,7 @@
 .lite2-shell .lite-gap-dismiss:hover,
 .lite2-shell .lite-gap-dismiss:focus-visible {
   border-color: var(--rule-strong);
-  background: rgba(29, 27, 23, 0.04);
+  background: rgba(var(--lite2-ink-rgb), 0.04);
   color: var(--ink);
   outline: none;
 }
@@ -1481,14 +1481,14 @@
 /* 空态——沿用 Playbooks/Follow-ups 同款备忘录腔尾注语法（诚实、不喧哗）。 */
 .lite2-shell .lite-gap-empty {
   padding: 20px 20px 18px;
-  border: 1px solid rgba(105, 128, 109, 0.3);
+  border: 1px solid rgba(var(--lite2-accent-rgb), 0.3);
   border-radius: var(--radius);
-  background: rgba(105, 128, 109, 0.06);
+  background: rgba(var(--lite2-accent-rgb), 0.06);
 }
 
 .lite2-shell .lite-gap-empty h2 {
   margin: 0 0 6px;
-  font-family: Georgia, 'Times New Roman', serif;
+  font-family: var(--lite2-heading-font);
   font-size: 16.5px;
   font-weight: 500;
 }
@@ -1541,7 +1541,7 @@
   padding: 8px 12px;
   border: 1px solid var(--rule);
   border-radius: 8px;
-  background: rgba(255, 253, 248, 0.7);
+  background: rgba(var(--lite2-surface-rgb), 0.7);
 }
 
 .lite2-shell .lite-gap-history-title {
@@ -1562,12 +1562,12 @@
 }
 
 .lite2-shell .lite-gap-history-badge.is-resolved {
-  background: rgba(105, 128, 109, 0.14);
-  color: rgba(74, 96, 78, 0.95);
+  background: rgba(var(--lite2-accent-rgb), 0.14);
+  color: rgba(var(--lite2-accent-deep-rgb), 0.95);
 }
 
 .lite2-shell .lite-gap-history-badge.is-dismissed {
-  background: rgba(29, 27, 23, 0.06);
+  background: rgba(var(--lite2-ink-rgb), 0.06);
   color: var(--ink-faint);
 }
 
@@ -1619,14 +1619,14 @@
 }
 
 .lite2-shell .lite-triage-room {
-  border-color: rgba(108, 99, 181, 0.3);
-  color: #4a4197;
+  border-color: rgba(var(--lite2-violet-rgb), 0.3);
+  color: var(--lite2-violet-deep);
 }
 
 .lite2-shell .lite-triage-room:hover,
 .lite2-shell .lite-triage-room:focus-visible {
-  border-color: rgba(108, 99, 181, 0.6);
-  background: rgba(108, 99, 181, 0.1);
+  border-color: rgba(var(--lite2-violet-rgb), 0.6);
+  background: rgba(var(--lite2-violet-rgb), 0.1);
   outline: none;
 }
 
@@ -1638,7 +1638,7 @@
 }
 
 .lite2-shell .lite-triage-addfollowup:disabled {
-  color: rgba(105, 128, 109, 0.85);
+  color: rgba(var(--lite2-accent-rgb), 0.85);
   cursor: default;
 }
 
@@ -1651,14 +1651,14 @@
 
 .lite2-shell .lite-triage-checkmark {
   display: block;
-  color: rgba(74, 96, 78, 0.55);
+  color: rgba(var(--lite2-accent-deep-rgb), 0.55);
   font-size: 15px;
   line-height: 1;
 }
 
 .lite2-shell .home-check:hover .lite-triage-checkmark,
 .lite2-shell .home-check:focus-visible .lite-triage-checkmark {
-  color: rgba(74, 96, 78, 0.95);
+  color: rgba(var(--lite2-accent-deep-rgb), 0.95);
 }
 
 /* ── feat-036 · advice 卡「加入跟进」（Recommended actions 每条一个次级按钮）── */
@@ -1693,7 +1693,7 @@
 }
 
 .lite2-shell .lite-advice-add-followup:disabled {
-  color: rgba(105, 128, 109, 0.85);
+  color: rgba(var(--lite2-accent-rgb), 0.85);
   cursor: default;
 }
 
@@ -1719,7 +1719,7 @@
 
 .lite2-shell .lite-followups-header h1 {
   margin: 4px 0 0;
-  font-family: Georgia, 'Times New Roman', serif;
+  font-family: var(--lite2-heading-font);
   font-size: clamp(21px, 2.4vw, 27px);
   font-weight: 500;
   line-height: 1.32;
@@ -1775,7 +1775,7 @@
   padding: 0 10px;
   border: 1px solid var(--rule);
   border-radius: 8px;
-  background: rgba(255, 253, 248, 0.9);
+  background: rgba(var(--lite2-surface-rgb), 0.9);
   font-size: 12.5px;
 }
 
@@ -1785,7 +1785,7 @@
   padding: 0 8px;
   border: 1px solid var(--rule);
   border-radius: 8px;
-  background: rgba(255, 253, 248, 0.9);
+  background: rgba(var(--lite2-surface-rgb), 0.9);
   font-size: 12.5px;
 }
 
@@ -1838,7 +1838,7 @@
   padding: 11px 14px;
   border: 1px solid var(--rule);
   border-radius: var(--radius);
-  background: rgba(255, 253, 248, 0.82);
+  background: rgba(var(--lite2-surface-rgb), 0.82);
 }
 
 .lite2-shell .lite-followup-main {
@@ -1856,13 +1856,13 @@
   padding: 0;
   border: 1.5px solid var(--rule-strong);
   border-radius: 999px;
-  background: rgba(255, 253, 248, 0.9);
+  background: rgba(var(--lite2-surface-rgb), 0.9);
 }
 
 .lite2-shell .lite-followup-check:hover,
 .lite2-shell .lite-followup-check:focus-visible {
-  border-color: rgba(105, 128, 109, 0.85);
-  background: rgba(105, 128, 109, 0.08);
+  border-color: rgba(var(--lite2-accent-rgb), 0.85);
+  background: rgba(var(--lite2-accent-rgb), 0.08);
   outline: none;
 }
 
@@ -1870,7 +1870,7 @@
   flex: 0 0 auto;
   width: 22px;
   text-align: center;
-  color: rgba(74, 96, 78, 0.85);
+  color: rgba(var(--lite2-accent-deep-rgb), 0.85);
   font-size: 14px;
 }
 
@@ -1889,7 +1889,7 @@
 .lite2-shell .lite-followups-history-list .lite-followup-title {
   color: var(--ink-faint);
   text-decoration: line-through;
-  text-decoration-color: rgba(105, 128, 109, 0.55);
+  text-decoration-color: rgba(var(--lite2-accent-rgb), 0.55);
 }
 
 .lite2-shell .lite-followup-note {
@@ -1954,8 +1954,8 @@
 
 .lite2-shell .lite-followup-delete:hover,
 .lite2-shell .lite-followup-delete:focus-visible {
-  border-color: rgba(188, 92, 73, 0.4);
-  color: rgba(160, 74, 58, 0.9);
+  border-color: rgba(var(--lite2-danger-rgb), 0.4);
+  color: rgba(var(--lite2-danger-deep-rgb), 0.9);
   outline: none;
 }
 
@@ -1974,7 +1974,7 @@
   padding: 0 8px;
   border: 1px solid var(--rule);
   border-radius: 8px;
-  background: rgba(255, 253, 248, 0.9);
+  background: rgba(var(--lite2-surface-rgb), 0.9);
   font-size: 12.5px;
 }
 
@@ -2020,7 +2020,7 @@
   bottom: 0;
   padding: 7px 20px;
   border-top: 1px solid var(--rule);
-  background: var(--lite2-glass, rgba(255, 253, 248, 0.86));
+  background: var(--lite2-glass);
   backdrop-filter: blur(10px);
   text-align: center;
   pointer-events: none;
@@ -2057,7 +2057,7 @@
   flex-direction: column;
   border: 1px solid var(--rule-strong);
   border-radius: 16px;
-  background: var(--lite2-surface, rgba(255, 253, 248, 0.96));
+  background: var(--lite2-surface);
   box-shadow: var(--shadow);
   overflow: hidden;
 }
@@ -2214,7 +2214,7 @@
   padding: 9px 12px;
   border: 1px solid var(--rule);
   border-radius: 10px;
-  background: var(--paper-strong, #fffdf8);
+  background: var(--paper-strong);
   color: var(--ink);
   font: inherit;
   font-size: 13.5px;
@@ -2253,7 +2253,7 @@
 .lite2-shell .lite-onboard-playbook.is-on {
   border-color: var(--sage);
   box-shadow: inset 3px 0 0 var(--sage);
-  background: var(--lite2-glass, rgba(255, 253, 248, 0.82));
+  background: var(--lite2-glass);
 }
 
 .lite2-shell .lite-onboard-playbook-title {
@@ -2294,7 +2294,7 @@
   border-radius: 10px;
   font-size: 13px;
   color: var(--ink);
-  background: var(--lite2-glass, rgba(255, 253, 248, 0.82));
+  background: var(--lite2-glass);
 }
 
 .lite2-shell .lite-onboard-summary-none {
@@ -2359,7 +2359,7 @@
   border: 1px solid var(--sage);
   border-radius: 10px;
   background: var(--sage);
-  color: var(--paper-strong, #fffdf8);
+  color: var(--paper-strong);
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
@@ -2395,7 +2395,7 @@
   padding: 8px 14px;
   border: 1px solid var(--rule);
   border-radius: 999px;
-  background: var(--lite2-glass, rgba(255, 253, 248, 0.82));
+  background: var(--lite2-glass);
   color: var(--ink-soft);
   font-size: 12.5px;
   line-height: 1.35;
@@ -2425,7 +2425,7 @@
   height: 32px;
   border: 1px solid var(--rule);
   border-radius: 50%;
-  background: var(--lite2-glass, rgba(255, 253, 248, 0.82));
+  background: var(--lite2-glass);
   color: var(--ink-soft);
   cursor: pointer;
 }
@@ -2461,7 +2461,7 @@
   width: min(340px, 86vw);
   border: 1px solid var(--rule-strong);
   border-radius: 14px;
-  background: var(--lite2-surface, rgba(255, 253, 248, 0.96));
+  background: var(--lite2-surface);
   box-shadow: var(--shadow);
   overflow: hidden;
 }
@@ -2535,7 +2535,7 @@
 
 .lite2-shell .lite-notif-item:hover,
 .lite2-shell .lite-notif-item:focus-visible {
-  background: var(--lite2-glass, rgba(255, 253, 248, 0.82));
+  background: var(--lite2-glass);
   outline: none;
 }
 
@@ -2579,4 +2579,202 @@
   .lite2-shell .lite-onboard-playbook-grid {
     grid-template-columns: 1fr;
   }
+}
+
+/* ══ feat-046 · shared chunk 硬编码面的令牌镜像覆盖（aurora 精修棒）═══════════════════
+   shared/styles/*（00-base/20-report-card/40-nexus-empty/55-ask-composer/70-home-cards）
+   属冻结资产（v01/story 同用，ADR-0022 一行不改），其中一批表面硬编码了暖纸半透明白
+   rgba(255,253,248,X) / 墨 tint rgba(29,27,23,X) / serif 标题——皮肤令牌层盖不到。
+   本节在 .lite2-shell 作用域内按原 alpha 逐条重申同一批声明、只把色值换成令牌：
+   paper 令牌三元组与原字面量逐位相同（计算值零漂移，E 组 paperUnchanged 断言盯着），
+   aurora 自动吃到白玻璃/深藏青/sans 标题。lite2.css 在 main.tsx import 串最后，
+   等 specificity 下靠 cascade 顺序胜出。 */
+
+/* ── 卡片/控件表面（原值注释在行尾，供日后对账）─────────────────────────────── */
+.lite2-shell .home-person-card,
+.lite2-shell .home-project-card {
+  background: rgba(var(--lite2-surface-rgb), 0.82); /* 70-home-cards: rgba(255,253,248,.82) */
+}
+
+.lite2-shell .home-check,
+.lite2-shell .lite-followup-check {
+  background: rgba(var(--lite2-surface-rgb), 0.9); /* 70-home-cards: rgba(255,253,248,.9) */
+}
+
+.lite2-shell .home-check:hover,
+.lite2-shell .home-check:focus-visible {
+  border-color: rgba(var(--lite2-accent-rgb), 0.85); /* rgba(105,128,109,.85) */
+  background: rgba(var(--lite2-accent-rgb), 0.08); /* rgba(105,128,109,.08) */
+}
+
+.lite2-shell .home-drawer-toggle {
+  background: rgba(var(--lite2-surface-rgb), 0.74); /* rgba(255,253,248,.74) */
+}
+
+.lite2-shell .home-drawer-item {
+  text-decoration-color: rgba(var(--lite2-accent-rgb), 0.55); /* rgba(105,128,109,.55) */
+}
+
+.lite2-shell .home-closing {
+  border-color: rgba(var(--lite2-accent-rgb), 0.3); /* rgba(105,128,109,.3) */
+  background: rgba(var(--lite2-accent-rgb), 0.07); /* rgba(105,128,109,.07) */
+}
+
+.lite2-shell .home-evidence-tag {
+  border-color: rgba(var(--lite2-accent-rgb), 0.35); /* rgba(105,128,109,.35) */
+  background: rgba(var(--lite2-accent-rgb), 0.08);
+  color: var(--ink-soft);
+}
+
+.lite2-shell .home-handoff.is-inking {
+  border-color: rgba(var(--lite2-accent-rgb), 0.55);
+}
+
+.lite2-shell .ink-check path {
+  stroke: rgba(var(--lite2-accent-deep-rgb), 0.95); /* rgba(74,96,78,.95) */
+}
+
+.lite2-shell .home-discard:hover,
+.lite2-shell .home-discard:focus-visible {
+  background: rgba(var(--lite2-ink-rgb), 0.04); /* rgba(29,27,23,.04) */
+}
+
+.lite2-shell .home-tone-terracotta .home-person-read {
+  color: rgba(var(--lite2-danger-deep-rgb), 0.88); /* rgba(160,74,58,.88) */
+}
+
+.lite2-shell .home-tone-honey .home-person-read {
+  color: rgba(var(--lite2-warn-deep-rgb), 0.88); /* rgba(146,100,33,.88) */
+}
+
+.lite2-shell .home-tone-terracotta .home-handoff-tone {
+  color: rgba(var(--lite2-danger-deep-rgb), 0.9); /* rgba(160,74,58,.9) */
+}
+
+.lite2-shell .home-tone-honey .home-handoff-tone {
+  color: rgba(var(--lite2-warn-deep-rgb), 0.9); /* rgba(146,100,33,.9) */
+}
+
+/* 语气温度左边条（paper 语法；aurora 下②分支把 ::before 整个隐去换徽章，不冲突） */
+.lite2-shell .home-tone-sage.home-handoff::before {
+  background: rgba(var(--lite2-accent-rgb), 0.75); /* rgba(105,128,109,.75) */
+}
+
+.lite2-shell .home-tone-honey.home-handoff::before {
+  background: rgba(var(--lite2-warn-rgb), 0.7); /* rgba(178,123,43,.7) */
+}
+
+.lite2-shell .home-tone-terracotta.home-handoff::before {
+  background: rgba(var(--lite2-danger-rgb), 0.78); /* rgba(188,92,73,.78) */
+}
+
+/* 项目卡状态左缘（「项目状态可以硬」——left edge 语法两皮都保留，只换族色） */
+.lite2-shell .home-project-card.edge-at-risk {
+  border-left-color: rgba(var(--lite2-warn-rgb), 0.6); /* rgba(178,123,43,.6) */
+}
+
+.lite2-shell .home-project-card.edge-blocked {
+  border-left-color: rgba(var(--lite2-danger-rgb), 0.65); /* rgba(188,92,73,.65) */
+}
+
+/* ── composer / room chrome ──────────────────────────────────────────────────── */
+.lite2-shell .nexus-followup-composer {
+  background: rgba(var(--lite2-surface-rgb), 0.92); /* 55-ask-composer: rgba(255,253,248,.92) */
+}
+
+.lite2-shell .nexus-empty-composer input {
+  background: rgba(var(--lite2-surface-rgb), 0.95); /* 40-nexus-empty: rgba(255,253,248,.95) */
+}
+
+.lite2-shell .composer-reference-chip {
+  background: rgba(var(--lite2-surface-rgb), 0.7); /* 00-base: rgba(255,253,248,.7) */
+}
+
+.lite2-shell .composer-reference-picker {
+  background: rgba(var(--lite2-surface-rgb), 0.96); /* rgba(255,253,248,.96) */
+}
+
+.lite2-shell .suggestion-row button {
+  background: rgba(var(--lite2-surface-rgb), 0.7); /* rgba(255,253,248,.7) */
+}
+
+.lite2-shell .metric-row span {
+  background: rgba(var(--lite2-surface-rgb), 0.66); /* rgba(255,253,248,.66) */
+}
+
+.lite2-shell .scene-tab:hover,
+.lite2-shell .scene-tab:focus-visible {
+  background: rgba(var(--lite2-ink-rgb), 0.06); /* rgba(29,27,23,.06) */
+}
+
+.lite2-shell .nexus-brief-bar,
+.lite2-shell .nexus-brief-card {
+  background: rgba(var(--lite2-surface-rgb), 0.96); /* 00-base: rgba(255,253,248,.96) */
+}
+
+.lite2-shell .nexus-brief-bar {
+  border-color: rgba(var(--lite2-accent-rgb), 0.42); /* rgba(105,128,109,.42) */
+}
+
+.lite2-shell .nexus-brief-bar:hover,
+.lite2-shell .nexus-brief-bar:focus-visible,
+.lite2-shell .nexus-brief-hud.is-open .nexus-brief-bar {
+  border-color: rgba(var(--lite2-accent-rgb), 0.7); /* rgba(105,128,109,.7) */
+}
+
+.lite2-shell .nexus-inspector {
+  background: rgba(var(--lite2-surface-rgb), 0.9); /* 00-base: rgba(255,253,248,.9) */
+}
+
+/* ── 结果卡（The room 的 8 字段卡 + 快照内卡）──────────────────────────────── */
+.lite2-shell .structured-output-card {
+  background: rgba(var(--lite2-surface-rgb), 0.94); /* 20-report-card: rgba(255,253,248,.94) */
+}
+
+.lite2-shell .mismatch-card {
+  background: rgba(var(--lite2-surface-rgb), 0.9); /* rgba(255,253,248,.9) */
+}
+
+/* ── serif 标题 → 标题字体令牌（shared chunk 里 lite2 可达的全部 Georgia 声明；
+   paper 令牌值 = 同一串 Georgia（计算值零漂移），aurora = sans。lite2.css 自己的
+   Georgia 声明已在各原位直接改消费令牌，此处只补 shared 的。 */
+.lite2-shell .home-greeting h1,
+.lite2-shell .home-spine-head h2,
+.lite2-shell .home-handoff-body h3,
+.lite2-shell .home-closing h3,
+.lite2-shell .structured-output-header h2,
+.lite2-shell .report-conclusion strong,
+.lite2-shell .report-script-line,
+.lite2-shell .mismatch-card h2,
+.lite2-shell .nexus-empty h2,
+.lite2-shell .nexus-brief-card-question {
+  font-family: var(--lite2-heading-font);
+}
+
+/* ── 遗留修复③（部分收敛）：三套折叠语法中，「A closer look 历史」与「今天已照料」抽屉
+   同为"收纳已处理条目的抽屉"语义，视觉却一套裸文字 toggle 一套药丸 toggle——把 gap-history
+   toggle 对齐 .home-drawer-toggle 的药丸语法（纯 CSS、类名与 DOM 零改动，B/C 组门选择器
+   合同不破）。Follow-ups 的 History 是 subtab（导航语义，非抽屉），不强行归并——完整的
+   "统一为一套 class" 需改三个屏的 DOM + 重写 B/C 门断言合同，判定失控，记遗留（见
+   progress.md Notes）。 */
+.lite2-shell .lite-gap-history-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: rgba(var(--lite2-surface-rgb), 0.74); /* = .home-drawer-toggle 同款 */
+  color: var(--ink-soft);
+  font-size: 12px;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.lite2-shell .lite-gap-history-toggle:hover,
+.lite2-shell .lite-gap-history-toggle:focus-visible {
+  border-color: var(--rule-strong);
+  color: var(--ink);
+  outline: none;
 }

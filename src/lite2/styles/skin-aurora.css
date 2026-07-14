@@ -1,43 +1,227 @@
 /* feat-035（lite-live-v02 kickoff §架构拍板 4）· aurora 皮肤令牌层 — `?skin=aurora`。
-   色表来自合伙人参考库对照（decisions.md §终盘 / kickoff-dev.md §4）：
-   bg #edf6ff · surface #ffffff · ink #10223d · blue #496ee8 · purple #6b5bd6 ·
-   玻璃 rgba(255,255,255,.82)+blur · 极光渐变底 135deg #eee9ff→#e4faff→#f5fbff + violet/cyan
-   radial 光晕。这是粗调初版——shared 设计系统里消费这批 CSS 自定义属性的组件（文字色/边框/
-   多数阴影）随令牌自动换皮，约覆盖八成；令牌覆盖不到的语法差异（暖纸半透明白背景硬编码在
-   shared chunk 里、徽章 vs 左边条这类结构性差异）留给 feat-039 逐屏精修 + 少量
-   `[data-skin="aurora"]` 组件级分支，本波不引入。 */
+   feat-046（阶段 C 精修棒）在此基础上把粗调初版的色表/渐变/阴影/密度/圆角对齐合伙人参考库
+   `D:\avery-command-room (2)\avery-command-room` 的 src/app/globals.css 精确值（只抄 CSS 数值，
+   零 TSX/JSX 进仓）：bg #edf6ff · surface #ffffff/soft #eef3fa · ink #10223d/ink-2 #263850 ·
+   muted #667085 · blue #496ee8 · purple #6b5bd6 · green #2f9f6b · orange #d88a2d · red #d95757 ·
+   gold #caa35d（各带 soft 底色对）· 玻璃 rgba(255,255,255,.82)+blur(20px)+saturate(1.1) ·
+   极光渐变底（violet/cyan radial + 135deg #eee9ff→#e4faff→#f5fbff，fixed）· violet 阴影
+   （0 1px 2px rgba(16,34,61,.08),0 12px 30px rgba(36,32,95,.10)；hover
+   0 20px 64px rgba(36,32,95,.16)）· radii 9/10/12/16/999 · 密度（15px 基准，
+   11.5-13px 徽章/按钮，tabular-nums）。
+
+   架构纪律（kickoff §架构拍板 4）：组件样式只消费令牌——shared 设计系统里消费这批 CSS 自定义
+   属性的组件（文字色/边框/多数阴影）随令牌自动换皮，约覆盖八成；令牌覆盖不到的语法差异（玻璃
+   chrome 硬编码在 shared/lite2.css 老代里、徽章 vs 左边条这类结构性差异）用本文件底部的少量
+   `[data-skin="aurora"]` 组件级分支处理，逐条注释、控制在少数（见各分支上方注释）。红线不随
+   皮肤松动：人卡在 aurora 下同样零数字零血条（本文件不触碰任何人身数据渲染逻辑，纯视觉令牌）。 */
 .lite2-shell[data-skin='aurora'] {
   --paper: #edf6ff;
   --paper-strong: #ffffff;
   --ink: #10223d;
-  --ink-soft: #3c5170;
-  --ink-faint: #7688a3;
+  --ink-soft: #263850;
+  --ink-faint: #667085;
   --rule: rgba(16, 34, 61, 0.12);
   --rule-strong: rgba(16, 34, 61, 0.24);
+  /* 语气温度令牌复用既有变量名（--sage/--honey/--terracotta/--iris/--sky）承载 aurora 配色，
+     组件代码零改动即可自动换皮：sage(安稳/主色)→blue、honey(警示)→orange、
+     terracotta(阻塞/危险)→red、iris(次强调)→purple、sky→与 sage 同色（原粗调版本 honey/
+     terracotta 误留了 paper 的旧值未换皮，本棒一并修正）。 */
   --sage: #496ee8;
   --iris: #6b5bd6;
-  --honey: #b27b2b;
-  --terracotta: #bc5c49;
+  --honey: #d88a2d;
+  --terracotta: #d95757;
   --sky: #496ee8;
-  --shadow: 0 24px 70px rgba(16, 34, 61, 0.16);
-  --shadow-soft: 0 12px 40px rgba(16, 34, 61, 0.1);
+  --shadow: 0 20px 64px rgba(36, 32, 95, 0.16);
+  --shadow-soft: 0 1px 2px rgba(16, 34, 61, 0.08), 0 12px 30px rgba(36, 32, 95, 0.1);
+  /* 局部覆盖共享 --radius（shared/styles/00-base.css :root 里定义的 8px 基准）——作用域锁在
+     .lite2-shell[data-skin='aurora'] 子树内，v01/story 够不到（它们的壳没有这个属性选择器)，
+     paper 侧不声明、继续吃 :root 的 8px，两皮圆角差异由这一条 token 覆盖统一带动几十个消费
+     var(--radius) 的元素（dropzone/卡片/输入框等），无需逐元素改。 */
+  --radius: 10px;
+  /* 密度基准：aurora 参考库全局 body font-size:15px（比浏览器默认 16px 更紧凑）——paper 侧
+     显式声明维持 16px（见 skin-paper.css），两值都不依赖浏览器默认，可稳定断言。 */
+  font-size: 15px;
 
   --lite2-surface: rgba(255, 255, 255, 0.86);
   --lite2-glass: rgba(255, 255, 255, 0.82);
+  --lite2-glass-blur: blur(20px) saturate(1.1);
   --lite2-bg-gradient:
-    radial-gradient(circle at 18% 12%, rgba(107, 91, 214, 0.16), transparent 42%),
-    radial-gradient(circle at 82% 78%, rgba(73, 110, 232, 0.14), transparent 46%),
-    linear-gradient(135deg, #eee9ff 0%, #e4faff 52%, #f5fbff 100%);
+    radial-gradient(circle at 8% -2%, rgba(168, 139, 255, 0.34) 0, rgba(168, 139, 255, 0) 36%),
+    radial-gradient(circle at 88% 0%, rgba(51, 199, 232, 0.38) 0, rgba(51, 199, 232, 0) 40%),
+    radial-gradient(circle at 42% 62%, rgba(124, 92, 255, 0.1) 0, rgba(124, 92, 255, 0) 48%),
+    linear-gradient(135deg, #eee9ff 0%, #e4faff 48%, #f5fbff 100%);
 
   background: var(--lite2-bg-gradient);
+  background-attachment: fixed;
+
+  /* feat-046 · lite2.css 老代（feat-024/025 时代）大量硬编码 rgba(255,253,248,X)/
+     rgba(29,27,23,X)，本棒把它们改消费下面两个 RGB 三元组令牌——aurora 侧给出白色/深藏青
+     三元组，paper 侧镜像原硬编码值（见 skin-paper.css，零漂移）。 */
+  --lite2-surface-rgb: 255, 255, 255;
+  --lite2-ink-rgb: 16, 34, 61;
+  --lite2-paper-rgb: 237, 246, 255;
+  /* 语气色三元组（镜像 skin-paper.css 的同名令牌）——aurora 值取参考库色表：
+     accent=blue #496ee8 / deep=blue-fg #2f4bb0 · danger=red #d95757 / deep=red-fg #a5322f ·
+     warn=orange #d88a2d / deep=orange-fg #9a5a12 · violet=purple #6b5bd6 / deep=purple-fg
+     #4b3ca8 · sky=blue（聚焦描边同主色）· ink-hover=navy-2 #193454。 */
+  --lite2-accent-rgb: 73, 110, 232;
+  --lite2-accent-deep-rgb: 47, 75, 176;
+  --lite2-danger-rgb: 217, 87, 87;
+  --lite2-danger-deep-rgb: 165, 50, 47;
+  --lite2-warn-rgb: 216, 138, 45;
+  --lite2-warn-deep-rgb: 154, 90, 18;
+  --lite2-violet-rgb: 107, 91, 214;
+  --lite2-violet-deep: #4b3ca8;
+  --lite2-sky-rgb: 73, 110, 232;
+  --lite2-ink-hover: #193454;
+  --lite2-heading-font: 'Inter', 'Segoe UI', 'Noto Sans SC', Arial, sans-serif;
+  /* 参考库密度语法：数字一律 tabular-nums（继承级，一处声明全树生效）。 */
+  font-variant-numeric: tabular-nums;
+
+  /* 彩色徽章色表（参考库 badge.tsx 的 toneMap 逐一对照抄值，只抄 CSS 数值）——供下方"左边条→
+     软底徽章"分支消费；paper 侧不声明这些（那几个元素在 paper 皮下保持原有左边条/纯文字语法，
+     不需要这套 token）。 */
+  --lite2-tone-blue-bg: #eef2ff;
+  --lite2-tone-blue-fg: #2f4bb0;
+  --lite2-tone-purple-bg: #f0edff;
+  --lite2-tone-purple-fg: #4b3ca8;
+  --lite2-tone-green-bg: #e7f5ef;
+  --lite2-tone-green-fg: #1c6a45;
+  --lite2-tone-orange-bg: #fff2df;
+  --lite2-tone-orange-fg: #9a5a12;
+  --lite2-tone-red-bg: #feeceb;
+  --lite2-tone-red-fg: #a5322f;
+  --lite2-tone-gold-bg: #f5ecd8;
+  --lite2-tone-gold-fg: #8a6a29;
+  --lite2-tone-gray-bg: #eef3fa;
+  --lite2-tone-gray-fg: #667085;
 }
 
-/* 玻璃质感的顶栏/composer chrome——shared chunk 里这两个类背景是硬编码暖纸半透明白，
-   令牌盖不到；lite2 作用域内改消费 --lite2-glass，让 aurora 的玻璃令牌真的生效
-   （kickoff §4：「组件样式只消费令牌」的第一批落地，非详尽——其余留 feat-039）。 */
+/* ═══ [data-skin="aurora"] 组件级分支（逐条记录，kickoff §feat-046 要求"控制在少数"）═══
+   下面每一条都是"令牌覆盖不到的语法差异"，不是行为改动——零 DOM 结构变化，只重新分配已有
+   元素/已有 class 的视觉表现。 */
+
+/* ── ① 玻璃质感 chrome 扩面：初版只盖了 3 个类，精修补齐顶栏/铃铛/建议 chip/页脚——
+   这些都是 shared chunk 或 lite2.css 里硬编码暖纸半透明白的顶层 chrome，令牌盖不到。
+   blur 强度按参考库精确值升级到 20px+saturate(1.1)（初版是朴素 16px）。 */
 .lite2-shell[data-skin='aurora'] .scene-tabs,
+.lite2-shell[data-skin='aurora'] .mode-switch,
 .lite2-shell[data-skin='aurora'] .composer-card,
-.lite2-shell[data-skin='aurora'] .nexus-empty {
+.lite2-shell[data-skin='aurora'] .nexus-empty,
+.lite2-shell[data-skin='aurora'] .lite2-compliance-footer,
+.lite2-shell[data-skin='aurora'] .lite-bell-toggle,
+.lite2-shell[data-skin='aurora'] .lite-room-chip {
   background: var(--lite2-glass);
-  backdrop-filter: blur(16px);
+  backdrop-filter: var(--lite2-glass-blur);
+}
+
+/* ── ② 晨间分诊卡：语气温度左边条 → 软底徽章。.home-handoff 是 shared/70-home-cards.css
+   的冻结类（v01 也用），只能用属性选择器从 lite2 侧覆盖，v01 物理够不到。左边条(::before)
+   在 aurora 下隐去，语气改由 .home-handoff-tone 文字标签的软底徽章样式承载——badge 语法
+   与参考库 badge.tsx 一致（tone-soft 底色 + 饱和字色 + 全圆角）。 */
+.lite2-shell[data-skin='aurora'] .home-handoff::before {
+  display: none;
+}
+.lite2-shell[data-skin='aurora'] .home-handoff {
+  padding-left: 16px;
+}
+.lite2-shell[data-skin='aurora'] .home-handoff-tone {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  border-radius: 999px;
+  color: var(--lite2-tone-blue-fg);
+  background: var(--lite2-tone-blue-bg);
+  letter-spacing: 0.04em;
+}
+.lite2-shell[data-skin='aurora'] .home-tone-honey .home-handoff-tone {
+  color: var(--lite2-tone-orange-fg);
+  background: var(--lite2-tone-orange-bg);
+}
+.lite2-shell[data-skin='aurora'] .home-tone-terracotta .home-handoff-tone {
+  color: var(--lite2-tone-red-fg);
+  background: var(--lite2-tone-red-bg);
+}
+
+/* ── ③ A closer look 对照卡：claim/evidence 两栏左边条 → pane 标签软底徽章（同②语法，
+   claim=蓝 evidence=红，呼应 sage/terracotta 的语气温度而非红绿评判色）。 */
+.lite2-shell[data-skin='aurora'] .lite-gap-pane-claim,
+.lite2-shell[data-skin='aurora'] .lite-gap-pane-evidence {
+  border-left: none;
+}
+.lite2-shell[data-skin='aurora'] .lite-gap-pane-label {
+  display: inline-flex;
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: var(--lite2-tone-blue-fg);
+  background: var(--lite2-tone-blue-bg);
+}
+.lite2-shell[data-skin='aurora'] .lite-gap-pane-evidence .lite-gap-pane-label {
+  color: var(--lite2-tone-red-fg);
+  background: var(--lite2-tone-red-bg);
+}
+
+/* ── ④ A closer look 历史徽章：resolved=绿（安心落定）/dismissed=灰（中性搁置），
+   替换初版的 sage 系半透明底（与③的蓝/红一起，一张卡的生命周期读作三种清楚的徽章色）。 */
+.lite2-shell[data-skin='aurora'] .lite-gap-history-badge.is-resolved {
+  color: var(--lite2-tone-green-fg);
+  background: var(--lite2-tone-green-bg);
+}
+.lite2-shell[data-skin='aurora'] .lite-gap-history-badge.is-dismissed {
+  color: var(--lite2-tone-gray-fg);
+  background: var(--lite2-tone-gray-bg);
+}
+
+/* ── ⑤ Playbooks 槽位标签：纯灰 chip → 蓝色软底徽章（gate 门 auroraApplied 的其中一个真机
+   探针即取自此元素——它在默认/onboarding 前也无条件渲染，验证徽章语法零依赖额外前置操作）。 */
+.lite2-shell[data-skin='aurora'] .lite-playbooks-slot-tag {
+  color: var(--lite2-tone-blue-fg);
+  background: var(--lite2-tone-blue-bg);
+}
+
+/* ── ⑥ Vision「诚实标注」pill（Coming/Preview）：honey 半透明描边 → 完整 orange 软底徽章。 */
+.lite2-shell[data-skin='aurora'] .lite-vision-tag {
+  border-color: transparent;
+  color: var(--lite2-tone-orange-fg);
+  background: var(--lite2-tone-orange-bg);
+}
+
+/* ── ⑦ Ask 卡状态 chip：sage 半透明底 → 蓝色软底徽章，与①③⑤同一套语法统一识别。 */
+.lite2-shell[data-skin='aurora'] .ask-status-chip {
+  border-color: transparent;
+  color: var(--lite2-tone-blue-fg);
+  background: var(--lite2-tone-blue-bg);
+}
+
+/* ── ⑧ Follow-ups 来源标签：纯大写小字 → purple 软底徽章（PRD F3 的"来源标签"在 aurora 下
+   获得独立可读的视觉身份，不与标题同色阶混在一起）。 */
+.lite2-shell[data-skin='aurora'] .lite-followup-source {
+  display: inline-flex;
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: var(--lite2-tone-purple-fg);
+  background: var(--lite2-tone-purple-bg);
+}
+
+/* ── ⑨ serif 标题 → sans 700（kickoff §feat-046 例举的语法分支之一）。字体族本身走
+   --lite2-heading-font 令牌（两皮共用消费点，lite2.css）；字重差异令牌带不动——paper 的
+   serif 显示标题是 500（Georgia 的手写温度），aurora 的 sans 标题按参考库语法加重到 700，
+   只列今天显式 500 的"显示级标题"（prose 级 serif——report-script-line/receipt 值等——
+   只换族不加重）。 */
+.lite2-shell[data-skin='aurora'] .home-greeting h1,
+.lite2-shell[data-skin='aurora'] .home-spine-head h2,
+.lite2-shell[data-skin='aurora'] .home-handoff-body h3,
+.lite2-shell[data-skin='aurora'] .home-closing h3,
+.lite2-shell[data-skin='aurora'] .structured-output-header h2,
+.lite2-shell[data-skin='aurora'] .mismatch-card h2,
+.lite2-shell[data-skin='aurora'] .nexus-empty h2,
+.lite2-shell[data-skin='aurora'] .upload-panel-head h2,
+.lite2-shell[data-skin='aurora'] .lite-detail-head h2,
+.lite2-shell[data-skin='aurora'] .home-people-group-title,
+.lite2-shell[data-skin='aurora'] .lite-vision-head h2,
+.lite2-shell[data-skin='aurora'] .lite-vision-mocks-head h2,
+.lite2-shell[data-skin='aurora'] .lite-closerlook-header h1,
+.lite2-shell[data-skin='aurora'] .lite-followups-header h1,
+.lite2-shell[data-skin='aurora'] .lite-gap-empty h2 {
+  font-weight: 700;
 }

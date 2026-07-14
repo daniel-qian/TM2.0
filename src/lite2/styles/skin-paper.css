@@ -21,7 +21,7 @@
   --shadow-soft: 0 12px 40px rgba(50, 45, 36, 0.08);
 
   /* lite2 专用令牌（组件消费这两个，覆盖 shared chunk 里裸写的暖纸半透明白，
-     令牌覆盖不到的极少数语法差异留 feat-039 用 [data-skin] 分支处理）。 */
+     令牌覆盖不到的极少数语法差异留 feat-046 用 [data-skin] 分支处理）。 */
   --lite2-surface: rgba(255, 253, 248, 0.86);
   --lite2-glass: rgba(255, 253, 248, 0.82);
   --lite2-bg-gradient:
@@ -29,4 +29,32 @@
     linear-gradient(135deg, #fbf8f0 0%, #f0eadf 52%, #f9f6ef 100%);
 
   background: var(--lite2-bg-gradient);
+
+  /* feat-046 · aurora 精修棒新增的令牌镜像层。lite2.css 里 feat-024/025 时代的老代大量
+     直接硬编码 rgba(255,253,248,X)/rgba(29,27,23,X)（令牌层盖不到——skin-aurora.css 顶部
+     注释早就点名的"覆盖不到的语法差异"），本棒把这些老代改消费下面两个 RGB 三元组令牌
+     （配合各元素原有的 alpha 值单独拼 rgba()）；paper 侧给出与硬编码原值逐位相同的三元组，
+     保证 paperUnchanged 门相位零漂移（真机快照见 live-frontend-gate.snippet.js
+     PAPER_BASELINE，2026-07-14 在本棒实现前于 integrate/v02-main-sync@feff6be 真机采集）。 */
+  --lite2-surface-rgb: 255, 253, 248;
+  --lite2-ink-rgb: 29, 27, 23;
+  --lite2-paper-rgb: 247, 244, 238;
+  /* 语气色三元组（sage/terracotta/honey/iris/sky 的字面量家族）——paper 值 = lite2.css 原
+     硬编码逐位相同；aurora 侧换参考库色（blue/red/orange/purple）。deep 变体 = 同族的深字色。 */
+  --lite2-accent-rgb: 105, 128, 109;
+  --lite2-accent-deep-rgb: 74, 96, 78;
+  --lite2-danger-rgb: 188, 92, 73;
+  --lite2-danger-deep-rgb: 160, 74, 58;
+  --lite2-warn-rgb: 178, 123, 43;
+  --lite2-warn-deep-rgb: 146, 100, 33;
+  --lite2-violet-rgb: 108, 99, 181;
+  --lite2-violet-deep: #4a4197;
+  --lite2-sky-rgb: 82, 123, 145;
+  --lite2-ink-hover: #2b2822;
+  /* 标题字体令牌——paper 侧维持现有 serif（Georgia 手写体温度），aurora 侧换 sans
+     （kickoff §feat-046 例举的允许语法分支之一："serif 标题→sans"）。 */
+  --lite2-heading-font: Georgia, 'Times New Roman', serif;
+  /* 密度基准显式重申浏览器默认 16px（此前从未显式声明，靠 body 未设置 font-size 的隐式
+     默认）——与 aurora 侧显式 15px 形成可断言、不依赖浏览器默认值的稳定对照。 */
+  font-size: 16px;
 }
