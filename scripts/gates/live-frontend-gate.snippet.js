@@ -150,7 +150,7 @@
  * chips + notification bell, SEPARATE aggregate (nudgeVerdict below, phase group D — same
  * per-group-aggregate convention flowVerdict/gapVerdict established for groups B/C). BORN RED
  * (2026-07-14, before implementation): no `.lite-onboard` / `.lite-room-chip` / `.lite-bell`
- * anywhere. Driven with `?v=2&mode=live&transport=stub`. Spans FIVE page loads (first-visit
+ * anywhere. Driven with `?v=2&mode=live&transport=stub`. Spans SIX page loads (first-visit
  * detection = localStorage state, so the driver clears every `lite2:*` key and reloads between
  * runs); like the A-group phases, cross-navigation evidence is carried by the driver as JSON and
  * fed into nudgeVerdict(carried) at the end:
@@ -171,9 +171,19 @@
  *                                                    // chosen set (specific ids, not a count),
  *                                                    // every slot carrying the honest Coming tag
  *   C) [clear ALL `lite2:` keys again -> reload, re-inject]
- *      const skip = await __seedGate.onboardSkipNow() // helper: wizard appears fresh; the skip
+ *      await __seedGate.assertOnboardEscape()        // onboardEscape (added on adversarial-verify
+ *                                                    // rework, 2026-07-14: an aria-modal dialog
+ *                                                    // MUST be keyboard-escapable — keyboard
+ *                                                    // users were trapped): wizard mounts fresh;
+ *                                                    // advance one step; Escape closes the
+ *                                                    // overlay with PAUSE semantics — persisted
+ *                                                    // status stays 'in-progress' (NOT skipped/
+ *                                                    // done) and the advanced step is preserved
+ *                                                    // for resume next visit
+ *   D) [reload, re-inject — the wizard RESUMES at the saved step (pause is not dismissal):]
+ *      const skip = await __seedGate.onboardSkipNow() // helper: wizard appears again; the skip
  *                                                    // control closes it
- *   D) [reload, re-inject]
+ *   E) [reload, re-inject]
  *      await __seedGate.assertOnboardSkip(skip)      // onboardSkip: after the reload the wizard
  *                                                    // never mounts again (no nagging)
  *      await __seedGate.assertChipsAsk()             // chipsAsk: The room's empty state renders
@@ -182,7 +192,7 @@
  *                                                    // fires a REAL askLive run — the terminal
  *                                                    // mounts and SSE frames render (same dynamic
  *                                                    // shape as phase F2), not a dead button
- *   E) [clear ALL `lite2:` keys on a SETTLED page — wait for chipsAsk's run to finish first: a
+ *   F) [clear ALL `lite2:` keys on a SETTLED page — wait for chipsAsk's run to finish first: a
  *       notification push from a still-streaming run re-writes lite2:notify:v1 AFTER the clear
  *       (caught live on the first green drive, 2026-07-14) — then reload, re-inject]
  *      await __seedGate.assertBellIsReal()           // bellIsReal: (skips the fresh wizard first)
@@ -196,11 +206,16 @@
  *                                                    // too; exact event-type multiset, not
  *                                                    // count>0); a composer-driven run then adds
  *                                                    // EXACTLY one 'run' item (final multiset
- *                                                    // gap+ingest+run and nothing else); the
+ *                                                    // gap+ingest+run and nothing else); clicking
+ *                                                    // the 'gap' notification ROUTES to the
+ *                                                    // mapped tab (A closer look) and marks that
+ *                                                    // item read (NOTIF_TARGET wiring — coverage
+ *                                                    // added on adversarial-verify rework); the
  *                                                    // unread badge shows and mark-all clears it
- *      __seedGate.nudgeVerdict({ onboardPersist, onboardSkip })   // aggregate (4 phases) — pass
- *                                                    // the JSON carried from pages B/D for the
- *                                                    // phases that ran before this page load
+ *      __seedGate.nudgeVerdict({ onboardPersist, onboardEscape, onboardSkip, chipsAsk })
+ *                                                    // aggregate (5 phases) — pass the JSON
+ *                                                    // carried from pages B/C/E for the phases
+ *                                                    // that ran before this page load
  */
 (() => {
   // Story-EXCLUSIVE nouns. NOTE: 'Lin Qing' / 'Chen Mingyuan' / 'Sun Xiaomei' / 'Zheng Zixuan'
@@ -1714,8 +1729,47 @@
       return out;
     },
 
+    async assertOnboardEscape() {
+      // Phase onboardEscape (page C, cleared state — added on adversarial-verify rework
+      // 2026-07-14): the wizard is an aria-modal dialog, so Escape MUST work — and it must mean
+      // PAUSE (same as the × control: progress kept, resumes next visit), not skip/dismiss.
+      // Advance one step first so "progress preserved" is a real assertion (the persisted step
+      // must equal the ADVANCED step after the close, not the default 'upload').
+      const out = {
+        sawWizard: false, advanced: false, stepBefore: null, closedOnEscape: false,
+        persistedStatus: null, persistedStep: null, statusOk: false, stepPreserved: false,
+        pass: false,
+      };
+      try { await poll(() => (this._wizard() ? true : null), 10000, 'wizard to mount for escape run'); } catch (e) { results.onboardEscape = out; return out; }
+      out.sawWizard = true;
+      const next = $('.lite-onboard-next');
+      if (next) next.click();
+      try {
+        await poll(() => (this._wizardStep() === 'team' ? true : null), 5000, 'wizard to advance before escape');
+        out.advanced = true;
+      } catch (e) { /* stays false — stepBefore below records whatever it is */ }
+      out.stepBefore = this._wizardStep();
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      try {
+        await poll(() => (!this._wizard() ? true : null), 4000, 'wizard to close on Escape');
+        out.closedOnEscape = true;
+      } catch (e) { /* stays false */ }
+      try {
+        const raw = window.localStorage.getItem('lite2:onboard:v1');
+        const parsed = raw ? JSON.parse(raw) : null;
+        out.persistedStatus = parsed ? parsed.status : null;
+        out.persistedStep = parsed ? parsed.step : null;
+      } catch (e) { /* stays null */ }
+      out.statusOk = out.persistedStatus === 'in-progress'; // pause, NOT skipped/done
+      out.stepPreserved = !!out.stepBefore && out.persistedStep === out.stepBefore;
+      out.pass = out.sawWizard && out.advanced && out.closedOnEscape && out.statusOk && out.stepPreserved;
+      results.onboardEscape = out;
+      return out;
+    },
+
     async onboardSkipNow() {
-      // Helper (page C): on a fresh cleared state the wizard appears; the skip control closes it.
+      // Helper (page D — after the escape run's reload, the wizard RESUMES at the saved step;
+      // originally page C on a fresh cleared state): the wizard appears; the skip control closes it.
       const out = { sawWizard: false, skipClosed: false };
       try { await poll(() => (this._wizard() ? true : null), 10000, 'onboarding wizard to mount for skip run'); } catch (e) { return out; }
       out.sawWizard = true;
@@ -1864,8 +1918,41 @@
       } catch (e) { finalKinds = kindsNow(); }
       const finalExact = JSON.stringify(finalKinds) === JSON.stringify(['gap', 'ingest', 'run']);
 
-      // ── 4) unread badge + mark-all-read ──
+      // ── 4) clicking a notification ROUTES to its mapped tab and marks THAT item read ──
+      // (coverage added on adversarial-verify rework 2026-07-14: NOTIF_TARGET wiring was
+      // implemented but never gate-exercised). Use the 'gap' item — it routes to A closer look,
+      // a screen we are NOT currently on (we just ran in The room), so the switch is a real
+      // assertion, not a no-op.
       const badgeShown = !!$('.lite-bell-badge');
+      let routeClicked = false;
+      let routedToCloserLook = false;
+      let clickedItemRead = false;
+      let routedNotifId = null;
+      await openBell();
+      const gapItem = $$('.lite-notif-item').find((el) => el.getAttribute('data-notif-kind') === 'gap');
+      if (gapItem) {
+        routedNotifId = gapItem.getAttribute('data-notif-id');
+        gapItem.click();
+        routeClicked = true;
+        try {
+          await poll(() => {
+            const shell = $('.lite2-shell');
+            return shell && shell.getAttribute('data-scene') === 'closerlook' ? true : null;
+          }, 5000, 'notification click to route to A closer look');
+          routedToCloserLook = true;
+        } catch (e) { /* stays false */ }
+        // The clicked item must now be read (is-unread gone on that data-notif-id).
+        await openBell(); // click closed the popover — reopen to inspect the item state
+        try {
+          await poll(() => {
+            const el = $$('.lite-notif-item').find((x) => x.getAttribute('data-notif-id') === routedNotifId);
+            return el && !el.classList.contains('is-unread') ? true : null;
+          }, 4000, 'clicked notification to be marked read');
+          clickedItemRead = true;
+        } catch (e) { /* stays false */ }
+      }
+
+      // ── 5) unread badge + mark-all-read (ingest/run items are still unread at this point) ──
       let markAllWorks = false;
       const markAll = $('.lite-bell-markall');
       if (markAll) {
@@ -1887,9 +1974,13 @@
         finalKinds,
         finalExact,
         badgeShown,
+        routeClicked,
+        routedToCloserLook,
+        clickedItemRead,
         markAllWorks,
         pass: bellPresent && initialItems === 0 && emptyMarker && ingestOk && ingestExact &&
-          runOk && finalExact && badgeShown && markAllWorks,
+          runOk && finalExact && badgeShown && routeClicked && routedToCloserLook &&
+          clickedItemRead && markAllWorks,
       };
       results.bellIsReal = out;
       return out;
@@ -1902,12 +1993,13 @@
       // (from this load) win only if the carried slot is absent.
       const merged = Object.assign({}, results);
       if (carried && typeof carried === 'object') {
-        for (const k of ['onboardPersist', 'onboardSkip', 'chipsAsk', 'bellIsReal']) {
+        for (const k of ['onboardPersist', 'onboardEscape', 'onboardSkip', 'chipsAsk', 'bellIsReal']) {
           if (carried[k]) merged[k] = carried[k];
         }
       }
       const phases = {
         onboardPersist: !!(merged.onboardPersist && merged.onboardPersist.pass),
+        onboardEscape: !!(merged.onboardEscape && merged.onboardEscape.pass),
         onboardSkip: !!(merged.onboardSkip && merged.onboardSkip.pass),
         chipsAsk: !!(merged.chipsAsk && merged.chipsAsk.pass),
         bellIsReal: !!(merged.bellIsReal && merged.bellIsReal.pass),

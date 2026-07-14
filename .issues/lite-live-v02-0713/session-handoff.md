@@ -133,8 +133,35 @@ npm run build      — 501 modules（feat-044 基线 497，+4：onboardStore/not
    设置」行。更广的问候位（如 Your team 头部晨间问候）动既有屏结构，留 feat-046 视觉精修
    一并定（配置已持久化，接入零成本）。
 
+## 追记 · 对抗验证打回复验（2026-07-14，fix commit）
+
+gate 路 CONFIRMED_SAFE（含验证者自选勾选集/敌意 grep/中途续跑三探针）、i18n 路
+CONFIRMED_SAFE、redline 路 ISSUES_FOUND 一个 blocker，fix commit 追加于本分支（不改历史）：
+
+- **Blocker · 向导不响应 Escape**：`role="dialog" aria-modal="true"` 弹层零键盘退出路径，
+  键盘用户被困。修法 = OnboardWizard `useEffect` 挂 `window` keydown 监听，Escape 调
+  `pause()`（与 × 等价：进度保留、下次续跑），卸载时 remove（Escape → pause → 组件
+  unmount → cleanup 即时注销，零全局监听残留）。门补 **D 组第 5 相位
+  `assertOnboardEscape`**（先红后绿：修前真跑 `closedOnEscape:false` 复现 blocker；修后绿
+  = Escape 关弹层 + localStorage status 仍 `in-progress`（非 skipped/done）+ 前进过的
+  step=team 保留 + reload 后向导续跑于 team 步旁证 pause≠dismiss）；`nudgeVerdict` 聚合
+  4→5 相位，驱动协议五页→六页（头注释已同步）。
+- **非阻塞 · bellIsReal 补 NOTIF_TARGET 路由断言**：点 gap 通知 → `data-scene` 切
+  `closerlook` + 该条 `is-unread` 消失（`routeClicked/routedToCloserLook/clickedItemRead`
+  三键），之后才 Mark all read——路由接线原先实现了但门从未行使（对抗验证指出的覆盖缺口）。
+- **非阻塞 · 工作树复核**：`public/__gate_verify.js` 不存在且 `git log --all` 全历史零记录，
+  无需清理。
+- 复验：D 组六页协议重驱全绿
+  `{pass:true,phases:{onboardPersist:true,onboardEscape:true,onboardSkip:true,chipsAsk:true,bellIsReal:true}}`；
+  `npx tsc -b` 绿；init.sh 绿（0 error / 5 warning 基线不变、501 模块）。
+- 备注：工作树里 `kickoff-dev.md` 存在编排侧未提交附录（§6 并 main 计划，"回执 main 编排
+  广播"落款）——非本棒所属，未并入本棒任何 commit、原样保留，由编排自行落盘。
+
 ## 遗留 / 给 feat-046（aurora 精修）的提示
 
+- **DetailOverlay 缺 Escape（对抗验证点名的既有惯例，本棒不修）**：lite2 `DetailOverlay.tsx`
+  同为浮层且无键盘退出路径（v01 lite 同源拷贝的既有行为）——feat-046 候选：加同款
+  Escape=close 监听（OnboardWizard 实现可照抄；`closeDetail()` 无进度语义，比向导更简单）。
 - **词族抽查顺带发现（域外，零改动，上报编排定夺）**：既有 key `playbooksSlotIncident`
   （zh.lite 与 zh.lite2 同值）用「会议室」指 The room，与锁定词「议事室」不一致——zh.lite
   属冻结 v01 不可动；zh.lite2 该值是 verbatim 沿用且经过早期对抗验证。是否另案处理由编排拍。

@@ -48,6 +48,18 @@ export function OnboardWizard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Escape = 与 × 等价（pause 语义：进度保留、下次续跑）——对抗验证打回（2026-07-14）：
+  // aria-modal 弹层必须可键盘退出，否则键盘用户被困（全代码库当时零 Escape 处理）。
+  // 监听器随组件挂载/卸载注册/注销（Escape 触发 pause → 向导整组件 unmount → cleanup
+  // 立即注销，不留全局监听残留）。
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') pause()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [pause])
+
   const stepIndex = ONBOARD_STEPS.indexOf(step)
   const goNext = () => {
     const next = ONBOARD_STEPS[stepIndex + 1]
