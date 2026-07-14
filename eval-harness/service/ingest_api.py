@@ -94,6 +94,11 @@ def authorize_context(reg: ContextRegistry, context_id: str,
     if required:
         if not token or not secrets.compare_digest(token, required):
             raise unknown
+    elif getattr(reg, "persistent", False):
+        # feat-038 hardening: a SERVED (DB-backed) context with no owner_token must FAIL CLOSED — a
+        # legacy/direct-inserted NULL-token row is never world-readable over the API. (The in-memory
+        # registry keeps the empty-token back-compat: it is a test/direct-caller seam, not served.)
+        raise unknown
     return ctx
 
 

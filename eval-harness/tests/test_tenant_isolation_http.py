@@ -203,3 +203,73 @@ def test_advise_sample_is_removed(client):
 def test_demo_advise_without_a_context_needs_no_token(client):
     r = client.post("/advise", json={"situation": "How do I run a calm 1:1?", "stream": False})
     assert r.status_code == 200, "the no-context demo default must still work without any token"
+
+
+# ==============================================================================================
+# 12) feat-038 hardening: an empty/NULL owner_token FAILS CLOSED on the persistent (DB) registry,
+#     while the in-memory registry keeps the empty-token back-compat (test/direct-caller seam).
+# ==============================================================================================
+
+import os  # noqa: E402
+
+
+def _db_url() -> str | None:
+    return (os.environ.get("AVERY_DB_URL") or os.environ.get("PGVECTOR_URL") or "").strip() or None
+
+
+def test_inmemory_empty_token_stays_backcompat(monkeypatch, tmp_path):
+    """The in-memory registry is a test/direct-caller seam, not a served path: an empty owner_token
+    keeps the pre-038 no-token back-compat (authorize returns the context)."""
+    from fastapi import HTTPException  # noqa: F401
+    from service.ingest_api import authorize_context
+    from avery.ingest.registry import ContextRegistry, CompanyContext, materialize_memory, new_context_id
+    from avery.ingest.extract import ExtractionResult
+    from avery.ingest.store import KeywordStore
+
+    reg = ContextRegistry()
+    ex = ExtractionResult(people=[], projects=[], signals=[], materials=[])
+    d = tmp_path / "mem"; materialize_memory(ex, d)
+    cid = new_context_id()
+    reg.put(CompanyContext(context_id=cid, extraction=ex, store=KeywordStore(),
+                           memory_dir=d, name="legacy", owner_token=""))
+    assert getattr(reg, "persistent", False) is False
+    # empty token + no caller token -> back-compat: returns the context (no raise).
+    assert authorize_context(reg, cid, None).context_id == cid
+
+
+@pytest.mark.needs_db
+def test_persistent_empty_token_fails_closed(tmp_path):
+    """A DB-backed context whose owner_token is NULL/empty is NEVER world-readable over the API:
+    authorize_context must raise 404 on the persistent registry even though the context exists."""
+    url = _db_url()
+    if not url:
+        pytest.skip("needs AVERY_DB_URL (or PGVECTOR_URL)")
+    import psycopg
+    from fastapi import HTTPException
+    from service.ingest_api import authorize_context
+    from avery.ingest.pg_registry import PostgresContextRegistry
+    from avery.ingest.registry import CompanyContext, materialize_memory, new_context_id
+    from avery.ingest.extract import ExtractionResult
+    from avery.ingest.store import KeywordStore
+
+    reg = PostgresContextRegistry(url, data_dir=tmp_path / "pgdata")
+    assert getattr(reg, "persistent", False) is True
+    ex = ExtractionResult(people=[], projects=[], signals=[], materials=[])
+    d = tmp_path / "pgmem"; materialize_memory(ex, d)
+    cid = new_context_id()
+    # Persist a real context (mints/holds a token), then force the DB row's token to NULL (legacy state).
+    reg.put(CompanyContext(context_id=cid, extraction=ex, store=KeywordStore(),
+                           memory_dir=d, name="legacy", owner_token="tok_placeholder"))
+    try:
+        with psycopg.connect(url) as conn:
+            conn.execute("UPDATE avery.contexts SET owner_token = NULL WHERE context_id = %s", (cid,))
+        # get() maps NULL -> "" ; authorize must FAIL CLOSED (404), not return the context.
+        with pytest.raises(HTTPException) as ei:
+            authorize_context(reg, cid, None)
+        assert ei.value.status_code == 404
+        # and even a (any) supplied token is refused when the stored token is empty.
+        with pytest.raises(HTTPException) as ei2:
+            authorize_context(reg, cid, "anything")
+        assert ei2.value.status_code == 404
+    finally:
+        reg.delete(cid)
