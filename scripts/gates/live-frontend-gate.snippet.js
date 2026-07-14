@@ -65,6 +65,38 @@
  *    expect exit 1, revert, expect exit 0 — see live-frontend-gate.md for the exact injections]
  *   __seedGate.recordWallRed({ pass: true, directions: {...} })    // wallRed: lint red-then-green evidence
  *   __seedGate.v2Verdict()                                         // aggregate (5 phases)
+ *
+ * feat-036 (lite-live-v02, ADR-0017 execution) — morning triage + Follow-ups phases, SEPARATE
+ * aggregate (flowVerdict below, phase group B). BORN RED (2026-07-14, before implementation):
+ * no `.lite-triage-room` / `.lite-followup-item` anywhere — TeamScreen's handoff list has no
+ * done/discard buttons wired to a real mark store, Follow-ups is still the coming-soon
+ * placeholder. Driven with `?v=2&mode=live&transport=stub` (same deterministic lite2 stub used
+ * by v2Verdict). Reuses the shared `.home-handoff` / `.home-check` / `.home-discard` /
+ * `.home-drawer*` DOM contract from the v01 Card-home pattern (src/shared/styles/70-home-cards.css)
+ * — feat-036 wires those SAME classes to a real localStorage-backed store instead of adding a
+ * parallel visual language:
+ *   [on `?v=2&mode=live&transport=stub`]
+ *   __seedGate.defuseAnimations()
+ *   await __seedGate.assertTriageRenders()          // triageRenders: >=1 derived card, zero
+ *                                                    // person-number leak in the triage DOM
+ *   await __seedGate.assertTriageActions()           // triageActions: done -> drawer + count
+ *                                                    // drop; discard -> disappears; take-to-
+ *                                                    // room -> screen switches + composer
+ *                                                    // pre-filled (all three re-use the SAME
+ *                                                    // stub card via restore-between-steps —
+ *                                                    // the stub corpus only yields one honest
+ *                                                    // at-risk handoff, no fabricated extras)
+ *   await __seedGate.assertFollowupsFlow()            // followupsFlow: triage "add to
+ *                                                    // follow-ups" -> Follow-ups tab shows the
+ *                                                    // item with a source label -> check done
+ *                                                    // -> lands in History -> restore -> back
+ *                                                    // in the active list
+ *   const before = await __seedGate.snapshotFollowups() // helper: titles in active + history
+ *   [reload the SAME url, re-inject snippet]
+ *   await __seedGate.assertFollowupsPersist(before)  // followupsPersist: after reload, every
+ *                                                    // title from `before` is still present
+ *                                                    // (localStorage, not in-memory only)
+ *   __seedGate.flowVerdict()                         // aggregate (4 phases)
  */
 (() => {
   // Story-EXCLUSIVE nouns. NOTE: 'Lin Qing' / 'Chen Mingyuan' / 'Sun Xiaomei' / 'Zheng Zixuan'
@@ -906,6 +938,287 @@
         storyUntouched: !!(results.storyUntouched && results.storyUntouched.pass),
         wallRed: !!(results.wallRed && results.wallRed.pass),
         skinTokens: !!(results.skinTokens && results.skinTokens.pass),
+      };
+      return { pass: Object.values(phases).every(Boolean), phases, results };
+    },
+
+    // ── feat-036 (lite-live-v02) — flowVerdict, independent aggregate, phase group B ──────────
+    // Morning triage (ADR-0017 execution) + Follow-ups (PRD F3). Driven `?v=2&mode=live
+    // &transport=stub` (deterministic, same lite2 stub roster/blockers as v2Verdict). The stub
+    // corpus (src/lite2/stubTransport.ts) only carries ONE at-risk project with a blocker, so
+    // there is honestly only one derived triage card — assertTriageActions exercises done/
+    // discard/take-to-room on that SAME card in sequence, restoring it between sub-checks,
+    // rather than fabricating extra corpus signal just to get more cards.
+    async assertTriageRenders() {
+      // Phase triageRenders: the top of Your team renders >=1 derived triage card (from
+      // team.handoffs, itself derived from real project blockers — teamData.ts liveHandoffs()),
+      // each with a done check + a discard control + a take-to-room control, and zero person-
+      // number leak inside the triage DOM (red line, same BLOOD_BAR_RE as v01 person cards).
+      this._clickTab('Your team');
+      try {
+        await poll(() => ($$('.home-handoff').length > 0 ? true : null), 8000, 'triage cards to render');
+      } catch (e) { /* fall through — assertions below report absence */ }
+      const cards = $$('.home-handoff');
+      const text = cards.map((c) => c.innerText).join('\n');
+      const bloodBar = BLOOD_BAR_RE.test(text) ? text.match(BLOOD_BAR_RE)[0] : null;
+      const first = cards[0];
+      const out = {
+        triageCards: cards.length,
+        bloodBarLeak: bloodBar,
+        hasCheck: !!(first && $('.home-check', first)),
+        hasDiscard: !!(first && $('.home-discard', first)),
+        hasTakeToRoom: !!(first && $('.lite-triage-room', first)),
+        hasAddFollowup: !!(first && $('.lite-triage-addfollowup', first)),
+        pass:
+          cards.length >= 1 && !bloodBar && !!first &&
+          !!$('.home-check', first) && !!$('.home-discard', first) &&
+          !!$('.lite-triage-room', first) && !!$('.lite-triage-addfollowup', first),
+      };
+      results.triageRenders = out;
+      return out;
+    },
+
+    async assertTriageActions() {
+      // Phase triageActions: done -> pending count drops + item shows up inside the "Taken
+      // care of today" drawer; discard -> item disappears from pending; take-to-room ->
+      // screen switches to The room with the composer pre-filled with that card's context.
+      // All three sub-checks reuse the SAME single stub-derived card (restored between steps
+      // via the drawer's undo button) — see file-header note on why there is only one card.
+      this._clickTab('Your team');
+      try {
+        await poll(() => ($$('.home-handoff').length > 0 ? true : null), 8000, 'a triage card to act on');
+      } catch (e) { /* report below */ }
+      const initialCount = $$('.home-handoff').length;
+      if (initialCount < 1) return (results.triageActions = { pass: false, error: 'no triage cards to act on' });
+      const title = (($$('.home-handoff')[0].querySelector('h3') || {}).textContent || '').trim();
+      const findUndoFor = (itemTitle) => {
+        const li = $$('.home-drawer-list li').find((el) => (el.textContent || '').includes(itemTitle));
+        return li ? li.querySelector('button') : null;
+      };
+
+      // ── 1) DONE ──
+      $('.home-check', $$('.home-handoff')[0]).click();
+      let doneWorks = false;
+      try {
+        await poll(() => ($$('.home-handoff').length < initialCount ? true : null), 4000, 'pending count to drop after done');
+        doneWorks = true;
+      } catch (e) { /* doneWorks stays false */ }
+      const toggle1 = $('.home-drawer-toggle');
+      if (toggle1) toggle1.click(); // mount .home-drawer-list
+      let drawerHasItem = false;
+      try {
+        await poll(() => ($$('.home-drawer-item').some((el) => (el.textContent || '').trim() === title) ? true : null), 4000, 'done item to appear in drawer');
+        drawerHasItem = true;
+      } catch (e) { /* drawerHasItem stays false */ }
+      const undo1 = findUndoFor(title);
+      if (undo1) undo1.click();
+      try {
+        await poll(() => ($$('.home-handoff').length === initialCount ? true : null), 4000, 'card restored after first undo');
+      } catch (e) { /* fall through — next sub-check will report its own failure */ }
+
+      // ── 2) DISCARD ──
+      let discardWorks = false;
+      const beforeDiscard = $$('.home-handoff').length;
+      const cardToDiscard = $$('.home-handoff').find((c) => ((c.querySelector('h3') || {}).textContent || '').trim() === title);
+      if (cardToDiscard) {
+        $('.home-discard', cardToDiscard).click();
+        try {
+          await poll(() => ($$('.home-handoff').length < beforeDiscard ? true : null), 4000, 'pending count to drop after discard');
+          discardWorks = true;
+        } catch (e) { /* discardWorks stays false */ }
+      }
+      if (!$('.home-drawer-list')) {
+        const toggle2 = $('.home-drawer-toggle');
+        if (toggle2) toggle2.click();
+      }
+      const undo2 = findUndoFor(title);
+      if (undo2) undo2.click();
+      try {
+        await poll(() => ($$('.home-handoff').length === initialCount ? true : null), 4000, 'card restored after second undo');
+      } catch (e) { /* fall through */ }
+
+      // ── 3) TAKE TO THE ROOM ──
+      let roomWorks = false;
+      let composerValue = '';
+      const cardForRoom = $$('.home-handoff').find((c) => ((c.querySelector('h3') || {}).textContent || '').trim() === title);
+      if (cardForRoom) {
+        const roomBtn = $('.lite-triage-room', cardForRoom);
+        if (roomBtn) {
+          roomBtn.click();
+          try {
+            await poll(() => ($('.nexus-followup-composer input') ? true : null), 6000, 'room composer to mount');
+          } catch (e) { /* fall through */ }
+          const input = $('.nexus-followup-composer input');
+          composerValue = input ? input.value : '';
+          roomWorks = !!composerValue && composerValue.includes(title);
+        }
+      }
+
+      const out = {
+        title,
+        initialCount,
+        doneWorks,
+        drawerHasItem,
+        discardWorks,
+        roomWorks,
+        composerValueSample: composerValue.slice(0, 120),
+        pass: doneWorks && drawerHasItem && discardWorks && roomWorks,
+      };
+      results.triageActions = out;
+      return out;
+    },
+
+    async assertFollowupsFlow() {
+      // Phase followupsFlow: a triage card's "Add to follow-ups" -> the Follow-ups tab shows a
+      // new item carrying a source label -> checking it complete moves it into History ->
+      // restoring it there puts it back in the active list.
+      this._clickTab('Your team');
+      try {
+        await poll(() => ($$('.home-handoff').length > 0 ? true : null), 8000, 'triage cards present');
+      } catch (e) { /* fall through */ }
+      const card = $$('.home-handoff')[0];
+      if (!card) return (results.followupsFlow = { pass: false, error: 'no triage card to add from' });
+      const title = ((card.querySelector('h3') || {}).textContent || '').trim();
+      const addBtn = $('.lite-triage-addfollowup', card);
+      if (!addBtn) return (results.followupsFlow = { pass: false, error: 'no .lite-triage-addfollowup button' });
+      addBtn.click();
+
+      this._clickTab('Follow-ups');
+      try {
+        await poll(() => ($('.lite-followups-list') || $('.lite-followup-item') ? true : null), 8000, 'follow-ups screen to mount');
+      } catch (e) { /* fall through */ }
+      let item = null;
+      try {
+        item = await poll(() => {
+          const found = $$('.lite-followup-item').find(
+            (el) => ((el.querySelector('.lite-followup-title') || {}).textContent || '').trim() === title,
+          );
+          return found || null;
+        }, 4000, 'new follow-up item to appear');
+      } catch (e) {
+        return (results.followupsFlow = { pass: false, error: String(e) });
+      }
+      const sourceEl = $('.lite-followup-source', item);
+      const sourceLabelText = sourceEl ? (sourceEl.textContent || '').trim() : '';
+      const hasSourceLabel = sourceLabelText.length > 0;
+
+      const check = $('.lite-followup-check', item);
+      if (check) check.click();
+      let leftActive = false;
+      try {
+        await poll(() => {
+          const stillThere = $$('.lite-followup-item').some(
+            (el) => ((el.querySelector('.lite-followup-title') || {}).textContent || '').trim() === title,
+          );
+          return !stillThere ? true : null;
+        }, 4000, 'item to leave the active list');
+        leftActive = true;
+      } catch (e) { /* leftActive stays false */ }
+
+      const historyTab = $('.lite-followups-subtab[data-subtab="history"]');
+      if (historyTab) historyTab.click();
+      let historyItem = null;
+      let movedToHistory = false;
+      try {
+        historyItem = await poll(() => {
+          const found = $$('.lite-followup-item').find(
+            (el) => ((el.querySelector('.lite-followup-title') || {}).textContent || '').trim() === title,
+          );
+          return found || null;
+        }, 4000, 'item to appear in history');
+        movedToHistory = !!historyItem;
+      } catch (e) { /* movedToHistory stays false */ }
+
+      let restored = false;
+      if (historyItem) {
+        const restoreBtn = $('.lite-followup-restore', historyItem);
+        if (restoreBtn) {
+          restoreBtn.click();
+          const activeTab = $('.lite-followups-subtab[data-subtab="active"]');
+          if (activeTab) activeTab.click();
+          try {
+            await poll(() => {
+              const backInActive = $$('.lite-followup-item').some(
+                (el) => ((el.querySelector('.lite-followup-title') || {}).textContent || '').trim() === title,
+              );
+              return backInActive ? true : null;
+            }, 4000, 'item to return to the active list');
+            restored = true;
+          } catch (e) { /* restored stays false */ }
+        }
+      }
+
+      const out = {
+        title,
+        hasSourceLabel,
+        sourceLabelText,
+        leftActive,
+        movedToHistory,
+        restored,
+        pass: hasSourceLabel && leftActive && movedToHistory && restored,
+      };
+      results.followupsFlow = out;
+      return out;
+    },
+
+    async snapshotFollowups() {
+      // Helper (not a phase itself): collect every follow-up title currently held (active +
+      // history) BEFORE a reload — the driver carries this JSON across the navigation the same
+      // way readSkinSnapshot()/assertSkinTokens() do for the skin-token phase above.
+      // NOTE (caught live, 2026-07-14): clicking a subtab and reading the DOM in the same tick
+      // can catch React's PRE-click render (batched update not yet flushed) — this produced a
+      // false "same item in both active and history" snapshot the first time this ran. A short
+      // settle after each click avoids it (same class of trap as the teamGrouped collapse poll).
+      const settle = () => new Promise((r) => setTimeout(r, 200));
+      this._clickTab('Follow-ups');
+      await settle();
+      const collect = () =>
+        $$('.lite-followup-title').map((el) => (el.textContent || '').trim()).filter(Boolean);
+      const activeTab = $('.lite-followups-subtab[data-subtab="active"]');
+      const historyTab = $('.lite-followups-subtab[data-subtab="history"]');
+      if (activeTab) activeTab.click();
+      await settle();
+      const activeTitles = collect();
+      if (historyTab) historyTab.click();
+      await settle();
+      const historyTitles = collect();
+      if (activeTab) activeTab.click();
+      await settle();
+      return { activeTitles, historyTitles, total: activeTitles.length + historyTitles.length };
+    },
+
+    async assertFollowupsPersist(before) {
+      // Phase followupsPersist: called on a FRESH page load (after reload, snippet
+      // re-injected) — every title captured by snapshotFollowups() before the reload must
+      // still be present (localStorage-backed, not lost to an in-memory-only store).
+      this._clickTab('Follow-ups');
+      try {
+        await poll(
+          () => ($('.lite-followups-list') || $('.lite-followups-empty-note') ? true : null),
+          8000,
+          'follow-ups screen to mount',
+        );
+      } catch (e) { /* fall through — comparison below will report the mismatch */ }
+      const after = await this.snapshotFollowups();
+      const beforeAll = before ? [...before.activeTitles, ...before.historyTitles] : [];
+      const afterAll = [...after.activeTitles, ...after.historyTitles];
+      const missing = beforeAll.filter((t) => !afterAll.includes(t));
+      const out = {
+        before,
+        after,
+        missing,
+        pass: !!before && before.total > 0 && missing.length === 0,
+      };
+      results.followupsPersist = out;
+      return out;
+    },
+
+    flowVerdict() {
+      const phases = {
+        triageRenders: !!(results.triageRenders && results.triageRenders.pass),
+        triageActions: !!(results.triageActions && results.triageActions.pass),
+        followupsFlow: !!(results.followupsFlow && results.followupsFlow.pass),
+        followupsPersist: !!(results.followupsPersist && results.followupsPersist.pass),
       };
       return { pass: Object.values(phases).every(Boolean), phases, results };
     },

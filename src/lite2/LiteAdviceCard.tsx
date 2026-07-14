@@ -1,14 +1,33 @@
+import { useState } from 'react'
 import type { LiteAdvice } from './streamSource'
+import { useFlow } from './flowStore'
+import { useDict } from '../shared/i18n/useDict'
 
 // feat-024 · 8 字段卡（lite 版）——复用 shared 的 .structured-output-card / .report-* CSS
 // chrome（同一张卡的观感），代码零 story 依赖：confirmWith 是纯文本 chip（无 fixture 头像），
 // 不派 fixture task（live 不凭空造派工对象）。红线由服务端 contract.py 复验；本卡只渲染。
+//
+// feat-036（PRD F3）：Recommended actions 每条挂"加入跟进"——真写 flowStore
+// （source='room'），不是假按钮；点过一次变"Added"防重复堆。
 
 function classNames(parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(' ')
 }
 
 export function LiteAdviceCard({ advice }: { advice: LiteAdvice }) {
+  const { t } = useDict()
+  const addFollowup = useFlow((s) => s.addFollowup)
+  const [added, setAdded] = useState<ReadonlySet<string>>(new Set())
+
+  function handleAdd(item: string) {
+    addFollowup({ title: item, source: 'room', dueGroup: 'today' })
+    setAdded((prev) => {
+      const next = new Set(prev)
+      next.add(item)
+      return next
+    })
+  }
+
   return (
     <section className="structured-output-card" aria-label="What it found — the read">
       <header className="structured-output-header">
@@ -105,7 +124,17 @@ export function LiteAdviceCard({ advice }: { advice: LiteAdvice }) {
           <p className="report-section-label">Recommended actions</p>
           <ol className="report-list report-actions">
             {advice.recommended_actions.map((item) => (
-              <li key={item}>{item}</li>
+              <li key={item} className="lite-advice-action-row">
+                <span>{item}</span>
+                <button
+                  type="button"
+                  className="lite-advice-add-followup"
+                  disabled={added.has(item)}
+                  onClick={() => handleAdd(item)}
+                >
+                  {added.has(item) ? t.lite2.followupAdded : t.lite2.adviceAddFollowup}
+                </button>
+              </li>
             ))}
           </ol>
         </section>

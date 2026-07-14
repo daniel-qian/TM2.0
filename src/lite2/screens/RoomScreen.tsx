@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useLite } from '../store'
+import { useFlow } from '../flowStore'
 import { useDict } from '../../shared/i18n/useDict'
 import { LiteAdviceCard } from '../LiteAdviceCard'
 import { AskCard } from '../AskCard'
@@ -66,16 +67,20 @@ function LiteTerminal({ lines, running }: { lines: LiteStreamLine[]; running: bo
 }
 
 // live 提问 composer（空态 + 运行后追问共用）。走 store.askLive → feat-015 /advise SSE。
+// feat-036：initialValue 承接分诊卡"带进议事室"的预填上下文（flowStore.composerDraft，
+// 挂载时读一次——只预填、不自动提交，manager 审过再问）。
 function LiteAskComposer({
   placeholder,
   submitLabel,
   onAsk,
+  initialValue,
 }: {
   placeholder: string
   submitLabel: string
   onAsk: (text: string) => void
+  initialValue?: string
 }) {
-  const [draft, setDraft] = useState('')
+  const [draft, setDraft] = useState(initialValue ?? '')
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const text = draft.trim()
@@ -102,6 +107,15 @@ export function RoomScreen() {
   const ask = useLite((s) => s.ask)
   const askLive = useLite((s) => s.askLive)
   const { t } = useDict()
+
+  // feat-036：分诊"带进议事室"的预填——读一次即消费，之后正常导航不会再带旧草稿回来。
+  const composerDraft = useFlow((s) => s.composerDraft)
+  const consumeComposerDraft = useFlow((s) => s.consumeComposerDraft)
+  useEffect(() => {
+    if (composerDraft) consumeComposerDraft()
+    // 只在挂载时消费一次——依赖数组特意留空，effect 不该在 composerDraft 变化时重跑。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const running = run.status === 'running'
   const hasStarted = run.status !== 'idle'
@@ -144,6 +158,7 @@ export function RoomScreen() {
             placeholder={t.nexus.askPlaceholder}
             submitLabel={t.nexus.ask}
             onAsk={(text) => askLive({ situation: text })}
+            initialValue={composerDraft ?? undefined}
           />
         </>
       ) : (
@@ -156,6 +171,7 @@ export function RoomScreen() {
               placeholder={t.nexus.askPlaceholder}
               submitLabel={t.nexus.ask}
               onAsk={(text) => askLive({ situation: text })}
+              initialValue={composerDraft ?? undefined}
             />
           </div>
         </section>

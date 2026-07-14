@@ -223,13 +223,39 @@ export const en = {
     roomCanvasHint: 'Drag to move · scroll to zoom',
     roomCanvasReset: 'Reset view',
 
-    // ── Follow-ups screen (feat-035 skeleton — honest empty state; feat-036 wires the real
-    // derivation, today/this-week/later grouping, source tags, and localStorage persistence) ──
-    followupsEyebrow: 'Coming soon',
+    // ── Follow-ups screen (feat-035 laid the skeleton; feat-036 wires the real derivation —
+    // today/this-week/later grouping, source tags, manual add, history, localStorage persistence.
+    // Every "add to follow-ups" entry point elsewhere in lite2 writes into this same list.) ──
+    followupsEyebrow: 'Follow-ups',
     followupsTitle: 'Everything you follow up on, in one place',
-    followupsBody:
-      "Items from the morning triage queue, the room, quick asks, and a closer look will land here — grouped by today, this week, and later, each one tagged with where it came from.",
-    followupsComingSoon: 'Not built yet — this tab is a preview of where your follow-ups will live.',
+    followupsGroupToday: 'Today',
+    followupsGroupWeek: 'This week',
+    followupsGroupLater: 'Later',
+    followupsActiveTab: 'Active',
+    followupsHistoryTab: 'History',
+    followupsEmptyActive: "Nothing on your follow-up list yet — add one below, or bring one over from this morning's list, the room, or a quick ask.",
+    followupsEmptyHistory: "Nothing completed yet — finished items land here.",
+    followupsSourceTriage: 'From this morning',
+    followupsSourceRoom: 'From the room',
+    followupsSourceAsk: 'From a quick ask',
+    followupsSourceCloserLook: 'From a closer look',
+    followupsSourceManual: 'Added by you',
+    followupsAddTitlePlaceholder: 'What needs following up?',
+    followupsAddGroupLabel: 'When',
+    followupsAddSubmit: 'Add to follow-ups',
+    followupsDone: 'Done',
+    followupsRestore: 'Bring it back',
+    followupsDelete: 'Delete',
+    followupsEdit: 'Edit',
+    followupsSave: 'Save',
+    followupsCancel: 'Cancel',
+    followupsDraftMail: 'Draft the message',
+    followupsCompletedAt: 'done',
+    followupsTitleAria: 'Follow-up title',
+    followupAdded: 'Added',
+
+    // Advice card — "add to follow-ups" on each recommended action (feat-036, source=room)
+    adviceAddFollowup: 'Add to follow-ups',
 
     // ── A closer look screen (feat-035 skeleton — honest empty state; feat-037 wires the real
     // comparison-card derivation, resolve/dismiss, history, and the ask-them-directly link) ──
@@ -316,12 +342,26 @@ export const en = {
 
     visionComingSoon: 'None of the four is live yet. This tab is a preview of the boundary, kept honest on purpose.',
 
-    // Your team — briefing header (real numbers from ingestion) + weak handoffs
+    // Your team — briefing header (real numbers from ingestion) + morning triage (feat-036,
+    // ADR-0017 execution: done/discard/take-to-room three-action queue over the same derived
+    // handoffs — the derivation itself stays in teamData.ts, unchanged from feat-024).
     briefingEyebrow: 'From your uploads',
     metricsLabel: 'Team at a glance',
     handoffsTitle: 'Worth your attention today',
     handoffsEmpty: 'Nothing needs you right now — your uploads read steady.',
     handoffOpen: 'Open the project',
+
+    // Triage three actions + the "Taken care of today" drawer
+    triageRemaining: '{pending} of {total} still worth a look',
+    triageDoneAria: 'Done — {action}',
+    triageDiscardLabel: 'Not today',
+    triageTakeToRoomLabel: 'Take to the room',
+    triageAddFollowupLabel: 'Add to follow-ups',
+    triageDraftMailLabel: 'Draft the message',
+    triageDrawerLabel: 'Taken care of today',
+    triageSetAsideLabel: 'set aside',
+    triageRestoreLabel: 'Bring it back',
+    triageAllDone: 'Everything from this morning is settled the way you chose.',
 
     // Upload empty state (the left spine speaks for itself — no scripted placeholders)
     emptyEyebrow: 'Getting started',

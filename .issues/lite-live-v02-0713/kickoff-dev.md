@@ -39,3 +39,11 @@ PRD F5+F7。向导覆盖层（首访触发、可跳过、localStorage 记进度�
 ## 每个子代理的收口纪律
 
 init.sh 绿 + 本 feature 门相位先红后绿实证 + v01/story 零回归复跑 + feature_list evidence 更新 + progress.md 追加 + commit 到自己分支（不 merge、不 push）。对抗验证由 main 编排（红线 / 墙与门真伪 / i18n 三路，CONFIRMED_SAFE 才进下一个 feature）。全链完毕 main 出 review 包（截图 + 改动清单 + 抽查点）给 Danny。
+
+## 合流契约附录（2026-07-14，来自 lite-v1 持久化线广播，已核实：feat/041-e2e-broadcast tip=9e5a725）
+
+1. **编号撞车与处置**：持久化线占用 feat-030→041 号段（branch 实证：feat/038-tenant-isolation、039-upload-hardgate、040-deploy-prep、041-e2e-broadcast）。本线在 feature_list.json 登记的 feat-035..039 与之冲突。**处置：等 impl-036 收口后，本线五个 feature 整体改号 feat-042..046**（042=壳、043=分诊+跟进、044=矛盾页、045=onboarding+nudges、046=aurora 皮），本地分支同步改名，kickoff/PRD/feature_list 一并更新；已 commit 的历史 message 不重写，改号记录留此为凭。改号前暂停以旧号 spawn 新棒。
+2. **阶段 D 新增一棒「v02 引擎同步 + 笔记/文件面」（拟 feat-047）**：lite2 引擎拷贝自 main@3a9cf5c，不含持久化线 src/lite 改动（transport.ts owner_token/X-Avery-Token、store.ts files/notes、NotesScreen、UploadPanel 文件清单、RoomScreen note nudge）。待持久化线合 main 后，把引擎 delta 移植进 lite2 并给 v02 补笔记/文件用户面（tab 安排属 UX，进 review 包给 Danny 拍）。**token 纪律不可违反：token 只走 header（X-Avery-Token / Bearer），绝不进 URL；/ingest 的 owner_token 只返一次必须存住；缺 token 读路径 404 是设计不是 bug。** 经理 owner_token 与快问 /r/{token} 员工分享 token 是两套，永不混用。
+3. **红线开关佐证**：持久化线确认后端 AVERY_ALLOW_PERSON_SCORING 开时笔记文本可能含评分——v02 本期不给人卡设计任何分数 UI 与 PRD 一致；笔记面移植时（feat-047）笔记正文按后端原样呈现即可，不做前端二次加工。
+4. **所有权**：`.issues/lite-v1-lean-real-0713/**` 归持久化线，本线不动。数据处理说明草稿（data-handling-copy-draft.md）若 v02 做隐私露出可采用（feat-047 时评估）。
+5. **合流顺序 Danny 定**；本线优势：v02 完全不碰 src/lite/**，对三方合流是中立方，随时可合。

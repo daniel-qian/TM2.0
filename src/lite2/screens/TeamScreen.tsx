@@ -1,17 +1,29 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useLite } from '../store'
+import { useFlow, selectTriagePending, selectTriageHandled, selectTriageSetAside } from '../flowStore'
+import { draftMailForHandoff } from '../draftLinks'
 import { useDict } from '../../shared/i18n/useDict'
 import { UploadPanel } from '../UploadPanel'
 import { InitialAvatar } from '../InitialAvatar'
 import { LiteComposer } from '../LiteComposer'
 import { groupPeople } from '../teamGroups'
-import type { LitePerson } from '../teamData'
+import type { LiteHandoff, LitePerson } from '../teamData'
 
 // feat-024 · lite 屏 1+2：上传空态 · Your team——ADR-0022 决策 1。
 // 空态：左脊柱是 live 自己的引导文案（不渲染任何 scripted 占位——story 渗漏的第一现场）；
 // 右栏 = 上传。上传后：briefing 真数顶栏（人数/项目数来自 ingestion，聚合数字 R2 真算才显）
-// + 人卡/项目卡双轨 + 弱 handoffs（只从项目 blocker 派生，缺信号不造）。
+// + 人卡/项目卡双轨 + 晨间分诊区（feat-036，PRD F2 / ADR-0017 原判执行）。
 // 🔴 红线：人卡永不渲染任何数字——LitePerson 类型层就没有评分键的位置。
+//
+// feat-036 · 晨间分诊三动作（ADR-0017 决策 5）：分诊条目本身仍是 teamData.ts liveHandoffs()
+// 的真派生（handoffs ← 项目 blockers，零捏造）；这里只加真接线的三动作 + "今天已照料"堆：
+//   done → 收进堆、pending 计数安静更新；discard → 直接消失（同样收进堆，标"搁置"）；
+//   带进议事室 → composer 预填该条目上下文，切到 The room（不自动提交——人审过再问）。
+// marks 态与 Follow-ups 一样走 flowStore 的 localStorage（key 带 lite2 前缀）。
+
+function fill(template: string, vars: Record<string, string | number>): string {
+  return template.replace(/\{(\w+)\}/g, (_, k: string) => String(vars[k] ?? ''))
+}
 
 // 进度条分档与 story 地图页同口径（<40 低 · 40–69 中 · ≥70 高），复用 strip-* 配色类。
 function progressBand(progress: number) {
@@ -100,6 +112,36 @@ export function TeamScreen() {
   const { t } = useDict()
   const team = useLite((s) => s.team)
   const openDetail = useLite((s) => s.openDetail)
+  const goScreen = useLite((s) => s.goScreen)
+
+  const triageMarks = useFlow((s) => s.triageMarks)
+  const markTriageDone = useFlow((s) => s.markTriageDone)
+  const discardTriage = useFlow((s) => s.discardTriage)
+  const restoreTriage = useFlow((s) => s.restoreTriage)
+  const addFollowup = useFlow((s) => s.addFollowup)
+  const setComposerDraft = useFlow((s) => s.setComposerDraft)
+
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [addedFollowupIds, setAddedFollowupIds] = useState<ReadonlySet<string>>(new Set())
+
+  const pending = useMemo(() => selectTriagePending(team, triageMarks), [team, triageMarks])
+  const handled = useMemo(() => selectTriageHandled(team, triageMarks), [team, triageMarks])
+  const setAside = useMemo(() => selectTriageSetAside(team, triageMarks), [team, triageMarks])
+  const totalHandoffs = team?.handoffs.length ?? 0
+
+  function handleTakeToRoom(handoff: LiteHandoff) {
+    setComposerDraft(`${handoff.action}\n\n${handoff.evidence}`)
+    goScreen('room')
+  }
+
+  function handleAddFollowup(handoff: LiteHandoff) {
+    addFollowup({ title: handoff.action, source: 'triage', dueGroup: 'today', note: handoff.evidence })
+    setAddedFollowupIds((prev) => {
+      const next = new Set(prev)
+      next.add(handoff.id)
+      return next
+    })
+  }
 
   return (
     <section className="scene scene-home is-active" aria-label="Your team — live">
@@ -126,15 +168,30 @@ export function TeamScreen() {
 
                 <div className="home-spine-head">
                   <h2>{t.lite2.handoffsTitle}</h2>
+                  {totalHandoffs > 0 && pending.length > 0 ? (
+                    <p className="home-count" aria-live="polite">
+                      {fill(t.lite2.triageRemaining, { pending: pending.length, total: totalHandoffs })}
+                    </p>
+                  ) : null}
                 </div>
 
-                {team.handoffs.length > 0 ? (
+                {pending.length > 0 ? (
                   <ol className="home-handoff-list">
-                    {team.handoffs.map((handoff) => (
+                    {pending.map((handoff) => (
                       <li
                         key={handoff.id}
                         className={classNames(['home-handoff', `home-tone-${handoff.tone}`])}
                       >
+                        <button
+                          type="button"
+                          className="home-check"
+                          aria-label={fill(t.lite2.triageDoneAria, { action: handoff.action })}
+                          onClick={() => markTriageDone(handoff.id)}
+                        >
+                          <span className="lite-triage-checkmark" aria-hidden="true">
+                            ✓
+                          </span>
+                        </button>
                         <div className="home-handoff-body">
                           <span className="home-handoff-tone">{handoff.toneLabel}</span>
                           <h3>{handoff.action}</h3>
@@ -147,14 +204,78 @@ export function TeamScreen() {
                             >
                               {t.lite2.handoffOpen} →
                             </button>
+                            <button
+                              type="button"
+                              className="lite-triage-room"
+                              onClick={() => handleTakeToRoom(handoff)}
+                            >
+                              {t.lite2.triageTakeToRoomLabel} ↗
+                            </button>
+                            <button
+                              type="button"
+                              className="lite-triage-addfollowup"
+                              disabled={addedFollowupIds.has(handoff.id)}
+                              onClick={() => handleAddFollowup(handoff)}
+                            >
+                              {addedFollowupIds.has(handoff.id)
+                                ? t.lite2.followupAdded
+                                : t.lite2.triageAddFollowupLabel}
+                            </button>
+                            <a className="lite-triage-draftmail" href={draftMailForHandoff(handoff)}>
+                              {t.lite2.triageDraftMailLabel}
+                            </a>
+                            <button
+                              type="button"
+                              className="home-discard"
+                              onClick={() => discardTriage(handoff.id)}
+                            >
+                              {t.lite2.triageDiscardLabel}
+                            </button>
                           </div>
                         </div>
                       </li>
                     ))}
                   </ol>
                 ) : (
-                  <p className="lite-handoffs-empty">{t.lite2.handoffsEmpty}</p>
+                  <p className="lite-handoffs-empty">
+                    {totalHandoffs > 0 ? t.lite2.triageAllDone : t.lite2.handoffsEmpty}
+                  </p>
                 )}
+
+                {handled.length + setAside.length > 0 ? (
+                  <section className="home-drawer">
+                    <button
+                      type="button"
+                      className="home-drawer-toggle"
+                      aria-expanded={drawerOpen}
+                      onClick={() => setDrawerOpen((open) => !open)}
+                    >
+                      {t.lite2.triageDrawerLabel} · {handled.length}
+                      {setAside.length > 0 ? ` · ${setAside.length} ${t.lite2.triageSetAsideLabel}` : ''}
+                      <span aria-hidden="true">{drawerOpen ? '▴' : '▾'}</span>
+                    </button>
+                    {drawerOpen ? (
+                      <ul className="home-drawer-list">
+                        {handled.map((handoff) => (
+                          <li key={handoff.id}>
+                            <span className="home-drawer-item">{handoff.action}</span>
+                            <button type="button" onClick={() => restoreTriage(handoff.id)}>
+                              {t.lite2.triageRestoreLabel}
+                            </button>
+                          </li>
+                        ))}
+                        {setAside.map((handoff) => (
+                          <li key={handoff.id} className="is-set-aside">
+                            <span className="home-drawer-item">{handoff.action}</span>
+                            <button type="button" onClick={() => restoreTriage(handoff.id)}>
+                              {t.lite2.triageRestoreLabel}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </section>
+                ) : null}
               </>
             ) : (
               /* ── 上传空态：live 自己的引导文案，零 scripted 占位 ── */

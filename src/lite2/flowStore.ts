@@ -1,0 +1,183 @@
+import { create } from 'zustand'
+import type { LiteHandoff, LiteTeam } from './teamData'
+
+// feat-036 · lite2 晨间分诊 + Follow-ups 跟进（PRD F2+F3, ADR-0017 原判的真正执行）。
+// 独立于 store.ts（kickoff-dev.md §Feature 切分：减冲突面）——这里只管两件事：
+//   ① 分诊三动作态（done/discard，纯 mark，派生本身仍在 teamData.ts liveHandoffs() 里，
+//      不重复实现——marks 只决定一个 handoff 今天显示在 pending / 已照料堆 / 搁置堆）。
+//   ② Follow-ups 条目（今天/本周/之后分组 + 来源标签 + 完成/编辑/删除/历史）。
+// 都走 localStorage（key 带 lite2 前缀），同步读写——不用 zustand persist 中间件：
+// 该中间件的 hydrate() 走 Promise 链（即便 storage 本身同步），首帧会有一次"空态闪一下再
+// 冒出数据"的窗口；这里手写同步 load/save，store 创建时就是最终态，无闪烁、也不需要门相位
+// 用 poll 等 hydration——与本仓库其它小 store（如 story/homeStore.ts）手写风格一致。
+//
+// 🔴 红线：分诊/跟进条目上只出现人名与定性描述，零数字/评分/排名——marks 与 FollowupItem
+// 结构本身就没有数字字段的位置（结构性护栏，同 teamData.ts 对 LitePerson 的做法）。
+
+const STORAGE_KEY = 'lite2:flow:v1'
+
+export type TriageMark = 'done' | 'discarded'
+
+export type FollowupSource = 'triage' | 'room' | 'ask' | 'closer-look' | 'manual'
+export type FollowupDueGroup = 'today' | 'week' | 'later'
+
+export interface FollowupItem {
+  id: string
+  title: string
+  source: FollowupSource
+  dueGroup: FollowupDueGroup
+  note?: string
+  done: boolean
+  doneAt?: string
+  createdAt: string
+}
+
+interface PersistedShape {
+  triageMarks: Record<string, TriageMark>
+  followups: FollowupItem[]
+}
+
+function loadPersisted(): PersistedShape {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return { triageMarks: {}, followups: [] }
+    const raw = window.localStorage.getItem(STORAGE_KEY)
+    if (!raw) return { triageMarks: {}, followups: [] }
+    const parsed = JSON.parse(raw) as Partial<PersistedShape>
+    return {
+      triageMarks: parsed.triageMarks && typeof parsed.triageMarks === 'object' ? parsed.triageMarks : {},
+      followups: Array.isArray(parsed.followups) ? parsed.followups : [],
+    }
+  } catch {
+    // 解析失败/无痕模式拒绝访问——退回内存态，不崩页面。
+    return { triageMarks: {}, followups: [] }
+  }
+}
+
+function savePersisted(state: PersistedShape) {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return
+    window.localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ triageMarks: state.triageMarks, followups: state.followups }),
+    )
+  } catch {
+    // 写满/被拒——本次操作仍在内存态生效，只是不持久化；不抛错不打断交互。
+  }
+}
+
+let idSeq = 0
+function nextId(prefix: string): string {
+  idSeq += 1
+  return `${prefix}_${Date.now().toString(36)}_${idSeq}`
+}
+
+interface FlowState {
+  triageMarks: Record<string, TriageMark>
+  markTriageDone: (id: string) => void
+  discardTriage: (id: string) => void
+  restoreTriage: (id: string) => void
+
+  followups: FollowupItem[]
+  addFollowup: (input: {
+    title: string
+    source: FollowupSource
+    dueGroup: FollowupDueGroup
+    note?: string
+  }) => string
+  completeFollowup: (id: string) => void
+  reopenFollowup: (id: string) => void
+  deleteFollowup: (id: string) => void
+  editFollowup: (id: string, patch: Partial<Pick<FollowupItem, 'title' | 'dueGroup' | 'note'>>) => void
+
+  // "带进议事室"：分诊条目一键飞进 The room——composer 预填该条目上下文（不自动提交，
+  // manager 审过再发问；与 AskCard 的 authorship 原则同一条线：起草由 Avery，动手由人）。
+  composerDraft: string | null
+  setComposerDraft: (text: string) => void
+  consumeComposerDraft: () => void
+}
+
+export const useFlow = create<FlowState>((set, get) => {
+  const initial = loadPersisted()
+
+  function persist() {
+    const { triageMarks, followups } = get()
+    savePersisted({ triageMarks, followups })
+  }
+
+  return {
+    triageMarks: initial.triageMarks,
+    markTriageDone: (id) => {
+      set((s) => ({ triageMarks: { ...s.triageMarks, [id]: 'done' } }))
+      persist()
+    },
+    discardTriage: (id) => {
+      set((s) => ({ triageMarks: { ...s.triageMarks, [id]: 'discarded' } }))
+      persist()
+    },
+    restoreTriage: (id) => {
+      set((s) => {
+        const marks = { ...s.triageMarks }
+        delete marks[id]
+        return { triageMarks: marks }
+      })
+      persist()
+    },
+
+    followups: initial.followups,
+    addFollowup: (input) => {
+      const id = nextId('fu')
+      const item: FollowupItem = {
+        id,
+        title: input.title,
+        source: input.source,
+        dueGroup: input.dueGroup,
+        note: input.note,
+        done: false,
+        createdAt: new Date().toISOString(),
+      }
+      set((s) => ({ followups: [item, ...s.followups] }))
+      persist()
+      return id
+    },
+    completeFollowup: (id) => {
+      set((s) => ({
+        followups: s.followups.map((f) =>
+          f.id === id ? { ...f, done: true, doneAt: new Date().toISOString() } : f,
+        ),
+      }))
+      persist()
+    },
+    reopenFollowup: (id) => {
+      set((s) => ({
+        followups: s.followups.map((f) => (f.id === id ? { ...f, done: false, doneAt: undefined } : f)),
+      }))
+      persist()
+    },
+    deleteFollowup: (id) => {
+      set((s) => ({ followups: s.followups.filter((f) => f.id !== id) }))
+      persist()
+    },
+    editFollowup: (id, patch) => {
+      set((s) => ({ followups: s.followups.map((f) => (f.id === id ? { ...f, ...patch } : f)) }))
+      persist()
+    },
+
+    composerDraft: null,
+    setComposerDraft: (text) => set({ composerDraft: text }),
+    consumeComposerDraft: () => set({ composerDraft: null }),
+  }
+})
+
+// ── 分诊纯函数选择器（输入 = LiteTeam.handoffs，本身已是 teamData.ts liveHandoffs() 的真派生；
+// 这里不重新派生，只按 marks 分桶——避免红线审计过的派生逻辑在两处各长一份）。────────────
+export function selectTriagePending(team: LiteTeam | null, marks: Record<string, TriageMark>): LiteHandoff[] {
+  return (team?.handoffs ?? []).filter((h) => !marks[h.id])
+}
+
+export function selectTriageHandled(team: LiteTeam | null, marks: Record<string, TriageMark>): LiteHandoff[] {
+  return (team?.handoffs ?? []).filter((h) => marks[h.id] === 'done')
+}
+
+export function selectTriageSetAside(team: LiteTeam | null, marks: Record<string, TriageMark>): LiteHandoff[] {
+  return (team?.handoffs ?? []).filter((h) => marks[h.id] === 'discarded')
+}

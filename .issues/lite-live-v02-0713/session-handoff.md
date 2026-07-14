@@ -1,118 +1,135 @@
-# session-handoff · feat-035（v02 并排壳 + 皮肤基建）
+# session-handoff · feat-036（v02 晨间分诊区 + Follow-ups 跟进区）
 
-> 写于 2026-07-14。分支 `feat/035-v02-shell`（从 main `3a9cf5c` 起），主 checkout 承接（未用独立
-> worktree——kickoff-dev.md 的编排形态就是"每 feature 一个 AFK 实现子代理在主 checkout 承接分支"）。
-> **未 merge main、未 push**。下一棒交给 main 编排做对抗验证，clean 后推进 feat-036。
+> 写于 2026-07-14。分支 `feat/036-v02-triage-followups`（从 `feat/035-v02-shell` 起），主 checkout 承接
+> （同编排形态：每 feature 一个 AFK 实现子代理在主 checkout 承接分支跑 gate-first 全流程）。
+> **未 merge main、未 push**。下一棒交给 main 编排做对抗验证，clean 后推进 feat-037（A closer look）。
+>
+> 本文件覆盖 feat-035 遗留的同名文件——鉴于本 epic 的既有约定是"每棒一份最新交接"，历史棒的细节
+> 留在各自 commit 与 `progress.md` 的对应 Update 节（feat-035 见 `progress.md` "2026-07-14 · feat-035"）。
 
 ## 分支与提交
 
 ```
-feat/035-v02-shell（4 commits，from main 3a9cf5c）
+feat/036-v02-triage-followups（从 feat/035-v02-shell 起，落盘前请以 git log 实际输出为准）
 ```
 
-commit 顺序（`git log feat/035-v02-shell --oneline`，最新在上，跑完 `feat()` 主提交后请核对实际
-hash——本文写于收口前，落盘时按 `git log -5 --oneline` 更新）：
+commit 顺序（按落盘时机，语义边界不变，粒度可能微调）：
 
-1. `docs(v02): 立项 + feat-035..039 登记` — `.issues/lite-live-v02-0713/*` 三文档入库
-   + `feature_list.json` 登记 5 个 feature（925e649）。
-2. `feat(v02): lite2 并排壳 — copy-then-wall + v 开关 + 6-tab 骨架 + 皮肤令牌层 + 合规页脚`
-   （待落盘 hash）— 本节下方"实现清单"全部内容。
-3. `docs(v02): gate — v2Verdict 5 相位 + 驱动协议`（待落盘 hash）— snippet.js + gate.md。
-4. `docs(v02): feat-035 done — evidence + progress + handoff`（待落盘 hash）— feature_list.json
-   状态更新 + progress.md 新节 + 本文件。
+1. `docs(v02): 门先行 — flowVerdict B 组 4 相位 + 出生即红实证` — `scripts/gates/live-frontend-gate.snippet.js`
+   新增 `assertTriageRenders`/`assertTriageActions`/`assertFollowupsFlow`/`snapshotFollowups`/
+   `assertFollowupsPersist`/`flowVerdict`，头注释登记用法；实现前真跑一遍记录红态。
+2. `feat(v02): 晨间分诊三动作 + Follow-ups 真实屏 — flowStore + draftLinks + 五处改动`
+   — 本节下方"实现清单"全部内容。
+3. `docs(v02): feat-036 done — evidence + progress + handoff`
+   — `feature_list.json` 状态更新 + `progress.md` 新节 + 本文件。
 
-（提交粒度可能在落盘时合并/微调，以 `git log` 实际输出为准；语义边界不变。）
+## 实现清单（对照 kickoff-dev.md §feat-036）
 
-## 实现清单（对照 kickoff-dev.md §架构拍板 1-6）
-
-| 拍板项 | 落地 |
+| 项 | 落地 |
 |---|---|
-| 1. copy-then-wall | `src/lite/**`（19 文件）→ `src/lite2/**`，逐文件 1:1 复制后機械替换 `t.lite.`→`t.lite2.`；`LiteApp.tsx`→`Lite2App.tsx` 改名+改造 |
-| 2. 版本开关 | `src/shared/version.ts`（`?v=` 缺省 `'1'`）+ `App.tsx` 三路合成 |
-| 3. CSS 作用域 | `src/lite2/styles/lite2.css` = `lite.css` 的 76 处 `.lite-shell`→`.lite2-shell` 机械替换，新增 Follow-ups/A closer look/合规页脚 CSS 块（净新增选择器，非替换） |
-| 4. 皮肤令牌层 | `src/lite2/skin.ts` + `styles/skin-paper.css`（现值照搬）+ `styles/skin-aurora.css`（decisions.md 色表，粗调） |
-| 5. 墙扩展 | `eslint.config.js` 三区两两互斥（lite2→story/story→lite2/lite→lite2/lite2→lite 全 error），红灯实证见下 |
-| 6. i18n | `en.ts` 新增 `lite2` 顶层 key（95 个：84 复用 + 11 新增）+ `zh.ts` 同步（84 复用 `zh.lite` 已核准译文 + 11 个走 M3 真译） |
+| triage 派生 | **不重新派生**——直接消费 `teamData.ts liveHandoffs()` 既有真派生（`team.handoffs`），`flowStore.ts` 只加 `triageMarks` + 三个纯函数选择器（`selectTriagePending/Handled/SetAside`）按 mark 分桶。理由：避免红线审计过的 handoff 派生逻辑在两处各长一份。 |
+| 三动作 | done→`.home-check`→`markTriageDone`；discard→`.home-discard`→`discardTriage`；带进议事室→新 `.lite-triage-room`→`setComposerDraft`+`goScreen('room')`（只预填不自动提交）。 |
+| "今天已照料"堆 | 复用 story 同款 `.home-drawer`/`.home-drawer-toggle`/`.home-drawer-list`/`.home-drawer-item`（`src/shared/styles/70-home-cards.css` 既有类，不新造视觉语言）；默认折叠。 |
+| Follow-ups slice | `flowStore.ts`：`FollowupItem{id,title,source,dueGroup,note?,done,doneAt?,createdAt}`，`addFollowup/completeFollowup/reopenFollowup/deleteFollowup/editFollowup`。 |
+| Follow-ups 屏 | `FollowupsScreen.tsx` 整屏重写：今天/本周/之后分组 + 手动添加表单 + Active/History 两个 subtab + 逐条编辑/删除/起草邮件。 |
+| 真接线（禁止假按钮） | 分诊卡"加入跟进"（`.lite-triage-addfollowup`）+ advice 卡 Recommended actions 每条一个"加入跟进"（`.lite-advice-add-followup`，source=room）均真写 `flowStore.addFollowup`。 |
+| mailto 起草深链 | `draftLinks.ts`：`draftMailForHandoff`/`draftMailForFollowup`，收件人留空，`encodeURIComponent` 手写（不用 `URLSearchParams`，避免 mailto 对 `+` 的解析歧义）。 |
+| localStorage 持久化 | `flowStore.ts` 手写同步 load/save（key `lite2:flow:v1`），**不用** zustand `persist` 中间件——其 `hydrate()` 走 Promise 链会有一帧空态闪烁窗口；手写版 store 创建时即最终态。 |
+| i18n | `en.ts` 新增 43 key（`triage*`/`followups*`/`adviceAddFollowup`/`followupAdded`），删 2 个不再用的 coming-soon 占位 key；`zh.ts` 经 `scripts/i18n-zh-lite2-delta.mjs` 重跑（84 复用 + 45 delta 送 M3）。 |
 
-6-tab 骨架（`src/lite2/LiteTopbar.tsx` tabs 数组顺序）：`Your team` · `The room` ·
-`Follow-ups`（`src/lite2/screens/FollowupsScreen.tsx`，新，空态占位）· `A closer look`
-（`src/lite2/screens/CloserLookScreen.tsx`，新，空态占位）· `Playbooks` · `Where this goes`。
+## 门证据（flowVerdict，B 组，实测，非模板）
 
-合规页脚：`src/lite2/Lite2Footer.tsx`，挂载在 `Lite2App.tsx` 壳底部（`.lite2-compliance-footer`，
-`position:absolute;bottom:0`，`pointer-events:none` 不挡 composer）。
+**实现前（真跑，红是成功）**：
 
-## 门证据（v2Verdict，实测，非模板）
+```json
+{
+  "pass": false,
+  "phases": {
+    "triageRenders": false,
+    "triageActions": false,
+    "followupsFlow": false,
+    "followupsPersist": false
+  },
+  "note": "2026-07-14 born red：?v=2&mode=live&transport=stub 下分诊区已渲染 1 张卡（既有 liveHandoffs() 派生），但卡上零 .home-check/.home-discard/.lite-triage-room/.lite-triage-addfollowup；Follow-ups 屏 .lite-followup-item 计数 0（仍是 feat-035 的 coming-soon 占位）。"
+}
+```
+
+**实现后（真跑，绿是收工）**：
 
 ```json
 {
   "pass": true,
   "phases": {
-    "v2Boots": true,
-    "v1Untouched": true,
-    "storyUntouched": true,
-    "wallRed": true,
-    "skinTokens": true
+    "triageRenders": true,
+    "triageActions": true,
+    "followupsFlow": true,
+    "followupsPersist": true
+  },
+  "results": {
+    "triageRenders": { "triageCards": 1, "bloodBarLeak": null, "hasCheck": true, "hasDiscard": true, "hasTakeToRoom": true, "hasAddFollowup": true, "pass": true },
+    "triageActions": { "doneWorks": true, "drawerHasItem": true, "discardWorks": true, "roomWorks": true, "pass": true },
+    "followupsFlow": { "hasSourceLabel": true, "sourceLabelText": "From this morning", "leftActive": true, "movedToHistory": true, "restored": true, "pass": true },
+    "followupsPersist": { "pass": true }
   }
 }
 ```
 
-- `v2Boots`：`?v=2&mode=live&transport=stub` → `.lite2-shell` 挂载，6 个 tab 顺序精确匹配
-  `["Your team","The room","Follow-ups","A closer look","Playbooks","Where this goes"]`。
-- `v1Untouched`：默认 URL（无 `v=`）`.lite2-shell` 计数 = 0；同会话复跑 v01 十相位 `verdict()`
-  → `{emptyStateClean,ingested,teamRendered,postUploadClean,detailIsLive,composerIsLive,
-  teamGrouped,roomCanvas,playbooksEmpty,visionSurface}` 全 `true`（含 F2 真 SSE：5 帧 → manifest
-  → 8 字段卡；team 16 人含 Lin Qing/Chen Mingyuan，零血条泄漏）。另跑 `askVerdict()` 六相位
-  （K1-K6：草稿逐字编辑+增删 / 分享 2 链 host 校验 / 拉取回收 1/2→全收 / 多人定性汇总零分数表 /
-  单人回执数值+本人自述+原话短评 / whole-DOM 人卡零数字零分数表）全 `true`——双重零回归证据。
-- `storyUntouched`：`?mode=story` → `.lite2-shell` 计数 = 0，story 壳正常渲染。
-- `wallRed`：4 个新墙方向逐一临时注入违规 import → `npm run lint` exit 1（红）→ 撤回 → exit 0
-  （绿），`git diff --stat` 复位后归零，无残留改动。
-- `skinTokens`：`readSkinSnapshot()` 前后对比——`data-skin` 属性 `paper`→`aurora`，
-  `backgroundImage` 从暖纸渐变（`rgb(251,248,240)…`）变为极光渐变（`rgb(238,233,255)…`，含
-  violet/cyan radial 光晕）。
+- `triageRenders`：stub 语料（1 个 at-risk 项目、1 条 blocker）诚实产出 1 张分诊卡，卡上四个真控件全在、零人身数字泄漏（`BLOOD_BAR_RE` 零命中）。
+- `triageActions`：**同一张卡**做 done→撤销→discard→撤销→带进议事室 三段式序列（stub 只有 1 张诚实卡，不为凑测试虚构第二张）；done 后 pending 计数掉且条目进抽屉，discard 后立即消失，带进议事室后 composer 值含条目标题。
+- `followupsFlow`：分诊卡"加入跟进"→ Follow-ups 屏出现新条目、来源标签 "From this morning" → 勾完成离开 active 列表 → History tab 出现 → 点 Bring it back → 回到 active 列表。
+- `followupsPersist`：写入后整页 reload（`localStorage` 而非纯内存态），条目仍在（跨导航快照对比，模式同 `v2Verdict` 的 `readSkinSnapshot`/`assertSkinTokens`）。
+
+## 零回归证据（同分支复跑，v01/story/v2Verdict A 组）
+
+```json
+{
+  "v01_verdict": { "pass": true, "phases": { "emptyStateClean": true, "ingested": true, "teamRendered": true, "postUploadClean": true, "detailIsLive": true, "composerIsLive": true, "teamGrouped": true, "roomCanvas": true, "playbooksEmpty": true, "visionSurface": true } },
+  "askVerdict": { "pass": true, "phases": { "askDraft": true, "askShare": true, "askCollect": true, "askReceiptsMulti": true, "askSingle": true, "askRedline": true } },
+  "v2Verdict_A_group_recheck": { "v2Boots": true, "v1Untouched": true, "storyUntouched": true, "skinTokens": true, "wallRed": "见下方独立记录" }
+}
+```
+
+- `wallRed`（本棒亲自复测，4 方向逐一临时注入违规 import → `npm run lint` exit 1 → 撤回 → exit 0）：
+  `lite2→story`/`story→lite2`/`lite→lite2`/`lite2→lite` 全部先红后绿；`git status`/
+  `git diff --stat main -- src/lite/ src/story/ eval-harness/` 复位后确认零字节改动（过程中撞到一次
+  Windows 下 `git status` 对 `src/lite/store.ts`/`src/story/lib/useRailCamera.ts` 报 `M` 但
+  `git diff --numstat` 显示零变更的 CRLF/LF 索引噪音——`git checkout --` 清理确认，非真实内容改动）。
 
 ## init.sh
 
 ```
-npm run lint       — 0 errors, 3 warnings（src/story/lib/useRailCamera.ts 既有 noInlineConfig
-                      警告，与本次改动无关，S1 之前就有）
+npm run lint       — 0 errors, 4 warnings（3 条 story/lib/useRailCamera.ts 既有 noInlineConfig
+                      警告 + 1 条 RoomScreen.tsx 新增同款警告——eslint-disable-next-line 在本仓库
+                      noInlineConfig 配置下本就无效，是已知无害模式，不是新问题）
 npm run typecheck  — clean
-npm run build      — 494 modules（S6 基线 467，+27）
+npm run build      — 496 modules（feat-035 基线 494，+2：flowStore.ts + draftLinks.ts）
 ```
 
-## 零回归证据摘要
+## 门辅助脚本的一个 bug（非产品代码，已修入 snippet.js）
 
-`git diff --stat main -- src/lite/ src/story/ eval-harden/` 空输出（zero diff）——v01/story
-一个字节没动。改动面 36 文件：35 个 tracked add/modify + `.codegraph/design-system-ref.lnk`
-（Danny 的文件，保持未追踪，未纳入任何提交）。
+`snapshotFollowups()` 最初在点击 `.lite-followups-subtab` 后立刻同步读 DOM，捕获了 React 批处理
+提交前的旧渲染，误判"同一条目同时出现在 active 与 history 两个视图"。加 200ms settle 后复测：
+history 正确为空、active 正确只含 1 条。已在 `live-frontend-gate.snippet.js` 内加注释存档，
+避免下一棒（feat-037 写 C 组门相位时）踩同一个坑——**任何 subtab/tab 切换后紧跟着的 DOM 读取都
+应该走 poll 或至少一次 settle，不能假设点击后同步生效**。
 
-## 偏离 kickoff 之处（非阻塞，已记 progress.md）
+## 偏离 kickoff 之处
 
-1. **门文档写在实现之后**：kickoff 要求"先立门"（gate-first），本 session 先建完整棵
-   `src/lite2/**` + 皮肤令牌层，再回头把 `v2Verdict` 断言写进 snippet.js。DOM 四相位
-   （`v2Boots`/`v1Untouched`/`storyUntouched`/`skinTokens`）因此无法证明"实现前必红"，只有
-   `wallRed`（ESLint 侧）做了真正的先红后绿实证（这部分是运行时可验证的，与实现顺序无关）。
-   建议 feat-036 起，先给 Follow-ups 真派生逻辑的门相位（B 组）写断言、确认红，再写实现代码，
-   更严格遵循 gate-first。
-2. **i18n 全量脚本在 lite2 撞同一个 token 预算坑**（S5/S6 的 `lite` section 已知坑复现）：
-   `node scripts/i18n-zh.mjs lite2` 三次 "no JSON in response"。没有走"记一行不阻塞"的英文
-   兜底路线，而是新写了一次性配套脚本 `scripts/i18n-zh-lite2-delta.mjs`（84 个重复 key 直接复用
-   `zh.lite` 已核准译文，11 个真正新 key 单独走 M3，`max_tokens` 2000→6000 后一次成功）——比单纯
-   兜底英文更好（真中文上线），但比 kickoff 预想的"跑现成脚本"多了一步临时工具开发。此脚本已
-   commit 进仓库（`scripts/i18n-zh-lite2-delta.mjs`），feat-036..039 若继续在 `lite2` 命名空间
-   加 key，可直接复用同一模式（改 `deltaKeys` 判定逻辑即可，不必每次重写）。
+无重大偏离。本棒**严格执行了 gate-first**：先写 B 组 4 相位断言、对着未实现的代码真跑确认红
+（红态 JSON 见上）、再动手实现、再复跑绿——修正了 feat-035 交接记录里的纪律偏离（feat-035 的门
+文档是实现完之后才补的，DOM 相位没能证明"出生即红"）。
 
-## 遗留 / 给 feat-036 的提示
+## 遗留 / 给 feat-037 的提示
 
-- Follow-ups / A closer look 目前是纯空态占位——真派生（`src/lite2/flowStore.ts` 分诊+跟进
-  store）、来源标签、localStorage 持久化全部待 feat-036/037。
-- aurora 皮肤是"粗调初版"（kickoff 明确允许）：令牌层覆盖约八成组件（凡消费 `var(--ink)` 等
-  CSS 自定义属性的 shared 组件自动换皮），少量玻璃 chrome（`.scene-tabs`/`.composer-card`/
-  `.nexus-empty`）在 lite2 作用域内单独覆盖了背景，其余组件级语法差异留 feat-039 逐屏精修。
-- 合规页脚固定在壳底部、贴文档流最底，未做真实截图验证是否与移动端窄屏 composer 打架
-  （`preview_screenshot` 本 session 持续 30s 超时，同 S4 已知坑——DOM/computed-value 断言已覆盖
-  核心逻辑，但视觉细节建议下一棒有条件时截图复核）。
-- `src/lite2/**` 内的组件级注释大多沿用了 v1 的历史脉络描述（如 store.ts 顶部已改写为
-  feat-035 血统说明），但部分组件内联注释（如 `LiteComposer.tsx`、`RoomScreen.tsx`）仍保留
-  "feat-024（ADR-0022 决策 1）"等 v1 历史注释字样——这些注释描述的技术决策对 lite2 依然成立
-  （同一套 seam/契约），未逐条重写，纯粹是历史脉络说明，不影响功能。
+- Follow-ups 编辑目前只支持标题+分组，不支持改来源标签或 note——如果 feat-037/038 需要更丰富的
+  编辑，可以在 `flowStore.editFollowup` 的 patch 类型上直接扩展（已经是 `Partial<Pick<...>>` 形状，
+  加字段成本低）。
+- advice 卡的"加入跟进"是逐条 recommended action 一个按钮（`.lite-advice-add-followup`），视觉上
+  略密——非阻塞，可留 feat-039 aurora 精修阶段顺手收窄成单一"全部加入"或折叠态。
+- `src/lite2/flowStore.ts` 的 `composerDraft` 桥目前只服务"分诊→议事室"这一条路径；feat-037 的
+  "直接问问本人"→ room 预填快问语境，如果也要走 composer 预填（而非直接开一张新 Ask 草稿），可以
+  复用同一个 `setComposerDraft`/`consumeComposerDraft` 机制，不必另起一套状态。
+- `.home-drawer*`（今天已照料堆）与 `.home-check`/`.home-discard`（分诊三动作）现在被 v01 story
+  的 `70-home-cards.css`（shared，非 lite2 专属）和 lite2 的晨间分诊共用同一套类名与视觉语言——
+  这是有意为之（PRD 明确"沿用 sage/honey/terracotta 左边条语法"），feat-037 的矛盾卡"解决/忽略/
+  历史"如果视觉语言相近，可以考虑复用而非重新设计一套。
