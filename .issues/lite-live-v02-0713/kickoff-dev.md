@@ -47,3 +47,16 @@ init.sh 绿 + 本 feature 门相位先红后绿实证 + v01/story 零回归复�
 3. **红线开关佐证**：持久化线确认后端 AVERY_ALLOW_PERSON_SCORING 开时笔记文本可能含评分——v02 本期不给人卡设计任何分数 UI 与 PRD 一致；笔记面移植时（feat-047）笔记正文按后端原样呈现即可，不做前端二次加工。
 4. **所有权**：`.issues/lite-v1-lean-real-0713/**` 归持久化线，本线不动。数据处理说明草稿（data-handling-copy-draft.md）若 v02 做隐私露出可采用（feat-047 时评估）。
 5. **合流顺序 Danny 定**；本线优势：v02 完全不碰 src/lite/**，对三方合流是中立方，随时可合。
+
+## 合流契约附录 §6 · 并新 main 计划（2026-07-14，回执 main 编排广播）
+
+已核实：main=5d32e4f（含持久化链 integrate 6bf6b0e + Ask 阶段 C merge da94d59），分叉点 3a9cf5c，冲突面=5 个共享文件（feature_list.json、gate md+snippet、i18n en/zh），全并集型。
+
+**决定：merge，不 rebase**——本线 feature_list evidence 与对抗验证记录全部按 commit hash 引用（bf1fce0/2824620/23b6f28/c37ca11…），rebase 改写 hash 会作废证据链。
+
+**时机与顺序**：feat-045 对抗验证收口后立即执行：
+1. 从 feat/045 tip 开 `integrate/v02-main-sync`，merge main 5d32e4f；解 5 文件并集（i18n 双方各自 key、feature_list 条目并集且 feat-034 取 main 新版、gate 相位并集）；
+2. 合后全量复跑：init.sh + v01 verdict + askVerdict（注意 main 侧 Ask 已从 stub 变真后端相位，以 main 的门定义为准）+ v2Verdict A/B/C/D 组；
+3. feat-046（aurora 皮）从同步后基线起跑；
+4. **feat-047 因持久化已进 main 而解除阻塞**，排在 046 后（引擎 delta 移植进 lite2 + 笔记/文件面 + owner_token header 纪律）。
+lite2 与 src/lite 零交叉 import（墙已实证），合流期间 lite2 引擎仍是旧契约拷贝、独立可编译，不构成恶性冲突；契约对齐在 feat-047 做。
