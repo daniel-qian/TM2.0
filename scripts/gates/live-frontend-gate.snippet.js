@@ -145,6 +145,60 @@
  *                                                    // project title + claim/evidence context
  *                                                    // (not auto-submitted)
  *   __seedGate.gapVerdict()                          // aggregate (3 phases)
+ *
+ * feat-045 (lite-live-v02, PRD F5+F7 / decisions.md 拍板#1) — onboarding wizard + suggestion
+ * chips + notification bell, SEPARATE aggregate (nudgeVerdict below, phase group D — same
+ * per-group-aggregate convention flowVerdict/gapVerdict established for groups B/C). BORN RED
+ * (2026-07-14, before implementation): no `.lite-onboard` / `.lite-room-chip` / `.lite-bell`
+ * anywhere. Driven with `?v=2&mode=live&transport=stub`. Spans FIVE page loads (first-visit
+ * detection = localStorage state, so the driver clears every `lite2:*` key and reloads between
+ * runs); like the A-group phases, cross-navigation evidence is carried by the driver as JSON and
+ * fed into nudgeVerdict(carried) at the end:
+ *   A) [clear ALL localStorage keys starting `lite2:` -> load ?v=2&mode=live&transport=stub,
+ *       inject, defuseAnimations()]
+ *      const walk = await __seedGate.onboardWalkthrough()   // helper: wizard appears on a clean
+ *                                                    // first visit; REAL upload through the
+ *                                                    // wizard's own file input (store.uploadFiles
+ *                                                    // -> stub ingest -> ready marker); team-info
+ *                                                    // step filled; playbook selection CHANGED
+ *                                                    // from the default set (one default off, two
+ *                                                    // non-defaults on); done-step summary lists
+ *                                                    // exactly the chosen ids; finish closes it
+ *   B) [reload the SAME url, re-inject]
+ *      await __seedGate.assertOnboardPersist(walk)   // onboardPersist: wizard does NOT re-appear;
+ *                                                    // Playbooks tab renders slots whose
+ *                                                    // data-playbook-id set EXACTLY equals the
+ *                                                    // chosen set (specific ids, not a count),
+ *                                                    // every slot carrying the honest Coming tag
+ *   C) [clear ALL `lite2:` keys again -> reload, re-inject]
+ *      const skip = await __seedGate.onboardSkipNow() // helper: wizard appears fresh; the skip
+ *                                                    // control closes it
+ *   D) [reload, re-inject]
+ *      await __seedGate.assertOnboardSkip(skip)      // onboardSkip: after the reload the wizard
+ *                                                    // never mounts again (no nagging)
+ *      await __seedGate.assertChipsAsk()             // chipsAsk: The room's empty state renders
+ *                                                    // exactly 4 suggestion chips (distinct
+ *                                                    // data-chip-id, non-empty copy); clicking one
+ *                                                    // fires a REAL askLive run — the terminal
+ *                                                    // mounts and SSE frames render (same dynamic
+ *                                                    // shape as phase F2), not a dead button
+ *   E) [clear ALL `lite2:` keys -> reload, re-inject]
+ *      await __seedGate.assertBellIsReal()           // bellIsReal: (skips the fresh wizard first)
+ *                                                    // bell opens on a cleared state with ZERO
+ *                                                    // notification items and an explicit empty
+ *                                                    // marker (no placeholder fakes); a stub
+ *                                                    // ingest then yields EXACTLY one 'ingest'
+ *                                                    // item plus one 'gap' item (the stub corpus
+ *                                                    // honestly contains ONE contradiction —
+ *                                                    // pr_portal — so the new-gap event fires
+ *                                                    // too; exact event-type multiset, not
+ *                                                    // count>0); a composer-driven run then adds
+ *                                                    // EXACTLY one 'run' item (final multiset
+ *                                                    // gap+ingest+run and nothing else); the
+ *                                                    // unread badge shows and mark-all clears it
+ *      __seedGate.nudgeVerdict({ onboardPersist, onboardSkip })   // aggregate (4 phases) — pass
+ *                                                    // the JSON carried from pages B/D for the
+ *                                                    // phases that ran before this page load
  */
 (() => {
   // Story-EXCLUSIVE nouns. NOTE: 'Lin Qing' / 'Chen Mingyuan' / 'Sun Xiaomei' / 'Zheng Zixuan'
@@ -1530,6 +1584,333 @@
         gapsToAsk: !!(results.gapsToAsk && results.gapsToAsk.pass),
       };
       return { pass: Object.values(phases).every(Boolean), phases, results };
+    },
+
+    // ── feat-045 (lite-live-v02, PRD F5+F7) — nudgeVerdict, independent aggregate, group D ────
+    // Onboarding wizard (overlay, first-visit via localStorage) + room empty-state suggestion
+    // chips + REAL-event notification bell. See the top-of-file usage doc for the five-page
+    // drive order; first-visit state lives in `lite2:`-prefixed localStorage keys, so the driver
+    // clears those (and ONLY those) between runs.
+    _wizard() { return $('.lite-onboard'); },
+    _wizardStep() { const w = this._wizard(); return w ? w.getAttribute('data-onboard-step') : null; },
+    async _settleNudge(ms) { return new Promise((r) => setTimeout(r, ms || 250)); },
+    // Confirm an element NEVER shows up inside a window (poll-for-absence — the inverse of poll).
+    async _staysAbsent(sel, ms) {
+      const t0 = Date.now();
+      for (;;) {
+        if ($(sel)) return false;
+        if (Date.now() - t0 > ms) return true;
+        await this._settleNudge(200);
+      }
+    },
+    _injectFileInto(input, name) {
+      const dt = new DataTransfer();
+      const bytes = new TextEncoder().encode('name,role\nA colleague,Coordinator\n');
+      dt.items.add(new File([bytes], name, { type: 'text/csv' }));
+      input.files = dt.files;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    },
+    _setInput(el, value) {
+      const proto = el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+      Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, value);
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    },
+
+    async onboardWalkthrough() {
+      // Helper (page A of the drive order — returns JSON the driver carries to
+      // assertOnboardPersist after the reload). Walks all four steps on a CLEAN first visit:
+      // upload (REAL store.uploadFiles through the wizard's own input — stub settles instantly),
+      // team info, playbook selection (changed from the default set), done summary, finish.
+      const out = { sawWizard: false, startStep: null, uploadReady: false, filledTeam: false,
+        defaultIds: [], chosenIds: [], differsFromDefault: false, summaryIds: [],
+        summaryMatches: false, greetingHasName: false, finished: false };
+      try { await poll(() => (this._wizard() ? true : null), 10000, 'onboarding wizard to mount on first visit'); } catch (e) { return out; }
+      out.sawWizard = true;
+      out.startStep = this._wizardStep();
+
+      // ── step: upload (real ingest through the wizard) ──
+      const upInput = $('.lite-onboard-upload-input');
+      if (upInput) {
+        this._injectFileInto(upInput, 'wizard-roster.csv');
+        try {
+          await poll(() => ($('.lite-onboard-upload-ready') ? true : null), 15000, 'wizard upload to settle (stub)');
+          out.uploadReady = true;
+        } catch (e) { /* stays false */ }
+      }
+      const next1 = $('.lite-onboard-next');
+      if (next1) next1.click();
+      try { await poll(() => (this._wizardStep() === 'team' ? true : null), 5000, 'wizard to advance to team step'); } catch (e) { return out; }
+
+      // ── step: team info (local config, used for greetings) ──
+      const company = $('input.lite-onboard-company');
+      const dept = $('input.lite-onboard-dept');
+      const name = $('input.lite-onboard-name');
+      if (company) this._setInput(company, 'Prism Works');
+      if (dept) this._setInput(dept, 'Operations');
+      if (name) this._setInput(name, 'Danny');
+      out.filledTeam = !!(company && dept && name);
+      const next2 = $('.lite-onboard-next');
+      if (next2) next2.click();
+      try { await poll(() => (this._wizardStep() === 'playbooks' ? true : null), 5000, 'wizard to advance to playbooks step'); } catch (e) { return out; }
+
+      // ── step: playbooks — CHANGE the selection so persistence can't pass on defaults alone ──
+      const chips = () => $$('.lite-onboard-playbook');
+      const pressedIds = () => chips().filter((c) => c.getAttribute('aria-pressed') === 'true')
+        .map((c) => c.getAttribute('data-playbook-id')).filter(Boolean);
+      out.defaultIds = pressedIds().sort();
+      const firstOn = chips().find((c) => c.getAttribute('aria-pressed') === 'true');
+      const offs = chips().filter((c) => c.getAttribute('aria-pressed') !== 'true');
+      if (firstOn) firstOn.click();
+      if (offs[0]) offs[0].click();
+      if (offs[1]) offs[1].click();
+      try {
+        await poll(() => (pressedIds().length === out.defaultIds.length + 1 ? true : null), 5000, 'playbook toggles to stick');
+      } catch (e) { /* fall through — chosenIds below reports the actual state */ }
+      out.chosenIds = pressedIds().sort();
+      out.differsFromDefault = JSON.stringify(out.chosenIds) !== JSON.stringify(out.defaultIds);
+      const next3 = $('.lite-onboard-next');
+      if (next3) next3.click();
+      try { await poll(() => (this._wizardStep() === 'done' ? true : null), 5000, 'wizard to advance to done step'); } catch (e) { return out; }
+
+      // ── step: done — summary must list exactly the chosen ids; greeting uses the name ──
+      out.summaryIds = $$('.lite-onboard-summary-item')
+        .map((el) => el.getAttribute('data-playbook-id')).filter(Boolean).sort();
+      out.summaryMatches = JSON.stringify(out.summaryIds) === JSON.stringify(out.chosenIds);
+      out.greetingHasName = ((this._wizard() || {}).innerText || '').includes('Danny');
+      const finish = $('.lite-onboard-finish');
+      if (finish) finish.click();
+      try {
+        await poll(() => (!this._wizard() ? true : null), 5000, 'wizard to close after finish');
+        out.finished = true;
+      } catch (e) { /* stays false */ }
+      return out;
+    },
+
+    async assertOnboardPersist(walk) {
+      // Phase onboardPersist (page B, after a REAL reload): the wizard must NOT re-appear, and
+      // the Playbooks tab must reflect the SPECIFIC chosen ids (data-playbook-id set equality,
+      // not a count), every chosen slot carrying the honest Coming-grammar tag.
+      const wizardStaysAway = await this._staysAbsent('.lite-onboard', 2500);
+      this._clickTab('Playbooks');
+      try { await poll(() => ($('.lite-playbooks') ? true : null), 8000, 'playbooks screen to mount'); } catch (e) { /* report below */ }
+      const slots = $$('.lite-playbooks-slot[data-playbook-id]');
+      const slotIds = slots.map((s) => s.getAttribute('data-playbook-id')).sort();
+      const expected = (walk && walk.chosenIds) || [];
+      const exactMatch = expected.length > 0 && JSON.stringify(slotIds) === JSON.stringify(expected);
+      const allTagged = slots.length > 0 && slots.every((s) => s.querySelector('.lite-playbooks-slot-tag'));
+      const out = {
+        walk: walk || null,
+        wizardStaysAway,
+        slotIds,
+        expectedIds: expected,
+        exactMatch,
+        allTagged,
+        pass: !!walk && walk.sawWizard && walk.uploadReady && walk.differsFromDefault &&
+          walk.summaryMatches && walk.finished && wizardStaysAway && exactMatch && allTagged,
+      };
+      results.onboardPersist = out;
+      return out;
+    },
+
+    async onboardSkipNow() {
+      // Helper (page C): on a fresh cleared state the wizard appears; the skip control closes it.
+      const out = { sawWizard: false, skipClosed: false };
+      try { await poll(() => (this._wizard() ? true : null), 10000, 'onboarding wizard to mount for skip run'); } catch (e) { return out; }
+      out.sawWizard = true;
+      const skip = $('.lite-onboard-skip');
+      if (!skip) return out;
+      skip.click();
+      try {
+        await poll(() => (!this._wizard() ? true : null), 5000, 'wizard to close after skip');
+        out.skipClosed = true;
+      } catch (e) { /* stays false */ }
+      return out;
+    },
+
+    async assertOnboardSkip(skipRun) {
+      // Phase onboardSkip (page D, after a REAL reload): skipping is remembered — the wizard
+      // never mounts again on later visits.
+      const wizardStaysAway = await this._staysAbsent('.lite-onboard', 2500);
+      const out = {
+        skipRun: skipRun || null,
+        wizardStaysAway,
+        pass: !!skipRun && skipRun.sawWizard && skipRun.skipClosed && wizardStaysAway,
+      };
+      results.onboardSkip = out;
+      return out;
+    },
+
+    async assertChipsAsk() {
+      // Phase chipsAsk: The room's empty state renders EXACTLY 4 suggestion chips (distinct
+      // stable data-chip-id, non-empty copy); clicking one fires a REAL askLive run — the
+      // terminal mounts and SSE frames render (same dynamic shape as phase F2). Run this on a
+      // page where the wizard is already out of the way (post-skip); defensively skips if up.
+      if (this._wizard()) {
+        const skip = $('.lite-onboard-skip');
+        if (skip) skip.click();
+        try { await poll(() => (!this._wizard() ? true : null), 5000, 'wizard to close before chips'); } catch (e) { /* fall through */ }
+      }
+      this._clickTab('The room');
+      try { await poll(() => ($('.nexus-empty') ? true : null), 8000, 'room empty state to mount'); } catch (e) { /* report below */ }
+      const chips = $$('.lite-room-chip');
+      const chipIds = chips.map((c) => c.getAttribute('data-chip-id')).filter(Boolean);
+      const chipTexts = chips.map((c) => (c.textContent || '').trim());
+      const idsDistinct = new Set(chipIds).size === chips.length;
+      const textsNonEmpty = chipTexts.every((t) => t.length > 0);
+      let framesSeen = 0;
+      let clicked = false;
+      if (chips[0]) {
+        chips[0].click();
+        clicked = true;
+        try {
+          await poll(() => {
+            const lines = $$('.nexus-terminal-log .terminal-line')
+              .filter((l) => !l.classList.contains('terminal-cursor-line'));
+            return lines.length > 0 ? lines.length : null;
+          }, 20000, 'first SSE frame after chip click');
+          framesSeen = $$('.nexus-terminal-log .terminal-line')
+            .filter((l) => !l.classList.contains('terminal-cursor-line')).length;
+        } catch (e) { /* framesSeen stays 0 */ }
+      }
+      const out = {
+        chipCount: chips.length,
+        chipIds,
+        chipTexts,
+        idsDistinct,
+        textsNonEmpty,
+        clicked,
+        framesSeen,
+        pass: chips.length === 4 && idsDistinct && textsNonEmpty && clicked && framesSeen > 0,
+      };
+      results.chipsAsk = out;
+      return out;
+    },
+
+    async assertBellIsReal() {
+      // Phase bellIsReal (page E, cleared state): notifications are driven ONLY by real events.
+      //  1. Fresh state -> bell opens with ZERO items and an explicit empty marker (a hardcoded
+      //     placeholder notification would fail right here — the partner build's five fakes are
+      //     the anti-pattern this phase exists to block).
+      //  2. A real stub ingest -> EXACTLY one 'ingest' item appears, plus EXACTLY one 'gap' item
+      //     (the stub corpus honestly contains one contradiction, pr_portal, so the new-gap-card
+      //     event fires too — exact event-type multiset, not count>0).
+      //  3. A composer-driven run to completion -> EXACTLY one 'run' item joins them; final
+      //     multiset === {gap, ingest, run} and nothing else.
+      //  4. The unread badge shows while unread items exist, and mark-all-read clears it.
+      if (this._wizard()) {
+        const skip = $('.lite-onboard-skip');
+        if (skip) skip.click();
+        try { await poll(() => (!this._wizard() ? true : null), 5000, 'wizard to close before bell run'); } catch (e) { /* fall through */ }
+      }
+      const kindsNow = () => $$('.lite-notif-item').map((el) => el.getAttribute('data-notif-kind')).sort();
+      const openBell = async () => {
+        if (!$('.lite-bell-pop')) {
+          const t = $('.lite-bell-toggle');
+          if (t) t.click();
+          try { await poll(() => ($('.lite-bell-pop') ? true : null), 4000, 'bell popover to open'); } catch (e) { /* report below */ }
+        }
+      };
+
+      // ── 1) zero state ──
+      const bellPresent = !!$('.lite-bell-toggle');
+      if (!bellPresent) return (results.bellIsReal = { pass: false, error: 'no .lite-bell-toggle in DOM' });
+      await openBell();
+      const initialItems = $$('.lite-notif-item').length;
+      const emptyMarker = !!$('.lite-bell-empty');
+
+      // ── 2) real stub ingest -> exactly {gap, ingest} ──
+      this._clickTab('Your team');
+      let ingestOk = false;
+      const upInput = $('.upload-input');
+      if (upInput) {
+        this._injectFileInto(upInput, 'bell-roster.csv');
+        try {
+          await poll(() => ($('.upload-ready') ? true : null), 15000, 'stub ingest to settle');
+          ingestOk = true;
+        } catch (e) { /* stays false */ }
+      }
+      await openBell();
+      let afterIngestKinds = [];
+      try {
+        afterIngestKinds = await poll(() => {
+          const k = kindsNow();
+          return k.includes('ingest') ? k : null;
+        }, 8000, 'ingest notification to land');
+      } catch (e) { afterIngestKinds = kindsNow(); }
+      const ingestExact = JSON.stringify(afterIngestKinds) === JSON.stringify(['gap', 'ingest']);
+
+      // ── 3) run to completion -> exactly {gap, ingest, run} ──
+      this._clickTab('The room');
+      let runOk = false;
+      try {
+        await poll(() => ($('.nexus-followup-composer input') ? true : null), 6000, 'room composer to mount');
+        const input = $('.nexus-followup-composer input');
+        const form = input.closest('form');
+        this._setInput(input, 'How does the pilot look this week?');
+        if (typeof form.requestSubmit === 'function') form.requestSubmit();
+        else form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+        await poll(() => ($('.terminal-line.is-manifest') ? true : null), 30000, 'stub run to complete');
+        runOk = true;
+      } catch (e) { /* stays false */ }
+      await openBell();
+      let finalKinds = [];
+      try {
+        finalKinds = await poll(() => {
+          const k = kindsNow();
+          return k.includes('run') ? k : null;
+        }, 8000, 'run notification to land');
+      } catch (e) { finalKinds = kindsNow(); }
+      const finalExact = JSON.stringify(finalKinds) === JSON.stringify(['gap', 'ingest', 'run']);
+
+      // ── 4) unread badge + mark-all-read ──
+      const badgeShown = !!$('.lite-bell-badge');
+      let markAllWorks = false;
+      const markAll = $('.lite-bell-markall');
+      if (markAll) {
+        markAll.click();
+        try {
+          await poll(() => (!$('.lite-bell-badge') ? true : null), 4000, 'unread badge to clear after mark-all');
+          markAllWorks = true;
+        } catch (e) { /* stays false */ }
+      }
+
+      const out = {
+        bellPresent,
+        initialItems,
+        emptyMarker,
+        ingestOk,
+        afterIngestKinds,
+        ingestExact,
+        runOk,
+        finalKinds,
+        finalExact,
+        badgeShown,
+        markAllWorks,
+        pass: bellPresent && initialItems === 0 && emptyMarker && ingestOk && ingestExact &&
+          runOk && finalExact && badgeShown && markAllWorks,
+      };
+      results.bellIsReal = out;
+      return out;
+    },
+
+    nudgeVerdict(carried) {
+      // Cross-navigation aggregate (group D): phases onboardPersist/onboardSkip ran on EARLIER
+      // page loads — the driver carries their returned JSON forward and passes it here (same
+      // driver-carries-JSON doctrine as v2Verdict's externally-computed phases). In-page results
+      // (from this load) win only if the carried slot is absent.
+      const merged = Object.assign({}, results);
+      if (carried && typeof carried === 'object') {
+        for (const k of ['onboardPersist', 'onboardSkip', 'chipsAsk', 'bellIsReal']) {
+          if (carried[k]) merged[k] = carried[k];
+        }
+      }
+      const phases = {
+        onboardPersist: !!(merged.onboardPersist && merged.onboardPersist.pass),
+        onboardSkip: !!(merged.onboardSkip && merged.onboardSkip.pass),
+        chipsAsk: !!(merged.chipsAsk && merged.chipsAsk.pass),
+        bellIsReal: !!(merged.bellIsReal && merged.bellIsReal.pass),
+      };
+      return { pass: Object.values(phases).every(Boolean), phases, results: merged };
     },
   };
 
