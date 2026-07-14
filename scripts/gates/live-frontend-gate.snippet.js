@@ -216,6 +216,58 @@
  *                                                    // aggregate (5 phases) — pass the JSON
  *                                                    // carried from pages B/C/E for the phases
  *                                                    // that ran before this page load
+ *
+ * feat-046 (lite-live-v02, kickoff-dev.md §feat-046 / decisions.md 终盘形态) — aurora skin polish
+ * pass, SEPARATE aggregate (skinVerdict below, phase group E). BORN RED (2026-07-14, before
+ * implementation, on the feat-042..045 rough-draft tokens): `readSkinProbe()`'s computed values on
+ * `?skin=aurora` did NOT yet hit the target shape (glass was still cream-tinted rgba(255,253,248,…)
+ * not white, shadows were ink-tinted not violet, density/radius/badge tokens did not exist yet) —
+ * `assertAuroraApplied()` failed several of its >=8 sub-checks. `PAPER_BASELINE` below is a REAL
+ * computed-value snapshot captured live (this session, on `integrate/v02-main-sync`@feff6be, BEFORE
+ * any feat-046 CSS edit) — not a guess; `assertPaperUnchanged()` diffs the CURRENT paper probe
+ * against these exact literal strings, so any future edit that nudges a paper pixel — even one this
+ * skin pass didn't intend — goes red. Pure-visual scope: zero DOM structural change (two authorized
+ * functional exceptions carried on this branch: DetailOverlay Escape-to-close, onboarding wizard
+ * backdrop switched from a hardcoded warm rgba to consuming `--lite2-ink-rgb`). Driven with
+ * `?transport=stub`. `readSkinProbe()` clicks through Your team + Playbooks internally (both are
+ * needed to read `.upload-panel` and `.lite-playbooks-slot-tag`) and returns to Your team when done
+ * — call it fresh on each of the three URLs below:
+ *   [on `?v=2&mode=live&transport=stub&skin=aurora`]
+ *   __seedGate.defuseAnimations()
+ *   const auroraProbe = await __seedGate.readSkinProbe()
+ *   __seedGate.assertAuroraApplied(auroraProbe)        // auroraApplied: >=8 independently-checked
+ *                                                       // computed values (11 in practice) — bg
+ *                                                       // radial-gradient contains the aurora violet
+ *                                                       // stop, glass chrome (.scene-tabs/.mode-
+ *                                                       // switch/.lite2-compliance-footer) computes
+ *                                                       // to white-tinted rgba (not paper's cream),
+ *                                                       // blur(20px)+saturate, box-shadow carries the
+ *                                                       // violet rgba(36,32,95,…) stop, active tab
+ *                                                       // background is the aurora navy #10223d,
+ *                                                       // shell font-size is the 15px density
+ *                                                       // baseline, .upload-panel border-radius is
+ *                                                       // the bumped 10px, .lite-playbooks-slot-tag
+ *                                                       // reads as a real blue-soft badge (not the
+ *                                                       // flat gray chip)
+ *   [on `?v=2&mode=live&transport=stub&skin=paper`]
+ *   const paperProbe = await __seedGate.readSkinProbe()
+ *   __seedGate.assertPaperUnchanged(paperProbe)        // paperUnchanged: every field in paperProbe
+ *                                                       // byte-equal to the PAPER_BASELINE constant
+ *                                                       // captured pre-implementation (see above)
+ *   [on default URL `?mode=live&transport=stub` (no v=)]
+ *   const defaultLeak = __seedGate.readLeakProbe()
+ *   [on `?mode=story`]
+ *   const storyLeak = __seedGate.readLeakProbe()
+ *   __seedGate.assertSkinNoLeak(defaultLeak, storyLeak) // skinNoLeak: both surfaces render ZERO
+ *                                                       // .lite2-shell AND their shared `.scene-tabs`
+ *                                                       // chrome still computes to the ORIGINAL
+ *                                                       // shared/00-base.css value (proves
+ *                                                       // `[data-skin='aurora']`-scoped rules never
+ *                                                       // reach outside lite2, not just "structurally
+ *                                                       // can't" by inspection)
+ *   __seedGate.skinVerdict({ auroraApplied, paperUnchanged, skinNoLeak })
+ *                                                       // aggregate (3 phases) — pass carried JSON
+ *                                                       // for whichever phases ran on earlier loads
  */
 (() => {
   // Story-EXCLUSIVE nouns. NOTE: 'Lin Qing' / 'Chen Mingyuan' / 'Sun Xiaomei' / 'Zheng Zixuan'
@@ -2177,6 +2229,155 @@
         onboardSkip: !!(merged.onboardSkip && merged.onboardSkip.pass),
         chipsAsk: !!(merged.chipsAsk && merged.chipsAsk.pass),
         bellIsReal: !!(merged.bellIsReal && merged.bellIsReal.pass),
+      };
+      return { pass: Object.values(phases).every(Boolean), phases, results: merged };
+    },
+
+    // ── feat-046 (lite-live-v02) — skinVerdict, independent aggregate, phase group E ───────────
+    // Aurora skin polish pass. See the usage block above for the full 3-URL drive protocol.
+    async readSkinProbe() {
+      // Helper (not a phase itself): snapshot the full set of computed values the E-group phases
+      // assert against. Clicks through Your team (for `.upload-panel`, the radius probe) and
+      // Playbooks (for `.lite-playbooks-slot-tag`, the badge probe) internally — both render
+      // unconditionally with zero setup (no ingest, no onboarding) so this is safe to call on a
+      // clean stub page load. Returns to Your team before resolving.
+      const shell = $('.lite2-shell');
+      if (!shell) return null;
+      const cs = (el) => getComputedStyle(el);
+      const out = { skinAttr: shell.getAttribute('data-skin') };
+      const shellCs = cs(shell);
+      out.shellFontSize = shellCs.fontSize;
+      out.shellBackgroundImage = shellCs.backgroundImage;
+      const footer = $('.lite2-compliance-footer'); // always mounted (Lite2App renders it outside the screen switch)
+      out.footerBackgroundColor = footer ? cs(footer).backgroundColor : null;
+      const tabs = $('.scene-tabs'); // always mounted (topbar)
+      out.tabsBackgroundColor = tabs ? cs(tabs).backgroundColor : null;
+      out.tabsBackdropFilter = tabs ? (cs(tabs).backdropFilter || cs(tabs).webkitBackdropFilter) : null;
+      out.tabsBoxShadow = tabs ? cs(tabs).boxShadow : null;
+      const activeTab = $('.scene-tab.is-active');
+      out.activeTabBackgroundColor = activeTab ? cs(activeTab).backgroundColor : null;
+
+      this._clickTab('Your team');
+      try {
+        await poll(() => ($('.upload-panel') || $('.home-lane-people') ? true : null), 4000, 'team screen to settle');
+      } catch (e) { /* fall through — uploadPanel probe reports null below */ }
+      const uploadPanel = $('.upload-panel');
+      out.uploadPanelBorderRadius = uploadPanel ? cs(uploadPanel).borderRadius : null;
+
+      this._clickTab('Playbooks');
+      try {
+        await poll(() => ($('.lite-playbooks-slot-tag') ? true : null), 4000, 'playbooks slot tag to mount');
+      } catch (e) { /* fall through */ }
+      const tag = $('.lite-playbooks-slot-tag');
+      out.playbookTagBackgroundColor = tag ? cs(tag).backgroundColor : null;
+      out.playbookTagColor = tag ? cs(tag).color : null;
+
+      this._clickTab('Your team'); // leave the page on a neutral default screen
+      return out;
+    },
+
+    assertAuroraApplied(probe) {
+      // Phase auroraApplied: `?skin=aurora` — 11 independently-checked computed values (>= the
+      // kickoff's required 8), each a POSITIVE assertion against the target aurora shape (not
+      // merely "differs from paper" — a regression to some other wrong value would still be
+      // caught). Target values sourced from kickoff-dev.md §feat-046 / the partner reference
+      // library's src/app/globals.css color table.
+      const p = probe || {};
+      const str = (v) => typeof v === 'string';
+      const checks = {
+        skinAttrIsAurora: p.skinAttr === 'aurora',
+        bgHasAuroraVioletStop: str(p.shellBackgroundImage) && p.shellBackgroundImage.includes('168, 139, 255'),
+        bgHasAuroraCyanStop: str(p.shellBackgroundImage) && p.shellBackgroundImage.includes('51, 199, 232'),
+        tabsGlassIsWhiteTinted: str(p.tabsBackgroundColor) && /rgba?\(255,\s*255,\s*255/.test(p.tabsBackgroundColor),
+        tabsBlurIsStrong: str(p.tabsBackdropFilter) && p.tabsBackdropFilter.includes('20px') && p.tabsBackdropFilter.includes('saturate'),
+        tabsShadowIsViolet: str(p.tabsBoxShadow) && p.tabsBoxShadow.includes('36, 32, 95'),
+        activeTabIsNavy: str(p.activeTabBackgroundColor) && /rgba?\(16,\s*34,\s*61/.test(p.activeTabBackgroundColor),
+        footerGlassIsWhiteTinted: str(p.footerBackgroundColor) && /rgba?\(255,\s*255,\s*255/.test(p.footerBackgroundColor),
+        densityIsCompact: p.shellFontSize === '15px',
+        radiusIsBumped: p.uploadPanelBorderRadius === '10px',
+        playbookTagIsBlueBadgeBg: str(p.playbookTagBackgroundColor) && /rgba?\(238,\s*242,\s*255/.test(p.playbookTagBackgroundColor),
+        playbookTagIsBlueBadgeFg: str(p.playbookTagColor) && /rgba?\(47,\s*75,\s*176/.test(p.playbookTagColor),
+      };
+      const pass = Object.values(checks).every(Boolean);
+      const out = { probe: p, checks, pass };
+      results.auroraApplied = out;
+      return out;
+    },
+
+    // Literal computed-value snapshot captured LIVE on `integrate/v02-main-sync`@feff6be
+    // (2026-07-14, before any feat-046 CSS edit) via `?v=2&mode=live&transport=stub&skin=paper` —
+    // not a guess. assertPaperUnchanged() diffs the current probe against these exact strings
+    // field-by-field so any future paper drift (even unintended) goes red.
+    PAPER_BASELINE: {
+      skinAttr: 'paper',
+      shellFontSize: '16px',
+      shellBackgroundImage: 'radial-gradient(circle at 24% 18%, rgba(255, 255, 255, 0.9), rgba(0, 0, 0, 0) 28%), linear-gradient(135deg, rgb(251, 248, 240) 0%, rgb(240, 234, 223) 52%, rgb(249, 246, 239) 100%)',
+      footerBackgroundColor: 'rgba(255, 253, 248, 0.82)',
+      tabsBackgroundColor: 'rgba(255, 253, 248, 0.78)',
+      tabsBackdropFilter: 'blur(12px)',
+      tabsBoxShadow: 'rgba(50, 45, 36, 0.08) 0px 12px 40px 0px',
+      activeTabBackgroundColor: 'rgb(29, 27, 23)',
+      uploadPanelBorderRadius: '8px',
+      playbookTagBackgroundColor: 'rgba(29, 27, 23, 0.06)',
+      playbookTagColor: 'rgb(145, 139, 127)',
+    },
+
+    assertPaperUnchanged(probe) {
+      // Phase paperUnchanged: `?skin=paper` computed values must be byte-identical to
+      // PAPER_BASELINE — proves the aurora polish pass touched zero paper pixels.
+      const p = probe || {};
+      const base = this.PAPER_BASELINE;
+      const fields = Object.keys(base);
+      const diffs = {};
+      for (const f of fields) {
+        if (p[f] !== base[f]) diffs[f] = { expected: base[f], actual: p[f] };
+      }
+      const out = { probe: p, diffs, pass: Object.keys(diffs).length === 0 };
+      results.paperUnchanged = out;
+      return out;
+    },
+
+    readLeakProbe() {
+      // Helper for skinNoLeak: call on the default URL (`?mode=live`, no `v=`) and on
+      // `?mode=story`. `.scene-tabs` is the shared topbar chrome both v01 and story render —
+      // reading its computed background proves `[data-skin='aurora']`-scoped rules (which all
+      // require a `.lite2-shell` ancestor to match at all) truly never reach outside lite2, not
+      // just "structurally can't" by inspection.
+      const tabs = $('.scene-tabs');
+      return {
+        lite2ShellCount: $$('.lite2-shell').length,
+        tabsBackgroundColor: tabs ? getComputedStyle(tabs).backgroundColor : null,
+      };
+    },
+
+    assertSkinNoLeak(defaultProbe, storyProbe) {
+      // Phase skinNoLeak: both surfaces render ZERO .lite2-shell AND their shared `.scene-tabs`
+      // chrome still computes to the ORIGINAL shared/00-base.css value (unaffected by feat-046).
+      const ORIGINAL_TABS_BG = 'rgba(255, 253, 248, 0.78)';
+      const ok = (probe) => !!probe && probe.lite2ShellCount === 0 && probe.tabsBackgroundColor === ORIGINAL_TABS_BG;
+      const out = {
+        defaultProbe, storyProbe,
+        defaultOk: ok(defaultProbe),
+        storyOk: ok(storyProbe),
+        pass: ok(defaultProbe) && ok(storyProbe),
+      };
+      results.skinNoLeak = out;
+      return out;
+    },
+
+    skinVerdict(carried) {
+      // Cross-navigation aggregate (group E): phases run on separate page loads — the driver
+      // carries their returned JSON forward and passes it here (same doctrine as v2Verdict).
+      const merged = Object.assign({}, results);
+      if (carried && typeof carried === 'object') {
+        for (const k of ['auroraApplied', 'paperUnchanged', 'skinNoLeak']) {
+          if (carried[k]) merged[k] = carried[k];
+        }
+      }
+      const phases = {
+        auroraApplied: !!(merged.auroraApplied && merged.auroraApplied.pass),
+        paperUnchanged: !!(merged.paperUnchanged && merged.paperUnchanged.pass),
+        skinNoLeak: !!(merged.skinNoLeak && merged.skinNoLeak.pass),
       };
       return { pass: Object.values(phases).every(Boolean), phases, results: merged };
     },

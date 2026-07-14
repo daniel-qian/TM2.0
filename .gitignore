@@ -18,3 +18,9 @@ dist-ssr
 .codex/archives/
 .vercel
 .env*.local
+
+# feat-046 · 双皮 review 证据包（截图/计算值清单）——给 Danny 的 review 包素材，不进 git
+.issues/lite-live-v02-0713/review-shots/
+# 门驱动辅助（gate snippet / evidence collector 的 public/ 临时拷贝）——收口必删，防漏兜底
+public/__gate_verify.js
+public/__evidence_collector.js
