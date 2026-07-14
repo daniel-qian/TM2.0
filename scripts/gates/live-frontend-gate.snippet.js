@@ -2681,14 +2681,246 @@
       return out;
     },
 
-    syncVerdict() {
-      const phases = {
-        tokenDiscipline: !!(results.tokenDiscipline && results.tokenDiscipline.pass),
-        notesSurfaceV2: !!(results.notesSurfaceV2 && results.notesSurfaceV2.pass),
-        filesSurfaceV2: !!(results.filesSurfaceV2 && results.filesSurfaceV2.pass),
-        enginePar: !!(results.enginePar && results.enginePar.pass),
+    async assertAskStatusCoerce() {
+      // Phase askStatusCoerce (feat-047 adversarial-verify BLOCKER, 2026-07-15) — ADR-0023 +
+      // feat-034 stage C F1, verbatim: "前端 coerce 遇未知状态必须 fail-loud 或折 closed，绝不折回
+      // draft（否则已发出/已撤回的 ask 会以可编辑草稿复活）". lite2's copy forked BEFORE stage C
+      // and carried the 4-word vocabulary, folding EVERYTHING unknown -> 'draft' — so a real
+      // backend's `revoked`/`expired` resurrected an already-withdrawn ask as an EDITABLE draft
+      // whose Confirm button re-runs saveAsk+shareAsk against the real service.
+      //
+      // Drives lite2's OWN seam (window.__lite2Ask — v01's askStatusGuards drives __liteAsk; the
+      // two shells' coerces are separate code and each needs its own coverage. lite2's was never
+      // exercised by any gate, which is exactly why this survived to adversarial verify).
+      // Checks BOTH paths a bad status can enter by:
+      //   (1) the SSE manifest path  — coerceAskDraft directly;
+      //   (2) the fetchAsk/refresh path — store.refreshAsk consuming a transport response, which
+      //       is THE way a real backend actually delivers revoked/expired. lite2's store set the
+      //       raw response straight into state with no coerce at all, so (1) alone proves nothing.
+      // Then asserts the RENDERED card is a terminal state, not an editable draft.
+      const dbg = window.__lite2Ask;
+      const store = window.__lite2Store;
+      if (!dbg || !dbg.coerceAskDraft || !store) {
+        return (results.askStatusCoerce = {
+          pass: false,
+          error: 'no __lite2Ask/__lite2Store debug seam — is this the ?v=2 lite2 page?',
+        });
+      }
+      const mk = (status) => dbg.coerceAskDraft({
+        id: 'ask_gate_f_coerce', status,
+        questions: [{ id: 'q1', kind: 'scale', text: 'How is the launch pacing?' }],
+        recipients: [{ id: 'r1', name: 'Lin Qing' }],
+        company_context_id: 'ctx_gate_coerce',
+      });
+      // (1) coerce-level vocabulary contract.
+      const coerced = {
+        revoked: (mk('revoked') || {}).status,
+        expired: (mk('expired') || {}).status,
+        unknown: (mk('totally-bogus-status') || {}).status,
+        draftStillDraft: (mk('draft') || {}).status,
+        closedStillClosed: (mk('closed') || {}).status,
       };
-      return { pass: Object.values(phases).every(Boolean), phases, results };
+      const neverFoldsToDraft = coerced.revoked !== 'draft' && coerced.expired !== 'draft' &&
+        coerced.unknown !== 'draft';
+      const revokedKept = coerced.revoked === 'revoked';
+      const expiredKept = coerced.expired === 'expired';
+      const unknownFoldsClosed = coerced.unknown === 'closed';
+      const knownStillWork = coerced.draftStillDraft === 'draft' && coerced.closedStillClosed === 'closed';
+
+      // (2) the REAL delivery path: a transport handing back a terminal status through refreshAsk.
+      // Swap in a tiny fake transport whose fetchAsk returns a POISONED payload — terminal status
+      // AND an out-of-range receipt — and drive the real store action. Two things are under test:
+      //   · the status must not become 'draft';
+      //   · the response must actually pass through the defensive coerce at all. A store that
+      //     sets the raw response into state "passes" a status check by accident (raw revoked
+      //     stays revoked) while in fact guarding nothing — so the poisoned receipt is the
+      //     discriminator: only a store that really coerces refuses it (lite's adoptAsk throws ->
+      //     askError; a raw-passthrough store renders "99 out of 5").
+      const prevAsk = store.getState().ask;
+      const prevTransport = store.getState().transport;
+      const seeded = mk('shared');           // must be a refreshable status for refreshAsk to fire
+      let storePathStatus = null;
+      let storePathThrew = false;
+      let storePathCoerced = false;
+      if (seeded) {
+        store.setState({
+          ask: { ...seeded, status: 'shared' },
+          askBusy: 'idle', askError: null,
+          transport: Object.assign({}, prevTransport, {
+            async fetchAsk() {
+              return {
+                id: 'ask_gate_f_coerce', status: 'revoked',
+                questions: [{ id: 'q1', kind: 'scale', text: 'How is the launch pacing?' }],
+                recipients: [{
+                  id: 'r1', name: 'Lin Qing',
+                  receipt: { answers: [{ question_id: 'q1', value: 99 }], answered_at: '2026-07-15T10:00:00Z' },
+                }],
+              };
+            },
+          }),
+        });
+        try {
+          await store.getState().refreshAsk();
+        } catch (e) { storePathThrew = true; }
+        const landed = store.getState().ask || {};
+        storePathStatus = landed.status;
+        // Coerced == the poisoned receipt never reached state (card refused, or receipt stripped).
+        const landedReceipt = (landed.recipients || []).map((r) => r.receipt).filter(Boolean);
+        const poisonRendered = landedReceipt.some((rc) =>
+          (rc.answers || []).some((a) => typeof a.value === 'number' && (a.value < 1 || a.value > 5)));
+        storePathCoerced = !poisonRendered;
+      }
+      const storePathNotDraft = storePathStatus !== 'draft';
+
+      // (3) the RENDERED card: a terminal state must not offer the draft's editing surface.
+      // lite2's RoomScreen only mounts AskCard inside its `hasStarted` branch, so a run has to
+      // exist before the card can render at all — drive one real (stub) askLive first, let it
+      // settle, THEN seed the terminal ask.
+      const terminal = mk('revoked');
+      let domProbe = { mounted: false };
+      if (terminal) {
+        store.getState().askLive({ situation: 'Gate probe — terminal ask rendering.' });
+        try {
+          await poll(() => (store.getState().run.status !== 'running' ? true : null), 15000, 'stub run to settle');
+        } catch (e) { /* fall through — probe reports what it finds */ }
+        store.setState({ ask: terminal, askBusy: 'idle' });
+        this._clickTab('The room');
+        try {
+          await poll(() => ($('.lite-ask-card') ? true : null), 6000, 'ask card to mount for coerce probe');
+          const card = $('.lite-ask-card');
+          const confirm = $('.ask-confirm', card);
+          domProbe = {
+            mounted: true,
+            dataStatus: card.getAttribute('data-ask-status'),
+            editableInputs: $$('.ask-q-input', card).length,
+            addButtons: $$('.ask-q-add', card).length,
+            confirmPresent: !!confirm,
+            confirmDisabled: confirm ? !!confirm.disabled : null,
+            linkRows: $$('.ask-link-row', card).length,
+            terminalNotePresent: !!$('.ask-revoked-note', card),
+          };
+        } catch (e) { /* domProbe stays unmounted — reported below */ }
+      }
+      // A withdrawn ask must render as withdrawn: no editable question inputs, no add buttons,
+      // and NO clickable Confirm (present-but-disabled is acceptable; present-and-clickable is not).
+      const domIsTerminal = domProbe.mounted && domProbe.dataStatus === 'revoked' &&
+        domProbe.editableInputs === 0 && domProbe.addButtons === 0 &&
+        (!domProbe.confirmPresent || domProbe.confirmDisabled === true) &&
+        domProbe.linkRows === 0 && domProbe.terminalNotePresent === true;
+
+      store.setState({ ask: prevAsk, transport: prevTransport });  // leave the session as found
+
+      const out = {
+        coerced, neverFoldsToDraft, revokedKept, expiredKept, unknownFoldsClosed, knownStillWork,
+        storePathStatus, storePathThrew, storePathNotDraft, storePathCoerced,
+        domProbe, domIsTerminal,
+        pass: neverFoldsToDraft && revokedKept && expiredKept && unknownFoldsClosed &&
+          knownStillWork && storePathNotDraft && storePathCoerced && domIsTerminal,
+      };
+      results.askStatusCoerce = out;
+      return out;
+    },
+
+    async assertAskAuthHeader(realContextId) {
+      // Phase askAuthHeader (feat-047 adversarial-verify, redline path — same-root contract
+      // drift): lite2's saveAsk/shareAsk/fetchAsk went out with ZERO X-Avery-Token header while
+      // fetchTeam/fetchFiles/fetchNotes carried it — against the hardened real backend the ask
+      // endpoints 404/500. Asserts all three manager-side ask calls present the owner_token.
+      //
+      // Driven against the REAL http transport (NOT the stub — the stub is offline and never
+      // issues a fetch, so a header assertion there would be vacuous). Uses the same in-page
+      // fetch spy as tokenDiscipline and reads the CAPTURED request headers: the assertion is
+      // about what the CLIENT SENDS, so it holds whether or not the server accepts the payload.
+      // Pass the real contextId from a completed ingest (assertTokenDiscipline's page).
+      const store = window.__lite2Store;
+      if (!store) return (results.askAuthHeader = { pass: false, error: 'no __lite2Store seam' });
+      const state0 = store.getState();
+      const contextId = realContextId || state0.contextId;
+      const ownerToken = state0.ownerToken;
+      if (!contextId || !ownerToken) {
+        return (results.askAuthHeader = {
+          pass: false, error: 'no live contextId/ownerToken — run a real ingest first', contextId,
+        });
+      }
+      if (new URLSearchParams(location.search).get('transport') === 'stub') {
+        return (results.askAuthHeader = {
+          pass: false, error: 'stub transport issues no fetch — this phase needs the real http transport',
+        });
+      }
+      const log = this._installTokenFetchSpy();
+      const prevAsk = store.getState().ask;
+      log.length = 0;
+
+      // Seed a real draft bound to the real context, then drive the REAL store actions:
+      // confirmAsk() -> saveAsk + shareAsk;  refreshAsk() -> fetchAsk.
+      store.setState({
+        ask: {
+          id: 'ask_gate_authhdr', status: 'draft',
+          questions: [{ id: 'q1', kind: 'scale', text: 'How is the pilot launch pacing this week?' }],
+          recipients: [{ id: 'r1', name: 'Lin Qing' }],
+          company_context_id: contextId,
+        },
+        askBusy: 'idle', askError: null,
+      });
+      await store.getState().confirmAsk();
+      // refreshAsk only fires on shared/collecting — force the state so fetchAsk is exercised
+      // even if the server rejected the save (the header is what's under test, not the payload).
+      const afterConfirm = store.getState().ask;
+      store.setState({
+        ask: Object.assign({}, afterConfirm || {}, {
+          id: (afterConfirm && afterConfirm.id) || 'ask_gate_authhdr',
+          status: 'shared',
+        }),
+        askBusy: 'idle',
+      });
+      await store.getState().refreshAsk();
+
+      const hdr = (r) => r.headers['x-avery-token'];
+      const saveCalls = log.filter((r) => /\/ask$/.test(r.url.split('?')[0]) && r.method === 'POST');
+      const shareCalls = log.filter((r) => /\/ask\/[^/]+\/share/.test(r.url));
+      const fetchCalls = log.filter((r) => /\/ask\/[^/]+$/.test(r.url.split('?')[0]) && (r.method || 'GET') === 'GET');
+      const allCarry = (calls) => calls.length > 0 && calls.every((r) => hdr(r) === ownerToken);
+      const saveOk = allCarry(saveCalls);
+      const shareOk = allCarry(shareCalls);
+      const fetchOk = allCarry(fetchCalls);
+      // token stays header-only here too (same rule as tokenDiscipline, re-checked on ask URLs).
+      const urlLeak = log.some((r) => r.url.includes(ownerToken));
+
+      store.setState({ ask: prevAsk, askBusy: 'idle', askError: null });
+
+      const out = {
+        contextId,
+        saveCallCount: saveCalls.length, shareCallCount: shareCalls.length, fetchCallCount: fetchCalls.length,
+        saveOk, shareOk, fetchOk, urlLeak,
+        observedHeaders: {
+          save: saveCalls.map(hdr), share: shareCalls.map(hdr), fetch: fetchCalls.map(hdr),
+        },
+        pass: saveOk && shareOk && fetchOk && !urlLeak,
+      };
+      results.askAuthHeader = out;
+      return out;
+    },
+
+    syncVerdict(carried) {
+      // Cross-navigation aggregate (group F): tokenDiscipline/askAuthHeader run on the real-backend
+      // page, the rest on the stub page — the driver carries their JSON forward (same doctrine as
+      // v2Verdict/skinVerdict).
+      const merged = Object.assign({}, results);
+      if (carried && typeof carried === 'object') {
+        for (const k of ['tokenDiscipline', 'notesSurfaceV2', 'filesSurfaceV2', 'enginePar',
+                         'askStatusCoerce', 'askAuthHeader']) {
+          if (carried[k]) merged[k] = carried[k];
+        }
+      }
+      const phases = {
+        tokenDiscipline: !!(merged.tokenDiscipline && merged.tokenDiscipline.pass),
+        notesSurfaceV2: !!(merged.notesSurfaceV2 && merged.notesSurfaceV2.pass),
+        filesSurfaceV2: !!(merged.filesSurfaceV2 && merged.filesSurfaceV2.pass),
+        enginePar: !!(merged.enginePar && merged.enginePar.pass),
+        askStatusCoerce: !!(merged.askStatusCoerce && merged.askStatusCoerce.pass),
+        askAuthHeader: !!(merged.askAuthHeader && merged.askAuthHeader.pass),
+      };
+      return { pass: Object.values(phases).every(Boolean), phases, results: merged };
     },
   };
 

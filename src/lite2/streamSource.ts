@@ -290,6 +290,15 @@ export function coerceAskDraft(raw: unknown): AskDraft | null {
   }
 }
 
+// feat-047 对抗验证 · 门缝：把防御性 coerce 暴露给 live-frontend-gate 的 F 组
+// askStatusCoerce 相位直接断言（门是唯一消费者；产品代码不读它）。照 src/lite/streamSource.ts
+// 的 __liteAsk 先例，独立命名 __lite2Ask 避免与 v01 撞名——v01 的 askVerdict 相位打 __liteAsk，
+// 两个壳各自的 coerce 各自被门覆盖（此前 lite2 侧的 coerce 从未被任何门行使过，正是这次
+// blocker 潜伏至今的原因）。
+if (typeof window !== 'undefined') {
+  ;(window as unknown as Record<string, unknown>).__lite2Ask = { coerceAskDraft }
+}
+
 function coerceAskReceipt(raw: unknown): AskReceipt | undefined {
   if (!raw || typeof raw !== 'object') return undefined
   const r = raw as Record<string, unknown>
