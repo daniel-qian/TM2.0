@@ -17,13 +17,101 @@ minimum: the advisor cites real lines that came from the manager's own uploads.
 """
 from __future__ import annotations
 
+import os
 import tempfile
 import uuid
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 
 from .extract import ExtractionResult
 from .store import RetrievalStore, RetrievalHit, KeywordStore
+
+
+@dataclass
+class SourceDocument:
+    """feat-032 — a persisted RAW upload: the original bytes + metadata, kept in the per-company
+    file space so a manager can look back at what Avery's memory is built on (User Story 4).
+
+    The bytes are UNTRUSTED content: stored and served for download, NEVER interpreted as
+    instructions (readiness §2-I injection surface — this layer only stores/lists, it does not
+    follow anything inside a file). `content` is held in memory by the in-memory registry and left
+    None by the Postgres registry's metadata read (get()); the bytea is pulled on demand by the
+    download seam (`source_document_bytes`). `storage_ref` is the feat-035 object-store seam
+    (PRD: 'may include an object-store reference') — v1 keeps bytes inline in avery.source_documents.
+    """
+    filename: str
+    source_key: str = ""                   # feat-032 P1: the DISAMBIGUATED per-document join key
+                                           # (== the parsed doc's name == a material's '<key>:<line>'
+                                           # source prefix). Distinct even when two uploads share a
+                                           # `filename`, so n_chunks attributes per DOCUMENT, not per
+                                           # display name. Empty -> fall back to `filename` (pre-032).
+    mime: str = "application/octet-stream"
+    size_bytes: int = 0
+    doc_kind: str = "company"
+    status: str = "ingested"               # feat-032 P2: 'ingested' | 'failed' (unparseable) |
+                                           # 'empty' (parsed, produced no material). The manifest
+                                           # surfaces it so a failed file is not disguised as valid.
+    uploaded_at: str = ""                  # ISO8601 UTC; set at ingest, or read back from the DB
+    content: bytes | None = None           # raw upload bytes (in-memory) / None (pg metadata read)
+    storage_ref: str = ""                  # feat-035 seam: object-store pointer; inline bytea in v1
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+@dataclass
+class CompanyNote:
+    """feat-033 — one agent-WRITTEN observation in the company's persistent, user-visible notebook.
+
+    `text` is Avery's observation about the company (work-focused, never a person score — the write
+    gate enforces that); `source_excerpt` is the ~60-char lead of the manager's question that
+    triggered it (the notes surface shows 'From your question about <excerpt>'). Free text — the red
+    line is a CONTENT scan run BEFORE this ever exists (see `gate_note_red_line`)."""
+    id: str
+    created_at: str          # ISO8601 UTC
+    text: str
+    source_excerpt: str = ""
+
+
+def new_note_id() -> str:
+    return "note_" + uuid.uuid4().hex[:16]
+
+
+def gate_note_red_line(text: str, source_excerpt: str = "") -> None:
+    """🔴 The WRITE-SIDE red line for Avery's self-written notes — the moat's most load-bearing new
+    face. Reuses the UNCHANGED advisor gate `avery.redline.validate` (EN+ZH); it does NOT add or
+    weaken any red-line mechanism. A note that scores / ranks / profiles a PERSON (in the observation
+    OR in the echoed question excerpt shown on the surface) raises ValueError, so NOTHING is stored —
+    the self-written memory can never be a back door around 'no numbers on a person'.
+
+    Both registries call this before persisting, and the service's post-advise hook re-checks
+    independently (belt-and-suspenders, like feat-030's storage door).
+
+    feat-033 (adversarial closure) — the observation and the echoed excerpt are validated
+    SEPARATELY, never concatenated. Concatenating let a negation cue in one field bleed across the
+    boundary and mask a real person-score in the other (e.g. an advice read ending '…never on the
+    person' would suppress a scoring excerpt like '李雷:9分,排名第一'). Each field is displayed on its
+    own, so each must independently pass — strictly stronger than the joined check.
+
+    feat-033 (policy pivot, 2026-07-13) — when the operator has EXPLICITLY unblocked person scoring
+    (`AVERY_ALLOW_PERSON_SCORING`, see avery.scoring_policy), the person-scoring raise is SKIPPED so a
+    scoring note lands (both the in-memory and the Postgres append_note funnel through here, so one
+    switch covers both). Default OFF keeps the moat: the detector (`avery.redline`) is untouched —
+    only THIS enforcement decision consults the switch. The NUL / 0x00 storage-safety check is NOT a
+    red-line policy and ALWAYS runs, switch or no switch."""
+    from avery import redline   # core, offline, stdlib-only — safe for the offline path
+    from avery.scoring_policy import person_scoring_allowed
+    if not person_scoring_allowed():
+        for part in (text, source_excerpt):
+            if not part:
+                continue
+            rl = redline.validate(part)
+            if not rl.passed:
+                raise ValueError(f"red line: refusing to persist a scoring note ({rl.summary()})")
+    if "\x00" in (text or "") or "\x00" in (source_excerpt or ""):
+        raise ValueError("unsupported control character (NUL / 0x00) in a note — cannot be stored")
 
 
 @dataclass
@@ -35,6 +123,13 @@ class CompanyContext:
     memory_dir: Path                       # holds materialized facts.md / notes.md
     name: str = "company"
     source_files: list[str] = field(default_factory=list)
+    source_documents: list[SourceDocument] = field(default_factory=list)  # feat-032 file space
+    owner_token: str = ""                   # feat-038 tenant isolation: the unguessable holder
+                                            # credential set at /ingest. A read path validates a
+                                            # header token against this; empty == pre-038 / no auth
+                                            # required (v1 back-compat — new /ingest always sets it).
+                                            # NEVER travels in a URL (header only); the context_id
+                                            # in the URL is not sufficient to read the data.
 
     # --- retrieval surface (what the advisor uses) --------------------------------------------
 
@@ -101,24 +196,144 @@ class CompanyContext:
                    {"label": "active projects", "value": str(n_proj)}]
         if at_risk:
             metrics.append({"label": "need a look", "value": str(len(at_risk))})
-        headline = f"Ingested {len(self.source_files)} file(s): {n_people} people, {n_proj} projects."
+        # feat-032 P2: reconcile with the file manifest. source_files counts only the PARSED docs;
+        # source_documents counts everything UPLOADED (incl. parse-failures the manifest still shows).
+        # Say "N of M" when they differ so the headline never claims fewer files than the manifest
+        # lists. (No source_documents = pre-032 path -> just N.)
+        n_ingested = len(self.source_files)
+        n_uploaded = len(self.source_documents) or n_ingested
+        files_phrase = f"{n_ingested} of {n_uploaded}" if n_uploaded != n_ingested else str(n_ingested)
+        headline = f"Ingested {files_phrase} file(s): {n_people} people, {n_proj} projects."
         subhead = ("Everything below is drawn from your uploads — nothing invented. "
                    + (f"{len(at_risk)} project(s) worth a closer look." if at_risk
                       else "No risk signals surfaced from the documents."))
         return {"tone": "alert" if at_risk else "calm", "headline": headline, "subhead": subhead,
                 "metrics": metrics}
 
+    # --- feat-032 file space (per-company uploaded-file manifest) ------------------------------
+
+    def _chunks_per_file(self) -> dict[str, int]:
+        """How many material chunks each parsed document contributed, keyed by a chunk's
+        `<key>:<line>` source PREFIX (== the parsed doc's name == a SourceDocument.source_key). The
+        prefix is per-DOCUMENT, so two uploads sharing a display `filename` do not merge their counts
+        (feat-032 P1). Same cite seam the advisor uses."""
+        counts: dict[str, int] = {}
+        for m in self.extraction.materials:
+            src = m.source or ""
+            key = src.rsplit(":", 1)[0] if ":" in src else src
+            if key:
+                counts[key] = counts.get(key, 0) + 1
+        return counts
+
+    def file_cards(self) -> list[dict]:
+        """The per-file manifest the 'your files' view renders — METADATA ONLY (no bytes): filename,
+        size, mime, doc_kind, status, uploaded_at, and n_chunks (material chunks the file produced).
+        n_chunks joins on source_key (the per-document key), falling back to filename for a pre-032
+        row that has none. Content is untrusted data; the manifest lists it, the download seam serves
+        the bytes separately."""
+        counts = self._chunks_per_file()
+        return [{"idx": i, "filename": sd.filename, "size_bytes": sd.size_bytes, "mime": sd.mime,
+                 "doc_kind": sd.doc_kind, "status": sd.status, "uploaded_at": sd.uploaded_at,
+                 "n_chunks": counts.get(sd.source_key or sd.filename, 0)}
+                for i, sd in enumerate(self.source_documents)]
+
 
 class ContextRegistry:
-    """In-memory id -> CompanyContext map. Process-local (a session-scoped handle, like the sampler's
-    ephemeral cases). A DB-backed registry would plug in behind the same get/put API."""
+    """In-memory id -> CompanyContext map. Process-local — the OFFLINE default (no external service,
+    what the AFK suite runs). feat-030 delivered the promised DB-backed twin behind the same get/put
+    API (`pg_registry.PostgresContextRegistry`); `active_registry()` picks between them by env."""
+
+    # feat-031 cost gate: this registry does NOT persist a store's vectors and advise never reads its
+    # in-memory CompanyContext.store, so embedding a corpus for it is pure spend with no reader. The
+    # /ingest handler consults this flag to open the vector path ONLY behind a persistent registry.
+    persistent = False
 
     def __init__(self) -> None:
         self._by_id: dict[str, CompanyContext] = {}
+        self._notes: dict[str, list[CompanyNote]] = {}   # feat-033: agent-written notes, per context
+        self._asks: dict[str, object] = {}               # feat-034: ask_id -> Ask (deep-copied)
+        self._ask_tokens: dict[str, tuple[str, int]] = {}  # share_token -> (ask_id, recipient idx)
 
     def put(self, ctx: CompanyContext) -> str:
         self._by_id[ctx.context_id] = ctx
         return ctx.context_id
+
+    # --- feat-033: Avery's notes (write-side, accumulating, user-visible) ----------------------
+
+    def append_note(self, context_id: str, text: str, source_excerpt: str = "") -> CompanyNote:
+        """Append one agent observation to this company's notebook. Runs the write-side red line
+        FIRST (raises ValueError on a scoring/ranking/profiling note — nothing lands), then stores
+        it in insertion order. In-memory holds the notes for the process; the Postgres twin persists
+        them so they accumulate across sessions/restarts (same duck-typed API)."""
+        gate_note_red_line(text, source_excerpt)
+        note = CompanyNote(id=new_note_id(), created_at=_now_iso(), text=text,
+                           source_excerpt=source_excerpt)
+        self._notes.setdefault(context_id, []).append(note)
+        return note
+
+    def list_notes(self, context_id: str) -> list[CompanyNote]:
+        """This company's notes, NEWEST FIRST (the notebook reads new->old)."""
+        return list(reversed(self._notes.get(context_id, [])))
+
+    # --- feat-034: Ask ("Quick ask") storage — the same seam style as notes ---------------------
+
+    def put_ask(self, ask):
+        """Store one ask snapshot (create or update). Runs the write-side red-line gate FIRST
+        (raises ValueError on a person-scoring question — nothing lands), same storage-door
+        discipline as append_note. Deep-copied both ways so a caller's later mutation can never
+        silently edit the stored evidence."""
+        import copy
+        from .ask import gate_ask_red_line
+        gate_ask_red_line(ask)
+        snapshot = copy.deepcopy(ask)
+        self._asks[snapshot.id] = snapshot
+        # token index tracks the CURRENT snapshot only (re-share replaces cleanly)
+        self._ask_tokens = {t: k for t, k in self._ask_tokens.items() if k[0] != snapshot.id}
+        for i, r in enumerate(snapshot.recipients):
+            if r.share_token:
+                self._ask_tokens[r.share_token] = (snapshot.id, i)
+        return copy.deepcopy(snapshot)
+
+    def get_ask(self, ask_id: str):
+        import copy
+        ask = self._asks.get(ask_id)
+        return copy.deepcopy(ask) if ask is not None else None
+
+    def get_ask_by_token(self, share_token: str):
+        """Resolve one employee link -> (ask, recipient index), or None (unknown token -> the
+        loud 404). The token is the WHOLE credential — no enumeration path exists."""
+        import copy
+        hit = self._ask_tokens.get(share_token or "")
+        if hit is None:
+            return None
+        ask_id, ridx = hit
+        ask = self._asks.get(ask_id)
+        if ask is None or ridx >= len(ask.recipients):
+            return None
+        return copy.deepcopy(ask), ridx
+
+    def record_answer(self, share_token: str, answers: list, comment: str,
+                      answered_at: str) -> str:
+        """The answer-once lock: 'ok' when this FIRST answer lands, 'already' when the recipient
+        answered before (nothing is overwritten — the evidence stays stable, PRD Q8), 'unknown'
+        for a token that was never minted. Advances the stored status shared->collecting->closed."""
+        hit = self._ask_tokens.get(share_token or "")
+        if hit is None:
+            return "unknown"
+        ask_id, ridx = hit
+        ask = self._asks.get(ask_id)
+        if ask is None:
+            return "unknown"
+        rec = ask.recipients[ridx]
+        if rec.answered_at:
+            return "already"
+        rec.answers = list(answers)
+        rec.comment = comment or ""
+        rec.answered_at = answered_at
+        if ask.status in ("shared", "collecting"):
+            done = sum(1 for r in ask.recipients if r.answered_at)
+            ask.status = "closed" if done >= len(ask.recipients) else "collecting"
+        return "ok"
 
     def get(self, context_id: str) -> CompanyContext | None:
         return self._by_id.get(context_id)
@@ -128,15 +343,67 @@ class ContextRegistry:
         ctx = self.get(context_id)
         return ctx.memory_dir if ctx else None
 
+    def source_document_bytes(self, context_id: str, idx: int) -> bytes | None:
+        """feat-032 download seam: the raw bytes of the idx-th uploaded file, or None (unknown
+        context / out-of-range idx / no content). In-memory holds the bytes; the pg twin reads
+        bytea. Same duck-typed API so the /team/{id}/files/{idx} handler is registry-agnostic."""
+        ctx = self.get(context_id)
+        if ctx is None or idx < 0 or idx >= len(ctx.source_documents):
+            return None
+        return ctx.source_documents[idx].content
+
     def __contains__(self, context_id: str) -> bool:
         return context_id in self._by_id
 
     def clear(self) -> None:
         self._by_id.clear()
+        self._notes.clear()
+        self._asks.clear()
+        self._ask_tokens.clear()
 
 
-# Process-wide default registry (the service imports this).
+# Process-wide default registry (the offline in-memory instance).
 REGISTRY = ContextRegistry()
+
+
+# --- feat-030: env-selected persistence -------------------------------------------------------
+
+def db_url() -> str | None:
+    """The persistence connection string: `AVERY_DB_URL`, with `PGVECTOR_URL` accepted as the alias
+    that service/.env.example already names. Unset -> the in-memory registry (offline default)."""
+    return (os.environ.get("AVERY_DB_URL") or os.environ.get("PGVECTOR_URL") or "").strip() or None
+
+
+def data_root() -> Path:
+    """Where materialized memory (facts.md/notes.md) lives: `AVERY_DATA_DIR` when set (a STABLE
+    data dir — survives reboots; pair it with the DB registry so a restart re-materializes into
+    it), else the pre-030 OS-temp default (fine for the ephemeral in-memory registry)."""
+    env = (os.environ.get("AVERY_DATA_DIR") or "").strip()
+    if env:
+        return Path(env)
+    return Path(tempfile.gettempdir()) / "avery-contexts"
+
+
+_PG_REGISTRIES: dict[str, object] = {}   # url -> PostgresContextRegistry (per-process cache)
+
+
+def active_registry() -> ContextRegistry:
+    """THE registry the service should use right now. `AVERY_DB_URL`/`PGVECTOR_URL` set -> the
+    Postgres-backed registry (company data survives restarts/redeploys); unset -> the in-memory
+    REGISTRY (offline default, no external service, suite stays green with no DB).
+
+    The DB module is imported lazily so the offline path NEVER needs psycopg installed."""
+    url = db_url()
+    if not url:
+        return REGISTRY
+    reg = _PG_REGISTRIES.get(url)
+    if reg is None:
+        from .pg_registry import PostgresContextRegistry  # lazy: offline suite never imports this
+        from avery.embeddings import make_embedder_from_env  # feat-031: same gate the service uses
+        # feat-031: a configured embedder turns the DB registry into real pgvector RAG (put() fills
+        # embeddings, get() rebuilds a pgvector store). None (keyword / no key) -> KeywordStore.
+        reg = _PG_REGISTRIES[url] = PostgresContextRegistry(url, embedder=make_embedder_from_env())
+    return reg  # type: ignore[return-value]  # duck-typed: same get/put/resolve/__contains__ API
 
 
 def new_context_id() -> str:

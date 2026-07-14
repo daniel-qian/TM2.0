@@ -67,6 +67,20 @@ def test_multiformat_parse_and_kind(path, ext, expect_kind):
     assert doc.doc_kind == expect_kind, f"{path.name}: kind {doc.doc_kind} != {expect_kind}"
 
 
+def test_parse_strips_nul_and_c0_control_chars():
+    """feat-030 P3: a real PDF/xlsx can carry a stray NUL (0x00) or other C0 control char in its
+    text layer. Those must be scrubbed at the parse seam — a NUL crashes the Postgres driver on
+    write (0x00 is illegal in a Postgres text value), and control chars corrupt the citable corpus.
+    Newline and tab are preserved (they are legitimate layout)."""
+    doc = parse_bytes("dirty.txt", b"alpha\x00beta\x01gamma\x1f\tdelta\nomega")
+    assert "\x00" not in doc.text, "NUL byte survived parse — put() would 500 on the DB write"
+    for cc in ("\x01", "\x1f"):
+        assert cc not in doc.text, f"C0 control char {cc!r} survived parse"
+    # content is preserved (minus the stripped controls); tab + newline stay.
+    assert "alpha" in doc.text and "omega" in doc.text
+    assert "\t" in doc.text and "\n" in doc.text
+
+
 def test_pdf_text_layer_extracted():
     doc = parse_file(WEEKLY)
     assert "unresolved feedback comments" in doc.text

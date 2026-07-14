@@ -99,10 +99,14 @@ def _dashscope_available() -> bool:
     return bool((os.environ.get("DASHSCOPE_API_KEY") or "").strip())
 
 
+@pytest.mark.needs_keys
 @pytest.mark.skipif(not _dashscope_available(), reason="no DASHSCOPE_API_KEY (offline / AFK)")
 def test_real_embeddings_find_what_keyword_misses(tmp_path):
     """The money proof: semantic recall surfaces the right line even when it shares NO keywords with
-    the query — exactly the case keyword recall cannot handle."""
+    the query — exactly the case keyword recall cannot handle.
+
+    Marked @needs_keys: this is the ONE offline-suite test that makes a real network call. Deselect it
+    (`-m "not needs_keys"`) for a literally-zero-external-dependency run; it also skips without a key."""
     from avery.embeddings import make_dashscope_embedder
     embedder = make_dashscope_embedder()
     assert embedder is not None

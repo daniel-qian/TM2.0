@@ -1,3 +1,18 @@
+> **⟳ 2026-07-14 v02 链 → 新 main 同步合流(★下个 session 从这里接)**:lite-live-v02 链
+> (feat-042..045,四棒全对抗验证收口)与新 main(`5d32e4f` = 持久化链 + Ask 阶段 C 真后端)
+> 分头跑了一段,本次在分支 `integrate/v02-main-sync`(从 `feat/045-v02-onboard-nudges`@`e255a97`
+> 起,`git merge main` 普通合并非 rebase)完成同步。**冲突面只有 2 个文件真冲突**
+> (`feature_list.json` 脚本取并集、`src/shared/i18n/zh.ts` 仅文件头注释合并)、其余
+> (`en.ts`/gate 文档+snippet/`main.tsx`)全自动合并干净、`src/lite/**`/`eval-harness/**`/
+> `src/story/**` 零冲突全取 main(如约零改动)。合后全量复验:`init.sh` 绿(502 模块,0 error/
+> 5 warning 同 feat-045 基线);v01 十一相位 `verdict()` 真后端(mock brain)+ stub 各跑一遍全绿;
+> `askVerdict` 九相位(main 阶段 C 定义)stub 全绿;v02 四组 `v2Verdict`/`flowVerdict`/
+> `gapVerdict`/`nudgeVerdict`(A-D,17 相位)全绿;wallRad 4 方向真做红→绿。**未 merge 回
+> main、未 push**——`integrate/v02-main-sync` 即交付物。详见 `progress.md` 本节顶部
+> "Update — 2026-07-14 · v02 链 → 新 main 同步合流"(冲突逐个解法+全部门证据 JSON)。
+> **下一棒**:feat-046(aurora 皮精修)/ feat-047(lite2 引擎同步真后端契约)均可从
+> `integrate/v02-main-sync` 起跑,持久化已进 main 解除了 feat-047 此前的阻塞。
+
 # Session Handoff — 2026-07-09 · lite 打磨波(S4+S5+S6)收盘
 
 > **接续只靠本文件 + git,不回放聊天。** 上一版(07-09 S3 收盘 = 救援线 merge)见 `git show 9dbccf5:session-handoff.md`;更早 S2/S1 见其内指针。

@@ -9,8 +9,14 @@
 |---|---|---|---|---|
 | A. story scripted beat | 在最贴切的既有 case 加一个 Ask beat（新 ThreadStepKind `quick-ask`）：agent 提议快问 → Ask 卡（1~2 题，问事不问人）→ 回执归来 beat（原话+“本人自述”）。加性：既有 beats/rail 零改。 | `feat/034-story-ask` | 无（持久化线不碰 src/**） | **DONE+对抗验证 CONFIRMED_SAFE**（7b87cbd，已合 main 3e79e9e） |
 | B. lite Ask 卡（stub 驱动） | Ask = lite 第二种 artifact 卡：AskDraft 数据形状 + AskCard 组件（Room 内出生：编辑题目→确认→逐人链接→回收状态 chip→回执呈现）。走 LiveTransport stub（ADR-0020 seam），后端契约按下方提案对齐。 | `feat/034-lite-ask` | 无；**不碰 eval-harness/** | **DONE+对抗验证 CONFIRMED_SAFE**（169e651，已合 main d1934bf） |
-| C. 后端（数据模型+端点+员工 H5+红线门） | PRD "Implementation Direction" 全量：ask/ask_recipient 落 avery schema、`/r/{token}` 服务端渲染、问句红线门、回执闭环。 | 待定 | **deferred**：等持久化链合 main；届时对齐 feat/030 的 registry/DB 接缝 + Supabase avery schema | 未开 |
-| D. 部署（子域+哨兵） | `avery.ima-read.com` A 记录→宝塔 vhost/证书→容器（内存帽）→nginx 反代→**内存哨兵**（Q12） | — | 随 lite-v1 部署波 | 未开 |
+| C. 后端（数据模型+端点+员工 H5+红线门） | PRD "Implementation Direction" 全量：ask/ask_recipient 落 avery schema、`/r/{token}` 服务端渲染、问句红线门、回执闭环。 | `feat/034-stage-c` | 持久化链已并入 main（integrate cb11a2c）；骑 registry/authorize_context/scoring_policy 接缝 | **DONE+对抗验证×2 后修 2 缺陷,已合 main da94d59**（2026-07-14） |
+| D. 部署（**并入 lite-v1 部署波，不单独部**） | Ask 后端与持久化链是同一个 Python 容器；`avery.ima-read.com` 子域 vhost/证书→容器（内存帽+内存哨兵 Q12）→nginx。**Ask 特有 env**：`AVERY_PUBLIC_BASE`（生成 `/r/` 链接）+ `/ask`·`/r` 限流阈值 + 生产域名 OG 在企微/飞书/钉钉真机 unfurl 验证。DB 侧已就绪（见下"部署事实"）。 | — | **等第二台 ECS**（当前唯一生产机 ~150M free 无 swap 塞不下 Avery，会连累 ImaRead）；与 lite-v1 同波部署 | 未开（host 墙） |
+
+### 部署事实（钉自持久化线 2026-07-14 回执 + 记忆 [[avery-infra-icp-ecs-in-hand]]，阶段 D 开工前必读）
+
+- **Supabase 已换独立库**（推翻早先"共用 imaread 项目"）：生产 `AVERY_DB_URL` 指向新项目 `wvgmphgnvapacyyjmsew`（avery / 新加坡 ap-southeast-1）。我们的 `0007_ask.sql` **无需手动上库**——registry 的 `_ensure_schema()` 连库时自动 replay 全部迁移（IF NOT EXISTS 幂等）。dev 仍走各自本地 pg。
+- **连库形态坑（必带，否则生产连不上且 libpq 假报 "password authentication failed"）**：走 session pooler `aws-0-ap-southeast-1.pooler.supabase.com:5432`、user `postgres.<ref>`；`AVERY_DB_URL` 尾巴必须 `?sslmode=require&channel_binding=disable`（psycopg3 默认 SCRAM 通道绑定协商不下来=真病根，别去 reset 密码）；密码里特殊字符 percent-encode。后端零代码改动。
+- **@needs_db PG 腿**：本机开发无凭据未实跑（本轮 11 skips 干净）；部署首个动作 = `AVERY_DB_URL=… pytest -m needs_db` 把真 PG 路径（ask 契约 pg 双胞胎 + B token 读 A 的 ask → 404）跑绿。
 
 ## 后端契约提案（给持久化线/未来阶段 C 的对齐稿，additive-only）
 
@@ -40,6 +46,14 @@
 - **F2（demo 诚实性）**：stub 模式 shared 态产出真域名假链接（`avery.ima-read.com/r/tok_…`）带复制按钮、无"离线预览、链接不可用"标记——接真后端自然消失，但**在此之前若用 stub 演示必须先补该标记**。
 - **F3（防御归一收紧）**：`coerceAskDraft` 现对 >3 题静默截断、未知题型折 scale、回执值无量程校验（99 会渲染 "99 out of 5"）——阶段 C 收紧为"坏形状宁可不出卡"，服务端做最终门。
 - story 侧非阻塞记录：chip 快速双击连跳一拍（等价 chip+Advance，seek 可洗，main 既有无防抖模式）——如影响路演体感再修。
+
+## 阶段 C 对接契约（钉自持久化线 2026-07-14 就绪广播，开工必读）
+
+- **建工作区只走 `POST /ingest`**（回 `{context_id, owner_token}`），不自己 INSERT `avery.contexts`——token 铸造/红线门/记忆物化都在 ingest 路径里。DB=Supabase avery schema（迁移 0001-0006，DDL 只增不改），接缝=`avery.ingest.registry.active_registry()`，`AVERY_DB_URL` 有值走 PG、无值走内存（离线默认）。
+- **两套 token 严格分离**：`owner_token`=经理凭据，只走 header（`X-Avery-Token`/Bearer），绝不进 URL；本线 `/r/{token}` share-token=员工侧一次性凭据，自管语义（v1 在 URL 是拍板设计——员工免登录的唯一路径，但 ask 的 manager 侧端点【POST /ask·share·GET /ask/{id}·revoke】全部要求 owner_token header + 404-on-mismatch（`authorize_context` 接缝直接复用，恒时比较、无枚举 oracle）。
+- **人打分开关（Danny 07-13 政策转向）**：问句红线校验两档——问"事"问句恒许；涉人打分问句仅 `scoring_policy.person_scoring_allowed()`（`AVERY_ALLOW_PERSON_SCORING`）为 on 时放行，**不另起机制**。呈现层结构边界不随开关放松：回执不进人卡/无跨人分数表（ADR-0023 结构闸 + DB entities 打分键 CHECK 仍在）。
+- **部署约束**：`/ask`/`/r/` 端点同受 feat-039 硬门（限流+LLM 花费闸——员工 H5 高频不许烧 M3 额度）+ 内存哨兵；CORS/TLS 沿 runbook。
+- 真机证据基线（他们侧）：离线 474 passed；`@needs_db` 41 passed 含贯穿 e2e（持久化/隔离/真 RAG 隔离/笔记/开关两态）与基本压测。
 
 ## 与持久化线的协调（07-13 广播回执）
 

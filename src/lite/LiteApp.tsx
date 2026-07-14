@@ -2,6 +2,7 @@ import { useLite } from './store'
 import { LiteTopbar } from './LiteTopbar'
 import { TeamScreen } from './screens/TeamScreen'
 import { RoomScreen } from './screens/RoomScreen'
+import { NotesScreen } from './screens/NotesScreen'
 import { PlaybooksScreen } from './screens/PlaybooksScreen'
 import { VisionScreen } from './screens/VisionScreen'
 import { DetailOverlay } from './DetailOverlay'
@@ -18,6 +19,8 @@ export function LiteApp() {
       <main className="scene-stage">
         {screen === 'team' ? (
           <TeamScreen />
+        ) : screen === 'notes' ? (
+          <NotesScreen />
         ) : screen === 'playbooks' ? (
           <PlaybooksScreen />
         ) : screen === 'vision' ? (

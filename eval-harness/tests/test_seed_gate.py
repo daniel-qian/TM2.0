@@ -123,6 +123,10 @@ def offline_client(monkeypatch):
     monkeypatch.setenv("AVERY_BRAIN", "mock")
     monkeypatch.setenv("AVERY_EMBEDDINGS", "keyword")
     monkeypatch.setenv("AVERY_EXTRACTOR", "heuristic")   # feat-023 knob; harmless before it lands
+    # feat-030: fully-offline includes NO database — pin the in-memory registry even on a machine
+    # whose env carries a DB URL (the DB path has its own @needs_db contract + restart gates).
+    monkeypatch.delenv("AVERY_DB_URL", raising=False)
+    monkeypatch.delenv("PGVECTOR_URL", raising=False)
     from fastapi.testclient import TestClient
     from service.app import app
     return TestClient(app)
@@ -153,10 +157,13 @@ def test_offline_seed_ingest_shape_and_redline(offline_client):
     assert metrics.get("people") == str(len(payload["people"]))
     assert metrics.get("active projects") == str(len(payload["projects"]))
 
-    # /team/{id} replay returns the same payload (registry round-trip)
-    r2 = offline_client.get(f"/team/{payload['context_id']}")
+    # /team/{id} replay returns the same payload (registry round-trip). feat-038: the replay is
+    # gated — present the owner_token minted at /ingest (it is NOT echoed back in the team payload).
+    r2 = offline_client.get(f"/team/{payload['context_id']}",
+                            headers={"X-Avery-Token": payload["owner_token"]})
     assert r2.status_code == 200
     assert r2.json()["people"] == payload["people"]
+    assert "owner_token" not in r2.json(), "the token must NOT be echoed by the /team refetch"
 
 
 def test_offline_seed_facts_materialize_cleanly(monkeypatch, tmp_path):
@@ -364,7 +371,7 @@ def test_advise_cites_the_design_lead(live_service, seed_payload):
         "title": "who leads design",
         "company_context_id": seed_payload["context_id"],
         "stream": False,
-    }, timeout=600)
+    }, headers={"X-Avery-Token": seed_payload["owner_token"]}, timeout=600)   # feat-038
     assert r.status_code == 200, f"/advise failed: HTTP {r.status_code}: {r.text[:500]}"
     body = r.json()
 

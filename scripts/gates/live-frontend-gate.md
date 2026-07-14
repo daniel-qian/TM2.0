@@ -40,18 +40,25 @@
      (三拍叙事 `.lite-vision-beat` ≥3 + 能力边界 mock `.lite-vision-mock` ≥3,**每张 mock
      必带 `.lite-vision-tag` preview/coming 标注**——零未标注 mock);若 mock 含示例人
      (`.lite-vision-person`)则**零数字**(红线);该屏 story 名词黑名单 = 0。
-   - `__seedGate.verdict()` — 聚合判定(10 相位:原 6 + teamGrouped/roomCanvas/playbooksEmpty
-     + visionSurface)。
+   - `await __seedGate.assertNotesSurface()` — **相位 K**(feat-033):Avery's notes 写侧笔记屏。
+     **在 composerAskLive 之后跑**——一次真 advise 现在会写一条真笔记,故此时应已 POPULATED。
+     断言:屏挂载 + **常驻红线信任条 `.lite-notes-redline-note`** + 观察条目(`.lite-notes-entry-text`)
+     **零人卡数字**(红线,写侧后端门已拦,此处在渲染面复核)+ 条目**只读**(观察正文非 button)
+     + 该屏 story 名词黑名单 = 0。空态(没跑 advise)也容忍(空态卡 + 信任条)。
+   - `__seedGate.verdict()` — 聚合判定(11 相位:原 6 + teamGrouped/roomCanvas/playbooksEmpty
+     + visionSurface + notesSurface)。
 5. **收尾**:停 dev server、杀 8137 uvicorn。verdict JSON 原样贴进
    `feature_list.json` evidence / progress.md。
 
 ## Ask 卡相位(feat-034 阶段 B,独立聚合 `askVerdict()`)
 
-后端 ask 端点(阶段 C)未落地前,本组相位跑在**确定性 stub transport**下:
+本组相位默认跑在**确定性 stub transport**下(离线回归/演示通道):
 `http://localhost:5175/?mode=live&transport=stub`(不占 5173/8137;stub 全程离线,
-`src/lite/stubTransport.ts`,同一 LiveTransport seam,零真 LLM/零网络)。阶段 C 接线后
-换真后端重跑同一组断言。stub 模式下上面 10 个既有相位同样可跑(seed 内容任意字节即可,
-stub ingest 确定性返回 16 人 2 项目、含 Lin Qing / Chen Mingyuan)。
+`src/lite/stubTransport.ts`,同一 LiveTransport seam,零真 LLM/零网络)。**阶段 C 后端已落地**
+(2026-07-14:POST /ask·/ask/{id}·share·GET·revoke + 员工 H5 /r/{token},见
+`.issues/ask-card-0713/stage-c-handoff.md`)——部署波拉真 8137 后去掉 `?transport=stub`
+重跑同一组断言(届时 F2 相位要求离线标注**不在**)。stub 模式下上面 11 个既有相位同样可跑
+(seed 内容任意字节即可,stub ingest 确定性返回 16 人 2 项目、含 Lin Qing / Chen Mingyuan)。
 
 在 `composerAskLive(...)`(stub 流会多带一帧 `manifest{kind:'ask-draft'}`)之后按序:
 
@@ -62,6 +69,9 @@ stub ingest 确定性返回 16 人 2 项目、含 Lin Qing / Chen Mingyuan)。
 - `await __seedGate.assertAskShare()` — **相位 K2**:确认 → shared;链接数 = 选中受访者数;
   每条 `https://avery.ima-read.com/r/{token}`(host/协议/路径逐条校验);每链接一个复制按钮,
   点击不崩(clipboard 被拒也不崩)。
+- `__seedGate.assertAskOfflineNote()` — **相位 F2(阶段 C,demo 诚实性)**:在 shared/collecting
+  态运行(K2 之后、K3 之前)。stub 通道(`?transport=stub`)下 `.ask-offline-note`
+  ("离线预览——链接不可用")**必须在**;真后端下**必须不在**(链接是真的)——同一断言两向诚实。
 - `await __seedGate.assertAskCollect(2)` — **相位 K3**:拉取式刷新推进
   shared → collecting(回收 chip "1/2 replied")→ closed。
 - `__seedGate.assertAskReceipts('multi')` — **相位 K4** 🔴:多人同题回执 = **一段定性汇总**
@@ -73,8 +83,15 @@ stub ingest 确定性返回 16 人 2 项目、含 Lin Qing / Chen Mingyuan)。
   (`.ask-receipt-comment`)。
 - `await __seedGate.assertAskRedline()` — **相位 K6** 🔴(全 DOM 结构闸):人卡零数字
   (连裸数字都不许,回执值/标注不得漏上人卡)、全文档零分数表结构、story 名词黑名单 = 0。
-- `__seedGate.askVerdict()` — 6 相位独立聚合(不并进 `verdict()`:真后端跑既有 10 相位时
-  ask 相位可能尚未接线,两本账各自诚实)。
+- `await __seedGate.assertAskStatusGuards()` — **相位 F1(阶段 C,status 词表)**:经
+  `window.__liteAsk.coerceAskDraft` 断言未知 status **折 closed 绝不折 draft**(已发出/已撤回的
+  ask 不得以可编辑草稿复活);`revoked`/`expired` 原样保留;再驱动 `window.__liteStore` 渲染
+  两终态,断言 `.ask-revoked-note` / `.ask-expired-note` 在 DOM 且链接区已撤(跑完恢复原 ask)。
+- `__seedGate.assertAskCoerceStrict()` — **相位 F3(阶段 C,坏形状宁可不出卡)**:
+  \>3 题 / 未知题型(matrix)/ 回执值域外(scale 收到 99、yesno 收到数字)→ coerce 一律
+  返回 null(不再截断、不再折 scale、不渲染 "99 out of 5");合法形状照常出卡。
+- `__seedGate.askVerdict()` — **9 相位**独立聚合(K1–K6 + 阶段 C 的 F1/F2/F3;不并进
+  `verdict()`:两本账各自诚实)。
 
 ### Ask 相位已知坑
 

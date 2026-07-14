@@ -98,10 +98,15 @@ def test_advise_rejects_empty_situation(client):
     assert r.status_code == 422  # pydantic min_length
 
 
-def test_advise_sample_endpoint(client):
+def test_advise_sample_endpoint_is_removed(client):
+    """feat-038: /advise/sample was a zero-body, unauthenticated, token-burning SSE demo (readiness
+    §2-A). It is taken down — the route no longer exists, so it 404s."""
     r = client.get("/advise/sample")
-    assert r.status_code == 200
-    assert r.headers["content-type"].startswith("text/event-stream")
-    events = _parse_sse(r.text)
-    manifest = json.loads([data for ev, data in events if ev == "manifest"][0])
-    assert manifest["contract_ok"] is True
+    assert r.status_code == 404, "/advise/sample must be gone (denial-of-wallet / IDOR console)"
+
+
+def test_interactive_docs_are_closed(client):
+    """feat-038: /docs, /redoc, /openapi.json expose the API shape and turn an IDOR into a clickable
+    console — a lead-gen deploy closes them (FastAPI docs_url=None etc.)."""
+    for path in ("/docs", "/redoc", "/openapi.json"):
+        assert client.get(path).status_code == 404, f"{path} must be closed in production"

@@ -35,6 +35,9 @@ export const en = {
     grownFrom: 'Grown from',
     privacyNote: 'Nothing is scored about any person — only what they do and own.',
     empty: 'No files yet. Upload a few to see your team appear.',
+    // feat-032 — the per-company file space: a look-back list of what you uploaded (persists).
+    filesTitle: 'Your files',
+    filesChunks: 'references',
   },
 
   // ── Your team, live ───────────────────────────────────────────────────────
@@ -59,6 +62,7 @@ export const en = {
   lite: {
     tabTeam: 'Your team',
     tabRoom: 'The room',
+    tabNotes: "Avery's notes",
     tabPlaybooks: 'Playbooks',
     tabVision: 'Where this goes',
 
@@ -150,6 +154,29 @@ export const en = {
     visionMockPersonRole: 'Read as what they do and own — never a number.',
 
     visionComingSoon: 'None of the four is live yet. This tab is a preview of the boundary, kept honest on purpose.',
+
+    // ── Avery's notes surface (feat-033: write-side, accumulating, user-visible memory) ──
+    // Copy per avery-notes-ux-draft.md §5. The red-line trust note stays on-message with the
+    // existing family (upload.privacyNote / emptyHintPrivacy / visionProofRedline): a DETERMINISTIC
+    // gate, never "we try" — never scored/ranked/profiled, and no instruction can turn that off.
+    notesEyebrow: 'Field notes',
+    notesTitle: 'What Avery has noticed about your company',
+    notesLede:
+      'Every time you ask the room a real question, Avery writes down what it observed — in its own words, for you to read. It builds up the longer you work together.',
+    notesRedlineNote:
+      'These notes describe work — projects, handoffs, load. They never score, rank, or profile a person, and no instruction can turn that off.',
+    notesCountSince: 'observations · since', // "12 observations · since Mar 3"
+    notesCountOne: 'observation', // per-day group count (singular)
+    notesCountMany: 'observations', // per-day group count (plural)
+    notesToday: 'Today',
+    notesSourcePrefix: 'From your question about', // + excerpt + " →"
+    notesOpenRoom: 'Open the room →',
+    notesEmptyEyebrow: 'Nothing written yet',
+    notesEmptyTitle: "Avery hasn't taken its first note",
+    notesEmptyBody:
+      'Ask the room a real question about your team. When Avery notices something worth keeping — a pattern, a risk, a dependency — it writes it here.',
+    notesEmptyCta: 'Ask the room',
+    notesNudge: 'Avery added a note', // Room chip after a note lands
 
     // Your team — briefing header (real numbers from ingestion) + weak handoffs
     briefingEyebrow: 'From your uploads',
@@ -561,6 +588,20 @@ export const en = {
     summaryTitle: 'Taken together',
     answeredAt: 'answered',
     errorGeneric: "Couldn't reach the ask service — try again.",
+    // ── stage C additions ──
+    // F2 (demo honesty): the stub channel's links are demo-only — say so, plainly.
+    offlinePreview: 'Offline preview — these links are for show and will not open.',
+    // PRD Q8, now real: the backend enforces the seven-day window, so the card may say it.
+    expiryHint: 'Links stay live for seven days, then expire on their own.',
+    revoke: 'Withdraw this ask',
+    revokedTitle: 'Withdrawn',
+    revokedChip: 'Withdrawn',
+    revokedNote:
+      'You withdrew this ask — its links now show a withdrawn notice instead of questions. No further replies will arrive.',
+    expiredTitle: 'Expired',
+    expiredChip: 'Expired',
+    expiredNote:
+      'This ask passed its seven-day window — the links no longer accept answers. Start a new ask if you still need their read.',
   },
 }
 

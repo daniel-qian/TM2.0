@@ -922,16 +922,188 @@
       return out;
     },
 
+    // ── feat-034 stage C follow-ups (kickoff F1/F2/F3) — BORN RED 2026-07-14 ──
+    // F1: unknown status must fold to 'closed' (NEVER 'draft' — a revoked ask must not resurrect
+    // as an editable draft), and the two new terminal statuses render dedicated UI states.
+    // Drives the real store (window.__liteStore) + the exported coerce (window.__liteAsk).
+    async assertAskStatusGuards() {
+      const dbg = window.__liteAsk;
+      const store = window.__liteStore;
+      if (!dbg || !dbg.coerceAskDraft || !store) {
+        return (results.askStatusGuards = { pass: false, error: 'no __liteAsk/__liteStore debug seam' });
+      }
+      const mk = (status) => dbg.coerceAskDraft({
+        id: 'ask_gate_f1', status,
+        questions: [{ id: 'q1', kind: 'scale', text: 'How is the launch pacing?' }],
+        recipients: [{ id: 'r1', name: 'Lin Qing' }],
+      });
+      const unknownFolds = (mk('totally-bogus-status') || {}).status;
+      const revokedKept = (mk('revoked') || {}).status;
+      const expiredKept = (mk('expired') || {}).status;
+      // DOM halves: the card renders dedicated terminal states (copy present, no link rows).
+      const prev = store.getState().ask;
+      const domFor = async (status) => {
+        store.setState({ ask: mk(status) });
+        try {
+          await poll(() => {
+            const c = $('.lite-ask-card');
+            return c && c.getAttribute('data-ask-status') === status ? true : null;
+          }, 4000, status + ' card state');
+        } catch (e) { return { mounted: false }; }
+        const card = $('.lite-ask-card');
+        return {
+          mounted: true,
+          note: !!$(status === 'revoked' ? '.ask-revoked-note' : '.ask-expired-note', card),
+          linkRows: $$('.ask-link-row', card).length,
+        };
+      };
+      const revokedDom = await domFor('revoked');
+      const expiredDom = await domFor('expired');
+      store.setState({ ask: prev });   // leave the session as found
+      const out = {
+        unknownFolds, revokedKept, expiredKept,
+        revokedDom, expiredDom,
+        pass: unknownFolds === 'closed' && revokedKept === 'revoked' && expiredKept === 'expired' &&
+          revokedDom.mounted && revokedDom.note && revokedDom.linkRows === 0 &&
+          expiredDom.mounted && expiredDom.note && expiredDom.linkRows === 0,
+      };
+      results.askStatusGuards = out;
+      return out;
+    },
+
+    // F2 (demo honesty): under the stub transport a SHARED ask shows real-looking links that go
+    // nowhere — the card must SAY SO (.ask-offline-note). Against the real backend the note must
+    // be ABSENT (the links work). Run while the card is shared/collecting (between K2 and K3).
+    assertAskOfflineNote() {
+      const isStub = new URLSearchParams(location.search).get('transport') === 'stub';
+      const card = $('.lite-ask-card');
+      if (!card) return (results.askOfflineNote = { pass: false, error: 'no .lite-ask-card' });
+      const status = card.getAttribute('data-ask-status');
+      const inShare = status === 'shared' || status === 'collecting';
+      const note = $('.ask-offline-note', card);
+      const noteText = note ? (note.textContent || '').trim() : null;
+      const out = {
+        isStub, status, notePresent: !!note, noteText,
+        pass: inShare && (isStub ? !!note && noteText.length > 0 : !note),
+      };
+      results.askOfflineNote = out;
+      return out;
+    },
+
+    // F3 (defensive coerce, tightened): a bad shape means NO card — never a half-broken one.
+    // >3 questions / an unknown question kind / a receipt value outside its question's range
+    // (99 "out of 5", a string yes/no) must all coerce to null.
+    assertAskCoerceStrict() {
+      const dbg = window.__liteAsk;
+      if (!dbg || !dbg.coerceAskDraft) {
+        return (results.askCoerceStrict = { pass: false, error: 'no __liteAsk debug seam' });
+      }
+      const base = {
+        id: 'ask_gate_f3', status: 'closed',
+        questions: [{ id: 'q1', kind: 'scale', text: 'How is the launch pacing?' }],
+        recipients: [{ id: 'r1', name: 'Lin Qing' }],
+      };
+      const fourQs = dbg.coerceAskDraft({
+        ...base,
+        questions: [1, 2, 3, 4].map((i) => ({ id: 'q' + i, kind: 'scale', text: 'Question ' + i + '?' })),
+      });
+      const unknownKind = dbg.coerceAskDraft({
+        ...base,
+        questions: [{ id: 'q1', kind: 'matrix', text: 'Pick all that apply' }],
+      });
+      const outOfRange = dbg.coerceAskDraft({
+        ...base,
+        recipients: [{ id: 'r1', name: 'Lin Qing', receipt: {
+          answers: [{ question_id: 'q1', value: 99 }], answered_at: '2026-07-14T10:00:00Z' } }],
+      });
+      const wrongType = dbg.coerceAskDraft({
+        ...base,
+        questions: [{ id: 'q1', kind: 'yesno', text: 'Is the quote signed?' }],
+        recipients: [{ id: 'r1', name: 'Lin Qing', receipt: {
+          answers: [{ question_id: 'q1', value: 3 }], answered_at: '2026-07-14T10:00:00Z' } }],
+      });
+      const goodStillWorks = dbg.coerceAskDraft({
+        ...base,
+        recipients: [{ id: 'r1', name: 'Lin Qing', receipt: {
+          answers: [{ question_id: 'q1', value: 4 }], answered_at: '2026-07-14T10:00:00Z' } }],
+      });
+      const out = {
+        fourQsNull: fourQs === null,
+        unknownKindNull: unknownKind === null,
+        outOfRangeNull: outOfRange === null,
+        wrongTypeNull: wrongType === null,
+        goodStillWorks: !!(goodStillWorks && goodStillWorks.recipients[0].receipt),
+        pass: fourQs === null && unknownKind === null && outOfRange === null &&
+          wrongType === null && !!(goodStillWorks && goodStillWorks.recipients[0].receipt),
+      };
+      results.askCoerceStrict = out;
+      return out;
+    },
+
     askVerdict() {
       const phases = {
         askDraft: !!(results.askDraft && results.askDraft.pass),
         askShare: !!(results.askShare && results.askShare.pass),
+        askOfflineNote: !!(results.askOfflineNote && results.askOfflineNote.pass),   // F2 (stage C)
         askCollect: !!(results.askCollect && results.askCollect.pass),
         askReceiptsMulti: !!(results.askReceiptsMulti && results.askReceiptsMulti.pass),
         askSingle: !!(results.askSingle && results.askSingle.pass),
         askRedline: !!(results.askRedline && results.askRedline.pass),
+        askStatusGuards: !!(results.askStatusGuards && results.askStatusGuards.pass), // F1 (stage C)
+        askCoerceStrict: !!(results.askCoerceStrict && results.askCoerceStrict.pass), // F3 (stage C)
       };
       return { pass: Object.values(phases).every(Boolean), phases, results };
+    },
+
+    // ── feat-033 new-surface phase ───────────────────────────────────────────
+    async assertNotesSurface() {
+      // The "Avery's notes" surface: the write-side, accumulating, READ-ONLY notebook.
+      // Called AFTER composerAskLive (a real advise now writes a real note), so the tab should be
+      // POPULATED. Asserts: the tab mounts; the RED-LINE trust note is present (deterministic gate,
+      // not "we try"); the observation entries carry ZERO person-score numbers (the red line the
+      // write-side backend gate enforces, re-checked on the rendered surface); entries are READ-ONLY
+      // (the observation body is not a button — only the source line jumps to the room); and the
+      // story-noun blacklist stays 0. An EMPTY notebook (no advise ran) is tolerated (empty-state +
+      // trust note), so this phase is honest whether or not a note landed.
+      this._clickTab("Avery's notes");
+      try {
+        await poll(() => ($('.lite-notes') ? true : null), 8000, 'notes surface to mount');
+      } catch (e) { /* fall through — assertions below report absence */ }
+      const screen = $('.lite-notes');
+      const trustNote = $('.lite-notes-redline-note');
+      const entries = $$('.lite-notes-entry');
+      const populated = entries.length > 0;
+      const emptyState = $('.lite-notes-empty');
+      // Red line on the RENDERED observations only (the trust note legitimately says "score/rank").
+      const entryText = $$('.lite-notes-entry-text').map((e) => e.innerText || '').join('\n');
+      const numberLeak = BLOOD_BAR_RE.test(entryText) || /\b\d\s*\/\s*\d\b/.test(entryText)
+        ? (entryText.match(BLOOD_BAR_RE) || entryText.match(/\b\d\s*\/\s*\d\b/) || [])[0] : null;
+      // Read-only: an observation entry must not be a <button> (only .lite-notes-entry-source is).
+      const entryIsButton = $$('.lite-notes-entry').some((e) => e.tagName === 'BUTTON');
+      const text = (screen && screen.innerText) || '';
+      const storyHits = [];
+      for (const noun of STORY_NOUNS) {
+        const re = noun.includes(' ')
+          ? new RegExp(noun.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')
+          : new RegExp('\\b' + noun + '\\b');
+        if (re.test(text)) storyHits.push(noun);
+      }
+      const out = {
+        screenPresent: !!screen,
+        trustNotePresent: !!trustNote,
+        populated,
+        entryCount: entries.length,
+        emptyStatePresent: !!emptyState,
+        numberLeak,
+        entryIsButton,
+        storyHits,
+        // Screen mounts; the red-line trust note is present; it is either populated (clean, read-only)
+        // or an honest empty state; zero number leak on observations; story-noun blacklist clean.
+        pass: !!screen && !!trustNote && (populated || !!emptyState) &&
+          !numberLeak && !entryIsButton && storyHits.length === 0,
+      };
+      results.notesSurface = out;
+      return out;
     },
 
     verdict() {
@@ -952,6 +1124,8 @@
         playbooksEmpty: !!(results.playbooks && results.playbooks.pass),
         // feat-026 (S6) new surface — positioning narrative + honestly-labeled capability mock.
         visionSurface: !!(results.vision && results.vision.pass),
+        // feat-033 new surface — the write-side, accumulating, read-only "Avery's notes" notebook.
+        notesSurface: !!(results.notesSurface && results.notesSurface.pass),
       };
       return { pass: Object.values(phases).every(Boolean), phases, results };
     },

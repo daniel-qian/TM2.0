@@ -9,22 +9,19 @@ The frontend never sees any of this: it only ever receives SSE events.
 """
 from __future__ import annotations
 
-import os
+from avery.embeddings import make_embedder_from_env, resolve_embeddings_kind as _resolve_kind
 
-from avery.embeddings import make_dashscope_embedder
-
-_DASHSCOPE_KINDS = ("dashscope", "bailian", "qwen", "text-embedding-v4")
+# feat-031: the gate itself now lives in avery.embeddings so the Postgres registry (avery.ingest) can
+# share it without importing `service`. This module stays the SERVICE-side entry point (unchanged API).
 
 
 def resolve_embeddings_kind() -> str:
-    return (os.environ.get("AVERY_EMBEDDINGS") or "keyword").strip().lower()
+    return _resolve_kind()
 
 
 def make_embedder():
     """Build the configured embedder, or None for the offline keyword path (default / no key)."""
-    if resolve_embeddings_kind() in _DASHSCOPE_KINDS:
-        return make_dashscope_embedder()   # None when DASHSCOPE_API_KEY is unset
-    return None
+    return make_embedder_from_env()   # None when AVERY_EMBEDDINGS is keyword or DASHSCOPE_API_KEY unset
 
 
 def active_embeddings() -> str:

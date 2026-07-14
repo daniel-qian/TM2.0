@@ -61,3 +61,54 @@ def test_python_multipart_declared_when_service_uses_forms():
         f"service/ uses FastAPI form/file parsing ({where}) which REQUIRES the `python-multipart` "
         f"package, but it is NOT declared in {REQUIREMENTS.name}. The Docker image installs only "
         f"requirements.txt, so /ingest will 500 in the container. Add `python-multipart>=0.0.9`.")
+
+
+def test_psycopg_declared_when_a_db_registry_exists():
+    """feat-030, same failure shape as the multipart gate: `avery/ingest/pg_registry.py` imports
+    psycopg LAZILY, so every offline test passes without it — but a deploy that sets AVERY_DB_URL
+    would 500 on first /ingest if the Docker image (which installs ONLY requirements.txt) doesn't
+    ship the driver. Static scan, no import, no network."""
+    pg_module = HERE / "avery" / "ingest" / "pg_registry.py"
+    if not pg_module.exists():
+        return  # no DB registry, nothing needs the driver
+    text = pg_module.read_text(encoding="utf-8")
+    if "import psycopg" not in text:
+        return
+    declared = _declared_packages()
+    assert "psycopg" in declared, (
+        f"avery/ingest/pg_registry.py imports psycopg (lazily — offline tests can't catch the "
+        f"absence) but `psycopg` is NOT declared in {REQUIREMENTS.name}; a DB-configured deploy "
+        f"would 500 on first use. Add `psycopg[binary]>=3.1`.")
+
+
+def _repo_uses(needle: str, *rel_paths: str) -> bool:
+    """True if `needle` appears in any of the given repo-relative files (static scan, no import)."""
+    for rel in rel_paths:
+        p = HERE / rel
+        if p.exists() and needle in p.read_text(encoding="utf-8"):
+            return True
+    return False
+
+
+def test_defusedxml_declared_when_used():
+    """feat-039, same lazy-import failure shape as the psycopg/multipart gates: `parse.py` calls
+    `defusedxml.defuse_stdlib()` LAZILY to harden openpyxl's XML against entity/quadratic bombs, so
+    every offline test passes without it — but the Docker image (which installs ONLY requirements.txt)
+    would ship WITHOUT the hardening. Static scan; if defusedxml is used it must be declared."""
+    if not _repo_uses("defusedxml", "avery/ingest/parse.py"):
+        return
+    assert "defusedxml" in _declared_packages(), (
+        f"avery/ingest/parse.py uses defusedxml (lazily) but it is NOT declared in "
+        f"{REQUIREMENTS.name}; the Docker image would lose XML-bomb hardening. Add `defusedxml>=0.7`.")
+
+
+def test_psutil_declared_when_used():
+    """feat-039: the memory sentinel (`service/mem_sentinel.py`) reads process RSS via psutil (lazy —
+    it falls back to cgroup/proc, so offline tests never require the package). A deploy that relies on
+    the sentinel needs psutil in the image; if the sentinel imports it, it must be declared."""
+    if not _repo_uses("import psutil", "service/mem_sentinel.py"):
+        return
+    assert "psutil" in _declared_packages(), (
+        f"service/mem_sentinel.py imports psutil (lazily) but it is NOT declared in "
+        f"{REQUIREMENTS.name}; the ECS memory sentinel would fall back to cgroup/proc only. "
+        f"Add `psutil>=5.9`.")
