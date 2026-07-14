@@ -181,16 +181,26 @@ def _post_advise_note(company_context_id: str | None, situation: str, manifest: 
 def health() -> dict:
     kind = brain_factory.resolve_brain_kind()
     # feat-039: sample the memory sentinel on the health hook and bubble a `degraded` flag when RSS
-    # crosses AVERY_MEM_WARN_MB (Danny Q12 — the "time to upsize the ECS box" signal). /health never
-    # lies about the extractor (active_extractor stays honest: 'heuristic' vs 'llm:<brain>').
+    # crosses AVERY_MEM_WARN_MB (Danny Q12 — the "time to upsize the ECS box" signal).
     mem = mem_sentinel.sample()
+    # /health must not lie about extraction. `extractor` is the CONFIGURED intent ('heuristic' or
+    # 'llm:<brain>'); `extraction_mode` is what it will ACTUALLY do right now — when a real brain is
+    # configured but the per-process LLM spend budget is exhausted, extraction degrades to the offline
+    # heuristic (denial-of-wallet fallback), so report 'degraded' and flip the operator `degraded`
+    # flag rather than claim a healthy 'llm'. A natively keyless deploy stays honestly 'heuristic',
+    # and a spent budget is moot there (no LLM extractor is in play).
+    extractor = extractor_factory.active_extractor()             # "heuristic" or "llm:<brain>"
+    llm_configured = extractor.startswith("llm:")
+    extraction_degraded = llm_configured and llm_budget.exhausted()
+    extraction_mode = "degraded" if extraction_degraded else ("llm" if llm_configured else "heuristic")
     return {"status": "ok", "service": "avery-agent", "brain": kind,
             "live": brain_factory.brain_is_live(),
             "embeddings": embedding_factory.active_embeddings(),  # "keyword" or "dashscope:<model>/<dim>"
-            "extractor": extractor_factory.active_extractor(),    # "heuristic" or "llm:<brain>"
+            "extractor": extractor,                               # configured intent
+            "extraction_mode": extraction_mode,                  # effective now: llm / heuristic / degraded
             "memory": mem,                                        # {rss_mb, warn_mb, high, available}
             "llm_calls_remaining": llm_budget.remaining(),        # None = unlimited (gate disabled)
-            "degraded": bool(mem.get("high"))}                   # operator-facing: something needs attention
+            "degraded": bool(mem.get("high")) or extraction_degraded}  # operator-facing: needs attention
 
 
 @app.post("/advise")

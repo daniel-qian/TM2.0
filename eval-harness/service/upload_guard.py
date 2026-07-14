@@ -77,17 +77,34 @@ def reset_rate_limiter() -> None:
 
 
 def _client_ip(scope) -> str:
-    """The caller IP. Honours the FIRST X-Forwarded-For hop (the runbook terminates TLS at a reverse
-    proxy that sets it), else the transport peer. XFF is spoofable if the deploy is NOT behind a
-    trusted proxy — acceptable for a lean lead-gen box; documented in the session handoff."""
-    headers = dict(scope.get("headers") or [])
-    xff = headers.get(b"x-forwarded-for")
-    if xff:
-        first = xff.decode("latin-1").split(",")[0].strip()
-        if first:
-            return first
+    """The rate-limit key: the caller's real IP, chosen so a forged X-Forwarded-For CANNOT mint a
+    fresh bucket per request (the DoS-bypass hole feat-039 closed).
+
+    Default (`AVERY_TRUSTED_PROXY_HOPS` unset/0): trust ONLY the unspoofable TCP peer
+    (`scope['client']`) and IGNORE X-Forwarded-For entirely. Behind the standard nginx
+    `$proxy_add_x_forwarded_for` recipe the header is APPENDED to — the attacker's forged value stays
+    LEFTMOST while the real client is appended on the right — so trusting the leftmost hop (the old
+    behaviour) let a flood rotate XFF and evade the per-IP limit. The TCP peer is set by the kernel
+    from the socket and cannot be spoofed over HTTP.
+
+    Behind N trusted reverse proxies, set `AVERY_TRUSTED_PROXY_HOPS=N`: the real client is then the
+    Nth XFF hop FROM THE RIGHT (each trusted proxy appends the address it received from). Anything to
+    the left of that is attacker-controlled and ignored. If the header is shorter than N (misconfig
+    or an attacker sending too few hops) we fall back to the TCP peer rather than trust a forged left
+    value. NOTE: if the proxy instead REPLACES the header (`proxy_set_header X-Forwarded-For
+    $remote_addr`) there is exactly one hop -> N=1."""
     client = scope.get("client")
-    return client[0] if client else "unknown"
+    peer = client[0] if client else "unknown"
+    hops = guards._int_env("AVERY_TRUSTED_PROXY_HOPS", 0)
+    if hops <= 0:
+        return peer   # trust only the TCP peer; XFF is not consulted (spoof-proof default)
+    xff = _header(scope, b"x-forwarded-for")
+    if not xff:
+        return peer   # proxies expected but no XFF present -> the unspoofable peer
+    parts = [p.strip() for p in xff.decode("latin-1").split(",") if p.strip()]
+    if len(parts) >= hops:
+        return parts[-hops]   # the Nth hop from the right = the real client behind N trusted proxies
+    return peer       # XFF shorter than the trusted chain -> fall back to the peer, never the left
 
 
 def _header(scope, name: bytes) -> bytes | None:
@@ -103,10 +120,6 @@ async def _send_json(send, status: int, payload: dict) -> None:
                 "headers": [(b"content-type", b"application/json"),
                             (b"content-length", str(len(body)).encode())]})
     await send({"type": "http.response.body", "body": body})
-
-
-class _BodyTooLarge(Exception):
-    pass
 
 
 class IngestGuardMiddleware:
@@ -155,30 +168,41 @@ class IngestGuardMiddleware:
                 pass
 
         # 2b) streamed backstop (chunked / lying Content-Length): count bytes, abort before RAM fills.
+        # On overflow the MIDDLEWARE sends the honest 413 ITSELF and hands the app an http.disconnect,
+        # rather than raising an exception up through the ASGI app — because FastAPI's multipart parser
+        # would catch that exception and turn it into a misleading 400 "error parsing the body" (the
+        # client that hit the size cap must see a truthful 413). Once we've responded we swallow any
+        # response the app still tries to emit reacting to the disconnect.
         counted = {"total": 0}
-        started = {"v": False}
+        overflowed = {"v": False}
+        responded = {"v": False}
 
         async def guarded_receive():
+            if overflowed["v"]:
+                return {"type": "http.disconnect"}   # body already refused; unwind the app
             msg = await receive()
             if msg.get("type") == "http.request":
                 counted["total"] += len(msg.get("body", b"") or b"")
                 if counted["total"] > max_total:
-                    raise _BodyTooLarge()
+                    overflowed["v"] = True
+                    log.warning("upload streamed body exceeded cap %s -> 413", max_total)
+                    await _send_json(send, 413, {
+                        "error": "upload too large",
+                        "detail": f"request body exceeded the {max_total}-byte per-request limit"})
+                    responded["v"] = True
+                    return {"type": "http.disconnect"}
             return msg
 
         async def guarded_send(message):
-            if message.get("type") == "http.response.start":
-                started["v"] = True
+            if responded["v"]:
+                return   # our 413 is already on the wire; drop the app's own (400) response
             await send(message)
 
         try:
             return await self.app(scope, guarded_receive, guarded_send)
-        except _BodyTooLarge:
-            log.warning("upload streamed body exceeded cap %s -> 413", max_total)
-            if not started["v"]:
-                return await _send_json(send, 413, {
-                    "error": "upload too large",
-                    "detail": f"request body exceeded the {max_total}-byte per-request limit"})
+        except Exception:
+            if responded["v"]:
+                return   # the app raised reacting to the disconnect; the 413 is already sent
             raise
 
 

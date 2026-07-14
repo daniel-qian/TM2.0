@@ -30,11 +30,18 @@ class ParseError(Exception):
     """A single file could not be parsed (unknown/again-unsupported format or missing lib)."""
 
 
-# feat-039 (readiness §2-D): harden the XML parsers openpyxl/csv use against entity-expansion /
-# quadratic-blowup ("billion laughs") bombs. `defusedxml.defuse_stdlib()` patches the stdlib XML
-# stack (xml.etree, xml.sax, ...) in place — openpyxl reads xlsx via xml.etree, so this covers it.
-# Best-effort + idempotent: if defusedxml is absent the parse still works (the zip-bomb guard in
-# guards.archive_reason is the primary decompression-bomb defence at the HTTP edge either way).
+# feat-039 (readiness §2-D): defence-in-depth against XML entity-expansion / quadratic-blowup
+# ("billion laughs") bombs in docx/xlsx. IMPORTANT ATTRIBUTION (corrected): openpyxl AND python-docx
+# read OOXML XML via **lxml** when it is installed (both fall back to the stdlib xml.etree only when
+# lxml is absent). `defusedxml.defuse_stdlib()` patches the STDLIB stack (xml.etree, xml.sax, ...) in
+# place — so it hardens ONLY the lxml-absent fallback path, NOT lxml itself. On the common (lxml
+# present) path the billion-laughs protection actually comes from lxml/libxml2's own parser, which by
+# default does not resolve external/parameter entities and caps internal entity expansion; a crafted
+# bomb is refused there, not by defuse_stdlib. We still call defuse_stdlib() to cover the fallback
+# path (and it is cheap + idempotent). The residual attack surface via lxml's remaining internal-
+# entity handling is narrow, and the zip-bomb guard in guards.archive_reason is the primary
+# decompression-bomb defence at the HTTP edge regardless. Best-effort: if defusedxml is absent the
+# parse still works and lxml/libxml2's limits still apply.
 _XML_DEFUSED = False
 
 

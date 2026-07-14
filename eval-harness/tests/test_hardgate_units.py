@@ -10,6 +10,7 @@ Covers the pieces the HTTP suite exercises end-to-end, at the seam level:
 """
 from __future__ import annotations
 
+import asyncio
 import io
 import zipfile
 
@@ -17,6 +18,90 @@ import pytest
 
 from avery.ingest import guards
 from avery.ingest.parse import ParsedDoc
+
+
+# ── upload_guard._client_ip — spoof-resistant rate-limit key (P1, HIGH) ───────────────────────────
+
+def test_client_ip_ignores_xff_by_default(monkeypatch):
+    """Default (AVERY_TRUSTED_PROXY_HOPS unset/0): the limiter keys on the UNSPOOFABLE TCP peer and
+    IGNORES X-Forwarded-For entirely — a forged XFF can no longer mint a fresh bucket per request."""
+    from service import upload_guard
+    monkeypatch.delenv("AVERY_TRUSTED_PROXY_HOPS", raising=False)
+    scope = {"headers": [(b"x-forwarded-for", b"9.9.9.9, 8.8.8.8")], "client": ("10.0.0.1", 5)}
+    assert upload_guard._client_ip(scope) == "10.0.0.1"
+
+
+def test_client_ip_trusted_proxy_hops_counts_from_the_right(monkeypatch):
+    """With N trusted proxies (each APPENDS the address it received from, on the right, per the nginx
+    $proxy_add_x_forwarded_for recipe), the real client is the Nth XFF hop FROM THE RIGHT — never the
+    attacker-controlled leftmost hop."""
+    from service import upload_guard
+    scope = {"headers": [(b"x-forwarded-for", b"1.1.1.1, 2.2.2.2, 3.3.3.3")],
+             "client": ("10.0.0.9", 5)}
+    monkeypatch.setenv("AVERY_TRUSTED_PROXY_HOPS", "1")
+    assert upload_guard._client_ip(scope) == "3.3.3.3"     # one proxy -> rightmost hop
+    monkeypatch.setenv("AVERY_TRUSTED_PROXY_HOPS", "2")
+    assert upload_guard._client_ip(scope) == "2.2.2.2"     # two proxies -> 2nd from right
+    monkeypatch.setenv("AVERY_TRUSTED_PROXY_HOPS", "3")
+    assert upload_guard._client_ip(scope) == "1.1.1.1"     # three -> the real client
+
+
+def test_client_ip_hops_deeper_than_chain_falls_back_to_peer(monkeypatch):
+    """If XFF is SHORTER than the configured trusted depth (a misconfig, or an attacker sending too
+    few hops), fall back to the unspoofable TCP peer rather than trusting a forged leftmost value."""
+    from service import upload_guard
+    monkeypatch.setenv("AVERY_TRUSTED_PROXY_HOPS", "3")
+    scope = {"headers": [(b"x-forwarded-for", b"7.7.7.7")], "client": ("10.0.0.2", 5)}
+    assert upload_guard._client_ip(scope) == "10.0.0.2"
+
+
+# ── IngestGuardMiddleware streamed backstop — honest 413, RAM bounded (P2, LOW) ───────────────────
+
+def test_streamed_backstop_sends_413_and_stays_bounded(monkeypatch):
+    """The streamed total-body backstop must (a) emit an honest 413 ITSELF (not raise into the form
+    parser -> a misleading 400), and (b) stop pulling the body ~one chunk past the cap so RAM stays
+    bounded on the 540M box even for a chunked / lying-Content-Length client."""
+    monkeypatch.setenv("AVERY_MAX_TOTAL_UPLOAD_BYTES", "2000")
+    monkeypatch.delenv("AVERY_RATE_INGEST_PER_MIN", raising=False)
+    from service.upload_guard import IngestGuardMiddleware
+
+    chunk = b"x" * 512
+    n_chunks = 40                       # 20 480 bytes available >> the 2 000-byte cap
+    pulled = {"bytes": 0, "calls": 0}
+
+    async def receive():
+        pulled["calls"] += 1
+        if pulled["calls"] > n_chunks:  # guard against an over-pulling (broken) impl looping forever
+            return {"type": "http.request", "body": b"", "more_body": False}
+        pulled["bytes"] += len(chunk)
+        return {"type": "http.request", "body": chunk, "more_body": True}
+
+    sent: list[dict] = []
+
+    async def send(message):
+        sent.append(message)
+
+    async def downstream(scope, rcv, snd):
+        # like FastAPI's multipart parser: drain the body, and on the abort try to emit its own 400
+        # (which the guard must swallow — the client already got our 413).
+        while True:
+            msg = await rcv()
+            if msg["type"] == "http.disconnect":
+                await snd({"type": "http.response.start", "status": 400, "headers": []})
+                await snd({"type": "http.response.body", "body": b'{"detail":"parse error"}'})
+                return
+
+    scope = {"type": "http", "path": "/ingest", "method": "POST",
+             "headers": [], "client": ("1.2.3.4", 5555)}
+    asyncio.run(IngestGuardMiddleware(downstream)(scope, receive, send))
+
+    starts = [m for m in sent if m["type"] == "http.response.start"]
+    assert starts, "the guard sent no response"
+    assert all(m["status"] == 413 for m in starts), (
+        f"streamed overflow must yield an honest 413 and swallow the app's 400: {starts}")
+    assert pulled["bytes"] <= 2000 + len(chunk) + 8, (
+        f"the backstop over-pulled the body ({pulled['bytes']} bytes; cap 2000, chunk {len(chunk)}) "
+        f"— RAM is not bounded")
 
 
 # ── guards.check_type — disguise detection ────────────────────────────────────────────────────────
