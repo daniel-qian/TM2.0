@@ -9,6 +9,7 @@ import type {
 } from './transport'
 import { resolveTransport } from './stubTransport'
 import {
+  coerceAskDraft,
   createLiveAgentSource,
   emptyRunState,
   type LiveAgentSource,
@@ -91,6 +92,8 @@ interface LiteState {
   confirmAsk: () => Promise<void>
   // manager 拉取回收状态/回执（PRD Q7：拉取式，无推送）
   refreshAsk: () => Promise<void>
+  // 撤回作废（PRD Q8）：shared/collecting 可撤；closed 服务端 409 大声失败
+  revokeAsk: () => Promise<void>
 }
 
 // `?transport=stub` → 确定性 stub（AFK 门/离线演示）；默认真 HTTP（行为零变化）。
@@ -286,13 +289,13 @@ export const useLite = create<LiteState>((set, get) => ({
     if (!ask || ask.status !== 'draft' || get().askBusy !== 'idle') return
     set({ askBusy: 'saving', askError: null })
     try {
-      // 保存（题目经服务端红线门，阶段 C）→ 一人一链。两步各自大声失败，不吞错。
+      // 保存（题目经服务端红线门）→ 一人一链。两步各自大声失败，不吞错。
       const saved = await transport.saveAsk({
         ...ask,
         company_context_id: ask.company_context_id ?? contextId ?? undefined,
       })
       const shared = await transport.shareAsk(saved.id)
-      set({ ask: shared, askBusy: 'idle' })
+      set({ ask: adoptAsk(shared), askBusy: 'idle' })
     } catch (err) {
       set({ askBusy: 'idle', askError: err instanceof Error ? err.message : String(err) })
     }
@@ -305,9 +308,37 @@ export const useLite = create<LiteState>((set, get) => ({
     set({ askBusy: 'refreshing', askError: null })
     try {
       const next = await transport.fetchAsk(ask.id)
-      set({ ask: next, askBusy: 'idle' })
+      set({ ask: adoptAsk(next), askBusy: 'idle' })
+    } catch (err) {
+      set({ askBusy: 'idle', askError: err instanceof Error ? err.message : String(err) })
+    }
+  },
+
+  revokeAsk: async () => {
+    const { ask, transport } = get()
+    if (!ask || (ask.status !== 'shared' && ask.status !== 'collecting')) return
+    if (get().askBusy !== 'idle') return
+    set({ askBusy: 'refreshing', askError: null })
+    try {
+      const next = await transport.revokeAsk(ask.id)
+      set({ ask: adoptAsk(next), askBusy: 'idle' })
     } catch (err) {
       set({ askBusy: 'idle', askError: err instanceof Error ? err.message : String(err) })
     }
   },
 }))
+
+// 阶段 C F1/F3：transport 回来的 ask 一律过同一把防御 coerce 再进 store——未知 status 折
+// closed、坏形状（超题数/未知题型/值域外回执）宁可不出卡（抛错走 askError 大声显示）。
+// 服务端是最终门；这里只是"坏形状绝不渲染"的客户端半边。
+function adoptAsk(raw: AskDraft): AskDraft {
+  const coerced = coerceAskDraft(raw)
+  if (!coerced) throw new Error('ask payload failed shape validation — refusing to render it')
+  return coerced
+}
+
+// 阶段 C 门缝：live-frontend-gate 的 F1 相位驱动 store 渲染 revoked/expired 两态
+// （门是唯一消费者；产品代码不经 window 读 store）。
+if (typeof window !== 'undefined') {
+  ;(window as unknown as Record<string, unknown>).__liteStore = useLite
+}

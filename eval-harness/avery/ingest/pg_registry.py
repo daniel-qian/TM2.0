@@ -410,6 +410,125 @@ class PostgresContextRegistry:
         return [CompanyNote(id=nid, created_at=ca.isoformat(), text=txt, source_excerpt=se or "")
                 for nid, ca, txt, se in rows]
 
+    # --- feat-034: Ask ("Quick ask") storage — the postgres twin of the registry ask seam --------
+
+    def put_ask(self, ask):
+        """Persist one ask snapshot (create or update). The write-side red-line gate runs BEFORE
+        any INSERT (a person-scoring question raises ValueError — nothing touches the DB), same
+        storage-door discipline as append_note. Recipients are replaced as one atomic snapshot
+        (same 're-put = replace' semantics as put())."""
+        from psycopg.types.json import Jsonb
+        from .ask import gate_ask_red_line
+        gate_ask_red_line(ask)
+        self._ensure_schema()
+        questions = [{"id": q.id, "kind": q.kind, "text": q.text} for q in ask.questions]
+        with self._connect() as conn, conn.transaction():
+            conn.execute(
+                "INSERT INTO avery.asks (id, context_id, status, thread_hint, questions, "
+                " comment_prompt, generation_mode, created_at, expires_at) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, "
+                "        COALESCE(%s::timestamptz, now()), "
+                "        COALESCE(%s::timestamptz, now() + interval '7 days')) "
+                "ON CONFLICT (id) DO UPDATE SET "
+                "  status = EXCLUDED.status, thread_hint = EXCLUDED.thread_hint, "
+                "  questions = EXCLUDED.questions, comment_prompt = EXCLUDED.comment_prompt, "
+                "  generation_mode = EXCLUDED.generation_mode, expires_at = EXCLUDED.expires_at",
+                (ask.id, ask.context_id, ask.status, ask.thread_hint, Jsonb(questions),
+                 ask.comment_prompt, ask.generation_mode,
+                 ask.created_at or None, ask.expires_at or None))
+            conn.execute("DELETE FROM avery.ask_recipients WHERE ask_id = %s", (ask.id,))
+            with conn.cursor() as cur:
+                cur.executemany(
+                    "INSERT INTO avery.ask_recipients "
+                    "(ask_id, idx, person_id, person_name, share_token, answers, comment, "
+                    " answered_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s::timestamptz)",
+                    [(ask.id, i, r.id, r.name, r.share_token or None,
+                      Jsonb(r.answers) if r.answers is not None else None,
+                      r.comment or "", r.answered_at or None)
+                     for i, r in enumerate(ask.recipients)])
+        return self.get_ask(ask.id)
+
+    def _ask_from_rows(self, row, recips):
+        from .ask import Ask, AskQuestion, AskRecipient
+        (aid, context_id, status, thread_hint, questions, comment_prompt,
+         generation_mode, created_at, expires_at) = row
+        return Ask(
+            id=aid, context_id=context_id, status=status, thread_hint=thread_hint or "",
+            questions=[AskQuestion(id=q.get("id", ""), kind=q.get("kind", ""),
+                                   text=q.get("text", "")) for q in (questions or [])],
+            recipients=[AskRecipient(id=pid or "", name=pname, share_token=tok or "",
+                                     answers=list(ans) if ans is not None else None,
+                                     comment=cmt or "",
+                                     answered_at=aat.isoformat() if aat is not None else "")
+                        for _i, pid, pname, tok, ans, cmt, aat in recips],
+            comment_prompt=comment_prompt or "", generation_mode=generation_mode or "manager",
+            created_at=created_at.isoformat() if created_at is not None else "",
+            expires_at=expires_at.isoformat() if expires_at is not None else "")
+
+    _ASK_COLS = ("id, context_id, status, thread_hint, questions, comment_prompt, "
+                 "generation_mode, created_at, expires_at")
+    _RECIP_COLS = "idx, person_id, person_name, share_token, answers, comment, answered_at"
+
+    def get_ask(self, ask_id: str):
+        self._ensure_schema()
+        with self._connect() as conn:
+            row = conn.execute(
+                f"SELECT {self._ASK_COLS} FROM avery.asks WHERE id = %s", (ask_id,)).fetchone()
+            if row is None:
+                return None
+            recips = conn.execute(
+                f"SELECT {self._RECIP_COLS} FROM avery.ask_recipients "
+                "WHERE ask_id = %s ORDER BY idx", (ask_id,)).fetchall()
+        return self._ask_from_rows(row, recips)
+
+    def get_ask_by_token(self, share_token: str):
+        """Resolve one employee link -> (ask, recipient index), or None. One indexed lookup —
+        the token is the whole credential (no enumeration path)."""
+        if not share_token:
+            return None
+        self._ensure_schema()
+        with self._connect() as conn:
+            hit = conn.execute(
+                "SELECT ask_id, idx FROM avery.ask_recipients WHERE share_token = %s",
+                (share_token,)).fetchone()
+        if hit is None:
+            return None
+        ask = self.get_ask(hit[0])
+        if ask is None or hit[1] >= len(ask.recipients):
+            return None
+        return ask, hit[1]
+
+    def record_answer(self, share_token: str, answers: list, comment: str,
+                      answered_at: str) -> str:
+        """The answer-once lock, ATOMIC in SQL: the UPDATE lands only where answered_at IS NULL,
+        so two racing submits can never both write ('ok' / 'already' / 'unknown'). Advances the
+        ask status shared->collecting->closed inside the same transaction."""
+        from psycopg.types.json import Jsonb
+        if not share_token:
+            return "unknown"
+        self._ensure_schema()
+        with self._connect() as conn, conn.transaction():
+            cur = conn.execute(
+                "UPDATE avery.ask_recipients SET answers = %s, comment = %s, "
+                "answered_at = %s::timestamptz "
+                "WHERE share_token = %s AND answered_at IS NULL RETURNING ask_id",
+                (Jsonb(list(answers)), comment or "", answered_at, share_token))
+            row = cur.fetchone()
+            if row is None:
+                exists = conn.execute(
+                    "SELECT 1 FROM avery.ask_recipients WHERE share_token = %s",
+                    (share_token,)).fetchone()
+                return "already" if exists else "unknown"
+            ask_id = row[0]
+            total, done = conn.execute(
+                "SELECT count(*), count(answered_at) FROM avery.ask_recipients "
+                "WHERE ask_id = %s", (ask_id,)).fetchone()
+            conn.execute(
+                "UPDATE avery.asks SET status = %s "
+                "WHERE id = %s AND status IN ('shared', 'collecting')",
+                ("closed" if done >= total else "collecting", ask_id))
+        return "ok"
+
     def resolve_memory_dir(self, context_id: str) -> Path | None:
         ctx = self.get(context_id)
         return ctx.memory_dir if ctx else None

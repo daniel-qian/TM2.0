@@ -265,6 +265,20 @@ export const en = {
     summaryTitle: 'Taken together',
     answeredAt: 'answered',
     errorGeneric: "Couldn't reach the ask service — try again.",
+    // ── stage C additions ──
+    // F2 (demo honesty): the stub channel's links are demo-only — say so, plainly.
+    offlinePreview: 'Offline preview — these links are for show and will not open.',
+    // PRD Q8, now real: the backend enforces the seven-day window, so the card may say it.
+    expiryHint: 'Links stay live for seven days, then expire on their own.',
+    revoke: 'Withdraw this ask',
+    revokedTitle: 'Withdrawn',
+    revokedChip: 'Withdrawn',
+    revokedNote:
+      'You withdrew this ask — its links now show a withdrawn notice instead of questions. No further replies will arrive.',
+    expiredTitle: 'Expired',
+    expiredChip: 'Expired',
+    expiredNote:
+      'This ask passed its seven-day window — the links no longer accept answers. Start a new ask if you still need their read.',
   },
 }
 

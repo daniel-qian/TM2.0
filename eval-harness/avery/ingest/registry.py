@@ -251,6 +251,8 @@ class ContextRegistry:
     def __init__(self) -> None:
         self._by_id: dict[str, CompanyContext] = {}
         self._notes: dict[str, list[CompanyNote]] = {}   # feat-033: agent-written notes, per context
+        self._asks: dict[str, object] = {}               # feat-034: ask_id -> Ask (deep-copied)
+        self._ask_tokens: dict[str, tuple[str, int]] = {}  # share_token -> (ask_id, recipient idx)
 
     def put(self, ctx: CompanyContext) -> str:
         self._by_id[ctx.context_id] = ctx
@@ -272,6 +274,66 @@ class ContextRegistry:
     def list_notes(self, context_id: str) -> list[CompanyNote]:
         """This company's notes, NEWEST FIRST (the notebook reads new->old)."""
         return list(reversed(self._notes.get(context_id, [])))
+
+    # --- feat-034: Ask ("Quick ask") storage — the same seam style as notes ---------------------
+
+    def put_ask(self, ask):
+        """Store one ask snapshot (create or update). Runs the write-side red-line gate FIRST
+        (raises ValueError on a person-scoring question — nothing lands), same storage-door
+        discipline as append_note. Deep-copied both ways so a caller's later mutation can never
+        silently edit the stored evidence."""
+        import copy
+        from .ask import gate_ask_red_line
+        gate_ask_red_line(ask)
+        snapshot = copy.deepcopy(ask)
+        self._asks[snapshot.id] = snapshot
+        # token index tracks the CURRENT snapshot only (re-share replaces cleanly)
+        self._ask_tokens = {t: k for t, k in self._ask_tokens.items() if k[0] != snapshot.id}
+        for i, r in enumerate(snapshot.recipients):
+            if r.share_token:
+                self._ask_tokens[r.share_token] = (snapshot.id, i)
+        return copy.deepcopy(snapshot)
+
+    def get_ask(self, ask_id: str):
+        import copy
+        ask = self._asks.get(ask_id)
+        return copy.deepcopy(ask) if ask is not None else None
+
+    def get_ask_by_token(self, share_token: str):
+        """Resolve one employee link -> (ask, recipient index), or None (unknown token -> the
+        loud 404). The token is the WHOLE credential — no enumeration path exists."""
+        import copy
+        hit = self._ask_tokens.get(share_token or "")
+        if hit is None:
+            return None
+        ask_id, ridx = hit
+        ask = self._asks.get(ask_id)
+        if ask is None or ridx >= len(ask.recipients):
+            return None
+        return copy.deepcopy(ask), ridx
+
+    def record_answer(self, share_token: str, answers: list, comment: str,
+                      answered_at: str) -> str:
+        """The answer-once lock: 'ok' when this FIRST answer lands, 'already' when the recipient
+        answered before (nothing is overwritten — the evidence stays stable, PRD Q8), 'unknown'
+        for a token that was never minted. Advances the stored status shared->collecting->closed."""
+        hit = self._ask_tokens.get(share_token or "")
+        if hit is None:
+            return "unknown"
+        ask_id, ridx = hit
+        ask = self._asks.get(ask_id)
+        if ask is None:
+            return "unknown"
+        rec = ask.recipients[ridx]
+        if rec.answered_at:
+            return "already"
+        rec.answers = list(answers)
+        rec.comment = comment or ""
+        rec.answered_at = answered_at
+        if ask.status in ("shared", "collecting"):
+            done = sum(1 for r in ask.recipients if r.answered_at)
+            ask.status = "closed" if done >= len(ask.recipients) else "collecting"
+        return "ok"
 
     def get(self, context_id: str) -> CompanyContext | None:
         return self._by_id.get(context_id)
@@ -296,6 +358,8 @@ class ContextRegistry:
     def clear(self) -> None:
         self._by_id.clear()
         self._notes.clear()
+        self._asks.clear()
+        self._ask_tokens.clear()
 
 
 # Process-wide default registry (the offline in-memory instance).

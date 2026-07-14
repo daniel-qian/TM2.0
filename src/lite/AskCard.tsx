@@ -33,12 +33,15 @@ export function AskCard() {
   const askBusy = useLite((s) => s.askBusy)
   const askError = useLite((s) => s.askError)
   const team = useLite((s) => s.team)
+  // 阶段 C F2（demo 诚实性）：离线预览通道（stub）的链接不可真开——卡上明说。
+  const offlinePreview = useLite((s) => !!s.transport.offlinePreview)
   const editAskQuestion = useLite((s) => s.editAskQuestion)
   const addAskQuestion = useLite((s) => s.addAskQuestion)
   const removeAskQuestion = useLite((s) => s.removeAskQuestion)
   const toggleAskRecipient = useLite((s) => s.toggleAskRecipient)
   const confirmAsk = useLite((s) => s.confirmAsk)
   const refreshAsk = useLite((s) => s.refreshAsk)
+  const revokeAsk = useLite((s) => s.revokeAsk)
 
   const [copiedId, setCopiedId] = useState<string | null>(null)
 
@@ -47,6 +50,9 @@ export function AskCard() {
   const isDraft = ask.status === 'draft'
   const isClosed = ask.status === 'closed'
   const collecting = ask.status === 'shared' || ask.status === 'collecting'
+  // 阶段 C：两个终态（F1 词表补全）。已撤回/已过期只剩一句状态说明——链接区、编辑区全撤。
+  const isRevoked = ask.status === 'revoked'
+  const isExpired = ask.status === 'expired'
   const answered = answeredCount(ask)
   const total = ask.recipients.length
 
@@ -97,12 +103,26 @@ export function AskCard() {
         <div>
           <p className="eyebrow">{t.ask.eyebrow}</p>
           <h2>
-            {isDraft ? t.ask.draftTitle : isClosed ? t.ask.receiptsTitle : t.ask.sharedTitle}
+            {isDraft
+              ? t.ask.draftTitle
+              : isClosed
+                ? t.ask.receiptsTitle
+                : isRevoked
+                  ? t.ask.revokedTitle
+                  : isExpired
+                    ? t.ask.expiredTitle
+                    : t.ask.sharedTitle}
           </h2>
         </div>
         {!isDraft ? (
           <span className="ask-status-chip">
-            {isClosed ? t.ask.closedChip : fill(t.ask.repliesChip, { answered, total })}
+            {isClosed
+              ? t.ask.closedChip
+              : isRevoked
+                ? t.ask.revokedChip
+                : isExpired
+                  ? t.ask.expiredChip
+                  : fill(t.ask.repliesChip, { answered, total })}
           </span>
         ) : null}
       </header>
@@ -201,6 +221,8 @@ export function AskCard() {
       {collecting ? (
         <>
           <p className="ask-lede">{t.ask.sharedLede}</p>
+          {/* 阶段 C F2：stub 通道的链接是演示用假链接——诚实标注，接真后端此标自然消失。 */}
+          {offlinePreview ? <p className="ask-offline-note">{t.ask.offlinePreview}</p> : null}
           <div className="ask-links">
             {ask.recipients.map((r) => (
               <div key={r.id} className="ask-link-row">
@@ -216,6 +238,8 @@ export function AskCard() {
               </div>
             ))}
           </div>
+          {/* 阶段 C：7 天过期——后端已接，才说这句话（Q8）。 */}
+          <p className="ask-expiry-hint">{t.ask.expiryHint}</p>
           <footer className="ask-footer">
             <button
               type="button"
@@ -225,9 +249,20 @@ export function AskCard() {
             >
               {askBusy === 'refreshing' ? t.ask.refreshing : t.ask.refresh}
             </button>
+            <button
+              type="button"
+              className="ask-revoke"
+              disabled={askBusy !== 'idle'}
+              onClick={() => void revokeAsk()}
+            >
+              {t.ask.revoke}
+            </button>
           </footer>
         </>
       ) : null}
+
+      {isRevoked ? <p className="ask-revoked-note">{t.ask.revokedNote}</p> : null}
+      {isExpired ? <p className="ask-expired-note">{t.ask.expiredNote}</p> : null}
 
       {isClosed ? (
         <div className="ask-receipts">

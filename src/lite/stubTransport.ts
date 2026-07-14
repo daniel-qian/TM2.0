@@ -269,6 +269,10 @@ export function createStubTransport(): LiveTransport {
   return {
     streamAdvise: emitAdviseScript,
 
+    // 阶段 C F2（demo 诚实性）：本通道 shared 态发的是真域名假链接——自我声明离线预览，
+    // AskCard 据此渲染"链接不可用"标注（真 HTTP transport 无此标）。
+    offlinePreview: true,
+
     async ingest(files) {
       ingested = true
       sourceFiles = files.map((f) => f.name)
@@ -330,10 +334,20 @@ export function createStubTransport(): LiveTransport {
       return shared
     },
 
+    async revokeAsk(askId) {
+      // 与阶段 C 真端点同语义：closed 不可撤（409 大声）；其余置 revoked（幂等）。
+      const st = asks.get(askId)
+      if (!st) throw new Error('ask HTTP 404 (stub)')
+      if (st.draft.status === 'closed') throw new Error('ask revoke HTTP 409 (stub: closed)')
+      const revoked: AskDraft = { ...st.draft, status: 'revoked' }
+      asks.set(askId, { draft: revoked, revealed: st.revealed })
+      return revoked
+    },
+
     async fetchAsk(askId) {
       const st = asks.get(askId)
       if (!st) throw new Error('ask HTTP 404 (stub)')
-      if (st.draft.status === 'draft') return st.draft
+      if (st.draft.status === 'draft' || st.draft.status === 'revoked') return st.draft
       // 每次拉取多"回来"一份回执，直到全齐——shared → collecting → closed 可确定性重放。
       st.revealed = Math.min(st.revealed + 1, st.draft.recipients.length)
       const recipients = st.draft.recipients.map((r, i) =>

@@ -1343,6 +1343,53 @@
   font-size: 12px;
 }
 
+/* ── feat-034 阶段 C 追加（F1/F2 + 撤回/过期两终态；只追加，不动既有规则）──────────── */
+/* F2 demo 诚实性：stub 通道的假链接标注 */
+.lite-ask-card .ask-offline-note {
+  margin: 0;
+  padding: 8px 12px;
+  border-left: 3px solid var(--terracotta);
+  background: rgba(178, 84, 43, 0.08);
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* 7 天过期提示（后端已接，才说这句话） */
+.lite-ask-card .ask-expiry-hint {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+
+/* 撤回按钮：与 refresh 同排的次级动作，警示色描边 */
+.lite-ask-card .ask-revoke {
+  padding: 8px 16px;
+  border-radius: 6px;
+  border: 1px solid var(--terracotta);
+  background: transparent;
+  color: var(--terracotta);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.lite-ask-card .ask-revoke:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* 两终态说明（F1：revoked/expired 专属呈现——没有链接区、没有编辑区） */
+.lite-ask-card .ask-revoked-note,
+.lite-ask-card .ask-expired-note {
+  margin: 0;
+  padding: 8px 12px;
+  border-left: 3px solid var(--rule-strong);
+  background: rgba(31, 35, 40, 0.05);
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
 /* ── feat-033 · Avery's notes（写侧、累积、只读）─────────────────────────────────────────
    复用叙事屏骨架（scene-nexus + eyebrow + h2 + lede）、分组折叠（home-people-group-head，
    样式已在 team 段）、信任小字（upload-privacy-note）、is-new 高亮惯例。整屏只读。 */

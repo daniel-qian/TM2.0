@@ -14,6 +14,10 @@ import type { Dict } from "./index";
 // NOTE (feat-034 merge): scripts/i18n-zh.mjs now HAS a directed-section mode
 //  (`node scripts/i18n-zh.mjs ask`) — the ask.* section below was generated through it.
 //  The feat-032/033 hand-written keys above can be folded the same way (e.g. `… upload lite`).
+// NOTE (feat-034 stage C): the 9 NEW ask.* keys (offlinePreview / expiryHint / revoke /
+//  revoked* / expired*) came out of a directed `i18n-zh.mjs ask` M3 run; the run's churn on the
+//  ALREADY-FINAL ask keys was reverted (locked copy stays byte-identical), only the new keys were
+//  folded in. Danny 审字 pending on the new keys.
 export const zh: Dict = {
   "mode": {
     "storyLabel": "演示",
@@ -187,6 +191,15 @@ export const zh: Dict = {
     "receiptScaleSuffix": "/ 5",
     "summaryTitle": "放在一起看",
     "answeredAt": "回复于",
-    "errorGeneric": "连不上快问服务——再试一次。"
+    "errorGeneric": "连不上快问服务——再试一次。",
+    "offlinePreview": "离线预览——这些链接只是示意，点不开。",
+    "expiryHint": "链接七天内有效，过期自动失效。",
+    "revoke": "撤回这次快问",
+    "revokedTitle": "已撤回",
+    "revokedChip": "已撤回",
+    "revokedNote": "你撤回了这次快问——链接打开后只看到撤回提示，不再显示问题，也不再接收回复。",
+    "expiredTitle": "已过期",
+    "expiredChip": "已过期",
+    "expiredNote": "这次快问已过七天有效期，链接不再接收作答。如果还想听听他们的看法，重新发起一次。"
   }
 };
