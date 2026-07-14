@@ -237,44 +237,70 @@ export function coerceAdvice(raw: unknown): LiteAdvice | null {
 }
 
 // manifest{kind:'ask-draft'}.ask 的防御性形状归一（与 coerceAdvice 同规格）。
-// 契约硬边界（PRD Q5 / ADR-0023）：题数 1..3、题型仅 scale|yesno；坏形状返回 null
-// （宁可不出卡，不出一张半坏的卡）。回执只存在于 recipients[].receipt——没有任何
-// 可挂到"人"身上的槽位（结构性红线）。
+// 契约硬边界（PRD Q5 / ADR-0023 / 阶段 C F1+F3 收紧——feat-047 打回复验补齐，
+// 与 src/lite/streamSource.ts 现行实现对齐；拷贝不引用，墙纪律不变）：
+//   · 题数 >3、未知题型、值域外回执（99 "out of 5"、yesno 收到数字）→ 返回 null，
+//     **宁可不出卡**，绝不出一张半坏/静默改形的卡（F3：不再截断、不再折 scale）。
+//   · status 词表 = 服务端六词（draft|shared|collecting|closed|revoked|expired）；
+//     未知词一律折 **closed**——绝不折 draft，否则已发出/已撤回的 ask 会以可编辑草稿复活（F1）。
+//   · 回执只存在于 recipients[].receipt——没有任何可挂到"人"身上的槽位（结构性红线）。
 export function coerceAskDraft(raw: unknown): AskDraft | null {
   if (!raw || typeof raw !== 'object') return null
   const r = raw as Record<string, unknown>
   if (typeof r.id !== 'string' || !r.id) return null
 
-  const questions: AskQuestion[] = Array.isArray(r.questions)
-    ? (r.questions as unknown[])
-        .filter((q): q is Record<string, unknown> => !!q && typeof q === 'object')
-        .map((q, i) => ({
-          id: typeof q.id === 'string' && q.id ? q.id : `q${i + 1}`,
-          kind: (q.kind === 'yesno' ? 'yesno' : 'scale') as AskQuestion['kind'],
-          text: typeof q.text === 'string' ? q.text : '',
-        }))
-        .filter((q) => q.text.trim().length > 0)
-        .slice(0, 3)
-    : []
+  if (!Array.isArray(r.questions)) return null
+  const rawQuestions = (r.questions as unknown[]).filter(
+    (q): q is Record<string, unknown> => !!q && typeof q === 'object',
+  )
+  if (rawQuestions.length !== (r.questions as unknown[]).length) return null // 非对象题项 = 坏形状
+  if (rawQuestions.length > 3) return null // F3：超题数不出卡（不再静默截断）
+  const questions: AskQuestion[] = []
+  for (let i = 0; i < rawQuestions.length; i++) {
+    const q = rawQuestions[i]
+    if (q.kind !== 'scale' && q.kind !== 'yesno') return null // F3：未知题型不出卡（不再折 scale）
+    const text = typeof q.text === 'string' ? q.text : ''
+    if (!text.trim()) continue // 空题文照旧丢弃（阶段 B 行为，不算毒形状）
+    questions.push({
+      id: typeof q.id === 'string' && q.id ? q.id : `q${i + 1}`,
+      kind: q.kind,
+      text,
+    })
+  }
   if (questions.length < 1) return null
+  const kindById = new Map(questions.map((q) => [q.id, q.kind]))
 
-  const recipients: AskRecipient[] = Array.isArray(r.recipients)
-    ? (r.recipients as unknown[])
-        .filter((x): x is Record<string, unknown> => !!x && typeof x === 'object')
-        .map((x, i) => ({
-          id: typeof x.id === 'string' && x.id ? x.id : `r${i + 1}`,
-          name: typeof x.name === 'string' ? x.name : '',
-          token: typeof x.token === 'string' ? x.token : undefined,
-          link: typeof x.link === 'string' ? x.link : undefined,
-          receipt: coerceAskReceipt(x.receipt),
-        }))
-        .filter((x) => x.name.trim().length > 0)
+  const recipients: AskRecipient[] = []
+  const rawRecipients = Array.isArray(r.recipients)
+    ? (r.recipients as unknown[]).filter(
+        (x): x is Record<string, unknown> => !!x && typeof x === 'object',
+      )
     : []
+  for (let i = 0; i < rawRecipients.length; i++) {
+    const x = rawRecipients[i]
+    const name = typeof x.name === 'string' ? x.name : ''
+    if (!name.trim()) continue
+    const receipt = coerceAskReceipt(x.receipt, kindById)
+    if (receipt === 'poisoned') return null // F3：值域外/错型回执 = 整卡不出
+    recipients.push({
+      id: typeof x.id === 'string' && x.id ? x.id : `r${i + 1}`,
+      name,
+      token: typeof x.token === 'string' ? x.token : undefined,
+      link: typeof x.link === 'string' ? x.link : undefined,
+      receipt,
+    })
+  }
 
+  // F1：已知六词原样保留；未知词折 closed（fail-safe 方向 = 不可编辑、不可再分享）。
   const status: AskStatus =
-    r.status === 'shared' || r.status === 'collecting' || r.status === 'closed'
+    r.status === 'draft' ||
+    r.status === 'shared' ||
+    r.status === 'collecting' ||
+    r.status === 'closed' ||
+    r.status === 'revoked' ||
+    r.status === 'expired'
       ? r.status
-      : 'draft'
+      : 'closed'
 
   return {
     id: r.id,
@@ -299,18 +325,30 @@ if (typeof window !== 'undefined') {
   ;(window as unknown as Record<string, unknown>).__lite2Ask = { coerceAskDraft }
 }
 
-function coerceAskReceipt(raw: unknown): AskReceipt | undefined {
+// 回执归一：undefined = 没有回执；'poisoned' = 回执存在但值域/类型对不上它的题——
+// F3 收紧后由调用方把整卡打回 null（渲染 "99 out of 5" 是对证据的歪曲，宁可不渲染）。
+function coerceAskReceipt(
+  raw: unknown,
+  kindById: Map<string, AskQuestion['kind']>,
+): AskReceipt | undefined | 'poisoned' {
   if (!raw || typeof raw !== 'object') return undefined
   const r = raw as Record<string, unknown>
-  const answers = Array.isArray(r.answers)
-    ? (r.answers as unknown[])
-        .filter((a): a is Record<string, unknown> => !!a && typeof a === 'object')
-        .map((a) => ({
-          question_id: typeof a.question_id === 'string' ? a.question_id : '',
-          value: typeof a.value === 'number' || typeof a.value === 'boolean' ? a.value : false,
-        }))
-        .filter((a) => a.question_id)
-    : []
+  if (!Array.isArray(r.answers)) return undefined
+  const answers: { question_id: string; value: number | boolean }[] = []
+  for (const a of r.answers as unknown[]) {
+    if (!a || typeof a !== 'object') return 'poisoned'
+    const rec = a as Record<string, unknown>
+    const qid = typeof rec.question_id === 'string' ? rec.question_id : ''
+    const kind = kindById.get(qid)
+    if (!kind) return 'poisoned' // 回执答了一道不存在的题
+    const v = rec.value
+    if (kind === 'scale') {
+      if (typeof v !== 'number' || !Number.isInteger(v) || v < 1 || v > 5) return 'poisoned'
+    } else {
+      if (typeof v !== 'boolean') return 'poisoned'
+    }
+    answers.push({ question_id: qid, value: v })
+  }
   if (answers.length === 0) return undefined
   return {
     answers,

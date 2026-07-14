@@ -125,7 +125,11 @@ export interface LiveSignalCard {
 // LitePerson 一个字段都不加；类型层就没有可把答案挂到"人"身上的槽位。
 
 export type AskQuestionKind = 'scale' | 'yesno' // 1~5 刻度 · 是/否（PRD Q5：仅这两种）
-export type AskStatus = 'draft' | 'shared' | 'collecting' | 'closed'
+// status 词表锁定（阶段 C 对接契约，服务端为真源）：draft|shared|collecting|closed|revoked|expired。
+// feat-047 打回复验补齐（lite2 拷贝分叉于阶段 C 之前，带的是旧四词表——真后端发 revoked/expired
+// 时前端会把已撤回/已过期的 ask 复活成可编辑草稿，违反 ADR-0023 + 阶段 C F1 明文）。
+// F1：coerce 遇未知词折 closed（绝不折 draft——已发出/已撤回的 ask 不得以可编辑草稿复活）。
+export type AskStatus = 'draft' | 'shared' | 'collecting' | 'closed' | 'revoked' | 'expired'
 
 export interface AskQuestion {
   id: string
@@ -277,6 +281,13 @@ export function createHttpTransport(base: string = apiBase()): LiveTransport {
     const tok = contextId ? tokens[contextId] : undefined
     return tok ? { [OWNER_TOKEN_HEADER]: tok } : {}
   }
+  // feat-047 打回复验：askId → company_context_id（saveAsk 成功时记下），share/fetch 据此带
+  // owner_token header。进程内即可——ask 卡与 run 同生命周期，刷新后重新走 saveAsk。
+  // （此前 lite2 的 saveAsk/shareAsk/fetchAsk 零 header，对上已加固的真后端全部 404。）
+  const askContexts: Record<string, string> = {}
+  const rememberAskContext = (askId: string | undefined, contextId: string | undefined): void => {
+    if (askId && contextId) askContexts[askId] = contextId
+  }
 
   return {
     streamAdvise(req, onEvent, onDone) {
@@ -345,26 +356,39 @@ export function createHttpTransport(base: string = apiBase()): LiveTransport {
       return (await res.json()) as LiveTeamPayload
     },
 
-    // ── Ask（feat-034 契约提案；阶段 C 的 FastAPI 端点落地前，这三个调用只会 4xx/网络错，
-    // 全部大声失败——与 feat-028 的 404 纪律同规格，绝不静默回落假数据）──────────────────
+    // ── Ask（feat-034；阶段 C 端点已落地）────────────────────────────────────────────────
+    // feat-047 打回复验对齐：manager 侧 ask 端点全部要求 owner_token header（404-on-mismatch，
+    // 无枚举 oracle）。share/fetch 只有 askId——saveAsk 成功时记下 askId→context 映射，后续
+    // 调用按它取 header。🔴 token 只进 header，绝不进 URL。
+    // 未知 id 一律大声失败（与 feat-028 的 404 纪律同规格，绝不静默回落假数据）。
     async saveAsk(draft) {
       const res = await fetch(`${base}/ask`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeader(draft.company_context_id),
+        },
         body: JSON.stringify(draft),
       })
       if (!res.ok) throw new Error(`ask HTTP ${res.status}`)
-      return (await res.json()) as AskDraft
+      const saved = (await res.json()) as AskDraft
+      rememberAskContext(saved.id, saved.company_context_id ?? draft.company_context_id)
+      return saved
     },
 
     async shareAsk(askId) {
-      const res = await fetch(`${base}/ask/${encodeURIComponent(askId)}/share`, { method: 'POST' })
+      const res = await fetch(`${base}/ask/${encodeURIComponent(askId)}/share`, {
+        method: 'POST',
+        headers: authHeader(askContexts[askId]),
+      })
       if (!res.ok) throw new Error(`ask share HTTP ${res.status}`)
       return (await res.json()) as AskDraft
     },
 
     async fetchAsk(askId) {
-      const res = await fetch(`${base}/ask/${encodeURIComponent(askId)}`)
+      const res = await fetch(`${base}/ask/${encodeURIComponent(askId)}`, {
+        headers: authHeader(askContexts[askId]),
+      })
       if (!res.ok) throw new Error(`ask HTTP ${res.status}`)
       return (await res.json()) as AskDraft
     },

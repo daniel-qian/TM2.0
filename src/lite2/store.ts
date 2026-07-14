@@ -9,6 +9,7 @@ import type {
 } from './transport'
 import { resolveTransport } from './stubTransport'
 import {
+  coerceAskDraft,
   createLiveAgentSource,
   emptyRunState,
   type LiveAgentSource,
@@ -295,7 +296,10 @@ export const useLite = create<LiteState>((set, get) => ({
 
   confirmAsk: async () => {
     const { ask, transport, contextId } = get()
-    if (!ask || ask.status !== 'draft' || get().askBusy !== 'idle') return
+    // feat-047 打回复验：白名单守卫——**只有 draft 可确认**。此前写作 `status !== 'draft'` 的
+    // 黑名单式否定，与 coerce 折 draft 的 bug 叠加后，一张已撤回的 ask 能被重新 saveAsk+shareAsk。
+    if (!ask || ask.status !== 'draft') return
+    if (get().askBusy !== 'idle') return
     set({ askBusy: 'saving', askError: null })
     try {
       // 保存（题目经服务端红线门，阶段 C）→ 一人一链。两步各自大声失败，不吞错。
@@ -304,7 +308,7 @@ export const useLite = create<LiteState>((set, get) => ({
         company_context_id: ask.company_context_id ?? contextId ?? undefined,
       })
       const shared = await transport.shareAsk(saved.id)
-      set({ ask: shared, askBusy: 'idle' })
+      set({ ask: adoptAsk(shared), askBusy: 'idle' })
     } catch (err) {
       set({ askBusy: 'idle', askError: err instanceof Error ? err.message : String(err) })
     }
@@ -317,12 +321,24 @@ export const useLite = create<LiteState>((set, get) => ({
     set({ askBusy: 'refreshing', askError: null })
     try {
       const next = await transport.fetchAsk(ask.id)
-      set({ ask: next, askBusy: 'idle' })
+      set({ ask: adoptAsk(next), askBusy: 'idle' })
     } catch (err) {
       set({ askBusy: 'idle', askError: err instanceof Error ? err.message : String(err) })
     }
   },
 }))
+
+// feat-047 打回复验：transport 回来的 ask 一律过同一把防御 coerce 再进 store——未知 status 折
+// closed、坏形状（超题数/未知题型/值域外回执）宁可不出卡（抛错走 askError 大声显示）。
+// 服务端是最终门；这里只是"坏形状绝不渲染"的客户端半边。
+// 此前 lite2 把 transport 原始响应直接 set 进 store（零 coerce）——而 fetchAsk/refreshAsk
+// 正是真后端交付 revoked/expired 的主路径，只修 coerceAskDraft 堵不住它（照 src/lite 的
+// adoptAsk 先例补齐；拷贝不引用）。
+function adoptAsk(raw: AskDraft): AskDraft {
+  const coerced = coerceAskDraft(raw)
+  if (!coerced) throw new Error('ask payload failed shape validation — refusing to render it')
+  return coerced
+}
 
 // feat-047 门缝：live-frontend-gate 的 tokenDiscipline 相位读 contextId/ownerToken 断言 token
 // 纪律（门是唯一消费者；产品代码不经 window 读 store）——同 src/lite/store.ts 的 __liteStore

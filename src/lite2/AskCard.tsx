@@ -47,6 +47,10 @@ export function AskCard() {
   const isDraft = ask.status === 'draft'
   const isClosed = ask.status === 'closed'
   const collecting = ask.status === 'shared' || ask.status === 'collecting'
+  // feat-047 打回复验：两个终态（阶段 C F1 词表补全）。已撤回/已过期只剩一句状态说明——
+  // 链接区、编辑区全撤（isDraft/collecting/isClosed 三个分支都不命中，天然不渲染）。
+  const isRevoked = ask.status === 'revoked'
+  const isExpired = ask.status === 'expired'
   const answered = answeredCount(ask)
   const total = ask.recipients.length
 
@@ -97,12 +101,26 @@ export function AskCard() {
         <div>
           <p className="eyebrow">{t.ask.eyebrow}</p>
           <h2>
-            {isDraft ? t.ask.draftTitle : isClosed ? t.ask.receiptsTitle : t.ask.sharedTitle}
+            {isDraft
+              ? t.ask.draftTitle
+              : isClosed
+                ? t.ask.receiptsTitle
+                : isRevoked
+                  ? t.ask.revokedTitle
+                  : isExpired
+                    ? t.ask.expiredTitle
+                    : t.ask.sharedTitle}
           </h2>
         </div>
         {!isDraft ? (
           <span className="ask-status-chip">
-            {isClosed ? t.ask.closedChip : fill(t.ask.repliesChip, { answered, total })}
+            {isClosed
+              ? t.ask.closedChip
+              : isRevoked
+                ? t.ask.revokedChip
+                : isExpired
+                  ? t.ask.expiredChip
+                  : fill(t.ask.repliesChip, { answered, total })}
           </span>
         ) : null}
       </header>
@@ -279,6 +297,12 @@ export function AskCard() {
           )}
         </div>
       ) : null}
+
+      {/* feat-047 打回复验：两个终态各一句状态说明（文案走既有 shared ask.* 命名空间——
+          AskCard 全篇本就消费 t.ask.*，阶段 C 已把 revoked / expired 两族文案定稿并过 M3，
+          无需新 key）。链接区/编辑区在上面的三个分支里天然不命中，此处不重复否定。 */}
+      {isRevoked ? <p className="ask-revoked-note">{t.ask.revokedNote}</p> : null}
+      {isExpired ? <p className="ask-expired-note">{t.ask.expiredNote}</p> : null}
 
       {askError ? <p className="ask-error">{t.ask.errorGeneric}</p> : null}
     </section>

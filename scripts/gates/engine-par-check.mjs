@@ -137,15 +137,59 @@ checks.streamAdviseAuthThreading = {
   match: liteStreamAdviseUsesAuth === lite2StreamAdviseUsesAuth && lite2StreamAdviseUsesAuth,
 };
 
-// ── informational only: confirm the deliberately-OUT-OF-SCOPE Ask-stage-C additions are absent
-//    from lite2 (documents the scope decision as machine-checkable evidence, doesn't fail either
-//    way — kickoff-dev.md §合流契约附录 §2 only names transport.ts's owner_token/header/
-//    fetchFiles/fetchNotes as the delta to port) ────────────────────────────────────────────
+// ── 6) Ask status vocabulary — REQUIRED as of the feat-047 adversarial-verify blocker
+//    (2026-07-15). lite2's copy forked before Ask stage C and carried the old 4-word status
+//    vocabulary; its coerce folded every unknown word (including the real backend's `revoked` /
+//    `expired`) back to 'draft', resurrecting withdrawn asks as editable drafts — ADR-0023 +
+//    stage C F1 forbid this verbatim. Both shells must now carry the same six words. ─────────
+const STATUS_WORDS = ['draft', 'shared', 'collecting', 'closed', 'revoked', 'expired'];
+function statusVocab(src) {
+  const m = /export type AskStatus =([^\n]*(?:\n\s*\|[^\n]*)*)/.exec(src);
+  if (!m) return null;
+  return STATUS_WORDS.filter((w) => new RegExp(`'${w}'`).test(m[1]));
+}
+const liteVocab = statusVocab(liteSrc);
+const lite2Vocab = statusVocab(lite2Src);
+checks.askStatusVocabMatches = {
+  lite: liteVocab, lite2: lite2Vocab,
+  match: !!liteVocab && !!lite2Vocab && JSON.stringify(liteVocab) === JSON.stringify(lite2Vocab) &&
+    lite2Vocab.length === STATUS_WORDS.length,
+};
+
+// ── 7) Ask endpoints must thread the auth header too (found by the same adversarial-verify pass:
+//    lite2's saveAsk/shareAsk/fetchAsk went out with zero X-Avery-Token while the read endpoints
+//    carried it — the hardened real backend 404s them). ─────────────────────────────────────
+const askMethods = ['saveAsk', 'shareAsk', 'fetchAsk'];
+const askAuthThreading = {};
+for (const name of askMethods) {
+  const liteBody = methodBody(liteHttp, name);
+  const lite2Body = methodBody(lite2Http, name);
+  const liteUsesAuth = liteBody != null && /authHeader\(/.test(liteBody);
+  const lite2UsesAuth = lite2Body != null && /authHeader\(/.test(lite2Body);
+  askAuthThreading[name] = { liteFound: liteBody != null, lite2Found: lite2Body != null, liteUsesAuth, lite2UsesAuth, match: liteUsesAuth === lite2UsesAuth && lite2UsesAuth };
+}
+checks.askAuthHeaderThreading = askAuthThreading;
+// share/fetch only carry an askId — both shells need the askId->contextId map to know which
+// token to present.
+checks.askContextMapPresent = {
+  lite: /const askContexts/.test(liteSrc), lite2: /const askContexts/.test(lite2Src),
+  match: /const askContexts/.test(liteSrc) && /const askContexts/.test(lite2Src),
+};
+
+// ── informational only: confirm the still-OUT-OF-SCOPE Ask-stage-C additions are absent from
+//    lite2 (documents the scope decision as machine-checkable evidence, doesn't fail either way
+//    — kickoff-dev.md §合流契约附录 §2 only names transport.ts's owner_token/header/fetchFiles/
+//    fetchNotes as the delta to port).
+//    NOTE (2026-07-15): `askStatusRevokedExpiredAbsentFromLite2` USED to live here and assert
+//    those two words were ABSENT. The adversarial-verify blocker proved that framing was wrong —
+//    the status vocabulary is not an optional stage-C nicety, it is a safety contract, and it is
+//    now REQUIRED above (checks.askStatusVocabMatches). What remains out of scope is only the
+//    manager-side *withdraw action* (revokeAsk + its button): lite2 renders the revoked/expired
+//    terminal states when the backend reports them, but cannot itself withdraw an ask. ────────
 checks.intentionallyNotPorted = {
-  revokeAskAbsentFromLite2: !/revokeAsk/.test(lite2Src),
+  revokeAskActionAbsentFromLite2: !/revokeAsk/.test(lite2Src),
   offlinePreviewAbsentFromLite2: !/offlinePreview/.test(lite2Src),
-  askStatusRevokedExpiredAbsentFromLite2: !/'revoked'\s*\|\s*'expired'/.test(lite2Src),
-  note: 'These exist in src/lite/transport.ts (Ask stage C) but are a SEPARATE, unscoped feature — not part of the feat-047 delta kickoff-dev.md names. Their absence here is a documented decision, not a defect.',
+  note: 'The manager-side withdraw ACTION (revokeAsk) and the stub offlinePreview self-declaration exist in src/lite but stay unported: kickoff-dev.md §合流契约附录 §2 does not name them. lite2 still RENDERS revoked/expired correctly when the backend reports them (a withdrawal can originate elsewhere, and expiry is automatic) — displaying a terminal state and being able to cause it are different features.',
 };
 
 const requiredPass = [
@@ -160,6 +204,10 @@ const requiredPass = [
   checks.tokenStoreKeyIsNamespacedSeparately.deliberatelyDistinct,
   ...scopedMethods.map((m) => authThreading[m].match),
   checks.streamAdviseAuthThreading.match,
+  // feat-047 adversarial-verify additions (2026-07-15)
+  checks.askStatusVocabMatches.match,
+  ...askMethods.map((m) => askAuthThreading[m].match),
+  checks.askContextMapPresent.match,
 ];
 const pass = requiredPass.every(Boolean);
 

@@ -2773,21 +2773,39 @@
       const storePathNotDraft = storePathStatus !== 'draft';
 
       // (3) the RENDERED card: a terminal state must not offer the draft's editing surface.
-      // lite2's RoomScreen only mounts AskCard inside its `hasStarted` branch, so a run has to
-      // exist before the card can render at all — drive one real (stub) askLive first, let it
-      // settle, THEN seed the terminal ask.
+      // lite2's RoomScreen only mounts AskCard inside its `hasStarted` branch, so a run must
+      // exist before the card can render at all — seed `run.status` directly (same store-seam
+      // technique v01's assertAskStatusGuards uses to render its two terminal states).
+      // Do NOT drive a real askLive here: its onUpdate re-adopts the stream's own ask-draft on
+      // EVERY emit whose askDraft id differs from the current ask — including onDone's final
+      // emit, which lands AFTER any reasonable "run settled" poll and silently stomps the seeded
+      // terminal ask back to the stub's DRAFT (cost this probe two red herrings). The stream is
+      // irrelevant to what this phase tests: whether a terminal-status ask RENDERS as terminal.
       const terminal = mk('revoked');
       let domProbe = { mounted: false };
+      const prevRun = store.getState().run;
+      const prevScreen = store.getState().screen;
       if (terminal) {
-        store.getState().askLive({ situation: 'Gate probe — terminal ask rendering.' });
-        try {
-          await poll(() => (store.getState().run.status !== 'running' ? true : null), 15000, 'stub run to settle');
-        } catch (e) { /* fall through — probe reports what it finds */ }
-        store.setState({ ask: terminal, askBusy: 'idle' });
+        store.setState({ run: { ...prevRun, status: 'complete' }, ask: terminal, askBusy: 'idle' });
         this._clickTab('The room');
+        // TRAP #2 (cost this probe a second red herring): the run above already left a DRAFT
+        // ask-card mounted, so polling for `.lite-ask-card` PRESENCE resolves on the first tick
+        // and reads STALE DOM before React commits the setState — the probe then reports the old
+        // draft and reds for the wrong reason. Poll for the card to actually carry the seeded
+        // status; on timeout, still read whatever IS there so a genuinely broken implementation
+        // reports its real (wrong) shape instead of a bare 'unmounted'.
         try {
-          await poll(() => ($('.lite-ask-card') ? true : null), 6000, 'ask card to mount for coerce probe');
-          const card = $('.lite-ask-card');
+          await poll(
+            () => {
+              const c = $('.lite-ask-card');
+              return c && c.getAttribute('data-ask-status') === 'revoked' ? true : null;
+            },
+            6000,
+            'ask card to re-render as the seeded terminal state',
+          );
+        } catch (e) { /* fall through and report the real DOM below */ }
+        const card = $('.lite-ask-card');
+        if (card) {
           const confirm = $('.ask-confirm', card);
           domProbe = {
             mounted: true,
@@ -2799,7 +2817,7 @@
             linkRows: $$('.ask-link-row', card).length,
             terminalNotePresent: !!$('.ask-revoked-note', card),
           };
-        } catch (e) { /* domProbe stays unmounted — reported below */ }
+        }
       }
       // A withdrawn ask must render as withdrawn: no editable question inputs, no add buttons,
       // and NO clickable Confirm (present-but-disabled is acceptable; present-and-clickable is not).
@@ -2808,7 +2826,12 @@
         (!domProbe.confirmPresent || domProbe.confirmDisabled === true) &&
         domProbe.linkRows === 0 && domProbe.terminalNotePresent === true;
 
-      store.setState({ ask: prevAsk, transport: prevTransport });  // leave the session as found
+      // Leave the session EXACTLY as found — including `run` and `screen`. Seeding run.status to
+      // mount the card (above) leaves hasStarted true and the page parked on The room; a later
+      // phase (assertTriageActions' take-to-room sub-check) then reds for reasons that have
+      // nothing to do with it. Caught live on this drive — restoring only ask/transport is not
+      // enough, and a phase that poisons its neighbours is a gate defect, not a product one.
+      store.setState({ ask: prevAsk, transport: prevTransport, run: prevRun, screen: prevScreen });
 
       const out = {
         coerced, neverFoldsToDraft, revokedKept, expiredKept, unknownFoldsClosed, knownStillWork,
