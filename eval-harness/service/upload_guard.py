@@ -32,6 +32,20 @@ log = logging.getLogger("service.upload_guard")
 _GUARDED: dict[str, str] = {"/ingest": "ingest", "/advise": "advise"}
 
 
+def _route_for(path: str) -> str | None:
+    """Rate-limit route key for a request path. feat-034 adds the Ask surfaces: every /ask
+    manager endpoint shares one bucket ('ask'); the employee H5 (/r/{token} page + answer POST)
+    shares another ('share') — the public, unauthenticated face gets its OWN dial."""
+    exact = _GUARDED.get(path)
+    if exact:
+        return exact
+    if path == "/ask" or path.startswith("/ask/"):
+        return "ask"
+    if path.startswith("/r/"):
+        return "share"
+    return None
+
+
 # ── per-IP token-bucket rate limiter (in-memory, single-worker) ───────────────────────────────────
 
 _buckets: dict[tuple[str, str], list] = {}   # (route, ip) -> [tokens: float, last_monotonic: float]
@@ -43,6 +57,12 @@ def _rate_config(route: str) -> tuple[int, int]:
     if route == "ingest":
         rpm = guards._int_env("AVERY_RATE_INGEST_PER_MIN", 0)
         burst = guards._int_env("AVERY_RATE_INGEST_BURST", rpm or 1)
+    elif route == "ask":       # feat-034: manager-side ask writes (create/save/share/revoke)
+        rpm = guards._int_env("AVERY_RATE_ASK_PER_MIN", 0)
+        burst = guards._int_env("AVERY_RATE_ASK_BURST", rpm or 1)
+    elif route == "share":     # feat-034: the PUBLIC employee H5 (/r/{token} page + answer)
+        rpm = guards._int_env("AVERY_RATE_SHARE_PER_MIN", 0)
+        burst = guards._int_env("AVERY_RATE_SHARE_BURST", rpm or 1)
     else:
         rpm = guards._int_env("AVERY_RATE_ADVISE_PER_MIN", 0)
         burst = guards._int_env("AVERY_RATE_ADVISE_BURST", rpm or 1)
@@ -133,8 +153,12 @@ class IngestGuardMiddleware:
     async def __call__(self, scope, receive, send):
         if scope.get("type") != "http":
             return await self.app(scope, receive, send)
-        route = _GUARDED.get(scope.get("path", ""))
-        if route is None or scope.get("method", "GET").upper() != "POST":
+        route = _route_for(scope.get("path", ""))
+        method = scope.get("method", "GET").upper()
+        # POST is guarded on every route; the employee H5 ('share') guards its GET too — the
+        # /r/{token} page is the one PUBLIC unauthenticated surface (OG unfurlers hit it as well).
+        guarded = route is not None and (method == "POST" or (route == "share" and method == "GET"))
+        if not guarded:
             return await self.app(scope, receive, send)
 
         # Opportunistic memory sample on write traffic (cheap; the /health hook also samples).

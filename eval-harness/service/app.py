@@ -39,6 +39,8 @@ from avery import skills
 from avery.env import load_dotenv
 
 from . import brain_factory, embedding_factory, extractor_factory, live_input, llm_budget, mem_sentinel
+from .ask_api import maybe_ask_draft_frame  # feat-034: the ask-draft frame (service-layer, not engine)
+from .ask_api import router as ask_router   # feat-034: /ask manager endpoints + /r/{token} employee H5
 from .engine import stream_advice
 from .ingest_api import router as ingest_router  # feat-018: /ingest + /team/{id} (compose over feat-016)
 from .ingest_api import authorize_context, extract_owner_token  # feat-038: reuse the read-path gate
@@ -88,6 +90,12 @@ app.add_middleware(
 # feat-018: the ingestion HTTP surface (upload → Your team). Thin wrapper over feat-016's
 # ingest_paths + registry; nothing in the engine changes. Endpoints: POST /ingest, GET /team/{id}.
 app.include_router(ingest_router)
+
+# feat-034 stage C: the Ask ("Quick ask") surface — manager endpoints (POST /ask · /ask/{id} ·
+# /ask/{id}/share · GET /ask/{id} · /ask/{id}/revoke, all owner_token-gated) + the employee H5
+# (GET /r/{token}, POST /r/{token}/answer — the share token in the URL is the one deliberate
+# exception, the login-free employee path). Composes over the registry seam; engine untouched.
+app.include_router(ask_router)
 
 
 class AdviseRequest(BaseModel):
@@ -152,7 +160,10 @@ def _sse(events: Iterator[dict[str, Any]], case, on_manifest=None) -> EventSourc
     def gen():
         try:
             for ev in events:
-                if on_manifest is not None and ev.get("type") == "manifest":
+                # feat-034: the note hook keys on the ADVICE manifest only — the appended
+                # ask-draft frame is a different animal (no transcript, nothing to note).
+                if (on_manifest is not None and ev.get("type") == "manifest"
+                        and ev.get("kind") in (None, "advice")):
                     try:
                         on_manifest(ev)
                     except Exception:   # a note-write problem must never break the stream
@@ -162,6 +173,27 @@ def _sse(events: Iterator[dict[str, Any]], case, on_manifest=None) -> EventSourc
         finally:
             live_input.discard(case)
     return EventSourceResponse(gen())
+
+
+def _with_ask_frame(events: Iterator[dict[str, Any]], req: "AdviseRequest") -> Iterator[dict[str, Any]]:
+    """feat-034 stage C: append ONE `manifest{kind:'ask-draft'}` frame after a SUCCESSFUL advice
+    manifest, when the situation names a roster person (ask_api.maybe_ask_draft_frame — the
+    deterministic heuristic; no hit = no frame). This is the SERVICE-layer assembly point the
+    stage-C contract pins: the frozen advisor engine emits exactly what it always did; old
+    consumers ignore the extra frame (`kind` defaults to advice). Frame-building problems are
+    swallowed — a quick-ask proposal must never break an advise that already succeeded."""
+    saw_advice = False
+    for ev in events:
+        if ev.get("type") == "manifest" and ev.get("kind") in (None, "advice"):
+            saw_advice = True
+        yield ev
+    if saw_advice:
+        try:
+            frame = maybe_ask_draft_frame(req.company_context_id, req.situation)
+        except Exception:
+            frame = None
+        if frame:
+            yield frame
 
 
 def _post_advise_note(company_context_id: str | None, situation: str, manifest: dict) -> None:
@@ -221,6 +253,7 @@ def advise(req: AdviseRequest,
         situation=req.situation, title=req.title,
         company_context_id=req.company_context_id)
     events, case = _run_events(sit)
+    events = _with_ask_frame(events, req)   # feat-034: maybe one ask-draft frame after the manifest
 
     if req.stream:
         return _sse(events, case,
@@ -231,7 +264,10 @@ def advise(req: AdviseRequest,
         collected: list[dict] = list(events)
     finally:
         live_input.discard(case)
-    manifest = next((e for e in reversed(collected) if e["type"] == "manifest"), None)
+    # feat-034: the buffered body is built from the ADVICE manifest — never the trailing
+    # ask-draft frame (which is also a type=='manifest' event, discriminated by `kind`).
+    manifest = next((e for e in reversed(collected)
+                     if e["type"] == "manifest" and e.get("kind") in (None, "advice")), None)
     # feat-033: write Avery's observation to the company notebook (write-side red line inside).
     if manifest is not None:
         _post_advise_note(req.company_context_id, req.situation, manifest)
