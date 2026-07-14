@@ -41,6 +41,14 @@
 - **F3（防御归一收紧）**：`coerceAskDraft` 现对 >3 题静默截断、未知题型折 scale、回执值无量程校验（99 会渲染 "99 out of 5"）——阶段 C 收紧为"坏形状宁可不出卡"，服务端做最终门。
 - story 侧非阻塞记录：chip 快速双击连跳一拍（等价 chip+Advance，seek 可洗，main 既有无防抖模式）——如影响路演体感再修。
 
+## 阶段 C 对接契约（钉自持久化线 2026-07-14 就绪广播，开工必读）
+
+- **建工作区只走 `POST /ingest`**（回 `{context_id, owner_token}`），不自己 INSERT `avery.contexts`——token 铸造/红线门/记忆物化都在 ingest 路径里。DB=Supabase avery schema（迁移 0001-0006，DDL 只增不改），接缝=`avery.ingest.registry.active_registry()`，`AVERY_DB_URL` 有值走 PG、无值走内存（离线默认）。
+- **两套 token 严格分离**：`owner_token`=经理凭据，只走 header（`X-Avery-Token`/Bearer），绝不进 URL；本线 `/r/{token}` share-token=员工侧一次性凭据，自管语义（v1 在 URL 是拍板设计——员工免登录的唯一路径，但 ask 的 manager 侧端点【POST /ask·share·GET /ask/{id}·revoke】全部要求 owner_token header + 404-on-mismatch（`authorize_context` 接缝直接复用，恒时比较、无枚举 oracle）。
+- **人打分开关（Danny 07-13 政策转向）**：问句红线校验两档——问"事"问句恒许；涉人打分问句仅 `scoring_policy.person_scoring_allowed()`（`AVERY_ALLOW_PERSON_SCORING`）为 on 时放行，**不另起机制**。呈现层结构边界不随开关放松：回执不进人卡/无跨人分数表（ADR-0023 结构闸 + DB entities 打分键 CHECK 仍在）。
+- **部署约束**：`/ask`/`/r/` 端点同受 feat-039 硬门（限流+LLM 花费闸——员工 H5 高频不许烧 M3 额度）+ 内存哨兵；CORS/TLS 沿 runbook。
+- 真机证据基线（他们侧）：离线 474 passed；`@needs_db` 41 passed 含贯穿 e2e（持久化/隔离/真 RAG 隔离/笔记/开关两态）与基本压测。
+
 ## 与持久化线的协调（07-13 广播回执）
 
 - 本线不动 eval-harness/**；阶段 C 等其链合 main。
