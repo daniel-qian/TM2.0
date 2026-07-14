@@ -1,0 +1,43 @@
+/* feat-035（lite-live-v02 kickoff §架构拍板 4）· aurora 皮肤令牌层 — `?skin=aurora`。
+   色表来自合伙人参考库对照（decisions.md §终盘 / kickoff-dev.md §4）：
+   bg #edf6ff · surface #ffffff · ink #10223d · blue #496ee8 · purple #6b5bd6 ·
+   玻璃 rgba(255,255,255,.82)+blur · 极光渐变底 135deg #eee9ff→#e4faff→#f5fbff + violet/cyan
+   radial 光晕。这是粗调初版——shared 设计系统里消费这批 CSS 自定义属性的组件（文字色/边框/
+   多数阴影）随令牌自动换皮，约覆盖八成；令牌覆盖不到的语法差异（暖纸半透明白背景硬编码在
+   shared chunk 里、徽章 vs 左边条这类结构性差异）留给 feat-039 逐屏精修 + 少量
+   `[data-skin="aurora"]` 组件级分支，本波不引入。 */
+.lite2-shell[data-skin='aurora'] {
+  --paper: #edf6ff;
+  --paper-strong: #ffffff;
+  --ink: #10223d;
+  --ink-soft: #3c5170;
+  --ink-faint: #7688a3;
+  --rule: rgba(16, 34, 61, 0.12);
+  --rule-strong: rgba(16, 34, 61, 0.24);
+  --sage: #496ee8;
+  --iris: #6b5bd6;
+  --honey: #b27b2b;
+  --terracotta: #bc5c49;
+  --sky: #496ee8;
+  --shadow: 0 24px 70px rgba(16, 34, 61, 0.16);
+  --shadow-soft: 0 12px 40px rgba(16, 34, 61, 0.1);
+
+  --lite2-surface: rgba(255, 255, 255, 0.86);
+  --lite2-glass: rgba(255, 255, 255, 0.82);
+  --lite2-bg-gradient:
+    radial-gradient(circle at 18% 12%, rgba(107, 91, 214, 0.16), transparent 42%),
+    radial-gradient(circle at 82% 78%, rgba(73, 110, 232, 0.14), transparent 46%),
+    linear-gradient(135deg, #eee9ff 0%, #e4faff 52%, #f5fbff 100%);
+
+  background: var(--lite2-bg-gradient);
+}
+
+/* 玻璃质感的顶栏/composer chrome——shared chunk 里这两个类背景是硬编码暖纸半透明白，
+   令牌盖不到；lite2 作用域内改消费 --lite2-glass，让 aurora 的玻璃令牌真的生效
+   （kickoff §4：「组件样式只消费令牌」的第一批落地，非详尽——其余留 feat-039）。 */
+.lite2-shell[data-skin='aurora'] .scene-tabs,
+.lite2-shell[data-skin='aurora'] .composer-card,
+.lite2-shell[data-skin='aurora'] .nexus-empty {
+  background: var(--lite2-glass);
+  backdrop-filter: blur(16px);
+}

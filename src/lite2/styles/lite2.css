@@ -1,0 +1,1351 @@
+/* ═══════════════════════ feat-024 · lite 壳（ADR-0022）═══════════════════════
+   lite 专属增量样式。只取色于既有 token（paper/ink/sage/honey/terracotta），无新色板。
+   卡片/字体/终端/报告卡的 chrome 全部来自 shared chunk——这里只补 lite 独有件：
+   上传面板（feat-017 时代裸奔无样式）、首字母 avatar、真数 briefing chips、
+   空态引导、薄详情浮层、The room 的卡布局。 */
+
+/* ── 首字母 avatar（live 人无 sprite——不凭空派 avatar 资产）─────────────── */
+.initial-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  border: 1px solid var(--rule-strong);
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(105, 128, 109, 0.16), rgba(82, 123, 145, 0.14));
+  color: var(--ink-soft);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+/* ── 上传面板 ────────────────────────────────────────────────────────────── */
+.upload-panel {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: rgba(255, 253, 248, 0.86);
+  box-shadow: var(--shadow-soft);
+}
+
+.upload-panel-head h2 {
+  margin: 0 0 4px;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 17px;
+  font-weight: 500;
+}
+
+.upload-panel-head p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.upload-dropzone {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 22px 16px;
+  border: 1.5px dashed var(--rule-strong);
+  border-radius: var(--radius);
+  background: rgba(247, 244, 238, 0.7);
+  text-align: center;
+  cursor: pointer;
+  transition: border-color var(--fast) ease, background var(--fast) ease;
+}
+
+.upload-dropzone.is-dragover {
+  border-color: var(--sage);
+  background: rgba(105, 128, 109, 0.08);
+}
+
+.upload-dropzone.is-busy {
+  opacity: 0.65;
+  pointer-events: none;
+}
+
+.upload-drop-label {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+
+.upload-choose {
+  min-height: 34px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--paper);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.upload-choose:hover,
+.upload-choose:focus-visible {
+  outline: none;
+  background: #2b2822;
+}
+
+.upload-accepted {
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: 11px;
+}
+
+.upload-status p {
+  margin: 0;
+  font-size: 13px;
+}
+
+.upload-ingesting {
+  color: var(--honey);
+}
+
+.upload-ready-label {
+  color: var(--sage);
+  font-weight: 700;
+}
+
+.upload-grown-from {
+  margin-top: 4px !important;
+  color: var(--ink-soft);
+  font-size: 12px !important;
+}
+
+.upload-source-chip {
+  display: inline-block;
+  margin: 2px 4px 0 0;
+  padding: 2px 8px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: rgba(247, 244, 238, 0.9);
+  font-size: 11px;
+}
+
+.upload-error-label {
+  color: var(--terracotta);
+  font-weight: 700;
+}
+
+.upload-error-detail {
+  color: var(--ink-soft);
+  font-size: 12px !important;
+}
+
+.upload-retry {
+  margin-top: 6px;
+  min-height: 30px;
+  padding: 0 14px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 999px;
+  background: transparent;
+  font-size: 12px;
+}
+
+.upload-empty {
+  color: var(--ink-faint);
+}
+
+.upload-privacy-note {
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+/* 空态右栏：上传面板不贴边、居中呼吸 */
+.home-lanes-live-empty {
+  align-content: start;
+  padding-top: 24px;
+}
+
+/* ── 上传空态左脊柱（live 自己的引导，零 scripted 占位）───────────────────── */
+.lite-empty-greeting .home-greeting-sub {
+  max-width: 44ch;
+}
+
+.lite-empty-hints {
+  margin: 18px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 10px;
+}
+
+.lite-empty-hints li {
+  position: relative;
+  padding-left: 18px;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.lite-empty-hints li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.55em;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--sage);
+  opacity: 0.7;
+}
+
+/* ── briefing 真数顶栏（聚合数字 R2：真算才显）───────────────────────────── */
+.lite-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.lite-metric-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 4px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: rgba(255, 253, 248, 0.9);
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+
+.lite-metric-chip strong {
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.lite-handoffs-empty {
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+/* ── 薄只读详情浮层（纯 live payload，杀死 "Unknown teammate"）──────────── */
+.lite-detail-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 48px 24px;
+}
+
+.lite-detail-backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(29, 27, 23, 0.32);
+  backdrop-filter: blur(3px);
+  cursor: default;
+}
+
+.lite-detail-card {
+  position: relative;
+  width: min(560px, 92vw);
+  max-height: min(78vh, 720px);
+  overflow: auto;
+  display: grid;
+  gap: 16px;
+  padding: 22px 24px 24px;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--paper-strong);
+  box-shadow: var(--shadow);
+}
+
+.lite-detail-close {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  min-height: 30px;
+  padding: 0 14px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+
+.lite-detail-close:hover,
+.lite-detail-close:focus-visible {
+  outline: none;
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+.lite-detail-head {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  padding-right: 72px;
+}
+
+.lite-detail-head h2 {
+  margin: 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 22px;
+  font-weight: 500;
+}
+
+.lite-detail-subtitle {
+  margin: 2px 0 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+
+.lite-detail-section p,
+.lite-detail-section ul {
+  margin: 0;
+  color: var(--ink);
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+
+.lite-detail-section ul {
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+}
+
+.lite-detail-source p {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+/* ── The room（薄建）：8 字段卡从 board 世界坐标解放成滚动列 ─────────────── */
+.lite-room .lite-room-card {
+  position: absolute;
+  top: 76px;
+  right: 28px;
+  bottom: 96px;
+  left: 496px;
+  overflow: auto;
+  display: grid;
+  align-content: start;
+  padding: 4px;
+}
+
+.lite-room .lite-room-card .structured-output-card {
+  position: static;
+  width: 100%;
+  max-width: 950px;
+  max-height: none;
+  transform: none;
+  margin: 0 auto;
+}
+
+@media (max-width: 1100px) {
+  .lite-room .lite-room-card {
+    left: 24px;
+    top: 320px;
+  }
+}
+
+/* ── composer 引用空态 ───────────────────────────────────────────────────── */
+.lite-reference-empty {
+  margin: 8px 4px;
+  color: var(--ink-faint);
+  font-size: 12px;
+}
+
+/* ── 上传原生 input 隐藏（试玩 bug：双上传按钮 + 弹两次文件框）─────────────────
+   UploadPanel 的 <input.upload-input> 本意是隐藏、只由自定义「Choose files」按钮 +
+   dropzone onClick 程序化 .click() 触发；但它从来没有隐藏样式 → 浏览器原生「选择文件」
+   控件与自定义按钮同时可见（= 两个上传按钮），且直接点原生 input 会冒泡到 dropzone
+   的 onClick 再 .click() 一次 = 文件框弹两次。隐藏原生 input（程序化 click 仍有效）。 */
+.lite2-shell .upload-input {
+  display: none;
+}
+
+/* ── The room 空态 composer 不再盖住描述文字（试玩 bug：空态 UI 重叠）───────────
+   空态复用了 .nexus-followup-composer——它默认 position:absolute; left:16px; bottom:20px
+   （run 态锚场景底用）。塞进 .nexus-empty 卡（本身 absolute）后，composer 绝对定位到卡底、
+   盖住正常流里的 h2/subtitle。空态里让它回到正常流、卡内自然堆叠。
+   仅作用于 lite 空态包裹（.nexus-empty-composer-wrap 是 lite 专有）——run 态 composer
+   （在包裹之外）仍绝对锚底，story 的 followup composer 一律不受影响。 */
+.lite2-shell .nexus-empty-composer-wrap {
+  margin-top: 18px;
+}
+
+.lite2-shell .nexus-empty-composer-wrap .nexus-followup-composer {
+  position: static;
+  left: auto;
+  bottom: auto;
+  width: 100%;
+}
+
+/* ── 顶栏 mode 开关（Story/Live）补样式（S4 · 试玩 bug 5「按钮风格丢失」）──────
+   根因：`.mode-switch-btn` 由 feat-017（fae493f，WIP 被 session limit 截断）引入却
+   从未配 CSS——拆分前 global.css 与拆分后 chunk 里都只有 `.mode-switch` 的 pointer-events，
+   无按钮样式，故 Story/Live 一直是浏览器默认 `<button>`（灰框），feat-024 lite 顶栏
+   首次把它摆到右上角显著位而暴露。**不是拆 chunk 的 cascade 漂移。**
+   修法：补齐为与 `.scene-tabs`/`.scene-tab` 同款药丸，仅在 lite 壳内生效——`.mode-switch`
+   是 story 顶栏也复用的 shared chrome，而 story 是「冻结路演/视频资产」（ADR-0022 决策1），
+   其外观一像素不动，故此修 scope 在 `.lite2-shell` 内，不落 shared/00-base.css。 */
+.lite2-shell .mode-switch {
+  display: flex;
+  gap: 6px;
+  padding: 5px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: rgba(255, 253, 248, 0.78);
+  box-shadow: var(--shadow-soft);
+  backdrop-filter: blur(12px);
+}
+
+.lite2-shell .mode-switch-btn {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 13px;
+  transition:
+    background var(--fast) ease,
+    color var(--fast) ease,
+    border-color var(--fast) ease;
+}
+
+.lite2-shell .mode-switch-btn:hover,
+.lite2-shell .mode-switch-btn:focus-visible {
+  background: rgba(29, 27, 23, 0.06);
+  color: var(--ink);
+  outline: none;
+}
+
+.lite2-shell .mode-switch-btn.is-active {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.lite2-shell .mode-switch-btn:focus-visible {
+  outline: 2px solid rgba(82, 123, 145, 0.75);
+  outline-offset: 2px;
+}
+
+/* ── Your team 人栏限高自滚（S4 · 首页 UI bug 4）──────────────────────────────
+   真 ingestion 下 people 可达 20+，`.home-lane-people` 是 auto-fill grid 无高度上限，
+   整列（连同外层 `.home-scroll`）被撑爆，projects 栏被推到很深的滚动位。给 people
+   栏自己的有界滚动容器：限高 + 自滚，projects 栏立即可达、整页高度回收。
+   仅在 lite 壳生效——`.home-lane-people` 是 shared 类（story HomeScene 也用，且冻结），
+   不动 story。padding/负 margin 抵消：给内滚条与卡片 focus 描边留呼吸，同时保持人栏
+   与下方 projects 栏的外缘对齐不偏。 */
+.lite2-shell .home-lane-people {
+  max-height: min(52vh, 520px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 4px;
+  margin: -4px -4px 0;
+  /* 有界容器暗示（可滚）：极轻的内描边 + 圆角，读作一个盛人卡的托盘 */
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  scrollbar-width: thin;
+}
+
+/* 只有真的溢出（内容高于上限）时才显托盘感——空间够时无边框、无视觉负担。
+   overflow:auto 自带此行为：不溢出即无滚条；描边保持透明即可。 */
+.lite2-shell .home-lane-people:hover {
+  border-color: var(--rule);
+}
+
+/* ── feat-025 Q2 · Your team 轻量分组视图（部门/项目归属/角色聚类，可折叠）────────
+   分组只包容器 + 标题 + 折叠；人卡本身零改（.home-person-card 仍在 DOM、仍可点）。
+   限高自滚（Bug4）从 .home-lane-people 上移到整个分组列 .home-people-groups——
+   多分组时整列有界，projects 栏立即可达；组内 .home-lane-people 不再单独限高。 */
+.lite2-shell .home-people-group-caption {
+  color: var(--ink-faint);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.lite2-shell .home-people-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-height: min(58vh, 620px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 4px;
+  margin: -4px -4px 0;
+  scrollbar-width: thin;
+}
+
+/* 分组视图接管限高后，组内人栏本身不再单独限高（否则双层滚动打架）。 */
+.lite2-shell .home-people-groups .home-lane-people {
+  max-height: none;
+  overflow: visible;
+  padding: 0;
+  margin: 0;
+  border: 0;
+}
+.lite2-shell .home-people-groups .home-lane-people:hover {
+  border-color: transparent;
+}
+
+.lite2-shell .home-people-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.lite2-shell .home-people-group-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: rgba(29, 27, 23, 0.03);
+  text-align: left;
+  transition:
+    background var(--fast) ease,
+    border-color var(--fast) ease;
+}
+
+.lite2-shell .home-people-group-head:hover,
+.lite2-shell .home-people-group-head:focus-visible {
+  background: rgba(29, 27, 23, 0.06);
+  border-color: var(--rule);
+  outline: none;
+}
+
+.lite2-shell .home-people-group-title {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.lite2-shell .home-people-group-count {
+  color: var(--ink-faint);
+  font-size: 11.5px;
+}
+
+.lite2-shell .home-people-group-toggle {
+  margin-left: auto;
+  color: var(--ink-faint);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* ── feat-025 Q3 · The room 薄可拖拽/缩放画布（LitePanZoom）─────────────────────
+   画布填满 room scene（顶让 topbar、底让 composer）；board 内把原本 viewport-fixed
+   absolute 的终端/结果卡改成随 board 流动布局（scope 在 .lite2-shell .lite-room-board，
+   story 的 .nexus-terminal/.lite-room-card 一像素不动）。composer 留在画布外恒可点。 */
+.lite2-shell .lite-room-canvas {
+  position: absolute;
+  inset: 68px 20px 92px;
+  overflow: hidden;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background:
+    radial-gradient(circle at 1px 1px, rgba(29, 27, 23, 0.06) 1px, transparent 0) 0 0 / 22px 22px,
+    rgba(255, 253, 248, 0.55);
+}
+
+.lite2-shell .lite-panzoom-wrapper {
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+}
+.lite2-shell .lite-panzoom-wrapper:active {
+  cursor: grabbing;
+}
+
+.lite2-shell .lite-panzoom-content {
+  display: block;
+}
+
+/* board = 一块自然流动的画面（终端 + HUD + 结果卡），随 pan/zoom 整体移动缩放 */
+.lite2-shell .lite-room-board {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 20px;
+  width: 1180px;
+  max-width: none;
+  padding: 24px;
+}
+
+/* board 内解除 story 的 viewport-fixed absolute：终端与结果卡进入 flow */
+.lite2-shell .lite-room-board .nexus-terminal {
+  position: static;
+  top: auto;
+  left: auto;
+  bottom: auto;
+  width: min(440px, 100%);
+  height: 420px;
+}
+
+.lite2-shell .lite-room-board .nexus-brief-hud {
+  position: static;
+  flex: 1 1 260px;
+}
+
+.lite2-shell .lite-room-board .lite-room-card {
+  position: static;
+  inset: auto;
+  flex: 1 1 520px;
+  min-width: 300px;
+  max-height: 560px;
+  overflow: auto;
+}
+
+.lite2-shell .lite-room-canvas-controls {
+  position: absolute;
+  z-index: 5;
+  top: 10px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  /* .lite-room-canvas 无 pointer-events 限制；控件自身即可点 */
+}
+
+.lite2-shell .lite-room-canvas-hint {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(255, 253, 248, 0.86);
+  border: 1px solid var(--rule);
+  color: var(--ink-faint);
+  font-size: 11px;
+  backdrop-filter: blur(8px);
+}
+
+.lite2-shell .lite-room-canvas-reset {
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--rule);
+  background: rgba(255, 253, 248, 0.86);
+  color: var(--ink-soft);
+  font-size: 11px;
+  font-weight: 700;
+  backdrop-filter: blur(8px);
+  transition:
+    background var(--fast) ease,
+    color var(--fast) ease;
+}
+.lite2-shell .lite-room-canvas-reset:hover,
+.lite2-shell .lite-room-canvas-reset:focus-visible {
+  background: var(--ink);
+  color: var(--paper);
+  outline: none;
+}
+
+/* ── feat-025 Q1 · Playbooks 空态屏（诚实标 coming-soon，文案锚未来能力）──────────
+   复用 .nexus-empty 卡壳，但内容更长 → 放宽宽度 + 允许纵向滚动；左对齐读作叙事。 */
+.lite2-shell .lite-playbooks-empty {
+  width: min(680px, calc(100vw - 56px));
+  max-height: min(78vh, 640px);
+  overflow-y: auto;
+  text-align: left;
+}
+
+.lite2-shell .lite-playbooks-eyebrow {
+  color: var(--ink-faint);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.lite2-shell .lite-playbooks-empty h2 {
+  margin-bottom: 10px;
+  font-size: clamp(22px, 2.6vw, 28px);
+  line-height: 1.28;
+}
+
+.lite2-shell .lite-playbooks-slots {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--rule);
+}
+
+.lite2-shell .lite-playbooks-slots-label {
+  margin-bottom: 12px;
+  color: var(--ink-faint);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.lite2-shell .lite-playbooks-slot-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lite2-shell .lite-playbooks-slot {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px dashed var(--rule);
+  border-radius: var(--radius);
+  background: rgba(29, 27, 23, 0.02);
+}
+
+.lite2-shell .lite-playbooks-slot-tag {
+  flex: none;
+  margin-top: 1px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(29, 27, 23, 0.06);
+  color: var(--ink-faint);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.lite2-shell .lite-playbooks-slot-text {
+  color: var(--ink-soft);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+.lite2-shell .lite-playbooks-comingsoon {
+  margin-top: 20px;
+  color: var(--ink-faint);
+  font-size: 12px;
+  font-style: italic;
+}
+
+/* ── feat-026 · Vision 定位叙事页 + 能力边界 mock ─────────────────────────────
+   独立 tab（不打断试玩流）。取色只用既有 token；一屏两段（叙事三拍 + mock 网格），
+   整屏纵向滚动。全部 .lite2-shell 作用域——story 壳物理够不到。 */
+.lite2-shell .lite-vision {
+  display: flex;
+  justify-content: center;
+  padding: 28px 20px 40px;
+  overflow: hidden;
+}
+
+.lite2-shell .lite-vision-scroll {
+  width: min(860px, calc(100vw - 48px));
+  /* 填满场景内容框自滚——Vision 无 composer，不能像 team/room 那样按 100vh-148px
+     给底部 composer 预留空间（那会在本屏留出一条空白带，S6 试玩 bug）。
+     min-height:0 让 flex 子项可收缩、内部 overflow 生效。 */
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+/* ── ① 定位叙事 ─────────────────────────────────────────────────────────── */
+.lite2-shell .lite-vision-head h2 {
+  margin: 6px 0 10px;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(22px, 2.8vw, 30px);
+  font-weight: 500;
+  line-height: 1.24;
+}
+
+.lite2-shell .lite-vision-eyebrow,
+.lite2-shell .lite-vision-mocks-eyebrow,
+.lite2-shell .lite-vision-beat-label {
+  color: var(--ink-faint);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.lite2-shell .lite-vision-lede {
+  margin: 0;
+  max-width: 62ch;
+  color: var(--ink-soft);
+  font-size: 14.5px;
+  line-height: 1.6;
+}
+
+.lite2-shell .lite-vision-beats {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 24px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lite2-shell .lite-vision-beat {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 18px 20px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: rgba(255, 253, 248, 0.7);
+  box-shadow: var(--shadow-soft);
+}
+
+/* 第二拍（真正的产品）微微加重——叙事重心 */
+.lite2-shell .lite-vision-beat-real {
+  border-color: var(--rule-strong);
+  background: rgba(105, 128, 109, 0.06);
+}
+
+.lite2-shell .lite-vision-beat-step {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 1px solid var(--rule-strong);
+  background: var(--paper-strong);
+  color: var(--ink-soft);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.lite2-shell .lite-vision-beat-body h3 {
+  margin: 6px 0 8px;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.lite2-shell .lite-vision-beat-body p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 13.5px;
+  line-height: 1.58;
+}
+
+.lite2-shell .lite-vision-proof-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+
+.lite2-shell .lite-vision-proof-list li {
+  color: var(--ink-soft);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+/* ── ② 能力边界 mock ────────────────────────────────────────────────────── */
+.lite2-shell .lite-vision-mocks {
+  margin-top: 34px;
+  padding-top: 26px;
+  border-top: 1px solid var(--rule);
+}
+
+.lite2-shell .lite-vision-mocks-head h2 {
+  margin: 6px 0 10px;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(19px, 2.3vw, 24px);
+  font-weight: 500;
+  line-height: 1.26;
+}
+
+.lite2-shell .lite-vision-mock-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 14px;
+  margin-top: 20px;
+}
+
+.lite2-shell .lite-vision-mock {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px;
+  /* dashed 边框 = 视觉上就读作「未落地的预览」，与实心的实用卡区分 */
+  border: 1px dashed var(--rule-strong);
+  border-radius: var(--radius);
+  background: rgba(29, 27, 23, 0.02);
+}
+
+.lite2-shell .lite-vision-mock-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.lite2-shell .lite-vision-mock-top h3 {
+  margin: 0;
+  font-size: 15.5px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+/* 诚实标注 pill——honey/paper 高对比，一眼可见 preview/coming（融资场合不可吹破） */
+.lite2-shell .lite-vision-tag {
+  flex: none;
+  margin-top: 1px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--honey);
+  background: rgba(178, 123, 43, 0.12);
+  color: var(--honey);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.lite2-shell .lite-vision-mock-body {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.56;
+}
+
+/* mock 里的示例人 chip —— 🔴 红线：只名字 + 角色，零数字（结构上就没有数字槽） */
+.lite2-shell .lite-vision-person {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: rgba(255, 253, 248, 0.72);
+}
+
+.lite2-shell .lite-vision-person-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.lite2-shell .lite-vision-person-role {
+  font-size: 12px;
+  color: var(--ink-faint);
+  line-height: 1.45;
+}
+
+.lite2-shell .lite-vision-comingsoon {
+  margin: 22px 0 0;
+  color: var(--ink-faint);
+  font-size: 12px;
+  font-style: italic;
+}
+
+/* ── feat-034 · Ask（Quick ask / 快问）卡 ───────────────────────────────────────
+   lite 第二种 artifact 卡，与 .lite-room-card 内的 8 字段卡并列进 board flow。
+   🔴 ADR-0023：多人回执只有 .ask-receipt-summary 一段——没有任何"每人一行×数值"的样式钩子。 */
+.lite2-shell .lite-room-board .lite-room-ask {
+  flex: 1 1 420px;
+  min-width: 300px;
+  max-width: 520px;
+}
+
+.lite-ask-card {
+  background: var(--paper-strong);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-soft);
+  padding: 22px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.lite-ask-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--rule);
+  padding-bottom: 12px;
+}
+
+.lite-ask-header h2 {
+  margin: 2px 0 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 20px;
+  color: var(--ink);
+}
+
+.ask-status-chip {
+  flex: 0 0 auto;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--rule-strong);
+  background: rgba(105, 128, 109, 0.12);
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.lite-ask-card .ask-lede {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+/* 诚实提示：保存时才过红线门（服务端、阶段 C）——不是"已校验"的绿标 */
+.lite-ask-card .ask-redline-note {
+  margin: 0;
+  padding: 8px 12px;
+  border-left: 3px solid var(--honey);
+  background: rgba(178, 123, 43, 0.08);
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.lite-ask-card .ask-questions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lite-ask-card .ask-q-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lite-ask-card .ask-q-kind {
+  flex: 0 0 auto;
+  min-width: 52px;
+  text-align: center;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  border: 1px solid var(--rule-strong);
+  color: var(--ink-soft);
+  background: rgba(82, 123, 145, 0.1);
+}
+.lite-ask-card .ask-q-kind.is-yesno {
+  background: rgba(108, 99, 181, 0.1);
+}
+
+.lite-ask-card .ask-q-input {
+  flex: 1 1 auto;
+  padding: 8px 10px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.4;
+}
+.lite-ask-card .ask-q-input:focus {
+  outline: 2px solid rgba(105, 128, 109, 0.45);
+  outline-offset: 1px;
+}
+
+.lite-ask-card .ask-q-remove {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid var(--rule-strong);
+  background: transparent;
+  color: var(--ink-faint);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+.lite-ask-card .ask-q-remove:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.lite-ask-card .ask-q-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.lite-ask-card .ask-q-add {
+  padding: 5px 10px;
+  border: 1px dashed var(--rule-strong);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 12px;
+  cursor: pointer;
+}
+.lite-ask-card .ask-q-add:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.lite-ask-card .ask-q-hint {
+  color: var(--ink-faint);
+  font-size: 11px;
+}
+
+.lite-ask-card .ask-comment-prompt {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.lite-ask-card .ask-section-label {
+  margin: 0 0 2px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.lite-ask-card .ask-recipients-hint {
+  margin: 0 0 8px;
+  color: var(--ink-faint);
+  font-size: 12px;
+}
+
+.lite-ask-card .ask-recipient-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-height: 132px;
+  overflow: auto;
+}
+
+.lite-ask-card .ask-recipient-chip {
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--rule-strong);
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 12px;
+  cursor: pointer;
+}
+.lite-ask-card .ask-recipient-chip.is-selected {
+  background: rgba(105, 128, 109, 0.16);
+  border-color: var(--sage);
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.lite-ask-card .ask-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  border-top: 1px solid var(--rule);
+  padding-top: 12px;
+}
+
+.lite-ask-card .ask-confirm,
+.lite-ask-card .ask-refresh {
+  padding: 8px 16px;
+  border-radius: 6px;
+  border: 1px solid var(--rule-strong);
+  background: var(--ink);
+  color: var(--paper-strong);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.lite-ask-card .ask-refresh {
+  background: transparent;
+  color: var(--ink);
+}
+.lite-ask-card .ask-confirm:disabled,
+.lite-ask-card .ask-refresh:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.lite-ask-card .ask-links {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lite-ask-card .ask-link-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lite-ask-card .ask-link-name {
+  flex: 0 0 auto;
+  min-width: 110px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.lite-ask-card .ask-link-url {
+  flex: 1 1 auto;
+  padding: 5px 8px;
+  border: 1px solid var(--rule);
+  border-radius: 5px;
+  background: var(--paper);
+  color: var(--ink-soft);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lite-ask-card .ask-copy-btn {
+  flex: 0 0 auto;
+  padding: 5px 10px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.lite-ask-card .ask-receipts {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.lite-ask-card .ask-receipt-who {
+  margin: 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 15px;
+  color: var(--ink);
+}
+
+.lite-ask-card .ask-self-label {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--sage);
+}
+.lite-ask-card .ask-self-hint {
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink-faint);
+  font-size: 11px;
+}
+
+.lite-ask-card .ask-receipt-q {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px dashed var(--rule);
+}
+
+.lite-ask-card .ask-receipt-q-text {
+  font-size: 13px;
+  color: var(--ink-soft);
+  line-height: 1.45;
+}
+
+.lite-ask-card .ask-receipt-value {
+  flex: 0 0 auto;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 15px;
+  color: var(--ink);
+}
+
+.lite-ask-card .ask-receipt-comment {
+  margin: 4px 0 0;
+  padding: 8px 12px;
+  border-left: 3px solid var(--sage);
+  background: rgba(105, 128, 109, 0.07);
+  color: var(--ink);
+  font-size: 13px;
+  font-style: italic;
+  line-height: 1.55;
+}
+
+.lite-ask-card .ask-receipt-when {
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: 11px;
+}
+
+.lite-ask-card .ask-receipt-summary {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink);
+  line-height: 1.6;
+}
+
+.lite-ask-card .ask-error {
+  margin: 0;
+  color: var(--terracotta);
+  font-size: 12px;
+}
+
+/* ── feat-035 · Follow-ups / A closer look — 6-tab 骨架的空态占位屏 ─────────────
+   复用 .nexus-empty 卡壳 + Playbooks 空态同款排版语法（左对齐叙事、诚实 coming-soon 尾注）。
+   真派生/分组/历史留 feat-036（Follow-ups）与 feat-037（A closer look）。 */
+.lite2-shell .lite-followups-empty,
+.lite2-shell .lite-closerlook-empty {
+  width: min(560px, calc(100vw - 56px));
+  text-align: left;
+}
+
+.lite2-shell .lite-followups-eyebrow,
+.lite2-shell .lite-closerlook-eyebrow {
+  color: var(--ink-faint);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.lite2-shell .lite-followups-empty h2,
+.lite2-shell .lite-closerlook-empty h2 {
+  margin-bottom: 10px;
+  font-size: clamp(22px, 2.6vw, 28px);
+  line-height: 1.28;
+}
+
+.lite2-shell .lite-followups-comingsoon,
+.lite2-shell .lite-closerlook-comingsoon {
+  margin-top: 20px;
+  color: var(--ink-faint);
+  font-size: 12px;
+  font-style: italic;
+}
+
+/* ── feat-035 · 合规免责页脚（PRD F6）── 壳底部常驻一行，不随 tab 切换消失、
+   不遮挡 composer（薄单行，留在文档流最底，够不到 .composer-layer 的 fixed 定位）。 */
+.lite2-shell .lite2-compliance-footer {
+  position: absolute;
+  z-index: 30;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 7px 20px;
+  border-top: 1px solid var(--rule);
+  background: var(--lite2-glass, rgba(255, 253, 248, 0.86));
+  backdrop-filter: blur(10px);
+  text-align: center;
+  pointer-events: none;
+}
+
+.lite2-shell .lite2-compliance-footer p {
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: 10.5px;
+  line-height: 1.4;
+}

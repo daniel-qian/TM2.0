@@ -1,0 +1,32 @@
+/* feat-035（lite-live-v02 kickoff §架构拍板 4）· paper 皮肤令牌层 — `?skin=paper`（缺省）。
+   照搬 src/shared/styles/00-base.css 的 :root 现值（一个数字不改）——这是零视觉回归的锚点:
+   shared 设计系统里大量组件已经在消费这批 CSS 自定义属性（color: var(--ink) 等），token 层
+   在 `.lite2-shell[data-skin="paper"]` 内重申同一批值 = 组件外观与今天的 lite 逐字节一致。
+   壳自身的页面底色同理照抄 shared/styles/00-base.css 的 body 渐变（.app-shell 铺满视口，
+   盖住 body 渐变——两者数值相同，视觉零差）。 */
+.lite2-shell[data-skin='paper'] {
+  --paper: #f7f4ee;
+  --paper-strong: #fffdf8;
+  --ink: #1d1b17;
+  --ink-soft: #5e5a51;
+  --ink-faint: #918b7f;
+  --rule: rgba(52, 48, 40, 0.15);
+  --rule-strong: rgba(52, 48, 40, 0.28);
+  --sage: #69806d;
+  --iris: #6c63b5;
+  --honey: #b27b2b;
+  --terracotta: #bc5c49;
+  --sky: #527b91;
+  --shadow: 0 22px 70px rgba(50, 45, 36, 0.13);
+  --shadow-soft: 0 12px 40px rgba(50, 45, 36, 0.08);
+
+  /* lite2 专用令牌（组件消费这两个，覆盖 shared chunk 里裸写的暖纸半透明白，
+     令牌覆盖不到的极少数语法差异留 feat-039 用 [data-skin] 分支处理）。 */
+  --lite2-surface: rgba(255, 253, 248, 0.86);
+  --lite2-glass: rgba(255, 253, 248, 0.82);
+  --lite2-bg-gradient:
+    radial-gradient(circle at 24% 18%, rgba(255, 255, 255, 0.9), transparent 28%),
+    linear-gradient(135deg, #fbf8f0 0%, #f0eadf 52%, #f9f6ef 100%);
+
+  background: var(--lite2-bg-gradient);
+}
