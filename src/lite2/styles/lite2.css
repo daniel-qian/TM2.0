@@ -2046,7 +2046,10 @@
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: rgba(30, 27, 22, 0.35);
+  /* feat-046 遗留修复②（feat-045 handoff 点名）：遮罩色原硬编码暖调 rgba(30,27,22,.35)，
+     aurora 冷调下发暖——改消费墨色令牌（paper = 29,27,23，与原值差 1 个色阶、不可感知；
+     aurora = 深藏青 16,34,61，遮罩随皮肤变冷）。 */
+  background: rgba(var(--lite2-ink-rgb), 0.35);
   backdrop-filter: blur(3px);
 }
 
