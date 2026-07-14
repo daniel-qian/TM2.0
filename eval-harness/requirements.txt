@@ -16,6 +16,13 @@ sse-starlette>=1.8     # Server-Sent Events streaming for /advise
 httpx>=0.27            # fastapi.testclient (tests/test_service_http.py)
 python-multipart>=0.0.9  # feat-018 ingest upload: service/ingest_api.py UploadFile=File(...) needs it (Starlette multipart parsing); absent here => /ingest 500s in the Docker image while /health stays green
 
+# feat-018 — document PARSERS for /ingest (avery/ingest/parse.py, lazy-imported). Previously installed
+# ambiently in the dev venv but UNDECLARED here; the feat-040 docker smoke caught that no image shipped
+# them, so a real PDF/xlsx/docx upload 422'd "no parseable content". Declared now (dev + image lockstep).
+pypdf>=4.0             # PDF text extract
+openpyxl>=3.1          # .xlsx worksheets
+python-docx>=1.1       # .docx paragraphs/tables (import name: docx)
+
 # feat-030 — Postgres persistence (avery/ingest/pg_registry.py, selected via AVERY_DB_URL /
 # PGVECTOR_URL). Imported LAZILY: the offline suite / keyless service never touch these at import
 # time, but the Docker image must ship them or a DB-configured deploy 500s on first /ingest.
