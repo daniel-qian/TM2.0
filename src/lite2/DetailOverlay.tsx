@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useLite } from './store'
 import { useDict } from '../shared/i18n/useDict'
 import { InitialAvatar } from './InitialAvatar'
@@ -14,6 +15,17 @@ export function DetailOverlay() {
   const team = useLite((s) => s.team)
   const rawTeam = useLite((s) => s.rawTeam)
   const closeDetail = useLite((s) => s.closeDetail)
+
+  // feat-046 遗留修复①（feat-045 对抗验证点名的既有惯例）：aria-modal 弹层必须可键盘退出。
+  // 照 OnboardWizard 的监听器模式：挂载 add / 卸载 remove（Escape → closeDetail → 组件
+  // unmount → cleanup 即时注销，零全局监听残留）。closeDetail 无进度语义，直接关即可。
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') closeDetail()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [closeDetail])
 
   if (!detail || !team) return null
 
