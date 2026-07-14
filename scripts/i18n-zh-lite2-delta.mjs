@@ -37,12 +37,22 @@ const { zh: existingZh } = await import(pathToFileURL(path.resolve(ROOT, "src/sh
 if (!en.lite2) { console.error("en.ts has no `lite2` section — nothing to do."); process.exit(1); }
 if (!existingZh.lite) { console.error("zh.ts has no `lite` section to reuse — run i18n-zh.mjs lite2 directly instead."); process.exit(1); }
 
-// Delta = keys present in en.lite2 but NOT in en.lite (the genuinely new strings).
+// Delta = keys present in en.lite2 but NOT in en.lite (the genuinely new strings) AND not
+// already translated in zh.lite2. The second condition was added after the feat-043 rework
+// (2026-07-14): without it, every re-run re-sends ALL lite2-only keys through M3 — including
+// values that were already finalized/adversarially-verified in earlier features — and silently
+// clobbers approved copy (this is exactly how feat-042's closerLook*/footerText drifted).
+// Approved translations stay put; only keys M3 has never seen go out. To force a re-translation
+// of an existing key, delete its line from zh.ts's lite2 section first, then re-run.
 const sharedKeys = new Set(Object.keys(en.lite || {}));
-const deltaKeys = Object.keys(en.lite2).filter((k) => !sharedKeys.has(k));
+const existingLite2Zh = existingZh.lite2 || {};
+const deltaKeys = Object.keys(en.lite2).filter(
+  (k) => !sharedKeys.has(k) && !(k in existingLite2Zh),
+);
 const deltaObj = Object.fromEntries(deltaKeys.map((k) => [k, en.lite2[k]]));
-console.log(`Delta keys (through M3): ${deltaKeys.join(", ")}`);
+console.log(`Delta keys (through M3): ${deltaKeys.join(", ") || "(none)"}`);
 console.log(`Reused verbatim from zh.lite: ${Object.keys(en.lite2).filter((k) => sharedKeys.has(k)).length} keys`);
+console.log(`Kept from existing zh.lite2 (already approved): ${Object.keys(en.lite2).filter((k) => !sharedKeys.has(k) && k in existingLite2Zh).length} keys`);
 
 const SYS = `你是 Avery 的资深中文文案。Avery 是「管理决策层」产品：帮 20–500 人公司的管理者做出更稳妥、可追溯、算得清账的人事与项目决策。这一版文案是产品界面本身（Avery Live 的 live mode，v02 并排新壳 lite2）：给管理者当场使用。
 
@@ -81,6 +91,7 @@ async function translateDelta(obj) {
 }
 
 let deltaZh = null, lastErr;
+if (deltaKeys.length === 0) deltaZh = {}; // nothing new — skip the M3 call entirely
 for (let attempt = 1; attempt <= 3 && !deltaZh; attempt++) {
   try {
     deltaZh = await translateDelta(deltaObj);
@@ -95,10 +106,15 @@ if (!deltaZh) {
   deltaZh = deltaObj;
 }
 
-// lite2 = reused zh.lite verbatim for shared keys + M3 delta for the new keys, in en.lite2 order.
+// lite2 = zh.lite verbatim for shared keys, then already-approved zh.lite2 values, then the
+// M3 delta for genuinely new keys — in en.lite2 order.
 const lite2Zh = {};
 for (const k of Object.keys(en.lite2)) {
-  lite2Zh[k] = sharedKeys.has(k) ? existingZh.lite[k] : deltaZh[k];
+  lite2Zh[k] = sharedKeys.has(k)
+    ? existingZh.lite[k]
+    : k in existingLite2Zh
+      ? existingLite2Zh[k]
+      : deltaZh[k];
 }
 
 // Every other top-level section stays byte-identical from the existing zh.ts.
@@ -112,4 +128,6 @@ const out = `import type { Dict } from "./index";
 export const zh: Dict = ${JSON.stringify(ordered, null, 2)};
 `;
 fs.writeFileSync(path.resolve(ROOT, "src/shared/i18n/zh.ts"), out, "utf8");
-console.log(`\nWrote src/shared/i18n/zh.ts — lite2 section: ${Object.keys(en.lite2).length - deltaKeys.length} keys reused from zh.lite + ${deltaKeys.length} delta keys ${deltaZh === deltaObj ? "(EN fallback)" : "(M3-translated)"}.`);
+const nShared = Object.keys(en.lite2).filter((k) => sharedKeys.has(k)).length;
+const nKept = Object.keys(en.lite2).filter((k) => !sharedKeys.has(k) && k in existingLite2Zh).length;
+console.log(`\nWrote src/shared/i18n/zh.ts — lite2 section: ${nShared} keys reused from zh.lite + ${nKept} kept from existing zh.lite2 + ${deltaKeys.length} delta keys ${deltaKeys.length === 0 ? "(no M3 call)" : deltaZh === deltaObj ? "(EN fallback)" : "(M3-translated)"}.`);

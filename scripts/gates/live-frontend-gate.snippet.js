@@ -88,9 +88,10 @@
  *                                                    // at-risk handoff, no fabricated extras)
  *   await __seedGate.assertFollowupsFlow()            // followupsFlow: triage "add to
  *                                                    // follow-ups" -> Follow-ups tab shows the
- *                                                    // item with a source label -> check done
- *                                                    // -> lands in History -> restore -> back
- *                                                    // in the active list
+ *                                                    // NEW item (tracked by data-followup-id,
+ *                                                    // residue-proof) with the EXACT triage
+ *                                                    // source label -> check done -> lands in
+ *                                                    // History -> restore -> back in active
  *   const before = await __seedGate.snapshotFollowups() // helper: titles in active + history
  *   [reload the SAME url, re-inject snippet]
  *   await __seedGate.assertFollowupsPersist(before)  // followupsPersist: after reload, every
@@ -1070,8 +1071,46 @@
 
     async assertFollowupsFlow() {
       // Phase followupsFlow: a triage card's "Add to follow-ups" -> the Follow-ups tab shows a
-      // new item carrying a source label -> checking it complete moves it into History ->
-      // restoring it there puts it back in the active list.
+      // new item carrying the EXPECTED triage source label -> checking it complete moves it into
+      // History -> restoring it there puts it back in the active list.
+      //
+      // HARDENED (2026-07-14, adversarial-verify feedback on feat-043): the item is tracked by
+      // its STABLE id (`data-followup-id`, rendered by FollowupsScreen) instead of title text —
+      // a same-session re-run leaves residual items with identical titles in localStorage, and
+      // title matching silently latches onto the wrong one. The new item = the id that appears
+      // after the add click and was not present before. The source label is asserted EXACTLY
+      // (attribute `data-followup-source` === 'triage' AND visible text === the expected triage
+      // copy), not merely non-empty.
+      const EXPECTED_TRIAGE_SOURCE = 'From this morning'; // en.lite2.followupsSourceTriage
+      const settle = () => new Promise((r) => setTimeout(r, 200));
+      const idsNow = () =>
+        $$('.lite-followup-item').map((el) => el.getAttribute('data-followup-id')).filter(Boolean);
+      const collectAllIds = async () => {
+        // active + history (both subtabs), leaving the screen on Active.
+        const seen = new Set();
+        const activeTab = $('.lite-followups-subtab[data-subtab="active"]');
+        const historyTab = $('.lite-followups-subtab[data-subtab="history"]');
+        if (activeTab) activeTab.click();
+        await settle();
+        for (const id of idsNow()) seen.add(id);
+        if (historyTab) historyTab.click();
+        await settle();
+        for (const id of idsNow()) seen.add(id);
+        if (activeTab) activeTab.click();
+        await settle();
+        return seen;
+      };
+      const findById = (id) =>
+        $$('.lite-followup-item').find((el) => el.getAttribute('data-followup-id') === id) || null;
+
+      // 0) Baseline: every id already present BEFORE the add (residue from earlier runs).
+      this._clickTab('Follow-ups');
+      try {
+        await poll(() => ($('.lite-followups-list') || $('.lite-followups-empty-note') ? true : null), 8000, 'follow-ups screen to mount');
+      } catch (e) { /* fall through */ }
+      const beforeIds = await collectAllIds();
+
+      // 1) Add from the first triage card.
       this._clickTab('Your team');
       try {
         await poll(() => ($$('.home-handoff').length > 0 ? true : null), 8000, 'triage cards present');
@@ -1083,52 +1122,44 @@
       if (!addBtn) return (results.followupsFlow = { pass: false, error: 'no .lite-triage-addfollowup button' });
       addBtn.click();
 
+      // 2) The NEW item = the id that was not in the baseline.
       this._clickTab('Follow-ups');
+      let newId = null;
       try {
-        await poll(() => ($('.lite-followups-list') || $('.lite-followup-item') ? true : null), 8000, 'follow-ups screen to mount');
-      } catch (e) { /* fall through */ }
-      let item = null;
-      try {
-        item = await poll(() => {
-          const found = $$('.lite-followup-item').find(
-            (el) => ((el.querySelector('.lite-followup-title') || {}).textContent || '').trim() === title,
-          );
-          return found || null;
-        }, 4000, 'new follow-up item to appear');
+        newId = await poll(() => {
+          const fresh = idsNow().filter((id) => !beforeIds.has(id));
+          return fresh.length > 0 ? fresh[0] : null;
+        }, 8000, 'new follow-up item (fresh data-followup-id) to appear');
       } catch (e) {
-        return (results.followupsFlow = { pass: false, error: String(e) });
+        return (results.followupsFlow = { pass: false, error: String(e), beforeIdCount: beforeIds.size });
       }
+      const item = findById(newId);
+      if (!item) return (results.followupsFlow = { pass: false, error: 'new item vanished after id capture', newId });
+      const sourceAttr = item.getAttribute('data-followup-source');
       const sourceEl = $('.lite-followup-source', item);
       const sourceLabelText = sourceEl ? (sourceEl.textContent || '').trim() : '';
-      const hasSourceLabel = sourceLabelText.length > 0;
+      const sourceLabelOk = sourceAttr === 'triage' && sourceLabelText === EXPECTED_TRIAGE_SOURCE;
 
+      // 3) Complete -> leaves the active list (by id).
       const check = $('.lite-followup-check', item);
       if (check) check.click();
       let leftActive = false;
       try {
-        await poll(() => {
-          const stillThere = $$('.lite-followup-item').some(
-            (el) => ((el.querySelector('.lite-followup-title') || {}).textContent || '').trim() === title,
-          );
-          return !stillThere ? true : null;
-        }, 4000, 'item to leave the active list');
+        await poll(() => (!findById(newId) ? true : null), 4000, 'item to leave the active list');
         leftActive = true;
       } catch (e) { /* leftActive stays false */ }
 
+      // 4) Shows up in History (same id).
       const historyTab = $('.lite-followups-subtab[data-subtab="history"]');
       if (historyTab) historyTab.click();
       let historyItem = null;
       let movedToHistory = false;
       try {
-        historyItem = await poll(() => {
-          const found = $$('.lite-followup-item').find(
-            (el) => ((el.querySelector('.lite-followup-title') || {}).textContent || '').trim() === title,
-          );
-          return found || null;
-        }, 4000, 'item to appear in history');
+        historyItem = await poll(() => findById(newId), 4000, 'item to appear in history');
         movedToHistory = !!historyItem;
       } catch (e) { /* movedToHistory stays false */ }
 
+      // 5) Restore -> back in the active list (same id).
       let restored = false;
       if (historyItem) {
         const restoreBtn = $('.lite-followup-restore', historyItem);
@@ -1137,12 +1168,7 @@
           const activeTab = $('.lite-followups-subtab[data-subtab="active"]');
           if (activeTab) activeTab.click();
           try {
-            await poll(() => {
-              const backInActive = $$('.lite-followup-item').some(
-                (el) => ((el.querySelector('.lite-followup-title') || {}).textContent || '').trim() === title,
-              );
-              return backInActive ? true : null;
-            }, 4000, 'item to return to the active list');
+            await poll(() => (findById(newId) ? true : null), 4000, 'item to return to the active list');
             restored = true;
           } catch (e) { /* restored stays false */ }
         }
@@ -1150,12 +1176,15 @@
 
       const out = {
         title,
-        hasSourceLabel,
+        newId,
+        sourceAttr,
         sourceLabelText,
+        expectedSourceLabel: EXPECTED_TRIAGE_SOURCE,
+        sourceLabelOk,
         leftActive,
         movedToHistory,
         restored,
-        pass: hasSourceLabel && leftActive && movedToHistory && restored,
+        pass: sourceLabelOk && leftActive && movedToHistory && restored,
       };
       results.followupsFlow = out;
       return out;

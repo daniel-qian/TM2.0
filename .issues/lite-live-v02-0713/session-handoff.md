@@ -133,3 +133,15 @@ history 正确为空、active 正确只含 1 条。已在 `live-frontend-gate.sn
   的 `70-home-cards.css`（shared，非 lite2 专属）和 lite2 的晨间分诊共用同一套类名与视觉语言——
   这是有意为之（PRD 明确"沿用 sage/honey/terracotta 左边条语法"），feat-037 的矛盾卡"解决/忽略/
   历史"如果视觉语言相近，可以考虑复用而非重新设计一套。
+
+## 追记 · i18n 打回复验（2026-07-14，fix commit）
+
+对抗验证 i18n 路打回后按修复单在本分支追加 fix commit（不改历史）：锁定词 `triageDrawerLabel`
+恢复「今天已照料」；5 个被 bf1fce0 越权重译的域外 ZH 值（closerLook* ×4 + footerText）用
+`git show feat/042-v02-shell` 原文精确恢复；「重新激活」→「放回来」；自查一并修掉三处同类
+锁定词违约（会议→议事室、随手一问→快问）；`assertFollowupsFlow` 加固为按 `data-followup-id`
+稳定 id 追踪 + 来源标签精确断言；`scripts/i18n-zh-lite2-delta.mjs` 加「已有 zh.lite2 译文优先
+保留」防复发（幂等实测：重跑 zh.ts hash 不变、零 M3 调用）。复验：tsc 绿、清 localStorage 重驱
+followupsFlow/followupsPersist 两相位绿、`?lang=zh` 运行时抽查命中、init.sh 绿。
+**给下一棒的硬提醒**：收口自查必须包含 `git diff <上一棒分支> -- src/shared/i18n/`，确认既有
+key 值零漂移——delta 脚本现在虽已防复发，但任何手工/脚本改动 zh.ts 都应过这一遍。
