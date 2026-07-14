@@ -42,6 +42,29 @@
  *   await __seedGate.assertAskSingleFlow()     // K5: deselect to 1 recipient -> link -> receipt w/ self-reported
  *   await __seedGate.assertAskRedline()        // K6: whole-DOM — person cards zero numbers, no score tables, story nouns 0
  *   __seedGate.askVerdict()                    // aggregate (6 ask phases)
+ *
+ * feat-035 (lite-live-v02) — v2 shell + skin infra phases, SEPARATE aggregate (v2Verdict below,
+ * phase group A). GATE-FIRST: written and run red BEFORE the v02 shell existed (no .lite2-shell
+ * anywhere, no `?v=` switch) — feat-035's implementation turns this green. Driven with
+ * `?transport=stub` (deterministic, offline — no real backend). Spans THREE page loads plus one
+ * external lint run; the driver re-injects this snippet each navigation and carries JSON forward
+ * (full protocol: scripts/gates/live-frontend-gate.md):
+ *   [on `?v=2&mode=live&transport=stub&skin=paper`]
+ *   __seedGate.defuseAnimations()
+ *   await __seedGate.assertV2Boots()                              // v2Boots: .lite2-shell + 6 tabs, PRD order
+ *   const before = __seedGate.readSkinSnapshot()
+ *   [navigate to `?v=2&mode=live&transport=stub&skin=aurora`, re-inject snippet]
+ *   const after = __seedGate.readSkinSnapshot()
+ *   __seedGate.assertSkinTokens(before, after)                    // skinTokens: data-skin + computed value both change
+ *   [on default URL `?mode=live&transport=stub` (no v=) — re-run the existing 10-phase gate here
+ *    first (phases A-J above), take its verdict().pass, THEN:]
+ *   __seedGate.assertV1Untouched(verdictResult.pass)               // v1Untouched: 0 .lite2-shell + v01 10-phase pass
+ *   [on `?mode=story`]
+ *   __seedGate.assertStoryUntouched()                              // storyUntouched: 0 .lite2-shell
+ *   [outside the browser: npm run lint with each of the 4 new wall directions violated in turn,
+ *    expect exit 1, revert, expect exit 0 — see live-frontend-gate.md for the exact injections]
+ *   __seedGate.recordWallRed({ pass: true, directions: {...} })    // wallRed: lint red-then-green evidence
+ *   __seedGate.v2Verdict()                                         // aggregate (5 phases)
  */
 (() => {
   // Story-EXCLUSIVE nouns. NOTE: 'Lin Qing' / 'Chen Mingyuan' / 'Sun Xiaomei' / 'Zheng Zixuan'
@@ -778,6 +801,111 @@
         playbooksEmpty: !!(results.playbooks && results.playbooks.pass),
         // feat-026 (S6) new surface — positioning narrative + honestly-labeled capability mock.
         visionSurface: !!(results.vision && results.vision.pass),
+      };
+      return { pass: Object.values(phases).every(Boolean), phases, results };
+    },
+
+    // ── feat-035 (lite-live-v02) — v2Verdict, independent aggregate, phase group A ─────────────
+    // Driven with `?transport=stub` (deterministic, offline — no real backend needed). Unlike the
+    // 10-phase verdict()/askVerdict() above (which live inside a single `?mode=live` page), these
+    // phases span THREE separate page loads (default URL, `?v=2`, `?mode=story`) plus one lint
+    // run the browser can't do itself — so most of them take externally-computed evidence as
+    // arguments rather than driving everything in-page. The driver session's job: navigate,
+    // re-inject this snippet each time, call the matching phase, and carry the JSON forward.
+    async assertV2Boots() {
+      // Phase v2Boots: `?v=2&mode=live` must render the .lite2-shell root with all 6 tabs
+      // (PRD order: Your team · The room · Follow-ups · A closer look · Playbooks · Where this goes).
+      try {
+        await poll(() => ($('.lite2-shell') ? true : null), 8000, '.lite2-shell to mount');
+      } catch (e) { /* fall through — assertions below report absence */ }
+      const shell = $('.lite2-shell');
+      const tabs = $$('.lite2-shell .scene-tabs .scene-tab').map((b) => (b.textContent || '').trim());
+      const expected = ['Your team', 'The room', 'Follow-ups', 'A closer look', 'Playbooks', 'Where this goes'];
+      const out = {
+        shellPresent: !!shell,
+        dataScene: shell ? shell.getAttribute('data-scene') : null,
+        tabCount: tabs.length,
+        tabLabels: tabs,
+        tabOrderMatches: JSON.stringify(tabs) === JSON.stringify(expected),
+        pass: !!shell && tabs.length === 6 && JSON.stringify(tabs) === JSON.stringify(expected),
+      };
+      results.v2Boots = out;
+      return out;
+    },
+
+    assertV1Untouched(v01VerdictPass) {
+      // Phase v1Untouched: called on the DEFAULT URL (`?mode=live`, no `v=`) — must render ZERO
+      // .lite2-shell nodes (v01 stays LiteApp), AND the caller passes in the already-computed
+      // v01 ten-phase verdict().pass from a same-session re-run on this same page (this snippet
+      // can't itself remember state across navigations — the driver carries the boolean over).
+      const leaked = $$('.lite2-shell').length;
+      const out = {
+        lite2ShellCount: leaked,
+        v01VerdictPass: !!v01VerdictPass,
+        pass: leaked === 0 && !!v01VerdictPass,
+      };
+      results.v1Untouched = out;
+      return out;
+    },
+
+    assertStoryUntouched() {
+      // Phase storyUntouched: called on `?mode=story` — must render ZERO .lite2-shell nodes
+      // (the story shell physically can't reach lite2's root class; this is the S4/S5 "story
+      // untouched" pattern reused for lite2's own root class).
+      const leaked = $$('.lite2-shell').length;
+      const out = { lite2ShellCount: leaked, pass: leaked === 0 };
+      results.storyUntouched = out;
+      return out;
+    },
+
+    recordWallRed(evidence) {
+      // Phase wallRed: the ESLint wall check can't run from inside the browser — the driver
+      // session runs `npm run lint` with a violating import injected (expects exit 1), then
+      // removes it (expects exit 0), for all 4 new directions (lite2→story, story→lite2,
+      // lite→lite2, lite2→lite), and records that raw evidence here. Shape:
+      //   { pass: boolean, directions: { [name]: { redExit, greenExit } } }
+      results.wallRed = { pass: !!(evidence && evidence.pass), evidence };
+      return results.wallRed;
+    },
+
+    readSkinSnapshot() {
+      // Helper (not a phase itself): snapshot the shell's data-skin attribute + a couple of
+      // computed values that the token layer is expected to move. Called once per page load
+      // (paper, then aurora) — the driver holds both JSON snapshots and feeds them into
+      // assertSkinTokens() together (cross-navigation, so this can't be done in one call).
+      const shell = $('.lite2-shell');
+      if (!shell) return null;
+      const cs = getComputedStyle(shell);
+      return {
+        skinAttr: shell.getAttribute('data-skin'),
+        backgroundImage: cs.backgroundImage,
+        color: cs.color,
+      };
+    },
+
+    assertSkinTokens(before, after) {
+      // Phase skinTokens: switching `?skin=paper` -> `?skin=aurora` must change BOTH the shell
+      // root's data-skin attribute AND at least one key computed value (proves the token layer
+      // actually wires through — not just an inert attribute).
+      const skinAttrChanged = !!before && !!after && before.skinAttr !== after.skinAttr;
+      const computedChanged =
+        !!before && !!after &&
+        (before.backgroundImage !== after.backgroundImage || before.color !== after.color);
+      const out = {
+        before, after, skinAttrChanged, computedChanged,
+        pass: !!before && !!after && skinAttrChanged && computedChanged,
+      };
+      results.skinTokens = out;
+      return out;
+    },
+
+    v2Verdict() {
+      const phases = {
+        v2Boots: !!(results.v2Boots && results.v2Boots.pass),
+        v1Untouched: !!(results.v1Untouched && results.v1Untouched.pass),
+        storyUntouched: !!(results.storyUntouched && results.storyUntouched.pass),
+        wallRed: !!(results.wallRed && results.wallRed.pass),
+        skinTokens: !!(results.skinTokens && results.skinTokens.pass),
       };
       return { pass: Object.values(phases).every(Boolean), phases, results };
     },
