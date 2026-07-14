@@ -130,7 +130,10 @@ export function TeamScreen() {
   const totalHandoffs = team?.handoffs.length ?? 0
 
   function handleTakeToRoom(handoff: LiteHandoff) {
-    setComposerDraft(`${handoff.action}\n\n${handoff.evidence}`)
+    // 分隔符用 " — " 而非换行：composer 是 <input type="text">，换行被剥掉后两段文字会
+    // 连成一坨不可读（feat-044 对抗验证发现的同根 bug，与 CloserLookScreen 的 ask 预填
+    // 一并修，见该处注释）。
+    setComposerDraft(`${handoff.action} — ${handoff.evidence}`)
     goScreen('room')
   }
 

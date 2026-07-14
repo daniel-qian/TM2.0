@@ -157,4 +157,26 @@ npm run build      — 497 modules（feat-043 基线 496，+1：gapDerive.ts）
   收敛成一套通用折叠组件（当前三处均功能正确，只是三套 CSS/交互细节各自实现）。
 - `CloserLookScreen.tsx` 的"Ask them directly"与 feat-043 分诊卡的"带进议事室"共用同一个
   `flowStore.composerDraft` 桥——如果 feat-045 的 chips（room 空态建议问题）也要做类似预填，
-  可以复用同一机制，不必另起一套状态。
+  可以复用同一机制，不必另起一套状态。**注意：composerDraft 的内容会进 `<input type="text">`，
+  换行会被剥掉——多段上下文用 " — " 一类行内分隔符拼接（本棒 i18n 打回复验时修过的同根坑，
+  两处预填构造器已改）。**
+
+## 追记 · i18n 打回复验（2026-07-14，fix commit）
+
+对抗验证 gate 路/redline 路 CONFIRMED_SAFE、i18n 路 ISSUES_FOUND 打回，fix commit 追加于
+本分支（不改历史）：①Blocker-锁定词：gap* ZH 文案的「档案」违反全 app「文件」词族——
+`gapCardClaimLabel`→PRD F4 原文「文件里的说法」、`gapPageTitle`→「文件说的和实际读到的，
+对不上的地方」（同步消灭「读数」误译，EN "the read"=解读非仪表读数）、`gapPageBody` 改文件
+词族+动词与按钮文案对齐；自查发现 `gapCardEvidenceLabel`「信号显示的」也偏离 kickoff 规格
+原文，一并改「实际信号」。②composer 预填吞换行（同根 bug 授权跨棒修）：CloserLookScreen
+ask 预填与 TeamScreen take-to-room 预填（feat-043 文件）的 `\n` 改 " — "。③`gapDerive.ts`
+claim 兜底句从自拟叙事改机械状态读出（`Reported status: "on-track"`）。复验：tsc 绿；grep
+zh.ts 零「档案」——「读数」仅剩 `footerText`（**feat-042 锁定值、043 打回时明令逐字节恢复的
+域外值，本棒不动**，是否另案处理已上报编排）；浏览器清 localStorage 重驱 `gapsDerive`
+`{gapCards:1,bannedHits:[],nameDigitPairs:[],pass:true}`、`gapsToAsk`（预填
+"Onboarding Portal Revamp — Rebuilding... — The new checklist flow..." 分隔可读，
+`containsProjectRef:true,pass:true`）、`triageActions` 复跑 pass:true（B 组断言不受影响）；
+`?lang=zh` 运行时新四值真渲染、屏上零档案零读数；i18n diff 范围复核不变；init.sh 绿
+（0 error/4 既有 warning、tsc 0 错、build 497 模块）。
+**给下一棒的硬提醒**：新增 ZH 文案先对全 app 词族 grep 一遍（本次「档案 vs 文件」正是
+M3 独立翻译撞出的词族漂移，delta 脚本不做词族校验）；composerDraft 预填只能用行内分隔符。

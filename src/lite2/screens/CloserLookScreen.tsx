@@ -45,7 +45,10 @@ export function CloserLookScreen() {
     // 预填含项目引用 + claim/evidence 上下文；正文不携带人身评判语（只谈项目自述与信号，
     // 不谈"你为什么没说实话"一类归咎措辞）。不自动提交——manager 审过再问，同分诊
     // "带进议事室"的 authorship 原则（feat-036）。
-    setComposerDraft(`${gap.projectTitle}\n\n${gap.claim}\n${gap.evidence}`)
+    // 分隔符用 " — " 而非换行：composer 是 <input type="text">，换行被剥掉后三段文字会
+    // 连成一坨不可读（对抗验证 redline 路发现，2026-07-14；TeamScreen 的 take-to-room
+    // 预填是同根问题，已一并修）。
+    setComposerDraft(`${gap.projectTitle} — ${gap.claim} — ${gap.evidence}`)
     goScreen('room')
   }
 

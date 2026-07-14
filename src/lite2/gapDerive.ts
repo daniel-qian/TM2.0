@@ -37,7 +37,10 @@ export function deriveGaps(team: LiteTeam | null): GapCard[] {
     if (!STEADY_STATUSES.has(project.status)) continue
     const blockers = project.blockers ?? []
     if (blockers.length === 0) continue
-    const claim = project.summary?.trim() || `${project.title} is reported ${project.status}.`
+    // claim 兜底（summary 为空时）：机械状态读出式，引号原样引 status 字段值——不自拟叙事句
+    // （"X is reported fine." 读起来像语料里有人这么说过，但语料里没这句话；机械读出保证
+    // 兜底文本也 100% 可溯源到字段本身。对抗验证 redline 路要求，2026-07-14）。
+    const claim = project.summary?.trim() || `Reported status: "${project.status}"`
     blockers.forEach((blocker, idx) => {
       // Stable id derived from project id + blocker index (kickoff-dev.md §feat-044) — changes
       // only if the underlying corpus text changes, which is the intended "reappears if the
