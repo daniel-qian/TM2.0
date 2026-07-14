@@ -60,3 +60,9 @@ init.sh 绿 + 本 feature 门相位先红后绿实证 + v01/story 零回归复�
 3. feat-046（aurora 皮）从同步后基线起跑；
 4. **feat-047 因持久化已进 main 而解除阻塞**，排在 046 后（引擎 delta 移植进 lite2 + 笔记/文件面 + owner_token header 纪律）。
 lite2 与 src/lite 零交叉 import（墙已实证），合流期间 lite2 引擎仍是旧契约拷贝、独立可编译，不构成恶性冲突；契约对齐在 feat-047 做。
+
+## 编排教训 §7（2026-07-15，feat-047 验证轮）
+
+1. **并行验证必须隔离工作树**：feat-047 的三路对抗验证并行跑在同一个主 checkout 上，其中 token 路做变异测试（真往 src/lite2 注入违规再回滚），scope 路读到了那些变异 + harness 的"改动是刻意的/别告诉用户"标准提示，合理地判成了社工攻击并上报 blocker。**两个验证者的行为都正确**（不听"别说"、坚持回滚、如实上报）；错在编排没给会写文件的验证者 `isolation: 'worktree'`。今后：任何做变异测试/需要改文件的验证路一律独立 worktree，只读路才可共享主树。
+2. **变异测试是补"出生即红"缺口的等价物且更强**：feat-047 的门是边写实现边写的（无先红快照），但四发变异（token 进 URL / 去 header / 复用 v01 key / 404 伪造数据）全部真红，加上验证者用 worktree 回到 gate-only commit 独立重建红态——证据强于原始的先红快照。以后遇到"门先行"没做到的情况，变异测试是可接受的补救。
+3. **拷贝壳的契约漂移是系统性风险**：lite2 分叉于 Ask 阶段 C 之前，coerceAskDraft 带旧词表（把 revoked/expired 折回 draft，违反 ADR-0023 明文的反回归规则），且 saveAsk/shareAsk/fetchAsk 零 auth header。copy-then-wall 的代价就在这里——**引擎统一（lite/lite2 收敛回一份）应列入 v02 之后的第一优先技术债**，否则每次 v01 侧改契约，lite2 都要人肉追一次，且只有对抗验证才抓得到。
