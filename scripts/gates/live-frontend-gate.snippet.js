@@ -268,6 +268,81 @@
  *   __seedGate.skinVerdict({ auroraApplied, paperUnchanged, skinNoLeak })
  *                                                       // aggregate (3 phases) — pass carried JSON
  *                                                       // for whichever phases ran on earlier loads
+ *
+ * feat-047 (lite-live-v02, kickoff-dev.md §合流契约附录 §2 — engine sync + notes/files surfaces)
+ * — SEPARATE aggregate (syncVerdict below, phase group F). Ports the src/lite engine delta
+ * (owner_token storage + X-Avery-Token header discipline, fetchFiles/fetchNotes) into lite2's
+ * OWN transport.ts/store.ts/stubTransport.ts (copy-then-wall — zero lite<->lite2 imports), and
+ * gives v02 a 7th tab ("Avery's notes", ported from `lite`, placed after Follow-ups) plus a
+ * files list inside UploadPanel. Two of the four phases run on the DETERMINISTIC stub transport
+ * (`?v=2&mode=live&transport=stub`, same corpus as groups B/C/D/E); one is a pure static
+ * source-level comparison (no browser needed); tokenDiscipline is the odd one out — it is the
+ * ONLY phase in this whole file that requires the REAL backend (`?v=2&mode=live`, no
+ * `?transport=stub`) because the entire point is proving the owner_token round-trip against a
+ * real HTTP response, not a scripted stub that could fake header presence:
+ *   [stub phases — on `?v=2&mode=live&transport=stub`]
+ *   __seedGate.defuseAnimations()
+ *   await __seedGate.assertNotesSurfaceV2()      // notesSurfaceV2: run composerAskLive-equivalent
+ *                                                 // (a stub askLive call) first so a note has
+ *                                                 // landed, THEN click "Avery's notes" — trust
+ *                                                 // note present, entries read-only, zero number
+ *                                                 // leak, story-noun blacklist 0; an empty
+ *                                                 // notebook (no run yet) is tolerated too
+ *   await __seedGate.assertFilesSurfaceV2()       // filesSurfaceV2: after a stub ingest, Your
+ *                                                 // team's UploadPanel renders `.upload-files`
+ *                                                 // with one row per uploaded file — filename +
+ *                                                 // formatted size + n_chunks (the ACTUAL ported
+ *                                                 // LiveFileEntry contract has no `status` field
+ *                                                 // and no download URL — src/lite's real UI
+ *                                                 // doesn't render either, so this phase checks
+ *                                                 // what's actually renderable, not an invented
+ *                                                 // shape; see progress.md Notes for the
+ *                                                 // documented deviation from the task brief's
+ *                                                 // "status/download entry" wording)
+ *   [outside the browser: run `node scripts/gates/engine-par-check.mjs` — a pure static diff of
+ *    src/lite/transport.ts vs src/lite2/transport.ts restricted to the feat-047 SCOPED delta
+ *    (owner_token storage shape, OWNER_TOKEN_HEADER constant, which methods thread authHeader()
+ *    into their fetch calls) — NOT full byte-parity (lite2 intentionally does not carry lite's
+ *    later Ask-stage-C revoke/offlinePreview/expired-status additions; those are a separate,
+ *    unscoped feature per kickoff-dev.md §合流契约附录 §2's explicit file list)]
+ *   __seedGate.recordEnginePar(evidence)          // enginePar: records the script's JSON verdict
+ *   [real-backend phase — on `?v=2&mode=live` (NO `?transport=stub`), real eval-harness service
+ *    up (AVERY_BRAIN=minimax, port 8137), a real seed file ingested through the wizard or
+ *    UploadPanel, wait for `ingestStatus==='ready'`]
+ *   await __seedGate.assertTokenDiscipline()
+ *                                                 // tokenDiscipline (MOST IMPORTANT — kickoff
+ *                                                 // calls it out by name). Fully self-contained
+ *                                                 // (no driver-supplied evidence needed): installs
+ *                                                 // a `window.fetch` spy IN-PAGE (fetch is looked
+ *                                                 // up on globalThis at call time, so a snippet
+ *                                                 // injected after the app already loaded still
+ *                                                 // intercepts every call transport.ts makes),
+ *                                                 // reads the live contextId/ownerToken off
+ *                                                 // `window.__lite2Store`, then: (1) confirms
+ *                                                 // localStorage `lite2:ownerTokens:v1` holds the
+ *                                                 // token keyed by contextId; (2) drives real
+ *                                                 // refreshTeam/refreshFiles/refreshNotes calls
+ *                                                 // and reads the CAPTURED request headers off the
+ *                                                 // spy — every /team, /team/.../files,
+ *                                                 // /team/.../notes call must carry
+ *                                                 // X-Avery-Token === the real token; (3) scans
+ *                                                 // both the spy log's URLs AND
+ *                                                 // performance.getEntriesByType('resource') for
+ *                                                 // the raw token substring — zero matches either
+ *                                                 // place (header-only, never in a URL); (4) swaps
+ *                                                 // the store's contextId to a bogus id (no stored
+ *                                                 // token for it) and re-drives
+ *                                                 // refreshFiles/refreshNotes — must not crash and
+ *                                                 // must NOT populate files/notes with anything
+ *                                                 // (honest empty, not fabricated); (5) fires two
+ *                                                 // RAW fetches straight at the real backend
+ *                                                 // (bypassing the store, so it's the BACKEND's
+ *                                                 // enforcement being proven, not just "the
+ *                                                 // frontend happened not to send a bad one") — a
+ *                                                 // forged token and a missing-header request
+ *                                                 // against the SAME real context_id must both
+ *                                                 // 404
+ *   __seedGate.syncVerdict()                      // aggregate (4 phases)
  */
 (() => {
   // Story-EXCLUSIVE nouns. NOTE: 'Lin Qing' / 'Chen Mingyuan' / 'Sun Xiaomei' / 'Zheng Zixuan'
@@ -1190,21 +1265,23 @@
     // arguments rather than driving everything in-page. The driver session's job: navigate,
     // re-inject this snippet each time, call the matching phase, and carry the JSON forward.
     async assertV2Boots() {
-      // Phase v2Boots: `?v=2&mode=live` must render the .lite2-shell root with all 6 tabs
-      // (PRD order: Your team · The room · Follow-ups · A closer look · Playbooks · Where this goes).
+      // Phase v2Boots: `?v=2&mode=live` must render the .lite2-shell root with all 7 tabs
+      // (PRD order + feat-047's 7th tab: Your team · The room · Follow-ups · Avery's notes ·
+      // A closer look · Playbooks · Where this goes — "Avery's notes" ported from `lite`,
+      // placed after Follow-ups per feat-047's tab-order decision, see progress.md).
       try {
         await poll(() => ($('.lite2-shell') ? true : null), 8000, '.lite2-shell to mount');
       } catch (e) { /* fall through — assertions below report absence */ }
       const shell = $('.lite2-shell');
       const tabs = $$('.lite2-shell .scene-tabs .scene-tab').map((b) => (b.textContent || '').trim());
-      const expected = ['Your team', 'The room', 'Follow-ups', 'A closer look', 'Playbooks', 'Where this goes'];
+      const expected = ['Your team', 'The room', 'Follow-ups', "Avery's notes", 'A closer look', 'Playbooks', 'Where this goes'];
       const out = {
         shellPresent: !!shell,
         dataScene: shell ? shell.getAttribute('data-scene') : null,
         tabCount: tabs.length,
         tabLabels: tabs,
         tabOrderMatches: JSON.stringify(tabs) === JSON.stringify(expected),
-        pass: !!shell && tabs.length === 6 && JSON.stringify(tabs) === JSON.stringify(expected),
+        pass: !!shell && tabs.length === 7 && JSON.stringify(tabs) === JSON.stringify(expected),
       };
       results.v2Boots = out;
       return out;
@@ -2380,6 +2457,238 @@
         skinNoLeak: !!(merged.skinNoLeak && merged.skinNoLeak.pass),
       };
       return { pass: Object.values(phases).every(Boolean), phases, results: merged };
+    },
+
+    // ── feat-047 (lite-live-v02) — syncVerdict, independent aggregate, phase group F ──────────
+    // Engine sync (owner_token/header discipline, fetchFiles/fetchNotes) + notes/files surfaces.
+    // See the usage block above for the full drive protocol (2 stub phases, 1 static-script
+    // phase, 1 real-backend phase).
+    async assertNotesSurfaceV2() {
+      // Phase notesSurfaceV2: lite2's 7th tab, "Avery's notes" (ported from `lite`'s feat-033).
+      // Same honesty contract as v01's assertNotesSurface: screen mounts; the red-line trust note
+      // is present; populated OR an honest empty state; zero person-score-number leak on the
+      // rendered observations; entries are READ-ONLY (not a <button> — only the source line is);
+      // story-noun blacklist stays 0.
+      this._clickTab("Avery's notes");
+      try {
+        await poll(() => ($('.lite-notes') ? true : null), 8000, 'lite2 notes surface to mount');
+      } catch (e) { /* fall through — assertions below report absence */ }
+      const screen = $('.lite-notes');
+      const trustNote = $('.lite-notes-redline-note');
+      const entries = $$('.lite-notes-entry');
+      const populated = entries.length > 0;
+      const emptyState = $('.lite-notes-empty');
+      const entryText = $$('.lite-notes-entry-text').map((e) => e.innerText || '').join('\n');
+      const numberLeak = BLOOD_BAR_RE.test(entryText) || /\b\d\s*\/\s*\d\b/.test(entryText)
+        ? (entryText.match(BLOOD_BAR_RE) || entryText.match(/\b\d\s*\/\s*\d\b/) || [])[0] : null;
+      const entryIsButton = $$('.lite-notes-entry').some((e) => e.tagName === 'BUTTON');
+      const text = (screen && screen.innerText) || '';
+      const storyHits = [];
+      for (const noun of STORY_NOUNS) {
+        const re = noun.includes(' ')
+          ? new RegExp(noun.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')
+          : new RegExp('\\b' + noun + '\\b');
+        if (re.test(text)) storyHits.push(noun);
+      }
+      const out = {
+        screenPresent: !!screen,
+        trustNotePresent: !!trustNote,
+        populated,
+        entryCount: entries.length,
+        emptyStatePresent: !!emptyState,
+        numberLeak,
+        entryIsButton,
+        storyHits,
+        pass: !!screen && !!trustNote && (populated || !!emptyState) &&
+          !numberLeak && !entryIsButton && storyHits.length === 0,
+      };
+      results.notesSurfaceV2 = out;
+      return out;
+    },
+
+    async assertFilesSurfaceV2() {
+      // Phase filesSurfaceV2: Your team's UploadPanel renders a persistent "your files" list
+      // after ingest — one row per uploaded file, filename + a human-formatted size + n_chunks.
+      // NOTE (documented deviation — see progress.md): the ACTUAL ported LiveFileEntry contract
+      // (src/lite/transport.ts, byte-identical here — feat-047 didn't touch it) carries idx/
+      // filename/size_bytes/mime/doc_kind/uploaded_at/n_chunks — no `status` field, no download
+      // URL. src/lite's own UploadPanel doesn't render either. This phase checks what's real,
+      // not an invented shape; call it AFTER a real or stub ingest (an empty upload-files block
+      // is not tolerated here — unlike notesSurfaceV2, this phase is meant to run post-ingest).
+      this._clickTab('Your team');
+      try {
+        await poll(() => ($('.upload-files') ? true : null), 8000, 'upload files list to mount');
+      } catch (e) { /* fall through — assertions below report absence */ }
+      const filesBlock = $('.upload-files');
+      const rows = $$('.upload-file-row');
+      const rowsOk = rows.length > 0 && rows.every((r) => {
+        const name = $('.upload-file-name', r);
+        const meta = $('.upload-file-meta', r);
+        return !!name && (name.textContent || '').trim().length > 0 &&
+          !!meta && /\d/.test(meta.textContent || '') && /chunk|reference/i.test(meta.textContent || '');
+      });
+      const out = {
+        filesBlockPresent: !!filesBlock,
+        rowCount: rows.length,
+        rowsOk,
+        pass: !!filesBlock && rows.length > 0 && rowsOk,
+      };
+      results.filesSurfaceV2 = out;
+      return out;
+    },
+
+    recordEnginePar(evidence) {
+      // Phase enginePar: a pure static source-level comparison (scripts/gates/engine-par-check.mjs)
+      // can't run from inside the browser — the driver runs it externally and records the JSON
+      // verdict here (same doctrine as recordWallRed).
+      results.enginePar = { pass: !!(evidence && evidence.pass), evidence };
+      return results.enginePar;
+    },
+
+    _installTokenFetchSpy() {
+      // Helper (not a phase itself): wrap `window.fetch` so assertTokenDiscipline can read back
+      // the ACTUAL headers/URLs of every request the app makes — fetch is resolved off globalThis
+      // at call time, so a spy installed by a snippet injected after the app already loaded still
+      // intercepts every call transport.ts's createHttpTransport makes. Idempotent (installing
+      // twice keeps the first log).
+      if (window.__seedGateFetchLog) return window.__seedGateFetchLog;
+      const log = [];
+      window.__seedGateFetchLog = log;
+      const orig = window.fetch.bind(window);
+      window.fetch = (input, init) => {
+        try {
+          const url = typeof input === 'string' ? input : (input && input.url) || String(input);
+          const headers = {};
+          const h = (init && init.headers) || (input && input.headers);
+          if (h) {
+            if (typeof Headers !== 'undefined' && h instanceof Headers) {
+              for (const [k, v] of h.entries()) headers[k.toLowerCase()] = v;
+            } else if (Array.isArray(h)) {
+              for (const [k, v] of h) headers[String(k).toLowerCase()] = v;
+            } else {
+              for (const k of Object.keys(h)) headers[k.toLowerCase()] = h[k];
+            }
+          }
+          log.push({ url, headers, method: (init && init.method) || 'GET', t: Date.now() });
+        } catch (e) { /* logging must never break the real call */ }
+        return orig(input, init);
+      };
+      return log;
+    },
+
+    async assertTokenDiscipline() {
+      // Phase tokenDiscipline (MOST IMPORTANT per kickoff-dev.md §合流契约附录 §2). REQUIRES the
+      // REAL backend (no `?transport=stub`) — a scripted stub could fake header presence, so this
+      // phase only means something against a real HTTP round-trip. Call AFTER a real ingest has
+      // completed (`window.__lite2Store.getState().contextId`/`.ownerToken` both set). See the
+      // usage block above for the full 5-part contract this checks.
+      const store = window.__lite2Store;
+      if (!store) {
+        return (results.tokenDiscipline = {
+          pass: false, error: 'window.__lite2Store not present — is this the real-backend `?v=2&mode=live` page, past feat-047\'s implementation?',
+        });
+      }
+      const log = this._installTokenFetchSpy();
+      const state0 = store.getState();
+      const contextId = state0.contextId;
+      const ownerToken = state0.ownerToken;
+      if (!contextId || !ownerToken) {
+        return (results.tokenDiscipline = {
+          pass: false, error: 'no live contextId/ownerToken in store — ingest a real seed first', contextId, ownerToken,
+        });
+      }
+
+      // (1) localStorage persists the token keyed by context_id (transport.ts's TOKEN_STORE_KEY).
+      let tokenStore = null;
+      try { tokenStore = JSON.parse(localStorage.getItem('lite2:ownerTokens:v1') || '{}'); } catch (e) { /* leave null */ }
+      const tokenPersisted = !!tokenStore && tokenStore[contextId] === ownerToken;
+
+      // (2)+(3) drive real read calls, then inspect exactly what went over the wire.
+      log.length = 0; // only look at requests fired from here on
+      await store.getState().refreshTeam();
+      await store.getState().refreshFiles();
+      await store.getState().refreshNotes();
+      try {
+        await poll(() => (log.some((r) => /\/team\//.test(r.url)) ? true : null), 20000, 'team/files/notes requests to fire');
+      } catch (e) { /* fall through — the call-count checks below report absence honestly */ }
+
+      const stripOrigin = (u) => u.replace(location.origin, '');
+      const teamCalls = log.filter((r) => /\/team\/[^/]+(\?|$)/.test(stripOrigin(r.url)));
+      const filesCalls = log.filter((r) => /\/team\/[^/]+\/files/.test(r.url));
+      const notesCalls = log.filter((r) => /\/team\/[^/]+\/notes/.test(r.url));
+      const hasHeaderEverywhere = (calls) =>
+        calls.length > 0 && calls.every((r) => r.headers['x-avery-token'] === ownerToken);
+      const teamHeaderOk = hasHeaderEverywhere(teamCalls);
+      const filesHeaderOk = hasHeaderEverywhere(filesCalls);
+      const notesHeaderOk = hasHeaderEverywhere(notesCalls);
+
+      // token NEVER appears in any request URL (header-only encoding) — scan both the spy log
+      // and the browser's own resource timing entries (independent evidence source).
+      const urlLeakInLog = log.some((r) => r.url.includes(ownerToken));
+      const resourceEntries = (performance.getEntriesByType('resource') || []).map((e) => e.name);
+      const urlLeakInResourceTimeline = resourceEntries.some((u) => u.includes(ownerToken));
+
+      // (4) missing token (bogus context, nothing stored for it) -> the frontend must not crash
+      // and must NOT fabricate data — files/notes stay exactly as they were.
+      const filesBefore = store.getState().files.length;
+      const notesBefore = store.getState().notes.length;
+      const bogusContextId = 'ctx_seedgate_bogus_' + Date.now();
+      store.setState({ contextId: bogusContextId });
+      let missingTokenCrashed = false;
+      try {
+        await store.getState().refreshFiles();
+        await store.getState().refreshNotes();
+      } catch (e) {
+        missingTokenCrashed = true; // refreshFiles/refreshNotes are supposed to swallow errors
+      }
+      const stillHonestAfterMissing =
+        !missingTokenCrashed &&
+        store.getState().files.length === filesBefore &&
+        store.getState().notes.length === notesBefore;
+      store.setState({ contextId }); // restore real session state for later phases
+
+      // (5) forged / missing-header requests straight at the REAL backend (bypassing the store
+      // entirely) — proves the BACKEND enforces this, not just "the frontend never sent a bad one".
+      const base = window.__seedGateApiBase || 'http://127.0.0.1:8137';
+      let forgedStatus = null;
+      let missingHeaderStatus = null;
+      try {
+        const r1 = await fetch(`${base}/team/${encodeURIComponent(contextId)}/files`, {
+          headers: { 'X-Avery-Token': 'forged-not-a-real-token' },
+        });
+        forgedStatus = r1.status;
+      } catch (e) { forgedStatus = 'network-error:' + String(e).slice(0, 80); }
+      try {
+        const r2 = await fetch(`${base}/team/${encodeURIComponent(contextId)}/files`);
+        missingHeaderStatus = r2.status;
+      } catch (e) { missingHeaderStatus = 'network-error:' + String(e).slice(0, 80); }
+
+      const pageAlive = !!(document.body && document.body.isConnected);
+
+      const out = {
+        contextId, tokenPersisted,
+        teamCallCount: teamCalls.length, filesCallCount: filesCalls.length, notesCallCount: notesCalls.length,
+        teamHeaderOk, filesHeaderOk, notesHeaderOk,
+        urlLeakInLog, urlLeakInResourceTimeline,
+        missingTokenCrashed, stillHonestAfterMissing,
+        forgedStatus, missingHeaderStatus,
+        pageAlive,
+        pass: tokenPersisted && teamHeaderOk && filesHeaderOk && notesHeaderOk &&
+          !urlLeakInLog && !urlLeakInResourceTimeline && stillHonestAfterMissing &&
+          forgedStatus === 404 && missingHeaderStatus === 404 && pageAlive,
+      };
+      results.tokenDiscipline = out;
+      return out;
+    },
+
+    syncVerdict() {
+      const phases = {
+        tokenDiscipline: !!(results.tokenDiscipline && results.tokenDiscipline.pass),
+        notesSurfaceV2: !!(results.notesSurfaceV2 && results.notesSurfaceV2.pass),
+        filesSurfaceV2: !!(results.filesSurfaceV2 && results.filesSurfaceV2.pass),
+        enginePar: !!(results.enginePar && results.enginePar.pass),
+      };
+      return { pass: Object.values(phases).every(Boolean), phases, results };
     },
   };
 
