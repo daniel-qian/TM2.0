@@ -4,6 +4,7 @@ import { LiteTopbar } from './LiteTopbar'
 import { TeamScreen } from './screens/TeamScreen'
 import { RoomScreen } from './screens/RoomScreen'
 import { FollowupsScreen } from './screens/FollowupsScreen'
+import { NotesScreen } from './screens/NotesScreen'
 import { CloserLookScreen } from './screens/CloserLookScreen'
 import { PlaybooksScreen } from './screens/PlaybooksScreen'
 import { VisionScreen } from './screens/VisionScreen'
@@ -21,6 +22,8 @@ import { resolveSkin } from './skin'
 //
 // 6-tab 骨架（PRD 顺序）：Your team · The room · Follow-ups · A closer look · Playbooks ·
 // Where this goes。Follow-ups / A closer look 本波先空态占位（feat-036/037 真派生）。
+// feat-047：第 7 tab「Avery's notes」移植自 src/lite，插在 Follow-ups 之后（tab 顺序为本棒
+// 默认决定，理由见 progress.md；最终排位交 review 包给 Danny 拍）。
 export function Lite2App() {
   const screen = useLite((s) => s.screen)
   const detail = useLite((s) => s.detail)
@@ -43,6 +46,8 @@ export function Lite2App() {
           <TeamScreen />
         ) : screen === 'followups' ? (
           <FollowupsScreen />
+        ) : screen === 'notes' ? (
+          <NotesScreen />
         ) : screen === 'closerlook' ? (
           <CloserLookScreen />
         ) : screen === 'playbooks' ? (

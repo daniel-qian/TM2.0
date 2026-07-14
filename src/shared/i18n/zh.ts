@@ -22,6 +22,10 @@ import type { Dict } from "./index";
 // NOTE (lite-live-v02 sync, integrate/v02-main-sync): the lite2.* section below was generated via
 //  scripts/i18n-zh-lite2-delta.mjs (v02's own generator) and is independent of the notes above,
 //  which describe the shared lite.*/ask.* sections only.
+// NOTE (feat-047): lite2.tabNotes + the 14-key lite2.notes* block are NEW in this run — 0 fresh
+//  M3 calls (script reused zh.lite's already-approved translation verbatim since the key names
+//  match byte-for-byte; see scripts/i18n-zh-lite2-delta.mjs's sharedKeys logic). Danny 审字
+//  inherits from the original feat-033 hand-written note above (same source strings).
 export const zh: Dict = {
   "mode": {
     "storyLabel": "演示",
@@ -169,6 +173,7 @@ export const zh: Dict = {
     "tabVision": "未来方向",
     "tabFollowups": "跟进",
     "tabCloserLook": "多看一眼",
+    "tabNotes": "Avery 的笔记",
     "groupAllLabel": "按团队分组",
     "groupUngrouped": "其他成员",
     "groupCollapse": "收起",
@@ -221,6 +226,21 @@ export const zh: Dict = {
     "gapRestoreLabel": "放回来",
     "gapEmptyTitle": "现在没什么要多看一眼的",
     "gapEmptyBody": "等项目自报的进度和它遇到的卡点说法不一致时,会出现在这里。",
+    "notesEyebrow": "实录笔记",
+    "notesTitle": "Avery 记下的、关于你公司的观察",
+    "notesLede": "每当你在议事室问一个真实的问题，Avery 都会用它自己的话把观察到的记下来，供你翻阅。你们合作得越久，这本笔记就越厚。",
+    "notesRedlineNote": "这些笔记只描述工作——项目、交接、负荷。它永远不会给任何人打分、排名或贴标签，任何指令都关不掉这条红线。",
+    "notesCountSince": "条观察 · 始于",
+    "notesCountOne": "条观察",
+    "notesCountMany": "条观察",
+    "notesToday": "今天",
+    "notesSourcePrefix": "来自你的提问：",
+    "notesOpenRoom": "进议事室 →",
+    "notesEmptyEyebrow": "还没有记录",
+    "notesEmptyTitle": "Avery 还没写下第一条笔记",
+    "notesEmptyBody": "去议事室问一个关于你团队的真实管理问题。当 Avery 注意到值得留存的东西——一个模式、一处风险、一条依赖——它就会记在这里。",
+    "notesEmptyCta": "去议事室提问",
+    "notesNudge": "Avery 记了一条笔记",
     "playbooksEyebrow": "即将推出",
     "playbooksTitle": "操作手册从团队已有的工作方式中生长出来",
     "playbooksBody": "当 Avery 接入了你自己的 SOP、检查清单和过往决策后，会把它们提炼成可复用的操作手册——下次遇到类似情况，会议室已经知道你的行事规则。",

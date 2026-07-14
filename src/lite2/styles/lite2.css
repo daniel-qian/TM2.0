@@ -156,6 +156,54 @@
   line-height: 1.5;
 }
 
+/* feat-047 移植（feat-032）·「你的文件」持久清单——薄回看视图（filename · size · n_chunks）。
+   令牌纪律：--lite2-paper-rgb 随皮肤切换（paper=暖纸/aurora=白），不写死暖纸字面量。 */
+.upload-files {
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid var(--rule);
+}
+
+.upload-files-title {
+  margin: 0 0 6px;
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.upload-files-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.upload-file-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 8px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: rgba(var(--lite2-paper-rgb), 0.6);
+}
+
+.upload-file-name {
+  color: var(--ink);
+  font-size: 12px;
+  word-break: break-word;
+}
+
+.upload-file-meta {
+  flex: none;
+  color: var(--ink-faint);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
 /* 空态右栏：上传面板不贴边、居中呼吸 */
 .home-lanes-live-empty {
   align-content: start;
@@ -2780,4 +2828,145 @@
   border-color: var(--rule-strong);
   color: var(--ink);
   outline: none;
+}
+
+/* ── feat-047 移植（feat-033）· Avery's notes（写侧、累积、只读，第 7 tab）──────────────────
+   复用叙事屏骨架（scene-nexus + eyebrow + h2 + lede）、分组折叠（home-people-group-head，
+   样式已在上方 team 段）、信任小字（upload-privacy-note）、is-new 高亮惯例。整屏只读。
+   全部新增——不像 .upload-panel 那批 feat-035 时代的裸选择器遗留债，这里从一开始就用
+   `.lite2-shell` 前缀（架构拍板 3）与 --lite2-* 令牌（feat-046 遗留提示：别写死暖纸字面量，
+   否则 aurora 下发暖）。is-new / nudge 的强调色沿用 .upload-dropzone.is-dragover 已立的
+   先例：--lite2-accent-rgb（paper=sage 105,128,109 / aurora=blue 73,110,232）。 */
+.lite2-shell .lite-notes {
+  display: flex;
+  justify-content: center;
+  padding: 28px 20px 40px;
+  overflow: hidden;
+}
+
+/* 空态走 .nexus-empty（Playbooks 先例，居中卡）——不套内滚容器 */
+.lite2-shell .lite-notes-body {
+  width: min(760px, calc(100vw - 48px));
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.lite2-shell .lite-notes-head h2 {
+  margin: 6px 0 10px;
+  font-family: var(--lite2-heading-font);
+  font-size: clamp(20px, 2.6vw, 27px);
+  font-weight: 500;
+  line-height: 1.24;
+}
+
+.lite2-shell .lite-notes-eyebrow {
+  color: var(--ink-faint);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.lite2-shell .lite-notes-lede {
+  margin: 0;
+  max-width: 60ch;
+  color: var(--ink-soft);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.lite2-shell .lite-notes-redline-note {
+  margin: 10px 0 0;
+  max-width: 60ch;
+}
+
+.lite2-shell .lite-notes-count {
+  margin: 14px 0 4px;
+  color: var(--ink-faint);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+
+.lite2-shell .lite-notes-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.lite2-shell .lite-notes-group-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 0 4px;
+}
+
+.lite2-shell .lite-notes-entry {
+  padding: 14px 16px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: rgba(var(--lite2-surface-rgb), 0.7);
+  box-shadow: var(--shadow-soft);
+}
+
+/* 最新一条微高亮（is-new 惯例，与终端 .terminal-line.is-new 同族语义） */
+.lite2-shell .lite-notes-entry.is-new {
+  border-color: var(--rule-strong);
+  background: rgba(var(--lite2-accent-rgb), 0.06);
+}
+
+.lite2-shell .lite-notes-entry-time {
+  margin: 0 0 6px;
+  color: var(--ink-faint);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.lite2-shell .lite-notes-entry-text {
+  margin: 0;
+  color: var(--ink);
+  font-size: 14.5px;
+  line-height: 1.6;
+}
+
+/* 来源行——唯一可点元素（跳 Room）；条目本体只读、非 button */
+.lite2-shell .lite-notes-entry-source {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--ink-soft);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.lite2-shell .lite-notes-entry-source:hover,
+.lite2-shell .lite-notes-entry-source:focus-visible {
+  color: var(--ink);
+  text-decoration: underline;
+}
+
+.lite2-shell .lite-notes-empty-cta {
+  margin-top: 16px;
+}
+
+/* Room 内 nudge chip（对齐 .lite-metric-chip / .upload-source-chip 视觉族） */
+.lite2-shell .lite-notes-nudge {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 12px;
+  padding: 5px 12px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 999px;
+  background: rgba(var(--lite2-accent-rgb), 0.08);
+  color: var(--ink);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.lite2-shell .lite-notes-nudge:hover,
+.lite2-shell .lite-notes-nudge:focus-visible {
+  background: rgba(var(--lite2-accent-rgb), 0.16);
 }

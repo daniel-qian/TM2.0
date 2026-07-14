@@ -18,6 +18,8 @@ import type {
   AskDraft,
   AskReceipt,
   LiveAgentEvent,
+  LiveFileEntry,
+  LiveNoteEntry,
   LiveTeamPayload,
   LiveTransport,
 } from './transport'
@@ -204,6 +206,17 @@ export function createStubTransport(): LiveTransport {
   const asks = new Map<string, StubAskState>()
   let ingested = false
   let sourceFiles: string[] = []
+  // feat-047 移植（feat-032 file space, stub 面）：清单诚实回显本会话真上传的文件名/大小；
+  // n_chunks/uploaded_at 确定性写死（真值由后端 materials 链接给，stub 不编造语义）。
+  let stubFiles: LiveFileEntry[] = []
+  // feat-047 移植（feat-033 Avery's notes, stub 面）：每完成一次 advise 追加一条确定性观察
+  // （与真后端"advise 落定→写侧笔记落库"同节奏），新→旧返回。🔴 文本零数字、零评分/排名。
+  const stubNotes: LiveNoteEntry[] = []
+  const NOTE_TEXTS = [
+    'The pilot launch conversation keeps circling back to the unsigned vendor quote — the owners sound steady, the paperwork does not.',
+    'Handoffs between design and engineering read smoother this week; the portal checklist is doing the coordination work.',
+    'Questions about dates keep landing on the same open thread — worth watching whether the approval loop is the real bottleneck.',
+  ]
 
   const emitAdviseScript = (
     req: AdviseRequest,
@@ -239,6 +252,13 @@ export function createStubTransport(): LiveTransport {
     const tick = () => {
       if (aborted) return
       if (i >= events.length) {
+        // advise 落定 → 追加一条笔记（真后端在此刻写侧落库；store 随后 fetchNotes 亮 nudge）。
+        stubNotes.unshift({
+          id: `note_stub_${askSeq}`,
+          created_at: new Date(Date.UTC(2026, 6, 13, 1, askSeq, 0)).toISOString(),
+          text: NOTE_TEXTS[(askSeq - 1) % NOTE_TEXTS.length],
+          source_excerpt: (req.situation || '').slice(0, 60),
+        })
         onDone()
         return
       }
@@ -261,6 +281,15 @@ export function createStubTransport(): LiveTransport {
     async ingest(files) {
       ingested = true
       sourceFiles = files.map((f) => f.name)
+      stubFiles = files.map((f, i) => ({
+        idx: i,
+        filename: f.name,
+        size_bytes: f.size,
+        mime: f.type || 'application/octet-stream',
+        doc_kind: 'document',
+        uploaded_at: '2026-07-13T09:00:00+08:00',
+        n_chunks: 3 + (i % 3), // 确定性占位——真 n_chunks 由后端 materials 前缀链接计数
+      }))
       return { ...STUB_TEAM, source_files: sourceFiles }
     },
 
@@ -268,6 +297,19 @@ export function createStubTransport(): LiveTransport {
       // feat-028 纪律：未知 id 大声 404，绝不静默回落。
       if (!ingested || contextId !== STUB_CONTEXT_ID) throw new Error('team HTTP 404 (stub)')
       return { ...STUB_TEAM, source_files: sourceFiles }
+    },
+
+    // feat-047 移植（feat-032）：清单 = 本会话真上传的文件（stub 无跨重启持久化——那是后端的
+    // 活，这里不假装）。
+    async fetchFiles(contextId) {
+      if (!ingested || contextId !== STUB_CONTEXT_ID) throw new Error('files HTTP 404 (stub)')
+      return { context_id: STUB_CONTEXT_ID, files: stubFiles }
+    },
+
+    // feat-047 移植（feat-033）：新→旧；advise 每落定一次多一条（与真后端写侧同节奏）。
+    async fetchNotes(contextId) {
+      if (!ingested || contextId !== STUB_CONTEXT_ID) throw new Error('notes HTTP 404 (stub)')
+      return { context_id: STUB_CONTEXT_ID, notes: [...stubNotes] }
     },
 
     async saveAsk(draft) {

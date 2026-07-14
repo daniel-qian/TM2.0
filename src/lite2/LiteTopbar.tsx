@@ -17,12 +17,14 @@ export function LiteTopbar() {
   const setMode = useMode((s) => s.setMode)
   const { t } = useDict()
 
-  // PRD 顺序（6 tab）：Your team · The room · Follow-ups · A closer look · Playbooks ·
-  // Where this goes。
+  // PRD 顺序（6 tab）+ feat-047 第 7 tab：Your team · The room · Follow-ups · Avery's notes ·
+  // A closer look · Playbooks · Where this goes。笔记面移植自 src/lite，放在 Follow-ups 之后
+  // （本棒的 tab 顺序决定，理由见 progress.md）。
   const tabs: { label: string; screen: LiteScreen }[] = [
     { label: t.lite2.tabTeam, screen: 'team' },
     { label: t.lite2.tabRoom, screen: 'room' },
     { label: t.lite2.tabFollowups, screen: 'followups' },
+    { label: t.lite2.tabNotes, screen: 'notes' },
     { label: t.lite2.tabCloserLook, screen: 'closerlook' },
     { label: t.lite2.tabPlaybooks, screen: 'playbooks' },
     { label: t.lite2.tabVision, screen: 'vision' },
