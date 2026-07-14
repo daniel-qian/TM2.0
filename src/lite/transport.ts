@@ -124,7 +124,9 @@ export interface LiveSignalCard {
 // LitePerson 一个字段都不加；类型层就没有可把答案挂到"人"身上的槽位。
 
 export type AskQuestionKind = 'scale' | 'yesno' // 1~5 刻度 · 是/否（PRD Q5：仅这两种）
-export type AskStatus = 'draft' | 'shared' | 'collecting' | 'closed'
+// status 词表锁定（阶段 C 对接契约，服务端为真源）：draft|shared|collecting|closed|revoked|expired。
+// F1：coerce 遇未知词折 closed（绝不折 draft——已发出/已撤回的 ask 不得以可编辑草稿复活）。
+export type AskStatus = 'draft' | 'shared' | 'collecting' | 'closed' | 'revoked' | 'expired'
 
 export interface AskQuestion {
   id: string
@@ -218,6 +220,12 @@ export interface LiveTransport {
   shareAsk: (askId: string) => Promise<AskDraft>
   // manager 侧拉取状态/回执（PRD Q7：打开时 HTTP 拉取刷新，无推送）。
   fetchAsk: (askId: string) => Promise<AskDraft>
+  // 撤回作废（PRD Q8；阶段 C 端点已落）。closed 后不可撤——服务端 409 大声失败。
+  revokeAsk: (askId: string) => Promise<AskDraft>
+
+  // 阶段 C F2（demo 诚实性）：离线预览通道（stub）自我声明——shared 态的链接不可真开，
+  // UI 据此加"离线预览"标注。真 HTTP transport 恒缺省（undefined = 链接是真的）。
+  readonly offlinePreview?: boolean
 
   // 按 context_id 拉取「你的文件」清单（feat-032 file space；重启后仍在）。
   fetchFiles: (contextId: string) => Promise<LiveFilesPayload>
@@ -273,6 +281,12 @@ export function createHttpTransport(base: string = apiBase()): LiveTransport {
   const authHeader = (contextId: string | undefined): Record<string, string> => {
     const tok = contextId ? tokens[contextId] : undefined
     return tok ? { [OWNER_TOKEN_HEADER]: tok } : {}
+  }
+  // 阶段 C：askId → company_context_id（saveAsk 成功时记下），share/fetch/revoke 据此带
+  // owner_token header。进程内即可——ask 卡与 run 同生命周期，刷新后重新走 saveAsk。
+  const askContexts: Record<string, string> = {}
+  const rememberAskContext = (askId: string | undefined, contextId: string | undefined): void => {
+    if (askId && contextId) askContexts[askId] = contextId
   }
 
   return {
@@ -342,11 +356,10 @@ export function createHttpTransport(base: string = apiBase()): LiveTransport {
       return (await res.json()) as LiveTeamPayload
     },
 
-    // ── Ask（feat-034 契约提案；阶段 C 的 FastAPI 端点落地前，这三个调用只会 4xx/网络错，
-    // 全部大声失败——与 feat-028 的 404 纪律同规格，绝不静默回落假数据）──────────────────
-    // feat-038 对齐（阶段 C 对接契约）：manager 侧 ask 端点全部要求 owner_token header。
-    // saveAsk 有 company_context_id 可携带；share/fetch 只有 askId——header 接线整体归阶段 C
-    //（届时端点与 token 校验一起落地），此处不预造无凭据可携的假接线。
+    // ── Ask（feat-034；阶段 C 端点已落地）────────────────────────────────────────────────
+    // feat-038 对齐（阶段 C 对接契约）：manager 侧 ask 端点全部要求 owner_token header
+    //（404-on-mismatch，无枚举 oracle）。share/fetch/revoke 只有 askId——saveAsk 成功时
+    // 记下 askId→context 映射，后续调用按它取 header。🔴 token 只进 header，绝不进 URL。
     async saveAsk(draft) {
       const res = await fetch(`${base}/ask`, {
         method: 'POST',
@@ -357,18 +370,34 @@ export function createHttpTransport(base: string = apiBase()): LiveTransport {
         body: JSON.stringify(draft),
       })
       if (!res.ok) throw new Error(`ask HTTP ${res.status}`)
-      return (await res.json()) as AskDraft
+      const saved = (await res.json()) as AskDraft
+      rememberAskContext(saved.id, saved.company_context_id ?? draft.company_context_id)
+      return saved
     },
 
     async shareAsk(askId) {
-      const res = await fetch(`${base}/ask/${encodeURIComponent(askId)}/share`, { method: 'POST' })
+      const res = await fetch(`${base}/ask/${encodeURIComponent(askId)}/share`, {
+        method: 'POST',
+        headers: authHeader(askContexts[askId]),
+      })
       if (!res.ok) throw new Error(`ask share HTTP ${res.status}`)
       return (await res.json()) as AskDraft
     },
 
     async fetchAsk(askId) {
-      const res = await fetch(`${base}/ask/${encodeURIComponent(askId)}`)
+      const res = await fetch(`${base}/ask/${encodeURIComponent(askId)}`, {
+        headers: authHeader(askContexts[askId]),
+      })
       if (!res.ok) throw new Error(`ask HTTP ${res.status}`)
+      return (await res.json()) as AskDraft
+    },
+
+    async revokeAsk(askId) {
+      const res = await fetch(`${base}/ask/${encodeURIComponent(askId)}/revoke`, {
+        method: 'POST',
+        headers: authHeader(askContexts[askId]),
+      })
+      if (!res.ok) throw new Error(`ask revoke HTTP ${res.status}`)
       return (await res.json()) as AskDraft
     },
 
