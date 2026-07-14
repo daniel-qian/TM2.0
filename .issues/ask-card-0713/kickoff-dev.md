@@ -9,7 +9,7 @@
 |---|---|---|---|---|
 | A. story scripted beat | 在最贴切的既有 case 加一个 Ask beat（新 ThreadStepKind `quick-ask`）：agent 提议快问 → Ask 卡（1~2 题，问事不问人）→ 回执归来 beat（原话+“本人自述”）。加性：既有 beats/rail 零改。 | `feat/034-story-ask` | 无（持久化线不碰 src/**） | **DONE+对抗验证 CONFIRMED_SAFE**（7b87cbd，已合 main 3e79e9e） |
 | B. lite Ask 卡（stub 驱动） | Ask = lite 第二种 artifact 卡：AskDraft 数据形状 + AskCard 组件（Room 内出生：编辑题目→确认→逐人链接→回收状态 chip→回执呈现）。走 LiveTransport stub（ADR-0020 seam），后端契约按下方提案对齐。 | `feat/034-lite-ask` | 无；**不碰 eval-harness/** | **DONE+对抗验证 CONFIRMED_SAFE**（169e651，已合 main d1934bf） |
-| C. 后端（数据模型+端点+员工 H5+红线门） | PRD "Implementation Direction" 全量：ask/ask_recipient 落 avery schema、`/r/{token}` 服务端渲染、问句红线门、回执闭环。 | 待定 | **deferred**：等持久化链合 main；届时对齐 feat/030 的 registry/DB 接缝 + Supabase avery schema | 未开 |
+| C. 后端（数据模型+端点+员工 H5+红线门） | PRD "Implementation Direction" 全量：ask/ask_recipient 落 avery schema、`/r/{token}` 服务端渲染、问句红线门、回执闭环。 | `feat/034-stage-c` | 持久化链已并入 main（integrate cb11a2c，2026-07-14）；骑 registry/authorize_context/scoring_policy 接缝 | **施工中（2026-07-14）** |
 | D. 部署（子域+哨兵） | `avery.ima-read.com` A 记录→宝塔 vhost/证书→容器（内存帽）→nginx 反代→**内存哨兵**（Q12） | — | 随 lite-v1 部署波 | 未开 |
 
 ## 后端契约提案（给持久化线/未来阶段 C 的对齐稿，additive-only）
