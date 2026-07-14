@@ -2,7 +2,8 @@
 
 > 写于 2026-07-14/15。分支 `feat/047-v02-engine-sync`（从 `feat/046-v02-aurora-skin`@84ea135 起，
 > = v02 五棒〔042..046〕aurora 皮精修收口后的全绿基线）。主 checkout 承接。
-> **未 merge main、未 push**。下一棒交给 main 编排做对抗验证；v02 波（feat-042..047）全部收口后
+> **未 merge main、未 push**。**对抗验证已跑过一轮**：token 路 CONFIRMED_SAFE（变异测试四发四中），
+> scope/redline 路报的 blocker 已修（见下 §打回复验）。v02 波（feat-042..047）全部收口后
 > main 出 review 包给 Danny。
 >
 > 本文件覆盖 feat-046 的同名文件——历史棒细节在各自 commit 与 progress.md 对应 Update 节。
@@ -13,6 +14,10 @@
 feat/047-v02-engine-sync（从 feat/046-v02-aurora-skin@84ea135 起）
   10bf563 docs(v02): 门先行 — F 组 syncVerdict 4 相位 + engine-par-check.mjs
   8a2ec6c feat(v02): 引擎同步 — owner_token/header 纪律 + 笔记/文件面移植
+  c2e60ab docs(v02): feat-047 done — evidence + progress + handoff
+  ── 对抗验证打回后 ──
+  c5a8e13 docs(v02): 门先行（严格）— F 组 askStatusCoerce + askAuthHeader 出生即红
+  f0c12d3 fix(v02): coerce 绝不折回 draft + ask 端点补 header（blocker）
 ```
 
 ## 任务范围（对照 kickoff-dev.md §合流契约附录 §2）
@@ -147,10 +152,56 @@ npm run build      — 503 模块（feat-046 基线 502 + 1，唯一新模块 No
 3. **wallRed 只补做了 1/4 方向的真实注入**（lite2→lite），另 3 方向沿用"`eslint.config.js` 未改"
    的论证——同 feat-044/045/046 口径，非本棒新开的先例。
 
+## 打回复验（2026-07-15）· 对抗验证 blocker 已修
+
+**token 路 CONFIRMED_SAFE**：验证者做**变异测试四发四中**——token 塞进 URL / 去掉 header /
+复用 v01 的 localStorage key / 404 时伪造假笔记，四种违规 F 组门全部真红。我欠的"出生即红"
+快照由验证者用 worktree 回到 `10bf563` 独立重建确认真红，**已闭环**。
+
+**Blocker（`f0c12d3` 已修）· coerceAskDraft 把 revoked/expired 折回 draft**：lite2 的 coerce
+只认四词、其余折 `'draft'` —— 真后端发 `revoked`/`expired` 时一张**已撤回的 ask 复活成可编辑
+草稿、Confirm 可点**，能对真后端重新 saveAsk+shareAsk（违反 ADR-0023 + 阶段 C F1 明文）。
+根因：lite2 拷贝分叉于阶段 C 之前。修法照 `src/lite/streamSource.ts` 现行实现对齐（拷贝不引用）：
+六词词表 / 未知折 closed / AskCard 两终态 / confirmAsk 白名单守卫 / saveAsk·shareAsk·fetchAsk
+补 `authHeader()` + `askContexts` 映射。
+
+**修法之外、但 blocker 不修不成立的两处**（同 commit，理由见 progress.md）：store 补 `adoptAsk`
+（fetchAsk/refreshAsk 才是真后端交付终态的**主路径**，只修 coerce 堵不住）；coerce 一并对齐
+阶段 C 的 F3 收紧（同一函数同一根因，半对齐正是本 blocker 的成因）。
+
+**i18n 零新 key**（偏离任务书"走 lite2.* 新 key"）：AskCard 消费的是 **shared 的 `t.ask.*`**，
+阶段 C 已把 revoked/expired 两族文案定稿过 M3、随 main merge 在库——新造 `lite2.ask*` 是对已
+批准文案的无谓复制。本 fix 的 i18n diff 为空。
+
+**门**：新增 `window.__lite2Ask` 缝（**lite2 侧 coerce 此前从未被任何门行使过**——v01 的
+askStatusGuards/askCoerceStrict 打的是 `__liteAsk` = v01 的 coerce，这正是 blocker 潜伏至今的
+原因）。`askStatusCoerce` 先红（`revoked→draft`、`editableInputs:2`、`confirmDisabled:false`）
+后绿（`revoked→revoked`、`editableInputs:0`、`confirmPresent:false`、`domIsTerminal:true`）；
+`askAuthHeader` 先红（`save:[null]`/`fetch:[null]`、share 未发出）后绿（三方法全带真 token、
+`shareCallCount:1`）——**用真后端**（stub 离线不发 fetch，header 断言在 stub 上是空断言）。
+uvicorn 同日志前后对照：红 `POST /ask → 404`；绿 `POST /ask → 200 → share 200 → fetch 200`。
+
+**门自身两个坑（已修进 snippet 并留注释，都是门的缺陷非产品缺陷）**：①探针 poll 卡片"存在"
+会读到上一轮 run 留下的陈旧 draft 卡（React 提交前）→ 改 poll 卡片真带上所配 status；
+②探针原用真 askLive 撑 `hasStarted`，但 askLive 的 onUpdate 会在 **onDone 末帧**（落在任何
+"run settled"轮询之后）把种下的终态冲回 stub draft → 改为直接种 `run.status`，并把
+`run`/`screen` **一并还原**（原先只还原 ask/transport，害得后续 `assertTriageActions` 假红）。
+
+**复验**：F 组 6/6 · v01 11/11 · askVerdict 9/9 · A 组 5/5 · B 组 4/4 · C 组 3/3 · D 组 5/5 ·
+E 组 3/3（`paperUnchanged` `diffs:{}`）。init.sh 绿（0 err/5 warn、503 模块不变）。
+
 ## 遗留 / 给下一棒的提示
 
 - **tab 顺序**未与 Danny 确认（本棒默认把 Avery's notes 放 Follow-ups 之后），review 包要把这条
   摆出来。
+- **【review 包】文件清单缺 `status` 字段与下载入口 = v01 就有的既有缺口**（对抗验证非阻塞项①，
+  验证者已用 curl 实证）：后端 `file_cards()` **确实返 `status`**、`GET /team/{id}/files/{idx}`
+  端点**确实存在**——但 `src/lite`（v01）的 UploadPanel 从来没渲染这两样，lite2 是照搬 v01 的
+  行为。**不是 feat-047 引入的**，也不在本棒 scope。要补需 v01/lite2 两侧一起做（或明确只做
+  v02），请 Danny/编排定夺是否另开一棒。
+- **`engine-par-check.mjs` 用正则抓方法体**（对抗验证非阻塞项②）：源码格式一变可能抽空——
+  验证者已实证它 **fail-closed**（抓不到 = 红 = 拦住合流，不会假绿），不是漏洞，记档即可。
+  若未来嫌它脆，可换 TS AST 解析。
 - `.upload-files*`（本棒新增内容，沿用旧区块惯例）与 `.lite-notes*`（本棒新增内容，走新规范）在
   同一个 `lite2.css` 文件里用了两种前缀风格——非阻塞，留给未来做 CSS 大扫除的棒一起处理。
 - `playbooksSlotIncident`「会议室」词族问题（feat-045 上报，feat-046 确认仍域外）仍未处理，编排
