@@ -15,13 +15,17 @@ missing key can never break an upload — it just means today's conservative ext
 """
 from __future__ import annotations
 
+import logging
 import os
 
 from avery.brain import MINIMAX_BASE_URL, MINIMAX_MODEL, OpenAICompatBrain
 from avery.ingest.extract import Extractor, HeuristicExtractor
 from avery.ingest.llm_extract import LLMExtractor
 
+from . import llm_budget
 from .brain_factory import DEEPSEEK_BASE_URL, DEEPSEEK_MODEL
+
+log = logging.getLogger("service.extractor_factory")
 
 _EXTRACTION_BRAINS = ("minimax", "deepseek")   # reality: M3 + DeepSeek only
 _KEY_ENV = {"minimax": "MINIMAX_API_KEY", "deepseek": "DEEPSEEK_API_KEY"}
@@ -75,11 +79,39 @@ def make_extractor() -> Extractor:
     brain_kind = _extraction_brain_kind()
     if brain_kind is None or not (os.environ.get(_KEY_ENV[brain_kind]) or "").strip():
         return HeuristicExtractor()           # no usable key -> offline behavior, AFK-green
+
+    # feat-039 spend gate: if the per-process LLM call budget is already spent, don't even build the
+    # brain — degrade HONESTLY to the heuristic and TAG it so extraction_mode reports 'degraded'
+    # (a tagged heuristic is not the same signal as a natively-heuristic deploy).
+    if llm_budget.exhausted():
+        log.warning("LLM call budget exhausted before extraction — using the heuristic (degraded)")
+        h = HeuristicExtractor()
+        h._avery_degraded = "llm_budget_exhausted"   # type: ignore[attr-defined]
+        return h
+
     try:
         brain = _make_extraction_brain(brain_kind)
     except Exception:
         return HeuristicExtractor()
-    return LLMExtractor(brain, fallback=HeuristicExtractor())
+    # Wrap the brain so every model call charges the budget and trips the gate mid-batch (the
+    # LLMExtractor catches the BudgetExceeded per-doc and falls back to the heuristic -> degraded).
+    return LLMExtractor(llm_budget.BudgetedBrain(brain), fallback=HeuristicExtractor())
+
+
+def extraction_mode(extractor: Extractor) -> str:
+    """feat-039 — the honest label the /ingest response carries (readiness §2-G2/W):
+
+        llm       — a real model extracted every document,
+        degraded  — a model was configured but ≥1 document fell back to the heuristic (429 / red-line
+                    breach / no entities / budget exhausted), OR the budget was spent up front,
+        heuristic — the offline heuristic (no key / AVERY_EXTRACTOR=heuristic) — a natively-keyless
+                    deploy, NOT a silent fallback.
+    """
+    if isinstance(extractor, LLMExtractor):
+        return "degraded" if extractor.degraded else "llm"
+    if getattr(extractor, "_avery_degraded", None):
+        return "degraded"
+    return "heuristic"
 
 
 def active_extractor() -> str:

@@ -21,3 +21,9 @@ python-multipart>=0.0.9  # feat-018 ingest upload: service/ingest_api.py UploadF
 # time, but the Docker image must ship them or a DB-configured deploy 500s on first /ingest.
 psycopg[binary]>=3.1   # Postgres driver (psycopg3, bundled libpq)
 pgvector>=0.3          # vector-type adapter (materials.embedding column; feat-031 fills it)
+
+# feat-039 — upload hard-gate + memory sentinel. Both imported LAZILY (offline suite / keyless service
+# never touch them at import time and degrade gracefully if absent), but the Docker image must ship
+# them or the deploy loses XML-bomb hardening (defusedxml) and RSS-based memory watch (psutil).
+defusedxml>=0.7        # avery/ingest/parse.py: defuse_stdlib() hardens openpyxl/xlsx XML vs entity bombs
+psutil>=5.9            # service/mem_sentinel.py: process RSS for the ECS memory sentinel (Danny Q12)

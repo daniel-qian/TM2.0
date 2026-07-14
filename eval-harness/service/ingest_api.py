@@ -37,10 +37,10 @@ from fastapi import File
 from fastapi import Response
 from starlette.concurrency import run_in_threadpool
 
-from avery.ingest import ingest_paths
+from avery.ingest import guards, ingest_paths
 from avery.ingest.registry import CompanyContext, ContextRegistry, SourceDocument, active_registry
 
-from . import embedding_factory, extractor_factory
+from . import embedding_factory, extractor_factory, upload_guard
 
 router = APIRouter()
 
@@ -149,10 +149,18 @@ async def ingest(files: list[UploadFile] = File(...)) -> dict:
     if not files:
         raise HTTPException(status_code=400, detail="no files uploaded")
 
+    # feat-039 upload hard-gate (readiness §2-D): refuse an over-COUNT batch before touching any
+    # bytes. Per-file SIZE and TYPE/zip-bomb checks run per file below (before the file is written to
+    # disk); the total-body cap already ran at the ASGI edge (upload_guard.IngestGuardMiddleware).
+    upload_guard.enforce_count(len(files))
+
     # feat-038: mint the owner_token BEFORE ingest so it is persisted with the context in the SAME
     # write (no second put()), and returned to the uploader below. Header-transported thereafter.
     owner_token = mint_owner_token()
 
+    per_file_cap = guards.max_file_bytes()
+    total_cap = guards.max_total_bytes()
+    running_total = 0
     tmp = Path(tempfile.mkdtemp(prefix="avery-upload-"))
     saved: list[Path] = []
     src_docs: list[SourceDocument] = []
@@ -162,7 +170,15 @@ async def ingest(files: list[UploadFile] = File(...)) -> dict:
         display_names = [Path(f.filename or "upload").name or "upload" for f in files]
         parse_names = _unique_parse_names(display_names)
         for f, display, parse_name in zip(files, display_names, parse_names):
-            raw = await f.read()
+            # Read in bounded chunks (RAM stays <= per-file cap), refuse an oversize file (413) and a
+            # DISGUISED type / zip bomb (415 / 413) BEFORE it is parsed or written to disk.
+            raw = await upload_guard.read_capped(f, display, per_file_cap)
+            running_total += len(raw)
+            if running_total > total_cap:
+                raise HTTPException(status_code=413, detail={
+                    "error": "upload too large",
+                    "detail": f"batch exceeds the {total_cap}-byte per-request limit"})
+            upload_guard.enforce_type_and_archive(display, raw)
             dest = tmp / parse_name
             dest.write_bytes(raw)
             saved.append(dest)
@@ -194,15 +210,19 @@ async def ingest(files: list[UploadFile] = File(...)) -> dict:
             registry = active_registry()
             embedder = embedding_factory.make_embedder()
             prefer_vector = embedder is not None and getattr(registry, "persistent", False)
-            return ingest_paths([str(p) for p in saved], registry=registry, name="company",
-                                extractor=extractor_factory.make_extractor(),
-                                embedder=embedder if prefer_vector else None,
-                                prefer_vector=prefer_vector,
-                                source_documents=src_docs,
-                                owner_token=owner_token)
+            # feat-039: build the extractor HERE so we can read its honest-degradation telemetry after
+            # ingest (llm / heuristic / degraded) and surface it on the response (readiness §2-G2/W).
+            extractor = extractor_factory.make_extractor()
+            rep = ingest_paths([str(p) for p in saved], registry=registry, name="company",
+                               extractor=extractor,
+                               embedder=embedder if prefer_vector else None,
+                               prefer_vector=prefer_vector,
+                               source_documents=src_docs,
+                               owner_token=owner_token)
+            return rep, extractor_factory.extraction_mode(extractor)
 
         try:
-            report = await run_in_threadpool(_extract_and_ingest)
+            report, extraction_mode = await run_in_threadpool(_extract_and_ingest)
         except ValueError as e:
             # feat-030 P3: a persistence guard (e.g. a NUL/control char that slipped past parse)
             # rejects the write with a clean ValueError — surface it as 422, never a raw 500.
@@ -229,6 +249,10 @@ async def ingest(files: list[UploadFile] = File(...)) -> dict:
         # in the /team/{id} refetch payload (that call already had to prove ownership to reach it).
         payload = _team_payload(report.context)
         payload["owner_token"] = owner_token
+        # feat-039: honest extraction label so the client is TOLD when it fell back (never a silent
+        # low-quality result presented as a real team). 'degraded' => a model was configured but at
+        # least one document dropped to the heuristic (429 / red-line / budget) — no fake person card.
+        payload["extraction_mode"] = extraction_mode
         return payload
     finally:
         # Ephemeral: never persist the raw upload.

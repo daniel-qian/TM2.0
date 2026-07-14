@@ -38,10 +38,11 @@ from sse_starlette.sse import EventSourceResponse
 from avery import skills
 from avery.env import load_dotenv
 
-from . import brain_factory, embedding_factory, extractor_factory, live_input
+from . import brain_factory, embedding_factory, extractor_factory, live_input, llm_budget, mem_sentinel
 from .engine import stream_advice
 from .ingest_api import router as ingest_router  # feat-018: /ingest + /team/{id} (compose over feat-016)
 from .ingest_api import authorize_context, extract_owner_token  # feat-038: reuse the read-path gate
+from .upload_guard import IngestGuardMiddleware  # feat-039: edge rate-limit + total-body size cap
 
 HERE = Path(__file__).resolve().parent.parent          # eval-harness/
 SKILLS_DIR = HERE / "skills"
@@ -61,6 +62,12 @@ app = FastAPI(
     redoc_url=None,
     openapi_url=None,
 )
+
+# feat-039: the upload hard-gate EDGE — per-IP rate limit + total-body size cap on POST /ingest
+# (and /advise rate limit). Added BEFORE CORS so CORS ends up OUTERMOST and decorates the guard's
+# 429/413 responses with the ACAO headers a browser needs to read them. Pure ASGI (wraps `receive`
+# to count streamed bytes). Limits are env-configured (default off/generous — the ECS runbook tunes).
+app.add_middleware(IngestGuardMiddleware)
 
 # Browser live mode (frontend :5173 -> this service :8137) needs CORS. Origins are env-configurable
 # for deploy (AVERY_CORS_ORIGINS, comma-separated); dev defaults to the Vite dev ports.
@@ -173,10 +180,17 @@ def _post_advise_note(company_context_id: str | None, situation: str, manifest: 
 @app.get("/health")
 def health() -> dict:
     kind = brain_factory.resolve_brain_kind()
+    # feat-039: sample the memory sentinel on the health hook and bubble a `degraded` flag when RSS
+    # crosses AVERY_MEM_WARN_MB (Danny Q12 — the "time to upsize the ECS box" signal). /health never
+    # lies about the extractor (active_extractor stays honest: 'heuristic' vs 'llm:<brain>').
+    mem = mem_sentinel.sample()
     return {"status": "ok", "service": "avery-agent", "brain": kind,
             "live": brain_factory.brain_is_live(),
             "embeddings": embedding_factory.active_embeddings(),  # "keyword" or "dashscope:<model>/<dim>"
-            "extractor": extractor_factory.active_extractor()}    # "heuristic" or "llm:<brain>"
+            "extractor": extractor_factory.active_extractor(),    # "heuristic" or "llm:<brain>"
+            "memory": mem,                                        # {rss_mb, warn_mb, high, available}
+            "llm_calls_remaining": llm_budget.remaining(),        # None = unlimited (gate disabled)
+            "degraded": bool(mem.get("high"))}                   # operator-facing: something needs attention
 
 
 @app.post("/advise")

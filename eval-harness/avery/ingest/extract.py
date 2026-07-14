@@ -186,15 +186,27 @@ _TENURE_RE = re.compile(
     re.I)
 
 # STOP words for names — header cells / labels that are not people.
+# feat-039 (readiness §2-G2): the heuristic used to accept "No." (a common roster INDEX column header)
+# as a person, so a degraded/keyless extraction rendered a fake exec card named "No." while /health
+# claimed llm. The LLM path already guarded it (llm_extract._NOT_A_PERSON); here we close the same hole
+# for the heuristic — add "No."/index/header labels (mirroring the LLM stop-list) so a table header can
+# never become a PersonEntity.
 _NOT_NAME = {
     "name", "role", "team", "email", "tenure", "title", "person", "people", "member", "members",
     "roster", "directory", "project", "owner", "status", "notes", "department", "manager",
+    # index / numbering column headers (the "No." bug) + common label cells:
+    "no.", "no", "s.no", "s.no.", "sr", "sr.", "sl", "sl.", "sn", "s/n", "id", "index", "seq", "#",
+    "background", "responsibilities", "current responsibilities", "profile", "total", "designation",
+    "dept", "dept.", "date", "phone", "n/a", "na", "none", "unknown", "tbd",
 }
+
+# A bare index/numbering token ("No.", "S.No", "序号", "编号", "#3") is never a person.
+_INDEX_TOKEN_RE = re.compile(r"^(?:no|s\.?\s*no|sl|sr|sn|seq|id|#\d*|序号|编号|序號|編號)\.?$", re.I)
 
 
 def _looks_like_name(token: str) -> bool:
     token = token.strip()
-    if not token or token.lower() in _NOT_NAME:
+    if not token or token.lower() in _NOT_NAME or _INDEX_TOKEN_RE.match(token):
         return False
     # 1-3 capitalized words, letters/space/dot/hyphen only.
     return bool(re.match(r"^[A-Z][A-Za-z.\-]+(?: [A-Z][A-Za-z.\-]+){0,2}$", token))

@@ -30,6 +30,30 @@ class ParseError(Exception):
     """A single file could not be parsed (unknown/again-unsupported format or missing lib)."""
 
 
+# feat-039 (readiness §2-D): harden the XML parsers openpyxl/csv use against entity-expansion /
+# quadratic-blowup ("billion laughs") bombs. `defusedxml.defuse_stdlib()` patches the stdlib XML
+# stack (xml.etree, xml.sax, ...) in place — openpyxl reads xlsx via xml.etree, so this covers it.
+# Best-effort + idempotent: if defusedxml is absent the parse still works (the zip-bomb guard in
+# guards.archive_reason is the primary decompression-bomb defence at the HTTP edge either way).
+_XML_DEFUSED = False
+
+
+def _defuse_xml() -> None:
+    global _XML_DEFUSED
+    if _XML_DEFUSED:
+        return
+    try:
+        import warnings
+        with warnings.catch_warnings():
+            # defuse_stdlib touches the deprecated cElementTree shim; the hardening still applies.
+            warnings.simplefilter("ignore", DeprecationWarning)
+            import defusedxml
+            defusedxml.defuse_stdlib()
+    except Exception:  # pragma: no cover - env without defusedxml degrades gracefully
+        pass
+    _XML_DEFUSED = True
+
+
 # doc_kind: coarse routing hint for the extractor. Not authoritative — the extractor still inspects
 # content — but lets a resume vs a project weekly vs a roster take different heuristic paths.
 DOC_KINDS = ("resume", "project", "company", "roster", "roadmap", "unknown")
@@ -107,6 +131,14 @@ def _parse_pdf(data: bytes) -> str:
     except Exception as e:  # pragma: no cover - env without pypdf
         raise ParseError(f"pypdf not available for PDF parse: {e}")
     reader = PdfReader(io.BytesIO(data))
+    # feat-039 (readiness §2-D): cap page count before extracting — a pathological PDF with a huge /
+    # cyclic page tree is a CPU/RAM DoS. `len(reader.pages)` reads the (cheap) page tree; refuse over
+    # the cap rather than iterate a hostile document. (A true wall-clock timeout is not portable to
+    # Windows dev; the page cap is the deterministic, cross-platform guard.)
+    from . import guards
+    n_pages = len(reader.pages)
+    if n_pages > guards.max_pdf_pages():
+        raise ParseError(f"PDF has {n_pages} pages (limit {guards.max_pdf_pages()}) — refused")
     return "\n\n".join((page.extract_text() or "") for page in reader.pages)
 
 
@@ -115,6 +147,7 @@ def _parse_docx(data: bytes) -> str:
         import docx  # python-docx
     except Exception as e:  # pragma: no cover - env without python-docx
         raise ParseError(f"python-docx not available for docx parse: {e}")
+    _defuse_xml()
     doc = docx.Document(io.BytesIO(data))
     parts = [p.text for p in doc.paragraphs]
     for tbl in doc.tables:
@@ -130,6 +163,7 @@ def _parse_xlsx(data: bytes) -> str:
         from openpyxl import load_workbook
     except Exception as e:  # pragma: no cover - env without openpyxl
         raise ParseError(f"openpyxl not available for xlsx parse: {e}")
+    _defuse_xml()
     wb = load_workbook(io.BytesIO(data), read_only=True, data_only=True)
     out: list[str] = []
     for ws in wb.worksheets:
