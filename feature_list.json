@@ -311,8 +311,8 @@
       "dependencies": [
         "feat-044"
       ],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "branch feat/045-v02-onboard-nudges（自 feat/044@23b6f28）。gate-first：nudgeVerdict D 组 4 相位（onboardPersist/onboardSkip/chipsAsk/bellIsReal）实现前真跑红{pass:false,4 相位全 false，向导/chips/铃铛零 DOM}（commit c37ca11）；实现后五页协议真跑绿{pass:true,phases:{onboardPersist:true,onboardSkip:true,chipsAsk:true,bellIsReal:true}}——onboardPersist 按 data-playbook-id 断具体所选 4 项精确集合；bellIsReal 断事件类型精确多重集（清态 0 通知+空态标记 → ingest 后恰 [gap,ingest]（stub 语料诚实含一处矛盾）→ run 后恰 [gap,ingest,run]），未读徽章+全部已读实证。零回归同会话复跑：v01 十相位全绿、askVerdict 六相位全绿（K5/K6 因 vite 被别线 worktree 触发 full-reload 而跨页补跑，驱动侧携带 JSON 惯例）、v2Verdict A 组 5 相位（wallRed 抽查 lite2→story 注入 exit1/撤回 exit0，eslint.config.js 零改动）、flowVerdict B 组 4 相位、gapVerdict C 组 3 相位全绿；story ?mode=story 零 .lite2-shell/零铃铛/零向导；git diff 044 -- src/lite src/story eval-harness 空。i18n：EN 62 新 key 定稿，ZH delta 幂等跑，M3 词族漂移 13 处手工对齐（房间→议事室、剧本→打法/操作手册、小提问→快问、团队视图→团队已就绪、待启用→即将），既有 key 逐字节零漂移，?lang=zh 运行时真渲染抽查过。init.sh 绿（lint 0 err/5 warn=4 基线+1 OnboardWizard 同款 noInlineConfig 无害注释；tsc 干净；build 501 模块，044 基线 497 +4 新文件）。"
     },
     {
       "id": "feat-046",
