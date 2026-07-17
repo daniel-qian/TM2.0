@@ -287,5 +287,12 @@ def test_pg_ask_survives_a_new_registry_instance(pg, tmp_path):
     r = got2.recipients[ridx]
     assert r.answers == [{"question_id": "q1", "value": 5}, {"question_id": "q2", "value": False}]
     assert r.comment == "I can hold the date if the pricing approval lands."
-    # single-lock survives the restart too
-    assert reg_b.record_answer(tok, [{"question_id": "q1", "value": 1}], "", "x") == "already"
+    # single-lock survives the restart too. `answered_at` must be a REAL timestamp even on the
+    # path we expect to be refused: the pg twin binds it into `answered_at = %s::timestamptz` in the
+    # same atomic `UPDATE ... WHERE answered_at IS NULL` that enforces the lock, so Postgres parses
+    # the value BEFORE the WHERE can filter the row out — a sentinel like "x" raises
+    # InvalidDatetimeFormat instead of returning "already". (The in-memory twin returns early on
+    # `if rec.answered_at`, never looking at the argument, which is why a sentinel silently passed
+    # there and this contract test only caught it the first time it ran against a real Postgres.)
+    assert reg_b.record_answer(tok, [{"question_id": "q1", "value": 1}], "",
+                               "2026-07-14T12:00:00+00:00") == "already"

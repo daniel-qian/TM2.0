@@ -22,16 +22,27 @@
 --     (1024 = AVERY_EMBED_DIM in eval-harness/.env — DashScope text-embedding dim.)
 --   * avery.contexts.owner_token              — feat-038 tenant isolation validates it; unused in 030.
 
--- feat-030 P4: pgvector lives in `extensions` on Supabase but `public` on the local Docker image.
--- A session-local search_path spanning both makes the unqualified `vector` type resolve on either,
--- even for a restricted role whose default search_path omits the extension schema.
+-- This SET is for THIS migration only: it lets the unqualified `vector` type below resolve while we
+-- create avery.materials. It does NOT reach the running service — nothing in avery/ or service/ sets
+-- a search_path; PgRegistry._connect() is a bare psycopg.connect(url), so at runtime the unqualified
+-- `vector` in `$7::vector` resolves against the DB ROLE's DEFAULT search_path, not this one.
 SET search_path = avery, public, extensions;
 
 CREATE SCHEMA IF NOT EXISTS avery;
 
--- On Supabase pgvector 0.8.0 is already installed (extensions schema) -> no-op.
--- On the local Docker pgvector image this installs the extension into the default schema.
-CREATE EXTENSION IF NOT EXISTS vector;
+-- 2026-07-17 PRODUCTION BUG (a real 500 on a real deploy): `CREATE EXTENSION IF NOT EXISTS vector`
+-- with no WITH SCHEMA installs into the FIRST schema of the search_path set above — i.e. `avery`.
+-- That was invisible on every DB we had (Supabase's shared project + the long-lived local container
+-- both already had pgvector installed, so IF NOT EXISTS was a no-op), and it detonated the first time
+-- the migration met a genuinely FRESH database: the extension landed in `avery`, the service's role
+-- default search_path (`"$user", public, extensions` on Supabase / `"$user", public` on the local
+-- image) does NOT include `avery`, and every /ingest died on
+--     psycopg.errors.UndefinedObject: type "vector" does not exist.
+-- Fix: pin the target schema explicitly instead of letting search_path order decide. `public` is the
+-- one schema BOTH default search_paths contain, so the runtime resolves `vector` unqualified on
+-- Supabase and on the local pgvector image alike. IF NOT EXISTS keeps this a no-op wherever pgvector
+-- is already installed (e.g. Supabase's `extensions`) — it never relocates an existing install.
+CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA public;
 
 -- One row per ingested company workspace (the `company_context_id` the HTTP surface hands out).
 CREATE TABLE IF NOT EXISTS avery.contexts (
