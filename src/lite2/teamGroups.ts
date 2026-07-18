@@ -33,15 +33,24 @@ function ownedProjectTitle(
   return null
 }
 
+// feat-068 · ownsTemplate 由调用方从字典传入（同 ungroupedLabel 的既有口径）。以前这里直接
+// 拼 `Owns ${owned}`，中文页的分组标题因此顶着英文动词。分组 key 仍用**原始项目标题**派生，
+// 与语言无关——换语言只换标题，不改分组身份（key 变了会让折叠状态错位）。
 function groupKeyFor(
   person: LitePerson,
   projects: LiteProject[],
+  ownsTemplate: string,
 ): { key: string; title: string } | null {
   const team = person.team?.trim()
   if (team) return { key: `team:${team.toLowerCase()}`, title: team }
 
   const owned = ownedProjectTitle(person, projects)
-  if (owned) return { key: `owns:${owned.toLowerCase()}`, title: `Owns ${owned}` }
+  if (owned) {
+    return {
+      key: `owns:${owned.toLowerCase()}`,
+      title: ownsTemplate.replace('{project}', owned),
+    }
+  }
 
   const role = person.role?.trim()
   if (role) return { key: `role:${role.toLowerCase()}`, title: role }
@@ -54,12 +63,13 @@ export function groupPeople(
   people: LitePerson[],
   projects: LiteProject[],
   ungroupedLabel: string,
+  ownsTemplate: string,
 ): PersonGroup[] {
   const byKey = new Map<string, PersonGroup>()
   const order: string[] = []
 
   for (const person of people) {
-    const g = groupKeyFor(person, projects)
+    const g = groupKeyFor(person, projects, ownsTemplate)
     const key = g?.key ?? UNGROUPED_KEY
     const title = g?.title ?? ungroupedLabel
     let bucket = byKey.get(key)

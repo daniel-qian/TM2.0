@@ -1,4 +1,5 @@
-import type { LiteHandoff, LiteTeam } from './teamData'
+import type { HandoffDisplay } from '../shared/handoffCopy'
+import type { LiteTeam } from './teamData'
 import type { FollowupItem, FollowupSource } from './flowStore'
 
 // feat-036 · mailto 起草深链（PRD F3）：Avery 起草、manager 来发（ADR-0015 authorship 原则——
@@ -70,7 +71,12 @@ export function clipboardTextForDraft(draft: Pick<LiteDraft, 'subject' | 'body'>
  *   ② 就算翻成中文也不该在这儿：出处是给 manager 看的来源标注，不是要发给同事的消息内容；
  *      收件人收到「（来自你的上传）」只会莫名其妙。弹层已有 draftBodyHint 常驻说明来源。
  */
-export function draftFromHandoff(handoff: LiteHandoff, team: LiteTeam | null): LiteDraft {
+// feat-068 · 入参改吃**已本地化**的分诊条目（HandoffDisplay），不再是派生层的 LiteHandoff。
+// 派生层的 action/evidenceTag 是写死的英文（"Take a look at X"），直接进草稿主题的话，
+// 中文 manager 点「起草消息」复制到微信发出去，就是一句英文标题挂着中文正文。
+// HandoffDisplay 结构上就是 HandoffLike + 本地化后的 toneLabel/action/evidenceTag，
+// personIds / evidence 这些派生字段原样带着，所以这里只是把 subject 换成了本地化那份。
+export function draftFromHandoff(handoff: HandoffDisplay, team: LiteTeam | null): LiteDraft {
   const names = handoff.personIds
     .map((id) => team?.people.find((p) => p.id === id)?.name)
     .filter((name): name is string => Boolean(name))

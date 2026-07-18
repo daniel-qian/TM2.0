@@ -32,6 +32,30 @@ import type { Dict } from "./index";
 //  变得可接受的唯一理由（用户默认以为在上传，上传不该要两分钟；读完每一页才该要）。
 //  后续若要再动这几条，走定向模式 `node scripts/i18n-zh.mjs upload lite2`，别全量重跑——
 //  会重译已锁定的 story 共享段，正是 kickoff 警告的 drift + token 风险。源 key 在 en.ts。
+// ⚠ ZH DRAFT, PENDING M3 (feat-068 · ZH-03): the whole NEW `transport.*` section (9 keys) was
+//  hand-drafted. Background: feat-068 introduced httpErrorMessage() **in English only**, in the
+//  same wave that made ZH the production default — so a 三亚 manager who tripped the rate limit
+//  read 「无法读取这些文件」 stacked on `ingest: too many requests — wait 34s and try again.`,
+//  where the English line was the one carrying the actual information. These 9 keys are the fix.
+//  Run them through the directed generator (`node scripts/i18n-zh.mjs transport`) before 07-25 —
+//  source keys live in en.ts. Do NOT full-regen: that re-translates the locked story-shared
+//  sections (drift + token risk the kickoff warns against).
+// ⚠ ZH DRAFT, PENDING M3 (feat-068 · ZH-02): the 11 NEW triage keys duplicated into BOTH lite.*
+//  and lite2.* (handoffToneLabel / handoffAction / handoffEvidenceFallback / handoffEvidenceTag /
+//  handoffStatus{AtRisk,Blocked} / personRead{Owns,ListSeparator,None} / personCardOpenAria /
+//  groupOwns) were hand-drafted. Background: 「今天值得你留意」——首页最重要的那块面板——的标签
+//  全是英文，因为 teamData.ts 的 liveHandoffs()/liveRead() 把英文句子直接拼进了派生数据
+//  （线上实测：`WORTH A CLOSER LOOK` / `Take a look at 客房系统改造` / `Owns 客房系统改造负责人,
+//  后端接口交付`）。这些串是**前端派生**的，后端改不动，只能在前端修。
+//  拟稿时刻意避开逐字直译：`Take a look at {project}` 没有译成「看一下 {project}」（英文动词在
+//  前的语序，中文读起来就是机翻），而是把项目名摆到句首再说要你做什么；眉签复用了字典里已锁的
+//  「多看一眼」，没有另造同义词。
+//  ⚠ 已知瑕疵留给 M3 判断：personReadOwns「负责：{items}」在 owns 条目本身就以「负责人」结尾时
+//  会读成「负责：客房系统改造负责人」（语义重复）。这是上游抽取的语料质量问题，EN 侧同样存在
+//  （`Owns 客房系统改造负责人`），不是本次引入的回归——若要在文案层规避，需要换一个不含「负责」
+//  的框架词，但「负责」是 lite.emptyHintPrivacy 已锁的用词。
+//  Run them through the directed generator (`node scripts/i18n-zh.mjs lite lite2`) before 07-25 —
+//  source keys live in en.ts. Do NOT full-regen.
 // ✍ HAND-WRITTEN, NOT M3 (feat-058): lite2.draft* 那 20 条（应用内草稿框）由本棒直接定稿——
 //  AGENTS.md 已授权中文文案 act-first，不标"待审"。源 key 在 en.ts；后续若要重译走定向模式
 //  `node scripts/i18n-zh.mjs lite2`，别全量重跑（会重译已锁定的 story 共享段）。
@@ -51,7 +75,7 @@ export const zh: Dict = {
     "choose": "选择文件",
     "accepted": "支持 PDF、Word、Excel、CSV、Markdown 或文本",
     "ingestingLabel": "正在读取文件…",
-    "ingestingHint": "正在逐页通读你的文件，通常需要 1–2 分钟。请保持页面打开。",
+    "ingestingHint": "正在逐页通读你的文件，通常需要两三分钟。请保持页面打开。",
     "ingestingElapsed": "已用时 {seconds} 秒",
     "readyLabel": "团队已就绪",
     "errorLabel": "无法读取这些文件",
@@ -74,6 +98,17 @@ export const zh: Dict = {
     "liveError": "暂时连不上，再试一次？",
     "askPlaceholder": "向你的团队提问…",
     "ask": "提问"
+  },
+  "transport": {
+    "misconfigured": "这个版本没配置好 —— 发布时没带上后端地址。重试没有用，需要重新构建后再发布一次。",
+    "offline": "连不上服务器。检查一下网络，再试一次。",
+    "rateLimited": "请求太频繁了，等 {seconds} 秒后再试。",
+    "rateLimitedWait": "刚才请求有点多，稍等一会儿再试。",
+    "tooLarge": "一次最多上传 10 个文件，单个不超过 10MB。",
+    "unsupportedType": "这个文件类型不支持，或者里面的内容读不出来。",
+    "staleToken": "这台浏览器的访问凭据没了 —— 公司数据还在，只是这台浏览器打不开它了。",
+    "serverError": "服务器出了点问题（HTTP {status}）。稍后再试一次。",
+    "generic": "出了点问题（HTTP {status}）。再试一次。"
   },
   "lite": {
     "tabTeam": "你的团队",
@@ -155,6 +190,17 @@ export const zh: Dict = {
     "handoffsTitle": "今天值得你留意",
     "handoffsEmpty": "暂时没有需要你出面的事——文件读起来一切平稳。",
     "handoffOpen": "打开项目",
+    "handoffToneLabel": "多看一眼",
+    "handoffAction": "{project}：今天先过一下",
+    "handoffEvidenceFallback": "文件里，{project}的状态标记为「{status}」。",
+    "handoffEvidenceTag": "来自你上传的文件",
+    "handoffStatusAtRisk": "有风险",
+    "handoffStatusBlocked": "受阻",
+    "personReadOwns": "负责：{items}",
+    "personReadListSeparator": "、",
+    "personReadNone": "团队成员",
+    "personCardOpenAria": "打开{name}——{read}",
+    "groupOwns": "负责：{project}",
     "emptyEyebrow": "开始上手",
     "emptyHintRoster": "团队花名册或几份简历都可以——成员会以卡片形式出现。",
     "emptyHintProject": "项目计划或周报都可以——项目会排在他们旁边。",
@@ -242,7 +288,7 @@ export const zh: Dict = {
     "gapDismissedBadge": "已搁置",
     "gapRestoreLabel": "放回来",
     "gapEmptyTitle": "现在没什么要多看一眼的",
-    "gapEmptyBody": "等项目自报的进度和它遇到的卡点说法不一致时,会出现在这里。",
+    "gapEmptyBody": "等项目自报的进度和它遇到的卡点说法不一致时，会出现在这里。",
     "notesEyebrow": "实录笔记",
     "notesTitle": "Avery 记下的、关于你公司的观察",
     "notesLede": "每当你在议事室问一个真实的问题，Avery 都会用它自己的话把观察到的记下来，供你翻阅。你们合作得越久，这本笔记就越厚。",
@@ -309,6 +355,17 @@ export const zh: Dict = {
     "handoffsTitle": "今天值得你留意",
     "handoffsEmpty": "暂时没有需要你出面的事——文件读起来一切平稳。",
     "handoffOpen": "打开项目",
+    "handoffToneLabel": "多看一眼",
+    "handoffAction": "{project}：今天先过一下",
+    "handoffEvidenceFallback": "文件里，{project}的状态标记为「{status}」。",
+    "handoffEvidenceTag": "来自你上传的文件",
+    "handoffStatusAtRisk": "有风险",
+    "handoffStatusBlocked": "受阻",
+    "personReadOwns": "负责：{items}",
+    "personReadListSeparator": "、",
+    "personReadNone": "团队成员",
+    "personCardOpenAria": "打开{name}——{read}",
+    "groupOwns": "负责：{project}",
     "triageRemaining": "{pending} / {total} 还值得看一眼",
     "triageDoneAria": "已完成 — {action}",
     "triageDiscardLabel": "今天先放放",
@@ -395,7 +452,7 @@ export const zh: Dict = {
     "onboardUploadBody": "把你第一天会交给新经理的东西交给 Avery —— 一份人员名单、一份项目计划、一份周记。你的团队会从这里长出来。可以跳过，稍后从「你的团队」里上传。",
     "onboardUploadChoose": "选择文件",
     "onboardUploadReading": "正在读取文件…",
-    "onboardUploadHint": "正在逐页通读，通常需要 1–2 分钟，期间可以先进行下一步。",
+    "onboardUploadHint": "正在逐页通读，通常需要两三分钟，期间可以先进行下一步。",
     "onboardUploadElapsed": "已用时 {seconds} 秒",
     "onboardUploadReady": "团队已就绪",
     "onboardUploadError": "没能读取这些文件 —— 再试一次，或者先跳过、稍后再上传。",
@@ -536,8 +593,9 @@ export const zh: Dict = {
   "ask": {
     "eyebrow": "快问",
     "draftTitle": "值得直接问问他们",
-    "draftLede": "缺的那一块不在文件里,而在他们自己怎么看这件事。看看这些问题,再把各自的链接交给本人。",
-    "redlineNote": "问题只问事情,不评人。每条问题在保存时都会过一道红线检查——这道检查跑在服务器上,目前预览里还没跑过。",
+    "draftLede": "缺的那一块不在文件里，而在他们自己怎么看这件事。看看这些问题，再把各自的链接交给本人。",
+    "redlineNote": "问题只问事情，不评人。每条问题保存时都会过一道红线检查——它跑在服务器上，每次保存都跑。",
+    "redlineNoteOffline": "问题只问事情，不评人。红线检查在保存时由服务器执行；当前是离线预览，不会真的保存，所以这一趟没有走到它。",
     "kindScale": "1–5",
     "kindYesNo": "是 / 否",
     "questionAria": "问题正文",
@@ -545,13 +603,13 @@ export const zh: Dict = {
     "addScale": "加一道 1–5 分题",
     "addYesNo": "加一道是 / 否题",
     "maxQuestionsHint": "最多三道题——十秒内答完。",
-    "commentPromptLabel": "他们可以再补一句自己的话:",
+    "commentPromptLabel": "他们可以再补一句自己的话：",
     "recipientsLabel": "问谁",
     "recipientsHint": "从你团队名单里选人——每人一条独立链接。",
-    "confirm": "确认,生成链接",
+    "confirm": "确认，生成链接",
     "confirmBusy": "正在生成链接…",
     "sharedTitle": "链接备好了——你来发",
-    "sharedLede": "你亲手把链接发给对应的人,在你们平时聊的地方都行——你没发,谁也收不到。",
+    "sharedLede": "你亲手把链接发给对应的人，在你们平时聊的地方都行——你没发，谁也收不到。",
     "copy": "复制链接",
     "copied": "已复制",
     "repliesChip": "{answered}/{total} 已回复",

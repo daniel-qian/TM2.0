@@ -130,8 +130,17 @@ export function AskCard() {
       {isDraft ? (
         <>
           <p className="ask-lede">{t.ask.draftLede}</p>
-          {/* 诚实提示：红线校验发生在保存时、在服务端（阶段 C）——预览里还没真跑过。 */}
-          <p className="ask-redline-note">{t.ask.redlineNote}</p>
+          {/* feat-068 · 红线提示按**当前真在用的通道**二选一。
+              旧文案无条件写死「目前预览里还没跑过」——那是阶段 C 落地前写的，现在是假话：
+              httpTransport.saveAsk 打 POST /ask，服务端 redline.validate 每次保存都真跑。
+              「不给任何人打分」是这个产品对中文客户最重的一句承诺，亲口说它没在跑是纯自伤
+              ——客户要么判定这东西没做完，要么判定承诺是空的，而两个结论都不成立。
+              🔴 但它确实是条件性的：stub 通道（?transport=stub，离线确定性演示）的 saveAsk
+              只做结构校验、不碰红线文本。所以按 offlinePreview 分流，而不是把悲观那句
+              无条件套给所有人——尤其不能套给走真通道的线上客户。 */}
+          <p className="ask-redline-note">
+            {offlinePreview ? t.ask.redlineNoteOffline : t.ask.redlineNote}
+          </p>
 
           <div className="ask-questions">
             {ask.questions.map((q) => (

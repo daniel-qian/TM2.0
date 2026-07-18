@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState, type ChangeEvent, type DragEvent } from 'react'
+import { useRef, useState, type ChangeEvent, type DragEvent } from 'react'
 import { useLite } from './store'
 import { useDict } from '../shared/i18n/useDict'
+import { clearIngestStart, useIngestElapsedSeconds } from '../shared/ingestClock'
 
 // feat-017 · 上传 UI——ADR-0020 决策 2 / 施工图 §2 表 #1；feat-024 随 lite 壳入墙。
 //
@@ -30,31 +31,17 @@ function fill(template: string, vars: Record<string, string | number>): string {
   return template.replace(/\{(\w+)\}/g, (_, k: string) => String(vars[k] ?? ''))
 }
 
-// feat-068（与 lite 壳同源，按 v01→v02 移植惯例各留一份）· 活的秒表。
-//
-// ingest 真实耗时 100–120s（后端法兰克福 / LLM 国内，跨境往返）——v02 是要真拿去演示的那张皮，
-// 这两分钟里屏幕必须有可见证据说明"没冻"。
+// feat-068 · 活的秒表。ingest 真实耗时 100–120s（后端法兰克福 / LLM 国内，跨境往返）
+// ——v02 是要真拿去演示的那张皮，这两分钟里屏幕必须有可见证据说明"没冻"。
 //
 // 刻意不做百分比进度条：服务端 /ingest 不吐任何进度信号，假进度条只会卡在 90% 一动不动，
 // 比一行诚实的秒数更伤信任。秒数是唯一我们真的知道的量。
 //
-// 生命周期：interval 只在 active（ingesting）期间存在。active 翻 false 时 effect cleanup
-// 立即清掉；组件卸载时同一个 cleanup 也会跑——两条路都不留悬挂定时器。
-function useElapsedSeconds(active: boolean): number {
-  const [seconds, setSeconds] = useState(0)
-  useEffect(() => {
-    if (!active) return
-    // 每次重新进入 ingesting 都从 0 起算（第二次上传不能继承上一次的秒数）。
-    setSeconds(0)
-    const startedAt = Date.now()
-    // 用 Date.now() 差值而非 count++：后台标签页会节流 setInterval，累加法会越走越慢说谎。
-    const id = window.setInterval(() => {
-      setSeconds(Math.floor((Date.now() - startedAt) / 1000))
-    }, 1000)
-    return () => window.clearInterval(id)
-  }, [active])
-  return seconds
-}
+// feat-068 修正：秒表原先在两个壳里各自持一份组件局部 state，surface 一 unmount 就归零重数。
+// v02 受害最重——onboardUploadHint 劝用户「这期间可以先进行下一步」，向导换步就是 unmount，
+// 用户照做必踩。锚点已移进 shared/ingestClock（模块级，跟着这一发 ingest 活），本壳的
+// UploadPanel 与 OnboardWizard.StepUpload 从此读同一个起点：两边显示的秒数一致，且都是真值。
+// 这一处**刻意不再按 v01→v02 惯例各留一份**——两个壳要的正是同一个时间锚。
 
 export function UploadPanel() {
   const { t } = useDict()
@@ -68,11 +55,15 @@ export function UploadPanel() {
 
   const sourceFiles = team?.sourceFiles ?? []
   const busy = status === 'ingesting'
-  const elapsed = useElapsedSeconds(busy)
+  const elapsed = useIngestElapsedSeconds(busy)
 
   const onPick = (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? [])
-    if (files.length > 0) void uploadFiles(files)
+    // feat-068 · 发车前先松锚，保证这一发从 0 起算（理由见 lite/UploadPanel 同处注释）。
+    if (files.length > 0) {
+      clearIngestStart()
+      void uploadFiles(files)
+    }
     // 允许重复选同名文件再次触发。
     event.target.value = ''
   }
@@ -82,7 +73,10 @@ export function UploadPanel() {
     setDragOver(false)
     if (busy) return
     const files = Array.from(event.dataTransfer.files ?? [])
-    if (files.length > 0) void uploadFiles(files)
+    if (files.length > 0) {
+      clearIngestStart()
+      void uploadFiles(files)
+    }
   }
 
   // feat-068 · 唯一的"开文件选择器"入口，ingesting 期间一律不开。

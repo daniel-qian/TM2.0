@@ -19,7 +19,11 @@ export interface LitePerson {
   name: string
   role: string
   team?: string
-  read: string // 定性读数（collaboration / owns 情境 / 中性句）
+  // feat-068 · read 只装**语料原文**（collaboration 首条 / tenure 原句）；空串 = 语料里没有可引
+  // 的原文。任何"拼出来的句子"都不在派生层生成——拼句是文案层的事（shared/handoffCopy.ts 的
+  // localizePersonRead）。以前这里直接拼 `Owns ${...}`，把英文烧死进数据，中文构建再也救不回来。
+  read: string
+  ownsRead: string[] // feat-068 · owns 情境的原文条目（已截断到 2 条），交给文案层拼成「负责 X、Y」
   tone: LiteTone
   tenure?: string
   owns?: string[]
@@ -40,15 +44,18 @@ export interface LiteProject {
 
 // 弱版 handoff（R1）：只从项目 blocker（doc-derived 信号）生成"看一眼"类行动项；
 // 缺信号 → 不造。指向项目/情境，绝不点名评判人。
+//
+// feat-068 · 本结构体是 **locale-free** 的：只装结构化字段 + 语料原文，一个成句的文案都不装。
+// toneLabel / action / evidenceTag 三个展示串已下沉到 shared/handoffCopy.ts 的 localizeHandoff()，
+// 由渲染层按当前字典拼出来（ZH-02：它们以前是写死的英文，中文页因此顶着英文标签）。
 export interface LiteHandoff {
   id: string
   tone: LiteTone
-  toneLabel: string
-  action: string
-  evidence: string
+  projectTitle: string // 拼句用（文案层决定语序，派生层不拼）
+  projectStatus: string // 无 blocker 原文时，文案层用它拼兜底证据句
+  evidence: string // blocker 原文，逐字保留；空串 = 无原文可引，由文案层兜底
   personIds: string[]
   projectIds: string[]
-  evidenceTag: string
 }
 
 export interface LiteBriefing {
@@ -92,39 +99,44 @@ export function stripPersonNumbers(card: LivePersonCard): LivePersonCard {
 }
 
 // ingestion 人卡 → 定性读数：优先 collaboration（她在跟谁协作/扛什么），否则 owns 情境，否则中性句。
-function liveRead(card: LivePersonCard): { read: string; tone: LiteTone } {
+//
+// feat-068 · 这里只**挑**语料原文、只**分类**信号，不再拼任何成句文案（原来的
+// `Owns ${...}` / `On the team` 是写死的英文，中文人卡因此顶着英文读数）。成句在
+// shared/handoffCopy.ts 的 localizePersonRead() 里按字典拼。
+function liveRead(card: LivePersonCard): { read: string; ownsRead: string[]; tone: LiteTone } {
   const collab = (card.collaboration ?? []).map((c) => c.trim()).filter(Boolean)
   if (collab.length > 0) {
-    return { read: collab[0], tone: 'sage' }
+    return { read: collab[0], ownsRead: [], tone: 'sage' }
   }
-  if (card.owns && card.owns.length > 0) {
-    return { read: `Owns ${card.owns.slice(0, 2).join(', ')}`, tone: 'sage' }
+  const owns = (card.owns ?? []).map((o) => o.trim()).filter(Boolean)
+  if (owns.length > 0) {
+    // 只截断、不拼串——「负责 X、Y」的顿号与语序由文案层按语言决定。
+    return { read: '', ownsRead: owns.slice(0, 2), tone: 'sage' }
   }
   if (card.tenure && card.tenure.trim()) {
-    return { read: card.tenure.trim(), tone: 'sage' }
+    return { read: card.tenure.trim(), ownsRead: [], tone: 'sage' }
   }
-  return { read: 'On the team', tone: 'sage' } // （无信号时的中性读数）
+  // 无任何信号：read/ownsRead 都留空，文案层出中性兜底句（personReadNone）。
+  return { read: '', ownsRead: [], tone: 'sage' }
 }
 
 function liveHandoffs(payload: LiveTeamPayload): LiteHandoff[] {
   const out: LiteHandoff[] = []
   for (const pr of payload.projects) {
-    const blockers = pr.blockers ?? []
-    const atRisk = pr.status === 'at-risk' || pr.status === 'blocked'
+    // feat-068 · 空白 blocker 行不算信号：以前 `['']` 这种脏数据会当成"有原文"，渲染出一条
+    // 证据为空的分诊卡；现在先 trim/filter，空行走文案层的兜底句。
+    const blockers = (pr.blockers ?? []).map((b) => b.trim()).filter(Boolean)
+    const status = pr.status ?? ''
+    const atRisk = status === 'at-risk' || status === 'blocked'
     if (!atRisk && blockers.length === 0) continue
-    const evidence =
-      blockers.length > 0
-        ? blockers[0]
-        : `${pr.title} is flagged ${pr.status ?? 'worth a look'} in your uploads.`
     out.push({
       id: `lh_${pr.id}`,
-      tone: pr.status === 'blocked' ? 'terracotta' : 'honey',
-      toneLabel: 'Worth a closer look', // （surface label per ADR-0015）
-      action: `Take a look at ${pr.title}`,
-      evidence,
+      tone: status === 'blocked' ? 'terracotta' : 'honey',
+      projectTitle: pr.title,
+      projectStatus: status,
+      evidence: blockers.length > 0 ? blockers[0] : '',
       personIds: pr.ownerId ? [pr.ownerId] : [],
       projectIds: [pr.id],
-      evidenceTag: 'From your uploads',
     })
   }
   return out
@@ -135,13 +147,14 @@ export function liteTeamFromPayload(payload: LiveTeamPayload): LiteTeam {
   const cleanPeople = payload.people.map(stripPersonNumbers)
 
   const people: LitePerson[] = cleanPeople.map((card) => {
-    const { read, tone } = liveRead(card)
+    const { read, ownsRead, tone } = liveRead(card)
     return {
       id: card.id,
       name: card.name,
       role: card.role ?? '',
       team: card.team,
       read,
+      ownsRead,
       tone,
       tenure: card.tenure,
       owns: card.owns,
