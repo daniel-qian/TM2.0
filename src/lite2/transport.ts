@@ -67,6 +67,10 @@ export interface LiveTeamPayload {
   projects: LiveProjectCard[]
   briefing: LiveBriefingPayload
   signals?: LiveSignalCard[]
+  // feat-056 决策定级。后端规则表算出，按严重度排好序 —— feat-057「今天要决策的」
+  // 直接按数组顺序展示，不要在前端重排（排序口径属于后端，前端重排会和"凭什么这么排"
+  // 的说明书对不上）。optional：老后端（pre-056）不发这个键。
+  decisions?: LiveDecisionCard[]
   // feat-047（移植自 src/lite，持久化链 feat-038 租户隔离）：/ingest 首帧回传本公司的
   // 不可猜 owner_token（经理凭据）。客户端存下（按 context_id）、后续所有读端点
   // （team/files/notes/advise）以 HTTP header 带上。
@@ -99,6 +103,45 @@ export interface LiveProjectCard {
   dueDate?: string
   summary?: string
   blockers?: string[]
+}
+
+// feat-056 决策定级契约。口径真源在后端 `eval-harness/avery/decision_rules.py`，
+// 人类可读说明在 `eval-harness/decision_grading_rules.md`（客户问"凭什么高风险"就给他看那份）。
+// 🔴 等级只由后端规则决定；前端不得自行判级、不得改写 grade。
+export type LiveDecisionGrade = 'high_risk' | 'needs_confirmation' | 'can_proceed'
+
+export interface LiveDecisionRuleHit {
+  rule_id: string // 如 'R-BLOCKER-STACK' —— 可引用编号，展开时逐条列给经理
+  grade: LiveDecisionGrade
+  grade_label: string // 高风险 / 需确认 / 可推进
+  severity: number // 3 / 2 / 1
+  title: string // 这条规则说的是什么（中文一行）
+  basis: string // 依据哪些字段（可审计）
+  evidence: string[] // 原文证据，verbatim —— 原样展示，不要转述
+}
+
+export interface LiveDecisionCard {
+  subject_type: 'project' // 当前只有项目型；留着以便后续扩人/任务
+  subject_id: string
+  subject_title: string
+  owner_name: string
+  grade: LiveDecisionGrade // 最终等级（= rule_grade，除非 Avery 合法上调）
+  grade_label: string
+  severity: number // 排序键：3 高风险 / 2 需确认 / 1 可推进
+  rule_grade: LiveDecisionGrade // 规则原判，永远保留，可对账
+  rule_grade_label: string
+  rule_severity: number
+  matched_rules: LiveDecisionRuleHit[] // 永不为空 —— 每条决策都能展开看到命中了哪条规则
+  // 🔴 文档没提到的字段（'status' | 'progress' | 'dueDate'）。界面必须显示「文档未提及」，
+  // 绝不能渲染成 0% 或空白 —— "文档没说"不等于"没风险"。
+  unknown_fields: string[]
+  reason: string // 那句人话理由
+  reason_source: 'rule' | 'avery' // rule = 机械拼装可溯源；avery = 模型写的
+  escalated: boolean // Avery 是否上调了等级
+  escalation_reason: string // 上调必须写明为什么；未上调时为空串
+  downgrade_blocked: boolean // Avery 试图下调、被硬拦（下调永不生效）
+  rejected_grade: string // 被拦下的那档（仅 downgrade_blocked 时非空）
+  review_rejected: string // '' | 'missing_reason' | 'downgrade' | 'unknown_grade'
 }
 
 export interface LiveBriefingPayload {
