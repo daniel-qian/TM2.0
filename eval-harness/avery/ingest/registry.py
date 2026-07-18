@@ -186,6 +186,21 @@ class CompanyContext:
                  "subjectId": s.subjectRef, "summary": s.summary, "tag": s.tag}
                 for s in self.extraction.signals]
 
+    def decision_cards(self, as_of=None) -> list[dict]:
+        """feat-056 决策定级：给每个项目算一个 高风险/需确认/可推进，按严重度排好序。
+
+        前端 feat-057 的「今天要决策的」直接吃这个列表（顺序即展示顺序）。等级由
+        `avery/decision_rules.py` 的规则表算出——确定、可复现、可当场把口径表给客户看
+        （`eval-harness/decision_grading_rules.md`）。Avery 的一句人话理由是在这之上的
+        叠加层（`decision_grading.apply_review`），只许上调、不许下调；本方法产出的是
+        纯规则版，reason_source == "rule"。
+
+        `as_of` 不传则取今天——时间类规则（到期日）以它为准，显式传入即可复现。
+        """
+        from ..decision_grading import grade_projects
+        return [d.to_dict() for d in grade_projects(self.project_cards(), self.signal_cards(),
+                                                    as_of=as_of)]
+
     def briefing(self) -> dict:
         """A calm, HONEST 'organization weather' briefing. Counts are real (people/projects); it
         emits NO invented aggregate health score (R2: real-or-nothing)."""
@@ -253,6 +268,8 @@ class ContextRegistry:
         self._notes: dict[str, list[CompanyNote]] = {}   # feat-033: agent-written notes, per context
         self._asks: dict[str, object] = {}               # feat-034: ask_id -> Ask (deep-copied)
         self._ask_tokens: dict[str, tuple[str, int]] = {}  # share_token -> (ask_id, recipient idx)
+        self._account_contexts: dict[str, list[str]] = {}  # feat-053: user_id -> [context_id]
+        self._context_owner: dict[str, str] = {}           # feat-053: context_id -> user_id (1:1)
 
     def put(self, ctx: CompanyContext) -> str:
         self._by_id[ctx.context_id] = ctx
@@ -335,6 +352,45 @@ class ContextRegistry:
             ask.status = "closed" if done >= len(ask.recipients) else "collecting"
         return "ok"
 
+    # --- feat-053: the account seam (Supabase user id <-> context ownership) -------------------
+    # ABOVE feat-038, never instead of it: owner_token stays the lower-layer credential and this map
+    # is a SECOND, durable way to prove ownership of a context you already own. A context with no
+    # entry here is anonymous and behaves exactly as it did pre-053 (the guest path).
+
+    def link_account_context(self, user_id: str, context_id: str) -> bool:
+        """Bind a context to an account. True when it is now bound to THIS user (including a
+        re-link, which is idempotent), False when another account already owns it — one context has
+        at most one owner account, which is the storage-layer half of "两个账号数据不串". The
+        Postgres twin gets the same answer from a UNIQUE index (migration 0008)."""
+        if not user_id or not context_id:
+            return False
+        current = self._context_owner.get(context_id)
+        if current is not None and current != user_id:
+            return False
+        self._context_owner[context_id] = user_id
+        ctxs = self._account_contexts.setdefault(user_id, [])
+        if context_id not in ctxs:
+            ctxs.append(context_id)
+        return True
+
+    def contexts_for_account(self, user_id: str) -> list[str]:
+        """Every context this user owns, newest link first (the order the account picker shows)."""
+        if not user_id:
+            return []
+        return list(reversed(self._account_contexts.get(user_id, [])))
+
+    def account_for_context(self, context_id: str) -> str | None:
+        """The account that owns this context, or None when it is still anonymous."""
+        return self._context_owner.get(context_id)
+
+    def account_owns(self, user_id: str | None, context_id: str) -> bool:
+        """The authorization question: may THIS signed-in user read THIS context? Requires an exact
+        match — an anonymous (unowned) context is never readable via the account path, only via its
+        owner_token, so signing in can never hand you someone else's un-claimed workspace."""
+        if not user_id or not context_id:
+            return False
+        return self._context_owner.get(context_id) == user_id
+
     def get(self, context_id: str) -> CompanyContext | None:
         return self._by_id.get(context_id)
 
@@ -360,6 +416,8 @@ class ContextRegistry:
         self._notes.clear()
         self._asks.clear()
         self._ask_tokens.clear()
+        self._account_contexts.clear()
+        self._context_owner.clear()
 
 
 # Process-wide default registry (the offline in-memory instance).

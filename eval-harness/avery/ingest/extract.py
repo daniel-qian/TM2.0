@@ -31,6 +31,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Protocol
 
+from .granularity import Ruling, apply_gate, segment_projects
 from .parse import ParsedDoc
 
 # The preset buckets _norm_team maps onto WHERE IT HONESTLY CAN; a department this startup taxonomy
@@ -160,8 +161,14 @@ class ExtractionResult:
     projects: list[ProjectEntity] = field(default_factory=list)
     signals: list[SignalEntity] = field(default_factory=list)
     materials: list[MaterialChunk] = field(default_factory=list)
+    # feat-054 — the granularity gate's audit trail: one Ruling per project candidate, kept AND
+    # demoted, each citing the rule and document line behind the call. Populated by extract_docs;
+    # an extractor's own per-doc result leaves it empty. NOT merged (see merge below).
+    granularity: list[Ruling] = field(default_factory=list)
 
     def merge(self, other: "ExtractionResult") -> "ExtractionResult":
+        # `granularity` is intentionally NOT concatenated: merge() folds together partial results
+        # from before the gate has run, and the gate assigns the finished list once, post-merge.
         self.people += other.people
         self.projects += other.projects
         self.signals += other.signals
@@ -689,16 +696,73 @@ def _norm_team(raw: str) -> str:
     return text
 
 
-def _norm_status(text: str) -> str:
+# Chinese status vocabulary. THE ENGLISH-ONLY VERSION OF THIS FUNCTION COLLAPSED THE WHOLE
+# GRADING LADDER ON CHINESE DOCUMENTS (feat-056 review, finding 2). Two of the three companies
+# in this wave hand us Chinese weekly reports, where 「状态：进行中」 is the normal way to write
+# it. Every one of those normalised to "" and two things followed downstream:
+#   1. decision_grading's can_proceed rules (_m_done / _m_clear) BOTH require a normalised English
+#      status, so no project in a Chinese-only document could ever reach 可推进 — the three-tier
+#      ladder silently collapsed to two, which is precisely the partner-parity target we were
+#      aligning to.
+#   2. the project fell through to the no-evidence rule, whose reason text told the manager the
+#      document never stated a status — while his own report says 进行中 in plain sight.
+# Chinese has no word boundaries, so these are substring matches; the negative lookbehinds are
+# what keep 未完成 / 没完成 / 待完成 out of "done" and 无风险 / 没风险 out of "at-risk".
+# 🔴 Precedence is deliberately risk-first (blocked > at-risk > done > on-track), matching the
+# English arm: when a line supports two readings, take the one that gets the project LOOKED AT.
+_ZH_BLOCKED = r"受阻|已阻断|阻塞|卡住|停滞|停工|中止|搁置|无法推进|推不动"
+_ZH_AT_RISK = r"(?<![无没])风险|延期|逾期|滞后|落后|推迟|拖期|告急|吃紧|超期"
+_ZH_DONE = r"(?<![未没待])完成|已交付|已上线|已结项|已验收|验收通过"
+_ZH_ON_TRACK = r"进行中|推进中|(?<![不异])正常|按计划|如期|顺利|在轨"
+
+
+def _norm_status(text: str, *, risk_only: bool = False) -> str:
+    """Normalize a stated status onto on-track|at-risk|blocked|done, or '' when the document does not
+    state one we can read honestly.
+
+    The Chinese vocabulary is PURELY ADDITIVE — every ASCII branch below is untouched and runs
+    first, so English output cannot move.
+
+    `risk_only=True` suppresses the two POSITIVE readings. It is for the whole-document fallback
+    (no 'Status:' line anywhere, so we are scanning prose). Downgrading a project on prose is not
+    symmetric with escalating it: the grading rules require an EXPLICIT positive self-report to
+    hand out 可推进, and the word 正常 happening to appear somewhere in a weekly report is not that
+    project stating it is fine. Reading risk out of prose stays on, because there the bias points
+    at getting a second look.
+
+    ONE WORD IS DELIBERATELY LEFT UNMAPPED: 「待确认」 (pending confirmation), which the first
+    customer's weekly uses for two of its six projects. It is tempting to call it at-risk, and that
+    would be INVENTING RISK: "nobody has confirmed this yet" is not "this is in trouble", and
+    at-risk is the status that drives「多看一眼」surfacing. A false alarm in front of a paying
+    customer costs more than an honest blank. So 待确认 returns '' HERE.
+
+    WHAT THE CARD ACTUALLY SHOWS IS NOT '' — and this docstring used to claim it was. Returning ''
+    hands the decision to `_project_from_span`, which then sniffs the project's own block for a
+    status (extract.py, `if not status:`). On the first customer's weekly that sniff finds real
+    blocker lines — 「佣金测算 — 受阻」, 「…卡住」 — inside the very blocks that self-report 待确认,
+    so 「销售绩效与佣金方案」 and 「新人带教与团队士气」 render BLOCKED, which is heavier than the
+    at-risk this function refused to assign. The inference is documented and line-citable, not
+    invented, so it stands for now; but the outcome is a product call, not a settled one, and the
+    contradiction is recorded here rather than papered over. See
+    test_pending_confirmation_falls_through_to_block_level_inference for the end-to-end behaviour
+    this actually produces.
+    """
     t = text.lower()
-    if re.search(r"\bblocked\b", t):
+    if re.search(r"\bblocked\b", t) or re.search(_ZH_BLOCKED, t):
         return "blocked"
-    if re.search(r"\bat[\s-]?risk\b|behind|slipping|delayed", t):
+    if re.search(r"\bat[\s-]?risk\b|behind|slipping|delayed", t) or re.search(_ZH_AT_RISK, t):
         return "at-risk"
-    if re.search(r"\b(done|shipped|complete|launched)\b", t):
+    if risk_only:
+        return ""
+    if re.search(r"\b(done|shipped|complete|launched)\b", t) or re.search(_ZH_DONE, t):
         return "done"
-    if re.search(r"\bon[\s-]?track\b|on schedule", t):
+    if re.search(r"\bon[\s-]?track\b|on schedule", t) or re.search(_ZH_ON_TRACK, t):
         return "on-track"
+    # 054 and 056 each grew a Chinese ladder independently and the merge stacked them. The second
+    # one is DELETED, not kept "for safety": it ran after this point with NO negative lookbehinds,
+    # so 「无风险」 matched 风险 → at-risk and 「未完成」 matched 完成 → done. Every word it carried
+    # is covered above (受阻 / 已阻断 were the only two missing and are now in _ZH_BLOCKED), and
+    # the surviving ladder is the one that reads negation correctly.
     return ""
 
 
@@ -823,18 +887,51 @@ class HeuristicExtractor:
     # projects & signals ---------------------------------------------------
 
     def _projects_from_doc(self, doc: ParsedDoc) -> ExtractionResult:
-        """Project weekly / roadmap: title from a heading or 'Project:' line; status/progress/owner
-        from labelled lines; blockers from 'blocker/blocked/waiting' lines."""
+        """Project weekly / roadmap -> ONE ProjectEntity PER PROJECT THE DOCUMENT LABELS.
+
+        feat-054 / H4 LAYER A — THE STRUCTURAL FIX. This function used to accumulate title / owner /
+        status / progress into SCALAR locals across the whole document and append a single entity at
+        the end, so every project but the last was overwritten in place. One document == one project,
+        by construction, since the function was written. It was invisible in every ASCII fixture only
+        because none of them had two projects in one file; a pure-English document with two
+        `Project:` lines lost the first one exactly the same way (see test_zh_project_axis_gap.py).
+
+        Now the document is SEGMENTED at its own project labels (`granularity.segment_projects`) and
+        each span is scanned independently, so six projects come back as six.
+
+        WHY A SINGLE BLOCK STILL SCANS THE WHOLE DOCUMENT: when a document labels exactly one
+        project, the doc-per-project assumption is simply TRUE for it, and scanning the whole file
+        keeps every pre-054 English fixture byte-identical — fields stated in a preamble above the
+        `Project:` line (a `#` heading, a `Summary:`, a trailing blocker paragraph) are still picked
+        up as they always were. Scoping only kicks in where it is the fix: 2+ labelled projects.
+        A document with NO project label keeps the old heading/filename-titled single entity.
+        """
+        blocks = segment_projects(doc)
         res = ExtractionResult()
-        title = ""
+        if len(blocks) <= 1:
+            spans: list[tuple[str, int, int]] = [
+                (blocks[0].title if blocks else "", 0, len(doc.lines))]
+        else:
+            spans = [(b.title, b.start, b.end) for b in blocks]
+        for labelled_title, lo, hi in spans:
+            res.projects.append(self._project_from_span(doc, labelled_title, lo, hi,
+                                                        whole_doc=len(blocks) <= 1))
+        return res
+
+    def _project_from_span(self, doc: ParsedDoc, labelled_title: str, lo: int, hi: int,
+                           whole_doc: bool) -> ProjectEntity:
+        """Read one project's fields out of one span of lines. Labels are read in BOTH languages
+        (feat-054 / H4 LAYER B): 「负责人：/自报状态：/进度：/截止：/进展摘要：/阻碍项：」 next to the
+        ASCII forms, so the first customer's weekly stops coming back blank-owned and blank-status."""
+        title = labelled_title
         owner = ""
         status = ""
         progress: int | None = None
         summary = ""
         due = ""
         blockers: list[str] = []
-        for i, ln in enumerate(doc.lines):
-            s = ln.strip()
+        for i in range(lo, min(hi, len(doc.lines))):
+            s = doc.lines[i].strip()
             m = re.match(r"^#+\s*(.+)$", s)
             if m and not title:
                 title = m.group(1).strip()
@@ -842,36 +939,76 @@ class HeuristicExtractor:
             m = re.match(r"^(project|title)\s*[:\-]\s*(.+)$", s, re.I)
             if m:
                 title = m.group(2).strip()
+            m = re.match(r"^(?:项目|专案|课题|工程)\s*[0-9０-９一二三四五六七八九十]*\s*[：:]\s*(.+)$", s)
+            if m:
+                title = m.group(1).strip()
             m = re.match(r"^(owner|lead|dri)\s*[:\-]\s*(.+)$", s, re.I)
             if m:
                 owner = m.group(2).strip()
+            # The Chinese label lines. 054 and 056 each grew their own set independently; this is
+            # the UNION of both vocabularies. They stay separate patterns rather than extra
+            # alternatives bolted onto the English ones, because they REQUIRE a colon:
+            # 「截止」「负责」 are ordinary words that start ordinary sentences, and an optional
+            # separator would let 「截止到目前为止…」 be read as a due date. The English arms keep
+            # their optional separator so nothing about their behaviour changes.
+            m = re.match(r"^(?:负责人|主负责人|项目负责人|责任人|牵头人|负责)\s*[:：]\s*(.+)$", s)
+            if m:
+                owner = m.group(1).strip()
             m = re.match(r"^status\s*[:\-]\s*(.+)$", s, re.I)
+            if m:
+                status = _norm_status(m.group(1)) or status
+            # 状态 / 进展 + colon: the Chinese label line. Without it the only thing that could
+            # see 「状态：进行中」 was the whole-document fallback below, which is risk_only and so
+            # can never return the positive reading the line actually states.
+            m = re.match(r"^(?:自报状态|当前状态|项目状态|状态|进展)\s*[:：]\s*(.+)$", s)
             if m:
                 status = _norm_status(m.group(1)) or status
             m = re.search(r"\bprogress\s*[:\-]?\s*(\d{1,3})\s*%", s, re.I)
             if m:
                 progress = max(0, min(100, int(m.group(1))))
+            m = re.match(r"^(?:进度|完成度|完成率)\s*[:：]?\s*(\d{1,3})\s*%", s)
+            if m:
+                progress = max(0, min(100, int(m.group(1))))
             m = re.match(r"^(due|deadline|ship(?:s|ping)?)\s*[:\-]?\s*(.+)$", s, re.I)
             if m:
                 due = m.group(2).strip()
+            m = re.match(r"^(?:截止/关键节点|截止日?期?|到期日?|交付日期|关键节点|上线时间|完成时间)"
+                         r"\s*[:：]\s*(.+)$", s)
+            if m:
+                due = m.group(1).strip()
             m = re.match(r"^(summary|overview|goal)\s*[:\-]\s*(.+)$", s, re.I)
             if m and not summary:
                 summary = m.group(2).strip()
+            m = re.match(r"^(?:进展摘要|摘要|概述|目标|简述)\s*[：:]\s*(.+)$", s)
+            if m and not summary:
+                summary = m.group(1).strip()
+            m = re.match(r"^(?:阻碍项|阻碍|阻塞|卡点|风险点)\s*[：:]\s*(.+)$", s)
+            if m:
+                blockers.append(m.group(1).strip()[:180])
+                continue
             if re.search(r"\b(blocker|blocked|waiting on|stuck|unresolved|no sign-?off|"
                          r"acceptance (?:not|un)|not defined)\b", s, re.I):
                 blockers.append(s.lstrip("-*• ").strip()[:180])
         if not title:
             title = re.sub(r"\.[a-z0-9]+$", "", doc.name).replace("_", " ").strip()
         if not status:
-            status = _norm_status(doc.text)
+            # Two independent guards on the same fallback, one from each line — both kept:
+            # 054: sniffing the WHOLE document for a status only makes sense when the document is
+            #      about one project; across a segmented weekly it would smear project 3's
+            #      「受阻」 onto all six. So scope the sniff to this project's own span.
+            # 056: risk_only, because this is PROSE, not a self-report. Escalating on prose is
+            #      fine (bias points at a second look); handing out 可推进 because the word 正常
+            #      happens to appear somewhere in the weekly is not.
+            status = _norm_status(doc.text if whole_doc
+                                  else "\n".join(doc.lines[lo:min(hi, len(doc.lines))]),
+                                  risk_only=True)
         if not summary:
-            first = next((ln.strip() for ln in doc.lines
-                          if ln.strip() and not ln.strip().startswith("#")), "")
+            first = next((doc.lines[i].strip() for i in range(lo, min(hi, len(doc.lines)))
+                          if doc.lines[i].strip() and not doc.lines[i].strip().startswith("#")), "")
             summary = first[:200]
-        res.projects.append(ProjectEntity(
+        return ProjectEntity(
             id=_slug(title, "p"), title=title, ownerName=owner, status=status, progress=progress,
-            dueDate=due, summary=summary, blockers=blockers[:6], source=f"{doc.name}:1"))
-        return res
+            dueDate=due, summary=summary, blockers=blockers[:6], source=f"{doc.name}:{lo + 1}")
 
     def _signals_from_doc(self, doc: ParsedDoc) -> ExtractionResult:
         """Doc-derived R1 signals: '12 unresolved comments', 'acceptance not set', 'reworked N days
@@ -997,6 +1134,12 @@ def extract_docs(docs: list[ParsedDoc], extractor: Extractor | None = None,
             futures = [pool.submit(ex.extract, d) for d in docs]
             for f in futures:
                 out.merge(f.result())
+
+    # feat-054 — THE GRANULARITY GATE, before dedup on purpose: a milestone is judged against the
+    # document that nested it, and after dedup that provenance is already merged away. Every
+    # decision (kept and demoted alike) is recorded on the result so "why isn't this a project?"
+    # has an answer that cites the document rather than a threshold.
+    out.granularity = apply_gate(out, docs)
 
     _dedupe_entities(out)
     _link_owners(out)

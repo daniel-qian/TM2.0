@@ -38,9 +38,11 @@ from sse_starlette.sse import EventSourceResponse
 from avery import skills
 from avery.env import load_dotenv
 
+from . import account  # feat-053: verify a Supabase access token -> user id (header-only)
 from . import brain_factory, embedding_factory, extractor_factory, live_input, llm_budget, mem_sentinel
 from .ask_api import maybe_ask_draft_frame  # feat-034: the ask-draft frame (service-layer, not engine)
 from .ask_api import router as ask_router   # feat-034: /ask manager endpoints + /r/{token} employee H5
+from .auth_api import router as auth_router  # feat-053: /account/status|contexts|claim
 from .engine import stream_advice
 from .ingest_api import router as ingest_router  # feat-018: /ingest + /team/{id} (compose over feat-016)
 from .ingest_api import authorize_context, extract_owner_token  # feat-038: reuse the read-path gate
@@ -96,6 +98,14 @@ app.include_router(ingest_router)
 # (GET /r/{token}, POST /r/{token}/answer — the share token in the URL is the one deliberate
 # exception, the login-free employee path). Composes over the registry seam; engine untouched.
 app.include_router(ask_router)
+
+# feat-053: the account surface — GET /account/status (is auth even configured here) · GET
+# /account/contexts (my companies, post-login restore) · POST /account/claim (adopt the anonymous
+# context I built as a guest). Supabase owns sign-up/in/out; this service only maps a VERIFIED user
+# to the context ids they own. The whole layer is dormant when SUPABASE_URL/ANON_KEY are unset —
+# /ingest and every read path keep working exactly as they did, which is what keeps the
+# `?v=2&mode=live&skin=paper&lang=zh` guest link alive.
+app.include_router(auth_router)
 
 
 class AdviseRequest(BaseModel):
@@ -238,17 +248,21 @@ def health() -> dict:
 @app.post("/advise")
 def advise(req: AdviseRequest,
            x_avery_token: str | None = Header(None),
-           authorization: str | None = Header(None)):
+           authorization: str | None = Header(None),
+           x_avery_account: str | None = Header(None)):
     # feat-028: a GIVEN-but-unknown company_context_id must 404 (consistent with GET /team/{id}),
     # not silently answer over the demo company. A missing id is the legitimate demo default.
     # feat-038: it must ALSO carry the owner_token (header) — otherwise advising over another
     # company's context (RAG over their facts + notes-write to their notebook) would be an IDOR. A
     # missing/wrong token 404s exactly like an unknown id (no existence oracle). A tokenless (pre-038)
     # context requires none. The token NEVER rides the URL — header only.
+    # feat-053: a signed-in owner of this context is authorized WITHOUT the owner_token (same gate,
+    # additive account path) — advising over your own company from a new device needs no token.
     if req.company_context_id:
         from avery.ingest.registry import active_registry
         authorize_context(active_registry(), req.company_context_id,
-                          extract_owner_token(x_avery_token, authorization))
+                          extract_owner_token(x_avery_token, authorization),
+                          account.resolve_account(x_avery_account))
     sit = live_input.LiveSituation(
         situation=req.situation, title=req.title,
         company_context_id=req.company_context_id)

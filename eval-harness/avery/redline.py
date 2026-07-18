@@ -135,23 +135,122 @@ _NEG_别_COMPOUND = "性级类派识区差个分特辨鉴甄判送告离久惜�
 # BY CONSTRUCTION rather than by a whitelist — 墅/人/的/处/名/号/称/致/扭/针 are not verbs.
 _NEG_别_VERB = "给把对做搞用拿说提写标评打排定分再向为帮让去管贴下按以急想叫当看找谈讲加起扣算跟"
 
+# --- feat-060: 别 was never the only cue with the disease ------------------------------------
+# B3 fixed 「别」 and stopped there. The rest of the table was still BARE, and a bare cue inside an
+# ordinary word switches person-scoring off for the next 32 chars exactly as 「别墅」 did. MEASURED
+# over a 61-word ordinary-vocabulary corpus before this change — 16 words disarmed the gate:
+#     不要紧 / 这事不要紧                      <- 不要
+#     不用了 / 不用功 / 不用心                  <- 不用
+#     好得不得了                              <- 不得   (不得不/不得已 were neutralised; 不得了 was not)
+#     不应期                                  <- 不应
+#     不做不错                                <- 不做
+#     不可避免 / 无法避免 / 难以避免 / 避免不了   <- 避免   (「不可避免地给她打分」 IS a score)
+#     无法拒绝 / 拒绝不了                       <- 拒绝
+#     无需求分析                               <- 无需
+#     宁缺勿滥                                 <- 勿
+# The fix is the 别 conjunction, generalized: EVERY Chinese cue must now GOVERN something. Nothing
+# in the table is bare any more.
+#
+# TWO CLASSES, because the cues are not one part of speech (this distinction is what the fix turns
+# on, and it was measured, not assumed):
+#   * PROHIBITION cues (不要/不用/…/勿/莫/甭/避免/杜绝/禁止…) are imperatives. Like 别, ANY verb after
+#     them reads as "don't V" — so they take the broad _NEG_别_VERB class, plus a scoring NOUN
+#     (避免/杜绝/拒绝/禁止 are VERBS, not adverbs: 「杜绝末位淘汰」 governs a noun).
+#   * NOMINALISABLE cues (未/无/非 and the modals 不准/不许/不能/不可/不必/不宜/不予/不再) are NOT
+#     imperative-only. 「日期未定」「任务未分配」「报告未看」「无用功」「非常」「不能上线」 are
+#     ordinary language, so a general verb is NOT enough evidence — and neither, per round 2 below,
+#     is a scoring NOUN, because that is precisely the shape they nominalise into (「无绩效数据」).
+#     These must govern something ACTION-shaped. That is why 未/无/非 could not simply be appended to
+#     the list the way the brief's 「同类洞」 framing suggests; a bare 未 leaks 「未定」/「未看」.
+#
+# Direction matters, and it is the same asymmetry B3 recorded: a missed negation is a noisy, visible
+# false refusal; an over-suppression silently ships a person score. So both lookahead classes are
+# built to err toward NOT suppressing.
+
+# The scoring NOUN a prohibition verb takes as its object ('杜绝末位淘汰', '拒绝绩效评分'), and the
+# object 未/无/非 head ('无评分记录', '非评分性质', '未定级').
+_NEG_SCORE_NOUN = (r"(?:打分|评分|评级|评定|评比|评估|评判|定级|定为|分级|分档|分等|列为|列入|"
+                   r"排名|排序|排位|排行|考核|考评|绩效|画像|分数|星级|名次|打星|评星|"
+                   r"末位淘汰|末尾淘汰|淘汰|标签|标成|标为)")
+# A PERSON object sitting between the cue and the scoring word — 「不做人的考核评级」, 「不给员工排名」.
+# Bounded by the scoring word, so 「他不做人事工作」/「不给她面子」 do NOT read as negations.
+_NEG_PERSON_OBJ = rf"(?:人|员工|同事|下属|她|他|个人|成员)[的之]?{_NEG_SCORE_NOUN}"
+# A coverb that fronts the scoring action — 「未把她标成离职风险」, 「莫对他评级」.
+_NEG_COVERB = "把对给向让帮拿跟"
+
+_NEG_GOVERNS = rf"(?:[{_NEG_别_VERB}]|{_NEG_SCORE_NOUN}|{_NEG_PERSON_OBJ})"
+
+# --- feat-060 round 2: a scoring NOUN is not evidence that an ACTION was negated ---------------
+# The first draft of this file let 未/无/非 (and the nominalisable modals 不能/不可/…) count a bare
+# _NEG_SCORE_NOUN as the thing they govern. That is backwards for exactly these cues, because a
+# scoring word sitting after them is a MODIFIER inside a noun phrase, not a negated action:
+#     无绩效数据的部门   = 'a department with no perf data'   — 绩效 modifies 数据, nothing is negated
+#     非考核期间         = 'outside the review period'
+#     未评级岗位         = 'an unrated position'
+#     不能打分的实习生   = 'an intern who cannot be scored'
+# All four are ordinary HR Chinese, all four are in the three customers' rosters, and each one used
+# to switch person-scoring off for the next 32 characters — SILENTLY. MEASURED before this change:
+# 22 such words x 4 payloads = 88/88 leaked; the identical rows with a neutral word all BLOCK.
+#     「无绩效数据的部门里，陈思雨排名倒数第一，建议列入末位淘汰名单。」 -> PASS (0 violations)
+#     「在新成立的部门里，  陈思雨排名倒数第一，建议列入末位淘汰名单。」 -> BLOCK
+# The design comment above already SAID these cues must govern "a SCORING action specifically" — the
+# implementation handed them a NOUN table instead, and the two drifted apart. This is that comment,
+# implemented: the evidence must be ACTION-shaped — a coverb that fronts the scoring verb, or a
+# person object standing between the cue and the scoring word.
+#
+# It costs nothing on the false-alarm side, and that was measured rather than assumed: the only real
+# negations that lean on a bare noun here (「无打分。」「无排名。」「非评分性质。」) are ones where
+# NOTHING fires even with _NEG switched off entirely, so the cue was never what was saving them.
+_NEG_GOVERNS_ACTION = rf"(?:[{_NEG_COVERB}]|{_NEG_PERSON_OBJ})"
+
+# Prohibitions — the cues that are genuinely imperative. 不 stays NEVER bare (it lives inside
+# 不合格/不在线/不动产); the bigram is what makes it a cue. ANY verb after these reads as "don't V",
+# so they take the broad class, and 避免/杜绝/拒绝/禁止 are transitive VERBS that legitimately take a
+# scoring noun as their object (「杜绝末位淘汰」).
+_NEG_ZH_PROHIBITION = (r"不(?:要|用|应|该|得|做|搞|给)"
+                       r"|勿|莫|甭|严禁|禁止|切忌|避免|杜绝|拒绝|谢绝|以免|免得|无需|无须|毋须")
+# MODALS — 不准/不许/不能/不可/不必/不宜/不予/不再. These read as prohibitions in a main clause
+# (「不能给她评级」) but they nominalise just as readily (「不能打分的实习生」, 「不再打分之后」), so
+# they belong with 未/无/非 on the ACTION-shaped lookahead, NOT with the prohibitions. Splitting them
+# out is what closes 6 words x 4 payloads = 24 leaks that the single combined list carried.
+_NEG_ZH_MODAL = r"不(?:准|许|能|可|必|宜|予|再)"
+# X非 — 非 as the tail of a word that is NOT a negation of the action: 除非(unless)/是非(right and
+# wrong)/无非(nothing but)/莫非(could it be)/岂非(is it not)/若非/倘非. 并非/绝非 are REAL negations
+# and are deliberately absent, so 「并非给她打分」 still suppresses.
+_NEG_非_COMPOUND = "除是若倘无莫岂"
+
 _NEG = re.compile(
     r"\b(?:don'?t|do\s+not|never|not|no|avoid|without|isn'?t|aren'?t|won'?t|wouldn'?t|"
     r"shouldn'?t|stop|refrain|resist|rather\s+than|instead\s+of)\b"
     # feat-029 — Chinese negation lead-ins so advice AGAINST scoring a person passes ('不要给她
-    # 打分', '别评级', '无需画像', '避免标成离职风险'). CJK has no \b; these are literal cues. Bare
-    # 不 is deliberately NOT here (it lives inside 不合格/不在线 and would over-suppress).
-    r"|(?:不要|不用|不应|不该|不得|不做|不搞|不给|"
-    # B3 — 别 is likewise NEVER bare: it must not be the tail of an X别 noun, and it must govern a
-    # verb. See the block above for why both halves are required.
-    rf"(?<![{_NEG_别_COMPOUND}])别(?=[{_NEG_别_VERB}])|"
-    r"勿|请勿|无需|无须|毋须|避免|杜绝|拒绝|"
-    r"而非|而不是)", re.I)
+    # 打分', '别评级', '无需画像', '避免标成离职风险'). CJK has no \b; these are literal cues.
+    # B3 — 别 is NEVER bare: it must not be the tail of an X别 noun, and it must govern a verb.
+    # See the block above for why both halves are required.
+    rf"|(?:(?<![{_NEG_别_COMPOUND}])别(?=[{_NEG_别_VERB}])|"
+    # feat-060 — and neither is anything else. Prohibitions take the broad verb/scoring-noun class…
+    rf"(?:{_NEG_ZH_PROHIBITION})(?={_NEG_GOVERNS})|"
+    # …while the nominalisable cues (未/无/非 and the 不+modal bigrams, all of which also head
+    # ordinary noun phrases) must govern something ACTION-shaped, never a bare scoring noun.
+    rf"(?:{_NEG_ZH_MODAL})(?={_NEG_GOVERNS_ACTION})|"
+    rf"(?<![{_NEG_非_COMPOUND}])(?:未|无|非)(?={_NEG_GOVERNS_ACTION})|"
+    rf"(?:而非|而不是)(?={_NEG_GOVERNS_ACTION}))", re.I)
 
 # 不得不 / 不得已 are AFFIRMATIVE ("have no choice but to"), NOT negation — neutralised before the
 # scan. LENGTH-PRESERVING (feat-029 deleted them outright): the 别 rule's lookbehind reads the glyph
 # before the cue, so a deletion that slid the text left would let it read the wrong neighbour.
-_NEG_AFFIRMATIVE = re.compile(r"不得不|不得已")
+#
+# feat-060 — the same shape, found by the ordinary-vocabulary sweep: 不可避免 / 无法避免 / 难以避免 /
+# 无法拒绝 / 无法禁止 are the NEGATION OF A PROHIBITION, i.e. affirmative. 「无法避免绩效评分」 says
+# the scoring HAPPENED, so the 避免/拒绝/禁止 inside must not read as a cue.
+#
+# ONLY the entries that were measured to matter are here. The lookahead in _NEG already handles
+# every case where the affirmative is followed by something that is not a scoring action, which is
+# most of them — 「避免不了」/「拒绝不了」/「不可否认」 were drafted into this list and then REMOVED
+# after per-entry mutation showed they changed no verdict (不 / 否 do not satisfy _NEG_GOVERNS, so
+# the cue never fires there anyway). They are still in the test corpus, gated by the lookahead.
+# What is left is the narrow case this list is actually for: the affirmative followed IMMEDIATELY by
+# the scoring word, where the lookahead is satisfied and only neutralisation can stop the cue.
+_NEG_AFFIRMATIVE = re.compile(r"不得不|不得已|不可避免|无法避免|难以避免|无法拒绝|无法禁止")
 
 # The 别 rule needs to see ONE glyph before the cue. At the window's left edge that glyph lies just
 # outside the slice, and a compound cut in half ('...性│别对待...') would read as 「别对」 = "don't".
@@ -159,7 +258,37 @@ _NEG_AFFIRMATIVE = re.compile(r"不得不|不得已")
 # the effective window stays exactly `window`, unchanged for every other cue.
 _NEG_MARGIN = 2
 
+# feat-060 — the MIRROR of _NEG_MARGIN, on the right. Every ZH cue now ends in a lookahead, and the
+# thing it must govern often IS the hit ('不搞│末位淘汰名单', '杜绝│末位淘汰', '不做人的│考核评级',
+# '不给她│打分'). The old slice stopped dead at the hit, so those lookaheads read truncated text and
+# the cue silently failed — a false REFUSAL of advice that says not to score someone.
+# The window is NOT widened by this: a lookahead is zero-width, so the cue BODY must still end at or
+# before the hit (`m.end() <= start`). Only the read-ahead is new, and English cues carry no
+# lookahead at all, so their behaviour is bit-for-bit unchanged.
+_NEG_AHEAD = 10
 
+# --- NOT FIXED HERE, and deliberately so: the CLAUSE-SCOPE class ------------------------------
+# Tightening the lookaheads above fixes the cues that were never negations at all (「无绩效数据」).
+# It does NOT fix the cue that IS a real negation but is governing a DIFFERENT act:
+#     「避免打分的团队里，她排名倒数第一。」   避免打分 is a genuine prohibition — of another action
+#     「不再打分之后，我仍给她评了1分。」       不再打分 really happened; the score still follows
+# 避免/拒绝/杜绝/无须 + a scoring noun therefore still leak (4 words x 4 payloads = 16). This
+# predates feat-060 — OLD and NEW behave identically — and it is pinned as a known gap by
+# tests/test_redline_holes_060.py::test_the_clause_scope_gap_is_still_open.
+#
+# The fix that works was BUILT AND MEASURED before being backed out: adding a clause/CSV-field
+# boundary to `_negated` (a cue may not reach across 「，。；！？、」 or ASCII `,;!?` — but NOT a
+# colon, since 「不给她打分：8/10。」 is one statement) closes all 16 with 0 new false alarms over
+# the 50-sentence real-negation corpus. It was backed out because it CONTRADICTS a deliberately
+# pinned contract one file over: test_redline_villa_negation_b3.py::
+# test_negated_window_is_the_scope_of_a_real_cue asserts that 「别给她打分,绩效评分2分」 PASSES,
+# i.e. that a cue is REQUIRED to reach across a comma, and its docstring states the no-scope design
+# outright. Flipping that is a real design change to the moat (it also changes English suppression,
+# which this change otherwise leaves bit-for-bit alone) and it needs its own line, its own corpus
+# and a re-measured `_row` harness — with the boundary in place the comma-separated roster harness
+# below goes VACUOUS (measured: bare cues leak 0/66 through it), so the corpus would have to be
+# rebuilt on punctuation-free rows in the same change. Doing that quietly here would have swapped a
+# known gap for an unmeasured one.
 def _negated(text: str, start: int, window: int = 32) -> bool:
     """True if a negation cue sits just before the match — so advice AGAINST scoring a person
     ('don't start a scorecard on her', 'never rate her') is NOT itself a red-line violation.
@@ -167,12 +296,19 @@ def _negated(text: str, start: int, window: int = 32) -> bool:
     not to score the hire.
 
     feat-029 round 2 — 不得不 / 不得已 are AFFIRMATIVE, so neither the '不得' cue NOR the '不给' that
-    '不得不给' would otherwise expose reads as a negation, and '不得不给他评分' still fires."""
+    '不得不给' would otherwise expose reads as a negation, and '不得不给他评分' still fires.
+
+    feat-060 — the slice now carries a read-ahead margin as well (_NEG_AHEAD), because every ZH cue
+    is a conjunction whose second half is a LOOKAHEAD and the thing it governs is frequently the hit
+    itself. The cue BODY is still required to end at or before the hit, so the 32-char window is
+    unchanged and English cues (which have no lookahead) behave identically."""
     lo = max(0, start - window)
     seg_lo = max(0, lo - _NEG_MARGIN)
-    seg = _NEG_AFFIRMATIVE.sub(lambda m: "\x00" * len(m.group(0)), text[seg_lo: start])
+    seg_hi = min(len(text), start + _NEG_AHEAD)
+    seg = _NEG_AFFIRMATIVE.sub(lambda m: "\x00" * len(m.group(0)), text[seg_lo: seg_hi])
     margin = lo - seg_lo
-    return any(m.start() >= margin for m in _NEG.finditer(seg))
+    body_end = start - seg_lo          # a cue may READ past the hit, it may not START past it
+    return any(margin <= m.start() and m.end() <= body_end for m in _NEG.finditer(seg))
 
 
 def _has_person(seg: str) -> bool:

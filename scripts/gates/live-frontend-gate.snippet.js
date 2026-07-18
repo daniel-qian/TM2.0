@@ -2798,7 +2798,10 @@
       const terminal = mk('revoked');
       let domProbe = { mounted: false };
       const prevRun = store.getState().run;
-      const prevScreen = store.getState().screen;
+      // feat-051: the current screen lives in the URL now, not in the store — read it off the
+      // shell's data-scene (same ids `goScreen()` takes) so the restore below can navigate back.
+      const prevShell = $('.lite2-shell');
+      const prevScene = prevShell ? prevShell.getAttribute('data-scene') : null;
       if (terminal) {
         store.setState({ run: { ...prevRun, status: 'complete' }, ask: terminal, askBusy: 'idle' });
         this._clickTab('The room');
@@ -2840,12 +2843,16 @@
         (!domProbe.confirmPresent || domProbe.confirmDisabled === true) &&
         domProbe.linkRows === 0 && domProbe.terminalNotePresent === true;
 
-      // Leave the session EXACTLY as found — including `run` and `screen`. Seeding run.status to
-      // mount the card (above) leaves hasStarted true and the page parked on The room; a later
-      // phase (assertTriageActions' take-to-room sub-check) then reds for reasons that have
-      // nothing to do with it. Caught live on this drive — restoring only ask/transport is not
-      // enough, and a phase that poisons its neighbours is a gate defect, not a product one.
-      store.setState({ ask: prevAsk, transport: prevTransport, run: prevRun, screen: prevScreen });
+      // Leave the session EXACTLY as found — including `run` and the current screen. Seeding
+      // run.status to mount the card (above) leaves hasStarted true and the page parked on The
+      // room; a later phase (assertTriageActions' take-to-room sub-check) then reds for reasons
+      // that have nothing to do with it. Caught live on this drive — restoring only ask/transport
+      // is not enough, and a phase that poisons its neighbours is a gate defect, not a product one.
+      // feat-051: the screen is a route now, so restoring it means NAVIGATING back, not writing a
+      // store field. (`store.setState({ screen })` silently became a no-op under the router — it
+      // wrote a key nobody reads and left the page on The room.)
+      store.setState({ ask: prevAsk, transport: prevTransport, run: prevRun });
+      if (prevScene) store.getState().goScreen(prevScene);
 
       const out = {
         coerced, neverFoldsToDraft, revokedKept, expiredKept, unknownFoldsClosed, knownStillWork,

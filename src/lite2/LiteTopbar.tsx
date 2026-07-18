@@ -1,8 +1,10 @@
 import { applyModeToUrl, useMode } from '../shared/modeStore'
 import { useDict } from '../shared/i18n/useDict'
 import { useLite, type LiteScreen } from './store'
+import { useCurrentScreen } from './routes'
 import { showModeSwitch, type AveryMode } from '../shared/mode'
 import { LiteBell } from './LiteBell'
+import { AuthPanel } from './auth/AuthPanel'
 
 // feat-035 · lite2 壳的顶栏：6 tab + mode 开关。复用 story 顶栏的 CSS chrome
 //（.prototype-topbar 容器 pointer-events:none——可点子元素 .scene-tabs/.mode-switch
@@ -11,7 +13,8 @@ import { LiteBell } from './LiteBell'
 // `.scene-tabs .scene-tab` 数 6 个 tab，铃铛不得混进去）；.lite-bell 在 lite2.css 里
 // 自己 pointer-events:auto 回来（同 .scene-tabs/.mode-switch 的规矩）。
 export function LiteTopbar() {
-  const screen = useLite((s) => s.screen)
+  // feat-051：高亮哪个 tab 由 URL 说了算（深链 `/team/:personId` 归到「你的团队」）。
+  const screen = useCurrentScreen()
   const goScreen = useLite((s) => s.goScreen)
   const mode = useMode((s) => s.mode)
   const setMode = useMode((s) => s.setMode)
@@ -51,6 +54,9 @@ export function LiteTopbar() {
       </nav>
       {/* feat-045：通知铃铛——真事件驱动（notifyStore），nav 之外、mode 开关之前。 */}
       <LiteBell />
+      {/* feat-053：账号入口。同样在 .scene-tabs nav 之外（门相位按 `.scene-tabs .scene-tab`
+          数 tab，账号按钮不得混进去）。未配置 Supabase 时整块不渲染 —— 游客路径不受影响。 */}
+      <AuthPanel />
       {/* feat-034 polish：Story/Live 开关默认不渲染（?modeSwitch=1 显示，shared/mode.ts
           小工具——lite 只 import shared，墙不破）。缺席时整块不出 DOM，布局无空洞。 */}
       {showModeSwitch() ? (

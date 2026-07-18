@@ -27,6 +27,30 @@ export interface LiteStreamLine {
   key: string
 }
 
+// ── feat-059 · 简化视图的四相派生（净新增，不是照抄合伙人版）─────────────────────
+// 合伙人版那 4 步是手写死的（1200ms 假延迟 + canned 文案）。这里是**同一个形状、真实质**：
+// 四相的推进完全由真 SSE 事件驱动——没有对应事件的相位就停在 pending（诚实"待命"），
+// 绝不为了叙事好看造节奏、造进度、造延迟。原始流一行不删，只是默认收在「展开原始流」后面。
+export type LitePhaseId = 'read' | 'crosscheck' | 'method' | 'act'
+export type LitePhaseStatus = 'pending' | 'active' | 'done'
+
+export const LITE_PHASE_ORDER: LitePhaseId[] = ['read', 'crosscheck', 'method', 'act']
+
+export interface LitePhase {
+  id: LitePhaseId
+  status: LitePhaseStatus
+  steps: number // 归入本相的真事件条数（0 = 这一步真没发生，不亮）
+}
+
+// 一条真引用。`cite` 工具调用出生（claim + source_ref），紧随的 observe 补 resolved/snippet。
+// 🟢 这是我们比合伙人版强的地方（她全库零引用），简化视图必须以人话保留、可点开看原文。
+export interface LiteCitation {
+  ref: string // 'facts.md:15'
+  claim: string
+  snippet: string | null // 后端 resolve_ref 取回的原文行；取不到就 null（不编）
+  resolved: boolean | null // null = cite 的 observe 还没到
+}
+
 // ── 8 字段 advice 契约（feat-015 manifest.advice；对齐 service/contract.py 投影）──
 // 🔴 红线：没有任何"人评分"槽位——诊断是对处境的 hypothesis，不是对人的裁决。
 export interface LiteAdvice {
@@ -60,6 +84,13 @@ export interface LiveRunState {
   contractOk: boolean | null
   redlinePassed: boolean | null
   error: string | null
+  // ── feat-059 简化视图派生（原始 lines 一条不动，这些是"另一种读法"）──
+  phases: LitePhase[] // 恒 4 条、恒定顺序（LITE_PHASE_ORDER）
+  citations: LiteCitation[] // 真引用（cite 工具产出）
+  sourcesRead: number // 真读回来的原始材料份数（read_case 的 observe）
+  recallHits: number // recall 真翻出的记忆行数
+  // 派生用的内部游标——不参与渲染：把紧随 tool 的 observe 归到发起它的那一相。
+  pendingTool: string | null
 }
 
 export function emptyRunState(): LiveRunState {
@@ -71,6 +102,11 @@ export function emptyRunState(): LiveRunState {
     contractOk: null,
     redlinePassed: null,
     error: null,
+    phases: LITE_PHASE_ORDER.map((id) => ({ id, status: 'pending' as LitePhaseStatus, steps: 0 })),
+    citations: [],
+    sourcesRead: 0,
+    recallHits: 0,
+    pendingTool: null,
   }
 }
 
@@ -90,7 +126,14 @@ export function createLiveAgentSource(transport: LiveTransport): LiveAgentSource
       const state = emptyRunState()
       state.status = 'running'
       let seq = 0
-      const emit = () => onUpdate({ ...state, lines: [...state.lines] })
+      // feat-059：phases/citations 也逐帧换新引用——消费方（含 React.memo 的子树）看得见增量。
+      const emit = () =>
+        onUpdate({
+          ...state,
+          lines: [...state.lines],
+          phases: state.phases.map((p) => ({ ...p })),
+          citations: state.citations.map((c) => ({ ...c })),
+        })
 
       const push = (speaker: LiteSpeaker, type: LiteLineType, text: string) => {
         if (!text || !text.trim()) return
@@ -113,6 +156,8 @@ export function createLiveAgentSource(transport: LiveTransport): LiveAgentSource
             // 流正常结束但没 manifest（罕见）——收成 complete，避免卡在 running。
             state.status = 'complete'
           }
+          // feat-059：流收尾后没有活着的相位（在跑的那一相封成 done；从没亮过的保持 pending）。
+          sealPhases(state)
           emit()
         },
       )
@@ -130,20 +175,36 @@ export function applyEvent(
   switch (ev.type) {
     case 'started':
       // 元数据帧——不落终端行（question 首行由 RoomScreen 从提问态派生）。
+      // feat-059：也**不点亮**任何相位——"开始了"不等于"读过了"，第一条真 think/tool 才算数。
       break
     case 'think':
       // 真 agent 用泛 'agent'（display "AVERY"）——单 agent 不冒充多专家。
       push('agent', 'thought', ev.text ?? '')
+      // 🔴 复核打回（feat-059 finding 2）：一条裸 think 曾经就能把「读取事实」点亮成 done，
+      //    哪怕全程没有 read_case（memory.py::load_facts_head 已把 facts.md 头部预载进上下文，
+      //    模型完全可以不调 read_case 直接 recall——那就是一份原始材料都没读回来）。
+      //    现在「读取事实」**只由 read_case 驱动**（见 toolPhase），裸 think 不点亮它。
+      // 证据已经开始收 → 这条 think 是在拿到的证据上判断怎么办（匹配方法）；
+      // 还没开始收 → 归不到任何一相，谁也不点亮（原始流里一行不少，简化视图不替它编一个相位）。
+      if (evidenceStarted(state)) countStep(state, 'method')
       break
     case 'tool':
       push('agent', 'tool-call', formatToolCall(ev.name, ev.input))
+      state.pendingTool = ev.name ?? null
+      if (ev.name === 'cite') recordCite(state, ev.input)
+      countStep(state, toolPhase(ev.name))
       break
     case 'observe':
       push('tool', 'tool-result', ev.observation ?? '')
+      absorbObservation(state, ev.observation ?? '', ev.is_error === true)
+      countStep(state, toolPhase(state.pendingTool ?? undefined))
+      state.pendingTool = null
       break
     case 'nudge':
       // gate 把模型推回——system 行提示（人话，不暴露 rule id）。
       push('system', 'thought', nudgeText(ev.gate))
+      // 被闸推回去重新找依据，本身就是"在挑做法"的真信号。
+      countStep(state, 'method')
       break
     case 'manifest': {
       // feat-034 契约提案：可选判别字段 kind（缺省 = advice，现有路径零破坏）。
@@ -152,6 +213,7 @@ export function applyEvent(
         if (draft) {
           state.askDraft = draft
           push('system', 'manifest', 'A quick ask is drafted — yours to confirm')
+          countStep(state, 'act') // 起草出一张 ask 也是"生成动作"
         }
         // ask-draft 帧不判 run 完成——advice 帧（或流自然收尾）才收 status。
         break
@@ -162,16 +224,137 @@ export function applyEvent(
       state.redlinePassed = ev.redline_passed ?? null
       push('system', 'manifest', advice ? 'The read is ready' : 'Done')
       state.status = 'complete'
+      countStep(state, 'act')
+      sealPhases(state)
       break
     }
     case 'error':
       state.status = 'error'
       state.error = ev.error ?? 'unknown error'
       push('system', 'thought', 'Something went wrong reaching the room.')
+      // 出错时**不**把在跑的相位改成 done——它确实没跑完，留 active 由 UI 配合 run.status 显错。
       break
     default:
       break
   }
+}
+
+// ── feat-059 · 四相派生的纯逻辑（导出供门直接断言映射正确）──────────────────────
+
+export function phaseIndex(id: LitePhaseId): number {
+  return LITE_PHASE_ORDER.indexOf(id)
+}
+
+// 工具 → 相位。read_case=读事实；recall/cite=交叉验证；draft_advice=生成动作。
+// 未知工具归"匹配方法"——今天后端只有这 4 个（eval-harness/avery/tools.py::TOOL_SCHEMAS），
+// 日后新增的检索/方法类工具落在这里比落在别处更贴近事实。
+function toolPhase(name: string | undefined): LitePhaseId {
+  switch (name) {
+    case 'read_case':
+      return 'read'
+    case 'recall':
+    case 'cite':
+      return 'crosscheck'
+    case 'draft_advice':
+      return 'act'
+    default:
+      return 'method'
+  }
+}
+
+// 「收证据」是否已经真的开始（决定一条 think 算不算「匹配方法」的一步）。
+// 看的是真事件计数，不是时间——没有 recall/cite 发生过，这条 think 就还归不到任何一相。
+function evidenceStarted(state: LiveRunState): boolean {
+  return state.phases[phaseIndex('crosscheck')].steps > 0
+}
+
+// 计步永远记在**事件自己那一相**上——哪怕叙事已经走到后面。
+// （早期版本按"当前游标"记，结果 recall→think→cite 的真实序列里 cite 被记进了「匹配方法」，
+//   计数与事实不符。相位状态要单调，但计数必须忠实。）
+function countStep(state: LiveRunState, id: LitePhaseId): void {
+  const phase = state.phases[phaseIndex(id)]
+  if (phase) phase.steps += 1
+  refreshPhases(state)
+}
+
+// 相位状态**纯由 steps 派生**，不留可被随手调的进度变量：
+//   steps === 0            → pending（这一步真没发生，诚实灰着，绝不补成 done）
+//   不是最靠后的有事件相位 → done
+//   最靠后的有事件相位     → 只有 run 真的 complete 才 done，否则 active（含 error：它确实没跑完）
+export function refreshPhases(state: LiveRunState): void {
+  let last = -1
+  for (let i = 0; i < state.phases.length; i++) {
+    if (state.phases[i].steps > 0) last = i
+  }
+  for (let i = 0; i < state.phases.length; i++) {
+    const p = state.phases[i]
+    if (p.steps === 0) {
+      p.status = 'pending'
+      continue
+    }
+    p.status = i < last ? 'done' : state.status === 'complete' ? 'done' : 'active'
+  }
+}
+
+// 流收尾（onDone）——状态已落定，重算一次即可把在跑的那一相封掉。
+export function sealPhases(state: LiveRunState): void {
+  refreshPhases(state)
+}
+
+// cite 工具调用 → 一条待确认的引用（claim + ref 都来自模型真调用的入参）。
+function recordCite(state: LiveRunState, input: Record<string, unknown> | undefined): void {
+  const ref = typeof input?.source_ref === 'string' ? input.source_ref.trim() : ''
+  const claim = typeof input?.claim === 'string' ? input.claim.trim() : ''
+  if (!ref) return // 没有 ref 就不是引用——不造一条空证据充数
+  state.citations.push({ ref, claim, snippet: null, resolved: null })
+}
+
+// observe → 把真数字/真原文吸进派生态。只认后端已文档化的观察串形状，认不出就不填（不猜）。
+//   read_case  → 整份原始材料转储（简化视图只留"读了 N 份"，全文留在原始流）
+//   recall     → 每行 `facts.md:15  <text>`（memory.py::Hit.as_line）
+//   cite       → `✓ cited: «claim» ⟵ facts.md:15  (snippet)` 或 `⚠ recorded, but …`
+function absorbObservation(state: LiveRunState, observation: string, isError: boolean): void {
+  const tool = state.pendingTool
+  if (tool === 'read_case') {
+    if (!isError && observation.trim()) state.sourcesRead += 1
+    return
+  }
+  if (tool === 'recall') {
+    if (isError) return
+    for (const line of observation.split('\n')) {
+      if (MEMORY_HIT.test(line.trim())) state.recallHits += 1
+    }
+    return
+  }
+  if (tool === 'cite') {
+    const cite = state.citations[state.citations.length - 1]
+    if (!cite || cite.resolved !== null) return
+    if (isError || observation.startsWith('⚠')) {
+      cite.resolved = false
+      return
+    }
+    cite.resolved = observation.startsWith('✓')
+    if (cite.resolved) cite.snippet = extractCiteSnippet(observation)
+  }
+}
+
+// `facts.md:15  正文…` —— memory.py::Hit.as_line 的形状（source 是 <file>:<line>）。
+const MEMORY_HIT = /^[\w.\-/]+:\d+\s/
+
+// 从 `✓ cited: «claim» ⟵ facts.md:15  (原文)` 里取回原文（tools.py::_cite 的确切形状）。
+// 🔴 复核打回（feat-059 finding 1）：早期版本用 lastIndexOf('(')/lastIndexOf(')') 全串扫，
+//    源文件行自己带半角括号时会从括号处截断——`(Phase 1 (Sanya) launch moved to Q3)` 被切成
+//    `Sanya) launch moved to Q3`，把残句当逐字原文显示给经理。半角括号在业务文档里极常见
+//    （`Q3 (revised)`、`Anna Lindqvist (PM)`），英文语境必踩。
+// 解法：锚在 `» ⟵ <ref>  (` 之后（ref 无空格；claim 由 «» 定界），贪婪吃到结尾最后一个 ')'，
+//    这样嵌套/多个括号都原样保留。形状对不上就 null——宁可不显，不显残缺的"原文"。
+const CITE_SNIPPET = /»\s+⟵\s+\S+\s+\(([\s\S]*)\)\s*$/
+
+function extractCiteSnippet(observation: string): string | null {
+  const match = CITE_SNIPPET.exec(observation)
+  if (!match) return null
+  const snippet = match[1].trim()
+  return snippet ? snippet : null
 }
 
 function formatToolCall(name: string | undefined, input: Record<string, unknown> | undefined): string {

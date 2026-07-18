@@ -7,8 +7,8 @@ import type {
   LiveTeamPayload,
   LiveTransport,
 } from './transport'
-import { createHttpTransport } from './transport'
-import { resolveTransport } from './stubTransport'
+import { isStubTransportSelected, resolveTransport } from './stubTransport'
+import { createHttpTransport, storedOwnerToken } from './transport'
 import {
   coerceAskDraft,
   createLiveAgentSource,
@@ -18,6 +18,13 @@ import {
 } from './streamSource'
 import type { AdviseRequest } from './transport'
 import { liteTeamFromPayload, type LiteTeam } from './teamData'
+import {
+  navigateCloseDetail,
+  navigateToDetail,
+  navigateToScreen,
+  type LiteDetail,
+  type LiteScreen,
+} from './routes'
 
 // feat-017 的 liveStore 血统，feat-035（lite-live-v02 kickoff §架构拍板 1）copy-then-wall
 // 复制进 src/lite2/**，与 src/lite/store.ts 各自独立生长——lite ↔ lite2 零交叉 import。
@@ -37,23 +44,64 @@ export type IngestStatus = 'idle' | 'ingesting' | 'ready' | 'error'
 // 放在 Follow-ups 之后——本棒的 tab 顺序决定，见 progress.md）· A closer look（空态占位，
 // feat-037 真派生）· Playbooks（空态屏）· Vision/Where this goes（定位叙事 + 能力边界 mock）。
 // 详情是浮层不是 scene。
-export type LiteScreen =
-  | 'team'
-  | 'room'
-  | 'followups'
-  | 'notes'
-  | 'closerlook'
-  | 'playbooks'
-  | 'vision'
+// feat-051：屏的枚举与详情形状挪到 routes.ts（那里是导航的唯一真相源，屏 ↔ 路径成对定义）。
+// 这里原样再导出一次——既有 import 点（notifyStore / LiteTopbar）不用改。
+export type { LiteScreen, LiteDetail }
 
-export type LiteDetail = { kind: 'person' | 'project'; id: string } | null
+// ── feat-050 · 会话不丢（contextId 恢复）────────────────────────────────────────────────
+// 病因：后端早已持久化（Supabase），owner_token 也早已存在 `lite2:ownerTokens:v1`——唯独
+// context_id 只活在内存里，刷新一次这家公司的全部数据就"指针丢了"（数据还在，找不回来）。
+// 这里存的就是那根指针：一个 id，不是数据本身。手写同步 load/save，与 flowStore/
+// notifyStore/onboardStore 同族（`lite2:` 前缀、同样的无痕模式静默降级）。
+//
+// 🔴 只存 context_id，不存 owner_token（token 归 transport 的 `lite2:ownerTokens:v1` 管，
+// 各存各的，避免两处写同一份凭据）。
+const CONTEXT_STORE_KEY = 'lite2:contextId:v1'
+
+export function loadStoredContextId(): string | null {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return null
+    const raw = window.localStorage.getItem(CONTEXT_STORE_KEY)
+    return raw && raw.trim() ? raw : null
+  } catch {
+    // 无痕模式/禁用存储——退回"没有上次会话"，不崩。
+    return null
+  }
+}
+
+// 传 null 即遗忘（context 已失效时清干净，别留死指针）。
+export function rememberContextId(contextId: string | null): void {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return
+    if (contextId) window.localStorage.setItem(CONTEXT_STORE_KEY, contextId)
+    else window.localStorage.removeItem(CONTEXT_STORE_KEY)
+  } catch {
+    /* quota/无痕——本次会话内存里仍持有 contextId，只是下次打不开而已 */
+  }
+}
+
+// 首帧同步取回（不等 effect）：store 建好时 contextId 就位，`restoreSession()` 才有的可拉。
+const restoredContextId = isStubTransportSelected() ? null : loadStoredContextId()
+
+// 恢复的重入闸（模块级，同 notifyStore 的 `wired` 先例）。**不能拿 state.restoring 当闸**——
+// 它首帧就是 true（为了不闪空态），拿它当闸会让挂载时的第一次调用直接被自己挡掉、永远不拉。
+// 重试路径不受影响：那时这个标志早已落回 false。
+let restoreInFlight = false
+
+// 后端/stub 都把 404 编码进 Error.message（`team HTTP 404` / `team HTTP 404 (stub)`）——
+// 这是 feat-028 立的"未知 id 大声失败"纪律留下的唯一可判据。404 = context 真没了/token 对不上
+// （feat-038 租户隔离：绝不给 403 这种可枚举的 oracle），其余（500/网络断）都是"这次没连上"。
+function isNotFound(message: string): boolean {
+  return /HTTP 404/.test(message)
+}
 
 interface LiteState {
   transport: LiveTransport
 
   // ── lite 导航 ──
-  screen: LiteScreen
-  detail: LiteDetail
+  // feat-051：`screen` / `detail` 不再是 store 状态——当前屏与当前详情由 URL 派生
+  //（routes.ts 的 useCurrentScreen / useRouteDetail）。留在 store 里会变成第二份真相，
+  // 和后退键、刷新、深链三样各自打架。下面的 action 名字与签名保持不变，只是改成推路由。
 
   // ── Your team（feat-016 ingestion 产出）──
   ingestStatus: IngestStatus
@@ -73,6 +121,13 @@ interface LiteState {
   // advise 完成且后端确认新笔记落库 → Room 内出一次 nudge（丢弃则不出）。切屏即消。
   noteJustAdded: boolean
 
+  // feat-050：正在按存下的 contextId 取回上次会话（首帧即 true，避免"空态闪一下再冒出团队"
+  // 让人以为数据丢了）。取回结束（成功或降级）必须落回 false——绝不留无限 loading。
+  restoring: boolean
+  // 取不回来且**不是** 404 时的原因（后端没起/网断）。404 不进这里：那是"context 真没了"，
+  // 直接干净回上传态，不该冲用户报错。
+  restoreError: string | null
+
   // ── The room 一次 live 运行（feat-015 /advise）──
   run: LiveRunState
   agentSource: LiveAgentSource
@@ -85,11 +140,20 @@ interface LiteState {
   askError: string | null
 
   // ── actions ──
-  goScreen: (screen: LiteScreen) => void
+  // feat-051：`params` 可给目标屏叠加 query——feat-057 的决策卡走
+  // `goScreen('room', { q: '<问题>' })` 带着问题进议事室。省略即只切屏（既有 7 个调用点不变）。
+  goScreen: (screen: LiteScreen, params?: Record<string, string | null>) => void
   openDetail: (kind: 'person' | 'project', id: string) => void
   closeDetail: () => void
   setTransport: (transport: LiveTransport) => void // AFK 门注入确定性 stub
   uploadFiles: (files: File[]) => Promise<void>
+  // feat-050：按 localStorage 里的 contextId 把上次会话拉回来。挂载时调一次；失败可重试。
+  // 🔴 不是"唯一入口"——feat-053（账号体系）落地后 contextId 由服务端按账号返回，那条线
+  // 直接调 `adoptContext()` 覆盖即可，本条退化为无账号时的兜底（已有 team 时本函数自己让路）。
+  restoreSession: () => Promise<void>
+  // feat-050 的被覆盖口：谁拿到权威 contextId（现在是 localStorage，将来是 feat-053 的
+  // 服务端按账号返回）就调它——落 state + 落锚点，一处收口。
+  adoptContext: (contextId: string | null, ownerToken?: string | null) => void
   refreshTeam: () => Promise<void>
   refreshFiles: () => Promise<void>
   refreshNotes: () => Promise<void>
@@ -119,18 +183,20 @@ const defaultTransport = import.meta.env.DEV ? resolveTransport() : createHttpTr
 export const useLite = create<LiteState>((set, get) => ({
   transport: defaultTransport,
 
-  screen: 'team',
-  detail: null,
-
   ingestStatus: 'idle',
   ingestError: null,
   team: null,
-  contextId: null,
-  ownerToken: null,
+  // feat-050：从 localStorage 同步取回（stub 传输下恒为 null，见 restoredContextId）。
+  contextId: restoredContextId,
+  // token 归 transport 存；这里挂同一份供 UI/门可见（feat-047 语义不变）。
+  ownerToken: storedOwnerToken(restoredContextId),
   rawTeam: null,
   files: [],
   notes: [],
   noteJustAdded: false,
+  // 有锚点才算"正在恢复"——没有锚点是干净首访，直接进上传引导，不该转圈。
+  restoring: restoredContextId !== null,
+  restoreError: null,
 
   run: emptyRunState(),
   agentSource: createLiveAgentSource(defaultTransport),
@@ -141,9 +207,13 @@ export const useLite = create<LiteState>((set, get) => ({
   askError: null,
 
   // 切屏消掉 Room 内的一次性 nudge（用户已离开事发现场；nudge 是瞬态感知，不是持久红点）。
-  goScreen: (screen) => set({ screen, detail: null, noteJustAdded: false }),
-  openDetail: (kind, id) => set({ detail: { kind, id } }),
-  closeDetail: () => set({ detail: null }),
+  // feat-051：切屏本身交给路由（导航自带「离开详情」的语义，不必再手动清 detail）。
+  goScreen: (screen, params) => {
+    set({ noteJustAdded: false })
+    navigateToScreen(screen, params)
+  },
+  openDetail: (kind, id) => navigateToDetail(kind, id),
+  closeDetail: () => navigateCloseDetail(),
 
   setTransport: (transport) =>
     set({ transport, agentSource: createLiveAgentSource(transport) }),
@@ -160,7 +230,13 @@ export const useLite = create<LiteState>((set, get) => ({
         contextId: payload.context_id,
         // feat-047: 挂上本公司 owner_token（transport 已存并按 context_id 带 header）。
         ownerToken: payload.owner_token ?? null,
+        // 上传成功即"有会话了"——把上一轮失败的恢复提示清掉。
+        restoring: false,
+        restoreError: null,
       })
+      // feat-050：落锚点——这是"刷新还在"的全部秘密（数据本来就在后端，只差这根指针）。
+      // stub 传输不落（它的 context 是进程内造的，落了下次真启动会拿去打真后端）。
+      if (!isStubTransportSelected()) rememberContextId(payload.context_id)
       // feat-047（feat-032）：拉一次持久文件清单（含 n_chunks）。次要视图，失败不影响上传成功。
       void get().refreshFiles()
     } catch (err) {
@@ -169,6 +245,76 @@ export const useLite = create<LiteState>((set, get) => ({
         ingestError: err instanceof Error ? err.message : String(err),
       })
     }
+  },
+
+  // feat-050 · 会话不丢：按存下的 contextId 把上次会话拉回来（数据一直在后端，这里只是
+  // 拿着指针再要一次）。三条降级路径，一条都不许留白屏/无限 loading/一屏红字：
+  //   ① 没锚点        → 干净首访，直接进上传引导。
+  //   ② 404（context 没了 / token 失效）→ 忘掉锚点，干净回上传态，**不报错**。
+  //   ③ 其它错（后端没起/网断）→ 保住锚点（context 多半还活着，别把用户的指针扔了），
+  //      安静显示一行"没连上 + 重试"。
+  restoreSession: async () => {
+    if (restoreInFlight) return // StrictMode 双跑 effect / 重复挂载
+    const { contextId, transport, team } = get()
+    // 已经有 team（刚上传完，或 feat-053 落地后由账号态先填好）→ 让路，不覆盖。
+    if (!contextId || team) {
+      set({ restoring: false, restoreError: null })
+      return
+    }
+    restoreInFlight = true
+    set({ restoring: true, restoreError: null })
+    try {
+      const payload = await transport.fetchTeam(contextId)
+      set({
+        team: liteTeamFromPayload(payload),
+        rawTeam: payload,
+        // idle → ready（不经 'ingesting'）：notifyStore 的 ingest 通知只认
+        // `ingesting → ready` 这一跳，所以刷新页面不会假冒"你的团队已就绪"再通知一遍。
+        ingestStatus: 'ready',
+        ownerToken: storedOwnerToken(contextId),
+        restoring: false,
+        restoreError: null,
+      })
+      // 「你的文件」与「Avery's notes」同样按 contextId 持久在后端——一并取回，
+      // 否则刷新后团队回来了、文件清单和笔记还是空的（那也是"会话丢了"）。
+      // 两者都自带静默失败（次要视图），不会打断已就绪的主流程。
+      void get().refreshFiles()
+      void get().refreshNotes()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      if (isNotFound(message)) {
+        rememberContextId(null)
+        set({
+          contextId: null,
+          ownerToken: null,
+          team: null,
+          rawTeam: null,
+          files: [],
+          notes: [],
+          ingestStatus: 'idle',
+          restoring: false,
+          restoreError: null,
+        })
+      } else {
+        set({ restoring: false, restoreError: message, ingestStatus: 'idle' })
+      }
+    } finally {
+      restoreInFlight = false
+    }
+  },
+
+  // feat-050 的被覆盖口（见接口注释）：一处收口"权威 contextId 变了"这件事。
+  adoptContext: (contextId, ownerToken) => {
+    if (!isStubTransportSelected()) rememberContextId(contextId)
+    set({
+      contextId,
+      ownerToken: ownerToken ?? storedOwnerToken(contextId),
+      restoreError: null,
+      // 换了 context 就不能留着上一个 context 的数据（换账号数据串是 feat-053 的红线）。
+      ...(contextId !== get().contextId
+        ? { team: null, rawTeam: null, files: [], notes: [], ingestStatus: 'idle' as IngestStatus }
+        : {}),
+    })
   },
 
   refreshTeam: async () => {

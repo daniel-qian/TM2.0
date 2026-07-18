@@ -453,6 +453,13 @@ export const en = {
     triageRestoreLabel: 'Bring it back',
     triageAllDone: 'Everything from this morning is settled the way you chose.',
 
+    // feat-050 (session restore) — shown only while a stored context is being fetched back, or
+    // when that fetch could not reach the server. A 404 gets no copy at all: the context is
+    // genuinely gone, so the plain upload empty state IS the honest screen.
+    restoringLabel: 'Bringing back your last session…',
+    restoreFailed: 'Could not reach the server — your last session was not brought back.',
+    restoreRetry: 'Try again',
+
     // Upload empty state (the left spine speaks for itself — no scripted placeholders)
     emptyEyebrow: 'Getting started',
     emptyHintRoster: 'A team roster or a few resumes — the people appear as cards.',
@@ -571,6 +578,29 @@ export const en = {
     roomChipRisk: 'Which project is most at risk of slipping, and why?',
     roomChipHandoff: 'Is any handoff between people waiting on someone right now?',
     roomChipPlanning: 'Help me sketch priorities for next week.',
+
+    // ── The room — simplified thinking view (feat-059, PRD G7). Four phases driven by REAL
+    // stream events: a phase that got no event stays "not started yet". No fake progress, no
+    // scripted beats, no invented timing. The raw stream stays one click away, complete. ──
+    roomFlowTitle: 'How it worked through this',
+    roomFlowRawTitle: 'Raw stream',
+    roomFlowShowRaw: 'Show raw stream',
+    roomFlowHideRaw: 'Back to the summary',
+    roomPhaseRead: 'Reading the facts',
+    roomPhaseCrosscheck: 'Cross-checking',
+    roomPhaseMethod: 'Matching an approach',
+    roomPhaseAct: 'Writing the actions',
+    roomPhasePending: 'Not started yet',
+    roomFlowSteps: '{count} steps',
+    roomFlowSources: 'Read {count} source documents',
+    roomFlowRecall: 'Turned up {count} lines from your files',
+    roomFlowReady: 'The read is ready',
+    roomFlowCites: 'Grounded in {count} original lines',
+    roomFlowCitesLabel: 'The lines it cited',
+    roomFlowUnresolved: 'did not match a real line',
+    // Honest failure state inside the flow panel itself (feat-059 review finding 4): when the
+    // stream breaks mid-run the simplified view must say so, not leave a phase silently stalled.
+    roomFlowFailed: 'This run broke off partway and never finished. Open the raw stream to see where.',
 
     // ── Notification bell (feat-045, PRD F5 — REAL events only; zero hardcoded items; copy
     // never names an employee) ──
