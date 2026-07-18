@@ -68,7 +68,19 @@ export const zh: Dict = {
     "fileStatusFailed": "没能读取",
     "fileStatusUnknown": "状态未知",
     "fileStatusEmptyHint": "这份文件能打开，但里面没取出文字——扫描件或纯图片导出通常是这样。它没有任何内容进入你的团队。",
-    "fileStatusFailedHint": "这份文件完全没能打开，常见原因是字符编码不匹配（另存为 UTF-8 后重新上传）。它没有任何内容进入你的团队。"
+    "fileStatusFailedHint": "这份文件完全没能打开，常见原因是字符编码不匹配（另存为 UTF-8 后重新上传）。它没有任何内容进入你的团队。",
+    "againTitle": "再传文件会另起一家公司",
+    "againBody": "每次上传，Avery 都当作独立的一家公司来读。新传的不会并进你现在看的这一份——两份都留着，可以在这里来回切。",
+    "switchTitle": "这台电脑上传过的",
+    "switchAction": "打开这一份",
+    "switchOpening": "打开中…",
+    "switchCurrent": "当前打开的",
+    "switchFilesLabel": "读自",
+    "switchForget": "从这个列表里移除",
+    "switchForgetNote": "只是把这台电脑上的入口去掉，服务端的数据不会被删。",
+    "switchErrorMissingCredential": "这台电脑上已经没有打开那一份的钥匙了。公司数据本身还在服务端——用当初绑定的账号登录就能拿回来。",
+    "switchErrorUnreadable": "打不开那一份——服务端没有把它交出来。可能是那一份真的没了，也可能是这台电脑已经证明不了它是你的，Avery 分不出是哪一种。两种情况下它都还留在这个列表里，可以再试一次。",
+    "switchErrorFailed": "刚才没连上服务器。什么都没丢，再试一次。"
   },
   "team": {
     "liveEyebrow": "从你上传的文件里",
