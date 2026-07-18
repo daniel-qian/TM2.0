@@ -120,6 +120,13 @@ export interface LiveDecisionRuleHit {
   evidence: string[] // 原文证据，verbatim —— 原样展示，不要转述
 }
 
+// 文档写了、但后端解析不出一个可比较的值的字段。raw 是**文档原文**，原样展示。
+export interface LiveDecisionUnparsedField {
+  field: string // 'dueDate' 等机器键
+  field_label: string // 中文字段名，如「到期日」——用户面显示这个
+  raw: string // 文档里原本写的那几个字，如「月底前」
+}
+
 export interface LiveDecisionCard {
   subject_type: 'project' // 当前只有项目型；留着以便后续扩人/任务
   subject_id: string
@@ -132,9 +139,13 @@ export interface LiveDecisionCard {
   rule_grade_label: string
   rule_severity: number
   matched_rules: LiveDecisionRuleHit[] // 永不为空 —— 每条决策都能展开看到命中了哪条规则
-  // 🔴 文档没提到的字段（'status' | 'progress' | 'dueDate'）。界面必须显示「文档未提及」，
+  // 🔴 文档**确实没写**的字段（'status' | 'progress' | 'dueDate'）。界面必须显示「文档未提及」，
   // 绝不能渲染成 0% 或空白 —— "文档没说"不等于"没风险"。
   unknown_fields: string[]
+  // 🔴 文档**写了、但后端读不准**的字段，与 unknown_fields 互斥（一个字段只会出现在其中一个里）。
+  // 界面必须把原文摆出来，例如「到期日写的是『月底前』，无法确定具体日期」——
+  // 绝不能把这些说成「文档未提及」：客户手上就有原件，说他没写等于当场自证不可信。
+  unparsed_fields: LiveDecisionUnparsedField[]
   reason: string // 那句人话理由
   reason_source: 'rule' | 'avery' // rule = 机械拼装可溯源；avery = 模型写的
   escalated: boolean // Avery 是否上调了等级

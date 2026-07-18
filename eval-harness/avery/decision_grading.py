@@ -30,6 +30,7 @@ from .decision_rules import (
     CAN_PROCEED,
     DUE_CRUNCH_DAYS,
     DUE_SOON_DAYS,
+    DUE_YEAR_LOOKBACK_DAYS,
     GRADES,
     HIGH_RISK,
     KEYWORD_FAMILIES,
@@ -63,6 +64,9 @@ _RE_YM = re.compile(r"(\d{4})\s*[-/.年]\s*(\d{1,2})\s*月?(?!\s*[-/.]?\s*\d)")
 _RE_MON_D_Y = re.compile(r"\b([a-z]{3,9})\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})\b")
 _RE_D_MON_Y = re.compile(r"\b(\d{1,2})(?:st|nd|rd|th)?\s+([a-z]{3,9})\.?,?\s+(\d{4})\b")
 _RE_SLASH = re.compile(r"\b(\d{1,2})\s*/\s*(\d{1,2})\s*/\s*(\d{4})\b")
+# 年份省略的中文写法 —— 中文周报里 dueDate 的**常态**（"8月15日" / "8月15号" / "8月15日前"）。
+# 中文月日顺序无歧义，所以只差一个年份；年份由 as_of 推断，规则见 _resolve_year。
+_RE_MD_ZH = re.compile(r"(?<![\d年])\s*(\d{1,2})\s*月\s*(\d{1,2})\s*[日号]")
 
 
 def _mk(year: int, month: int, day: int) -> date | None:
@@ -72,12 +76,36 @@ def _mk(year: int, month: int, day: int) -> date | None:
         return None
 
 
-def parse_due_date(text: str) -> date | None:
+def _resolve_year(month: int, day: int, as_of: date) -> date | None:
+    """给一个只有月/日的到期日补上年份。确定性：同一个 (month, day, as_of) 永远同一个结果。
+
+    规则（写进 decision_grading_rules.md，客户可当场核对）：先按 `as_of` 当年算；如果算出来
+    的日子已经过去超过 `DUE_YEAR_LOOKBACK_DAYS` 天，就认为文档说的是**下一年**的同一天。
+    周报里写"8月15日"几乎不可能指三个月前，但很可能指下一个一月——这条规则两头都照顾到。
+    """
+    here = _mk(as_of.year, month, day)
+    if here is None:                      # 2月30日 这种根本不存在的日子
+        return None
+    if (as_of - here).days > DUE_YEAR_LOOKBACK_DAYS:
+        return _mk(as_of.year + 1, month, day)
+    return here
+
+
+def parse_due_date(text: str, *, as_of: date | None = None) -> date | None:
     """把一个自由文本 dueDate 解析成 date；认不出来返回 None（= 未知，不是"很远"）。
 
     支持 `2026-08-15` / `2026/8/15` / `2026年8月15日` / `2026年8月`（按当月 1 号，取**最早**
     可能日 —— 偏保守 = 偏向上调，符合"漏报比误报贵"）/ `Aug 15, 2026` / `15 Aug 2026`。
     `08/15/2026` 这种日月顺序有歧义的写法：只有当某一位 > 12（唯一解）时才认，否则判未知。
+
+    **省略年份的中文写法（"8月15日" / "8月15号"）只在传了 `as_of` 时才认**——年份靠它推断
+    （见 `_resolve_year`）。这是中文周报里最常见的写法；不认它会让每份中文文档的到期日
+    都被标成"未知"，等于对着客户自己的文件说瞎话。不传 `as_of` 就老老实实返回 None，
+    绝不拿 `date.today()` 在函数内部偷偷兜底（那会毁掉本模块的可复现性）。
+
+    🔴 "月底前" / "第三季度末" / "下周五" 这类**没法定到某一天**的写法一律返回 None，
+    调用方据此把它记进 `unparsed_fields`（= 文档写了、我读不准），而不是 `unknown_fields`
+    （= 文档压根没写）。两者都绝不当作"还早"。
     """
     if not text:
         return None
@@ -109,6 +137,12 @@ def parse_due_date(text: str) -> date | None:
     m = _RE_YM.search(t)
     if m:
         return _mk(int(m.group(1)), int(m.group(2)), 1)
+
+    # 年份省略的中文写法放在最后：上面每一条都要求写明年份，走到这里才说明文档确实没写年份。
+    if as_of is not None:
+        m = _RE_MD_ZH.search(t)
+        if m:
+            return _resolve_year(int(m.group(1)), int(m.group(2)), as_of)
     return None
 
 
@@ -127,6 +161,10 @@ class _Subject:
     blockers: tuple[str, ...]
     signals: tuple[dict, ...]
     unknown_fields: tuple[str, ...]
+    # 🔴 与 unknown_fields **互斥**：文档确实写了、但我读不出一个能比较的值。
+    # 每项是 (字段名, 文档原文)。分成两个字段是因为把它们混作一谈 = 对着客户自己的文件说
+    # "文档未提及"，而他翻开周报白纸黑字写着——这份说明书的全部说服力就建立在"当场把表给他看"。
+    unparsed_fields: tuple[tuple[str, str], ...]
 
 
 def _norm_text(v) -> str:
@@ -171,7 +209,7 @@ def _to_subject(project: dict, signals: list[dict], as_of: date) -> _Subject:
     if not isinstance(progress, int) or isinstance(progress, bool):
         progress = None
     due_raw = _norm_text(project.get("dueDate"))
-    due = parse_due_date(due_raw)
+    due = parse_due_date(due_raw, as_of=as_of)
     blockers = tuple(b for b in (_norm_text(x) for x in (project.get("blockers") or [])) if b)
     matched = _match_signals(project, signals)
 
@@ -179,14 +217,20 @@ def _to_subject(project: dict, signals: list[dict], as_of: date) -> _Subject:
     # 只收**标量**字段：它们缺失时前端会错渲成 0% / 空串 / "正常"，是真正会骗人的三个。
     # `blockers` 是列表字段，payload 本来就只在非空时才发，"没抽到阻塞行"是一个可接受的读法，
     # 放进未知列表只会让每个健康项目都挂一条「阻塞：未知」的噪音。全空的情形由 R-NO-EVIDENCE 兜。
+    # 🔴 「文档没写」和「文档写了但我读不准」是两件事，绝不能混作一谈。前者说"文档未提及"是
+    # 事实，后者说"文档未提及"是**对客户自己的文件作出的失实陈述**——他翻开周报就能当场证伪。
+    # 定级方向上两者一视同仁（都不当作"还早"），只有给人看的措辞必须分开。
     unknown: list[str] = []
+    unparsed: list[tuple[str, str]] = []
     if not status:
         unknown.append("status")
     if progress is None:
         unknown.append("progress")
     if due is None:
-        # 含"文档写了但解析不出来"（如"月底前"）——一样按未知处理，绝不当作"还早"。
-        unknown.append("dueDate")
+        if due_raw:
+            unparsed.append(("dueDate", due_raw))   # "月底前" / "第三季度末"：写了，定不到某一天
+        else:
+            unknown.append("dueDate")
 
     return _Subject(
         subject_id=_norm_text(project.get("id")) or _norm_text(project.get("title")),
@@ -194,6 +238,7 @@ def _to_subject(project: dict, signals: list[dict], as_of: date) -> _Subject:
         owner_name=_norm_text(project.get("ownerName")),
         status=status, progress=progress, due_raw=due_raw, due=due,
         blockers=blockers, signals=matched, unknown_fields=tuple(unknown),
+        unparsed_fields=tuple(unparsed),
     )
 
 
@@ -372,7 +417,8 @@ class Decision:
     grade: str                      # 最终等级（= rule_grade，除非 Avery 合法上调）
     rule_grade: str                 # 规则算出来的等级 —— 永远保留，可对账
     matched_rules: tuple[RuleHit, ...]
-    unknown_fields: tuple[str, ...]
+    unknown_fields: tuple[str, ...]                     # 文档压根没写 → 057 显示「文档未提及」
+    unparsed_fields: tuple[tuple[str, str], ...]        # 文档写了、读不准 → 显示原文 + 「读不准」
     reason: str
     reason_source: str = "rule"     # "rule"（机械拼装，可溯源）| "avery"（模型写的人话）
     escalated: bool = False
@@ -399,6 +445,10 @@ class Decision:
             "rule_severity": SEVERITY[self.rule_grade],
             "matched_rules": [h.to_dict() for h in self.matched_rules],
             "unknown_fields": list(self.unknown_fields),
+            "unparsed_fields": [
+                {"field": f, "field_label": _FIELD_LABEL.get(f, f), "raw": raw}
+                for f, raw in self.unparsed_fields
+            ],
             "reason": self.reason,
             "reason_source": self.reason_source,
             "escalated": self.escalated,
@@ -409,7 +459,7 @@ class Decision:
         }
 
 
-_UNKNOWN_LABEL = {"status": "状态", "progress": "进度", "dueDate": "到期日", "blockers": "阻塞"}
+_FIELD_LABEL = {"status": "状态", "progress": "进度", "dueDate": "到期日", "blockers": "阻塞"}
 
 
 def _compose_reason(subject: _Subject, grade: str, hits: tuple[RuleHit, ...]) -> str:
@@ -417,13 +467,22 @@ def _compose_reason(subject: _Subject, grade: str, hits: tuple[RuleHit, ...]) ->
 
     Avery 在线时会用一句更像人话的替换它（`apply_review`），但离线 / 无 key 时前端也必须
     有话可显示——🔴 这里绝不允许出现 canned 的"看起来像分析"的句子。
+
+    🔴 措辞红线：这句话会**原样打到经理屏幕上**，所以它只许陈述"我读到了什么"，
+    绝不许替客户断言"你的文档里没有什么"。两者的差别在于：抽取层读不出来的时候，
+    前者仍然是真话，后者是当着客户的面否认他自己写过的字。
     """
     top = [h.title for h in hits if h.grade == grade]
     body = "；".join(top) if top else "（无命中规则）"
     text = f"按规则判为{LABEL_ZH[grade]}：{body}。"
+    notes: list[str] = []
     if subject.unknown_fields:
-        missing = "、".join(_UNKNOWN_LABEL.get(f, f) for f in subject.unknown_fields)
-        text += f"（文档未提及：{missing}——未知不等于没风险。）"
+        missing = "、".join(_FIELD_LABEL.get(f, f) for f in subject.unknown_fields)
+        notes.append(f"未读到：{missing}")
+    for field, raw in subject.unparsed_fields:
+        notes.append(f"{_FIELD_LABEL.get(field, field)}写的是「{raw}」，无法确定具体日期")
+    if notes:
+        text += f"（{'；'.join(notes)}——未知不等于没风险。）"
     return text
 
 
@@ -470,6 +529,7 @@ def grade_project(project: dict, signals: list[dict] | None = None, *,
         rule_grade=rule_grade,
         matched_rules=frozen,
         unknown_fields=subject.unknown_fields,
+        unparsed_fields=subject.unparsed_fields,
         reason=_compose_reason(subject, rule_grade, frozen),
         reason_source="rule",
     )
@@ -521,7 +581,11 @@ def apply_review(decision: Decision, review: AveryReview | None) -> Decision:
     if proposed and proposed not in GRADES:
         return _with(decision, review_rejected="unknown_grade")
 
-    rule_sev = SEVERITY[decision.rule_grade]
+    # 基线取「规则原判」和「当前等级」里更高的那个。只用 rule_grade 会漏掉一条缝：一条已被
+    # 合法上调过的决策（rule_grade=可推进、grade=高风险）再复核一次，提"需确认"时算出来是
+    # 相对 rule_grade 的上调，于是被采纳——等级实质从高风险掉到需确认，还不打 downgrade_blocked。
+    # 那是把「下调一律硬拦」从后门走掉。当前没有调用方，但理由层一接回路就会踩到。
+    rule_sev = max(SEVERITY[decision.rule_grade], SEVERITY[decision.grade])
     proposed_sev = SEVERITY[proposed] if proposed else rule_sev
 
     if proposed_sev < rule_sev:

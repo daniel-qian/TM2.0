@@ -152,10 +152,11 @@ def test_can_proceed_requires_a_positive_statement():
 
 
 def test_unparseable_due_date_is_unknown_not_far_away():
-    """"月底前"这种解析不了的到期日按未知处理，绝不当作"还早"。"""
+    """"月底前"这种定不到某一天的到期日绝不当作"还早"——但它属"读不准"，不是"文档没写"。"""
     d = grade_project(proj(status="on-track", dueDate="月底前"), [], as_of=TODAY)
-    assert "dueDate" in d.unknown_fields
     assert not any(h.rule_id in ("R-DUE-SOON", "R-OVERDUE") for h in d.matched_rules)
+    assert d.unparsed_fields == (("dueDate", "月底前"),)
+    assert "dueDate" not in d.unknown_fields
 
 
 def test_unknown_fields_are_reported_for_the_frontend():
@@ -164,11 +165,79 @@ def test_unknown_fields_are_reported_for_the_frontend():
     assert set(d.unknown_fields) == {"status", "progress", "dueDate"}
     d2 = grade_project(proj(status="on-track", progress=50, dueDate="2026-12-01"), [], as_of=TODAY)
     assert d2.unknown_fields == ()
+    assert d2.unparsed_fields == ()
 
 
 def test_reason_flags_the_unknowns():
     d = grade_project(proj(id="p_y", title="半空项目", status="on-track"), [], as_of=TODAY)
-    assert "未提及" in d.reason and "未知不等于没风险" in d.reason
+    assert "未读到" in d.reason and "未知不等于没风险" in d.reason
+
+
+# --- 3b. 🔴 绝不对客户自己的文档作失实陈述（复核 finding 1 / 2 的回归门）----------------------
+# 这两条是本线唯一会**原样打到经理屏幕上**的文字。判错一档还能靠展开的证据自证；
+# 当着客户的面否认他自己写过的字，这份说明书的说服力当场归零。
+
+def test_a_written_but_unreadable_due_date_is_never_called_missing():
+    """🔴 dueDate="8月15日" 写在周报上。系统可以说"我读不准"，绝不许说"文档未提及"。"""
+    d = grade_project(proj(status="on-track", dueDate="8月底前"), [], as_of=TODAY)
+    assert "dueDate" not in d.unknown_fields, "文档白纸黑字写了到期日，不许说没写"
+    assert "未提及" not in d.reason and "没写" not in d.reason
+    # 说得出它写的是什么 —— 经理拿原文一对就知道系统读的是同一份文件
+    assert "8月底前" in d.reason
+    payload = d.to_dict()
+    assert payload["unparsed_fields"] == [
+        {"field": "dueDate", "field_label": "到期日", "raw": "8月底前"}]
+
+
+def test_missing_and_unreadable_are_two_different_fields():
+    """"文档没写"与"我读不准"必须分开——两者在 to_dict 里落到互斥的两个键。"""
+    written = grade_project(proj(status="on-track", dueDate="第三季度末"), [], as_of=TODAY)
+    absent = grade_project(proj(status="on-track"), [], as_of=TODAY)
+    assert [f["field"] for f in written.to_dict()["unparsed_fields"]] == ["dueDate"]
+    assert "dueDate" not in written.to_dict()["unknown_fields"]
+    assert absent.to_dict()["unparsed_fields"] == []
+    assert "dueDate" in absent.to_dict()["unknown_fields"]
+    # 🔴 定级方向上两者一视同仁：都不许因此触发"还早"，也都不许降级
+    for d in (written, absent):
+        assert not any(h.rule_id in ("R-DUE-SOON", "R-OVERDUE") for h in d.matched_rules)
+
+
+def test_year_omitted_chinese_due_dates_are_read():
+    """中文周报写到期日几乎不写年份。年份由 as_of 推断，规则确定、可当场核对。"""
+    # TODAY = 2026-07-18；"8月15日" → 今年的 8/15，28 天后 → 不算迫近但读得出来
+    d = grade_project(proj(status="on-track", dueDate="8月15日"), [], as_of=TODAY)
+    assert d.unparsed_fields == () and "dueDate" not in d.unknown_fields
+    # 迫近的（7 天内）真能触发 R-DUE-SOON —— 中文侧不再对时间类规则全盲
+    soon = grade_project(proj(status="on-track", dueDate="7月20日前"), [], as_of=TODAY)
+    assert any(h.rule_id == "R-DUE-SOON" for h in soon.matched_rules)
+    # 已过的 → 高风险
+    late = grade_project(proj(status="on-track", dueDate="6月30号"), [], as_of=TODAY)
+    assert any(h.rule_id == "R-OVERDUE" for h in late.matched_rules)
+    # 落在过去太远 → 说的是明年的同一天，不谎称已逾期
+    from avery.decision_grading import parse_due_date
+    assert parse_due_date("1月10日", as_of=TODAY) == date(2027, 1, 10)
+    # 🔴 不传 as_of 就认不出年份，绝不在函数内部偷偷读时钟
+    assert parse_due_date("8月15日") is None
+
+
+def test_chinese_status_is_understood_end_to_end():
+    """🔴 中文文档必须能走到三档，不许塌成两档；也不许对写了状态的文档说"没读到状态"。"""
+    from avery.ingest.extract import _norm_status
+    assert _norm_status("进行中") == "on-track"
+    assert _norm_status("正常推进") == "on-track"
+    assert _norm_status("已完成") == "done"
+    assert _norm_status("有风险") == "at-risk"
+    assert _norm_status("已阻塞") == "blocked"
+    # 否定式不许翻成正面：这两个一旦误判就是把有问题的项目说成没问题
+    assert _norm_status("未完成") != "done"
+    assert _norm_status("无风险") != "at-risk"
+    # 三档在中文侧真的都够得着
+    got = {grade_project(proj(status=_norm_status(zh)), [], as_of=TODAY).rule_grade
+           for zh in ("进行中", "有风险", "已阻塞")}
+    assert got == {R.CAN_PROCEED, R.NEEDS_CONFIRMATION, R.HIGH_RISK}
+    # 状态读出来了，理由里就不许再说没读到状态
+    d = grade_project(proj(status=_norm_status("进行中")), [], as_of=TODAY)
+    assert "状态" not in d.reason.split("未读到")[-1].split("——")[0]
 
 
 # --- 4. 规则逐条 ------------------------------------------------------------------------------
@@ -328,6 +397,22 @@ def test_every_downgrade_direction_is_blocked(frm, to):
     assert out.grade == frm and out.downgrade_blocked is True
 
 
+def test_a_second_review_cannot_walk_an_escalation_back_down():
+    """🔴 复核两次不是下调的后门。
+
+    以前基线只取 `rule_grade`：一条 可推进 被合法上调到 高风险 之后，第二次复核提 需确认
+    仍然算"相对规则原判的上调"，于是被采纳——等级实质从高风险掉回需确认，而且
+    `downgrade_blocked` 还是 False，一点痕迹都不留。基线改成 max(规则原判, 当前等级) 后堵死。
+    """
+    base = grade_project(proj(id="p_up", status="on-track"), [], as_of=TODAY)
+    assert base.rule_grade == R.CAN_PROCEED
+    up = apply_review(base, AveryReview(grade=R.HIGH_RISK, escalation_reason="工地停工，规则没覆盖"))
+    assert up.grade == R.HIGH_RISK and up.escalated is True
+    back = apply_review(up, AveryReview(grade=R.NEEDS_CONFIRMATION, escalation_reason="想想还好"))
+    assert back.grade == R.HIGH_RISK, "已上调的等级被第二次复核降回去了 —— 下调红线被绕过"
+    assert back.downgrade_blocked is True and back.rejected_grade == R.NEEDS_CONFIRMATION
+
+
 def test_unknown_grade_from_the_model_is_refused():
     """模型返回词表外的等级 → 整个复核作废，不给它任何改判效果。"""
     base = grade_project(PROJECTS[1], SIGNALS, as_of=TODAY)
@@ -355,9 +440,25 @@ def test_rules_doc_in_sync():
     for family in R.KEYWORD_FAMILIES:
         assert family in doc, f"关键词族 {family} 没写进说明文档"
     for const in ("DUE_SOON_DAYS", "DUE_CRUNCH_DAYS", "PROGRESS_CRUNCH_PCT",
-                  "PROGRESS_LOW_PCT", "BLOCKER_STACK_N"):
+                  "PROGRESS_LOW_PCT", "BLOCKER_STACK_N", "DUE_YEAR_LOOKBACK_DAYS"):
         assert const in doc, f"阈值 {const} 没写进说明文档"
         assert str(getattr(R, const)) in doc, f"{const} 的值在文档里对不上"
+
+
+def test_no_rule_asserts_what_the_customers_document_does_not_contain():
+    """🔴 用户面文字只许陈述"我读到/没读到什么"，不许替客户断言"你的文档里没写什么"。
+
+    抽取层读不出来的原因很多（中文标签、非常规排版、我们还没支持的写法）。把这些一律说成
+    "文档没写"，就是当着客户的面否认他自己写过的字——而他手上就有原件，一翻就露馅。
+    """
+    forbidden = ("文档没写", "文档未写", "文档里没有", "没有提到")
+    for r in R.RULES:
+        for bad in forbidden:
+            assert bad not in r.title_zh, f"{r.id} 的措辞替客户断言了文档内容：{r.title_zh}"
+    # 兜底理由同样过这条线：拿一张什么都没有的卡（最容易说过头的情形）
+    bare = grade_project(proj(id="p_bare2", title="空卡"), [], as_of=TODAY).reason
+    for bad in forbidden:
+        assert bad not in bare, f"兜底理由替客户断言了文档内容：{bare}"
 
 
 def test_every_rule_has_exactly_one_matcher():
@@ -449,10 +550,11 @@ def test_payload_shape_for_feat_057():
     assert set(d) == {
         "subject_type", "subject_id", "subject_title", "owner_name",
         "grade", "grade_label", "severity", "rule_grade", "rule_grade_label", "rule_severity",
-        "matched_rules", "unknown_fields", "reason", "reason_source",
+        "matched_rules", "unknown_fields", "unparsed_fields", "reason", "reason_source",
         "escalated", "escalation_reason", "downgrade_blocked", "rejected_grade",
         "review_rejected",
     }
+    assert isinstance(d["unparsed_fields"], list)
     assert d["grade"] in R.GRADES and d["grade_label"] == R.LABEL_ZH[d["grade"]]
     hit = d["matched_rules"][0]
     assert set(hit) == {"rule_id", "grade", "grade_label", "severity", "title", "basis",
