@@ -65,16 +65,35 @@ _MILESTONE_HEADER = re.compile(
     r"^(?:里程碑|关键里程碑|阶段目标|任务拆解|子任务|检查点)\s*[：:]\s*(.*)$"
     r"|^(?:key\s+)?(?:milestones?|checkpoints?|sub-?tasks?)\s*[:\-]\s*(.*)$", re.I)
 
-# Any OTHER labelled field ends the milestone list (「阻碍项：」/「影响面：」/next project...).
+# A KNOWN tracking field label. These close the milestone list unconditionally — 「阻碍项：」 is a
+# blocker and 「自报状态：受阻」 is this project's status, never a checkpoint, even though both LOOK
+# like the "<name>: <state>" checklist shape below. Vocabulary mirrors the labels
+# `extract._project_from_span` reads, so the two stay in agreement about what a field line is.
+_FIELD_LABEL = re.compile(
+    r"^(?:负责人|主负责人|负责|责任人|牵头人|自报状态|当前状态|状态|项目状态|进度|完成度|完成率"
+    r"|截止/关键节点|截止日期|截止|交付日期|关键节点|进展摘要|摘要|概述|目标|简述"
+    r"|阻碍项|阻碍|阻塞|卡点|风险点|影响面|下一步|备注|交接人|接班人)\s*[：:]"
+    r"|^(?:owner|lead|dri|status|progress|due|deadline|ship(?:s|ping)?|summary|overview|goal"
+    r"|blockers?|risks?|next\s+steps?|notes?|impact)\s*[:\-]", re.I)
+
+# Any OTHER labelled field ends the milestone list (an unrecognised 「XX：」 / next project...).
 _ANY_LABEL = re.compile(r"^[^：:]{1,12}[：:]\s*\S|^[a-z][a-z /]{1,20}\s*[:\-]\s*\S", re.I)
 
 # A checklist row: "<name> — <completion state>". This is the shape milestones take in the wild, and
 # a row whose whole predicate is a completion word is a checkpoint, not a tracked project.
+#
+# THE SEPARATOR INCLUDES THE COLON, and that is the fix for a silent whole-block failure: real
+# documents write checkpoints as 「A/B 测试: 未开始」 / "Budget sign-off: done" just as often as with
+# a dash. Read as a field label, such a row ended milestone collection permanently, so a block's
+# milestone list came back EMPTY — not one row short, all of them — and R1 (the only rule that
+# catches a milestone the LLM has already stripped the status off) could never match. The first
+# customer's weekly happens to use 「 — 」 throughout, which is why the corpus never showed it.
+# `_FIELD_LABEL` above is what keeps this broadening from swallowing genuine field lines.
 _STATE_WORDS_ZH = r"已完成|完成|进行中|受阻|阻塞|未开始|待启动|已交付|已上线|待确认|延期"
 _STATE_WORDS_EN = r"done|complete[d]?|in ?progress|blocked|not ?started|todo|delivered|shipped"
 _CHECKLIST_ROW = re.compile(
-    rf"^(?P<name>.{{1,60}}?)\s*[—–\-]{{1,2}}\s*(?P<state>{_STATE_WORDS_ZH}|{_STATE_WORDS_EN})\s*$",
-    re.I)
+    rf"^(?P<name>.{{1,60}}?)\s*(?:[—–]{{1,2}}|-{{1,2}}|[：:])\s*"
+    rf"(?P<state>{_STATE_WORDS_ZH}|{_STATE_WORDS_EN})\s*$", re.I)
 
 # 「阶段 / 第N期 / Phase N / M1」 — a phase MARKER. On its own this proves nothing (a company may
 # genuinely run "Phase 2" as its own tracked project); it only demotes when stripping the marker
@@ -209,7 +228,13 @@ def _milestones_in(doc: ParsedDoc, start: int, end: int) -> list[tuple[str, int]
             continue
         if not collecting:
             continue
-        # a new labelled field (「阻碍项：」…) closes the milestone list
+        # A KNOWN field label (「阻碍项：」/「自报状态：」…) closes the list — checked FIRST, so a field
+        # whose value happens to be a completion word ("状态：已完成") is never read as a checkpoint.
+        if _FIELD_LABEL.match(s):
+            collecting = False
+            continue
+        # An UNRECOGNISED "<x>: <y>" line closes it too, unless it is a checklist row — 「A/B 测试:
+        # 未开始」 is a checkpoint that merely looks like a label.
         if _ANY_LABEL.match(s) and not _CHECKLIST_ROW.match(s):
             collecting = False
             continue
@@ -273,9 +298,30 @@ def document_identities(docs: list[ParsedDoc]) -> dict[str, str]:
     return out
 
 
+_STATUS_LABEL = re.compile(
+    r"^(?:自报状态|当前状态|状态|项目状态)\s*[：:]\s*\S|^status\s*[:\-]\s*\S", re.I)
+
+
+def docs_stating_status(docs: list[ParsedDoc]) -> set[str]:
+    """Names of documents that LABEL a status (「自报状态：受阻」 / 'Status: on-track') rather than
+    merely containing prose a status can be sniffed out of.
+
+    This is the distinction rule R4 needs and could not previously make. `ProjectEntity.status` is
+    one field with two very different provenances, and the entity does not record which — so the
+    provenance is recovered here, from the document, instead of widening the entity (its shape is a
+    cross-line contract with the project screen and is deliberately left alone).
+    """
+    out: set[str] = set()
+    for doc in docs:
+        if any(_STATUS_LABEL.match(ln.strip()) for ln in doc.lines):
+            out.add(doc.name)
+    return out
+
+
 def classify(project, milestone_index: dict[str, tuple[str, str]],
              project_titles: dict[str, str],
-             doc_identities: dict[str, str] | None = None) -> Ruling:
+             doc_identities: dict[str, str] | None = None,
+             stated_status_docs: set[str] | None = None) -> Ruling:
     """Rule the candidate a project or a milestone, WITH a citable reason.
 
     Rules fire in evidence strength order — a structural fact from the document beats a shape
@@ -286,8 +332,12 @@ def classify(project, milestone_index: dict[str, tuple[str, str]],
       R2 checklist-row      the title carries its own completion verdict ("… — 已完成") and the doc
                             tracks no owner/progress/deadline for it. That is a checkbox.
       R3 phase-of           the title is "<known project> + 第二阶段/Phase 2" — a phase OF something
-                            this same document already tracks. A bare "Phase 2" with no matching
-                            parent is NOT demoted: some companies really do run one.
+                            this same document already tracks, whose whole name the title contains,
+                            and which the document does NOT track separately. A bare "Phase 2" with
+                            no matching parent is NOT demoted, and neither is a phase that carries
+                            its own owner/progress/deadline: some companies really do run one.
+      R4 document           the title is the DOCUMENT's own name/heading and nothing about it is
+                            tracked — not an owner, a progress, a deadline, or a LABELLED status.
       R0 tracked            otherwise, if the doc gave it owner/status/progress/deadline, it is a
                             project and we say which fields prove it.
     """
@@ -308,12 +358,27 @@ def classify(project, milestone_index: dict[str, tuple[str, str]],
                       reason=f"「{title}」是一条自带完成状态（「{m.group('state')}」）的清单条目，"
                              f"文档没有给它负责人、进度或截止日期，属于检查点")
 
-    if _PHASE_MARKER.search(title):
+    # R3 carries TWO guards, both added after it was caught demoting real projects and citing a
+    # parent that does not exist:
+    #
+    #  (a) IF THE DOCUMENT TRACKS IT IN ITS OWN RIGHT, IT IS A PROJECT — that is this module's own
+    #      definition, stated at the top, and a phase marker in the name cannot outrank it. A company
+    #      that runs 「营收冲刺第二期」 with its own 负责人 / 进度 / 截止 is running a project and
+    #      calling it a phase. Without this guard R3 fired ahead of R0 and the evidence never got a
+    #      chance to speak.
+    #
+    #  (b) THE PARENT'S WHOLE NAME MUST APPEAR IN THE PHASE'S NAME — the containment is one-way on
+    #      purpose. The old test also accepted `bare in other_k`, which makes any SIBLING sharing a
+    #      prefix look like a parent: 'Billing Rewrite Phase 2' was demoted into 'Billing Rewrite
+    #      Tooling', and 「别墅营收冲刺第二期」 into 「别墅营收冲刺复盘会」. Those parent lines were
+    #      fabrications, and a gate whose whole selling point is "we can say why" must not invent the
+    #      why. 'X Phase 2' is a phase of 'X'; it is not a phase of 'X Tooling'.
+    if _PHASE_MARKER.search(title) and not _tracked_fields(project):
         bare = _key(_PHASE_MARKER.sub("", title))
         for other_k, other_title in project_titles.items():
             if other_k == k or not bare or not other_k:
                 continue
-            if bare == other_k or (len(bare) >= 4 and (bare in other_k or other_k in bare)):
+            if bare == other_k or (len(other_k) >= 4 and other_k in bare):
                 return Ruling(title=title, verdict="milestone", rule="R3-phase-of",
                               parent=other_title, evidence=getattr(project, "source", ""),
                               reason=f"「{title}」是同一份文档已在跟进的项目「{other_title}」的一个阶段")
@@ -324,18 +389,26 @@ def classify(project, milestone_index: dict[str, tuple[str, str]],
     # phantom is the failure mode H4 called worse than an empty screen: it does not read as broken,
     # it reads as "everything is fine". Measured on the first customer's seed corpus, it was 2 of 8.
     #
-    # OWNER / PROGRESS / DEADLINE are the evidence here, and STATUS IS DELIBERATELY EXCLUDED: status
-    # is the one field the extractor may SNIFF from surrounding prose rather than read from a label
-    # (「按计划推进」 in a paragraph of minutes -> on-track), so a sniffed status is not evidence that
-    # the document tracks this thing as a project. A real project doc that states an owner, a
-    # progress or a due date keeps its heading title and is untouched.
-    if doc_identities and _key(title) in doc_identities and not (
+    # OWNER / PROGRESS / DEADLINE are the evidence here, and so is a STATUS THE DOCUMENT LABELLED.
+    # Status is the one field the extractor may SNIFF from prose rather than read from a label
+    # (「按计划推进」 in a paragraph of minutes -> on-track); a SNIFFED status is not evidence that the
+    # document tracks this thing, and if it counted, every phantom in a file containing those three
+    # characters would survive as a confidently on-track card. But the original rule excluded status
+    # WHOLESALE, which threw out the labelled case with the sniffed one — and that is a net
+    # regression: 'Roadmap.md' reading '# Roadmap / Status: on-track / <one paragraph>' extracted
+    # ZERO projects where the pre-054 extractor gave one real card, with nothing on screen and no
+    # explanation (rulings are not persisted). Sparse single-project files are exactly the shape the
+    # other two companies' documents take. `docs_stating_status` recovers the provenance, so
+    # 「文档写了 Status:」 counts as tracking and 「文中提到按计划推进」 still does not.
+    doc_name = (doc_identities or {}).get(_key(title), "")
+    if doc_name and not (
             getattr(project, "ownerName", "") or getattr(project, "ownerId", "")
             or getattr(project, "progress", None) is not None
-            or getattr(project, "dueDate", "")):
+            or getattr(project, "dueDate", "")
+            or (getattr(project, "status", "") and doc_name in (stated_status_docs or set()))):
         return Ruling(title=title, verdict="document", rule="R4-document-not-project",
                       evidence=getattr(project, "source", ""),
-                      reason=f"「{title}」是文档自身的标题（{doc_identities[_key(title)]}），"
+                      reason=f"「{title}」是文档自身的标题（{doc_name}），"
                              f"文档没有给它负责人、进度或截止日期——这是一份文件，不是一个项目")
 
     got = _tracked_fields(project)
@@ -386,7 +459,9 @@ def apply_gate(res, docs: list[ParsedDoc]) -> list[Ruling]:
         project_titles.setdefault(_key(p.title), p.title)
 
     identities = document_identities(docs)
-    rulings = [classify(p, milestone_index, project_titles, identities) for p in projects]
+    stated_status = docs_stating_status(docs)
+    rulings = [classify(p, milestone_index, project_titles, identities, stated_status)
+               for p in projects]
     keep = [p for p, r in zip(projects, rulings) if r.verdict == "project"]
     res.projects = keep
     return rulings

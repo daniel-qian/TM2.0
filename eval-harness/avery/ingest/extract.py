@@ -707,8 +707,18 @@ def _norm_status(text: str) -> str:
     customer's weekly uses for two of its six projects. It is tempting to call it at-risk, and that
     would be INVENTING RISK: "nobody has confirmed this yet" is not "this is in trouble", and
     at-risk is the status that drives「多看一眼」surfacing. A false alarm in front of a paying
-    customer costs more than an honest blank, and the PRD's rule for an unstated field is to show
-    「未知」 rather than guess. So 待确认 returns '' and the card reads unknown.
+    customer costs more than an honest blank. So 待确认 returns '' HERE.
+
+    WHAT THE CARD ACTUALLY SHOWS IS NOT '' — and this docstring used to claim it was. Returning ''
+    hands the decision to `_project_from_span`, which then sniffs the project's own block for a
+    status (extract.py, `if not status:`). On the first customer's weekly that sniff finds real
+    blocker lines — 「佣金测算 — 受阻」, 「…卡住」 — inside the very blocks that self-report 待确认,
+    so 「销售绩效与佣金方案」 and 「新人带教与团队士气」 render BLOCKED, which is heavier than the
+    at-risk this function refused to assign. The inference is documented and line-citable, not
+    invented, so it stands for now; but the outcome is a product call, not a settled one, and the
+    contradiction is recorded here rather than papered over. See
+    test_pending_confirmation_falls_through_to_block_level_inference for the end-to-end behaviour
+    this actually produces.
     """
     t = text.lower()
     if re.search(r"\bblocked\b", t):

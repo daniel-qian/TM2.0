@@ -222,3 +222,164 @@ granularity rulings= 8   （6 保留 + 2 条 R4 降级）
   一条都没抽出来 —— 同一个 Layer C 根因。这直接影响「今天要决策的」（G4）和决策定级（G5/feat-056）有没有米下锅，建议优先级排高。
 - `鹿山雅居-绩效评估表-REDLINE探针.xlsx` 被 `parse` 判成 `doc_kind=project`。R4 已经挡住它变成项目卡，
   但 doc_kind 分类本身可能值得看一眼（它是张绩效表）。
+
+
+---
+
+# 复核轮次 2 —— 修复记录（verdict: needs-fix，3 条 major + 1 条 minor）
+
+复核判定 `needs-fix`，诚实性检查通过（逐条复跑全部对上，无夸大），验收 9 项里 8 项 `yes`、
+1 项 `unverifiable`（真 LLM 无凭据，仍然无凭据，见下）。问题全部出在**门的判定逻辑本身**，
+不在交付范围或诚实性上。3 条 major 全修，1 条 minor 也修了。
+
+**这 3 条的共同点，也是最该记住的一点：它们全都静默。** 门照常输出 ruling、照常给理由、
+照常"看起来在工作"，只是答案是错的。一个卖点是「说得出为什么」的门，最危险的失效不是不给理由，
+是**理直气壮地给错理由**。所以下面每条都先复现、再修、再拿测试钉死。
+
+## 修复 1 —— 里程碑行带冒号会清空整块里程碑索引（major，granularity.py:213）
+
+**复现（修前实测）**：
+```
+输入块：项目 1：营收冲刺 / 负责人：陈思雨 / 里程碑： /
+       "A/B 测试: 未开始" / "预算缺口确认 — 受阻" / "数据回收 — 进行中" / 阻碍项：预算未批
+_milestones_in 实测 →  []            ← 不是少一行，是全空
+英文同样：Budget sign-off: done      →  []
+LLM 形态 4 个候选过 apply_gate 后     →  4 个全保留 ['营收冲刺','A/B 测试','预算缺口确认','数据回收']
+                                        rules = R0-tracked / R0-kept / R0-kept / R0-kept
+```
+`A/B 测试: 未开始` 命中 `_ANY_LABEL`（当成"下一个字段标签"）且不命中 `_CHECKLIST_ROW`（没破折号），
+`collecting` 置 False 且**再也不恢复** → 整块里程碑归零 → `build_milestone_index` 里没有这些行 →
+R1 永远匹配不上。而 R1 是**唯一**能拦住"LLM 已经把状态剥掉的里程碑"的规则（R2 要求标题自带完成状态后缀）。
+复核者说得对：客户文档里只要有一行这种写法，本 ticket 要修的碎片化就原样复发。
+
+**修法**：把冒号加进 `_CHECKLIST_ROW` 的分隔符，让 `A/B 测试: 未开始` 被认成检查点行。
+但光这样会**反向误伤** —— `自报状态：已完成` 也长这个样子，会被当成里程碑收进去。
+所以配套引入 `_FIELD_LABEL`（已知字段标签词表，中英双语，词表对齐 `_project_from_span` 实际读的标签），
+**先判已知字段标签、再判检查点行**：
+
+- `阻碍项：预算未批` / `自报状态：已完成` → 已知字段标签 → 关闭列表 ✅
+- `A/B 测试: 未开始` / `Budget sign-off: done` → 不是已知标签 + 是检查点行 → 收进里程碑 ✅
+
+**修后实测**：里程碑 3 行全收回；4 个候选过门后只剩 `['营收冲刺']`，另 3 条判 `R1-milestone-section`、
+parent 全部正确指向 `营收冲刺`。
+
+## 修复 2 —— R3 用子串包含判"阶段"，吞掉真项目并编造父子关系（major，granularity.py:316）
+
+**复现（修前实测）**：两个都带 owner+status+progress+dueDate 的独立项目：
+```
+'Billing Rewrite Phase 2' (Lena Park/at-risk/40%/Aug 1)
+'Billing Rewrite Tooling' (Marcus Reid/on-track/70%/Sep 1)
+→ 存活只剩 ['Billing Rewrite Tooling']
+→ 前者 R3-phase-of，parent 写成 'Billing Rewrite Tooling'
+中文同理：'别墅营收冲刺第二期'(陈思雨/at-risk/58%/7-17) 被 '别墅营收冲刺复盘会' 吞掉
+```
+**双重损害**，其中第二条更严重：一是四项跟进字段俱全的项目卡整张消失；
+二是门对客户的解释是「这是项目『Billing Rewrite Tooling』的一个阶段」——**这个父子关系在文档里不存在，是编的**。
+
+**修法**（两道闸，复核者建议的两条都采纳，第二条我改得比建议更严）：
+
+1. **有独立跟进字段就不降级**。原来 R3 排在 R0-tracked 之前，跟进证据根本没机会说话。
+   本模块自己的定义就是「文档单独跟进 = 项目」，名字里有个 Phase 压不过这条。
+2. **子串包含改成单向**：要求 `other_k == bare` 或 `other_k in bare`（父项目的完整名字出现在阶段名里），
+   **删掉 `bare in other_k` 这个方向**。被删的正是这个方向 —— 它让任何"共享前缀的兄弟"看起来像父项目。
+   复核者建议的是"other_k 以 bare 开头或相等"，但我实测那样 `billingrewritetooling`.startswith(`billingrewrite`)
+   仍然成立、`Billing Rewrite Phase 2` 还是会被吞。单向包含才真正堵住，且 R3 该干的活一点没丢
+   （`宴会厅翻新 第二阶段` → `宴会厅翻新` 照常降级，原有测试不变）。
+
+**修后实测**：两个独立项目全部存活、rules 均为 R0-tracked、无任何 R3 命中。
+
+## 修复 3 —— R4 把 status 整体排除，稀疏单项目文档被整条丢弃（major，granularity.py:332）
+
+**复现（修前实测）**：
+```
+Roadmap.md = "# Roadmap / Status: on-track / We are shipping the new billing flow this quarter."
+→ 抽出 0 个项目，ruling = R4-document-not-project
+同文件加一行 "Owner: Lena Park" → 恢复成 1 个项目
+```
+这是 **pre-054 行为的净回退**（原来出 1 张真项目卡），而且 `res.projects` 为空时项目屏一片空白、
+用户看不到任何解释（ruling 不落库，跨线契约）。而 kickoff/PRD 明确记录另两家公司的文档就是稀疏的
+（dueDate 7/17、progress 6/17 覆盖率），瑞典建筑公司那种「一个文件描述一个工程、写了状态没写负责人」
+正是这个形状。这条我上一轮的 risks 清单里确实没有，是漏了，不是藏了。
+
+**根因**：注释里排除 status 的理由是对的（status 可能是从散文嗅出来的），但**代码分不清两种来源**，
+于是把「文档明写 `Status:` 标签」和「从散文嗅到」一起扔了。
+
+**修法**：把 provenance 从文档侧找回来，新增 `docs_stating_status(docs) -> set[str]`
+（`_STATUS_LABEL` 扫每份文档有没有显式状态标签行），R4 的证据条件改成
+`owner / progress / dueDate / (status 且该文档明写了状态标签)`。
+
+🔴 **刻意没动 `ProjectEntity` 的形状** —— 加字段是最直接的做法，但它被 `pg_registry.py:231` 的
+`asdict(p)` 直接序列化进库、也是和 feat-055 项目屏的跨线契约。所以 provenance 从文档侧恢复，
+实体一个字段没加，feat-055 仍然不需要适配。
+
+**修后实测**：`Roadmap.md` → 1 个项目，ruling = R0-tracked。
+**反向闸仍然成立**：`Sanya_Ops_Handover_ZH.md`（全文没有状态标签、只能靠散文嗅）
+喂 `status="on-track"` 进去，照样判 R4-document-not-project —— 嗅出来的状态救不了幽灵，原意保住。
+
+## 修复 4 —— `待确认 → 未知` 这个承诺端到端不成立（minor，extract.py:711）
+
+`_norm_status` 的 docstring 写「So 待确认 returns '' and the card reads unknown」，
+测试也断言「An unstated status must render 「未知」」。**但卡片上不是 unknown。**
+返回 `''` 之后 `_project_from_span` 会兜底再嗅一次块文本，seed 上真 seed 实测：
+`销售绩效与佣金方案`、`新人带教与团队士气` 自报「待确认」，端到端 status **都是 `blocked`** ——
+比它拒绝赋予的 at-risk 还重。测试只断言了单元层 `_norm_status('待确认') == ''`，形状恰好避开了集成行为。
+
+我**没有改行为**（推断有文档明写的阻碍项做依据、可追行，且这是产品定夺，不是我该擅自定的），
+但把 docstring 改成了实情、并补了一条端到端测试
+`test_pending_confirmation_falls_through_to_block_level_inference` 把当前真实行为钉死。
+下次有人读这段注释不会再被误导。
+
+## 回归测试（+9 条，全部先复现后设防）
+
+`eval-harness/tests/test_project_granularity.py` 新增 9 条，**每条修前都实测复现过、回退即红**：
+
+| 测试 | 守住什么 |
+|---|---|
+| `..._colon_does_not_wipe_the_milestone_list` | 修复 1 主路径 + LLM 形态端到端 |
+| `..._colon_shaped_milestone_list_survives_in_english_too` | 修复 1 英文同构 |
+| `..._field_line_whose_value_is_a_completion_word_is_never_a_milestone` | 修复 1 的**反向闸**（别把字段行吞成里程碑） |
+| `test_r3_does_not_demote_a_phase_the_document_tracks_in_its_own_right` | 修复 2 闸一 |
+| `test_r3_does_not_invent_a_parent_out_of_a_sibling_...` | 修复 2 闸二（不编造 parent） |
+| `test_r3_still_demotes_a_phase_whose_real_parent_is_tracked` | 修复 2 的**反向闸**（R3 该干的活没丢） |
+| `..._labelled_status_is_tracking_evidence_and_keeps_a_sparse_single_project_doc` | 修复 3 主路径 |
+| `test_a_sniffed_status_still_does_not_rescue_a_phantom` | 修复 3 的**反向闸**（嗅出来的状态仍救不了幽灵） |
+| `test_pending_confirmation_falls_through_to_block_level_inference` | 修复 4，钉死端到端真实行为 |
+
+三条 major 每条都配了一条反向闸测试 —— 因为这三个 bug 有两个（1 和 3）本身就是
+"修一个方向、捅穿另一个方向"造成的，只测正向等于给下一轮埋雷。
+
+## 门（全部我自己跑过，输出如实）
+
+```
+$ python -m pytest eval-harness/tests/test_project_granularity.py -q
+40 passed in 0.54s                      （31 原有 + 9 新增）
+
+$ python -m pytest eval-harness/tests/ -q
+950 passed, 61 skipped, 4 xfailed in 19.15s      0 failed
+   —— 对比复核基线 941/61/4：+9 新测试，failed 恒为 0，没把绿的跑红
+
+$ npm run typecheck        （tsc -b）  零输出零错
+$ npm run build                        ✓ built in 2.92s
+```
+
+**真 seed 端到端复跑**（读 `D:\avery\.issues\...\e2e-seeds\`，只读，唯一允许的例外）：
+```
+DOCS = 5   PROJECTS = 6   RULINGS = 8
+6 个项目 owner/status/progress/dueDate 全部有值，标题与文档 6 个「项目 N：」头逐一对应
+2 条 R4-document-not-project（周例会纪要 / 绩效评估表）
+```
+**收敛结果与修复前一致 —— 6，等于数出来的 ground truth**（周报第 3 行「本期周报覆盖 6 个在跟进项目」）。
+这三条修复都是**边界行为**，没有动这份 seed 上已经正确的主路径，这正是预期。
+反过来说也印证了复核者的核心论点：**这个 seed 测不出这三个洞**，而本波成功标准是三家公司拿自己的真文件来试。
+
+## 没做 / 仍然遗留
+
+- **真 LLM 端到端仍未验证**（验收里唯一的 `unverifiable`）。仍然没有 `AVERY_BRAIN=minimax` key，
+  凭据墙没动。门逻辑本身是用 `_build` 纯函数路径以 LLM 形态输入验证的（复核者独立复现过），
+  `pipeline.py:117 → extract.py:1091 apply_gate` 这条链确认覆盖 LLM 路径而非只覆盖启发式路径；
+  但 prompt 文本在真模型上的效果仍未验证。**拿到 key 必须复跑。**
+- **`待确认` 的产品定夺没动**（见修复 4）。现在是 docstring 和测试都说实话，行为原样。
+- **Layer C（signal 轴）没动**，第 5 条 strict xfail 仍保留。理由同上一轮，复核者核实成立。
+- **`granularity` 仍不落库** —— ruling 只在内存里，项目屏为空时用户看不到解释。
+  修复 3 把「稀疏文档被整条清空」这个最常见的空屏来源堵掉了，但**契约本身没变**，
+  仍然是跨线遗留（要落库需要和 feat-055 一起定）。

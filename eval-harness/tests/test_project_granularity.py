@@ -28,6 +28,7 @@ from pathlib import Path
 
 from avery.ingest import HeuristicExtractor, extract_docs, parse_file
 from avery.ingest.extract import ExtractionResult, ProjectEntity, _norm_status
+from avery.ingest.parse import ParsedDoc
 from avery.ingest.granularity import (
     apply_gate, build_milestone_index, segment_projects, stated_project_count,
 )
@@ -360,3 +361,173 @@ def test_pending_confirmation_is_unknown_not_at_risk():
     status that drives 「多看一眼」 surfacing, so mapping it there would manufacture false alarms in
     front of a paying customer. An unstated status must render 「未知」, per the PRD."""
     assert _norm_status("待确认") == ""
+
+
+# ── review round 2: three ways the gate failed silently ──────────────────────────────────────────
+# Each test below is a REPRODUCTION first and a guard second: all three were demonstrated against
+# the shipped gate before the fix, and all three fail loudly if the fix is backed out. What they
+# have in common is that none of them raised anything — the gate kept answering confidently while
+# being wrong, which is the failure mode the whole "it must say why" design exists to prevent.
+
+def test_a_milestone_row_written_with_a_colon_does_not_wipe_the_milestone_list():
+    """R1's silent whole-block failure. Checkpoints get written 「A/B 测试: 未开始」 as readily as
+    with a dash, and read as a field label such a row ended collection PERMANENTLY — so the block's
+    milestone index came back EMPTY, not one row short. R1 is the only rule that catches a milestone
+    the LLM has already stripped the status off (R2 needs the status still attached), so an empty
+    index means every checkpoint in that block sails back onto the project axis. The first
+    customer's weekly uses 「 — 」 throughout, which is exactly why the corpus never showed this."""
+    doc = ParsedDoc(name="w.docx", doc_kind="project", text="\n".join([
+        "项目 1：营收冲刺",
+        "负责人：陈思雨",
+        "里程碑：",
+        "A/B 测试: 未开始",          # colon-shaped — used to look like a field label
+        "预算缺口确认 — 受阻",
+        "数据回收 — 进行中",
+        "阻碍项：预算未批",
+    ]))
+    rows = [t for t, _ in segment_projects(doc)[0].milestones]
+    assert rows == ["A/B 测试: 未开始", "预算缺口确认 — 受阻", "数据回收 — 进行中"]
+    assert "阻碍项：预算未批" not in rows      # a real field label still closes the list
+
+    res = ExtractionResult()
+    res.projects = [
+        ProjectEntity(id="p1", title="营收冲刺", ownerName="陈思雨", status="at-risk"),
+        ProjectEntity(id="p2", title="A/B 测试"),          # LLM-shaped: status already stripped
+        ProjectEntity(id="p3", title="预算缺口确认"),
+        ProjectEntity(id="p4", title="数据回收"),
+    ]
+    rulings = apply_gate(res, [doc])
+    assert [p.title for p in res.projects] == ["营收冲刺"]
+    assert [r.rule for r in rulings[1:]] == ["R1-milestone-section"] * 3
+    assert all(r.parent == "营收冲刺" for r in rulings[1:])
+
+
+def test_a_colon_shaped_milestone_list_survives_in_english_too():
+    """Same hole, pure ASCII: 'Budget sign-off: done' matched the label pattern on its own hyphen."""
+    doc = ParsedDoc(name="w.md", doc_kind="project", text="\n".join([
+        "Project: Alpha Launch",
+        "Owner: Lena Park",
+        "Milestones:",
+        "Budget sign-off: done",
+        "Data pull - in progress",
+        "Blockers: none",
+    ]))
+    rows = [t for t, _ in segment_projects(doc)[0].milestones]
+    assert rows == ["Budget sign-off: done", "Data pull - in progress"]
+
+
+def test_a_field_line_whose_value_is_a_completion_word_is_never_a_milestone():
+    """The guard on the fix above. Widening the checklist shape to accept colons must not swallow
+    genuine field lines: 「自报状态：已完成」 is this project's status, not a checkpoint of it."""
+    doc = ParsedDoc(name="w.docx", doc_kind="project", text="\n".join([
+        "项目 1：营收冲刺",
+        "里程碑：",
+        "预算缺口确认 — 受阻",
+        "自报状态：已完成",          # field label, value happens to be a completion word
+        "数据回收 — 进行中",         # after the label closed the list -> NOT a milestone
+    ]))
+    rows = [t for t, _ in segment_projects(doc)[0].milestones]
+    assert rows == ["预算缺口确认 — 受阻"]
+
+
+def test_r3_does_not_demote_a_phase_the_document_tracks_in_its_own_right():
+    """R3 fired ahead of R0, so tracking evidence never got to speak: a project with an owner, a
+    status, a progress AND a deadline was deleted for having 'Phase 2' in its name. By this module's
+    own definition that IS a project — a company running 「第二期」 with its own 负责人 is running a
+    project and calling it a phase."""
+    doc = ParsedDoc(name="b.md", doc_kind="project", text="\n".join([
+        "Project: Billing Rewrite Phase 2",
+        "Owner: Lena Park", "Status: at-risk", "Progress: 40%", "Due: Aug 1",
+        "",
+        "Project: Billing Rewrite",
+        "Owner: Marcus Reid", "Status: on-track", "Progress: 70%", "Due: Sep 1",
+    ]))
+    res = ExtractionResult()
+    res.projects = [
+        ProjectEntity(id="a", title="Billing Rewrite Phase 2", ownerName="Lena Park",
+                      status="at-risk", progress=40, dueDate="Aug 1"),
+        ProjectEntity(id="b", title="Billing Rewrite", ownerName="Marcus Reid",
+                      status="on-track", progress=70, dueDate="Sep 1"),
+    ]
+    rulings = apply_gate(res, [doc])
+    assert [p.title for p in res.projects] == ["Billing Rewrite Phase 2", "Billing Rewrite"]
+    assert [r.rule for r in rulings] == ["R0-tracked", "R0-tracked"]
+
+
+def test_r3_does_not_invent_a_parent_out_of_a_sibling_that_merely_shares_a_prefix():
+    """The worse half of the same bug: R3 accepted containment in EITHER direction, so any sibling
+    sharing a prefix looked like a parent. 'Billing Rewrite Phase 2' was demoted into 'Billing
+    Rewrite Tooling' — a parent-child relationship that exists nowhere in the document. For a gate
+    whose entire selling point is 「说得出为什么」, a fabricated why is worse than no why."""
+    doc = ParsedDoc(name="b.md", doc_kind="project", text="\n".join([
+        "Project: Billing Rewrite Phase 2",
+        "Project: Billing Rewrite Tooling",
+    ]))
+    res = ExtractionResult()
+    res.projects = [
+        ProjectEntity(id="a", title="Billing Rewrite Phase 2", source="b.md:1"),
+        ProjectEntity(id="b", title="Billing Rewrite Tooling", source="b.md:2"),
+    ]
+    rulings = apply_gate(res, [doc])
+    assert [p.title for p in res.projects] == ["Billing Rewrite Phase 2", "Billing Rewrite Tooling"]
+    assert not any(r.rule == "R3-phase-of" for r in rulings)
+
+
+def test_r3_still_demotes_a_phase_whose_real_parent_is_tracked():
+    """The one-way containment must stay permissive enough to do R3's actual job: the PARENT's whole
+    name appearing inside the phase's name is the evidence, and that still fires."""
+    doc = ParsedDoc(name="b.md", doc_kind="project", text="\n".join([
+        "项目 1：宴会厅翻新",
+        "项目 2：宴会厅翻新 第二阶段",
+    ]))
+    res = ExtractionResult()
+    res.projects = [ProjectEntity(id="a", title="宴会厅翻新 第二阶段", source="b.md:2")]
+    rulings = apply_gate(res, [doc])
+    assert res.projects == []
+    assert rulings[0].rule == "R3-phase-of" and rulings[0].parent == "宴会厅翻新"
+
+
+def test_a_labelled_status_is_tracking_evidence_and_keeps_a_sparse_single_project_doc():
+    """R4 excluded status WHOLESALE to avoid rescuing phantoms on a sniffed status, and threw out the
+    LABELLED case with it. Net regression: this file yielded ONE real card pre-054 and ZERO after —
+    an empty project screen with no explanation on it, since rulings are not persisted. 'One file
+    per job, states a status, names no owner' is precisely the shape the other two companies'
+    documents take, per the kickoff's own sparsity numbers."""
+    doc = ParsedDoc(name="Roadmap.md", doc_kind="project", ext="md", text="\n".join([
+        "# Roadmap",
+        "Status: on-track",
+        "We are shipping the new billing flow this quarter.",
+    ]))
+    out = extract_docs([doc])
+    assert [p.title for p in out.projects] == ["Roadmap"]
+    assert out.granularity[0].rule == "R0-tracked"
+
+
+def test_a_sniffed_status_still_does_not_rescue_a_phantom():
+    """The guard on the fix above, and the reason status was excluded in the first place. A status
+    the extractor SNIFFED out of prose is not evidence the document tracks anything: this file
+    labels no status at all, so its heading stays a document, not a project."""
+    doc = parse_file(CJK / "Sanya_Ops_Handover_ZH.md")
+    heading = next(l.strip().lstrip("#").strip() for l in doc.lines if l.strip().startswith("#"))
+    res = ExtractionResult()
+    res.projects = [ProjectEntity(id="p", title=heading, status="on-track", source="x:1")]
+    rulings = apply_gate(res, [doc])
+    assert res.projects == []
+    assert rulings[0].rule == "R4-document-not-project"
+
+
+def test_pending_confirmation_falls_through_to_block_level_inference():
+    """PINS WHAT THE CARD ACTUALLY SHOWS, which is not what _norm_status's docstring used to claim.
+    `_norm_status('待确认') == ''` is a unit fact; end to end that empty string hands the decision to
+    the block sniff, which finds 「受阻」 in the same block and renders BLOCKED — heavier than the
+    at-risk the mapping refused to assign. Documented and line-citable, so it stands, but it is a
+    product call and the previous test shape (unit assertion only) hid it completely."""
+    doc = ParsedDoc(name="w.docx", doc_kind="project", text="\n".join([
+        "项目 1：销售绩效与佣金方案",
+        "负责人：黄若琳",
+        "自报状态：待确认",
+        "里程碑：",
+        "佣金测算 — 受阻",
+    ]))
+    proj = extract_docs([doc]).projects[0]
+    assert proj.status == "blocked"      # NOT '' — the block sniff overrides the self-report
