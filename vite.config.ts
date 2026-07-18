@@ -13,13 +13,32 @@ declare const process: { cwd(): string }
 //   * Danny can eyeball `window.__AVERY_BUILD__` in devtools on the deployed site.
 // Build-time behavior itself is unchanged — mode/locale/api-base are still read from VITE_* by
 // src/live/mode.ts, src/i18n/index.ts, src/live/transport.ts. This only STAMPS the resolved values.
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ mode, command }) => {
   const env = loadEnv(mode, process.cwd(), 'VITE_')
   const build = {
     mode: env.VITE_AVERY_MODE || 'story',      // default story (safe) — deploy targets set 'live'
     locale: env.VITE_AVERY_LOCALE || 'en',     // default en (overseas-first) — 境内 sets 'zh'
     apiBase: env.VITE_AVERY_API_BASE || '(local default 127.0.0.1:8137)',
   }
+
+  // feat-068 — 部署闸：Vite 在**构建期**把 VITE_* 内联进静态包，所以一个漏配 VITE_AVERY_API_BASE
+  // 的 live 构建会**静默成功**，然后把 http://127.0.0.1:8137 烤死在公开 bundle 里 —— 访客的浏览器
+  // 去连他自己那台电脑，且 https 页面发 http 请求还会被当混合内容拦掉。线上表现是「后端挂了」，
+  // 只有开 devtools 读 window.__AVERY_BUILD__ 才看得出真因。这个类别的错必须在构建时炸，不能等
+  // 到真客户打开才发现。只拦 `vite build` 的 live 目标：`vite dev` 和 story 构建照旧走本机默认。
+  if (command === 'build' && build.mode === 'live') {
+    const base = env.VITE_AVERY_API_BASE
+    const localish = /^https?:\/\/(127\.0\.0\.1|localhost|0\.0\.0\.0|\[::1\])(:|\/|$)/i
+    if (!base || localish.test(base)) {
+      throw new Error(
+        `[avery] refusing to build a live target without a real API base.\n` +
+          `  VITE_AVERY_MODE=live but VITE_AVERY_API_BASE=${base ? `"${base}"` : '(unset)'}.\n` +
+          `  A bundle built this way calls the VISITOR's own machine and looks like a backend outage.\n` +
+          `  Set it to the deployed agent-service origin (production: https://avery.dannyqian.com).`,
+      )
+    }
+  }
+
   return {
     plugins: [react()],
     define: {

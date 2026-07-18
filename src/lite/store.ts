@@ -7,6 +7,7 @@ import type {
   LiveTeamPayload,
   LiveTransport,
 } from './transport'
+import { createHttpTransport } from './transport'
 import { resolveTransport } from './stubTransport'
 import {
   coerceAskDraft,
@@ -97,7 +98,13 @@ interface LiteState {
 }
 
 // `?transport=stub` → 确定性 stub（AFK 门/离线演示）；默认真 HTTP（行为零变化）。
-const defaultTransport = resolveTransport()
+// feat-068 — DEV-ONLY：stub 通道只在 dev 存在。stub 编的是一整套以假乱真的团队/建议数据，
+// 而线上这个 URL 是要发给真公司的——任何人往地址后面挂个 ?transport=stub，看到的就是编造的
+// 内容，且与真输出肉眼不可分（demo 诚实性事故）。`import.meta.env.DEV` 在生产构建里被静态
+// 求值成 false，Vite 据此把整条 stub 分支连同 stubTransport 模块一起 DCE 掉——线上根本不存在
+// 这个开关。dev 下行为一字不变（AFK/DOM 门就靠 ?transport=stub 驱动）。
+// 与 src/main.tsx 的 __AVERY_LITE__ 测试缝同一个写法。
+const defaultTransport = import.meta.env.DEV ? resolveTransport() : createHttpTransport()
 
 export const useLite = create<LiteState>((set, get) => ({
   transport: defaultTransport,

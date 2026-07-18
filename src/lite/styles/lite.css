@@ -1526,3 +1526,120 @@
 .lite-shell .lite-notes-nudge:focus-visible {
   background: rgba(105, 128, 109, 0.16);
 }
+
+/* ═══════════════════════ feat-068 · ingest 等待态（lite / v01）═══════════════════════
+   APPEND-ONLY：以上任何一条既有规则都没有被改动或重排（本仓的 zero-cascade-drift 纪律）。
+
+   为什么要有这一块：POST /ingest 真的要 100–120 秒（后端在法兰克福、LLM 在国内，跨境往返），
+   在此之前这两分钟里 .upload-ingesting 只是一行换了颜色的静态字——没有 spinner、没有秒表、
+   全仓零 @keyframes。真客户第一次接触产品就是两分钟的"死屏"。
+
+   分寸：本仓审美克制，所以动效只有两件——一颗 1.8s 的呼吸点 + 一条 2.4s 的不定量细条（2px）。
+   不做百分比进度条：服务端不吐进度信号，假进度条卡在 90% 比诚实的秒数更伤信任。
+
+   选择器一律带 .lite-shell 前缀：lite2.css 在 main.tsx 里排在本文件之后，同名无前缀规则会被
+   它整片盖掉；带壳前缀两边各自成立，互不串味。@keyframes 是全局命名空间，故名字带 v01 后缀。 */
+
+.lite-shell .upload-ingesting-block {
+  display: grid;
+  gap: 6px;
+}
+
+.lite-shell .upload-ingesting {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 呼吸点——"还活着"的最小信号。 */
+.lite-shell .upload-ingesting-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--honey);
+  animation: feat068-v01-ingest-pulse 1.8s ease-in-out infinite;
+}
+
+/* 预期文案：把"1–2 分钟 + 为什么值得"讲在前头。 */
+.lite-shell .upload-ingesting-hint {
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* 秒表。tabular-nums 让位宽固定，数字跳动时行不抖。 */
+.lite-shell .upload-ingesting-elapsed {
+  color: var(--ink-faint);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 不定量细条：只表达"在动"，不表达"到哪了"。 */
+.lite-shell .upload-ingesting-bar {
+  position: relative;
+  overflow: hidden;
+  height: 2px;
+  margin-top: 2px;
+  border-radius: 999px;
+  background: var(--rule);
+}
+
+.lite-shell .upload-ingesting-bar > span {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 34%;
+  border-radius: 999px;
+  background: var(--honey);
+  opacity: 0.55;
+  animation: feat068-v01-ingest-slide 2.4s ease-in-out infinite;
+}
+
+/* ingesting 期间的"选择文件"按钮：disabled 由 TSX 绑定（挡鼠标也挡键盘），这里只补视觉。 */
+.lite-shell .upload-choose:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.lite-shell .upload-choose:disabled:hover {
+  background: var(--ink);
+}
+
+@keyframes feat068-v01-ingest-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes feat068-v01-ingest-slide {
+  0% {
+    left: -34%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+
+/* prefers-reduced-motion：动效全停，但两个元素都保留静态存在感——秒表（JS 侧）仍在跳，
+   "没冻"的证据不依赖动画。 */
+@media (prefers-reduced-motion: reduce) {
+  .lite-shell .upload-ingesting-dot {
+    animation: none;
+    opacity: 0.8;
+  }
+
+  .lite-shell .upload-ingesting-bar > span {
+    animation: none;
+    left: 0;
+    width: 100%;
+    opacity: 0.3;
+  }
+}
