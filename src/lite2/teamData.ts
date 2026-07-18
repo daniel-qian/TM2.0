@@ -63,11 +63,28 @@ export interface LiteHandoff {
   evidenceTag: string
 }
 
+// fixA · 「多看一眼」那个数字的**形状**，不只是它的大小。
+//
+// 中文壳（线上 VITE_AVERY_LOCALE=zh，是生产默认）把这个数字填进一句写死量词的话：
+// 「其中 {N} 个项目值得多看一眼」。但后端的这个计数里可以混着**挂不到任何项目上的信号**
+// ——抽取层给每条 doc 信号写死 subjectRef="the project"（extract.py::_signals_from_doc），
+// 它们因此谁也挂不上。于是实测出现过 0 个项目 + 2 条信号 →「0 个进行中的项目 … 其中 2 个
+// 项目值得多看一眼」，凭空点名两个不存在的项目，就印在「没有一处是编的」正下方。
+//
+// 所以后端现在多发一个 look_kind（registry.py::briefing）：
+//   'projects' — 数出来的每一样都确实是项目，且总数不会超过项目总数 →「N 个项目」才是安全的
+//   'items'    — 里面混着挂不到项目上的读数 → 必须换成不点名的量词（「N 处」）
+//   'none'     — 什么都没数出来 → calm 分支
+// 老后端（pre-fixA）不发这个键，读出来是 undefined —— 消费方遇到 undefined 时按 'items'
+// 这一侧兜底（说「N 处」永远不会比事实更肯定；说「N 个项目」可能凭空点名）。
+export type LiteLookKind = 'projects' | 'items' | 'none'
+
 export interface LiteBriefing {
   tone: 'calm' | 'alert'
   headline: string
   subhead: string
   metrics: { label: string; value: string }[]
+  lookKind?: LiteLookKind
 }
 
 export interface LiteTeam {
@@ -212,6 +229,15 @@ export function liteTeamFromPayload(
       headline: b.headline,
       subhead: b.subhead,
       metrics: b.metrics ?? [],
+      lookKind: readLookKind(b),
     },
   }
+}
+
+// look_kind 是 fixA 之后才有的键，`LiveBriefingPayload`（src/lite2/transport.ts）还没声明它，
+// 所以在这里就地窄化读一次，而不是让契约类型漂在别人的文件里。认不出来的值一律当 undefined
+// ——消费方对 undefined 的兜底是**不点名**那一侧，宁可少说一个词，不可多点一个不存在的项目。
+function readLookKind(briefing: unknown): LiteLookKind | undefined {
+  const raw = (briefing as { look_kind?: unknown } | null)?.look_kind
+  return raw === 'projects' || raw === 'items' || raw === 'none' ? raw : undefined
 }

@@ -237,3 +237,100 @@ RED — 11 ok, 4 failed
 5. **`extract.py` 的项目切分在中文周报上会把整份文档合成一个项目**（`## 项目：X` 多块没被切开，
    title 取了 H1）。这是我为构造测试文档时实测到的，不属于本次范围，但会直接影响三家公司的真文件
    观感——建议单开一条。
+
+
+---
+
+# 第二轮收口（fixA 续）· 复核判 B2 "partial"
+
+复核的判词是准的：**原病灶治好了，但新判据把计数算错了，而错法正好落回这一轮要根治的那类话。**
+真 ingest 一份 10 行英文周报 → 1 个项目、1 张决策卡，简报却说 need a look = 3；中文生产壳把这个
+数字填进写死量词的一句话「其中 {N} 个项目值得多看一眼」，于是屏幕上一张项目卡、文字点名三个。
+
+## 病灶：一个数字错了两处
+
+**① 计数被重复计。** 第一版的去重判据是「signal 原文逐字出现在某条 flagged 决策的规则证据里」。
+规则证据只装**命中关键词族**的信号，所以一条**指名道姓挂在已 flagged 项目上**、措辞却撞不上关键词
+的信号，会被当成 loose 再加一次——同一个项目被数两遍。实测（`count_probe`，见下表）：
+
+| payload | 项目数 | 旧 need a look | 新 need a look |
+| --- | --- | --- | --- |
+| A 信号 `subjectId=p1`，p1 已 flagged，措辞不命中关键词族 | 1 | **2** | **1** |
+| B 负责人处境型信号，其项目已 flagged | 1 | **2** | **1** |
+| C 同一条信号在 payload 里出现两次 | 0 | **2** | **1** |
+| D 0 个项目 + 2 条挂不上的信号 | 0 | 2 | 2（数字本来就对，错的是量词） |
+| E 真 ingest 那份 10 行英文周报 | 1 | 2 | 2（同上） |
+
+**② 计数的形状没发出来。** 后端只发大小、不发「数出来的是什么」，前端只能一律叫「个项目」。
+
+## 改法
+
+**`registry.py::briefing()`** —— 去重改成**按信号身份**，且两条通道取并集（缺一条都会少数一类）：
+
+- **① 已归属**：`decision_grading._match_signals`（**就是定级时跑的那个函数**，不再自己写一份）把
+  这条信号挂到了某个已 flagged 的项目上 → 那件事已经在那张卡上数过一次。
+- **② 已引用**：信号原文逐字出现在某条 flagged 卡的规则证据里 → 那句话已经印在屏幕上了。
+  这一条**是第一版的判据，保留**：抽取层给每条 doc 信号写死 `subjectRef="the project"`
+  （`extract.py::_signals_from_doc` 里 `proj_ref` 从未被赋值），doc 信号谁也挂不上，所以只靠 ①
+  会让「既是项目 blocker、又被抽成信号」的那一行被数两遍。**只换成 ① 会让 E 从 2 涨回 3。**
+
+复用 `_match_signals` 而不是重写一份，是本条修复的要点：「简报自己造一套判据」正是 B2 的原病灶，
+把同样的错误搬到去重这一步只是换了层楼。
+
+新增三个字段（additive，老前端读不到也不会坏）：
+
+    look_kind      'projects' | 'items' | 'none'
+    look_projects  数出来的项目条数
+    look_signals   挂不到任何决策卡上的信号条数
+
+`'projects'` 的**契约**是：数出来的每一样都确实是项目，且总数**不可能超过项目总数**——只有这时
+「N 个项目」才是安全的话。有一条挂不上的信号，形状就是 `'items'`。
+
+**`teamData.ts`** —— `LiteBriefing.lookKind` 读出这个形状。老后端不发这个键 / 值认不出来 →
+`undefined`，消费方兜底到**不点名**那一侧（说「N 处」永远不会比事实更肯定；说「N 个项目」会凭空
+点名）。`transport.ts` 不在本线边界内，所以在 teamData 里就地窄化读一次，不去改别人的契约类型。
+
+**`zh.ts` / `en.ts`** —— 追加 `briefingSubheadRiskItems`（**纯新增，一个既有键都没改**）：
+
+    zh: 以下内容全部来自你上传的文件，没有一处是编的。其中 {atRisk} 处值得多看一眼。
+    en: Everything below is drawn from your uploads — nothing invented. {atRisk} item(s) worth a closer look.
+
+英文那句与 `registry.py` 的 items 分支**逐字节一致**，所以 EN 直通和 ZH 重组说的是同一句话。
+
+## 🔴 没修完的那一半（必须由集成方接）
+
+**中文生产壳上这条 blocker 还活着。** 消费 `lookKind` 的地方是 `src/shared/briefing.ts`，
+**不在本线可改文件清单里**，所以我把管道铺到它门口就停手了。真浏览器实测（`?v=2&mode=live&look=paper&lang=zh`，
+真后端 + 真 ingest 那份 10 行英文周报）：
+
+    headline : 你的团队：0 位成员，1 个进行中的项目。
+    subhead  : 以下内容全部来自你上传的文件，没有一处是编的。其中 2 个项目值得多看一眼。   ← 仍在点名 2 个项目
+    屏幕上   : 1 张项目卡
+
+接上之后同一屏会是（用已经备好的键跑出来的真串）：
+
+    subhead  : 以下内容全部来自你上传的文件，没有一处是编的。其中 2 处值得多看一眼。
+
+具体改法见 `needsOtherFiles` #1——三行，且键和数据都已经就位。
+
+## 回归测试（旧代码 FAIL / 新代码 PASS，输出见下）
+
+新增 `eval-harness/tests/test_briefing_look_count.py`（9 条）。旧代码（`git show HEAD:…registry.py`
+贴回工作树跑）：**9 failed**；恢复后：**9 passed**。其中最强的一条是
+`test_real_ingest_of_a_weekly_never_counts_one_project_as_three`——真 parse + 真确定性抽取，无 mock，
+就是审查现场那份文档。
+
+`verify-fixA.mjs` 补 10 条（look_kind 一路走到壳里 + 不点名的中文已备好）。把三个前端源文件退回
+HEAD 再跑：**25 ok / 7 failed**；恢复后：**32 ok / 0 failed**。
+
+## 门（第二轮）
+
+| 门 | 结果 |
+| --- | --- |
+| `python -m pytest eval-harness/tests/ -q` | **2971 passed / 0 failed / 61 skipped / 4 xfailed**（上一轮 2962 + 本次 9） |
+| `npm run typecheck` | 退出 0 |
+| `npm run lint` | **0 error** / 5 warning（与基线一致） |
+| `npm run build` | 通过（`✓ built in 2.75s`） |
+| `node verify-fixA.mjs` | 32 ok / 0 failed |
+| `node verify-fixA-live.mjs` | 15 ok / 0 failed（真浏览器 + 真后端，端口 5301/8301，跑完已释放） |
+| 真 HTTP `POST /ingest` + `GET /team/{id}` | 两个端点都带上了 `look_kind/look_projects/look_signals`（无 response_model，dict 直通） |

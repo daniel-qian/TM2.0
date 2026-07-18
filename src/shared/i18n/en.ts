@@ -196,6 +196,14 @@ export const en = {
     briefingHeadline: '{people} people, {projects} active projects.',
     briefingSubheadRisk:
       'Everything below is drawn from your uploads — nothing invented. {atRisk} project(s) worth a closer look.',
+    // fixA · the SAME count, worded for the case where part of it is not a project. The backend
+    // ships the count's shape (briefing.look_kind: 'projects' | 'items' | 'none'); 'items' means a
+    // signal in there reached no decision card, so naming it a project would invent a project —
+    // worst case measured: zero projects on screen, two signals, 「2 个项目值得多看一眼」 printed
+    // right under 「没有一处是编的」. Byte-identical to what registry.py emits for that branch, so
+    // the EN passthrough and the ZH recomposition say the same thing.
+    briefingSubheadRiskItems:
+      'Everything below is drawn from your uploads — nothing invented. {atRisk} item(s) worth a closer look.',
     briefingSubheadCalm:
       'Everything below is drawn from your uploads — nothing invented. No risk signals surfaced from the documents.',
     briefingMetricPeople: 'people',
@@ -454,6 +462,14 @@ export const en = {
     briefingHeadline: '{people} people, {projects} active projects.',
     briefingSubheadRisk:
       'Everything below is drawn from your uploads — nothing invented. {atRisk} project(s) worth a closer look.',
+    // fixA · the SAME count, worded for the case where part of it is not a project. The backend
+    // ships the count's shape (briefing.look_kind: 'projects' | 'items' | 'none'); 'items' means a
+    // signal in there reached no decision card, so naming it a project would invent a project —
+    // worst case measured: zero projects on screen, two signals, 「2 个项目值得多看一眼」 printed
+    // right under 「没有一处是编的」. Byte-identical to what registry.py emits for that branch, so
+    // the EN passthrough and the ZH recomposition say the same thing.
+    briefingSubheadRiskItems:
+      'Everything below is drawn from your uploads — nothing invented. {atRisk} item(s) worth a closer look.',
     briefingSubheadCalm:
       'Everything below is drawn from your uploads — nothing invented. No risk signals surfaced from the documents.',
     briefingMetricPeople: 'people',
