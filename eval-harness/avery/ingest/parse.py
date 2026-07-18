@@ -65,12 +65,42 @@ def _defuse_xml() -> None:
 # content — but lets a resume vs a project weekly vs a roster take different heuristic paths.
 DOC_KINDS = ("resume", "project", "company", "roster", "roadmap", "unknown")
 
+# EVERY PATTERN HERE WAS AN ASCII WORD UNTIL feat-049, AND THIS LIST IS A ROUTER, NOT A LABEL.
+# HeuristicExtractor.extract (extract.py) branches on doc_kind and 'unknown' matches NO branch, so a
+# document that sniffs to 'unknown' contributes material chunks and nothing else — no people, no
+# projects. A Chinese HR system exports 「员工花名册.md」/「本周项目周报.md」/「张伟_简历.md」; not one
+# contains an ASCII keyword, so the first customer's ordinary paperwork routed to 'unknown' and their
+# roster ingested as zero colleagues. The content pass below did not save it either: it runs the same
+# five ASCII regexes over the head of a Chinese document.
+#
+# THE CHINESE ALTERNATIONS MIRROR THE ENGLISH ONES RATHER THAN EXTENDING THEM. Each is the direct
+# rendering of a word already on its line — 周报 for weekly, 项目 for project, 名册 for roster — so
+# the router's breadth is unchanged and only its alphabet grows. Two English words are deliberately
+# NOT rendered, because their Chinese equivalents are far broader than the originals:
+#   * update -> 更新 is ordinary prose ("花名册由人事部于每月初更新" — a line in our own roster
+#     fixture), so it would route half the corpus to 'project'.
+#   * about  -> 关于 is the same problem, one kind lower.
+# Likewise the roster line takes the compounds 员工名单/人员名单/团队名单 but NOT bare 名单: 名单 is
+# any list of names (获奖名单, 客户名单), while 名册 is a register OF PEOPLE and nothing else.
+# Simplified + Traditional throughout — a Sanya hotel takes HK/TW paperwork too. `.lower()` in
+# sniff_kind is a no-op on Han, and no Han character can appear in an ASCII filename, so the English
+# routes below are untouched BY CONSTRUCTION (frozen in test_sniff_kind_english_routing_is_frozen).
+#
+# ORDER IS LOAD-BEARING AND UNCHANGED: first match wins, so 「员工手册」-style compounds reach
+# 'company' only after roster/roadmap/project have declined them, exactly as 'Company_Roster.xlsx'
+# has always resolved to roster rather than company.
 _KIND_HINTS: list[tuple[str, str]] = [
-    (r"resume|cv|curriculum|bio\b|profile", "resume"),
-    (r"roster|directory|team[_\- ]?list|headcount|people", "roster"),
-    (r"roadmap|milestone|timeline|plan\b", "roadmap"),
-    (r"weekly|status|standup|update|project|sprint|retro|report|brief", "project"),
-    (r"handbook|company|studio|org|policy|overview|about|charter|onboarding", "company"),
+    (r"resume|cv|curriculum|bio\b|profile"
+     r"|简历|簡歷|履历|履歷", "resume"),
+    (r"roster|directory|team[_\- ]?list|headcount|people"
+     r"|名册|名冊|员工名单|員工名單|人员名单|人員名單|团队名单|團隊名單|通讯录|通訊錄", "roster"),
+    (r"roadmap|milestone|timeline|plan\b"
+     r"|路线图|路線圖|里程碑|时间线|時間線|排期表", "roadmap"),
+    (r"weekly|status|standup|update|project|sprint|retro|report|brief"
+     r"|周报|週報|日报|日報|月报|月報|项目|項目|站会|站會|冲刺|衝刺|复盘|復盤|简报|簡報|汇报|匯報"
+     r"|报告|報告|状态|狀態", "project"),
+    (r"handbook|company|studio|org|policy|overview|about|charter|onboarding"
+     r"|手册|手冊|公司|工作室|组织架构|組織架構|规章制度|規章制度|政策|概览|概覽|章程", "company"),
 ]
 
 

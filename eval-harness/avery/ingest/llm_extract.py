@@ -42,7 +42,8 @@ log = logging.getLogger("avery.ingest.llm_extract")
 
 from .extract import (
     ExtractionResult, Extractor, HeuristicExtractor, PersonEntity, ProjectEntity,
-    SignalEntity, _norm_status, _norm_team, _slug,
+    SignalEntity, _INDEX_TOKEN_RE, _NOT_NAME, _norm_status, _norm_team, _person_key,
+    _project_key, _slug,
 )
 from .parse import ParsedDoc
 from .redline_extract import (
@@ -95,9 +96,19 @@ _INSTRUCTIONS = """Return exactly this JSON shape:
 
 Field rules:
 - people: one entry per real named individual. In a roster/table: one per data row (skip header
-  rows). role = their stated title. team = one of Founders|Eng|Product|Design|GTM|Ops if it can be
-  honestly mapped, else "". tenure = stated experience/tenure phrase (e.g. "8 years of B2B design",
-  free text). owns = up to 6 short phrases of what they own / are responsible for, from the doc.
+  rows). role = their stated title.
+  team = the department / team / group THE DOCUMENT ITSELF gives this person, copied VERBATIM in
+  the document's own words and language — from a 部门/团队/组 column, a section heading they sit
+  under, or a sentence that says so. Do NOT translate it, do NOT tidy it, and do NOT map it onto
+  any preset category list: 「别墅销售组」 comes back as 「别墅销售组」, never as an English bucket.
+  Only if the document names no department for ANYONE, fall back to the person's OWN stated title
+  and map it onto EXACTLY ONE of these six words, copied letter-for-letter:
+  Founders | Eng | Product | Design | GTM | Ops
+  Use one of those six and nothing else — never a word of your own invention: a "Design Director"
+  -> Design; a "Founder / CEO" -> Founders; a "Head of Sales" -> GTM; an "Office Manager" -> Ops.
+  If a title maps onto none of the six, "".
+  tenure = stated experience/tenure phrase (e.g. "8 years of B2B design", free text).
+  owns = up to 6 short phrases of what they own / are responsible for, from the doc.
 - projects: one entry per distinct project, phase or engagement THE DOC DESCRIBES AS WORK (e.g.
   "Phase 1" and "Phase 2" of an engagement are two entries). title must be a meaningful name from
   the content — NEVER the source filename. status only from: on-track|at-risk|blocked|done|"".
@@ -169,11 +180,32 @@ def _line_ref(doc: ParsedDoc, v, default: int = 1) -> str:
     return f"{doc.name}:{n}"
 
 
-# names that are obviously not a human (header/label cells) — belt to the model's suspenders
-_NOT_A_PERSON = re.compile(
-    r"^(no\.?|name|role|title|team|owner|status|case[\s\-]?id.*|member(s)?|people|background|"
-    r"current responsibilities|responsibilities|department|email|tenure|profile|sheet.*|total|"
-    r"n/?a|none|unknown|tbd|\d+)$", re.I)
+# Label/header cells that are obviously not a human — belt to the model's suspenders (_SYSTEM
+# already forbids them; this catches the model DISOBEYING, so it may not assume compliance).
+#
+# ONE LIST, NOT TWO (feat-048, round-2 follow-up — spotted by inspection in r2, out of r2's scope;
+# NOT "round 4", which is the TEAM-axis line). This used to be a self-contained regex that copied the
+# heuristic's `_NOT_NAME` words, and the copy did what copies do: by round 3 the regex was missing
+# every Chinese header (「姓名」/「职位」/「部门」— shipping a colleague named "Name" to an all-Chinese
+# customer, feat-039's "No." bug reborn) AND ~18 English labels the heuristic had since grown
+# (date/dept/designation/directory/id/index/manager/notes/person/phone/project/roster/s.no/sl/sn/
+# sr/seq/#). Both paths guard the SAME question — "is this cell a person or a label?" — so they now
+# read the SAME answer, and a word added to _NOT_NAME is covered here for free.
+#
+# _NOT_NAME + _INDEX_TOKEN_RE together, because the heuristic's defence is both: _looks_like_name
+# consults the pair, and 序号/编号 live only in the regex half. Only these three patterns are
+# genuinely regex-shaped (prefix/numeric matches with no literal to list) and so stay local.
+_NOT_A_PERSON_EXTRA = re.compile(r"^(?:case[\s\-]?id.*|sheet.*|\d+)$", re.I)
+
+
+def _not_a_person(name: str) -> bool:
+    token = (name or "").strip()
+    if not token:
+        return True
+    # .lower() is a no-op on Han; _NOT_NAME is stored lowercased for the ASCII half
+    if token.lower() in _NOT_NAME or _INDEX_TOKEN_RE.match(token):
+        return True
+    return bool(_NOT_A_PERSON_EXTRA.match(token))
 
 
 class LLMExtractor:
@@ -283,12 +315,14 @@ class LLMExtractor:
             if not isinstance(raw, dict):
                 continue
             name = _s(raw.get("name"), 80)
-            if not name or _NOT_A_PERSON.match(name):
+            if _not_a_person(name):
                 continue
             # structural red line on the RAW dict: any forbidden scoring key kills this record
             if validate_person_dict(name, raw):
                 continue
-            key = re.sub(r"\s+", " ", name.lower())
+            # shared with cross-document dedup (extract._dedupe_entities) — one definition of
+            # "same person", so within-doc and cross-doc can never drift apart
+            key = _person_key(name)
             person = seen_people.get(key)
             if person is None:
                 person = PersonEntity(
@@ -315,10 +349,10 @@ class LLMExtractor:
             if not isinstance(raw, dict):
                 continue
             title = _s(raw.get("title"), 140)
-            norm_title = re.sub(r"[\s_\-]+", " ", title.lower()).strip()
+            norm_title = _project_key(title)   # shared with cross-document dedup — see _person_key
             if not title or norm_title in seen_titles:
                 continue
-            if norm_title == re.sub(r"[\s_\-]+", " ", stem):
+            if norm_title == _project_key(stem):
                 continue                      # a filename is not a project title
             seen_titles.add(norm_title)
             status = _s(raw.get("status"), 20).lower()

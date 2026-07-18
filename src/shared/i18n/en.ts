@@ -224,6 +224,359 @@ export const en = {
     detailGone: 'This card is no longer in your uploads.',
   },
 
+  // ── lite2 shell (feat-035, lite-live-v02: the v02 shell running side-by-side with v01 above.
+  // Same product copy as `lite` — duplicated under its own namespace per kickoff-dev.md §6 so v01
+  // and v02 wording can diverge independently without touching v01's committed strings) ─────────
+  lite2: {
+    tabTeam: 'Your team',
+    tabRoom: 'The room',
+    tabPlaybooks: 'Playbooks',
+    tabVision: 'Where this goes',
+
+    // ── New tabs (feat-035 6-tab skeleton — PRD order: team, room, followups, closerlook,
+    // playbooks, vision) ──
+    tabFollowups: 'Follow-ups',
+    tabCloserLook: 'A closer look',
+    // feat-047: 7th tab, ported from `lite` — same key name/value as `en.lite.tabNotes` so
+    // scripts/i18n-zh-lite2-delta.mjs reuses the already-approved zh.lite translation verbatim
+    // (no fresh M3 call needed). Placed after Follow-ups in the topbar (LiteTopbar.tsx).
+    tabNotes: "Avery's notes",
+
+    // ── Team grouping view (feat-025 Q2: cluster people cards by department/role) ──
+    groupAllLabel: 'Grouped by team',
+    groupUngrouped: 'Everyone else',
+    groupCollapse: 'Collapse',
+    groupExpand: 'Expand',
+    groupCountOne: 'person',
+    groupCountMany: 'people',
+
+    // ── The room — thin pan/zoom canvas (feat-025 Q3) ──
+    roomCanvasHint: 'Drag to move · scroll to zoom',
+    roomCanvasReset: 'Reset view',
+
+    // ── Follow-ups screen (feat-035 laid the skeleton; feat-036 wires the real derivation —
+    // today/this-week/later grouping, source tags, manual add, history, localStorage persistence.
+    // Every "add to follow-ups" entry point elsewhere in lite2 writes into this same list.) ──
+    followupsEyebrow: 'Follow-ups',
+    followupsTitle: 'Everything you follow up on, in one place',
+    followupsGroupToday: 'Today',
+    followupsGroupWeek: 'This week',
+    followupsGroupLater: 'Later',
+    followupsActiveTab: 'Active',
+    followupsHistoryTab: 'History',
+    followupsEmptyActive: "Nothing on your follow-up list yet — add one below, or bring one over from this morning's list, the room, or a quick ask.",
+    followupsEmptyHistory: "Nothing completed yet — finished items land here.",
+    followupsSourceTriage: 'From this morning',
+    followupsSourceRoom: 'From the room',
+    followupsSourceAsk: 'From a quick ask',
+    followupsSourceCloserLook: 'From a closer look',
+    followupsSourceManual: 'Added by you',
+    followupsAddTitlePlaceholder: 'What needs following up?',
+    followupsAddGroupLabel: 'When',
+    followupsAddSubmit: 'Add to follow-ups',
+    followupsDone: 'Done',
+    followupsRestore: 'Bring it back',
+    followupsDelete: 'Delete',
+    followupsEdit: 'Edit',
+    followupsSave: 'Save',
+    followupsCancel: 'Cancel',
+    followupsDraftMail: 'Draft the message',
+    followupsCompletedAt: 'done',
+    followupsTitleAria: 'Follow-up title',
+    followupAdded: 'Added',
+
+    // Advice card — "add to follow-ups" on each recommended action (feat-036, source=room)
+    adviceAddFollowup: 'Add to follow-ups',
+
+    // ── A closer look screen (feat-035 laid the skeleton as an honest empty placeholder;
+    // feat-044 replaces it with the real comparison-card derivation — PRD F4 / decisions.md
+    // 拍板#4. The old closerLookEyebrow/Title/Body/ComingSoon placeholder keys are retired
+    // outright, not reused — a fresh key set avoids any risk of a stale ZH translation surviving
+    // under an old key name with new meaning, per session-handoff's i18n discipline note.) ──
+    gapPageEyebrow: 'A closer look',
+    gapPageTitle: "Where the file and the read don't quite line up",
+    gapPageBody:
+      "When a project's own status reads steady but something in the files says otherwise, it shows up here — what the files say next to what the signals show, with a way to settle it, let it go, or ask the person directly.",
+
+    // Comparison card — left pane vs. right pane.
+    gapCardClaimLabel: 'What the files say',
+    gapCardEvidenceLabel: 'What the signals show',
+    gapOwnerPrefix: 'Owned by',
+
+    // Card actions (memo-voiced, not SaaS "Resolve"/"Dismiss" verbs).
+    gapResolveLabel: 'Settled',
+    gapDismissLabel: 'Let it go',
+    gapAskLabel: 'Ask them directly',
+    gapAddFollowupLabel: 'Add to follow-ups',
+
+    // History (resolved + dismissed, collapsed by default — same drawer language as the
+    // morning-triage "Taken care of today" pattern, feat-036).
+    gapHistoryToggleLabel: 'Looked into',
+    gapResolvedBadge: 'Settled',
+    gapDismissedBadge: 'Let go',
+    gapRestoreLabel: 'Bring it back',
+
+    // Honest empty state — nothing derived from the current corpus.
+    gapEmptyTitle: 'Nothing worth a closer look right now',
+    gapEmptyBody:
+      "When a project's own status and its blockers tell different stories, it'll show up here.",
+
+    // ── Avery's notes surface (feat-047, ported from `lite`'s feat-033 — write-side,
+    // accumulating, user-visible memory). Every key name here matches `en.lite.notes*` byte-
+    // for-byte so scripts/i18n-zh-lite2-delta.mjs reuses the already-approved zh.lite Chinese
+    // verbatim (no fresh M3 call). Copy per avery-notes-ux-draft.md §5 — the red-line trust note
+    // stays on-message with the existing family (upload.privacyNote / emptyHintPrivacy /
+    // visionProofRedline): a DETERMINISTIC gate, never "we try" — never scored/ranked/profiled,
+    // and no instruction can turn that off. ──
+    notesEyebrow: 'Field notes',
+    notesTitle: 'What Avery has noticed about your company',
+    notesLede:
+      'Every time you ask the room a real question, Avery writes down what it observed — in its own words, for you to read. It builds up the longer you work together.',
+    notesRedlineNote:
+      'These notes describe work — projects, handoffs, load. They never score, rank, or profile a person, and no instruction can turn that off.',
+    notesCountSince: 'observations · since', // "12 observations · since Mar 3"
+    notesCountOne: 'observation', // per-day group count (singular)
+    notesCountMany: 'observations', // per-day group count (plural)
+    notesToday: 'Today',
+    notesSourcePrefix: 'From your question about', // + excerpt + " →"
+    notesOpenRoom: 'Open the room →',
+    notesEmptyEyebrow: 'Nothing written yet',
+    notesEmptyTitle: "Avery hasn't taken its first note",
+    notesEmptyBody:
+      'Ask the room a real question about your team. When Avery notices something worth keeping — a pattern, a risk, a dependency — it writes it here.',
+    notesEmptyCta: 'Ask the room',
+    notesNudge: 'Avery added a note', // Room chip after a note lands
+
+    // ── Playbooks screen (feat-025 Q1: honest empty state, anchored to future capability) ──
+    playbooksEyebrow: 'Coming soon',
+    playbooksTitle: 'Playbooks grow from the way your team already works',
+    playbooksBody:
+      'Once Avery is wired into your own SOPs, checklists, and past decisions, it distills them into reusable playbooks — so the next time a familiar situation lands, the room already knows your house rules.',
+    playbooksSlotRoster: 'Your onboarding and handover SOPs become step-by-step playbooks.',
+    playbooksSlotIncident: 'Recurring situations turn into a saved play the room runs the same way each time.',
+    playbooksSlotPack: 'Industry packs (starting with the hospitality pack) drop in pre-built plays you can adapt.',
+    playbooksSlotLabel: 'What will live here',
+    playbooksComingSoon: 'Not connected yet — this is a preview of where Avery is headed.',
+    playbooksEmptyTag: 'No playbooks yet',
+
+    // ── Vision surface (feat-026: positioning narrative + honestly-labeled capability mock) ──
+    // The narrative is deliberately calm and does not interrupt the trial flow — it's its own tab.
+    // Beats 1→2→3: what you're seeing now → what the real product is → what this demo is proving.
+    visionEyebrow: 'Where this goes',
+    visionTitle: 'You just tried the demo. Here is the product behind it.',
+    visionLede:
+      "Everything in the other tabs ran on files you uploaded yourself. That's on purpose — it's the fastest way to feel how Avery reads a team. The real product is a step past this.",
+
+    // Beat 1 — what you're looking at now (honest about the demo)
+    visionNowLabel: 'What you just used',
+    visionNowTitle: 'A demo you drove with your own files',
+    visionNowBody:
+      "You dropped in a roster and a plan, watched your team grow out of them, and asked the room a real question. Nothing here was scripted for you — it read what you gave it. This is a public, try-it-yourself build, not the deployed product.",
+
+    // Beat 2 — what the real product is (custom agent, your data, private deploy)
+    visionRealLabel: 'What Avery actually is',
+    visionRealTitle: 'A custom agent, built around one company',
+    visionRealBody:
+      "In production, Avery is set up for your company specifically — wired into your own systems and documents, and deployed inside your own secure environment, not a shared one. It stays a narrow, domain-specific agent that knows your team and only your team, so access stays scoped and auditable instead of one giant model reaching everywhere.",
+
+    // Beat 3 — what this demo is really proving (UIUX + judgment + red line)
+    visionProofLabel: 'What this demo is proving',
+    visionProofTitle: 'Three things worth judging today',
+    visionProofUiux: 'The interface — how a team and a live read actually feel to move through.',
+    visionProofJudgment: "The judgment — whether the room's read of a real situation is one you'd trust.",
+    visionProofRedline:
+      'The red line — people are never scored, ranked, or profiled, and no instruction can turn that off.',
+
+    // ── Capability-boundary mock (honestly labeled; NOT built — a preview of the boundary) ──
+    visionMockEyebrow: 'After your data is wired in',
+    visionMockTitle: 'What the boundary opens up',
+    visionMockLede:
+      "These are previews, not features you can click today. We show them so you can judge the direction honestly — each one is marked so nothing here reads as already shipped.",
+
+    // Honest markers (every mock card carries one of these — the gate asserts zero unlabeled cards)
+    visionTagPreview: 'Preview',
+    visionTagComing: 'Coming',
+    visionTagMock: 'Mock',
+
+    // Mock 1 — the agent's own file system (Schroeder: sandbox file system as a primitive)
+    visionMockFilesTitle: "The agent's own workspace",
+    visionMockFilesBody:
+      'Avery keeps its own private file space per company — a place to hold your documents, its working notes, and the artifacts it produces, so a read can build on the last one instead of starting cold every time.',
+
+    // Mock 2 — custom skills / tools / SOP (Pocock: skills as the unit of repeatable behaviour)
+    visionMockSkillsTitle: 'Skills, tools, and SOPs made yours',
+    visionMockSkillsBody:
+      'Your recurring work — how you onboard, how you run a review, how you handle a stuck project — becomes a named skill the agent runs the same way every time. Predictable by design, not improvised per prompt.',
+
+    // Mock 3 — background batch loops (Steinberger: attention is the bottleneck; loops run while away)
+    visionMockLoopTitle: 'Work that runs while you are away',
+    visionMockLoopBody:
+      "Point Avery at a batch of situations and it works through them in the background, on its own schedule. You come back to results to check — not a live session to babysit. The scarce thing is your attention, so the product spends it last.",
+
+    // Mock 4 — the red line as a deterministic gate (Martin-Dye: prompt is a request, permission is a check)
+    visionMockGateTitle: 'The red line is a gate, not a wish',
+    visionMockGateBody:
+      "Reading a team the wrong way costs trust you can't refund. So the no-scoring rule on people isn't a line in a prompt that a clever request could bend — it's a deterministic check every answer passes before it reaches you.",
+
+    // A tiny illustrative person chip inside a mock — red line holds: a name and a role, no numbers.
+    visionMockPersonName: 'A teammate',
+    visionMockPersonRole: 'Read as what they do and own — never a number.',
+
+    visionComingSoon: 'None of the four is live yet. This tab is a preview of the boundary, kept honest on purpose.',
+
+    // Your team — briefing header (real numbers from ingestion) + morning triage (feat-036,
+    // ADR-0017 execution: done/discard/take-to-room three-action queue over the same derived
+    // handoffs — the derivation itself stays in teamData.ts, unchanged from feat-024).
+    briefingEyebrow: 'From your uploads',
+    metricsLabel: 'Team at a glance',
+    handoffsTitle: 'Worth your attention today',
+    handoffsEmpty: 'Nothing needs you right now — your uploads read steady.',
+    handoffOpen: 'Open the project',
+
+    // Triage three actions + the "Taken care of today" drawer
+    triageRemaining: '{pending} of {total} still worth a look',
+    triageDoneAria: 'Done — {action}',
+    triageDiscardLabel: 'Not today',
+    triageTakeToRoomLabel: 'Take to the room',
+    triageAddFollowupLabel: 'Add to follow-ups',
+    triageDraftMailLabel: 'Draft the message',
+    triageDrawerLabel: 'Taken care of today',
+    triageSetAsideLabel: 'set aside',
+    triageRestoreLabel: 'Bring it back',
+    triageAllDone: 'Everything from this morning is settled the way you chose.',
+
+    // Upload empty state (the left spine speaks for itself — no scripted placeholders)
+    emptyEyebrow: 'Getting started',
+    emptyHintRoster: 'A team roster or a few resumes — the people appear as cards.',
+    emptyHintProject: 'A project plan or weekly update — the projects line up next to them.',
+    emptyHintPrivacy: 'No one gets scored. Avery only keeps what people do and own.',
+
+    // Lanes
+    peopleLane: 'People',
+    projectLane: 'Projects',
+
+    // The room — empty state
+    roomEmptyTitle: 'Bring a situation to the room',
+    roomEmptyBody:
+      'Describe what is on your mind about the team — it thinks it through against your uploads and comes back with a read.',
+
+    // Composer references (live corpus only)
+    refAll: 'All',
+    refPeople: 'People',
+    refProjects: 'Projects',
+    refAdd: 'Add a reference',
+    refSearch: 'Reference a person or project',
+    refEmpty: 'Upload a few files first — people and projects appear here.',
+
+    // Thin read-only detail overlay (pure live payload)
+    detailAria: 'Detail',
+    detailClose: 'Close',
+    detailPersonEyebrow: 'Teammate',
+    detailProjectEyebrow: 'Project',
+    detailTenure: 'Tenure',
+    detailOwns: 'Owns',
+    detailCollab: 'Working with',
+    detailSummary: 'Summary',
+    detailProgress: 'Progress',
+    detailBlockers: 'Worth a closer look',
+    detailSignals: 'What the documents say',
+    detailSource: 'From your uploads',
+    detailGone: 'This card is no longer in your uploads.',
+
+    // ── Onboarding wizard (feat-045, PRD F7 — first-visit overlay; skippable; × pauses and
+    // resumes next visit. NO fake connect-tools step, NO fake create-account step — every step
+    // is real wiring: upload really ingests, picks really persist.) ──
+    onboardEyebrow: 'Getting set up',
+    onboardCloseAria: 'Close — it picks up where you left off next time',
+    onboardSkip: 'Skip the setup',
+    onboardBack: 'Back',
+    onboardNext: 'Next',
+    onboardFinish: 'Step in',
+    onboardStepsAria: 'Setup steps',
+
+    onboardUploadTitle: 'Start with a few files',
+    onboardUploadBody:
+      "Hand Avery what you'd hand a new manager on day one — a roster, a project plan, a weekly note. Your team grows out of them. Fine to skip; you can upload later from Your team.",
+    onboardUploadChoose: 'Choose files',
+    onboardUploadReading: 'Reading your files…',
+    onboardUploadReady: 'Your team is ready',
+    onboardUploadError: "Couldn't read those files — try again, or move on and upload later.",
+    onboardUploadIdle: 'Nothing uploaded yet — this step is fine to skip.',
+
+    onboardTeamTitle: 'A little about you',
+    onboardTeamBody:
+      'Used for greetings around the product. It stays in this browser — nothing is sent anywhere.',
+    onboardCompanyLabel: 'Company',
+    onboardCompanyPlaceholder: 'e.g. Harbor & Co.',
+    onboardDeptLabel: 'Team or department',
+    onboardDeptPlaceholder: 'e.g. Operations',
+    onboardNameLabel: 'What should Avery call you?',
+    onboardNamePlaceholder: 'e.g. Alex',
+
+    onboardPlaybooksTitle: 'Pick the plays that fit how you run things',
+    onboardPlaybooksBody:
+      'Your picks shape the Playbooks tab — it shows where each one will grow once Avery is wired into your own SOPs. Nothing is connected yet, and it says so.',
+
+    onboardDoneTitle: "You're set",
+    onboardDoneGreeting: 'Good to meet you, {name}.',
+    onboardDoneGreetingNoName: 'Good to meet you.',
+    onboardDoneSummaryLead: 'The plays you picked:',
+    onboardDoneNoPicks: 'No plays picked — the Playbooks tab keeps its general preview.',
+
+    // ── Playbook candidates (feat-045 — eight plays, each a title + one plain line; memo
+    // voice, no framework name-dropping. Semantics reference the partner build; copy rewritten.) ──
+    playbookOnboardingTitle: "A new joiner's first month",
+    playbookOnboardingBody:
+      'Your onboarding and handover routine, written down as a step-by-step play.',
+    playbookWeeklyTitle: 'The weekly read',
+    playbookWeeklyBody: 'A standing pass over projects and blockers, run the same way every week.',
+    playbookStuckTitle: 'When a project stalls',
+    playbookStuckBody: 'A calm sequence for finding where a stalled project is actually stuck.',
+    playbookHandoffTitle: 'Handoffs and cover',
+    playbookHandoffBody: 'Who picks up what when someone is away — agreed before it is needed.',
+    playbookToughTalkTitle: 'Before a tough conversation',
+    playbookToughTalkBody: 'Get the facts and a kind opening in hand before you sit down.',
+    playbookNinetyTitle: "A manager's first ninety days",
+    playbookNinetyBody: 'What to read, who to meet, and what to leave alone at first.',
+    playbookRisksTitle: 'Hearing about risks early',
+    playbookRisksBody: 'A habit of asking the team about the work before small worries grow.',
+    playbookShipTitle: 'After it ships',
+    playbookShipBody: 'A short look back — what to keep, what to change, noted while it is fresh.',
+
+    // Playbooks screen — the slots reflect the setup picks (feat-045; falls back to the
+    // general three-slot preview when nobody has picked yet). Honest grammar stays: every
+    // slot is tagged Coming until something is really wired in.
+    playbooksChosenLabel: 'Your picks from setup',
+    playbooksChosenTag: 'Coming',
+    playbooksForCompany: 'Set up for {company}.',
+
+    // ── The room — empty-state suggestion chips (feat-045, PRD F5: four generic openers;
+    // click = the question goes to the room for real. Wording presumes nothing about the
+    // uploaded corpus.) ──
+    roomChipsLabel: 'A few ways to start',
+    roomChipAttention: 'Who on the team could use a hand from me this week?',
+    roomChipRisk: 'Which project is most at risk of slipping, and why?',
+    roomChipHandoff: 'Is any handoff between people waiting on someone right now?',
+    roomChipPlanning: 'Help me sketch priorities for next week.',
+
+    // ── Notification bell (feat-045, PRD F5 — REAL events only; zero hardcoded items; copy
+    // never names an employee) ──
+    bellAria: 'Notifications',
+    bellTitle: 'What came in',
+    bellEmpty:
+      'Nothing yet. When your files finish reading or a run in the room completes, it lands here.',
+    bellMarkAll: 'Mark all read',
+    bellUnreadAria: '{count} unread',
+    notifIngest: 'Your team is ready — the files you brought in have been read.',
+    notifRun: 'The room has finished thinking it through — the read is ready.',
+    notifAsk: 'All replies to your quick ask are in.',
+    notifGap: 'Something in the files is worth a closer look.',
+
+    // ── Compliance footer (PRD F6) — shell-global, memo tone (not regulatory tone). ──
+    footerText:
+      "Avery informs your judgment — it never replaces it. Every read here needs your own review before it becomes a decision, and none of it should be the sole basis for a serious call about a person's job, pay, or standing.",
+  },
+
   // ── Ask / Quick ask (feat-034 stage B — ADR-0023 voice: asks about the WORK, never rates
   // a person; answers are the employee's own words, never a person's attribute) ─────────────
   ask: {

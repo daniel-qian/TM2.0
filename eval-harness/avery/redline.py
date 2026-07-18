@@ -97,14 +97,67 @@ def _ctx(text: str, s: int, e: int, pad: int = 24) -> str:
     return text[max(0, s - pad): min(len(text), e + pad)].strip()
 
 
+# --- the 别 rule (B3) -------------------------------------------------------------------------
+# 「别」 means "don't" — AND it is a bound morpheme in a large class of ordinary nouns. A BARE 「别」
+# alternative here (feat-029, dadc6bd) therefore switched the whole person-scoring gate off for 32
+# chars after ANY 别-bearing word. Measured before the fix: 32/32 of a realistic corpus leaked,
+# including the advisor's own output — 「个别员工的绩效评分是2分,建议重点观察」 ('a few employees
+# score 2; watch them closely') PASSED the moat, while the identical sentence with 有些 correctly
+# failed. 「别墅」 is a VILLA, and the first customer is a 三亚别墅酒店 whose sales floor all carry
+# 「别墅销售顾问」.
+#
+# THIS IS THE 不 LESSON, NOT APPLIED TO 别. Bare 不 was already excluded above for exactly this
+# reason ("it lives inside 不合格/不在线 and would over-suppress") and replaced by 不+verb bigrams.
+# 别 needed the same treatment and did not get it.
+#
+# THE RULE IS A CONJUNCTION, AND BOTH HALVES ARE LOAD-BEARING — measured, not assumed. Each half
+# alone still leaks (see tests/test_redline_villa_negation_b3.py::test_both_halves_of_the_别_rule_
+# are_load_bearing, which executes both mutations):
+#   * following-verb alone  -> leaks 「分别给她打分」「区别对待」「甄别给」「级别分为」「组别对应」
+#                              「判别标准」「职别对照」 — an X别 compound followed by a real verb.
+#   * lookbehind alone      -> leaks 「别墅」 itself (and 别人/别的) — the customer's own word.
+# Together: 0 leaks, 0 false positives on the same corpus.
+#
+# BOTH LISTS ARE TUNED TO ERR TOWARD FIRING, because the moat's two errors are not symmetric:
+#   * a missed negation  -> genuine advice wrongly refused. Noisy, visible, safe.
+#   * an over-suppression -> a person score reaches the customer. Silent. This is B3.
+# So _NEG_别_COMPOUND is GENEROUS (an extra glyph only costs an over-fire) and _NEG_别_VERB is
+# CONSERVATIVE (a missing verb only costs an over-fire). Every unknown falls to the safe side.
+#
+# NOTE the deleted 别 alternative is NOT an option: dropping 别 from _NEG entirely breaks 19/25 real
+# negations in the same corpus ('别给她打分', '千万别把他排名倒数'), which is what the cue is FOR.
+
+# X别 — 别 as the SECOND morpheme of a noun (性别/级别/类别/个别/区别/识别/告别/天壤之别...).
+_NEG_别_COMPOUND = "性级类派识区差个分特辨鉴甄判送告离久惜阔诀话道拜永死门有之国组班科职"
+# 别 + VERB — 别 as "don't" is a preverbal adverb, so a verb (or a coverb) always follows it. This
+# list is the same shape as the 不要|不用|不做|不给 bigrams above, and covers the scoring-advice
+# verbs the red line actually meets. 别墅/别人/别的/别处/别名/别号/别称/别致/别扭/别针 are excluded
+# BY CONSTRUCTION rather than by a whitelist — 墅/人/的/处/名/号/称/致/扭/针 are not verbs.
+_NEG_别_VERB = "给把对做搞用拿说提写标评打排定分再向为帮让去管贴下按以急想叫当看找谈讲加起扣算跟"
+
 _NEG = re.compile(
     r"\b(?:don'?t|do\s+not|never|not|no|avoid|without|isn'?t|aren'?t|won'?t|wouldn'?t|"
     r"shouldn'?t|stop|refrain|resist|rather\s+than|instead\s+of)\b"
     # feat-029 — Chinese negation lead-ins so advice AGAINST scoring a person passes ('不要给她
     # 打分', '别评级', '无需画像', '避免标成离职风险'). CJK has no \b; these are literal cues. Bare
     # 不 is deliberately NOT here (it lives inside 不合格/不在线 and would over-suppress).
-    r"|(?:不要|不用|不应|不该|不得|不做|不搞|不给|别|勿|请勿|无需|无须|毋须|避免|杜绝|拒绝|"
+    r"|(?:不要|不用|不应|不该|不得|不做|不搞|不给|"
+    # B3 — 别 is likewise NEVER bare: it must not be the tail of an X别 noun, and it must govern a
+    # verb. See the block above for why both halves are required.
+    rf"(?<![{_NEG_别_COMPOUND}])别(?=[{_NEG_别_VERB}])|"
+    r"勿|请勿|无需|无须|毋须|避免|杜绝|拒绝|"
     r"而非|而不是)", re.I)
+
+# 不得不 / 不得已 are AFFIRMATIVE ("have no choice but to"), NOT negation — neutralised before the
+# scan. LENGTH-PRESERVING (feat-029 deleted them outright): the 别 rule's lookbehind reads the glyph
+# before the cue, so a deletion that slid the text left would let it read the wrong neighbour.
+_NEG_AFFIRMATIVE = re.compile(r"不得不|不得已")
+
+# The 别 rule needs to see ONE glyph before the cue. At the window's left edge that glyph lies just
+# outside the slice, and a compound cut in half ('...性│别对待...') would read as 「别对」 = "don't".
+# So the slice carries a read-only margin, and a cue STARTING inside the margin does not count —
+# the effective window stays exactly `window`, unchanged for every other cue.
+_NEG_MARGIN = 2
 
 
 def _negated(text: str, start: int, window: int = 32) -> bool:
@@ -113,11 +166,13 @@ def _negated(text: str, start: int, window: int = 32) -> bool:
     Surfaced by the first real run, where a baseline got falsely flagged for telling the manager
     not to score the hire.
 
-    feat-029 round 2 — 不得不 / 不得已 are AFFIRMATIVE ("have no choice but to"), NOT negation. They
-    are neutralised whole BEFORE the scan, so neither the '不得' cue NOR the '不给' that '不得不给'
-    would otherwise expose reads as a negation, and '不得不给他评分' still fires."""
-    seg = text[max(0, start - window): start].replace("不得不", "").replace("不得已", "")
-    return bool(_NEG.search(seg))
+    feat-029 round 2 — 不得不 / 不得已 are AFFIRMATIVE, so neither the '不得' cue NOR the '不给' that
+    '不得不给' would otherwise expose reads as a negation, and '不得不给他评分' still fires."""
+    lo = max(0, start - window)
+    seg_lo = max(0, lo - _NEG_MARGIN)
+    seg = _NEG_AFFIRMATIVE.sub(lambda m: "\x00" * len(m.group(0)), text[seg_lo: start])
+    margin = lo - seg_lo
+    return any(m.start() >= margin for m in _NEG.finditer(seg))
 
 
 def _has_person(seg: str) -> bool:

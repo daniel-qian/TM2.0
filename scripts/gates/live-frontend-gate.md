@@ -125,3 +125,45 @@ story 的 Wang 用其文案签名 "Wang has it steady" 代替(实跑抓到过此
   相位 F1 断静态(预填/引用),相位 F2(S2/feat-024 已补)断动态:真提交走 askLive →
   SSE 事件到帧。F2 需要真后端带 key 在跑;provider 偶发抽风时可单独重跑
   `__seedGate.composerAskLive(...)` 再取 verdict,但不得跳过。
+
+## v2 相位(feat-035,独立聚合 `v2Verdict()`,相位组 A)
+
+**出生即红**(2026-07-14,feat-035 实现前):无 `.lite2-shell`、无 `?v=` 开关——立门先于实现。
+全程 `?transport=stub`(离线确定性,不需要真后端;`src/lite2/stubTransport.ts`,同一
+LiveTransport seam,与 v01 stub 独立实例)。跨 3 次页面导航 + 1 次仓外 lint,驱动器
+(agent 会话)自己持有跨导航的 JSON 快照,不能全指望页内状态。
+
+跑法:
+
+1. 打开 `http://localhost:5173/?v=2&mode=live&transport=stub&skin=paper`(或 preview_start
+   起的 dev 端口),注入 snippet:
+   - `__seedGate.defuseAnimations()`
+   - `await __seedGate.assertV2Boots()` — **v2Boots**:`.lite2-shell` 挂载 + 6 个 tab、
+     顺序精确匹配 PRD(`Your team · The room · Follow-ups · A closer look · Playbooks ·
+     Where this goes`)。
+   - `const before = __seedGate.readSkinSnapshot()` — 记下 paper 皮的 `data-skin` + 关键计算值。
+2. 导航到同 URL 但 `&skin=aurora`(整页刷新,重新注入 snippet——皮肤只在挂载时读一次 URL,
+   见 `src/lite2/skin.ts`):
+   - `const after = __seedGate.readSkinSnapshot()`
+   - `__seedGate.assertSkinTokens(before, after)` — **skinTokens**:`data-skin` 属性变化
+     **且**至少一个关键计算值(背景图/文字色)随之变化(证明令牌层真的接进去了,不是挂了个
+     没人消费的属性)。
+3. 导航到默认 URL `?mode=live&transport=stub`(不带 `v=`)——**先跑一遍既有 10 相位**
+   (相位 A-J,同一 stub session,seed 内容任意字节即可)拿到 `verdict()`,再:
+   - `__seedGate.assertV1Untouched(verdictResult.pass)` — **v1Untouched**:当前页零
+     `.lite2-shell` 节点 **且** 传入的 v01 十相位 verdict 全绿。
+4. 导航到 `?mode=story`:
+   - `__seedGate.assertStoryUntouched()` — **storyUntouched**:零 `.lite2-shell` 节点
+     (story 壳物理够不到 lite2 的根类,同 S4/S5 的 "story 未受影响" 套路搬到 lite2 根类)。
+5. 仓外(不在浏览器里):对 4 个新墙方向各自实证"先红后绿"——
+   `lite2→story` / `story→lite2` / `lite→lite2` / `lite2→lite`,每个方向:临时在对应文件
+   追加一行违规 import → `npm run lint` 记 exit code(须为 1)→ 撤掉该行 → 复跑
+   `npm run lint`(须为 0)→ `git diff --stat` 确认改动文件已归零。四个方向都验完后:
+   - `__seedGate.recordWallRed({ pass: true, directions: { liteToLite2: {...}, ... } })` —
+     **wallRed**:把上面 4 组 exit code 证据塞进来(浏览器测不了 lint,这一相位是唯一一个
+     纯手工记录、不靠 DOM 断言的相位)。
+6. `__seedGate.v2Verdict()` — 聚合(5 相位:v2Boots / v1Untouched / storyUntouched /
+   wallRed / skinTokens)。
+
+**收尾**:JSON 原样贴进 `feature_list.json` evidence / progress.md,连同第 5 步 lint 的原始
+exit code 记录(红是成功,绿是收工)。
