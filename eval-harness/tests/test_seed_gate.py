@@ -384,17 +384,23 @@ def test_no_mojibake_on_the_wire(seed_payload):
 
 @seedgate
 @needs_keys
-@pytest.mark.xfail(strict=True, reason=(
-    "已知召回质量缺口，抽取侧无辜：2026-07-19 实测 LLM 抽取给出 30 人，其中 "
-    "{'name':'Lin Qing','role':'Design Director','team':'Design',"
-    "'source':'PrismDesign_TeamProfile_EN.xlsx:8'} —— 她在数据里，只是 top-k 召回没把她那行"
-    "捞给 /advise。这正是本条 docstring 自己说要 hold open 的那个缺口，与 v02 对齐波无关。"
-    "strict=True：召回修好那天这条会因为『意外通过』而变红，提醒把 xfail 摘掉。"))
 def test_advise_cites_the_design_lead(live_service, seed_payload):
     """The retrieval-quality gate: asking the ingested company 'who leads design' must produce
     advice whose CITED EVIDENCE includes the facts line naming Lin Qing (Design Director).
     07-07: the advise leg ran true end-to-end but top-k recall missed her row — that quality gap
-    is exactly what this assertion holds open until it is fixed."""
+    is exactly what this assertion holds open until it is fixed.
+
+    ⚠️ 2026-07-19 集成期实测：**这条是 flaky 的，而且不是抽取的锅。**
+      · 单独跑：PASS（我把它标成 xfail 之后立刻 XPASS(strict)，所以又把 xfail 撤了——
+        不能把一个会通过的测试标成「预期失败」）
+      · 整文件跑：FAIL
+      · 抽取侧无辜：实测 LLM 抽出 30 人，Lin Qing / Design Director / Design 好好地在里面
+        （PrismDesign_TeamProfile_EN.xlsx:8）。红在 top-k 召回没把她那行捞给 /advise。
+
+    也就是说结果取决于同文件里先跑过什么（seed_payload 这个上下文是怎么攒起来的）
+    + 召回本身的非确定性。**看到它红，先单独跑一遍再判断**；连着单跑都红才是真回归。
+    根治要么让召回对这类「谁负责 X」的问题稳定命中角色行，要么把这条门改成多次采样。
+    """
     import httpx
     r = httpx.post(f"{live_service}/advise", json={
         "situation": "In this team, who leads design? I need to know who owns design direction "
