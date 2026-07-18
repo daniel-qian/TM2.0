@@ -3,10 +3,12 @@ import { useLite } from './store'
 import {
   ONBOARD_STEPS,
   PLAYBOOK_CATALOG,
+  selectWizardOpen,
   useOnboard,
   type OnboardStep,
 } from './onboardStore'
 import { useDict } from '../shared/i18n/useDict'
+import { LiteModal } from './LiteModal'
 
 // feat-045 · lite2 onboarding 向导（PRD F7）——覆盖层，非路由。首访 v02 自动弹出
 // （onboardStore：unseen/in-progress 且本会话未 ×），可跳过（skipped 永不再弹）、
@@ -22,7 +24,12 @@ import { useDict } from '../shared/i18n/useDict'
 // 🔴 红线：向导全程零人卡、零数字读数；文案不承诺没接线的能力（诚实 Coming 语法由
 // Playbooks 屏延续）。门相位（nudgeVerdict D 组）按稳定 data-id 断言：
 // .lite-onboard[data-onboard-step] / .lite-onboard-playbook[data-playbook-id] /
-// .lite-onboard-summary-item[data-playbook-id]。
+// .lite-onboard-summary-item[data-playbook-id]——feat-052 换底座后这三个选择器原样保留
+// （.lite-onboard 现在是 LiteModal 的面板类，data-onboard-step 经 panelData 下发）。
+//
+// feat-052：底座换成 LiteModal。行为上的一处**有意变更**——点背景现在等同 ×（pause，进度保留、
+// 下次续跑），此前点背景无反应。这是 feat-052 验收要求的"任意两个弹层关闭方式一致"。
+// 开关从 Lite2App 的条件挂载移进本组件（selectWizardOpen），常驻挂载才跑得了出场动画。
 
 const ACCEPT = '.pdf,.docx,.doc,.xlsx,.xls,.csv,.md,.markdown,.txt'
 
@@ -62,6 +69,9 @@ export function OnboardWizard() {
 
   const step = useOnboard((s) => s.step)
   const status = useOnboard((s) => s.status)
+  // 向导是否该露面（原先由 Lite2App 条件挂载判定；feat-052 移进来——组件常驻挂载，
+  // 用 open 开关，出场动画才有机会跑完）。
+  const open = useOnboard(selectWizardOpen)
   const begin = useOnboard((s) => s.begin)
   const goStep = useOnboard((s) => s.goStep)
   const pause = useOnboard((s) => s.pause)
@@ -69,22 +79,16 @@ export function OnboardWizard() {
   const finish = useOnboard((s) => s.finish)
 
   // 首访：挂载即把 unseen 落成 in-progress（持久化）——从此刻起进度可续。
+  // （status==='unseen' ⇒ selectWizardOpen 为真，所以"常驻挂载后才 begin"与原先"开着才挂载、
+  //  挂载即 begin"等价，没有提前把 unseen 吃掉。）
   useEffect(() => {
     if (status === 'unseen') begin()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Escape = 与 × 等价（pause 语义：进度保留、下次续跑）——对抗验证打回（2026-07-14）：
-  // aria-modal 弹层必须可键盘退出，否则键盘用户被困（全代码库当时零 Escape 处理）。
-  // 监听器随组件挂载/卸载注册/注销（Escape 触发 pause → 向导整组件 unmount → cleanup
-  // 立即注销，不留全局监听残留）。
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') pause()
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [pause])
+  // Escape / 点背景 = 与 × 等价（pause 语义：进度保留、下次续跑）——对抗验证打回
+  // （2026-07-14）：aria-modal 弹层必须可键盘退出，否则键盘用户被困。feat-052 起这条由
+  // LiteModal 基座统一提供（onClose = pause），本组件不再自挂 window 监听。
 
   const stepIndex = ONBOARD_STEPS.indexOf(step)
   const goNext = () => {
@@ -97,75 +101,74 @@ export function OnboardWizard() {
   }
 
   return (
-    <div className="lite-onboard-backdrop">
-      <section
-        className="lite-onboard"
-        data-onboard-step={step}
-        role="dialog"
-        aria-modal="true"
-        aria-label={l.onboardEyebrow}
-      >
-        <header className="lite-onboard-head">
-          <p className="eyebrow lite-onboard-eyebrow">{l.onboardEyebrow}</p>
-          <div className="lite-onboard-dots" aria-label={l.onboardStepsAria}>
-            {ONBOARD_STEPS.map((s) => (
-              <span
-                key={s}
-                className={`lite-onboard-dot${s === step ? ' is-active' : ''}`}
-                aria-hidden="true"
-              />
-            ))}
-          </div>
-          <button
-            type="button"
-            className="lite-onboard-close"
-            aria-label={l.onboardCloseAria}
-            title={l.onboardCloseAria}
-            onClick={pause}
-          >
-            ×
-          </button>
-        </header>
-
-        <div className="lite-onboard-body">
-          {step === 'upload' ? (
-            <StepUpload />
-          ) : step === 'team' ? (
-            <StepTeam />
-          ) : step === 'playbooks' ? (
-            <StepPlaybooks />
-          ) : (
-            <StepDone />
-          )}
+    <LiteModal
+      open={open}
+      onClose={pause}
+      ariaLabel={l.onboardEyebrow}
+      backdropLabel={l.onboardCloseAria}
+      panelClassName="lite-onboard"
+      panelData={{ 'data-onboard-step': step }}
+    >
+      <header className="lite-onboard-head">
+        <p className="eyebrow lite-onboard-eyebrow">{l.onboardEyebrow}</p>
+        <div className="lite-onboard-dots" aria-label={l.onboardStepsAria}>
+          {ONBOARD_STEPS.map((s) => (
+            <span
+              key={s}
+              className={`lite-onboard-dot${s === step ? ' is-active' : ''}`}
+              aria-hidden="true"
+            />
+          ))}
         </div>
+        <button
+          type="button"
+          className="lite-onboard-close"
+          aria-label={l.onboardCloseAria}
+          title={l.onboardCloseAria}
+          onClick={pause}
+        >
+          ×
+        </button>
+      </header>
 
-        <footer className="lite-onboard-nav">
+      <div className="lite-onboard-body">
+        {step === 'upload' ? (
+          <StepUpload />
+        ) : step === 'team' ? (
+          <StepTeam />
+        ) : step === 'playbooks' ? (
+          <StepPlaybooks />
+        ) : (
+          <StepDone />
+        )}
+      </div>
+
+      <footer className="lite-onboard-nav">
+        {step !== 'done' ? (
+          <button type="button" className="lite-onboard-skip" onClick={skip}>
+            {l.onboardSkip}
+          </button>
+        ) : (
+          <span />
+        )}
+        <div className="lite-onboard-nav-main">
+          {stepIndex > 0 ? (
+            <button type="button" className="lite-onboard-back" onClick={goBack}>
+              {l.onboardBack}
+            </button>
+          ) : null}
           {step !== 'done' ? (
-            <button type="button" className="lite-onboard-skip" onClick={skip}>
-              {l.onboardSkip}
+            <button type="button" className="lite-onboard-next" onClick={goNext}>
+              {l.onboardNext}
             </button>
           ) : (
-            <span />
+            <button type="button" className="lite-onboard-finish" onClick={finish}>
+              {l.onboardFinish}
+            </button>
           )}
-          <div className="lite-onboard-nav-main">
-            {stepIndex > 0 ? (
-              <button type="button" className="lite-onboard-back" onClick={goBack}>
-                {l.onboardBack}
-              </button>
-            ) : null}
-            {step !== 'done' ? (
-              <button type="button" className="lite-onboard-next" onClick={goNext}>
-                {l.onboardNext}
-              </button>
-            ) : (
-              <button type="button" className="lite-onboard-finish" onClick={finish}>
-                {l.onboardFinish}
-              </button>
-            )}
-          </div>
-        </footer>
-      </section>
-    </div>
+        </div>
+      </footer>
+    </LiteModal>
   )
 }
 

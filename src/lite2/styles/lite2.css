@@ -322,25 +322,42 @@
   line-height: 1.55;
 }
 
-/* ── 薄只读详情浮层（纯 live payload，杀死 "Unknown teammate"）──────────── */
-.lite-detail-overlay {
+/* ── feat-052 · 统一 modal 基座（LiteModal.tsx）────────────────────────────────────
+   一层 + 一背景 + 一面板，全部弹层共用：层级、遮罩观感、居中留白只有这一处口径。
+   面板的宽度/内边距/背景仍由各弹层自己的类给（.lite-detail-card / .lite-onboard / …），
+   基座只管定位与行为——换底座不改各弹层长相。
+   两张皮：遮罩色消费 --lite2-ink-rgb 墨色令牌（paper 暖、aurora 冷藏青），面板类消费
+   --lite2-surface/--rule/--shadow，故 aurora 自动跟随，零 [data-skin] 分支。 */
+.lite2-shell .lite-modal-layer {
   position: fixed;
   inset: 0;
-  z-index: 80;
-  display: grid;
-  place-items: center;
-  padding: 48px 24px;
+  /* 单一层级口径：高于铃铛下拉（90）与页脚（30）——弹层开着时它盖住一切。 */
+  z-index: var(--lite2-z-modal, 120);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
 }
 
-.lite-detail-backdrop {
+.lite2-shell .lite-modal-backdrop {
   position: absolute;
   inset: 0;
   border: 0;
-  background: rgba(var(--lite2-ink-rgb), 0.32);
+  padding: 0;
+  background: rgba(var(--lite2-ink-rgb), 0.35);
   backdrop-filter: blur(3px);
   cursor: default;
 }
 
+.lite2-shell .lite-modal-panel {
+  position: relative;
+  max-width: 100%;
+  /* 面板本身是焦点容器（tabIndex=-1）：拿到程序化焦点时不画浏览器默认焦点框，
+     内部控件的 :focus-visible 环不受影响。 */
+  outline: none;
+}
+
+/* ── 薄只读详情浮层（纯 live payload，杀死 "Unknown teammate"）──────────── */
 .lite-detail-card {
   position: relative;
   width: min(560px, 92vw);
@@ -2355,22 +2372,10 @@
    全部 .lite2-shell 前缀（S4 教训：壳级作用域隔离）；组件样式只消费皮肤令牌
    （--ink/--rule/--sage/--lite2-surface 等），aurora 皮自动跟随，零 [data-skin] 分支。 */
 
-/* ── 向导覆盖层（非路由）──────────────────────────────────────────────────────── */
-.lite2-shell .lite-onboard-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 80;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  /* feat-046 遗留修复②（feat-045 handoff 点名）：遮罩色原硬编码暖调 rgba(30,27,22,.35)，
-     aurora 冷调下发暖——改消费墨色令牌（paper = 29,27,23，与原值差 1 个色阶、不可感知；
-     aurora = 深藏青 16,34,61，遮罩随皮肤变冷）。 */
-  background: rgba(var(--lite2-ink-rgb), 0.35);
-  backdrop-filter: blur(3px);
-}
-
+/* ── 向导覆盖层（非路由）──────────────────────────────────────────────────────────
+   feat-052：层与遮罩已收进基座 .lite-modal-layer / .lite-modal-backdrop（原
+   .lite-onboard-backdrop 规则整块删除，含 feat-046 那条"遮罩色消费墨色令牌"的修复——
+   口径原样搬进基座，两张皮的冷暖遮罩不回归）。.lite-onboard 现在是基座的面板类。 */
 .lite2-shell .lite-onboard {
   width: min(640px, 100%);
   max-height: min(84vh, 720px);
