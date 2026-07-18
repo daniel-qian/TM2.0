@@ -455,40 +455,40 @@
       "name": "会话不丢（contextId 恢复）",
       "description": "刷新丢全部团队数据：store.ts 的 contextId 初始化为 null 且不从 localStorage 恢复。存住 contextId，加载时按它走 /team/{id} 重拉。",
       "dependencies": [],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "分支 feat/050-session-restore，commit 93e6375。复核 verdict=pass（0 blocker / 0 major / 5 minor 已登记）。实现者跑 12 条门，复核者逐条重跑核对、诚实性无夸大。真机集成验证（vite :5300 + uvicorn :8300，?v=2&mode=live&skin=paper&lang=zh）：入口直链 / → /team 且 5 个 query 参数一个不丢；7 屏切换路径正确；后退键三次逐级回退不掉出应用；console 0 错。 真后端端到端复验：上传 → contextId 落 lite2:contextId:v1 → 整页刷新 → contextId/team/projects/decisions/files 全部拉回、restoring=false、restoreError=null、owner_token 不在 URL。集成门（integration/p0-wave1 全合完后）：typecheck 0 错 · build 通过 · lint 0 错 · pytest 2953 passed/0 failed/4 xfailed。 遗留 5 条 minor 见 progress-feat-050.md（恢复失败显英文原始错误串、404 不回收孤儿 token、慢恢复覆盖新上传的竞态、非 404 分支误清 ingesting 态、refreshTeam 404 不清死锚点）。"
     },
     {
       "id": "feat-051",
       "name": "路由化（react-router + 深链）",
       "description": "把 Zustand screen 变量换成真路由。7 屏 + /team/:personId + /projects/:projectId + /room?q= + ?showInactive=1。不破坏既有 ?v=2&mode=live&skin=paper&lang=zh。",
       "dependencies": [],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "分支 feat/051-router，commit e8559f6 + c592c95(复核 major 修复)。复核发现 1 major（从非团队屏开详情会偷换底屏、关闭把人扔回 /team）已修：来源屏写进 history state，所有屏路由共用 <ScreenView /> 让 React 复用底屏实例。真机集成验证（vite :5300 + uvicorn :8300，?v=2&mode=live&skin=paper&lang=zh）：入口直链 / → /team 且 5 个 query 参数一个不丢；7 屏切换路径正确；后退键三次逐级回退不掉出应用；console 0 错。 深链 /team/:personId 与 /projects/:projectId 真机验过；从 /closer-look 开项目详情 → data-scene 保持 closerlook、关闭回 /closer-look 不跳 /team。集成门（integration/p0-wave1 全合完后）：typecheck 0 错 · build 通过 · lint 0 错 · pytest 2953 passed/0 failed/4 xfailed。 未修 minor 1 条：详情深链在新标签页只到路由层、浮层不出现（依赖 feat-050 的 team 加载，实现者拒绝造假加载态，复核认可）。"
     },
     {
       "id": "feat-052",
       "name": "统一 modal 基座",
       "description": "单例 modal（背景点击/Esc 关闭、滚动锁、动画），收敛 DetailOverlay / OnboardWizard。为草稿框/项目详情/人卡详情铺底。",
       "dependencies": [],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "分支 feat/052-modal-base，commit 89b8948 + 2739f61(复核 major 修复)。新增 LiteModal 基座，DetailOverlay/OnboardWizard 收敛过来。复核 1 major（帧循环停摆时出场无兜底、弹层永久留在 DOM）已修：静态分支 + 700ms 出场看门狗双防线。真机集成验证（vite :5300 + uvicorn :8300，?v=2&mode=live&skin=paper&lang=zh）：入口直链 / → /team 且 5 个 query 参数一个不丢；7 屏切换路径正确；后退键三次逐级回退不掉出应用；console 0 错。 真机验过 Esc 关闭、滚动锁按开合正确加解（首访向导持锁 → Esc 关闭后 body.style.overflow 清空 → 再开人卡浮层再关，锁再次正确释放）。集成门（integration/p0-wave1 全合完后）：typecheck 0 错 · build 通过 · lint 0 错 · pytest 2953 passed/0 failed/4 xfailed。 已知未验：0.24s 动画观感（本环境 rAF 不触发、visibilityState 恒 hidden，跑的是静态分支），建议人工在真前台浏览器两张皮各扫一眼。"
     },
     {
       "id": "feat-053",
       "name": "账号体系（Supabase auth）",
       "description": "Supabase auth 邮箱+密码；注册/登录/登出/会话恢复。Supabase user → 公司 context_id，owner_token 保留在下层不动。不做多角色/邀请/SSO。",
       "dependencies": [],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "分支 feat/053-auth，commit 21f5aad + 26c33a0(复核四条全修)。新增 migration 0008_account_contexts.sql + service/account.py + auth_api.py + 前端 auth/{supabaseClient,authStore,AuthPanel}。映射口径按拍板：Supabase user → 公司 context_id，owner_token 留在下层不动，feat-038 租户隔离原样复用。复核 1 major（换账号后旧数据串台）已修，且实现者发现复核没点出的第三处根因：createHttpTransport 把 token map 存进闭包，只清 localStorage 修不掉。集成门（integration/p0-wave1 全合完后）：typecheck 0 错 · build 通过 · lint 0 错 · pytest 2953 passed/0 failed/4 xfailed。 🔴 凭据墙未过：无真 Supabase key，token 签发→后端校验的环路仍未端到端跑过；游客路径已保住（真机验证：无 Supabase 配置时 .lite-auth-toggle 不渲染，整条演示链不被登录墙挡）。"
     },
     {
       "id": "feat-054",
       "name": "抽取粒度门（项目粒度收敛）",
       "description": "LLM 把里程碑当项目，三亚 seed 抽出 17 个（应有约 6）。加粒度门收敛；同源查 H4 中文项目轴幽灵 5 条 strict xfail（非 CJK bug，结构性）。",
       "dependencies": [],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "分支 feat/054-project-granularity，commit 61f2414 + 74908d4(复核 3 major 全修)。新增 ingest/granularity.py 粒度门 + 31 条测试 + 中英双 fixture。三亚 seed 8→6 收敛。H4 中文项目轴幽灵 5 条 strict xfail：4 条转正、1 条保留并改写论证。复核 3 major 全是静默失效路径（里程碑行带冒号清空整块索引、R3 子串包含吞掉真项目并编造父子关系等），均已修且实测复现过。集成门（integration/p0-wave1 全合完后）：typecheck 0 错 · build 通过 · lint 0 错 · pytest 2953 passed/0 failed/4 xfailed。 🔴 两处未验：① 真 LLM 端到端（无 AVERY_BRAIN=minimax key，属凭据墙），门逻辑以 LLM 形态输入走 _build 纯函数路径验证、复核者独立复现；② 集成期真机发现：离线 heuristic 路径仍是「每篇文档只吐 1 个项目」——喂 3 个「## 项目：」标题的中文周报只抽出 1 个。这是 _projects_from_doc 的结构性缺陷（与 H4 同源），054 的门只覆盖 LLM 路径。无 key 演示会撞上。"
     },
     {
       "id": "feat-055",
@@ -507,8 +507,8 @@
       "name": "决策定级（规则 + Avery 理由）",
       "description": "规则算三档（高风险/需确认/可推进）+ Avery 写理由；允许上调不许下调；口径落可读配置不埋 prompt。",
       "dependencies": [],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "分支 feat/056-decision-grading，commit 2672bad + ae81597(复核 2 major 修复)。新增 avery/decision_rules.py（18 条规则、零逻辑的口径真源）+ decision_grading.py（引擎，apply_review 硬拦下调）+ decision_grading_rules.md（客户问「凭什么高风险」当场给他看的那份）+ 63 条门。契约经 registry.decision_cards() → /team payload 的 decisions[] 发给前端。复核 2 major 已修，其一是「决不对客户自己的文档作失实陈述」：拆出 unparsed_fields（写了但读不准，带原文）与 unknown_fields（确实没写）互斥两列，并加常设门禁止规则文案回归成「文档没写」。真机集成验证（vite :5300 + uvicorn :8300，?v=2&mode=live&skin=paper&lang=zh）：入口直链 / → /team 且 5 个 query 参数一个不丢；7 屏切换路径正确；后退键三次逐级回退不掉出应用；console 0 错。 真机端到端验过：喂含「到期日：8月15日」「截止：月底前」的中文周报，回包 decisions[0] = 需确认/severity 2/命中 R-BLOCKER-ONE+R-SIGNAL-WATCH+R-SELF-REPORT-MISMATCH/unparsed_fields=[到期日=月底前]/reason_source=rule。集成门（integration/p0-wave1 全合完后）：typecheck 0 错 · build 通过 · lint 0 错 · pytest 2953 passed/0 failed/4 xfailed。 未修 minor 1 条（heuristic 路径 _signals_from_doc 对普通叙述句不产信号），属 feat-054 地盘。"
     },
     {
       "id": "feat-057",
@@ -535,16 +535,16 @@
       "name": "议事室简化输出",
       "description": "LiteTerminal 逐行原样打流事件（英文脚手架+facts.md 转储）。默认简化视图（四相叙事）+「展开原始流」。净新增，非照抄。",
       "dependencies": [],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "分支 feat/059-room-simplified，commit 7f6957f + f6c1a7f(复核打回修复)。streamSource 把真流事件映射进四相叙事（读取事实/交叉验证/匹配方法/生成动作）+「展开原始流」。净新增，不是照抄——核实过合伙人版全库无折叠控件。复核 1 major（引用原文被半角括号截断、且 resolved 仍为 true 所以是「显错的原文」）已修：改为锚在后端契约形状的正则，契约真源经 python AST 求值 tools.py::_cite 的 return 表达式取得、未照抄字面量。集成门（integration/p0-wave1 全合完后）：typecheck 0 错 · build 通过 · lint 0 错 · pytest 2953 passed/0 failed/4 xfailed。 已知未验：真浏览器目测未做（当时 8 条线把浏览器 tab 占满），改用 renderToStaticMarkup 渲染真 RoomScreen + 真 zh 词典替代验证——比读代码强、比真浏览器弱，如实标注。"
     },
     {
       "id": "feat-060",
       "name": "红线补漏（name 字段 + _NEG 否定词）",
       "description": "name 字段未扫红线（文件名兜底能把人命名成「绩效8分」）；_NEG 其他否定词同类洞（当时只修了「别」）。",
       "dependencies": [],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "分支 feat/060-redline-holes，commit 53f7041 + 781e9d2(复核回合 2)。两个洞都补：① name 字段进红线扫描面（文件名兜底能把人命名成「绩效8分」）；② _NEG 整表合取化。复核逮到 2 blocker：未/无/非 + 评分名词被当否定动作（根因是代码注释写的意图与实现背离）、不能/不可/不必/不宜/不予/不再 同病。均已修：新增 _NEG_GOVERNS_ACTION 前瞻只认真正的动作形状，_NEG_ZH_IMPERATIVE 拆成禁止类与情态类两走向。误报侧代价经探针测量为 0（不是假设）。集成门（integration/p0-wave1 全合完后）：typecheck 0 错 · build 通过 · lint 0 错 · pytest 2953 passed/0 failed/4 xfailed。 主动回退 1 条 minor 并钉成 characterization 测试：避免/拒绝/杜绝/无须 + 评分名词仍漏（辖域问题非形状问题），修法与数据已量过但会与既有 test_redline_villa_negation_b3.py 明确冲突（那条断言 cue 必须能跨逗号），建议单开一线。"
     },
     {
       "id": "feat-068",
