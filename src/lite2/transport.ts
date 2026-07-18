@@ -10,6 +10,8 @@
 //
 // LLM key 绝不触碰前端（ADR-0020 决策 4）：live mode 一律走 HTTP 到 feat-015 服务。
 
+import { currentAccessToken } from './auth/authStore'
+
 // ── SSE 事件（feat-015 /advise 契约，见 service/engine.py::stream_advice）───────────────
 export type LiveAgentEventType =
   | 'started'
@@ -229,6 +231,21 @@ export interface LiveTransport {
 
   // feat-047 移植：按 context_id 拉取「Avery's notes」累积笔记（feat-033；只读、新→旧、重启后仍在）。
   fetchNotes: (contextId: string) => Promise<LiveNotesPayload>
+
+  // ── 账号（feat-053）。可选实现：stub transport 不提供，调用方须判空 ──────────────────
+  // 🔴 可选（`?:`）是刻意的——LiveTransport 有第二个实现（stubTransport，AFK 门/离线演示），
+  // 加必填方法会让它编译不过。账号是**联网后端能力**，stub 天然没有，判空即降级成游客。
+  // 本账号登记在案的公司 context（登录后恢复用）。
+  fetchAccountContexts?: () => Promise<AccountContextsPayload>
+  // 把匿名 context 认领进本账号（凭 owner_token 证明所有权）。
+  claimContext?: (contextId: string, ownerToken: string) => Promise<void>
+}
+
+// ── 账号契约（feat-053；后端 service/auth_api.py）────────────────────────────────────────
+// GET /account/contexts —— 只回本账号拥有的 context id，不回 owner_token
+//（账号已授权的调用方不需要 token，把长效凭据经 API 发回来正是 token 进日志的路径）。
+export interface AccountContextsPayload {
+  context_ids: string[]
 }
 
 // 服务基址：默认打本机 feat-015 服务；部署端经 VITE_AVERY_API_BASE 覆盖。
@@ -246,6 +263,20 @@ export function apiBase(): string {
 // src/lite 的 `avery.ownerTokens` 共享存储，两壳各自持有各自会话的 token。
 const TOKEN_STORE_KEY = 'lite2:ownerTokens:v1'
 export const OWNER_TOKEN_HEADER = 'X-Avery-Token'
+
+// ── feat-053 账号凭据 header ──────────────────────────────────────────────────────────────
+// 🔴 与 owner_token **分开两个 header**，刻意不复用 `Authorization: Bearer`——那个已经被
+// feat-038 的 owner_token 占了，一个 header 塞两种凭据 = 带 A 的调用方被当成 B 校验。
+// 两种凭据，两个 header，服务端各查各的（service/account.py 的同一条注释）。
+// 未登录 → 不发这个 header（游客路径原样走 owner_token，行为零变化）。
+export const ACCOUNT_TOKEN_HEADER = 'X-Avery-Account'
+
+// 直接读 authStore 的内存 token（不落我们自己的 localStorage——supabase-js 已在管持久化，
+// 再存一份就是多一个会失效、会泄漏的凭据副本）。未登录/未配置 → null → 不带 header。
+function accountHeader(): Record<string, string> {
+  const tok = currentAccessToken()
+  return tok ? { [ACCOUNT_TOKEN_HEADER]: tok } : {}
+}
 
 function loadTokenStore(): Record<string, string> {
   try {
@@ -277,9 +308,14 @@ export function createHttpTransport(base: string = apiBase()): LiveTransport {
     persistTokenStore(tokens)
   }
   // 🔴 header-only：给某 context 的读/写调用附上 owner_token（有则带，无则空），绝不进 URL。
+  // feat-053：同时带上账号 token（已登录才有）。两个凭据互为备份而非互斥——
+  // 服务端任一成立即放行（authorize_context 先看账号，再看 owner_token），所以
+  //   · 游客：只有 owner_token → 原样工作
+  //   · 换设备登录：只有账号 token → 服务端按 user 查到 context 再放行
+  //   · 本机已登录：两个都有 → 任一成立即可
   const authHeader = (contextId: string | undefined): Record<string, string> => {
     const tok = contextId ? tokens[contextId] : undefined
-    return tok ? { [OWNER_TOKEN_HEADER]: tok } : {}
+    return { ...(tok ? { [OWNER_TOKEN_HEADER]: tok } : {}), ...accountHeader() }
   }
   // feat-047 打回复验：askId → company_context_id（saveAsk 成功时记下），share/fetch 据此带
   // owner_token header。进程内即可——ask 卡与 run 同生命周期，刷新后重新走 saveAsk。
@@ -340,7 +376,13 @@ export function createHttpTransport(base: string = apiBase()): LiveTransport {
     async ingest(files) {
       const form = new FormData()
       for (const f of files) form.append('files', f, f.name)
-      const res = await fetch(`${base}/ingest`, { method: 'POST', body: form })
+      // feat-053：上传**不要求**登录（游客路径是硬要求，登录墙会作废整条演示链）。
+      // 已登录时带上账号 header，服务端顺手把新 context 绑到账号，省掉一次认领。
+      const res = await fetch(`${base}/ingest`, {
+        method: 'POST',
+        body: form,
+        headers: accountHeader(),
+      })
       if (!res.ok) throw new Error(`ingest HTTP ${res.status}`)
       const payload = (await res.json()) as LiveTeamPayload
       // feat-047: store this company's owner_token so every later read/advise can present it.
@@ -410,6 +452,25 @@ export function createHttpTransport(base: string = apiBase()): LiveTransport {
       })
       if (!res.ok) throw new Error(`notes HTTP ${res.status}`)
       return (await res.json()) as LiveNotesPayload
+    },
+
+    // ── 账号（feat-053）────────────────────────────────────────────────────────────────
+    // 登录后恢复：本账号名下的 context id。未登录 → 后端 401 → 大声失败（不静默回落）。
+    async fetchAccountContexts() {
+      const res = await fetch(`${base}/account/contexts`, { headers: accountHeader() })
+      if (!res.ok) throw new Error(`account contexts HTTP ${res.status}`)
+      return (await res.json()) as AccountContextsPayload
+    },
+
+    // 认领：把游客期建的 context 绑进本账号。owner_token 走 **body**——它是被交出的"标的"，
+    // 不是授权本次调用的凭据（授权的是账号 header）。🔴 仍然绝不进 URL。
+    async claimContext(contextId, ownerToken) {
+      const res = await fetch(`${base}/account/claim`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...accountHeader() },
+        body: JSON.stringify({ context_id: contextId, owner_token: ownerToken }),
+      })
+      if (!res.ok) throw new Error(`account claim HTTP ${res.status}`)
     },
   }
 }
