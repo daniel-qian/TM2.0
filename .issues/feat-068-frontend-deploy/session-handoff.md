@@ -160,3 +160,29 @@ URL 尚未交付任何人，无用户影响。**教训：在有别的 session �
 - **第 5 条已不成立** —— `?v=2` 已在生产 URL 打开：`data-look="paper"`、7 个中文页签、`/` → `/team`；`?v=2&look=aurora` 令牌正确（`--ink #10223d` / `--honey #d88a2d`）；点页签跳 `/room` 且粘性 query 完整保留。
 - **第 2 条仍然成立** —— 真 seed 文件（`LogiPulse-Roadmap.pdf` + `PrismDesign_TeamProfile_EN.xlsx`）**至今没在线上跑过**。今晚所有耗时数字（25s / 35s / 95s）用的都是我现编的小语料，**不能用来反驳广播里 100–120 秒的说法**。下一个 session 应当拿真种子跑一次，那才是演示当天的真实体感。
 - 第 3 条（测试语料的手滑 `黄海generic` 和几个测试 context 留在生产库里）仍然成立，且今晚又多了几个：`ctx_ebfe6c895d1b`、`ctx_02d618d3176a`，以及审计 agent 建的若干个。无害但是生产数据。
+
+## 验收 artifact
+
+完整版在本目录 **`acceptance-0719.html`**（浏览器直接打开即可，单文件、无外链、亮暗两套主题）。
+
+同一份也发布过 artifact：<https://claude.ai/code/artifact/395fb844-c7df-4d84-a445-e416be3b681a>
+—— ⚠️ **那个 URL 停在几小时前的版本**：收工前最后一次重新发布时 OAuth 令牌已过期
+（`deploy 401: OAuth access token has been revoked`，通宵会话的正常过期）。缺的是
+真 seed 实测 171.6s、30 人演示彩排、第二次操作失误、以及分诊卡中文化的最终验证。
+**以仓库里这份 HTML 为准。** Danny 醒来后如需刷新那个 URL，重新发布一次即可。
+
+## 第二次操作失误：提交过带冲突标记的代码
+
+凌晨合 main 时把验证和提交写成一条链：
+
+```
+npm run typecheck 2>&1 | tail -2 && git add -A && git commit …
+```
+
+**`&&` 取的是管道最后一环 `tail` 的退出码，不是 `tsc` 的。** typecheck 明明报了
+`TS1185: Merge conflict marker encountered`，链条照走，把还带 `<<<<<<<` 的
+`draftLinks.ts` 提交了进去。下一步改用 `npm run typecheck > log 2>&1; echo exit=$?`
+单独取真退出码，当场发现；**该提交未推送**，已 `--amend` 修正、三处冲突逐一解掉
+（其中一处是真类型冲突：feat-058 把 mailto 路径换成应用内草稿框，我那个函数已被取代）。
+
+**教训：把闸门写进管道，闸门就形同虚设。** 本仓的验证命令以后单独跑、单独取退出码。
