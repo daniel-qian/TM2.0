@@ -3431,6 +3431,18 @@
   }
 }
 
+/* 📌 这个 `}` 的来历（三条线各自独立撞上，值得留个记号）：
+   上面这条 `@media (prefers-reduced-motion: reduce)` 曾经**从未闭合**，于是从它往下的每一条
+   规则——feat-053 的整套账号入口样式、feat-055 的项目屏、feat-058 的草稿框——全被闷在这条
+   媒体查询里，**只有开了「减少动态效果」的用户才拿得到样式**，其余人看到的是裸奔的弹层。
+
+   🔴 它不会让 build 变红，这正是它能活下来的原因：esbuild 只报一句 warning（"Expected }"
+   to go with "{"），然后在 EOF 处替你自动闭合，产物照出。**三门全绿 ≠ 这段 CSS 是对的。**
+
+   实测：合流基点 8be4ab4 是 470 个 `{` 对 469 个 `}`，补上后 489 对 489。
+   集成方已在 bba9f1c 修掉（早于本次合流），feat-055 与 feat-058 两条线又各自独立发现了它。
+   合流时只留一个 `}` —— 补两次会反过来多闭合一层。 */
+
 /* ── feat-053 账号入口（LiteTopbar 内，LiteBell 旁；.prototype-topbar 是
    pointer-events:none 容器，同 .scene-tabs/.lite-bell 的规矩自己 auto 回来）────────── */
 .lite2-shell .lite-auth {
@@ -3611,4 +3623,180 @@
   color: var(--terracotta);
   font-size: 11.5px;
   line-height: 1.5;
+}
+
+/* ── feat-058 · 应用内草稿框（PRD G6）──────────────────────────────────────────
+   面板外观自己给（宽度/内边距/背景），定位与行为归 LiteModal 基座——同 .lite-detail-card
+   的分工。两张皮零分支：全部消费 --paper-strong / --rule / --shadow / --sage 令牌，
+   aurora 自动跟随。
+   主次分明：复制到聊天应用 = 实心主键（国内团队的真出口），邮件与完成 = 描边次键。 */
+.lite-draft-card {
+  position: relative;
+  width: min(620px, 94vw);
+  max-height: min(86vh, 780px);
+  overflow: auto;
+  display: grid;
+  gap: 14px;
+  padding: 22px 24px 24px;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--paper-strong);
+  box-shadow: var(--shadow);
+}
+
+.lite2-shell .lite-draft-close {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  min-height: 30px;
+  padding: 0 14px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+
+.lite2-shell .lite-draft-close:hover,
+.lite2-shell .lite-draft-close:focus-visible {
+  outline: none;
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+.lite2-shell .lite-draft-head {
+  padding-right: 72px;
+}
+
+.lite2-shell .lite-draft-head h2 {
+  margin: 4px 0 0;
+  font-family: var(--lite2-heading-font);
+  font-size: 21px;
+  font-weight: 500;
+}
+
+.lite2-shell .lite-draft-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.lite2-shell .lite-draft-field > .eyebrow {
+  margin: 0;
+}
+
+.lite2-shell .lite-draft-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+}
+
+.lite2-shell .lite-draft-hint {
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+
+.lite2-shell .lite-draft-subject,
+.lite2-shell .lite-draft-body {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  background: var(--paper-strong);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13.5px;
+}
+
+.lite2-shell .lite-draft-body {
+  /* 正文可编辑是本条的重点（🟢 超过参考库的只读预览）——给足行数，纵向可拉。 */
+  min-height: 150px;
+  line-height: 1.6;
+  resize: vertical;
+}
+
+.lite2-shell .lite-draft-subject:focus-visible,
+.lite2-shell .lite-draft-body:focus-visible {
+  outline: none;
+  border-color: var(--sage);
+}
+
+/* 状态行常驻渲染（aria-live 容器要先在 DOM 里），idle 时是空串——留一行高度，出现文字时
+   下面的按钮排不会往下跳。 */
+.lite2-shell .lite-draft-status {
+  min-height: 17px;
+  margin: 0;
+  /* 🔴 这里原先写的是 var(--lite2-sage-deep, var(--ink-soft))——**两张皮里都没有
+     --lite2-sage-deep 这个令牌**（全仓仅此一处引用），兜底恒生效，写了等于没写。
+     真令牌是 --lite2-accent-deep-rgb（paper 深鼠尾草 74,96,78 / aurora 深蓝 47,75,176），
+     paper 与 aurora 都有定义，本文件既有的"已办"字样同款。 */
+  color: rgb(var(--lite2-accent-deep-rgb));
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+/* 复制失败不许和「已复制」同色——同一行字、同一个位置，颜色是唯一能一眼分开成败的信号。 */
+.lite2-shell .lite-draft-status[data-tone='fail'] {
+  color: rgb(var(--lite2-danger-deep-rgb));
+}
+
+.lite2-shell .lite-draft-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.lite2-shell .lite-draft-copy {
+  padding: 8px 18px;
+  border: 1px solid var(--sage);
+  border-radius: 10px;
+  background: var(--sage);
+  color: var(--paper-strong);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.lite2-shell .lite-draft-copy:hover:not(:disabled),
+.lite2-shell .lite-draft-copy:focus-visible:not(:disabled) {
+  filter: brightness(1.06);
+  outline: none;
+}
+
+.lite2-shell .lite-draft-mailto,
+.lite2-shell .lite-draft-done,
+.lite2-shell .lite-draft-goqueue {
+  padding: 8px 14px;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.lite2-shell .lite-draft-mailto:hover,
+.lite2-shell .lite-draft-mailto:focus-visible,
+.lite2-shell .lite-draft-done:hover:not(:disabled),
+.lite2-shell .lite-draft-done:focus-visible:not(:disabled),
+.lite2-shell .lite-draft-goqueue:hover,
+.lite2-shell .lite-draft-goqueue:focus-visible {
+  outline: none;
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+.lite2-shell .lite-draft-copy:disabled,
+.lite2-shell .lite-draft-done:disabled,
+/* `<a>` 没有 :disabled——空草稿时 mailto 走 aria-disabled，观感要和另两个出口一致，
+   否则屏上会出现"两个键灰了、第三个还亮着"的自相矛盾。 */
+.lite2-shell .lite-draft-mailto[aria-disabled='true'] {
+  opacity: 0.5;
+  cursor: default;
 }

@@ -18,6 +18,7 @@ import { CloserLookScreen } from './screens/CloserLookScreen'
 import { PlaybooksScreen } from './screens/PlaybooksScreen'
 import { VisionScreen } from './screens/VisionScreen'
 import { DetailOverlay } from './DetailOverlay'
+import { DraftComposer } from './DraftComposer'
 import { Lite2Footer } from './Lite2Footer'
 import { OnboardWizard } from './OnboardWizard'
 import { initNotifications } from './notifyStore'
@@ -131,10 +132,13 @@ function Lite2Shell() {
           <Route path="*" element={<RedirectToDefault />} />
         </Routes>
       </main>
-      {/* feat-052：两个弹层都常驻挂载，开关在各自组件里（LiteModal 的 open）——父层条件挂载
+      {/* feat-052：弹层一律常驻挂载，开关在各自组件里（LiteModal 的 open）——父层条件挂载
           会把组件直接摘掉，出场动画没机会跑。 */}
       <DetailOverlay />
       <OnboardWizard />
+      {/* feat-058 · 应用内草稿框。挂在壳层而不是各屏内部：开框的入口在「你的团队」的分诊卡
+          和「跟进」的队列条目上，跨两棵子树；且弹层必须盖在整壳之上（同 DetailOverlay）。 */}
+      <DraftComposer />
       <Lite2Footer />
     </div>
   )
