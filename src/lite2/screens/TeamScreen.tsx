@@ -3,6 +3,7 @@ import { useLite } from '../store'
 import { useFlow, selectTriagePending, selectTriageHandled, selectTriageSetAside } from '../flowStore'
 import { draftMailForHandoff } from '../draftLinks'
 import { useDict } from '../../shared/i18n/useDict'
+import { localizeBriefing } from '../../shared/briefing'
 import { UploadPanel } from '../UploadPanel'
 import { InitialAvatar } from '../InitialAvatar'
 import { LiteComposer } from '../LiteComposer'
@@ -109,7 +110,7 @@ function PeopleGroup({
 }
 
 export function TeamScreen() {
-  const { t } = useDict()
+  const { t, locale } = useDict()
   const team = useLite((s) => s.team)
   const openDetail = useLite((s) => s.openDetail)
   const goScreen = useLite((s) => s.goScreen)
@@ -132,6 +133,14 @@ export function TeamScreen() {
   const handled = useMemo(() => selectTriageHandled(team, triageMarks), [team, triageMarks])
   const setAside = useMemo(() => selectTriageSetAside(team, triageMarks), [team, triageMarks])
   const totalHandoffs = team?.handoffs.length ?? 0
+
+  // feat-068 · 后端 briefing() 只会说英文（registry.py 里三处字面量写死，无 locale 参数，
+  // 线上镜像不许重建）。中文构建下在这里本地重组；EN 下原样透传，视觉零变化。
+  // 详见 src/shared/briefing.ts 顶部——请不要"顺手"把这层删掉。
+  const briefing = useMemo(
+    () => (team ? localizeBriefing(team.briefing, team, t.lite2, locale) : null),
+    [team, t, locale],
+  )
 
   function handleTakeToRoom(handoff: LiteHandoff) {
     // 分隔符用 " — " 而非换行：composer 是 <input type="text">，换行被剥掉后两段文字会
@@ -156,15 +165,15 @@ export function TeamScreen() {
         <div className="home-frame">
           {/* ── 左脊柱 ─────────────────────────────────────────────── */}
           <div className="home-spine">
-            {team ? (
+            {team && briefing ? (
               <>
                 <header className="home-greeting">
                   <p className="eyebrow">{t.lite2.briefingEyebrow}</p>
-                  <h1>{team.briefing.headline}</h1>
-                  <p className="home-greeting-sub">{team.briefing.subhead}</p>
-                  {team.briefing.metrics.length > 0 ? (
+                  <h1>{briefing.headline}</h1>
+                  <p className="home-greeting-sub">{briefing.subhead}</p>
+                  {briefing.metrics.length > 0 ? (
                     <div className="lite-metrics" aria-label={t.lite2.metricsLabel}>
-                      {team.briefing.metrics.map((m) => (
+                      {briefing.metrics.map((m) => (
                         <span key={m.label} className="lite-metric-chip">
                           <strong>{m.value}</strong> {m.label}
                         </span>
