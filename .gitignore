@@ -30,3 +30,4 @@ public/__evidence_collector.js
 runs/
 # 会话复盘存档（transcript-zh 产物）——本地留存，不入库
 transcripts/
+.vite-gate-cache/
