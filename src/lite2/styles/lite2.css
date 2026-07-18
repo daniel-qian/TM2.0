@@ -699,6 +699,229 @@
   overflow: auto;
 }
 
+/* ── feat-059 · 议事室简化输出（PRD G7）────────────────────────────────────────
+   默认四相叙事，「展开原始流」切回原终端（原始流 DOM 一行不改）。四相由真事件驱动，
+   没走到的相位灰着（.is-pending）——这里没有任何计时器/假进度条可以调。
+   全部 scope 在 .lite2-shell，v01 与 story 的终端一像素不动。 */
+/* 简化视图换成产品自己的浅色面——.nexus-terminal 那块深色「机房」正是要收起来的开发视角。
+   展开原始流时（.is-raw）不覆盖，深色终端原样回来。 */
+.lite2-shell .lite-flow.is-simplified {
+  border-color: var(--rule);
+  background: var(--lite2-surface);
+  box-shadow: var(--shadow-soft);
+}
+
+.lite2-shell .lite-flow.is-simplified .nexus-terminal-bar {
+  border-bottom-color: var(--rule);
+  background: rgba(var(--lite2-paper-rgb), 0.6);
+}
+
+.lite2-shell .lite-flow.is-simplified .nexus-terminal-dots i {
+  background: var(--rule-strong);
+}
+
+.lite2-shell .lite-flow.is-simplified .nexus-terminal-title {
+  color: var(--ink-faint);
+}
+
+.lite2-shell .lite-flow .lite-flow-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.lite2-shell .lite-flow .nexus-terminal-title {
+  flex: 1 1 auto;
+}
+
+/* 展开原始流时按钮在深色面上——两套面各给一套可读的对比度 */
+.lite2-shell .lite-flow.is-raw .lite-flow-toggle {
+  border-color: rgba(232, 227, 216, 0.24);
+  background: rgba(232, 227, 216, 0.08);
+  color: rgba(232, 227, 216, 0.72);
+}
+
+.lite2-shell .lite-flow.is-raw .lite-flow-toggle:hover {
+  border-color: rgba(232, 227, 216, 0.45);
+  background: rgba(232, 227, 216, 0.16);
+  color: rgba(245, 242, 235, 0.95);
+}
+
+.lite2-shell .lite-flow-toggle {
+  flex: 0 0 auto;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--rule);
+  background: rgba(var(--lite2-surface-rgb), 0.7);
+  color: var(--ink-soft);
+  font-size: 11px;
+  line-height: 1.5;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.lite2-shell .lite-flow-toggle:hover {
+  border-color: var(--rule-strong);
+  color: var(--ink);
+  background: rgba(var(--lite2-surface-rgb), 0.95);
+}
+
+.lite2-shell .lite-flow-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 18px 18px 20px;
+}
+
+.lite2-shell .lite-flow-phases {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.lite2-shell .lite-flow-phase {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 0;
+}
+
+/* 相位之间的连接线（纯静态装饰，不表示进度） */
+.lite2-shell .lite-flow-phase:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  left: 12px;
+  top: 34px;
+  bottom: -2px;
+  width: 1px;
+  background: var(--rule);
+}
+
+.lite2-shell .lite-flow-dot {
+  flex: 0 0 auto;
+  width: 25px;
+  height: 25px;
+  border-radius: 50%;
+  border: 1px solid var(--rule-strong);
+  background: rgba(var(--lite2-surface-rgb), 0.9);
+  color: var(--ink-faint);
+  font-size: 12px;
+  line-height: 23px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.lite2-shell .lite-flow-phase-text {
+  min-width: 0;
+  padding-top: 2px;
+}
+
+.lite2-shell .lite-flow-phase-label {
+  margin: 0;
+  font-size: 14px;
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.lite2-shell .lite-flow-phase-meta {
+  margin: 3px 0 0;
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+
+/* 待命：整条灰下去——它诚实地表示"这一步没有发生" */
+.lite2-shell .lite-flow-phase.is-pending .lite-flow-phase-label {
+  color: var(--ink-faint);
+  font-weight: 400;
+}
+
+.lite2-shell .lite-flow-phase.is-active .lite-flow-dot {
+  border-color: rgba(var(--lite2-accent-rgb), 0.85);
+  background: rgba(var(--lite2-accent-rgb), 0.12);
+  color: rgb(var(--lite2-accent-deep-rgb));
+}
+
+.lite2-shell .lite-flow-phase.is-done .lite-flow-dot {
+  border-color: rgba(var(--lite2-accent-rgb), 0.5);
+  color: rgb(var(--lite2-accent-deep-rgb));
+}
+
+.lite2-shell .lite-flow-phase-label .terminal-cursor {
+  margin-left: 6px;
+  color: rgb(var(--lite2-accent-deep-rgb));
+}
+
+/* 真引用入口 + 展开（facts.md:NNN 是我们的实质，不许在简化视图里丢） */
+.lite2-shell .lite-flow-cites-toggle {
+  margin-top: 7px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(var(--lite2-accent-rgb), 0.35);
+  background: rgba(var(--lite2-accent-rgb), 0.08);
+  color: rgb(var(--lite2-accent-deep-rgb));
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.lite2-shell .lite-flow-cites-toggle:hover {
+  border-color: rgba(var(--lite2-accent-rgb), 0.6);
+  background: rgba(var(--lite2-accent-rgb), 0.14);
+}
+
+.lite2-shell .lite-flow-cite-list {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 12px 0 0;
+  border-top: 1px solid var(--rule);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.lite2-shell .lite-flow-cite {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12px;
+}
+
+.lite2-shell .lite-flow-cite-ref {
+  font-family: var(--lite2-mono-font, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 11px;
+  color: rgb(var(--lite2-accent-deep-rgb));
+}
+
+.lite2-shell .lite-flow-cite-claim {
+  color: var(--ink);
+}
+
+.lite2-shell .lite-flow-cite-snippet {
+  color: var(--ink-soft);
+  padding-left: 9px;
+  border-left: 2px solid var(--rule);
+}
+
+.lite2-shell .lite-flow-cite-warn {
+  color: rgb(var(--lite2-warn-deep-rgb));
+  font-size: 11px;
+}
+
+/* 流面板内的诚实失败态（feat-059 复核 finding 4）——流中途断掉时不装成"还在跑"。 */
+.lite2-shell .lite-flow-failed {
+  margin: 14px 0 0;
+  padding: 9px 11px;
+  border: 1px solid rgba(var(--lite2-warn-deep-rgb), 0.35);
+  border-radius: 8px;
+  background: rgba(var(--lite2-warn-deep-rgb), 0.08);
+  color: rgb(var(--lite2-warn-deep-rgb));
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .lite2-shell .lite-room-canvas-controls {
   position: absolute;
   z-index: 5;

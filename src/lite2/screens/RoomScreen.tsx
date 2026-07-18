@@ -6,7 +6,13 @@ import type { Dict } from '../../shared/i18n'
 import { LiteAdviceCard } from '../LiteAdviceCard'
 import { AskCard } from '../AskCard'
 import { LitePanZoom } from '../LitePanZoom'
-import type { LiteStreamLine, LiteSpeaker } from '../streamSource'
+import type {
+  LiteStreamLine,
+  LiteSpeaker,
+  LiveRunState,
+  LitePhase,
+  LitePhaseId,
+} from '../streamSource'
 
 // feat-024 · lite 屏 3：The room 薄建——ADR-0022 决策 1。
 // live SSE 控制台（终端 chrome 与 story 同 CSS，代码独立）+ 8 字段卡。
@@ -24,8 +30,13 @@ function classNames(parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(' ')
 }
 
-// live 终端：直接吃 LiteStreamLine[]。等待/滚动全走 DOM，不依赖动画帧（headless rAF 坑）。
-function LiteTerminal({ lines, running }: { lines: LiteStreamLine[]; running: boolean }) {
+function fill(template: string, vars: Record<string, string | number>): string {
+  return template.replace(/\{(\w+)\}/g, (_, k: string) => String(vars[k] ?? ''))
+}
+
+// 原始流：一行不删、一行不改——展开后工程师/Danny 看到的就是今天这个终端本身。
+// 等待/滚动全走 DOM，不依赖动画帧（headless rAF 坑）。
+function RawStreamLog({ lines, running }: { lines: LiteStreamLine[]; running: boolean }) {
   const logRef = useRef<HTMLDivElement | null>(null)
   useEffect(() => {
     const log = logRef.current
@@ -33,36 +44,160 @@ function LiteTerminal({ lines, running }: { lines: LiteStreamLine[]; running: bo
   }, [lines.length])
 
   return (
-    <section className="nexus-terminal" aria-label="How it's thinking it through">
-      <header className="nexus-terminal-bar" aria-hidden="true">
-        <span className="nexus-terminal-dots">
+    <div className="nexus-terminal-log" ref={logRef} data-raw-stream="">
+      {lines.map((line) => {
+        const meta = SPEAKER_META[line.speaker]
+        const prefix = line.type === 'manifest' ? 'MANIFEST' : meta.label
+        const prefixClass = line.type === 'manifest' ? 'is-manifest' : meta.className
+        return (
+          <p key={line.key} className={classNames(['terminal-line', `is-${line.type}`, 'is-new'])}>
+            <span className={classNames(['terminal-prefix', prefixClass])}>{prefix}</span>
+            <span className="terminal-text">{line.text}</span>
+          </p>
+        )
+      })}
+      {running ? (
+        <p className="terminal-line terminal-cursor-line" aria-hidden="true">
+          <span className="terminal-prefix is-system">·</span>
+          <span className="terminal-text">
+            running <span className="terminal-cursor">▌</span>
+          </span>
+        </p>
+      ) : null}
+    </div>
+  )
+}
+
+const PHASE_LABEL: Record<LitePhaseId, (l: Dict['lite2']) => string> = {
+  read: (l) => l.roomPhaseRead,
+  crosscheck: (l) => l.roomPhaseCrosscheck,
+  method: (l) => l.roomPhaseMethod,
+  act: (l) => l.roomPhaseAct,
+}
+
+// 每一相的副文案 **只由真计数派生**：读回来几份材料、翻出几条记录、走了几步。
+// 相位没亮（steps=0）就说"待命"——绝不写"正在分析…"这类看着热闹的空话。
+function phaseMeta(phase: LitePhase, run: LiveRunState, l: Dict['lite2']): string {
+  if (phase.status === 'pending') return l.roomPhasePending
+  switch (phase.id) {
+    case 'read':
+      return run.sourcesRead > 0
+        ? fill(l.roomFlowSources, { count: run.sourcesRead })
+        : fill(l.roomFlowSteps, { count: phase.steps })
+    case 'crosscheck':
+      return run.recallHits > 0
+        ? fill(l.roomFlowRecall, { count: run.recallHits })
+        : fill(l.roomFlowSteps, { count: phase.steps })
+    case 'act':
+      return run.advice ? l.roomFlowReady : fill(l.roomFlowSteps, { count: phase.steps })
+    default:
+      return fill(l.roomFlowSteps, { count: phase.steps })
+  }
+}
+
+// feat-059 · 议事室简化输出。默认四相叙事（真事件驱动），「展开原始流」看全量。
+// 🔴 四相不是脚本：没有对应事件的相位停在 pending。零假延迟、零假进度、零 canned 文案。
+function LiteThinkingFlow({ run, running }: { run: LiveRunState; running: boolean }) {
+  const [showRaw, setShowRaw] = useState(false)
+  const [showCites, setShowCites] = useState(false)
+  const { t } = useDict()
+  const l = t.lite2
+  const cites = run.citations
+
+  return (
+    <section
+      className={classNames(['nexus-terminal', 'lite-flow', showRaw ? 'is-raw' : 'is-simplified'])}
+      aria-label={l.roomFlowTitle}
+    >
+      <header className="nexus-terminal-bar lite-flow-bar">
+        <span className="nexus-terminal-dots" aria-hidden="true">
           <i />
           <i />
           <i />
         </span>
-        <span className="nexus-terminal-title">thinking it through</span>
+        <span className="nexus-terminal-title">
+          {showRaw ? l.roomFlowRawTitle : l.roomFlowTitle}
+        </span>
+        <button
+          type="button"
+          className="lite-flow-toggle"
+          data-flow-toggle=""
+          aria-expanded={showRaw}
+          onClick={() => setShowRaw((v) => !v)}
+        >
+          {showRaw ? l.roomFlowHideRaw : l.roomFlowShowRaw}
+        </button>
       </header>
-      <div className="nexus-terminal-log" ref={logRef}>
-        {lines.map((line) => {
-          const meta = SPEAKER_META[line.speaker]
-          const prefix = line.type === 'manifest' ? 'MANIFEST' : meta.label
-          const prefixClass = line.type === 'manifest' ? 'is-manifest' : meta.className
-          return (
-            <p key={line.key} className={classNames(['terminal-line', `is-${line.type}`, 'is-new'])}>
-              <span className={classNames(['terminal-prefix', prefixClass])}>{prefix}</span>
-              <span className="terminal-text">{line.text}</span>
+
+      {showRaw ? (
+        <RawStreamLog lines={run.lines} running={running} />
+      ) : (
+        <div className="lite-flow-body">
+          <ol className="lite-flow-phases">
+            {run.phases.map((phase, i) => (
+              <li
+                key={phase.id}
+                className={classNames(['lite-flow-phase', `is-${phase.status}`])}
+                data-phase-id={phase.id}
+                data-phase-status={phase.status}
+              >
+                <span className="lite-flow-dot" aria-hidden="true">
+                  {i + 1}
+                </span>
+                <div className="lite-flow-phase-text">
+                  <p className="lite-flow-phase-label">
+                    {PHASE_LABEL[phase.id](l)}
+                    {phase.status === 'active' && running ? (
+                      <span className="terminal-cursor" aria-hidden="true">
+                        ▌
+                      </span>
+                    ) : null}
+                  </p>
+                  <p className="lite-flow-phase-meta">{phaseMeta(phase, run, l)}</p>
+                  {/* 🟢 真引用以人话保留在简化视图里——她那版全库零引用，这是我们的实质。 */}
+                  {phase.id === 'crosscheck' && cites.length > 0 ? (
+                    <button
+                      type="button"
+                      className="lite-flow-cites-toggle"
+                      data-cites-toggle=""
+                      aria-expanded={showCites}
+                      onClick={() => setShowCites((v) => !v)}
+                    >
+                      {fill(l.roomFlowCites, { count: cites.length })}
+                    </button>
+                  ) : null}
+                </div>
+              </li>
+            ))}
+          </ol>
+
+          {/* 🔴 复核打回（feat-059 finding 4）：SSE 中途断掉时，简化视图曾经只把某一相永久停在
+              active——看不出是失败还是还在跑（error 行只进原始流，而原始流默认是收起来的）。
+              这里在面板内直接说"断了"，并指向原始流看断点。绝不做假的"成功"态。 */}
+          {run.status === 'error' ? (
+            <p className="lite-flow-failed" data-flow-failed="" role="status">
+              {l.roomFlowFailed}
             </p>
-          )
-        })}
-        {running ? (
-          <p className="terminal-line terminal-cursor-line" aria-hidden="true">
-            <span className="terminal-prefix is-system">·</span>
-            <span className="terminal-text">
-              running <span className="terminal-cursor">▌</span>
-            </span>
-          </p>
-        ) : null}
-      </div>
+          ) : null}
+
+          {showCites && cites.length > 0 ? (
+            <ul className="lite-flow-cite-list" aria-label={l.roomFlowCitesLabel}>
+              {cites.map((cite, i) => (
+                <li key={`${cite.ref}-${i}`} className="lite-flow-cite">
+                  <span className="lite-flow-cite-ref">{cite.ref}</span>
+                  {cite.claim ? <span className="lite-flow-cite-claim">{cite.claim}</span> : null}
+                  {cite.snippet ? (
+                    <span className="lite-flow-cite-snippet">{cite.snippet}</span>
+                  ) : null}
+                  {cite.resolved === false ? (
+                    <span className="lite-flow-cite-warn">{l.roomFlowUnresolved}</span>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      )}
     </section>
   )
 }
@@ -141,7 +276,7 @@ export function RoomScreen() {
           {/* 薄画布：终端 + brief HUD + 8 字段卡随 pan/zoom 移动缩放；composer 留画布外 */}
           <LitePanZoom>
             <div className="lite-room-board">
-              <LiteTerminal lines={run.lines} running={running} />
+              <LiteThinkingFlow run={run} running={running} />
               <div className="nexus-brief-hud">
                 <div className="nexus-brief-bar" aria-label={t.nexus.liveThinking}>
                   <span className="nexus-brief-bar-eyebrow">{t.nexus.liveThinking}</span>
