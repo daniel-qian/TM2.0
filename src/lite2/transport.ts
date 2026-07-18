@@ -709,20 +709,24 @@ export function createHttpTransport(base: string = apiBase()): LiveTransport {
     // ── 账号（feat-053）────────────────────────────────────────────────────────────────
     // 登录后恢复：本账号名下的 context id。未登录 → 后端 401 → 大声失败（不静默回落）。
     async fetchAccountContexts() {
-      const res = await fetch(`${base}/account/contexts`, { headers: accountHeader() })
-      if (!res.ok) throw new Error(`account contexts HTTP ${res.status}`)
+      // feat-068：走 send() + transportError()，不再裸 fetch。这两条曾是 ZH-03 那个缺陷的
+      // 最后残留——抛的是 `account contexts HTTP 401` 这种开发者串，中文用户读到的就是它。
+      // 今天打不到（Supabase env 未配 → 登录入口不渲染），但配上 env 的那一刻就可达，
+      // 所以先拆掉，别把雷留在开关背后。
+      const res = await send('account contexts', `${base}/account/contexts`, { headers: accountHeader() })
+      if (!res.ok) throw transportError('account contexts', res)
       return (await res.json()) as AccountContextsPayload
     },
 
     // 认领：把游客期建的 context 绑进本账号。owner_token 走 **body**——它是被交出的"标的"，
     // 不是授权本次调用的凭据（授权的是账号 header）。🔴 仍然绝不进 URL。
     async claimContext(contextId, ownerToken) {
-      const res = await fetch(`${base}/account/claim`, {
+      const res = await send('account claim', `${base}/account/claim`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...accountHeader() },
         body: JSON.stringify({ context_id: contextId, owner_token: ownerToken }),
       })
-      if (!res.ok) throw new Error(`account claim HTTP ${res.status}`)
+      if (!res.ok) throw transportError('account claim', res)
     },
   }
 }
