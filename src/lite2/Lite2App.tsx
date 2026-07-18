@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, type ComponentType } from 'react'
 import {
   BrowserRouter,
   Navigate,
@@ -6,7 +6,6 @@ import {
   Routes,
   useLocation,
   useNavigate,
-  useSearchParams,
 } from 'react-router-dom'
 import { useFlow } from './flowStore'
 import { LiteTopbar } from './LiteTopbar'
@@ -25,10 +24,12 @@ import { selectWizardOpen, useOnboard } from './onboardStore'
 import { resolveSkin } from './skin'
 import {
   bindNavigator,
+  publishBaseScreen,
   PROJECT_PATH,
   SCREEN_PATH,
   useCurrentScreen,
   useRouteDetail,
+  type LiteScreen,
 } from './routes'
 
 // feat-035（lite-live-v02 kickoff §架构拍板 1）· lite2 壳 = v02 并排产品本体。
@@ -68,11 +69,18 @@ function Lite2Shell() {
   //     不重跑 render。只在渲染期绑的话，模拟卸载的 cleanup 把桥置空后就再也没人接回来，
   //     导航于是掉进 window.location.assign 兜底 = 整页重载、内存里的团队数据全丢。
   //     （这条是真机跑出来的：dev 下点人卡整页刷新、store 归零。）
+  //  ③ 同一个口子还要把「当前底屏」发布给 store 侧：openDetail 要知道浮层盖在哪一屏上，
+  //     closeDetail 要知道关掉之后把人送回哪一屏（详见 routes.ts 的来源屏一节）。
   bindNavigator(navigate)
+  publishBaseScreen(screen)
   useEffect(() => {
     bindNavigator(navigate)
-    return () => bindNavigator(null)
-  }, [navigate])
+    publishBaseScreen(screen)
+    return () => {
+      bindNavigator(null)
+      publishBaseScreen(null)
+    }
+  }, [navigate, screen])
 
   // feat-045：通知事件接线（真事件订阅，模块级 guard 幂等）+ 首访 onboarding 向导
   // （覆盖层；unseen/in-progress 且本会话未 × 时挂载——localStorage 记状态与进度）。
@@ -85,27 +93,36 @@ function Lite2Shell() {
     <div className="app-shell lite2-shell" data-scene={screen} data-mode="live" data-skin={skin}>
       <LiteTopbar />
       <main className="scene-stage">
+        {/* 🔴 每条屏路由的 element 都是同一个 <ScreenView />，这不是偷懒——是修复的关键。
+            react-router 不给 RenderedRoute 挂 key，所以「同一位置 + 同一组件类型」在路由
+            切换时会被 React 复用；由 ScreenView 内部按当前屏挑真正的屏组件。于是：
+              · 换屏（/room → /notes）→ 屏组件类型变了 → 照常卸载重挂，行为不变；
+              · 开详情（/closer-look → /projects/:id）→ 底屏仍是「多看一眼」→ 组件类型没变
+                → 原地保住，展开面板 / 已加入跟进的按钮态这些本地状态不再被冲掉。
+            如果每条路由各写各的 element，进详情就等于换了棵树 —— 底屏被偷换、本地状态清零，
+            正是复核逮到的那条 major。 */}
         <Routes>
           {/* 入口：`/?v=2&mode=live&skin=paper&lang=zh` 落到 /team，query 原样带过去。
               replace —— 否则后退键在 `/` 与 `/team` 之间反复横跳（重定向再把人推回来）。 */}
           <Route path="/" element={<RedirectToDefault />} />
 
-          <Route path={SCREEN_PATH.team} element={<TeamScreen />} />
+          <Route path={SCREEN_PATH.team} element={<ScreenView />} />
           {/* 深链：人卡。底屏照常渲染，浮层由路由派生（见下方 DetailOverlay）。 */}
-          <Route path={`${SCREEN_PATH.team}/:personId`} element={<TeamScreen />} />
+          <Route path={`${SCREEN_PATH.team}/:personId`} element={<ScreenView />} />
 
-          <Route path={SCREEN_PATH.room} element={<RoomRoute />} />
-          <Route path={SCREEN_PATH.followups} element={<FollowupsScreen />} />
-          <Route path={SCREEN_PATH.notes} element={<NotesScreen />} />
-          <Route path={SCREEN_PATH.closerlook} element={<CloserLookScreen />} />
-          <Route path={SCREEN_PATH.playbooks} element={<PlaybooksScreen />} />
-          <Route path={SCREEN_PATH.vision} element={<VisionScreen />} />
+          <Route path={SCREEN_PATH.room} element={<ScreenView />} />
+          <Route path={SCREEN_PATH.followups} element={<ScreenView />} />
+          <Route path={SCREEN_PATH.notes} element={<ScreenView />} />
+          <Route path={SCREEN_PATH.closerlook} element={<ScreenView />} />
+          <Route path={SCREEN_PATH.playbooks} element={<ScreenView />} />
+          <Route path={SCREEN_PATH.vision} element={<ScreenView />} />
 
           {/* 深链：项目详情。整屏项目看板是 feat-055 的活——这里先把路径占住，落到今天
               已有的真实项目浮层（真 payload，不是占位假屏；把已经能用的详情降级成
-              「Coming」反而是回归）。feat-055 换掉这一行的 element 即可，导航入口
-              （openDetail('project', id)）与路径形状都不用动。 */}
-          <Route path={`${PROJECT_PATH}/:projectId`} element={<TeamScreen />} />
+              「Coming」反而是回归）。底下垫的是**来源屏**（routes.ts 的 baseScreenFrom），
+              不再一律垫团队屏。feat-055 建整屏看板时把这条路由从 ScreenView 换成自己的
+              element 即可，导航入口（openDetail('project', id)）与路径形状都不用动。 */}
+          <Route path={`${PROJECT_PATH}/:projectId`} element={<ScreenView />} />
 
           {/* 兜底：未知路径回默认屏，同样保住 query。 */}
           <Route path="*" element={<RedirectToDefault />} />
@@ -125,20 +142,43 @@ function RedirectToDefault() {
   return <Navigate to={{ pathname: SCREEN_PATH.team, search, hash }} replace />
 }
 
+// 屏 id → 屏组件。ScreenView 按当前底屏在这里挑一个渲染。
+const SCREEN_COMPONENT: Record<LiteScreen, ComponentType> = {
+  team: TeamScreen,
+  room: RoomScreen,
+  followups: FollowupsScreen,
+  notes: NotesScreen,
+  closerlook: CloserLookScreen,
+  playbooks: PlaybooksScreen,
+  vision: VisionScreen,
+}
+
+// 所有屏路由共用的渲染位。屏组件由**底屏**决定（详情深链上 = 打开浮层时用户所在的那一屏），
+// 所以浮层是盖上去的，不是换一屏。
+function ScreenView() {
+  const screen = useCurrentScreen()
+  useRoomQueryRelay(screen)
+  const Screen = SCREEN_COMPONENT[screen]
+  return <Screen />
+}
+
 // 接力参数 `/room?q=<问题>`（PRD G2）——从决策卡带着问题进议事室。
 // 这里只做「搬运」：把 q 灌进 feat-036 已有的预填通道（flowStore.composerDraft），
 // RoomScreen 早就把它当 composer 的 initialValue 消费。不自动发问、不伪造回答。
 //
-// 为什么在 render 期搬而不是 useEffect：RoomScreen 是子组件，它的 initialValue 在**首次
-// render** 就要读到值；父组件的 effect 比子组件的 render 晚，用 effect 会整整错过一拍。
-// ref 闸保证一次挂载只搬一次（同一挂载内 q 再变不重复触发，避免在别的组件渲染期改 store）。
-function RoomRoute() {
-  const [search] = useSearchParams()
-  const relayed = useRef(false)
-  if (!relayed.current) {
-    relayed.current = true
-    const q = search.get('q')?.trim()
+// 为什么在 render 期搬而不是 useEffect：RoomScreen 由 ScreenView 在同一次 render 里渲染，
+// 它的 initialValue 在**首次 render** 就要读到值；effect 比子组件的 render 晚一拍，会整整
+// 错过。
+//
+// 闸门用 location.key（每条 history 条目一个、后退回同一条时不变）而不是「组件挂载一次」：
+// ScreenView 现在跨屏常驻，用 useRef(false) 那种一次性闸会导致第二次进议事室再也不预填。
+// 语义 = 「每次落到 /room 这条 history 条目预填一次」，与改造前逐次挂载的行为等价。
+function useRoomQueryRelay(screen: LiteScreen) {
+  const { key, search } = useLocation()
+  const relayedKey = useRef<string | null>(null)
+  if (screen === 'room' && relayedKey.current !== key) {
+    relayedKey.current = key
+    const q = new URLSearchParams(search).get('q')?.trim()
     if (q) useFlow.getState().setComposerDraft(q)
   }
-  return <RoomScreen />
 }

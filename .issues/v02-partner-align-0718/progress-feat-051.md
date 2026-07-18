@@ -172,3 +172,149 @@ kickoff 原文：`/projects/:projectId`「屏还没有，feat-055 才建，**你
 6. **部署**：`vercel.json` 已有 SPA fallback（`/(.*)` → `/index.html`），路径路由在线上直接可用；
    `vite` 的 `base` 未设（默认 `/`，产物是绝对路径 `/assets/...`），所以 `/team/:id` 这种
    **两段深链也不会 404 掉资源**。两处都是既有配置，本条没改。
+
+---
+---
+
+# 复核后的修复轮（第二棒）
+
+复核判定 `needs-fix`，1 条 major + 3 条 minor。下面逐条交代改了什么、怎么验的、哪条没改及为什么。
+
+## major（已修）：从非 team 屏开详情，底屏被偷换成团队屏
+
+**复核描述**：停在「多看一眼」→ 点 gap 卡的项目链接 → `/projects/pr_demo` 的 element 固定是
+`<TeamScreen />`，于是浮层还没看完底屏已经静默换成团队屏、顶栏高亮跳到「你的团队」；点「关闭」
+被 replace 到 `/team`，「多看一眼」的展开面板 / `historyOpen` / `addedIds` 等本地状态全丢。
+
+**复核判得对，是我漏了。** 我上一棒的 risks 只写了「不落占位、落真实浮层」的收益，没算代价：
+详情是**盖在当前屏上的浮层**，不是一次换屏，而我把底屏交给了纯路径派生（`/projects/*` → `'team'`），
+等于把「浮层」实现成了「换屏 + 浮层」。
+
+### 怎么修的（两处，配套）
+
+**① 底屏改由「来源屏」决定，不再纯按路径派生**（`src/lite2/routes.ts`）
+
+开详情时把「我是从哪一屏点开的」写进 **history state**：
+
+- 新增 `DetailNavState = { baseScreen: LiteScreen }`；`navigateToDetail()` push 时带上它。
+- 新增 `baseScreenFrom(pathname, state)`：优先取 state 里的来源屏，取不到才退回
+  `screenFromPathname()`。`useCurrentScreen()` 改走它 → `data-scene` 与顶栏高亮不再跳。
+- 新增 `publishBaseScreen()`（与既有 `bindNavigator()` 同一个口子、同一个理由：Zustand action 里
+  没有 hook）。壳每次渲染把当前底屏发布上来，`navigateToDetail` 用它当来源、
+  `navigateCloseDetail` 用它当回程目的地。
+- `navigateCloseDetail()` 从「按路径派生的底屏」改成「来源屏」，仍用 `replace`
+  （「点关闭再后退又把浮层翻出来」那条坏体验依然被挡住）。
+
+**URL 形状一个字没变** —— `/projects/:projectId` 照旧可深链（PRD G2 原文）。变的只是底下垫哪一屏。
+history state 随 history 条目走：后退/前进/**刷新**都还在；冷深链（新标签页直接开）没有 state，
+就退回默认屏——这是唯一诚实的兜底，实测确实退到 team。
+
+**② 所有屏路由共用同一个 `<ScreenView />`**（`src/lite2/Lite2App.tsx`）
+
+只改 ① 的话，底屏 id 对了，但 React 那棵树还是会被换掉（`/closer-look` 的 element 与
+`/projects/:id` 的 element 是两个不同组件），本地状态照样清零。
+
+react-router 不给 `RenderedRoute` 挂 key（核过 `react-router@7.18.1` 的 `_renderMatches`：
+`React.createElement(RenderedRoute, { match, routeContext, children })`，无 key），所以
+「同一位置 + 同一组件类型」在路由切换时会被 React 复用。于是把每条屏路由的 element 都写成
+`<ScreenView />`，由它内部按 `useCurrentScreen()` 挑真正的屏组件：
+
+- 换屏（`/room` → `/notes`）→ 屏组件类型变了 → 照常卸载重挂，行为不变；
+- 开详情（`/closer-look` → `/projects/:id`）→ 底屏仍是 closerlook → 组件类型没变 → **原地保住**。
+
+顺带把 `RoomRoute` 并进 `ScreenView`（`useRoomQueryRelay`）。**闸门从「组件挂载一次」换成
+`location.key`** —— `ScreenView` 现在跨屏常驻，原来的 `useRef(false)` 会导致第二次进议事室
+再也不预填（这是本次重构自带的坑，已经踩掉并回归验过，见下）。语义 = 「每落到 /room 这条
+history 条目预填一次」，与改造前逐次挂载等价。
+
+### 验收（真机，dev 5051，跑完已停）
+
+驱动方式与复核一致：真实 DOM `.click()` 切 tab + `window.__lite2Store.getState()` 调 store action
+（按钮走的是同一条链路）。
+
+| 步骤 | 结果 |
+|---|---|
+| 入口 `/?v=2&mode=live&skin=paper&lang=zh` | → `/team`，7 个中文 tab，`data-scene=team` |
+| 点「议事室」→ 点「多看一眼」 | `/room` → `/closer-look`，`scene=room`/`closerlook`，参数原样 |
+| **`openDetail('project','pr_demo')`** | `p=/projects/pr_demo`、**`scene=closerlook`**、**高亮仍是「多看一眼」**、`history.state.usr={baseScreen:'closerlook'}` |
+| **`closeDetail()`** | **`p=/closer-look`**、`scene=closerlook`、高亮「多看一眼」、`overlay=false` |
+| 组件是否被换掉 | 开详情前后抓 `.lite-closerlook` 的 DOM 节点比 identity：`sameNodeOpen=true`、`sameNodeClose=true` —— **同一个节点对象，全程没卸载过**，本地状态不再被冲掉 |
+| 关掉后连按后退 ×3 | `/closer-look` → `/room` → `/team`，全程 `.lite2-shell=true`（没掉出应用），4 个入口参数全程在，**没有把刚关掉的浮层翻出来** |
+| 详情页 F5 刷新 | `p=/projects/pr_demo`、**`scene=closerlook`**、高亮「多看一眼」、`history.state.usr` 还在 —— 来源屏挺过刷新 |
+| 冷深链新标签 `/projects/pr_demo?...&showInactive=1` | `scene=team`（无 state，按设计兜底）、`showInactive=1` 保住；`closeDetail()` → `/team` |
+| 从 team 开人卡（回归） | `/team/p_linqing`，`scene=team`，关闭 → `/team` —— 与改造前一致，无回归 |
+| 未知路径 `/no-such-screen/deep?v=2&...` | → `/team`，4 个参数全在 |
+| v01 / story 零回归 | `?mode=live&lang=zh` → `.lite-shell=true`、`.lite2-shell=false`、URL 不被重定向；`?mode=story` → 两个 lite 壳都不在 |
+| console | 0 error、0 React warning（含 render 期写 store 的那条 warning 也没有） |
+
+## minor 1（已修）：AFK 门里 `screen` 还原已成空转
+
+**复核判得对，我上一棒的理由也给错了** ——我写「该相位断言走 DOM，不依赖该字段，故无副作用」，
+这是在评估**本相位**；而那行还原（`:2843-2847` 的注释写得很清楚）是为了**邻居相位**存在的。
+结论侥幸没红只是因为 `assertTriageActions` 自己在 `:1431` 先 `_clickTab('Your team')` 自救了。
+
+改法（`scripts/gates/live-frontend-gate.snippet.js`）：不是删掉，是**按路由化后的口径还原**——
+存的时候从壳的 `data-scene` 读当前屏（属性值就是 `goScreen()` 吃的那套 id，不依赖 i18n 标签），
+还原的时候调 `store.getState().goScreen(prevScene)` 真导航回去，而不是往 store 写一个没人读的字段。
+注释里点明了「screen 现在是路由，还原 = 导航，不是写 store」，免得下一个人再被误导。
+
+- 这是**共享文件**，改动只在这一个相位内的 2 处（4 行），合并面很小，但请集成方知悉。
+- 验证：`node --check scripts/gates/live-frontend-gate.snippet.js` → 语法 OK。
+  **AFK 门本身我没跑**（需要真后端 + 完整 live 语料，不在本条工作树的自跑范围）——这条按「读代码 +
+  语法检查」为准，没跑过的门我不说跑过了。
+
+## minor 2（已修，顺带）：`?q=` 后退回 `/room?q=` 会重新预填
+
+复核只要求「措辞收紧」，但本次重构本来就要动这条闸门（`ScreenView` 跨屏常驻，旧的
+`useRef(false)` 一次性闸会坏掉），所以直接换成 `location.key` 闸。
+
+- **上一棒的措辞我在此更正**：原文「离屏时由 carrySearch 丢弃，不会诈尸重放」——
+  **对 tab 切换成立，对后退键不成立**。复核实测「后退回 `/room?q=` 会重新预填草稿框」属实。
+- 现在的口径（照实说）：**每落到 `/room` 这条 history 条目预填一次**。
+  后退回同一条 history 条目时 `location.key` 不变，**只要中途没去过别的屏就不会重复预填**；
+  但「去别屏再后退回来」仍会再预填一次（ref 只记最后一个 key）。
+  这与改造前的行为**等价**，不是新回归，也不吹成已经根治。
+- 实测：`goScreen('room',{q:'三亚项目谁在卡着？'})` → 输入框预填该中文；`goScreen('notes')` →
+  `goScreen('room',{q:'第二个问题'})` → 输入框预填「第二个问题」（**第二次仍然生效**，重构自带的坑
+  已排除）；`goScreen('room')` 无 q → 输入框为空。
+
+## minor 3（未修，只更正说法）：详情深链在新标签页只到路由层
+
+复核确认这是 feat-050（contextId 恢复）的下游依赖，且我没伪造加载态。本轮**没动**
+`DetailOverlay.tsx:32`，理由不变：在 feat-050 落地前，给 `team === null` 补「加载中」会是**假态**
+（根本没有在加载）。上面「遗留问题」第 1 条的口径继续有效。
+**对外演示前请勿把详情深链当成已可用能力宣传。**
+
+## 本轮改了哪些文件
+
+| 文件 | 改了什么 |
+|---|---|
+| `src/lite2/routes.ts` | 来源屏（history state）：`DetailNavState` / `baseScreenFrom()` / `publishBaseScreen()`；`navigateToDetail` 带 state；`navigateCloseDetail` 回来源屏；`useCurrentScreen` 走 `baseScreenFrom` |
+| `src/lite2/Lite2App.tsx` | 所有屏路由共用 `<ScreenView />`（保住底屏组件实例）；`SCREEN_COMPONENT` 映射；`RoomRoute` → `useRoomQueryRelay`（`location.key` 闸）；壳里补 `publishBaseScreen` |
+| `scripts/gates/live-frontend-gate.snippet.js` | `askStatusCoerce` 相位的屏还原改成读 `data-scene` + `goScreen()` 真导航 |
+
+`package.json` / `package-lock.json` / `feature_list.json` / 根 `progress.md` / 根 `session-handoff.md`
+一律未动；`src/story/**`、`src/lite/**`、`.issues/lite-v1-lean-real-0713/**` 零触碰；没装任何包。
+
+## 本轮跑过的门
+
+```
+$ npm run typecheck      # tsc -b
+（零输出，exit 0）
+
+$ npm run build
+✓ built in 2.72s
+dist/assets/index-kc5QQIdx.js  714.87 kB │ gzip: 231.79 kB
+（唯一警告：既有的 chunk >500 kB，非 error、非本轮引入）
+
+$ npm run lint
+✖ 5 problems (0 errors, 5 warnings)
+（5 条全是既有 noInlineConfig 提示：lite2/OnboardWizard.tsx:48、lite2/screens/RoomScreen.tsx:130、
+ story/lib/useRailCamera.ts:120/133/148。routes.ts / Lite2App.tsx 零告警。）
+
+$ node --check scripts/gates/live-frontend-gate.snippet.js
+（零输出 = 语法 OK）
+```
+
+**没跑的**：后端 pytest（本轮零后端改动，`eval-harness/**` 未触碰）；AFK live 门整跑
+（需真后端 + 完整语料，超出本工作树自跑范围，见 minor 1）；前端单测（本项目无前端单测框架）。
