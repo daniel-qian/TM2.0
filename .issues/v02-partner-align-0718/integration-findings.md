@@ -493,3 +493,67 @@ feat-056 给 `/team/{id}` 加的 `decisions[]`、feat-054 的粒度门、feat-06
 `UploadPanel` 的文件清单同样缺 key，是既有噪声（feat-050 的复核当时就注意到了并如实标注
 「不在本 diff 的 filesChanged 里」）。它落在 `fix/file-truth-encoding` 那条线的文件边界内，
 留给它或合并时统一处理，不越界抢改。
+
+---
+
+## 七、合流后全量 pytest 的三条红，逐条查清（2026-07-19 晨）
+
+四条修复线合完，全量跑出 2–3 条红。**没有一条是今晚工作的回归**，但查清的过程带出三件
+比那几条红更重要的事实。
+
+### F11 · 🔴 本机 `eval-harness/.env` 里有真的 LLM key —— 各线报的「凭据墙」是错的
+
+`service/app.py:56` 在导入时 `load_dotenv(HERE/".env")`，那份 .env 里有真的
+`MINIMAX_API_KEY` 和 `DASHSCOPE_API_KEY`。实测：
+
+```
+导入 app 前: make_extractor() -> HeuristicExtractor
+导入 app 后: make_extractor() -> LLMExtractor
+真喂一份 PDF: _llm_docs=1 _fallback_docs=0  extraction_mode=llm
+```
+
+**影响三件事**：
+1. feat-054 的 evidence 写着「无 AVERY_BRAIN=minimax key，真 LLM 端到端验证仍为
+   unverifiable」——**这句话是错的**，key 一直在。那条验证现在可以做。
+2. 今晚每次跑全量 pytest 都在**真调 MiniMax**（单次 11 分钟就是这么来的），在花钱。
+3. 任何「HTTP 层行为」的测试，跑的都是 **LLM 路径**，不是单元测试里的启发式路径。
+   两条路径对同一份文档的判断可以不同——见 F12。
+
+### F12 · 同一份文档，两个抽取器判出两种结果（不是红线漏洞，但值得知道）
+
+一份多贴了「绩效评分」列的花名册：
+
+| 路径 | 行为 |
+|---|---|
+| 启发式（单元测试） | 把评分列按位置塞进 `PersonEntity.tenure`（`'2分'`）→ `validate_extraction` 命中 `person-score-text` → `ingest_paths ok=False` → **422** |
+| LLM（真 HTTP `/ingest`） | 压根不产出这个字段 → 无违规可拦 → **200** |
+
+🔴 **200 不是红线漏洞**：实测人对象的键只有 `id/name/role/team`，**评分数据一个字节都没落到人身上**。
+红线的实质保证（人身上不许有评分）两条路径都守住了；不一致的是「要不要连文档一起拒收」这个策略。
+
+fixB 写的 `test_gbk_scoring_sheet_is_refused_over_real_http` 断言 HTTP 必须 422 —— 前提错了
+（UTF-8 版同样是 200，跟编码无关）。已改成断言**实质**：不管走哪个抽取器，人对象上不许出现
+评分键、也不许有评分值伪装成别的字段（启发式就把它塞进过 `tenure`）。422 那条路径仍由
+同文件的库层用例守着。
+
+### F13 · seed 门是 flaky 的 —— LLM 非确定性撞上硬断言
+
+`test_seed_gate.py::test_pdf_yields_real_projects` 断言 roadmap PDF 必须抽出 ≥2 个项目。
+我用**完全相同的输入、相同的代码**连跑两次：
+
+```
+第一次: ['LogiPulse']                                  ← 断言失败
+第二次: ['LogiPulse Phase 1', 'LogiPulse Phase 2']      ← 断言通过
+```
+
+**不是 feat-054 粒度门的回归**——决定性证据：当 LLM 真产出两个阶段时，粒度门
+**两个都保留**（裁决 `R0-tracked`：两者都有负责人/状态/截止日期，是真项目）：
+
+```
+LLM 抽出   : ['LogiPulse Phase 1', 'LogiPulse Phase 2']
+粒度门之后 : ['LogiPulse Phase 1', 'LogiPulse Phase 2']
+```
+
+所以这条门会**随机红**。它守的东西是对的（07-07 那次 1 个项目 == 文件名的回归），
+但断言方式对 LLM 输出太脆。要么放宽成「不许出现以文件名命名的项目」，要么多次采样取众数，
+要么固定 seed/温度。**在改之前，看到它红先别当成回归。**

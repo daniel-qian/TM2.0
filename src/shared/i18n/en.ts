@@ -46,6 +46,56 @@ export const en = {
     // feat-032 — the per-company file space: a look-back list of what you uploaded (persists).
     filesTitle: 'Your files',
     filesChunks: 'references',
+    // fixB/M3 — the exact extensions the backend accepts (guards.SUPPORTED_EXTS). The line above
+    // says "Word, Excel", which the picker used to back with `.doc,.xls` — types the server has
+    // never supported, so they were selectable, uploadable, and guaranteed to 422. Naming the
+    // extensions is the only version of this a user can act on.
+    acceptedExts: '.pdf · .docx · .xlsx · .csv · .tsv · .md · .txt',
+    acceptedLegacyNote: 'Older .doc and .xls files need a Save As to the newer format first.',
+    // fixB/M4 — read or not read, per file. Without these a scanned PDF that yielded nothing looks
+    // exactly like a roster that came through whole.
+    fileStatusIngested: 'Read',
+    fileStatusEmpty: 'Nothing readable',
+    fileStatusFailed: "Couldn't read",
+    fileStatusUnknown: 'Status unknown',
+    fileStatusEmptyHint:
+      'This file opened but no text came out of it — a scan or an image-only export usually does this. Nothing from it reached your team.',
+    fileStatusFailedHint:
+      "This file couldn't be opened at all — often a character-encoding mismatch (save it as UTF-8 and upload again). Nothing from it reached your team.",
+
+    // ── fixD/B1 — uploading a SECOND time starts a SEPARATE company, it does not merge ──────
+    // The backend mints a new context on every POST /ingest, and it cannot append (passing the
+    // old context_id REBUILDS and overwrites it). Previously the UI just kept inviting "add more
+    // files" and then silently swapped the screen to the new upload, with no way back — the
+    // manager's reading is "I lost my data". These strings say what actually happens, up front,
+    // and label the way back. Nothing here promises a merge, because there is no merge.
+    againTitle: 'Adding more files starts a separate company',
+    againBody:
+      "Avery reads each upload as its own company. A new upload will not be merged into the one you're looking at now — both are kept, and you can switch between them here.",
+    switchTitle: 'Uploads on this browser',
+    switchAction: 'Open this one',
+    switchOpening: 'Opening…',
+    switchCurrent: 'Currently open',
+    switchFilesLabel: 'Read from',
+    // Explicit, user-initiated removal — the ONLY way an entry leaves this list. A failed read
+    // must never remove one (see store.ts forgetKnownContext).
+    switchForget: 'Remove from this list',
+    switchForgetNote:
+      'This only removes the shortcut on this browser. Nothing is deleted on the server.',
+    // 🔴 The failure modes must stay distinguishable — they mean different things to a user.
+    // "no credential on this browser" is NOT "the data is gone", and must never be worded as if
+    // it were: the company is still on the server, this machine just can't prove it's yours.
+    switchErrorMissingCredential:
+      "This browser no longer holds the key to that upload, so it can't be opened here. The company itself is still on the server — signing in on the account it was attached to will bring it back.",
+    // 🔴 A 404 does NOT mean the upload is gone, and this string must never say that it does.
+    // Tenant isolation (feat-038) deliberately answers "no such context" and "you can't prove
+    // this is yours" with the same 404, precisely so the status code carries no existence
+    // information — which means Avery genuinely cannot tell the two apart. Saying "no longer on
+    // the server" would be the product asserting a fact about the customer's data that it does
+    // not have. Say what we actually observed: we couldn't open it.
+    switchErrorUnreadable:
+      "Avery couldn't open that upload — the server didn't hand it over. That can mean it's gone, or that this browser can no longer prove it's yours; Avery can't tell which from here. It stays on this list either way, so you can try again.",
+    switchErrorFailed: "Couldn't reach the server just now. Nothing was lost — try again.",
   },
 
   // ── Your team, live ───────────────────────────────────────────────────────
@@ -228,6 +278,14 @@ export const en = {
     briefingHeadline: '{people} people, {projects} active projects.',
     briefingSubheadRisk:
       'Everything below is drawn from your uploads — nothing invented. {atRisk} project(s) worth a closer look.',
+    // fixA · the SAME count, worded for the case where part of it is not a project. The backend
+    // ships the count's shape (briefing.look_kind: 'projects' | 'items' | 'none'); 'items' means a
+    // signal in there reached no decision card, so naming it a project would invent a project —
+    // worst case measured: zero projects on screen, two signals, 「2 个项目值得多看一眼」 printed
+    // right under 「没有一处是编的」. Byte-identical to what registry.py emits for that branch, so
+    // the EN passthrough and the ZH recomposition say the same thing.
+    briefingSubheadRiskItems:
+      'Everything below is drawn from your uploads — nothing invented. {atRisk} item(s) worth a closer look.',
     briefingSubheadCalm:
       'Everything below is drawn from your uploads — nothing invented. No risk signals surfaced from the documents.',
     briefingMetricPeople: 'people',
@@ -504,6 +562,14 @@ export const en = {
     briefingHeadline: '{people} people, {projects} active projects.',
     briefingSubheadRisk:
       'Everything below is drawn from your uploads — nothing invented. {atRisk} project(s) worth a closer look.',
+    // fixA · the SAME count, worded for the case where part of it is not a project. The backend
+    // ships the count's shape (briefing.look_kind: 'projects' | 'items' | 'none'); 'items' means a
+    // signal in there reached no decision card, so naming it a project would invent a project —
+    // worst case measured: zero projects on screen, two signals, 「2 个项目值得多看一眼」 printed
+    // right under 「没有一处是编的」. Byte-identical to what registry.py emits for that branch, so
+    // the EN passthrough and the ZH recomposition say the same thing.
+    briefingSubheadRiskItems:
+      'Everything below is drawn from your uploads — nothing invented. {atRisk} item(s) worth a closer look.',
     briefingSubheadCalm:
       'Everything below is drawn from your uploads — nothing invented. No risk signals surfaced from the documents.',
     briefingMetricPeople: 'people',
@@ -526,6 +592,18 @@ export const en = {
     personReadNone: 'On the team',
     personCardOpenAria: 'Open {name} — {read}',
     groupOwns: 'Owns {project}',
+
+    // fixA 的分诊卡文案键在集成时**去掉了**——不是丢弃，是被更好的实现取代：
+    // feat-068 已经把这四个键放进本 section 上方（用 {project} 占位符），并配了
+    // src/shared/handoffCopy.ts 的 localizeHandoff()，把拼句留在文案层、派生层只吐结构化数据。
+    // fixA 是在派生层拼句，同样能治好「中文页顶着英文标签」，但分层不如前者。
+    // 两者留一份即可，重复定义会直接 TS1117。fixA 独有的 projectStatusUnread 保留在下方。
+
+    // fixA · a project whose documents state no status we could read. 🔴 It is NOT rendered as
+    // 'on-track' (that was a front-end invention: the backend deliberately omits the key, and the
+    // decision layer records it as 未读到) and NOT rendered blank. It says which of the two it is:
+    // we did not read a status — never that the customer's file failed to state one.
+    projectStatusUnread: 'no status read',
 
     // Triage three actions + the "Taken care of today" drawer
     triageRemaining: '{pending} of {total} still worth a look',

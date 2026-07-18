@@ -7,6 +7,7 @@
 //   ② 指向人的信号停在"情境"（她在扛什么），不变成对人的负面标签。
 //   ③ 聚合数字 R2：真算或不显示，绝不编——briefing.metrics 直接来自 ingestion（人数/项目数真数）。
 
+import { getDict, resolveLocale, type Locale } from '../shared/i18n'
 import type { LivePersonCard, LiveProjectCard, LiveTeamPayload } from './transport'
 
 // 卡片左缘墨条的语气温度（与 shared CSS 的 home-tone-* 类同名）：
@@ -35,7 +36,18 @@ export interface LiteProject {
   id: string
   title: string
   ownerName: string
+  /**
+   * 🔴 **渲染用文案，不是判据。** 文档写了状态 → 原样是那个状态词（`on-track` / `blocked` …，
+   * 抽取层归一后的词，状态点与卡片边色都按它取色）；文档里没读到 → 本地化的「未读到状态」。
+   *
+   * 判断一律用 `statusRaw`。曾经这里写的是 `card.status ?? 'on-track'`：后端在 status 为空时
+   * **根本不发这个键**（registry.py 注释写着 "left absent (R2 don't invent)"）、决策层把它记进
+   * `unknown_fields` 并写「未读到：状态」，唯独这一行替客户补了一句「一切正常」。实测约四分之一
+   * 的项目命中，后果一路传到「多看一眼」——一句客户从没说过的话被加上引号，摆进「文件里的说法」。
+   */
   status: string
+  /** 文档自述的状态原值。**缺失就是缺失**（`undefined`），绝不兜底、绝不猜。 */
+  statusRaw?: string
   progress?: number // 可量化（文档写了就显）——项目可硬
   dueDate?: string
   summary?: string
@@ -58,11 +70,28 @@ export interface LiteHandoff {
   projectIds: string[]
 }
 
+// fixA · 「多看一眼」那个数字的**形状**，不只是它的大小。
+//
+// 中文壳（线上 VITE_AVERY_LOCALE=zh，是生产默认）把这个数字填进一句写死量词的话：
+// 「其中 {N} 个项目值得多看一眼」。但后端的这个计数里可以混着**挂不到任何项目上的信号**
+// ——抽取层给每条 doc 信号写死 subjectRef="the project"（extract.py::_signals_from_doc），
+// 它们因此谁也挂不上。于是实测出现过 0 个项目 + 2 条信号 →「0 个进行中的项目 … 其中 2 个
+// 项目值得多看一眼」，凭空点名两个不存在的项目，就印在「没有一处是编的」正下方。
+//
+// 所以后端现在多发一个 look_kind（registry.py::briefing）：
+//   'projects' — 数出来的每一样都确实是项目，且总数不会超过项目总数 →「N 个项目」才是安全的
+//   'items'    — 里面混着挂不到项目上的读数 → 必须换成不点名的量词（「N 处」）
+//   'none'     — 什么都没数出来 → calm 分支
+// 老后端（pre-fixA）不发这个键，读出来是 undefined —— 消费方遇到 undefined 时按 'items'
+// 这一侧兜底（说「N 处」永远不会比事实更肯定；说「N 个项目」可能凭空点名）。
+export type LiteLookKind = 'projects' | 'items' | 'none'
+
 export interface LiteBriefing {
   tone: 'calm' | 'alert'
   headline: string
   subhead: string
   metrics: { label: string; value: string }[]
+  lookKind?: LiteLookKind
 }
 
 export interface LiteTeam {
@@ -120,7 +149,17 @@ function liveRead(card: LivePersonCard): { read: string; ownsRead: string[]; ton
   return { read: '', ownsRead: [], tone: 'sage' }
 }
 
-function liveHandoffs(payload: LiveTeamPayload): LiteHandoff[] {
+// 与 lite/lite2 各组件里同名 helper 同形（本仓一贯写法）。
+function fill(template: string, vars: Record<string, string>): string {
+  return template.replace(/\{(\w+)\}/g, (_, k: string) => vars[k] ?? '')
+}
+
+type HandoffCopy = Pick<
+  ReturnType<typeof getDict>['lite2'],
+  'handoffToneLabel' | 'handoffAction' | 'handoffEvidenceFallback' | 'handoffEvidenceTag'
+>
+
+function liveHandoffs(payload: LiveTeamPayload, copy: HandoffCopy): LiteHandoff[] {
   const out: LiteHandoff[] = []
   for (const pr of payload.projects) {
     // feat-068 · 空白 blocker 行不算信号：以前 `['']` 这种脏数据会当成"有原文"，渲染出一条
@@ -143,7 +182,14 @@ function liveHandoffs(payload: LiveTeamPayload): LiteHandoff[] {
 }
 
 // 上传产出 → lite 屏幕数据。入口即剥净每张人卡的数字字段（红线）。
-export function liteTeamFromPayload(payload: LiveTeamPayload): LiteTeam {
+//
+// `locale` 默认现取（`resolveLocale()` 读 `?lang=` / 构建期 `VITE_AVERY_LOCALE`，与 useDict 同源；
+// 壳内没有运行时切换语言的入口，所以在映射期定文案与在渲染期定文案等价）。显式传入是给测试用的。
+export function liteTeamFromPayload(
+  payload: LiveTeamPayload,
+  locale: Locale = resolveLocale(),
+): LiteTeam {
+  const copy = getDict(locale).lite2
   const cleanPeople = payload.people.map(stripPersonNumbers)
 
   const people: LitePerson[] = cleanPeople.map((card) => {
@@ -162,19 +208,25 @@ export function liteTeamFromPayload(payload: LiveTeamPayload): LiteTeam {
     }
   })
 
-  const projects: LiteProject[] = payload.projects.map((card: LiveProjectCard) => ({
-    id: card.id,
-    title: card.title,
-    ownerName:
-      card.ownerName ??
-      cleanPeople.find((p) => p.id === card.ownerId)?.name ??
-      'Unassigned',
-    status: card.status ?? 'on-track',
-    progress: card.progress,
-    dueDate: card.dueDate,
-    summary: card.summary,
-    blockers: card.blockers,
-  }))
+  const projects: LiteProject[] = payload.projects.map((card: LiveProjectCard) => {
+    // 🔴 「我没读到」和「客户说没有」是两件事。空串也算没读到（后端只在有值时才发这个键，
+    // 但契约上 status?: string，收到 '' 同样不许被当成一个状态词）。
+    const statusRaw = card.status?.trim() ? card.status.trim() : undefined
+    return {
+      id: card.id,
+      title: card.title,
+      ownerName:
+        card.ownerName ??
+        cleanPeople.find((p) => p.id === card.ownerId)?.name ??
+        'Unassigned',
+      status: statusRaw ?? copy.projectStatusUnread,
+      statusRaw,
+      progress: card.progress,
+      dueDate: card.dueDate,
+      summary: card.summary,
+      blockers: card.blockers,
+    }
+  })
 
   const b = payload.briefing
   return {
@@ -182,12 +234,21 @@ export function liteTeamFromPayload(payload: LiveTeamPayload): LiteTeam {
     sourceFiles: payload.source_files ?? [],
     people,
     projects,
-    handoffs: liveHandoffs(payload),
+    handoffs: liveHandoffs(payload, copy),
     briefing: {
       tone: b.tone === 'alert' ? 'alert' : 'calm',
       headline: b.headline,
       subhead: b.subhead,
       metrics: b.metrics ?? [],
+      lookKind: readLookKind(b),
     },
   }
+}
+
+// look_kind 是 fixA 之后才有的键，`LiveBriefingPayload`（src/lite2/transport.ts）还没声明它，
+// 所以在这里就地窄化读一次，而不是让契约类型漂在别人的文件里。认不出来的值一律当 undefined
+// ——消费方对 undefined 的兜底是**不点名**那一侧，宁可少说一个词，不可多点一个不存在的项目。
+function readLookKind(briefing: unknown): LiteLookKind | undefined {
+  const raw = (briefing as { look_kind?: unknown } | null)?.look_kind
+  return raw === 'projects' || raw === 'items' || raw === 'none' ? raw : undefined
 }
