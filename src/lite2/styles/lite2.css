@@ -3995,3 +3995,30 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ── feat-055 复核 minor 修正：8 个 tab 的顶栏在窄视口撑破文档 ──────────────────────────
+   实测（390×844，iPhone 12/13/14 标准宽）：zh 下 7 个 tab 恰好不溢出，加上第 8 个「项目」后
+   documentElement.scrollWidth - clientWidth = 9px → 整页可横向拖动；en 下既有溢出 76px 恶化
+   到 119px。根因不是「项目」这个 tab，而是 .scene-tabs 这一行本身没有滚动容器，溢出直接撑
+   文档。这里把溢出关进 tab 条自己：条内横向滚，文档不动。feat-057 再加第 9 个 tab（home）
+   时这条同样兜得住，不必再改。
+   只作用于 lite2 壳内 —— shared/styles/00-base.css 的 .scene-tabs 同时供 v01/story 用，
+   那两层是冻结面，不动。桌面宽度下内容不溢出，overflow-x:auto 不产生滚动条，观感零变化
+   （skinVerdict 探针读的是 .scene-tabs 的 background/backdrop-filter/box-shadow，不受影响）。 */
+.lite2-shell .scene-tabs {
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+
+.lite2-shell .scene-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+/* tab 不许被压缩换行 —— 宁可滑，不许把「你的团队」挤成两行。 */
+.lite2-shell .scene-tabs .scene-tab {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}

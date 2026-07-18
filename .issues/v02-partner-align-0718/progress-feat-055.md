@@ -176,3 +176,127 @@ $ npm run lint          → ✖ 5 problems (0 errors, 5 warnings)
    - `store.refreshFiles()` 对畸形 `files` payload 无防御（`files` 非数组时 `UploadPanel` 直接崩）。
      我用错误 mock 撞到过，属契约违例输入，非本条范围。
    - 后端 briefing 首屏摘要仍是英文（已单开任务）。
+
+---
+
+## 6 · 复核返工轮（第二次收工）
+
+复核 verdict = `pass`，但带 1 条 major + 1 条 minor。**两条都修了，没有 skip。**
+
+### 6.1 [major] `scripts/gates/live-frontend-gate.snippet.js:1307` —— v2Boots 相位必红
+
+**判定**：复核者说得对，我第一轮的推迟是错的取舍。理由：`live-frontend-gate` 不在本条的
+三门里，但这个仓库「合进 main = 自动上生产」，把一个**已知必红**的门留给别人，等于把风险
+挪了个位置而不是消掉。跟 feat-057 的冲突是一行数组的取并集，比一个红门便宜。
+
+**改法**：把 `expected` 更新成最终 8 项 tab 表，并把 `tabs.length === 7` 改成
+`tabs.length === expected.length`（数量不再单独硬编码，只留数组一处真相）：
+
+```js
+const expected = ['Your team', 'Projects', 'The room', 'Follow-ups', "Avery's notes",
+                  'A closer look', 'Playbooks', 'Where this goes'];
+pass: !!shell && tabs.length === expected.length && JSON.stringify(tabs) === JSON.stringify(expected),
+```
+
+顺带修了 `scripts/gates/live-frontend-gate.md:149` 的驱动说明（原文还写着「6 个 tab」，
+连 feat-047 的第 7 个都没跟上）。两处都加了醒目注释：**动 `LiteTopbar.tsx` 的 tab 必须
+同一个 commit 同步这个数组**。
+
+**真验**（起本地 dev 5055，playwright 注入真 snippet 调真相位，不是读代码推断）：
+
+```
+PASS  v2Boots phase GREEN (was the major finding)
+      {"shellPresent":true,"dataScene":"team","tabCount":8,
+       "tabLabels":["Your team","Projects","The room","Follow-ups","Avery's notes",
+                    "A closer look","Playbooks","Where this goes"],
+       "tabOrderMatches":true,"pass":true}
+```
+
+英文标签是对的：`useDict` 的 `resolveLocale()` 默认 EN，门的 URL 不带 `?lang=`。
+
+### 6.2 [minor] 第 8 个 tab 把顶栏挤出 390px 视口
+
+**判定**：复核者的量化我复现了，一模一样。但根因不是「项目」这个 tab —— 是 `.scene-tabs`
+这一行**本身没有滚动容器**，溢出直接撑 documentElement。7 个恰好不溢出只是巧合。
+
+**改法**（`src/lite2/styles/lite2.css` 末尾追加，只作用于 `.lite2-shell` 内）：把溢出关进
+tab 条自己 —— `max-width:100% / min-width:0 / overflow-x:auto`，tab 加 `flex:0 0 auto` +
+`white-space:nowrap`（宁可滑，不许把「你的团队」挤成两行），滚动条隐藏。
+**没动 `src/shared/styles/00-base.css` 的 `.scene-tabs`** —— 那条同时供 v01 / story 用，
+是冻结面。feat-057 再加第 9 个 tab 时这条同样兜得住，不必再改。
+
+**真验**（同一页面，把新规则用 `!important` 中和掉复现修复前几何）：
+
+```
+lang=zh  doc h-overflow WITHOUT the fix = 9px    |  WITH the fix = 0px
+lang=en  doc h-overflow WITHOUT the fix = 119px  |  WITH the fix = 0px
+```
+
+9px / 119px 与复核者实测逐字吻合。修后两种语言下 `documentElement` 与 `body` 横向溢出
+均为 0，溢出改由 tab 条内部承载（`stripOverflowX:"auto"`、`stripScrolls:true`），
+8 个 tab 高度全为 36px（无一个换行），滚到最右点最后一个 tab 仍可用 → 落 `/vision`。
+
+桌面 1440 下**观感零变化**：文档不溢出、tab 条不滚动、`.scene-tabs` 的
+`background rgba(255,253,248,0.78)` / `box-shadow` / `backdrop-filter blur(12px)` 原样
+（`skinVerdict` 的 `readSkinProbe` 读的正是这三个值，不受影响）。
+
+### 6.3 本轮真验清单（23/23 全过）
+
+playwright 脚本在 scratchpad，**未入库**。除上面两条外还跑了回归：
+
+| 断言 | 结果 |
+|---|---|
+| snippet 注入成功、v2Boots 无 pageerror | ✅ |
+| zh 顶栏 8 个 tab、「项目」在 index 1 | ✅ `["你的团队","项目","议事室","跟进","Avery 的笔记","多看一眼","操作手册","未来方向"]` |
+| 入口直链 4 个 query 参数在 `/projects` 上不丢、切屏后仍不丢 | ✅ |
+| 点项目卡 → `/projects/pr_pilot`；Esc 关闭 → 回 `/projects`（不是 `/team`） | ✅ |
+| 项目流程零 pageerror | ✅ |
+| `look=paper` / `look=aurora` 各自 8 tab、`data-look` 正确、零横向溢出 | ✅ |
+| 390px zh/en：文档零溢出、tab 条内滚、无换行、最后一个 tab 可点 | ✅ |
+
+顺带独立复证了 0 个项目的诚实空态：无 contextId 时 `.lite-projects-empty` 出现、
+`.lite-projects-group` 与 `.lite-projects-grid` 各 0 个（**无骨架卡**），文案是
+「还没有项目 / 去「你的团队」上传一份项目计划、周报或进度汇总…」。
+
+⚠️ 踩到的坑，记给后来人：`createStubTransport()` 的 `ingested` 标志活在**单次页面加载的
+闭包里**，`injectSeeds` 之后再 `page.goto()` 硬刷新会把 context 丢掉（`fetchTeam` 抛 404）。
+要在 stub 下测有数据的屏，必须**点 tab 走站内路由**，不能重新导航。
+
+### 6.4 三道硬门（本轮改动后重跑）
+
+```
+$ npm run typecheck
+> tsc -b
+（无输出，0 错）
+
+$ npm run build
+✓ 564 modules transformed.
+dist/assets/index-T8X9aADC.css   199.10 kB │ gzip:  29.97 kB
+dist/assets/index-DE8LxKQ6.js    951.34 kB │ gzip: 293.43 kB
+✓ built in 3.33s
+（CSS 从 198.85 → 199.10 kB = 本轮那段 tab 条 CSS；仍无 unbalanced-brace 警告）
+
+$ npm run lint
+✖ 5 problems (0 errors, 5 warnings)
+（同一批既有 warning：OnboardWizard.tsx:86 / RoomScreen.tsx:265 /
+  useRailCamera.ts:120,133,148 —— 全在本分支未改动的文件里，本轮零新增）
+```
+
+**后端 pytest 本轮同样未跑**：本轮改动是 1 个 gate snippet + 1 个 gate 文档 + 1 段 CSS，
+零后端改动。
+
+### 6.5 本轮改动文件（4 个）
+
+- `scripts/gates/live-frontend-gate.snippet.js` —— `assertV2Boots` 期望值 7 → 8 项
+- `scripts/gates/live-frontend-gate.md` —— 驱动说明里的 tab 表同步（原来还停在 6 个）
+- `src/lite2/styles/lite2.css` —— 末尾追加 lite2 内 tab 条溢出兜底
+- `src/lite2/LiteTopbar.tsx` —— 只改注释：原注释写着「本条不改门」，已过时；换成「动这个数组
+  必须同一 commit 同步 gate 的期望数组」的硬提醒（零代码改动）
+
+### 6.6 给集成方（§5 第 1 条已解决，其余不变）
+
+- ✅ §5.1 的 gate 动作**本条已经做了**，集成方不必再动 —— 但 **feat-057 加 `home` tab 时
+  必须同步 `live-frontend-gate.snippet.js` 的 `expected` 数组**，否则 v2Boots 会红。
+  数组现在是那个门里唯一的 tab 真相源，注释已就地写明。
+- 合并冲突面新增一处：`scripts/gates/live-frontend-gate.snippet.js` 的 `expected` 行
+  （和 `LiteTopbar.tsx` 的 tab 数组一一对应，取并集时两处要一起改）。
