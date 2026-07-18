@@ -539,7 +539,6 @@ export const en = {
     projectsOwnerLabel: 'Owner',
     projectsDueLabel: 'Due',
     projectsProgressLabel: 'Progress',
-    projectsBlockersLabel: 'In the way',
     projectsBlockersOne: '1 thing in the way',
     projectsBlockersMany: '{count} things in the way',
     projectsUnknownValue: 'The documents did not say',

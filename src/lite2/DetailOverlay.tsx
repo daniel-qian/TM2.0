@@ -7,6 +7,7 @@ import { LiteModal } from './LiteModal'
 import { buildProjectViews, projectStatusLabel } from './projectView'
 import type { LiteDetail } from './store'
 import type { LiteTeam } from './teamData'
+import type { LiveTeamPayload } from './transport'
 
 // feat-024 · 薄只读详情浮层——ADR-0022 决策 2（v1 范围拍板）。
 // 点人卡/项目卡开 ~百行纯 live payload 浮层：名字/角色/owns/来源文件——零 fixtures，
@@ -32,12 +33,22 @@ export function DetailOverlay() {
 
   // 出场动画期间 store.detail 已经是 null，但面板还在屏上——留住最后一帧快照，否则关闭瞬间
   // 内容整块闪没、只剩一个空壳在缩。（LiteModal 的 open 由 store 驱动，这是配套写法。）
-  const lastRef = useRef<{ detail: NonNullable<LiteDetail>; team: LiteTeam } | null>(null)
-  if (liveDetail && liveTeam) lastRef.current = { detail: liveDetail, team: liveTeam }
-  const held = liveDetail && liveTeam ? { detail: liveDetail, team: liveTeam } : lastRef.current
+  // feat-055：快照里一并留住 rawTeam。项目详情改吃原始 payload 之后，只快照 team 会让人卡
+  // 与项目卡在出场动画期间行为不一致——`reset()` 把 team/rawTeam 一起清空时，人卡还能从
+  // 快照里渲染完这 300ms，项目卡却会当场翻成「这张卡片已不在你上传的文件里」再消失。
+  // 两者同源同寿命，就该锁在同一张快照里。
+  const lastRef = useRef<{
+    detail: NonNullable<LiteDetail>
+    team: LiteTeam
+    raw: LiveTeamPayload | null
+  } | null>(null)
+  if (liveDetail && liveTeam) lastRef.current = { detail: liveDetail, team: liveTeam, raw: rawTeam }
+  const held =
+    liveDetail && liveTeam ? { detail: liveDetail, team: liveTeam, raw: rawTeam } : lastRef.current
 
   const detail = held?.detail ?? null
   const team = held?.team ?? null
+  const heldRaw = held?.raw ?? null
 
   const signals = (rawTeam?.signals ?? []).filter(
     (sig) =>
@@ -54,7 +65,8 @@ export function DetailOverlay() {
   // "on-track"。派生口径收在 projectView.ts，屏与浮层共用一份（同一个项目两处说法必须一致）。
   // 注：store 里 team 与 rawTeam 永远成对写入（uploadFiles / restoreSession / refreshTeam
   // 三处都在同一次 set 里落），所以「有 team 没 raw」不会发生。
-  const projectViews = useMemo(() => buildProjectViews(rawTeam?.projects, rawTeam?.people), [rawTeam])
+  // 吃的是 held 快照里那份 raw（见上），不是 live rawTeam——理由同人卡。
+  const projectViews = useMemo(() => buildProjectViews(heldRaw?.projects, heldRaw?.people), [heldRaw])
   const project =
     detail?.kind === 'project' ? projectViews.find((p) => p.id === detail.id) ?? null : null
 
