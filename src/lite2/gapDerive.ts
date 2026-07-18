@@ -18,6 +18,16 @@ import type { LiteTeam } from './teamData'
 // liveHandoffs() morning-triage heuristic) — is what makes it worth a closer look. A project
 // that's already self-reporting at-risk/blocked is NOT a gap: its blockers are consistent with
 // its own story, not a contradiction of it.
+//
+// 🔴 And a project that self-reported NOTHING is not a gap either — read `statusRaw`, never
+// `status`. Until 2026-07-18 this read `project.status`, which teamData.ts was filling with a
+// hard-coded 'on-track' whenever the documents stated no status (~a quarter of real projects).
+// Every one of those landed in this branch and produced a comparison card whose 「文件里的说法」
+// column was a self-report that never happened: with no summary it quoted a status the front end
+// had invented, and — the higher-frequency harm — WITH a summary it put the document's first line
+// (e.g.「负责人：李娜」, not a status statement at all) opposite「实际信号」as if the customer had
+// claimed everything was fine. `statusRaw` is absent exactly when nothing was read, so this
+// function can no longer manufacture a self-report to contradict.
 const STEADY_STATUSES = new Set(['on-track', 'steady'])
 
 export interface GapCard {
@@ -34,13 +44,16 @@ export function deriveGaps(team: LiteTeam | null): GapCard[] {
   if (!team) return []
   const out: GapCard[] = []
   for (const project of team.projects) {
-    if (!STEADY_STATUSES.has(project.status)) continue
+    // 没自述过状态 → 无从「与自述矛盾」，直接跳过（project.status 是渲染文案，判据只认 statusRaw）。
+    const selfReported = project.statusRaw?.trim()
+    if (!selfReported || !STEADY_STATUSES.has(selfReported)) continue
     const blockers = project.blockers ?? []
     if (blockers.length === 0) continue
-    // claim 兜底（summary 为空时）：机械状态读出式，引号原样引 status 字段值——不自拟叙事句
+    // claim 兜底（summary 为空时）：机械状态读出式，引号原样引 statusRaw 字段值——不自拟叙事句
     // （"X is reported fine." 读起来像语料里有人这么说过，但语料里没这句话；机械读出保证
     // 兜底文本也 100% 可溯源到字段本身。对抗验证 redline 路要求，2026-07-14）。
-    const claim = project.summary?.trim() || `Reported status: "${project.status}"`
+    // 引号里的值现在必然来自文档（上面那道闸），所以这句"可溯源"才第一次真正成立。
+    const claim = project.summary?.trim() || `Reported status: "${selfReported}"`
     blockers.forEach((blocker, idx) => {
       // Stable id derived from project id + blocker index (kickoff-dev.md §feat-044) — changes
       // only if the underlying corpus text changes, which is the intended "reappears if the

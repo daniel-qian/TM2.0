@@ -201,16 +201,75 @@ class CompanyContext:
         return [d.to_dict() for d in grade_projects(self.project_cards(), self.signal_cards(),
                                                     as_of=as_of)]
 
-    def briefing(self) -> dict:
+    def briefing(self, as_of=None) -> dict:
         """A calm, HONEST 'organization weather' briefing. Counts are real (people/projects); it
-        emits NO invented aggregate health score (R2: real-or-nothing)."""
+        emits NO invented aggregate health score (R2: real-or-nothing).
+
+        🔴 The risk judgement is NOT this method's own. It is `avery.decision_grading` — the SAME
+        rule table (`avery/decision_rules.py`, human-readable twin `decision_grading_rules.md`) that
+        produces `decision_cards()`. Before 2026-07-18 this method carried a private, weaker rule
+        (`status in ("at-risk", "blocked")`) that read NEITHER blockers NOR signals, so a project
+        self-reporting on-track — or stating no status at all — while carrying an unresolved blocker
+        (i.e. the ENTIRE premise of the 「多看一眼」 surface, and a case the rule table already
+        models explicitly under its 「自报『正常』但挂着未解阻塞」 entry) fell straight through into
+        'No risk signals surfaced from the documents.' — a sentence printed directly beneath
+        'Everything below is drawn from your uploads — nothing invented.', while the very same
+        payload's decision_cards said 需确认 and listed the blocker. Two rule sets = the surface
+        contradicting itself one key apart. There is now exactly one.
+
+        Signals get counted too, and separately from the graded projects. Every SignalEntity the
+        extractor emits is a risk-shaped reading by construction (the four families: unresolved /
+        no sign-off / rework / interrupt), so a non-empty `signal_cards()` and the sentence 'no risk
+        signals' cannot both be true. Attribution of a signal to a project is a KNOWN blind spot of
+        `_match_signals` (documented there: it would rather miss than blanket-escalate) — the loose
+        ones therefore reach nobody's decision card, which is exactly why the briefing must not
+        swallow them.
+
+        🔴 De-duplication is by SIGNAL IDENTITY, via the SAME `_match_signals` the grader used —
+        never by comparing rule-evidence strings. The first cut of this method did the latter (a
+        signal counted as accounted only when its summary text appeared VERBATIM in some flagged
+        project's rule evidence) and that read the wrong thing: rule evidence only contains signals
+        that hit a KEYWORD FAMILY, so a signal explicitly naming an already-flagged project — same
+        project, already on a decision card, already surfaced — landed in the evidence-free case and
+        was added AGAIN as if it were a separate concern. Measured on a real POST /ingest of a
+        10-line weekly: 1 project, 1 decision card, briefing said 'need a look = 3'. The ZH shell
+        (the production default, see src/shared/briefing.ts) renders that count as 「其中 N 个项目
+        值得多看一眼」 — so the surface named three projects while one project card was on screen,
+        directly beneath 「没有一处是编的」. Same sentence, same spot, same lie as the original bug.
+
+        `look_kind` / `look_projects` / `look_signals` ship the count's SHAPE, not just its size, so
+        a localized surface can pick a truthful classifier instead of hard-coding 「个项目」:
+          · "projects" — every counted thing IS a graded project. `look_signals == 0`, and the total
+            can never exceed the project count. 「N 个项目」 is safe here and ONLY here.
+          · "items"    — part of the count is a signal that reached no decision card. Calling those
+            projects would invent projects (worst case: zero projects, two signals, 「2 个项目」).
+          · "none"     — nothing flagged; the calm sentence is the honest one.
+
+        `as_of` threads through to the date-sensitive rules (due dates) — pass it to reproduce a
+        briefing exactly; omitted means today, same convention as `decision_cards()`.
+        """
+        from ..decision_grading import grade_projects
+        from ..decision_rules import CAN_PROCEED
+
         n_people = len(self.extraction.people)
         n_proj = len(self.extraction.projects)
-        at_risk = [p for p in self.extraction.projects if p.status in ("at-risk", "blocked")]
+
+        signals = self.signal_cards()
+        projects = self.project_cards()
+        decisions = grade_projects(projects, signals, as_of=as_of)
+        flagged = [d for d in decisions if d.grade != CAN_PROCEED]
+        loose_signals = self._signals_no_decision_covers(projects, signals, flagged)
+        n_flagged, n_loose = len(flagged), len(loose_signals)
+        n_look = n_flagged + n_loose
+        look_kind = "none" if not n_look else ("items" if n_loose else "projects")
+
         metrics = [{"label": "people", "value": str(n_people)},
                    {"label": "active projects", "value": str(n_proj)}]
-        if at_risk:
-            metrics.append({"label": "need a look", "value": str(len(at_risk))})
+        if n_look:
+            # Label kept VERBATIM ('need a look'): src/shared/briefing.ts maps the ZH surface off
+            # this exact string, and its calm/risk branch is driven by whether this entry exists —
+            # so emitting it is what keeps the Chinese subhead from denying what the metrics show.
+            metrics.append({"label": "need a look", "value": str(n_look)})
         # feat-032 P2: reconcile with the file manifest. source_files counts only the PARSED docs;
         # source_documents counts everything UPLOADED (incl. parse-failures the manifest still shows).
         # Say "N of M" when they differ so the headline never claims fewer files than the manifest
@@ -219,11 +278,83 @@ class CompanyContext:
         n_uploaded = len(self.source_documents) or n_ingested
         files_phrase = f"{n_ingested} of {n_uploaded}" if n_uploaded != n_ingested else str(n_ingested)
         headline = f"Ingested {files_phrase} file(s): {n_people} people, {n_proj} projects."
-        subhead = ("Everything below is drawn from your uploads — nothing invented. "
-                   + (f"{len(at_risk)} project(s) worth a closer look." if at_risk
-                      else "No risk signals surfaced from the documents."))
-        return {"tone": "alert" if at_risk else "calm", "headline": headline, "subhead": subhead,
-                "metrics": metrics}
+        if look_kind == "none":
+            tail = "No risk signals surfaced from the documents."
+        elif look_kind == "items":
+            # 'item(s)', not 'project(s)': part of this count is a signal that reached no decision
+            # card, and calling it a project would be a small invention of exactly the kind this
+            # method exists to stop. The all-projects case keeps the stronger word.
+            tail = f"{n_look} item(s) worth a closer look."
+        else:
+            tail = f"{n_look} project(s) worth a closer look."
+        subhead = "Everything below is drawn from your uploads — nothing invented. " + tail
+        return {"tone": "alert" if n_look else "calm", "headline": headline, "subhead": subhead,
+                "metrics": metrics, "look_kind": look_kind,
+                "look_projects": n_flagged, "look_signals": n_loose}
+
+    @staticmethod
+    def _signal_identity(signal: dict) -> str:
+        """A signal's identity for counting. `id` when the extractor gave one (it always does on the
+        `signal_cards()` path); the summary text only as a defensive fallback, so a hand-built or
+        legacy payload without ids still de-duplicates instead of inflating the count."""
+        sid = str(signal.get("id") or "").strip()
+        return sid if sid else "summary:" + str(signal.get("summary") or "").strip()
+
+    @classmethod
+    def _signals_no_decision_covers(cls, projects: list[dict], signals: list[dict],
+                                    flagged) -> list[dict]:
+        """Signals that no already-flagged project's decision card speaks for.
+
+        A signal is covered when EITHER test says the manager is already being shown it. Both are
+        needed; each alone under-counts one real case, and under-counting here means saying one
+        project is several:
+
+        ① ATTACHED — `decision_grading._match_signals` (the very function the grader ran, not a
+           re-derivation) attributes the signal to a project whose card came back flagged. Delegating
+           matters: two independently written attribution rules is the bug class this whole method
+           exists to close — a private risk rule beside the rule table is what made the briefing deny
+           its own payload — and a second one hiding in the de-duplication step is that same mistake
+           one layer down. Test ② misses this case whenever the signal's wording hits no keyword
+           family, because then it never becomes rule evidence even though its project is flagged.
+
+        ② QUOTED — the signal's text appears VERBATIM in a flagged card's rule evidence, i.e. that
+           exact sentence is already printed on screen under that project. Test ① misses this case
+           routinely: the heuristic extractor stamps every doc signal with `subjectRef="the project"`
+           (a literal, never a real reference — `extract.py::_signals_from_doc`), so doc signals
+           attach to nothing, and a line that is simultaneously the project's blocker and its own
+           signal would be counted twice.
+
+        Everything else is returned. Those reach no decision card — the documented `_match_signals`
+        blind spot, or a project the grader cleared — so dropping them would make the surface go
+        silent about a risk-shaped reading out of the customer's own file. Empty-summary signals
+        carry nothing to show a manager and are skipped.
+        """
+        from ..decision_grading import _match_signals
+
+        flagged_subjects = {d.subject_id for d in flagged}
+        covered: set[str] = set()
+        for project in projects:
+            # Mirrors `_Subject.subject_id` (id, else title) so the two sides key alike.
+            subject_id = (str(project.get("id") or "").strip()
+                          or str(project.get("title") or "").strip())
+            if subject_id not in flagged_subjects:
+                continue
+            for signal in _match_signals(project, signals):
+                covered.add(cls._signal_identity(signal))
+        quoted = {ev for d in flagged for hit in d.matched_rules for ev in hit.evidence}
+
+        out: list[dict] = []
+        seen: set[str] = set()
+        for signal in signals:
+            summary = str(signal.get("summary") or "").strip()
+            if not summary:
+                continue
+            key = cls._signal_identity(signal)
+            if key in covered or summary in quoted or key in seen:
+                continue
+            seen.add(key)
+            out.append(signal)
+        return out
 
     # --- feat-032 file space (per-company uploaded-file manifest) ------------------------------
 
