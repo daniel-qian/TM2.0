@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from './authStore'
 import { authConfigured } from './supabaseClient'
 import { useLite } from '../store'
+import { forgetAllOwnerTokens } from '../transport'
 
 // feat-053 · 账号入口（顶栏，LiteBell 旁）。
 //
@@ -39,6 +40,7 @@ const COPY = {
     claimed: '已绑定到你的账号',
     claimFailed: '绑定失败，稍后再试',
     restoreFailed: '取不到你名下的公司数据',
+    retry: '重试',
     passwordHint: '至少 6 位',
   },
   en: {
@@ -63,6 +65,7 @@ const COPY = {
     claimed: 'Attached to your account',
     claimFailed: 'Could not attach it — try again later',
     restoreFailed: 'Could not load the companies on your account',
+    retry: 'Try again',
     passwordHint: 'At least 6 characters',
   },
 } as const
@@ -86,6 +89,42 @@ function useCopy(): Copy {
 
 type ClaimState = 'idle' | 'claiming' | 'claimed' | 'failed'
 
+// ── 换人即清场（feat-053 复核 finding 1）────────────────────────────────────────────────
+// 🔴 这是验收里那条「换账号后旧数据不串」的**前端一半**。服务端那一半（authorize_context
+// 按账号/owner_token 判定，不认就 404）一直是对的，但少了这一半，它在浏览器上是空转的：
+//
+//   经理 A 登录 → 上传公司 A（contextId / ownerToken / team / rawTeam / notes / files 全落进
+//   useLite，owner_token 还落进 localStorage）→ 点退出登录 → 经理 B 在同一个标签页登录。
+//   此前 signOut 只把 status 改成 'guest'，useLite 一个字段都没清，于是：
+//     · 恢复副作用拉到了 B 的 context_ids，却因为"手上已有 contextId"直接放弃接管
+//       → B 面前是 A 的人和项目；
+//     · localStorage 里 A 的 owner_token 还在，B 一刷新/一提问，服务端凭那枚 token
+//       正大光明放行 200 —— 这不是陈旧渲染，是活的读权限。
+//   三家外部公司在同一台机器上轮流演示（或 Danny 一台机器切两家看），当场串数据。
+//
+// 放在组件文件的模块层而不是 authStore：authStore 若 import useLite 就成环
+//（authStore → store → transport → authStore，transport 要拿 currentAccessToken）。
+// AuthPanel 本来就是连接这两边的那一层，是唯一不成环的落点。
+export function clearCompanyScope(): void {
+  // 先掐凭据，再清屏上的数据：顺序反过来的话，中间那一拍已在飞的请求仍带着旧 token。
+  forgetAllOwnerTokens()
+  useLite.getState().resetRun() // abort 在飞的 /advise 流 + 清掉 ask 草稿
+  useLite.setState({
+    contextId: null,
+    ownerToken: null,
+    team: null,
+    rawTeam: null,
+    files: [],
+    notes: [],
+    noteJustAdded: false,
+    ingestStatus: 'idle',
+    ingestError: null,
+    // detail 必须清：它握着上一家公司的 person/project id，留着就是一张指向空气的浮层。
+    detail: null,
+    screen: 'team',
+  })
+}
+
 export function AuthPanel() {
   const c = useCopy()
   const status = useAuth((s) => s.status)
@@ -102,6 +141,7 @@ export function AuthPanel() {
 
   const contextId = useLite((s) => s.contextId)
   const ownerToken = useLite((s) => s.ownerToken)
+  const rawTeam = useLite((s) => s.rawTeam)
   const transport = useLite((s) => s.transport)
 
   const [open, setOpen] = useState(false)
@@ -110,12 +150,45 @@ export function AuthPanel() {
   const [password, setPassword] = useState('')
   const [claim, setClaim] = useState<ClaimState>('idle')
   const [restoreError, setRestoreError] = useState(false)
+  // 用户点「重试」时 +1 —— 恢复副作用的 dep，是失败后唯一能让它再跑一次的东西。
+  const [restoreAttempt, setRestoreAttempt] = useState(0)
+  // 本账号名下已登记的 context（/account/contexts + 已登录上传的 account_linked）。
+  // 用来回答"手上这份到底归没归到账号名下"。
+  const [linkedIds, setLinkedIds] = useState<string[]>([])
   const restoredFor = useRef<string | null>(null)
+  const restoreInFlight = useRef(false)
+  // 屏上这份数据属于谁：userId（已登录）| null（游客）。用来发现"人换了"。
+  const scopedTo = useRef<string | null>(null)
 
   // 会话恢复：挂载即跑（store 内模块级 guard 幂等）。
   useEffect(() => {
     init()
   }, [init])
+
+  // 🔴 换人即清场。判据刻意收得很窄：**只有在"上一个身份是某个登录用户"且新身份与它不同**
+  // 时才清。于是三条路径各归各位：
+  //   · 首帧 loading→authed（刷新页面恢复会话）：prev 为 null → 不清，不会误伤自己的数据
+  //     （feat-050 正在做会话恢复，这条守住它不被登录动作反手清掉）
+  //   · 游客→登录：prev 为 null → 不清。游客期刚传的东西不能被登录动作吞掉——认领路径
+  //     整个建立在"登录后手上那份还在"之上
+  //   · 登录→登出、A→B 直接换会话：prev 是旧 userId 且 ≠ 新身份 → 清
+  // 必须在恢复副作用之前声明：同一次 commit 里 effect 按声明顺序同步跑完，清场先落地，
+  // 后面那个 fetch 的 .then 才会看到"手上没有 context"从而正常接管。
+  useEffect(() => {
+    if (status === 'disabled' || status === 'loading') return
+    const identity = status === 'authed' ? userId : null
+    if (status === 'authed' && !identity) return // 会话在但 user id 还没到 —— 等下一拍
+    const prev = scopedTo.current
+    if (prev === identity) return
+    scopedTo.current = identity
+    if (!prev) return // 第一次观测到身份，没有"上一个人"要清
+    clearCompanyScope()
+    restoredFor.current = null
+    restoreInFlight.current = false
+    setClaim('idle')
+    setRestoreError(false)
+    setLinkedIds([])
+  }, [status, userId])
 
   // 登录后恢复本账号的公司数据 —— 只在"当前没有 context"时才接管，绝不覆盖用户
   // 手上正在看的那份（游客期刚传的东西不能被登录动作吞掉）。
@@ -124,11 +197,18 @@ export function AuthPanel() {
   useEffect(() => {
     if (status !== 'authed' || !userId) return
     if (restoredFor.current === userId) return
-    restoredFor.current = userId
+    if (restoreInFlight.current) return // 同一次恢复不并发打两次
     const fetchContexts = transport.fetchAccountContexts
     if (!fetchContexts) return // stub transport 没有账号能力 —— 静默跳过
+    restoreInFlight.current = true
     void fetchContexts()
       .then(({ context_ids }) => {
+        // 🔴 守卫**成功才置位**（复核 finding 4）。置在 fetch 之前的话，后端恰好在重启、
+        // 网抖一下，就等于这一整个会话内恢复再也不会跑（守卫已占位，deps 也不会再变），
+        // 用户只能 F5。现在失败留着守卫为空，配合下面的「重试」按钮就能再来一次。
+        restoredFor.current = userId
+        setRestoreError(false)
+        setLinkedIds(context_ids)
         const first = context_ids[0]
         if (!first) return
         if (useLite.getState().contextId) return // 手上已有数据，不接管
@@ -137,16 +217,20 @@ export function AuthPanel() {
         void useLite.getState().refreshNotes()
       })
       .catch(() => setRestoreError(true))
-  }, [status, userId, transport])
+      .finally(() => {
+        restoreInFlight.current = false
+      })
+  }, [status, userId, transport, restoreAttempt])
 
-  // 登出后允许下次登录重新恢复。
+  // 已登录时上传 → /ingest 当场就把这份 context 绑到账号了，payload 回 account_linked。
+  // 记下来，否则面板会对着一份**已经归属**的数据说"还没归到账号名下"（复核 finding 2）。
+  // 记在组件 state 而不是每次现读 rawTeam：rawTeam 会被后续 refreshTeam 覆盖，
+  // 而 /team/{id} 刷新帧不带 account_linked——只看 rawTeam 的话这个事实会凭空消失。
   useEffect(() => {
-    if (status === 'guest') {
-      restoredFor.current = null
-      setClaim('idle')
-      setRestoreError(false)
-    }
-  }, [status])
+    const id = rawTeam?.context_id
+    if (!id || rawTeam?.account_linked !== true) return
+    setLinkedIds((prev) => (prev.includes(id) ? prev : [...prev, id]))
+  }, [rawTeam])
 
   // 未配置这份部署就没有账号能力 —— 不出假入口（点了必然失败的按钮比没有按钮更糟）。
   if (status === 'disabled' || !authConfigured()) return null
@@ -155,9 +239,14 @@ export function AuthPanel() {
   const authed = status === 'authed'
   const working = busy !== 'idle'
 
-  // 认领入口只在"手上这份数据确实还没归属"时出现：已登录 + 有 context + 有 owner_token。
-  // （owner_token 是证明所有权的凭据，没有它就无从认领。）
-  const canClaim = authed && Boolean(contextId) && Boolean(ownerToken) && claim !== 'claimed'
+  // 认领入口只在"手上这份数据确实还没归属"时出现：已登录 + 有 context + 有 owner_token
+  // （owner_token 是证明所有权的凭据，没有它就无从认领）+ **确实还没绑**。
+  // 最后一条是复核 finding 2：此前完全不看绑定状态，于是"已登录状态下上传"（后端 /ingest
+  // 当场就绑好了）也照样弹一句"当前这份公司数据还没归到账号名下"——对着客户说的一句假话。
+  // 三个判据都是真的：认领成功、/account/contexts 里有它、或上传时回了 account_linked。
+  const attached =
+    claim === 'claimed' || (contextId !== null && linkedIds.includes(contextId))
+  const canClaim = authed && Boolean(contextId) && Boolean(ownerToken) && !attached
 
   const doClaim = async () => {
     const claimContext = transport.claimContext
@@ -226,8 +315,26 @@ export function AuthPanel() {
                 </div>
               ) : null}
 
-              {claim === 'claimed' ? <p className="lite-auth-note">{c.claimed}</p> : null}
-              {restoreError ? <p className="lite-auth-error">{c.restoreFailed}</p> : null}
+              {contextId && attached ? (
+                <p className="lite-auth-note">{c.claimed}</p>
+              ) : null}
+
+              {restoreError ? (
+                <div className="lite-auth-claim">
+                  <p className="lite-auth-error">{c.restoreFailed}</p>
+                  {/* 失败必须有出路 —— 此前只剩 F5（复核 finding 4）。
+                      不按 restoreInFlight 置 disabled：那是个 ref，render 里读它不会随变化
+                      重渲染，只会渲染出一个可能已经过时的禁用态。并发本身在副作用里已经挡住
+                      （in-flight 时直接 bail），最坏结果是用户多点一下。 */}
+                  <button
+                    type="button"
+                    className="lite-auth-secondary"
+                    onClick={() => setRestoreAttempt((n) => n + 1)}
+                  >
+                    {c.retry}
+                  </button>
+                </div>
+              ) : null}
 
               <button
                 type="button"

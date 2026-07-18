@@ -22,6 +22,7 @@ lands in the default zero-network suite.
 """
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 import pytest
@@ -314,4 +315,103 @@ def test_verify_fails_closed_on_a_supabase_error(monkeypatch):
 
     monkeypatch.setattr(httpx, "get", _boom)
     assert account.verify_access_token("some-token") is None
+    account.reset_cache()
+
+
+# ── cache TTL is capped by the token's own exp (feat-053 复核 finding 3) ─────────────────────────
+# The module docstring promises "a cached entry does NOT outlive the token". It used to be a lie:
+# every verified token was cached for a flat 60s, so a token with 2s of life left kept authorizing
+# reads for another 58. These tests hold the promise to the code.
+
+def _jwt_with_exp(exp: float | None) -> str:
+    """A structurally-real JWT whose payload carries `exp`. Never signed — nothing verifies it."""
+    import base64 as _b64
+    import json as _json
+
+    def seg(obj: dict) -> str:
+        raw = _json.dumps(obj).encode("utf-8")
+        return _b64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+
+    claims: dict = {"sub": USER_A}
+    if exp is not None:
+        claims["exp"] = exp
+    return f"{seg({'alg': 'HS256', 'typ': 'JWT'})}.{seg(claims)}.not-a-real-signature"
+
+
+def test_unverified_exp_reads_the_claim_without_a_signature():
+    from service import account
+    soon = time.time() + 42
+    assert account._unverified_exp(_jwt_with_exp(soon)) == pytest.approx(soon)
+
+
+@pytest.mark.parametrize("token", [
+    "not-a-jwt",                  # opaque string
+    "only.two",                   # wrong segment count
+    "a.!!!not-base64!!!.c",       # undecodable payload
+    _jwt_with_exp(None),          # valid JWT, no exp claim
+])
+def test_unverified_exp_is_none_for_anything_it_cannot_read(token):
+    """Unreadable => None => fall back to the flat window. Never raises, never guesses."""
+    from service import account
+    assert account._unverified_exp(token) is None
+
+
+def test_unverified_exp_rejects_a_non_numeric_exp():
+    """`exp: true` is not an expiry — bool is an int subclass, so this needs its own guard, or
+    `float(True)` would silently cap the cache at 1970."""
+    import base64 as _b64
+    import json as _json
+    from service import account
+    payload = _b64.urlsafe_b64encode(_json.dumps({"exp": True}).encode()).decode().rstrip("=")
+    assert account._unverified_exp(f"h.{payload}.s") is None
+
+
+def test_ttl_is_capped_by_a_short_lived_token():
+    """The actual fix: 2 seconds left => cached for ~2 seconds, not for the flat 60."""
+    from service import account
+    ttl = account._cache_ttl_for(_jwt_with_exp(time.time() + 2))
+    assert 0 < ttl <= 3, ttl
+
+
+def test_ttl_falls_back_to_the_flat_window_for_a_long_lived_or_opaque_token():
+    from service import account
+    assert account._cache_ttl_for(_jwt_with_exp(time.time() + 86400)) == account._CACHE_TTL_S
+    assert account._cache_ttl_for("opaque-token") == account._CACHE_TTL_S
+
+
+def test_an_already_expired_token_is_never_remembered(monkeypatch):
+    """Supabase said yes (so we answer this request), but we refuse to cache that answer: the very
+    next request must re-ask rather than ride a dead token for the rest of the window."""
+    from service import account
+    monkeypatch.setenv("SUPABASE_URL", "https://stub.supabase.co")
+    monkeypatch.setenv("SUPABASE_ANON_KEY", "stub-anon-key")
+    account.reset_cache()
+
+    expired = _jwt_with_exp(time.time() - 1)
+    calls: list[str] = []
+
+    class _Resp:
+        status_code = 200
+
+        @staticmethod
+        def json() -> dict:
+            return {"id": USER_A}
+
+    import httpx
+
+    def _fake_get(url, **kwargs):
+        calls.append(url)
+        return _Resp()
+
+    monkeypatch.setattr(httpx, "get", _fake_get)
+    assert account.verify_access_token(expired) == USER_A
+    assert account.verify_access_token(expired) == USER_A
+    assert len(calls) == 2, "an expired token must not be served from cache"
+
+    # Control: a long-lived token IS cached, so the second call costs no round trip.
+    calls.clear()
+    fresh = _jwt_with_exp(time.time() + 3600)
+    assert account.verify_access_token(fresh) == USER_A
+    assert account.verify_access_token(fresh) == USER_A
+    assert len(calls) == 1, "a live token should be cached"
     account.reset_cache()

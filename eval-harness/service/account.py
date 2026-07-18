@@ -12,7 +12,10 @@ already a declared runtime dep.
 THE COST is a network hop per authenticated request, so verified tokens are cached in-process for
 `_CACHE_TTL_S` seconds. The cache is keyed by a SHA-256 of the token (the raw credential is never
 held as a dict key, never logged) and holds only `user_id` — never the token, never the email.
-A cached entry does NOT outlive the token: `exp` from the response caps the entry.
+A cached entry does NOT outlive the token: the TTL is capped by the token's own `exp`, read out of
+the JWT payload WITHOUT verifying it (see `_unverified_exp` for why that is safe). Note `exp` comes
+from the token, not from the /auth/v1/user response — that endpoint returns the user object, which
+carries no expiry.
 
 FAIL CLOSED, ALWAYS. Unconfigured service, unreachable Supabase, timeout, malformed body, non-200 —
 every one of them returns None, which the callers turn into "no account" and fall through to the
@@ -25,7 +28,9 @@ never persisted server-side, and never echoed back in a response body.
 """
 from __future__ import annotations
 
+import base64
 import hashlib
+import json
 import os
 import threading
 import time
@@ -115,6 +120,45 @@ def reset_cache() -> None:
         _cache.clear()
 
 
+def _unverified_exp(token: str) -> float | None:
+    """Read `exp` (unix seconds) out of a JWT payload WITHOUT verifying the signature. None if the
+    token is not a JWT, is malformed, or carries no numeric `exp`.
+
+    WHY IT IS SAFE NOT TO VERIFY: this number is only ever used to make a cache entry SHORTER, never
+    to grant anything. Supabase has already said yes to this exact token by the time we call this. A
+    forged or garbage `exp` can only make us re-ask Supabase sooner (costs a round trip); it can
+    never extend trust. Verifying the signature here would drag in exactly the JWT library and key
+    rotation that the module docstring explains we refuse to own.
+
+    WHY IT IS NEEDED: without it a token with two seconds of life left would be cached for the full
+    `_CACHE_TTL_S`, so an expired credential keeps authorizing reads for the rest of that window.
+    """
+    try:
+        parts = token.split(".")
+        if len(parts) != 3:
+            return None
+        payload = parts[1]
+        payload += "=" * (-len(payload) % 4)   # base64url in JWTs is unpadded
+        claims = json.loads(base64.urlsafe_b64decode(payload.encode("ascii")))
+        exp = claims.get("exp") if isinstance(claims, dict) else None
+        # bool is an int subclass — `exp: true` is not an expiry.
+        if isinstance(exp, bool) or not isinstance(exp, (int, float)):
+            return None
+        return float(exp)
+    except Exception:
+        return None
+
+
+def _cache_ttl_for(token: str) -> float:
+    """How long this verified token may be trusted without re-asking: the flat TTL, capped by the
+    token's own remaining lifetime. Returns <= 0 for an already-expired token, which `_cache_put`
+    declines to store (so the next request re-asks Supabase and gets the honest answer)."""
+    exp = _unverified_exp(token)
+    if exp is None:
+        return _CACHE_TTL_S   # not a JWT / no exp — fall back to the flat window
+    return min(_CACHE_TTL_S, exp - time.time())
+
+
 def verify_access_token(token: str | None) -> str | None:
     """The Supabase access token -> that user's id (the JWT `sub`), or None.
 
@@ -152,7 +196,10 @@ def verify_access_token(token: str | None) -> str | None:
     if not isinstance(user_id, str) or not user_id.strip():
         return None
     user_id = user_id.strip()
-    _cache_put(token, user_id, _CACHE_TTL_S)
+    # Capped by the token's own `exp`: a token with 2s of life left is not trusted for 60s.
+    # A non-positive TTL (already expired) is declined by _cache_put — we still answer THIS request
+    # (Supabase just said the token is good), we simply refuse to remember that answer.
+    _cache_put(token, user_id, _cache_ttl_for(token))
     return user_id
 
 
