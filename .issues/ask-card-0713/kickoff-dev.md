@@ -10,13 +10,15 @@
 | A. story scripted beat | 在最贴切的既有 case 加一个 Ask beat（新 ThreadStepKind `quick-ask`）：agent 提议快问 → Ask 卡（1~2 题，问事不问人）→ 回执归来 beat（原话+“本人自述”）。加性：既有 beats/rail 零改。 | `feat/034-story-ask` | 无（持久化线不碰 src/**） | **DONE+对抗验证 CONFIRMED_SAFE**（7b87cbd，已合 main 3e79e9e） |
 | B. lite Ask 卡（stub 驱动） | Ask = lite 第二种 artifact 卡：AskDraft 数据形状 + AskCard 组件（Room 内出生：编辑题目→确认→逐人链接→回收状态 chip→回执呈现）。走 LiveTransport stub（ADR-0020 seam），后端契约按下方提案对齐。 | `feat/034-lite-ask` | 无；**不碰 eval-harness/** | **DONE+对抗验证 CONFIRMED_SAFE**（169e651，已合 main d1934bf） |
 | C. 后端（数据模型+端点+员工 H5+红线门） | PRD "Implementation Direction" 全量：ask/ask_recipient 落 avery schema、`/r/{token}` 服务端渲染、问句红线门、回执闭环。 | `feat/034-stage-c` | 持久化链已并入 main（integrate cb11a2c）；骑 registry/authorize_context/scoring_policy 接缝 | **DONE+对抗验证×2 后修 2 缺陷,已合 main da94d59**（2026-07-14） |
-| D. 部署（**并入 lite-v1 部署波，不单独部**） | Ask 后端与持久化链是同一个 Python 容器；`avery.ima-read.com` 子域 vhost/证书→容器（内存帽+内存哨兵 Q12）→nginx。**Ask 特有 env**：`AVERY_PUBLIC_BASE`（生成 `/r/` 链接）+ `/ask`·`/r` 限流阈值 + 生产域名 OG 在企微/飞书/钉钉真机 unfurl 验证。DB 侧已就绪（见下"部署事实"）。 | — | **等第二台 ECS**（当前唯一生产机 ~150M free 无 swap 塞不下 Avery，会连累 ImaRead）；与 lite-v1 同波部署 | 未开（host 墙） |
+| D. 部署（**并入 lite-v1 部署波，同容器**） | Ask 后端与持久化链同一 Python 容器。**已部署**德国法兰克福轻量机（容器 `avery-agent`，main `5d32e4f` 构建，`--memory=700m` 单 worker）+ 生产库 `avery-fra` + Cloudflare quick tunnel。0007 两表已在生产库。**Ask 特有 env 待配**（非阻塞，等固定域名）：`AVERY_PUBLIC_BASE`（/r/ 链接绝对根）+ `/ask`·`/r` 限流阈值 + 生产域名 OG 三平台 unfurl 验证。 | — | 已随 lite-v1 部署波上线 | **DONE（已部署，演示可用）**（2026-07-14） |
 
-### 部署事实（钉自持久化线 2026-07-14 回执 + 记忆 [[avery-infra-icp-ecs-in-hand]]，阶段 D 开工前必读）
+### 部署事实（更新 2026-07-14 持久化线更正广播 `correction-to-ask-line.md`；旧新加坡/阿里云假设作废，见 [[avery-infra-icp-ecs-in-hand]]）
 
-- **Supabase 已换独立库**（推翻早先"共用 imaread 项目"）：生产 `AVERY_DB_URL` 指向新项目 `wvgmphgnvapacyyjmsew`（avery / 新加坡 ap-southeast-1）。我们的 `0007_ask.sql` **无需手动上库**——registry 的 `_ensure_schema()` 连库时自动 replay 全部迁移（IF NOT EXISTS 幂等）。dev 仍走各自本地 pg。
-- **连库形态坑（必带，否则生产连不上且 libpq 假报 "password authentication failed"）**：走 session pooler `aws-0-ap-southeast-1.pooler.supabase.com:5432`、user `postgres.<ref>`；`AVERY_DB_URL` 尾巴必须 `?sslmode=require&channel_binding=disable`（psycopg3 默认 SCRAM 通道绑定协商不下来=真病根，别去 reset 密码）；密码里特殊字符 percent-encode。后端零代码改动。
-- **@needs_db PG 腿**：本机开发无凭据未实跑（本轮 11 skips 干净）；部署首个动作 = `AVERY_DB_URL=… pytest -m needs_db` 把真 PG 路径（ask 契约 pg 双胞胎 + B token 读 A 的 ask → 404）跑绿。
+- **实际部署形态**：德国法兰克福轻量服务器（容器 `avery-agent`）+ **生产库 `avery-fra`（`zlxpldzapyoacmgvlqpn`，eu-central-1，与服务器同城 RTT ~15ms）** + Cloudflare quick tunnel（真 HTTPS、不占 80/443、**URL 临时重启即变、非固定地址**）。新加坡库 `wvgmph…` 已删、阿里云第二台 ECS / `avery.ima-read.com` 子域方案此路已换。
+- **`0007_ask.sql` 已在生产库自动 replay**（Dockerfile 补 `COPY db/` 后，空库 0→8 表实证含 asks/ask_recipients）。
+- **连库必带**：session pooler `aws-0-eu-central-1.pooler.supabase.com:5432` + user `postgres.<ref>` + `?sslmode=require&channel_binding=disable`（缺则假报 password auth failed）+ 密码 percent-encode。后端零代码改动。
+- **@needs_db PG 腿**：持久化线已替我方在真库跑通（52 passed，修了 1 条测试侧无效时间戳，产品/answer-once 锁零改动）。
+- **产品判断（持久化线交我方拍）**：内存/pg 孪生在**非法** `answered_at` 上不强求一致——该值生产端服务端自盖、非法值到不了真实路径，为不可达输入加校验属镀金；**不动产品**（与持久化线判断一致）。
 
 ## 后端契约提案（给持久化线/未来阶段 C 的对齐稿，additive-only）
 

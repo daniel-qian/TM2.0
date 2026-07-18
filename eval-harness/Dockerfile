@@ -41,6 +41,15 @@ COPY service/ ./service/
 COPY skills/  ./skills/
 COPY memory/  ./memory/
 
+# 2026-07-17: db/ IS a runtime dependency — omitting it silently disabled schema bootstrap.
+# PgRegistry._ensure_schema() replays every db/migrations/*.sql on first use (pg_registry.py:
+# _MIGRATIONS_DIR = <app root>/db/migrations). Without this COPY that path does not exist in the
+# image, and Path.glob() on a missing directory returns [] WITHOUT raising — so _ensure_schema()
+# silently replayed nothing, marked itself ready, and the service only worked because the schema
+# had been provisioned out-of-band by hand. A fresh deploy against a fresh database would have
+# died on UndefinedTable. ~32KB; keeps prod self-provisioning (and new migrations auto-apply).
+COPY db/      ./db/
+
 # Drop root.
 RUN useradd --create-home --uid 10001 avery && chown -R avery:avery /app
 USER avery

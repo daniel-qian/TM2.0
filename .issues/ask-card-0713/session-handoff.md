@@ -1,6 +1,17 @@
-# ask-card per-line handoff（2026-07-13 grill 会话 → 同日双面施工合流）
+# ask-card per-line handoff（2026-07-13 grill 会话 → 双面施工 → 阶段 C 后端 → 部署收工）
 
-## 2026-07-13 深夜 · 合流收线（最新状态）
+## 2026-07-14 · feat-034 全线收工 ✅（最新状态，看这条即可）
+
+- **A/B/C/D 全部落地，feat-034 = done。** A story beat + B lite AskCard(stub) + C 真后端（迁移 0007/manager 端点/员工 H5/ask-draft 帧）+ D 部署——四阶段均经独立对抗验证（C 是双 checker，抓到并修了 save 端点跨租户改绑 + 上标数字 500 两缺陷）。
+- **已部署上线（演示可用）**：与持久化链同容器，德国法兰克福轻量机（`avery-agent`，main `5d32e4f`，`--memory=700m`）+ 生产库 `avery-fra`（法兰克福）+ Cloudflare quick tunnel（临时 URL）。0007 两表在生产库、红线 clean。
+- **持久化线更正广播已消化**（`../lite-v1-lean-real-0713/correction-to-ask-line.md`）：①Dockerfile 补 `COPY db/` → 0007 真自动 replay；②我方从未跑的 `@needs_db` 契约测试哨兵 `answered_at='x'` 在 pg 报错=测试锅（已改合法 ISO），**产品/answer-once 锁零改动已 git diff 实证**。
+- **产品判断已拍**：内存/pg 孪生非法 `answered_at` 不强求一致（服务端自盖、不可达输入，不镀金）——不动产品。
+- **非阻塞遗留（等固定域名）**：`AVERY_PUBLIC_BASE` / `/ask`·`/r` 限流阈值 / 生产域名 OG 三平台 unfurl。
+- push 照旧留 Danny。本条 doc 落在 `close/feat-034-doc` 分支，待并入 main（main 当前被其他线占用）。
+
+---
+
+## 2026-07-13 深夜 · 合流收线
 
 - **阶段 A（story beat）+ 阶段 B（lite AskCard, stub）双双完工并经独立对抗验证 CONFIRMED_SAFE**，已 merge 本地 main（`3e79e9e` + `d1934bf`），合流后 `./init.sh` 复绿。两侧实现细节与验证 verdict 见 `story-beat-handoff.md` / `lite-ask-handoff.md`。
 - Q13（Danny 指令）：story 面加性解冻，scripted Ask beat 落 bill/acme case。
