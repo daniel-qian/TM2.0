@@ -14,4 +14,6 @@ When a skill mentions a role (e.g. "apply the AFK-ready triage label"), use the 
 
 Edit the right-hand column to match whatever vocabulary you actually use.
 
-> Note: these labels do not yet exist in the GitHub repo. The `triage` skill applies them with `gh issue edit --add-label`, which fails if the label is missing. Create them once with `gh label create <name>` (or let the skill prompt you) before the first triage run.
+> Note (corrected 2026-07-18, feat-068): **all five labels DO exist** in `daniel-qian/avery` — verified with `gh label list`. The earlier note here claimed they did not, which was wrong and would have sent someone to create duplicates. `gh issue edit --add-label` works against them today.
+>
+> Also corrected: until 2026-07-18 every line filed its work as local `.issues/` files with a "未建 GitHub issue（对外闸留 Danny）" note. **That gate is now open** — Danny authorised the push to `origin/main` and chose GitHub issues as the tracker for the deployment line onward. See `AGENTS.md` § Issue tracker.

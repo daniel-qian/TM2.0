@@ -22,7 +22,7 @@ import { DetailOverlay } from './DetailOverlay'
 import { Lite2Footer } from './Lite2Footer'
 import { OnboardWizard } from './OnboardWizard'
 import { initNotifications } from './notifyStore'
-import { resolveSkin } from './skin'
+import { resolveLook } from './look'
 import {
   bindNavigator,
   publishBaseScreen,
@@ -36,7 +36,7 @@ import {
 // feat-035（lite-live-v02 kickoff §架构拍板 1）· lite2 壳 = v02 并排产品本体。
 // copy-then-wall：整树从 src/lite/** 复制而来（引擎含在内），lite ↔ lite2 零交叉 import——
 // 边界由 ESLint no-restricted-imports 机器闸看住（这个壳也从不 import src/story/**）。
-// v1 冻结：src/lite/** 一行不改；这里独立生长六屏骨架 + 皮肤令牌层 + 合规页脚。
+// v1 冻结：src/lite/** 一行不改；这里独立生长六屏骨架 + 观感（Look）令牌层 + 合规页脚。
 //
 // 6-tab 骨架（PRD 顺序）：Your team · The room · Follow-ups · A closer look · Playbooks ·
 // Where this goes。Follow-ups / A closer look 本波先空态占位（feat-036/037 真派生）。
@@ -57,9 +57,10 @@ export function Lite2App() {
 function Lite2Shell() {
   const navigate = useNavigate()
   const screen = useCurrentScreen()
-  // 皮肤只在挂载时读一次 URL（与 useDict 的 locale 解析同口径）——现场切皮走整页刷新
-  // （试玩场景足够；运行时热切换留待需要时再做）。
-  const skin = useMemo(() => resolveSkin(), [])
+  // feat-068：观感（Look，原 skin——`Skin` 现专指 ADR-0021 的行业视觉主题，见 CONTEXT.md）
+  // 只在挂载时读一次 URL（与 useDict 的 locale 解析同口径）——现场切换走整页刷新（试玩场景
+  // 足够；运行时热切换留待需要时再做，见 issue #16）。
+  const look = useMemo(() => resolveLook(), [])
 
   // store 的 goScreen/openDetail/closeDetail 经这个桥推路由（Zustand action 里没有 hook）。
   // 两处都绑，缺一不可：
@@ -94,7 +95,7 @@ function Lite2Shell() {
   }, [])
 
   return (
-    <div className="app-shell lite2-shell" data-scene={screen} data-mode="live" data-skin={skin}>
+    <div className="app-shell lite2-shell" data-scene={screen} data-mode="live" data-look={look}>
       <LiteTopbar />
       <main className="scene-stage">
         {/* 🔴 每条屏路由的 element 都是同一个 <ScreenView />，这不是偷懒——是修复的关键。
