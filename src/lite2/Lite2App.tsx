@@ -12,7 +12,6 @@ import { DetailOverlay } from './DetailOverlay'
 import { Lite2Footer } from './Lite2Footer'
 import { OnboardWizard } from './OnboardWizard'
 import { initNotifications } from './notifyStore'
-import { selectWizardOpen, useOnboard } from './onboardStore'
 import { resolveSkin } from './skin'
 
 // feat-035（lite-live-v02 kickoff §架构拍板 1）· lite2 壳 = v02 并排产品本体。
@@ -26,17 +25,15 @@ import { resolveSkin } from './skin'
 // 默认决定，理由见 progress.md；最终排位交 review 包给 Danny 拍）。
 export function Lite2App() {
   const screen = useLite((s) => s.screen)
-  const detail = useLite((s) => s.detail)
   // 皮肤只在挂载时读一次 URL（与 useDict 的 locale 解析同口径）——现场切皮走整页刷新
   // （试玩场景足够；运行时热切换留待需要时再做）。
   const skin = useMemo(() => resolveSkin(), [])
 
-  // feat-045：通知事件接线（真事件订阅，模块级 guard 幂等）+ 首访 onboarding 向导
-  // （覆盖层；unseen/in-progress 且本会话未 × 时挂载——localStorage 记状态与进度）。
+  // feat-045：通知事件接线（真事件订阅，模块级 guard 幂等）。首访 onboarding 向导的开合
+  // 判定（unseen/in-progress 且本会话未 ×）feat-052 起收在 OnboardWizard 自己手里。
   useEffect(() => {
     initNotifications()
   }, [])
-  const wizardOpen = useOnboard(selectWizardOpen)
 
   return (
     <div className="app-shell lite2-shell" data-scene={screen} data-mode="live" data-skin={skin}>
@@ -58,8 +55,10 @@ export function Lite2App() {
           <RoomScreen />
         )}
       </main>
-      {detail ? <DetailOverlay /> : null}
-      {wizardOpen ? <OnboardWizard /> : null}
+      {/* feat-052：两个弹层都常驻挂载，开关在各自组件里（LiteModal 的 open）——父层条件挂载
+          会把组件直接摘掉，出场动画没机会跑。 */}
+      <DetailOverlay />
+      <OnboardWizard />
       <Lite2Footer />
     </div>
   )
