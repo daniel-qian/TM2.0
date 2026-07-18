@@ -559,6 +559,26 @@ export const en = {
     roomChipHandoff: 'Is any handoff between people waiting on someone right now?',
     roomChipPlanning: 'Help me sketch priorities for next week.',
 
+    // ── The room — simplified thinking view (feat-059, PRD G7). Four phases driven by REAL
+    // stream events: a phase that got no event stays "not started yet". No fake progress, no
+    // scripted beats, no invented timing. The raw stream stays one click away, complete. ──
+    roomFlowTitle: 'How it worked through this',
+    roomFlowRawTitle: 'Raw stream',
+    roomFlowShowRaw: 'Show raw stream',
+    roomFlowHideRaw: 'Back to the summary',
+    roomPhaseRead: 'Reading the facts',
+    roomPhaseCrosscheck: 'Cross-checking',
+    roomPhaseMethod: 'Matching an approach',
+    roomPhaseAct: 'Writing the actions',
+    roomPhasePending: 'Not started yet',
+    roomFlowSteps: '{count} steps',
+    roomFlowSources: 'Read {count} source documents',
+    roomFlowRecall: 'Turned up {count} lines from your files',
+    roomFlowReady: 'The read is ready',
+    roomFlowCites: 'Grounded in {count} original lines',
+    roomFlowCitesLabel: 'The lines it cited',
+    roomFlowUnresolved: 'did not match a real line',
+
     // ── Notification bell (feat-045, PRD F5 — REAL events only; zero hardcoded items; copy
     // never names an employee) ──
     bellAria: 'Notifications',
