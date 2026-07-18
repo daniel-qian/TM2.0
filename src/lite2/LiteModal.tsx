@@ -12,7 +12,7 @@ import { useEffect, useReducer, useRef, type ReactNode } from 'react'
 //   ⑤ 焦点管理（开 → 焦点进面板；关 → 还给开之前的元素；Tab 在面板内成环）
 //   ⑥ 层级统一（.lite-modal-layer 单一 z-index 令牌，见 lite2.css）
 //
-// 🔴 不许 portal 到 document.body：皮肤令牌挂在 .lite2-shell[data-skin]（skin.ts），靠 DOM
+// 🔴 不许 portal 到 document.body：观感令牌挂在 .lite2-shell[data-look]（look.ts），靠 DOM
 // 继承下发。portal 出壳 = 两张皮的令牌全部丢失（aurora 直接塌回 paper 变量的缺省值）。
 // 弹层必须留在壳内渲染——这也是 paper/aurora 双皮兼容的全部实现代价。
 //
