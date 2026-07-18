@@ -57,7 +57,15 @@ export const zh: Dict = {
     "privacyNote": "不给任何人打分 —— 只看他们做什么、负责什么。",
     "empty": "还没有文件。上传几份，团队就会出现。",
     "filesTitle": "你的文件",
-    "filesChunks": "处引用"
+    "filesChunks": "处引用",
+    "acceptedExts": ".pdf · .docx · .xlsx · .csv · .tsv · .md · .txt",
+    "acceptedLegacyNote": "旧版 .doc 和 .xls 需要先另存为新格式再上传。",
+    "fileStatusIngested": "已读取",
+    "fileStatusEmpty": "没读到内容",
+    "fileStatusFailed": "没能读取",
+    "fileStatusUnknown": "状态未知",
+    "fileStatusEmptyHint": "这份文件能打开，但里面没取出文字——扫描件或纯图片导出通常是这样。它没有任何内容进入你的团队。",
+    "fileStatusFailedHint": "这份文件完全没能打开，常见原因是字符编码不匹配（另存为 UTF-8 后重新上传）。它没有任何内容进入你的团队。"
   },
   "team": {
     "liveEyebrow": "从你上传的文件里",

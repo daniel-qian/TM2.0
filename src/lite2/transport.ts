@@ -231,6 +231,16 @@ export interface AskDraft {
 // 每公司「你的文件」薄清单：回看上传过哪些材料、Avery 的记忆基于什么。
 // 纯元数据（不含字节）；n_chunks = 该文件贡献的 material chunk 数（经 materials.source 前缀链接）。
 // 🔴 文件内容是不可信数据——此处只列/只显，绝不作指令跟随。
+// fixB/M4：后端每份文件都带 `status`，前端类型里一直没有这个键，界面也就永远不显示它。
+// 后果不是少一个徽章——是**读进去了和没读进去长得一模一样**：一份扫描版 PDF 一个字都没抽出来，
+// 和一份读全了的花名册在「你的文件」里像素级相同，headline 还照样说「Ingested 1 file(s)」。
+// 🔴 三个词的口径由后端 registry.SourceDocument.status 定，前端不得自行判定、不得改写：
+//   'ingested' 真读进去了并产出了引用 · 'empty' 解析成功但没抽到内容（扫描件/空表）
+//   'failed'   根本没解析成（编码不认、格式不认、库缺）
+// optional + 兜底 string：老后端不发这个键，stub transport 也不发——缺席时界面显示「未知」，
+// 绝不默认当成 ingested（"我没读到" 和 "客户说没有" 是两件事，这里是同一条纪律的下游）。
+export type LiveFileStatus = 'ingested' | 'empty' | 'failed'
+
 export interface LiveFileEntry {
   idx: number
   filename: string
@@ -239,6 +249,7 @@ export interface LiveFileEntry {
   doc_kind: string
   uploaded_at: string
   n_chunks: number
+  status?: LiveFileStatus | string
 }
 
 export interface LiveFilesPayload {
@@ -368,7 +379,12 @@ export function httpErrorMessage(name: string, res?: Response): string {
       ? `${name}: too many requests — wait ${wait}s and try again.`
       : `${name}: too many requests — wait a moment and try again.`
   }
-  if (status === 413) return `${name}: too much at once — the server caps 10 files, 10MB each.`
+  // fixB/M2：这里曾经写死「the server caps 10 files, 10MB each」——**两个数字都是错的**
+  // （真值 15 个文件 / 每个 8 MiB，见 avery/ingest/guards.py）。更糟的是单文件那个数字比真上限
+  // 还大，用户照着它压到 10MB 重试，永远撞同一堵墙。第三份副本已经删掉：真值只有服务端知道，
+  // 服务端在 413 的 body 里会说清楚（service/upload_guard.py 的 human_bytes 已经把它讲成人话），
+  // 由 withServerDetail() 原样转达。本函数只负责「哪一步、什么性质」，绝不复述任何上限数字。
+  if (status === 413) return `${name}: too much at once — the server refused this upload as over its limit.`
   if (status === 415 || status === 422)
     return `${name}: that file type isn't accepted, or its contents couldn't be read.`
   // 🔴 404 在已鉴权的读路径上几乎从不是"空"——是这台浏览器手里的 owner_token 缺失/过期，
@@ -377,6 +393,62 @@ export function httpErrorMessage(name: string, res?: Response): string {
     return `${name}: not found — your access token for this company is missing or stale (not "no data yet").`
   if (status >= 500) return `${name}: the server hit a problem (HTTP ${status}). Try again shortly.`
   return `${name} failed — HTTP ${status}.`
+}
+
+// ── fixB/B1+M2：把**服务端自己的说法**带到用户眼前 ────────────────────────────────────────
+//
+// 两条修复共用这一个出口，因为它们是同一个病：前端在替服务端编话。
+//   · M2：上限的真值只有服务端知道（guards.max_files/max_file_bytes）。前端复述 = 第三份副本 =
+//     迟早又错一次。服务端的 413 body 里已经写好人话上限，照抄即可。
+//   · B1：一份 GB18030 的花名册读不进去时，服务端现在会说「这份文件的字节在我们试过的编码里都
+//     不合法……请另存为 UTF-8」。这句诊断是用户唯一能自救的线索——它必须走到界面上，
+//     而不是被压成一句笼统的「that file type isn't accepted」。
+//
+// 🔴 body 里的内容（含文件名）是**不可信数据**：只当文本显示，绝不解析、绝不当指令。React 默认
+// 转义，再加长度截断防止一屏红字。读 body 失败一律吞掉——它只是锦上添花，绝不能把一次
+// 「服务端说了什么」的好奇心变成第二个错误。
+const SERVER_DETAIL_MAX = 400
+
+function pickDetailText(body: unknown): string | null {
+  if (typeof body === 'string') return body
+  if (!body || typeof body !== 'object') return null
+  const b = body as Record<string, unknown>
+  // FastAPI 的 HTTPException(detail=...) 包在 `detail` 下；ASGI 中间件直接发平铺的 {error, detail}。
+  const parts: string[] = []
+  const detail = b.detail
+  if (typeof detail === 'string') parts.push(detail)
+  else if (detail && typeof detail === 'object') {
+    const d = detail as Record<string, unknown>
+    for (const key of ['detail', 'reason']) {
+      if (typeof d[key] === 'string') parts.push(d[key] as string)
+    }
+    // 422「no parseable content」时，逐份文件的失败原因在这里——B1 的编码诊断就在其中。
+    if (Array.isArray(d.parse_errors)) {
+      parts.push(...d.parse_errors.filter((e): e is string => typeof e === 'string'))
+    }
+  } else if (typeof b.detail === 'undefined' && typeof b.error === 'string') {
+    parts.push(b.error)
+  }
+  const text = parts.join(' ').trim()
+  return text || null
+}
+
+/**
+ * 在传输层兜底文案后面，附上服务端自己给的解释（有就附，没有就算）。
+ * 🔴 会消耗 Response body，所以只在**失败路径**上调用（那条路径不会再读 body）。
+ */
+export async function withServerDetail(name: string, res: Response): Promise<string> {
+  const base = httpErrorMessage(name, res)
+  try {
+    const body = await res.json()
+    const detail = pickDetailText(body)
+    if (!detail) return base
+    const trimmed =
+      detail.length > SERVER_DETAIL_MAX ? `${detail.slice(0, SERVER_DETAIL_MAX)}…` : detail
+    return `${base} ${trimmed}`
+  } catch {
+    return base
+  }
 }
 
 // 429 的 Retry-After：规范允许「秒数」或「HTTP-date」两种写法。只认纯数字——不是数字就当没有
@@ -578,7 +650,10 @@ export function createHttpTransport(base: string = apiBase()): LiveTransport {
         body: form,
         headers: accountHeader(),
       })
-      if (!res.ok) throw new Error(httpErrorMessage('ingest', res))
+      // fixB/M2+B1：上传是唯一会撞上 413（超上限）/ 415（格式）/ 422（读不出内容，含编码失败）
+      // 的调用，也是唯一一处「服务端知道确切原因、用户照着就能自救」的地方。所以这条路径把
+      // 服务端的原话带出来，而不是只报一句分类。
+      if (!res.ok) throw new Error(await withServerDetail('ingest', res))
       const payload = (await res.json()) as LiveTeamPayload
       // feat-047: store this company's owner_token so every later read/advise can present it.
       rememberToken(payload.context_id, payload.owner_token)
@@ -651,21 +726,27 @@ export function createHttpTransport(base: string = apiBase()): LiveTransport {
 
     // ── 账号（feat-053）────────────────────────────────────────────────────────────────
     // 登录后恢复：本账号名下的 context id。未登录 → 后端 401 → 大声失败（不静默回落）。
+    // fixB/m5：这两个端点曾是全 transport 仅有的两处**裸 fetch**——绕开 send()，也就绕开了
+    // 「fetch 自己 reject 时没有 Response 可读」的那层包装。症状是：跨境/离线/混合内容被拦时
+    // 抛出的是浏览器原文（`Failed to fetch`），而 api base 配错这个最常见的部署事故在这里
+    // 完全说不出话。集成方修 ingest 那处时漏了这两个，一并收口——形状不变，只补错误文案。
     async fetchAccountContexts() {
-      const res = await fetch(`${base}/account/contexts`, { headers: accountHeader() })
-      if (!res.ok) throw new Error(`account contexts HTTP ${res.status}`)
+      const res = await send('account contexts', `${base}/account/contexts`, {
+        headers: accountHeader(),
+      })
+      if (!res.ok) throw new Error(httpErrorMessage('account contexts', res))
       return (await res.json()) as AccountContextsPayload
     },
 
     // 认领：把游客期建的 context 绑进本账号。owner_token 走 **body**——它是被交出的"标的"，
     // 不是授权本次调用的凭据（授权的是账号 header）。🔴 仍然绝不进 URL。
     async claimContext(contextId, ownerToken) {
-      const res = await fetch(`${base}/account/claim`, {
+      const res = await send('account claim', `${base}/account/claim`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...accountHeader() },
         body: JSON.stringify({ context_id: contextId, owner_token: ownerToken }),
       })
-      if (!res.ok) throw new Error(`account claim HTTP ${res.status}`)
+      if (!res.ok) throw new Error(httpErrorMessage('account claim', res))
     },
   }
 }

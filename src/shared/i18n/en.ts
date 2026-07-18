@@ -46,6 +46,22 @@ export const en = {
     // feat-032 — the per-company file space: a look-back list of what you uploaded (persists).
     filesTitle: 'Your files',
     filesChunks: 'references',
+    // fixB/M3 — the exact extensions the backend accepts (guards.SUPPORTED_EXTS). The line above
+    // says "Word, Excel", which the picker used to back with `.doc,.xls` — types the server has
+    // never supported, so they were selectable, uploadable, and guaranteed to 422. Naming the
+    // extensions is the only version of this a user can act on.
+    acceptedExts: '.pdf · .docx · .xlsx · .csv · .tsv · .md · .txt',
+    acceptedLegacyNote: 'Older .doc and .xls files need a Save As to the newer format first.',
+    // fixB/M4 — read or not read, per file. Without these a scanned PDF that yielded nothing looks
+    // exactly like a roster that came through whole.
+    fileStatusIngested: 'Read',
+    fileStatusEmpty: 'Nothing readable',
+    fileStatusFailed: "Couldn't read",
+    fileStatusUnknown: 'Status unknown',
+    fileStatusEmptyHint:
+      'This file opened but no text came out of it — a scan or an image-only export usually does this. Nothing from it reached your team.',
+    fileStatusFailedHint:
+      "This file couldn't be opened at all — often a character-encoding mismatch (save it as UTF-8 and upload again). Nothing from it reached your team.",
   },
 
   // ── Your team, live ───────────────────────────────────────────────────────
