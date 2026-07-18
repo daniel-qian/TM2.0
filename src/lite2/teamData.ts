@@ -7,6 +7,7 @@
 //   ② 指向人的信号停在"情境"（她在扛什么），不变成对人的负面标签。
 //   ③ 聚合数字 R2：真算或不显示，绝不编——briefing.metrics 直接来自 ingestion（人数/项目数真数）。
 
+import { getDict, resolveLocale, type Locale } from '../shared/i18n'
 import type { LivePersonCard, LiveProjectCard, LiveTeamPayload } from './transport'
 
 // 卡片左缘墨条的语气温度（与 shared CSS 的 home-tone-* 类同名）：
@@ -31,7 +32,18 @@ export interface LiteProject {
   id: string
   title: string
   ownerName: string
+  /**
+   * 🔴 **渲染用文案，不是判据。** 文档写了状态 → 原样是那个状态词（`on-track` / `blocked` …，
+   * 抽取层归一后的词，状态点与卡片边色都按它取色）；文档里没读到 → 本地化的「未读到状态」。
+   *
+   * 判断一律用 `statusRaw`。曾经这里写的是 `card.status ?? 'on-track'`：后端在 status 为空时
+   * **根本不发这个键**（registry.py 注释写着 "left absent (R2 don't invent)"）、决策层把它记进
+   * `unknown_fields` 并写「未读到：状态」，唯独这一行替客户补了一句「一切正常」。实测约四分之一
+   * 的项目命中，后果一路传到「多看一眼」——一句客户从没说过的话被加上引号，摆进「文件里的说法」。
+   */
   status: string
+  /** 文档自述的状态原值。**缺失就是缺失**（`undefined`），绝不兜底、绝不猜。 */
+  statusRaw?: string
   progress?: number // 可量化（文档写了就显）——项目可硬
   dueDate?: string
   summary?: string
@@ -106,32 +118,51 @@ function liveRead(card: LivePersonCard): { read: string; tone: LiteTone } {
   return { read: 'On the team', tone: 'sage' } // （无信号时的中性读数）
 }
 
-function liveHandoffs(payload: LiveTeamPayload): LiteHandoff[] {
+// 与 lite/lite2 各组件里同名 helper 同形（本仓一贯写法）。
+function fill(template: string, vars: Record<string, string>): string {
+  return template.replace(/\{(\w+)\}/g, (_, k: string) => vars[k] ?? '')
+}
+
+type HandoffCopy = Pick<
+  ReturnType<typeof getDict>['lite2'],
+  'handoffToneLabel' | 'handoffAction' | 'handoffEvidenceFallback' | 'handoffEvidenceTag'
+>
+
+function liveHandoffs(payload: LiveTeamPayload, copy: HandoffCopy): LiteHandoff[] {
   const out: LiteHandoff[] = []
   for (const pr of payload.projects) {
     const blockers = pr.blockers ?? []
     const atRisk = pr.status === 'at-risk' || pr.status === 'blocked'
     if (!atRisk && blockers.length === 0) continue
+    // 兜底 evidence 只在「没有阻塞原文、但状态自报有风险」时出现，所以 pr.status 一定有值；
+    // 仍然写 ?? '' 而不是 ?? 'worth a look'——真没有的时候宁可少一个词，也不替文档补一个。
     const evidence =
       blockers.length > 0
         ? blockers[0]
-        : `${pr.title} is flagged ${pr.status ?? 'worth a look'} in your uploads.`
+        : fill(copy.handoffEvidenceFallback, { title: pr.title, status: pr.status ?? '' })
     out.push({
       id: `lh_${pr.id}`,
       tone: pr.status === 'blocked' ? 'terracotta' : 'honey',
-      toneLabel: 'Worth a closer look', // （surface label per ADR-0015）
-      action: `Take a look at ${pr.title}`,
+      toneLabel: copy.handoffToneLabel, // （surface label per ADR-0015）
+      action: fill(copy.handoffAction, { title: pr.title }),
       evidence,
       personIds: pr.ownerId ? [pr.ownerId] : [],
       projectIds: [pr.id],
-      evidenceTag: 'From your uploads',
+      evidenceTag: copy.handoffEvidenceTag,
     })
   }
   return out
 }
 
 // 上传产出 → lite 屏幕数据。入口即剥净每张人卡的数字字段（红线）。
-export function liteTeamFromPayload(payload: LiveTeamPayload): LiteTeam {
+//
+// `locale` 默认现取（`resolveLocale()` 读 `?lang=` / 构建期 `VITE_AVERY_LOCALE`，与 useDict 同源；
+// 壳内没有运行时切换语言的入口，所以在映射期定文案与在渲染期定文案等价）。显式传入是给测试用的。
+export function liteTeamFromPayload(
+  payload: LiveTeamPayload,
+  locale: Locale = resolveLocale(),
+): LiteTeam {
+  const copy = getDict(locale).lite2
   const cleanPeople = payload.people.map(stripPersonNumbers)
 
   const people: LitePerson[] = cleanPeople.map((card) => {
@@ -149,19 +180,25 @@ export function liteTeamFromPayload(payload: LiveTeamPayload): LiteTeam {
     }
   })
 
-  const projects: LiteProject[] = payload.projects.map((card: LiveProjectCard) => ({
-    id: card.id,
-    title: card.title,
-    ownerName:
-      card.ownerName ??
-      cleanPeople.find((p) => p.id === card.ownerId)?.name ??
-      'Unassigned',
-    status: card.status ?? 'on-track',
-    progress: card.progress,
-    dueDate: card.dueDate,
-    summary: card.summary,
-    blockers: card.blockers,
-  }))
+  const projects: LiteProject[] = payload.projects.map((card: LiveProjectCard) => {
+    // 🔴 「我没读到」和「客户说没有」是两件事。空串也算没读到（后端只在有值时才发这个键，
+    // 但契约上 status?: string，收到 '' 同样不许被当成一个状态词）。
+    const statusRaw = card.status?.trim() ? card.status.trim() : undefined
+    return {
+      id: card.id,
+      title: card.title,
+      ownerName:
+        card.ownerName ??
+        cleanPeople.find((p) => p.id === card.ownerId)?.name ??
+        'Unassigned',
+      status: statusRaw ?? copy.projectStatusUnread,
+      statusRaw,
+      progress: card.progress,
+      dueDate: card.dueDate,
+      summary: card.summary,
+      blockers: card.blockers,
+    }
+  })
 
   const b = payload.briefing
   return {
@@ -169,7 +206,7 @@ export function liteTeamFromPayload(payload: LiveTeamPayload): LiteTeam {
     sourceFiles: payload.source_files ?? [],
     people,
     projects,
-    handoffs: liveHandoffs(payload),
+    handoffs: liveHandoffs(payload, copy),
     briefing: {
       tone: b.tone === 'alert' ? 'alert' : 'calm',
       headline: b.headline,

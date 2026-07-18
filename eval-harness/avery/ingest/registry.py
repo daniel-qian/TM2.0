@@ -201,16 +201,58 @@ class CompanyContext:
         return [d.to_dict() for d in grade_projects(self.project_cards(), self.signal_cards(),
                                                     as_of=as_of)]
 
-    def briefing(self) -> dict:
+    def briefing(self, as_of=None) -> dict:
         """A calm, HONEST 'organization weather' briefing. Counts are real (people/projects); it
-        emits NO invented aggregate health score (R2: real-or-nothing)."""
+        emits NO invented aggregate health score (R2: real-or-nothing).
+
+        🔴 The risk judgement is NOT this method's own. It is `avery.decision_grading` — the SAME
+        rule table (`avery/decision_rules.py`, human-readable twin `decision_grading_rules.md`) that
+        produces `decision_cards()`. Before 2026-07-18 this method carried a private, weaker rule
+        (`status in ("at-risk", "blocked")`) that read NEITHER blockers NOR signals, so a project
+        self-reporting on-track — or stating no status at all — while carrying an unresolved blocker
+        (i.e. the ENTIRE premise of the 「多看一眼」 surface, and a case the rule table already
+        models explicitly under its 「自报『正常』但挂着未解阻塞」 entry) fell straight through into
+        'No risk signals surfaced from the documents.' — a sentence printed directly beneath
+        'Everything below is drawn from your uploads — nothing invented.', while the very same
+        payload's decision_cards said 需确认 and listed the blocker. Two rule sets = the surface
+        contradicting itself one key apart. There is now exactly one.
+
+        Signals get counted too, and separately from the graded projects. Every SignalEntity the
+        extractor emits is a risk-shaped reading by construction (the four families: unresolved /
+        no sign-off / rework / interrupt), so a non-empty `signal_cards()` and the sentence 'no risk
+        signals' cannot both be true. Attribution of a signal to a project is a KNOWN blind spot of
+        `_match_signals` (documented there: it would rather miss than blanket-escalate) — the loose
+        ones therefore reach nobody's decision card, which is exactly why the briefing must not
+        swallow them. A signal is treated as ALREADY accounted for when its verbatim text shows up
+        in a flagged project's rule evidence; only the rest add to the count, so nothing is counted
+        twice. That check reads the graded output's public evidence, so it cannot drift from the
+        matcher the way a re-implemented attribution rule would.
+
+        `as_of` threads through to the date-sensitive rules (due dates) — pass it to reproduce a
+        briefing exactly; omitted means today, same convention as `decision_cards()`.
+        """
+        from ..decision_grading import grade_projects
+        from ..decision_rules import CAN_PROCEED
+
         n_people = len(self.extraction.people)
         n_proj = len(self.extraction.projects)
-        at_risk = [p for p in self.extraction.projects if p.status in ("at-risk", "blocked")]
+
+        signals = self.signal_cards()
+        decisions = grade_projects(self.project_cards(), signals, as_of=as_of)
+        flagged = [d for d in decisions if d.grade != CAN_PROCEED]
+        accounted = {ev for d in flagged for hit in d.matched_rules for ev in hit.evidence}
+        loose_signals = [s for s in signals
+                         if (str(s.get("summary") or "").strip()
+                             and str(s.get("summary")).strip() not in accounted)]
+        n_look = len(flagged) + len(loose_signals)
+
         metrics = [{"label": "people", "value": str(n_people)},
                    {"label": "active projects", "value": str(n_proj)}]
-        if at_risk:
-            metrics.append({"label": "need a look", "value": str(len(at_risk))})
+        if n_look:
+            # Label kept VERBATIM ('need a look'): src/shared/briefing.ts maps the ZH surface off
+            # this exact string, and its calm/risk branch is driven by whether this entry exists —
+            # so emitting it is what keeps the Chinese subhead from denying what the metrics show.
+            metrics.append({"label": "need a look", "value": str(n_look)})
         # feat-032 P2: reconcile with the file manifest. source_files counts only the PARSED docs;
         # source_documents counts everything UPLOADED (incl. parse-failures the manifest still shows).
         # Say "N of M" when they differ so the headline never claims fewer files than the manifest
@@ -219,10 +261,17 @@ class CompanyContext:
         n_uploaded = len(self.source_documents) or n_ingested
         files_phrase = f"{n_ingested} of {n_uploaded}" if n_uploaded != n_ingested else str(n_ingested)
         headline = f"Ingested {files_phrase} file(s): {n_people} people, {n_proj} projects."
-        subhead = ("Everything below is drawn from your uploads — nothing invented. "
-                   + (f"{len(at_risk)} project(s) worth a closer look." if at_risk
-                      else "No risk signals surfaced from the documents."))
-        return {"tone": "alert" if at_risk else "calm", "headline": headline, "subhead": subhead,
+        if not n_look:
+            tail = "No risk signals surfaced from the documents."
+        elif loose_signals:
+            # 'item(s)', not 'project(s)': part of this count is a signal that names no project, and
+            # calling it a project would be a small invention of exactly the kind this method exists
+            # to stop. The wording only changes in that case — the all-projects case is untouched.
+            tail = f"{n_look} item(s) worth a closer look."
+        else:
+            tail = f"{n_look} project(s) worth a closer look."
+        subhead = "Everything below is drawn from your uploads — nothing invented. " + tail
+        return {"tone": "alert" if n_look else "calm", "headline": headline, "subhead": subhead,
                 "metrics": metrics}
 
     # --- feat-032 file space (per-company uploaded-file manifest) ------------------------------

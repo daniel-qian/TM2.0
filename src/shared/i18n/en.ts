@@ -463,6 +463,21 @@ export const en = {
     handoffsEmpty: 'Nothing needs you right now — your uploads read steady.',
     handoffOpen: 'Open the project',
 
+    // fixA · the morning triage card's own copy (teamData.ts::liveHandoffs). It used to be four
+    // English literals inside the data mapper, so on the ZH build the whole card except the project
+    // name came out in English. EN wording is byte-identical to those literals — the EN build is
+    // visually unchanged.
+    handoffToneLabel: 'Worth a closer look',
+    handoffAction: 'Take a look at {title}',
+    handoffEvidenceFallback: '{title} is flagged {status} in your uploads.',
+    handoffEvidenceTag: 'From your uploads',
+
+    // fixA · a project whose documents state no status we could read. 🔴 It is NOT rendered as
+    // 'on-track' (that was a front-end invention: the backend deliberately omits the key, and the
+    // decision layer records it as 未读到) and NOT rendered blank. It says which of the two it is:
+    // we did not read a status — never that the customer's file failed to state one.
+    projectStatusUnread: 'no status read',
+
     // Triage three actions + the "Taken care of today" drawer
     triageRemaining: '{pending} of {total} still worth a look',
     triageDoneAria: 'Done — {action}',
