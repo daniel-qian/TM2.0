@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { useLite } from './store'
+import { useRouteDetail } from './routes'
 import { useDict } from '../shared/i18n/useDict'
 import { InitialAvatar } from './InitialAvatar'
 
@@ -11,7 +12,9 @@ import { InitialAvatar } from './InitialAvatar'
 
 export function DetailOverlay() {
   const { t } = useDict()
-  const detail = useLite((s) => s.detail)
+  // feat-051：详情由路由派生（`/team/:personId` · `/projects/:projectId`）——可深链、
+  // 可后退关闭、刷新还在。closeDetail 仍走 store（签名不变），内部推路由。
+  const detail = useRouteDetail()
   const team = useLite((s) => s.team)
   const rawTeam = useLite((s) => s.rawTeam)
   const closeDetail = useLite((s) => s.closeDetail)

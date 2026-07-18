@@ -1,6 +1,7 @@
 import { applyModeToUrl, useMode } from '../shared/modeStore'
 import { useDict } from '../shared/i18n/useDict'
 import { useLite, type LiteScreen } from './store'
+import { useCurrentScreen } from './routes'
 import { showModeSwitch, type AveryMode } from '../shared/mode'
 import { LiteBell } from './LiteBell'
 
@@ -11,7 +12,8 @@ import { LiteBell } from './LiteBell'
 // `.scene-tabs .scene-tab` 数 6 个 tab，铃铛不得混进去）；.lite-bell 在 lite2.css 里
 // 自己 pointer-events:auto 回来（同 .scene-tabs/.mode-switch 的规矩）。
 export function LiteTopbar() {
-  const screen = useLite((s) => s.screen)
+  // feat-051：高亮哪个 tab 由 URL 说了算（深链 `/team/:personId` 归到「你的团队」）。
+  const screen = useCurrentScreen()
   const goScreen = useLite((s) => s.goScreen)
   const mode = useMode((s) => s.mode)
   const setMode = useMode((s) => s.setMode)

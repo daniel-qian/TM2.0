@@ -17,6 +17,13 @@ import {
 } from './streamSource'
 import type { AdviseRequest } from './transport'
 import { liteTeamFromPayload, type LiteTeam } from './teamData'
+import {
+  navigateCloseDetail,
+  navigateToDetail,
+  navigateToScreen,
+  type LiteDetail,
+  type LiteScreen,
+} from './routes'
 
 // feat-017 的 liveStore 血统，feat-035（lite-live-v02 kickoff §架构拍板 1）copy-then-wall
 // 复制进 src/lite2/**，与 src/lite/store.ts 各自独立生长——lite ↔ lite2 零交叉 import。
@@ -36,23 +43,17 @@ export type IngestStatus = 'idle' | 'ingesting' | 'ready' | 'error'
 // 放在 Follow-ups 之后——本棒的 tab 顺序决定，见 progress.md）· A closer look（空态占位，
 // feat-037 真派生）· Playbooks（空态屏）· Vision/Where this goes（定位叙事 + 能力边界 mock）。
 // 详情是浮层不是 scene。
-export type LiteScreen =
-  | 'team'
-  | 'room'
-  | 'followups'
-  | 'notes'
-  | 'closerlook'
-  | 'playbooks'
-  | 'vision'
-
-export type LiteDetail = { kind: 'person' | 'project'; id: string } | null
+// feat-051：屏的枚举与详情形状挪到 routes.ts（那里是导航的唯一真相源，屏 ↔ 路径成对定义）。
+// 这里原样再导出一次——既有 import 点（notifyStore / LiteTopbar）不用改。
+export type { LiteScreen, LiteDetail }
 
 interface LiteState {
   transport: LiveTransport
 
   // ── lite 导航 ──
-  screen: LiteScreen
-  detail: LiteDetail
+  // feat-051：`screen` / `detail` 不再是 store 状态——当前屏与当前详情由 URL 派生
+  //（routes.ts 的 useCurrentScreen / useRouteDetail）。留在 store 里会变成第二份真相，
+  // 和后退键、刷新、深链三样各自打架。下面的 action 名字与签名保持不变，只是改成推路由。
 
   // ── Your team（feat-016 ingestion 产出）──
   ingestStatus: IngestStatus
@@ -84,7 +85,9 @@ interface LiteState {
   askError: string | null
 
   // ── actions ──
-  goScreen: (screen: LiteScreen) => void
+  // feat-051：`params` 可给目标屏叠加 query——feat-057 的决策卡走
+  // `goScreen('room', { q: '<问题>' })` 带着问题进议事室。省略即只切屏（既有 7 个调用点不变）。
+  goScreen: (screen: LiteScreen, params?: Record<string, string | null>) => void
   openDetail: (kind: 'person' | 'project', id: string) => void
   closeDetail: () => void
   setTransport: (transport: LiveTransport) => void // AFK 门注入确定性 stub
@@ -112,9 +115,6 @@ const defaultTransport = resolveTransport()
 export const useLite = create<LiteState>((set, get) => ({
   transport: defaultTransport,
 
-  screen: 'team',
-  detail: null,
-
   ingestStatus: 'idle',
   ingestError: null,
   team: null,
@@ -134,9 +134,13 @@ export const useLite = create<LiteState>((set, get) => ({
   askError: null,
 
   // 切屏消掉 Room 内的一次性 nudge（用户已离开事发现场；nudge 是瞬态感知，不是持久红点）。
-  goScreen: (screen) => set({ screen, detail: null, noteJustAdded: false }),
-  openDetail: (kind, id) => set({ detail: { kind, id } }),
-  closeDetail: () => set({ detail: null }),
+  // feat-051：切屏本身交给路由（导航自带「离开详情」的语义，不必再手动清 detail）。
+  goScreen: (screen, params) => {
+    set({ noteJustAdded: false })
+    navigateToScreen(screen, params)
+  },
+  openDetail: (kind, id) => navigateToDetail(kind, id),
+  closeDetail: () => navigateCloseDetail(),
 
   setTransport: (transport) =>
     set({ transport, agentSource: createLiveAgentSource(transport) }),
