@@ -10,6 +10,8 @@
 //
 // LLM key 绝不触碰前端（ADR-0020 决策 4）：live mode 一律走 HTTP 到 feat-015 服务。
 
+import { currentAccessToken } from './auth/authStore'
+
 // ── SSE 事件（feat-015 /advise 契约，见 service/engine.py::stream_advice）───────────────
 export type LiveAgentEventType =
   | 'started'
@@ -77,6 +79,10 @@ export interface LiveTeamPayload {
   // 🔴 只走 header，绝不进 URL（URL 会进 Referer/access log/CDN log/浏览器历史）。
   // /team/{id} 刷新帧不回传此字段（那次调用本就已用 token 证过身）。
   owner_token?: string
+  // feat-053：上传时已登录 → 后端当场把这份 context 绑到该账号，并在 /ingest 首帧回传结果。
+  // 未登录上传时后端根本不发这个键（不是 false，是缺席）。/team/{id} 刷新帧同样没有。
+  // UI 据此判断"这份数据到底归没归到账号名下"，别对着已绑好的数据说"还没绑"。
+  account_linked?: boolean
 }
 
 // 人卡：定性 ONLY。🔴 红线：moodPct/capacityPct 等血条字段 live 永不出现——
@@ -283,6 +289,21 @@ export interface LiveTransport {
 
   // feat-047 移植：按 context_id 拉取「Avery's notes」累积笔记（feat-033；只读、新→旧、重启后仍在）。
   fetchNotes: (contextId: string) => Promise<LiveNotesPayload>
+
+  // ── 账号（feat-053）。可选实现：stub transport 不提供，调用方须判空 ──────────────────
+  // 🔴 可选（`?:`）是刻意的——LiveTransport 有第二个实现（stubTransport，AFK 门/离线演示），
+  // 加必填方法会让它编译不过。账号是**联网后端能力**，stub 天然没有，判空即降级成游客。
+  // 本账号登记在案的公司 context（登录后恢复用）。
+  fetchAccountContexts?: () => Promise<AccountContextsPayload>
+  // 把匿名 context 认领进本账号（凭 owner_token 证明所有权）。
+  claimContext?: (contextId: string, ownerToken: string) => Promise<void>
+}
+
+// ── 账号契约（feat-053；后端 service/auth_api.py）────────────────────────────────────────
+// GET /account/contexts —— 只回本账号拥有的 context id，不回 owner_token
+//（账号已授权的调用方不需要 token，把长效凭据经 API 发回来正是 token 进日志的路径）。
+export interface AccountContextsPayload {
+  context_ids: string[]
 }
 
 // 服务基址：默认打本机 feat-015 服务；部署端经 VITE_AVERY_API_BASE 覆盖。
@@ -380,6 +401,20 @@ function retryAfterSeconds(res: Response): number | null {
 const TOKEN_STORE_KEY = 'lite2:ownerTokens:v1'
 export const OWNER_TOKEN_HEADER = 'X-Avery-Token'
 
+// ── feat-053 账号凭据 header ──────────────────────────────────────────────────────────────
+// 🔴 与 owner_token **分开两个 header**，刻意不复用 `Authorization: Bearer`——那个已经被
+// feat-038 的 owner_token 占了，一个 header 塞两种凭据 = 带 A 的调用方被当成 B 校验。
+// 两种凭据，两个 header，服务端各查各的（service/account.py 的同一条注释）。
+// 未登录 → 不发这个 header（游客路径原样走 owner_token，行为零变化）。
+export const ACCOUNT_TOKEN_HEADER = 'X-Avery-Account'
+
+// 直接读 authStore 的内存 token（不落我们自己的 localStorage——supabase-js 已在管持久化，
+// 再存一份就是多一个会失效、会泄漏的凭据副本）。未登录/未配置 → null → 不带 header。
+function accountHeader(): Record<string, string> {
+  const tok = currentAccessToken()
+  return tok ? { [ACCOUNT_TOKEN_HEADER]: tok } : {}
+}
+
 function loadTokenStore(): Record<string, string> {
   try {
     if (typeof localStorage === 'undefined') return {}
@@ -399,20 +434,58 @@ function persistTokenStore(store: Record<string, string>): void {
   }
 }
 
+// 🔴 模块级单份，不放进 createHttpTransport 的闭包（feat-053 复核 finding 1）。
+// 两个理由：① 多个 transport 实例本来就读写同一个 localStorage key，各持一份内存副本
+// 只会互相覆盖；② 更要命的是闭包私有副本**清不掉**——登出时把 localStorage 抹了，
+// 已建好的 transport 手里那份仍在，authHeader 继续发上一个账号的 owner_token。
+let tokenCache: Record<string, string> | null = null
+
+function tokenStore(): Record<string, string> {
+  if (!tokenCache) tokenCache = loadTokenStore()
+  return tokenCache
+}
+
+/**
+ * feat-053 · 抹掉本机存着的**全部** owner_token（内存 + localStorage）。
+ *
+ * 登出/换账号时调用。登出的语义是"这台浏览器上不再留我的凭据"——只清手上那一条的话，
+ * 早先几次上传留下的 token 仍躺在 localStorage 里，仍然是活的读权限。
+ * 代价（有意承担）：游客期传过、又始终没点"绑定到我的账号"的 context，登出后就找不回来了。
+ * 共享浏览器不该留下活凭据；面板里的绑定按钮就是留住它们的正路。
+ *
+ * 🔴 游客路径不受影响：游客从不登出，这个函数在游客会话里永远不会被调用。
+ */
+export function forgetAllOwnerTokens(): void {
+  tokenCache = {}
+  try {
+    if (typeof localStorage === 'undefined') return
+    localStorage.removeItem(TOKEN_STORE_KEY)
+  } catch {
+    /* private-mode — 内存那份已经空了，本会话不会再发出去 */
+  }
+}
+
 // ── 真 HTTP/SSE 传输（浏览器 fetch + 流式解析）──────────────────────────────────────────
 // 用 fetch + ReadableStream 手解 SSE（而非 EventSource）：POST body + Abort 都需要，EventSource 只支持 GET。
 export function createHttpTransport(base: string = apiBase()): LiveTransport {
   // Per-context owner_token map, seeded from localStorage so a page reload keeps the credential.
-  const tokens: Record<string, string> = loadTokenStore()
+  // 🔴 每次都经 tokenStore() 现取，绝不在这里 `const tokens = tokenStore()` 存进闭包——
+  // 那样 forgetAllOwnerTokens() 换掉模块级引用后，这里握着的还是登出前那份（finding 1 的成因）。
   const rememberToken = (contextId: string | undefined, token: string | undefined): void => {
     if (!contextId || !token) return
+    const tokens = tokenStore()
     tokens[contextId] = token
     persistTokenStore(tokens)
   }
   // 🔴 header-only：给某 context 的读/写调用附上 owner_token（有则带，无则空），绝不进 URL。
+  // feat-053：同时带上账号 token（已登录才有）。两个凭据互为备份而非互斥——
+  // 服务端任一成立即放行（authorize_context 先看账号，再看 owner_token），所以
+  //   · 游客：只有 owner_token → 原样工作
+  //   · 换设备登录：只有账号 token → 服务端按 user 查到 context 再放行
+  //   · 本机已登录：两个都有 → 任一成立即可
   const authHeader = (contextId: string | undefined): Record<string, string> => {
-    const tok = contextId ? tokens[contextId] : undefined
-    return tok ? { [OWNER_TOKEN_HEADER]: tok } : {}
+    const tok = contextId ? tokenStore()[contextId] : undefined
+    return { ...(tok ? { [OWNER_TOKEN_HEADER]: tok } : {}), ...accountHeader() }
   }
   // feat-047 打回复验：askId → company_context_id（saveAsk 成功时记下），share/fetch 据此带
   // owner_token header。进程内即可——ask 卡与 run 同生命周期，刷新后重新走 saveAsk。
@@ -487,7 +560,15 @@ export function createHttpTransport(base: string = apiBase()): LiveTransport {
     async ingest(files) {
       const form = new FormData()
       for (const f of files) form.append('files', f, f.name)
-      const res = await send('ingest', `${base}/ingest`, { method: 'POST', body: form })
+      // feat-053：上传**不要求**登录（游客路径是硬要求，登录墙会作废整条演示链）。
+      // 已登录时带上账号 header，服务端顺手把新 context 绑到账号，省掉一次认领。
+      // feat-068 的 send() 包装必须保留：ingest 真要 100–120 秒（后端在法兰克福、LLM 在国内），
+      // 那层带跨境重试与统一错误文案。裸 fetch 会把部署线刚修好的等待态又打回去。
+      const res = await send('ingest', `${base}/ingest`, {
+        method: 'POST',
+        body: form,
+        headers: accountHeader(),
+      })
       if (!res.ok) throw new Error(httpErrorMessage('ingest', res))
       const payload = (await res.json()) as LiveTeamPayload
       // feat-047: store this company's owner_token so every later read/advise can present it.
@@ -557,6 +638,25 @@ export function createHttpTransport(base: string = apiBase()): LiveTransport {
       })
       if (!res.ok) throw new Error(httpErrorMessage('notes', res))
       return (await res.json()) as LiveNotesPayload
+    },
+
+    // ── 账号（feat-053）────────────────────────────────────────────────────────────────
+    // 登录后恢复：本账号名下的 context id。未登录 → 后端 401 → 大声失败（不静默回落）。
+    async fetchAccountContexts() {
+      const res = await fetch(`${base}/account/contexts`, { headers: accountHeader() })
+      if (!res.ok) throw new Error(`account contexts HTTP ${res.status}`)
+      return (await res.json()) as AccountContextsPayload
+    },
+
+    // 认领：把游客期建的 context 绑进本账号。owner_token 走 **body**——它是被交出的"标的"，
+    // 不是授权本次调用的凭据（授权的是账号 header）。🔴 仍然绝不进 URL。
+    async claimContext(contextId, ownerToken) {
+      const res = await fetch(`${base}/account/claim`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...accountHeader() },
+        body: JSON.stringify({ context_id: contextId, owner_token: ownerToken }),
+      })
+      if (!res.ok) throw new Error(`account claim HTTP ${res.status}`)
     },
   }
 }

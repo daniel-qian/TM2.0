@@ -3154,4 +3154,184 @@
     width: 100%;
     opacity: 0.3;
   }
+/* ── feat-053 账号入口（LiteTopbar 内，LiteBell 旁；.prototype-topbar 是
+   pointer-events:none 容器，同 .scene-tabs/.lite-bell 的规矩自己 auto 回来）────────── */
+.lite2-shell .lite-auth {
+  position: relative;
+  pointer-events: auto;
+}
+
+.lite2-shell .lite-auth-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--lite2-glass);
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.lite2-shell .lite-auth-toggle:hover,
+.lite2-shell .lite-auth-toggle:focus-visible {
+  border-color: var(--rule-strong);
+  color: var(--ink);
+  outline: none;
+}
+
+.lite2-shell .lite-auth-pop {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 90;
+  width: min(300px, 88vw);
+  border: 1px solid var(--rule-strong);
+  border-radius: 14px;
+  background: var(--lite2-surface);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.lite2-shell .lite-auth-head {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.lite2-shell .lite-auth-title {
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.lite2-shell .lite-auth-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+}
+
+.lite2-shell .lite-auth-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.lite2-shell .lite-auth-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink-faint);
+}
+
+.lite2-shell .lite-auth-field input {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: var(--lite2-glass);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+}
+
+.lite2-shell .lite-auth-field input:focus-visible {
+  border-color: var(--rule-strong);
+  outline: none;
+}
+
+.lite2-shell .lite-auth-hint {
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+
+.lite2-shell .lite-auth-submit {
+  padding: 8px 12px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 999px;
+  background: rgba(var(--lite2-accent-rgb), 0.12);
+  color: var(--ink);
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.lite2-shell .lite-auth-submit:hover:not(:disabled),
+.lite2-shell .lite-auth-submit:focus-visible:not(:disabled) {
+  background: rgba(var(--lite2-accent-rgb), 0.2);
+  outline: none;
+}
+
+.lite2-shell .lite-auth-submit:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.lite2-shell .lite-auth-secondary,
+.lite2-shell .lite-auth-switch {
+  align-self: flex-start;
+  border: none;
+  background: transparent;
+  padding: 2px 0;
+  color: var(--sage);
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.lite2-shell .lite-auth-secondary:hover,
+.lite2-shell .lite-auth-secondary:focus-visible,
+.lite2-shell .lite-auth-switch:hover,
+.lite2-shell .lite-auth-switch:focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  outline: none;
+}
+
+.lite2-shell .lite-auth-who {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+}
+
+.lite2-shell .lite-auth-who-label {
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+
+.lite2-shell .lite-auth-who-email {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.lite2-shell .lite-auth-claim {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  background: var(--lite2-glass);
+}
+
+.lite2-shell .lite-auth-note {
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.lite2-shell .lite-auth-error {
+  margin: 0;
+  color: var(--terracotta);
+  font-size: 11.5px;
+  line-height: 1.5;
 }
