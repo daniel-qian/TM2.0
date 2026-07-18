@@ -449,6 +449,102 @@
       ],
       "status": "done",
       "evidence": "与 feat-048 同批落地(commit 0b6f5c2，文件 parse.py / extract.py / tests/test_cjk_zh_headers.py)。实测列序颠倒的中文花名册(姓名|部门|职位)能正确解析 role/team。门与 feat-048 的 CJK 门同跑：370 passed。"
+    },
+    {
+      "id": "feat-050",
+      "name": "会话不丢（contextId 恢复）",
+      "description": "刷新丢全部团队数据：store.ts 的 contextId 初始化为 null 且不从 localStorage 恢复。存住 contextId，加载时按它走 /team/{id} 重拉。",
+      "dependencies": [],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "feat-051",
+      "name": "路由化（react-router + 深链）",
+      "description": "把 Zustand screen 变量换成真路由。7 屏 + /team/:personId + /projects/:projectId + /room?q= + ?showInactive=1。不破坏既有 ?v=2&mode=live&skin=paper&lang=zh。",
+      "dependencies": [],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "feat-052",
+      "name": "统一 modal 基座",
+      "description": "单例 modal（背景点击/Esc 关闭、滚动锁、动画），收敛 DetailOverlay / OnboardWizard。为草稿框/项目详情/人卡详情铺底。",
+      "dependencies": [],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "feat-053",
+      "name": "账号体系（Supabase auth）",
+      "description": "Supabase auth 邮箱+密码；注册/登录/登出/会话恢复。Supabase user → 公司 context_id，owner_token 保留在下层不动。不做多角色/邀请/SSO。",
+      "dependencies": [],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "feat-054",
+      "name": "抽取粒度门（项目粒度收敛）",
+      "description": "LLM 把里程碑当项目，三亚 seed 抽出 17 个（应有约 6）。加粒度门收敛；同源查 H4 中文项目轴幽灵 5 条 strict xfail（非 CJK bug，结构性）。",
+      "dependencies": [],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "feat-055",
+      "name": "项目屏（整屏新建）",
+      "description": "独立项目看板 + /projects/:id 详情。必须显式「未知」态：dueDate 7/17、progress 6/17 覆盖，缺失不得渲染成 0%。",
+      "dependencies": [
+        "feat-051",
+        "feat-052",
+        "feat-054"
+      ],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "feat-056",
+      "name": "决策定级（规则 + Avery 理由）",
+      "description": "规则算三档（高风险/需确认/可推进）+ Avery 写理由；允许上调不许下调；口径落可读配置不埋 prompt。",
+      "dependencies": [],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "feat-057",
+      "name": "聚合首屏 +「今天要决策的」",
+      "description": "聚合入口屏四块摘要，7 个分屏全部保留为深入面。每个数字都要能追到真数据源，不得写死。",
+      "dependencies": [
+        "feat-056"
+      ],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "feat-058",
+      "name": "应用内草稿框",
+      "description": "「起草消息」现为裸 mailto。改为应用内草稿框：正文可编辑、复制到聊天应用为主出口、完成真写进跟进队列。",
+      "dependencies": [
+        "feat-052"
+      ],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "feat-059",
+      "name": "议事室简化输出",
+      "description": "LiteTerminal 逐行原样打流事件（英文脚手架+facts.md 转储）。默认简化视图（四相叙事）+「展开原始流」。净新增，非照抄。",
+      "dependencies": [],
+      "status": "not-started",
+      "evidence": ""
+    },
+    {
+      "id": "feat-060",
+      "name": "红线补漏（name 字段 + _NEG 否定词）",
+      "description": "name 字段未扫红线（文件名兜底能把人命名成「绩效8分」）；_NEG 其他否定词同类洞（当时只修了「别」）。",
+      "dependencies": [],
+      "status": "not-started",
+      "evidence": ""
     }
   ]
 }
