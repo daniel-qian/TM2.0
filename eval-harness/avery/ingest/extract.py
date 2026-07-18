@@ -696,12 +696,39 @@ def _norm_team(raw: str) -> str:
     return text
 
 
-def _norm_status(text: str) -> str:
+# Chinese status vocabulary. THE ENGLISH-ONLY VERSION OF THIS FUNCTION COLLAPSED THE WHOLE
+# GRADING LADDER ON CHINESE DOCUMENTS (feat-056 review, finding 2). Two of the three companies
+# in this wave hand us Chinese weekly reports, where 「状态：进行中」 is the normal way to write
+# it. Every one of those normalised to "" and two things followed downstream:
+#   1. decision_grading's can_proceed rules (_m_done / _m_clear) BOTH require a normalised English
+#      status, so no project in a Chinese-only document could ever reach 可推进 — the three-tier
+#      ladder silently collapsed to two, which is precisely the partner-parity target we were
+#      aligning to.
+#   2. the project fell through to the no-evidence rule, whose reason text told the manager the
+#      document never stated a status — while his own report says 进行中 in plain sight.
+# Chinese has no word boundaries, so these are substring matches; the negative lookbehinds are
+# what keep 未完成 / 没完成 / 待完成 out of "done" and 无风险 / 没风险 out of "at-risk".
+# 🔴 Precedence is deliberately risk-first (blocked > at-risk > done > on-track), matching the
+# English arm: when a line supports two readings, take the one that gets the project LOOKED AT.
+_ZH_BLOCKED = r"受阻|已阻断|阻塞|卡住|停滞|停工|中止|搁置|无法推进|推不动"
+_ZH_AT_RISK = r"(?<![无没])风险|延期|逾期|滞后|落后|推迟|拖期|告急|吃紧|超期"
+_ZH_DONE = r"(?<![未没待])完成|已交付|已上线|已结项|已验收|验收通过"
+_ZH_ON_TRACK = r"进行中|推进中|(?<![不异])正常|按计划|如期|顺利|在轨"
+
+
+def _norm_status(text: str, *, risk_only: bool = False) -> str:
     """Normalize a stated status onto on-track|at-risk|blocked|done, or '' when the document does not
     state one we can read honestly.
 
-    feat-054 adds the Chinese vocabulary. It is PURELY ADDITIVE — every ASCII branch below is
-    untouched and runs first, so English output cannot move.
+    The Chinese vocabulary is PURELY ADDITIVE — every ASCII branch below is untouched and runs
+    first, so English output cannot move.
+
+    `risk_only=True` suppresses the two POSITIVE readings. It is for the whole-document fallback
+    (no 'Status:' line anywhere, so we are scanning prose). Downgrading a project on prose is not
+    symmetric with escalating it: the grading rules require an EXPLICIT positive self-report to
+    hand out 可推进, and the word 正常 happening to appear somewhere in a weekly report is not that
+    project stating it is fine. Reading risk out of prose stays on, because there the bias points
+    at getting a second look.
 
     ONE WORD IS DELIBERATELY LEFT UNMAPPED: 「待确认」 (pending confirmation), which the first
     customer's weekly uses for two of its six projects. It is tempting to call it at-risk, and that
@@ -721,23 +748,21 @@ def _norm_status(text: str) -> str:
     this actually produces.
     """
     t = text.lower()
-    if re.search(r"\bblocked\b", t):
+    if re.search(r"\bblocked\b", t) or re.search(_ZH_BLOCKED, t):
         return "blocked"
-    if re.search(r"\bat[\s-]?risk\b|behind|slipping|delayed", t):
+    if re.search(r"\bat[\s-]?risk\b|behind|slipping|delayed", t) or re.search(_ZH_AT_RISK, t):
         return "at-risk"
-    if re.search(r"\b(done|shipped|complete|launched)\b", t):
+    if risk_only:
+        return ""
+    if re.search(r"\b(done|shipped|complete|launched)\b", t) or re.search(_ZH_DONE, t):
         return "done"
-    if re.search(r"\bon[\s-]?track\b|on schedule", t):
+    if re.search(r"\bon[\s-]?track\b|on schedule", t) or re.search(_ZH_ON_TRACK, t):
         return "on-track"
-    # Chinese — checked most-severe first, same precedence as the ASCII ladder above.
-    if re.search(r"受阻|阻塞|卡住|已阻断", text):
-        return "blocked"
-    if re.search(r"有风险|风险|落后|滞后|延期|逾期|告急", text):
-        return "at-risk"
-    if re.search(r"已完成|已交付|已上线|已结项", text):
-        return "done"
-    if re.search(r"正常|按计划|在轨|推进中|进行中", text):
-        return "on-track"
+    # 054 and 056 each grew a Chinese ladder independently and the merge stacked them. The second
+    # one is DELETED, not kept "for safety": it ran after this point with NO negative lookbehinds,
+    # so 「无风险」 matched 风险 → at-risk and 「未完成」 matched 完成 → done. Every word it carried
+    # is covered above (受阻 / 已阻断 were the only two missing and are now in _ZH_BLOCKED), and
+    # the surviving ladder is the one that reads negation correctly.
     return ""
 
 
@@ -920,25 +945,35 @@ class HeuristicExtractor:
             m = re.match(r"^(owner|lead|dri)\s*[:\-]\s*(.+)$", s, re.I)
             if m:
                 owner = m.group(2).strip()
-            m = re.match(r"^(?:负责人|主负责人|负责|责任人|牵头人)\s*[：:]\s*(.+)$", s)
+            # The Chinese label lines. 054 and 056 each grew their own set independently; this is
+            # the UNION of both vocabularies. They stay separate patterns rather than extra
+            # alternatives bolted onto the English ones, because they REQUIRE a colon:
+            # 「截止」「负责」 are ordinary words that start ordinary sentences, and an optional
+            # separator would let 「截止到目前为止…」 be read as a due date. The English arms keep
+            # their optional separator so nothing about their behaviour changes.
+            m = re.match(r"^(?:负责人|主负责人|项目负责人|责任人|牵头人|负责)\s*[:：]\s*(.+)$", s)
             if m:
                 owner = m.group(1).strip()
             m = re.match(r"^status\s*[:\-]\s*(.+)$", s, re.I)
             if m:
                 status = _norm_status(m.group(1)) or status
-            m = re.match(r"^(?:自报状态|当前状态|状态|项目状态)\s*[：:]\s*(.+)$", s)
+            # 状态 / 进展 + colon: the Chinese label line. Without it the only thing that could
+            # see 「状态：进行中」 was the whole-document fallback below, which is risk_only and so
+            # can never return the positive reading the line actually states.
+            m = re.match(r"^(?:自报状态|当前状态|项目状态|状态|进展)\s*[:：]\s*(.+)$", s)
             if m:
                 status = _norm_status(m.group(1)) or status
             m = re.search(r"\bprogress\s*[:\-]?\s*(\d{1,3})\s*%", s, re.I)
             if m:
                 progress = max(0, min(100, int(m.group(1))))
-            m = re.match(r"^(?:进度|完成度|完成率)\s*[：:]\s*(\d{1,3})\s*%", s)
+            m = re.match(r"^(?:进度|完成度|完成率)\s*[:：]?\s*(\d{1,3})\s*%", s)
             if m:
                 progress = max(0, min(100, int(m.group(1))))
             m = re.match(r"^(due|deadline|ship(?:s|ping)?)\s*[:\-]?\s*(.+)$", s, re.I)
             if m:
                 due = m.group(2).strip()
-            m = re.match(r"^(?:截止/关键节点|截止日期|截止|交付日期|关键节点|deadline)\s*[：:]\s*(.+)$", s)
+            m = re.match(r"^(?:截止/关键节点|截止日?期?|到期日?|交付日期|关键节点|上线时间|完成时间)"
+                         r"\s*[:：]\s*(.+)$", s)
             if m:
                 due = m.group(1).strip()
             m = re.match(r"^(summary|overview|goal)\s*[:\-]\s*(.+)$", s, re.I)
@@ -957,10 +992,16 @@ class HeuristicExtractor:
         if not title:
             title = re.sub(r"\.[a-z0-9]+$", "", doc.name).replace("_", " ").strip()
         if not status:
-            # Sniffing the WHOLE document for a status only makes sense when the document is about
-            # one project; across a segmented weekly it would smear project 3's 「受阻」 onto all six.
+            # Two independent guards on the same fallback, one from each line — both kept:
+            # 054: sniffing the WHOLE document for a status only makes sense when the document is
+            #      about one project; across a segmented weekly it would smear project 3's
+            #      「受阻」 onto all six. So scope the sniff to this project's own span.
+            # 056: risk_only, because this is PROSE, not a self-report. Escalating on prose is
+            #      fine (bias points at a second look); handing out 可推进 because the word 正常
+            #      happens to appear somewhere in the weekly is not.
             status = _norm_status(doc.text if whole_doc
-                                  else "\n".join(doc.lines[lo:min(hi, len(doc.lines))]))
+                                  else "\n".join(doc.lines[lo:min(hi, len(doc.lines))]),
+                                  risk_only=True)
         if not summary:
             first = next((doc.lines[i].strip() for i in range(lo, min(hi, len(doc.lines)))
                           if doc.lines[i].strip() and not doc.lines[i].strip().startswith("#")), "")
