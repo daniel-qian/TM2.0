@@ -26,6 +26,11 @@ import type { Dict } from "./index";
 //  M3 calls (script reused zh.lite's already-approved translation verbatim since the key names
 //  match byte-for-byte; see scripts/i18n-zh-lite2-delta.mjs's sharedKeys logic). Danny 审字
 //  inherits from the original feat-033 hand-written note above (same source strings).
+// ⚠ HAND-WRITTEN DRAFT, NOT YET M3 (feat-068): upload.ingestingHint / upload.ingestingElapsed /
+//  lite2.onboardUploadHint / lite2.onboardUploadElapsed —— ingest 真等待态（100–120s）的等待预期
+//  文案，本轮先落草稿保证上线不缺字；按 memory:chinese-copy-via-m3 仍需一次 M3 定稿
+//  （建议走定向模式 `node scripts/i18n-zh.mjs upload lite2`，别全量重跑——会重译已锁定的
+//  story 共享段，正是 kickoff 警告的 drift + token 风险）。源 key 在 en.ts。
 export const zh: Dict = {
   "mode": {
     "storyLabel": "演示",
@@ -42,6 +47,8 @@ export const zh: Dict = {
     "choose": "选择文件",
     "accepted": "支持 PDF、Word、Excel、CSV、Markdown 或文本",
     "ingestingLabel": "正在读取文件…",
+    "ingestingHint": "通常需要 1–2 分钟。它在逐页通读每一份文件，而不只是把文件收进来 —— 慢就慢在这一步，下面长出来的团队也正因为这一步才值得看。请保持本页打开。",
+    "ingestingElapsed": "已用 {seconds} 秒",
     "readyLabel": "团队已就绪",
     "errorLabel": "无法读取这些文件",
     "retry": "重试",
@@ -334,6 +341,8 @@ export const zh: Dict = {
     "onboardUploadBody": "把你第一天会交给新经理的东西交给 Avery —— 一份人员名单、一份项目计划、一份周记。你的团队会从这里长出来。可以跳过，稍后从「你的团队」里上传。",
     "onboardUploadChoose": "选择文件",
     "onboardUploadReading": "正在读取文件…",
+    "onboardUploadHint": "通常需要 1–2 分钟 —— 它在逐页通读，而不只是记下文件名。这期间可以先进行下一步。",
+    "onboardUploadElapsed": "已用 {seconds} 秒",
     "onboardUploadReady": "团队已就绪",
     "onboardUploadError": "没能读取这些文件 —— 再试一次，或者先跳过、稍后再上传。",
     "onboardUploadIdle": "还没上传文件 —— 这一步可以跳过。",

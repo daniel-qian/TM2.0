@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ChangeEvent } from 'react'
+import { useEffect, useRef, useState, type ChangeEvent } from 'react'
 import { useLite } from './store'
 import {
   ONBOARD_STEPS,
@@ -28,6 +28,32 @@ const ACCEPT = '.pdf,.docx,.doc,.xlsx,.xls,.csv,.md,.markdown,.txt'
 
 function fill(template: string, vars: Record<string, string | number>): string {
   return template.replace(/\{(\w+)\}/g, (_, k: string) => String(vars[k] ?? ''))
+}
+
+// feat-068 · 活的秒表（与 lite2/UploadPanel 同源，按本仓 v01→v02 各留一份的惯例复制）。
+//
+// ingest 真实耗时 100–120s（后端法兰克福 / LLM 国内，跨境往返）。向导是首访 v02 用户的
+// 主上传路径，这两分钟里必须有可见证据说明"没冻"——否则用户判定卡死、去戳按钮，就落进
+// 下面 StepUpload 注释里那条数据毁灭链。
+//
+// 刻意不做百分比进度条：服务端 /ingest 不吐任何进度信号，假进度条只会卡在 90% 一动不动。
+//
+// 生命周期：interval 只在 active（ingesting）期间存在。active 翻 false 时 effect cleanup
+// 立即清掉；向导被 × / Escape / Skip 关掉时整个组件 unmount，同一个 cleanup 也会跑
+// ——两条路都不留悬挂定时器（与上面 Escape 监听器的注销纪律同源）。
+function useElapsedSeconds(active: boolean): number {
+  const [seconds, setSeconds] = useState(0)
+  useEffect(() => {
+    if (!active) return
+    setSeconds(0)
+    const startedAt = Date.now()
+    // 用 Date.now() 差值而非 count++：后台标签页会节流 setInterval，累加法会越走越慢说谎。
+    const id = window.setInterval(() => {
+      setSeconds(Math.floor((Date.now() - startedAt) / 1000))
+    }, 1000)
+    return () => window.clearInterval(id)
+  }, [active])
+  return seconds
 }
 
 export function OnboardWizard() {
@@ -152,10 +178,32 @@ function StepUpload() {
   const ingestError = useLite((s) => s.ingestError)
   const inputRef = useRef<HTMLInputElement | null>(null)
 
+  // feat-068 · ingesting 期间这一步整体上锁。
+  const busy = ingestStatus === 'ingesting'
+  const elapsed = useElapsedSeconds(busy)
+
   const onPick = (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? [])
     if (files.length > 0) void uploadFiles(files)
     event.target.value = ''
+  }
+
+  // feat-068 · 🔴 重入闸——这不是打磨，是数据毁灭级的 correctness 修复。
+  //
+  // 事发链：/ingest 真的要 100–120s；在此之前这两分钟屏幕上只有一行静态字，用户判定卡死 →
+  // 再点一次"选择文件"。这颗按钮既没有 disabled、也不在 .lite-onboard 的任何 busy 遮罩下
+  // （UploadPanel 的 .upload-dropzone.is-busy{pointer-events:none} 只覆盖那边的 dropzone，
+  // 管不到向导），store.uploadFiles 也没有重入保护——于是每一次点击都真的再打一发 POST /ingest。
+  //
+  // 后果：每发各自新铸一个 context_id 和一个 owner_token；后落地的那发覆盖 store，先前那个
+  // owner_token 服务端只返一次、客户端已被覆盖 = 永久丢失，那份公司数据从此无人能认领。
+  // 一分钟点四下还会撞穿 10/min burst-3 限流吃 429。
+  //
+  // 本波只在 UI 层封口（store.ts 归他人所有，本 feature 不碰）：disabled 挡住鼠标和键盘两条
+  // 触发路径，openPicker 再兜一层——即使将来有人拆了 disabled，也打不出第二发。
+  const openPicker = () => {
+    if (busy) return
+    inputRef.current?.click()
   }
 
   return (
@@ -174,14 +222,31 @@ function StepUpload() {
       />
       <button
         type="button"
-        className="lite-onboard-upload-choose"
-        onClick={() => inputRef.current?.click()}
+        className={`lite-onboard-upload-choose${busy ? ' is-busy' : ''}`}
+        disabled={busy}
+        aria-busy={busy}
+        onClick={openPicker}
       >
         {l.onboardUploadChoose}
       </button>
+      {/* feat-068 · 诚实的等待态：预期在前（onboardUploadHint）+ 活的秒表 + 一条不定量动效。
+          🔴 秒表与动效整块 aria-hidden：外层是 aria-live="polite"，每秒变一次的数字若进无障碍
+          树，读屏会被每秒播报刷屏两分钟；"在忙"这件事由按钮的 aria-busy 表达即可。 */}
       <div className="lite-onboard-upload-status" aria-live="polite">
         {ingestStatus === 'ingesting' ? (
-          <p className="lite-onboard-upload-reading">{l.onboardUploadReading}</p>
+          <div className="lite-onboard-upload-waiting">
+            <p className="lite-onboard-upload-reading">
+              <span className="lite-onboard-upload-dot" aria-hidden="true" />
+              {l.onboardUploadReading}
+            </p>
+            <p className="lite-onboard-upload-hint">{l.onboardUploadHint}</p>
+            <p className="lite-onboard-upload-elapsed" aria-hidden="true">
+              {fill(l.onboardUploadElapsed, { seconds: elapsed })}
+            </p>
+            <div className="lite-onboard-upload-bar" aria-hidden="true">
+              <span />
+            </div>
+          </div>
         ) : ingestStatus === 'ready' ? (
           <p className="lite-onboard-upload-ready">{l.onboardUploadReady}</p>
         ) : ingestStatus === 'error' ? (

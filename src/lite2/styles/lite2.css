@@ -2970,3 +2970,188 @@
 .lite2-shell .lite-notes-nudge:focus-visible {
   background: rgba(var(--lite2-accent-rgb), 0.16);
 }
+
+/* ═══════════════════════ feat-068 · ingest 等待态（lite2 / v02）═══════════════════════
+   APPEND-ONLY：以上任何一条既有规则都没有被改动或重排（本仓的 zero-cascade-drift 纪律）。
+
+   为什么要有这一块：POST /ingest 真的要 100–120 秒（后端在法兰克福、LLM 在国内，跨境往返）。
+   v02 是要真拿去演示的那张皮，两分钟死屏发生在真客户的第一次接触上。
+
+   分寸：只有两件动效——一颗 1.8s 的呼吸点 + 一条 2.4s 的不定量细条（2px）。不做百分比进度条：
+   服务端不吐进度信号，假进度条卡在 90% 比诚实的秒数更伤信任。
+
+   换皮纪律（kickoff §架构拍板 4）：颜色只消费令牌（--honey / --ink-soft / --ink-faint /
+   --rule），paper 与 aurora 各自的 token 层自动生效，本块不写死任何色值、不加 [data-skin] 分支。
+   @keyframes 是全局命名空间，故名字带 v02 后缀，与 lite.css 里的 v01 组互不覆盖。
+
+   两处：① Your team 的 UploadPanel（.upload-*）；② 首访向导上传步（.lite-onboard-upload-*）。 */
+
+/* ── ① UploadPanel ─────────────────────────────────────────────────────────── */
+.lite2-shell .upload-ingesting-block {
+  display: grid;
+  gap: 6px;
+}
+
+.lite2-shell .upload-ingesting {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lite2-shell .upload-ingesting-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--honey);
+  animation: feat068-v02-ingest-pulse 1.8s ease-in-out infinite;
+}
+
+.lite2-shell .upload-ingesting-hint {
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* tabular-nums 让位宽固定，秒数跳动时行不抖（与 aurora 令牌层的 tabular-nums 密度一致）。 */
+.lite2-shell .upload-ingesting-elapsed {
+  color: var(--ink-faint);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.lite2-shell .upload-ingesting-bar {
+  position: relative;
+  overflow: hidden;
+  height: 2px;
+  margin-top: 2px;
+  border-radius: 999px;
+  background: var(--rule);
+}
+
+.lite2-shell .upload-ingesting-bar > span {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 34%;
+  border-radius: 999px;
+  background: var(--honey);
+  opacity: 0.55;
+  animation: feat068-v02-ingest-slide 2.4s ease-in-out infinite;
+}
+
+.lite2-shell .upload-choose:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.lite2-shell .upload-choose:disabled:hover {
+  background: var(--ink);
+}
+
+/* ── ② 首访向导上传步 ──────────────────────────────────────────────────────── */
+/* 🔴 这颗按钮的 disabled 是数据毁灭级修复的落点（见 OnboardWizard.tsx 的 openPicker 注释）：
+   ingesting 期间每多一次点击 = 多一发 POST /ingest = 多铸一个 owner_token 覆盖掉上一个，
+   被覆盖的那个服务端只返一次、永久丢失。这里只补视觉，闸在 TSX 侧（disabled + openPicker）。 */
+.lite2-shell .lite-onboard-upload-choose:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.lite2-shell .lite-onboard-upload-choose:disabled:hover {
+  border-color: var(--rule-strong);
+  color: var(--ink);
+}
+
+.lite2-shell .lite-onboard-upload-waiting {
+  display: grid;
+  gap: 6px;
+}
+
+.lite2-shell .lite-onboard-upload-reading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lite2-shell .lite-onboard-upload-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--honey);
+  animation: feat068-v02-ingest-pulse 1.8s ease-in-out infinite;
+}
+
+.lite2-shell .lite-onboard-upload-hint {
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.lite2-shell .lite-onboard-upload-elapsed {
+  color: var(--ink-faint);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.lite2-shell .lite-onboard-upload-bar {
+  position: relative;
+  overflow: hidden;
+  height: 2px;
+  margin-top: 2px;
+  max-width: 260px;
+  border-radius: 999px;
+  background: var(--rule);
+}
+
+.lite2-shell .lite-onboard-upload-bar > span {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 34%;
+  border-radius: 999px;
+  background: var(--honey);
+  opacity: 0.55;
+  animation: feat068-v02-ingest-slide 2.4s ease-in-out infinite;
+}
+
+@keyframes feat068-v02-ingest-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes feat068-v02-ingest-slide {
+  0% {
+    left: -34%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+
+/* prefers-reduced-motion：动效全停，但秒表（JS 侧）仍在跳——"没冻"的证据不依赖动画。 */
+@media (prefers-reduced-motion: reduce) {
+  .lite2-shell .upload-ingesting-dot,
+  .lite2-shell .lite-onboard-upload-dot {
+    animation: none;
+    opacity: 0.8;
+  }
+
+  .lite2-shell .upload-ingesting-bar > span,
+  .lite2-shell .lite-onboard-upload-bar > span {
+    animation: none;
+    left: 0;
+    width: 100%;
+    opacity: 0.3;
+  }
+}

@@ -545,6 +545,14 @@
       "dependencies": [],
       "status": "not-started",
       "evidence": ""
+    },
+    {
+      "id": "feat-068",
+      "name": "前端首次真部署（Vercel）+ 接线上后端",
+      "description": "把 SPA 部署到 avery-lite（averylite.dannyqian.com），接已上线的 https://avery.dannyqian.com。含只有真部署才暴露的修复：漏配 API base 的 live 构建改为构建期硬失败（此前静默把 localhost 烤进公开包，线上表现像后端挂了）；429/413/415/422/404 从 `HTTP 429` 改为人话；?transport=stub 逐出生产包；110 秒 ingest 的等待预期文案+计时+动效；v02 向导选文件按钮防重入（此前二次点击并发 /ingest，owner_token 只回传一次、后者覆盖前者=永久丢数据）；playwright 浏览器下载拖垮 npm ci；vercel.json 的 `//` 注释键被新 schema 拒收。后端侧配 AVERY_CORS_ORIGINS（此前只放行 localhost，任何部署前端 100% 被浏览器拦），并切断 tm2 的 git 连接以免 push 冲掉其审字 hold。contextId 持久化归 feat-050，不在本条范围。",
+      "dependencies": [],
+      "status": "in-progress",
+      "evidence": ""
     }
   ]
 }

@@ -29,6 +29,14 @@ export const en = {
     choose: 'Choose files',
     accepted: 'PDF, Word, Excel, CSV, Markdown, or text',
     ingestingLabel: 'Reading your files…',
+    // feat-068 — ingest 真实耗时 100–120s（后端在法兰克福、LLM 在国内，跨境往返）。
+    // 上线前这两分钟屏幕上只有一行静态字，真客户第一次接触就以为卡死。
+    // ingestingHint 负责「事先把预期讲明白 + 说清值在哪」；ingestingElapsed 是活的秒表，
+    // 证明界面没冻。不承诺给不出的数字：只说 usually 1–2 minutes，不说 30 seconds，
+    // 也不做假百分比进度条（服务端没有任何进度信号，卡在 90% 比诚实的文字更糟）。
+    ingestingHint:
+      'Usually 1–2 minutes. It reads every page of every file — that is the slow part, and the part that makes the team below worth reading. Leave this tab open.',
+    ingestingElapsed: '{seconds}s elapsed',
     readyLabel: 'Your team is ready',
     errorLabel: "Couldn't read those files",
     retry: 'Try again',
@@ -499,6 +507,11 @@ export const en = {
       "Hand Avery what you'd hand a new manager on day one — a roster, a project plan, a weekly note. Your team grows out of them. Fine to skip; you can upload later from Your team.",
     onboardUploadChoose: 'Choose files',
     onboardUploadReading: 'Reading your files…',
+    // feat-068 — 同 upload.ingestingHint 的理由（真等 100–120s）。向导版多一句"可以先进行
+    // 下一步"：Next/Skip 在 ingest 期间不禁用，读取在 store 里继续跑，这句是真的。
+    onboardUploadHint:
+      'Usually 1–2 minutes — it reads every page, not just the file names. You can move on to the next step while it works.',
+    onboardUploadElapsed: '{seconds}s elapsed',
     onboardUploadReady: 'Your team is ready',
     onboardUploadError: "Couldn't read those files — try again, or move on and upload later.",
     onboardUploadIdle: 'Nothing uploaded yet — this step is fine to skip.',

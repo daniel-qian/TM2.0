@@ -232,10 +232,89 @@ export interface LiveTransport {
 }
 
 // 服务基址：默认打本机 feat-015 服务；部署端经 VITE_AVERY_API_BASE 覆盖。
+const LOCAL_API_BASE = 'http://127.0.0.1:8137'
+
+// feat-068：读 build 期注入的 base。🔴 Vite 是在**打包时**把 VITE_* 内联成字面量的——
+// 运行时再改环境变量对已发出去的 bundle 毫无作用。空串/未定义一律算"没配"；尾斜杠剥掉
+// （下游全是 `${base}/xxx` 拼接，留着会拼出 //advise）。
+function envApiBase(): string | undefined {
+  const raw = typeof import.meta !== 'undefined' ? import.meta.env?.VITE_AVERY_API_BASE : undefined
+  const trimmed = raw ? String(raw).replace(/\/$/, '') : ''
+  return trimmed || undefined
+}
+
+// feat-068：「env 没配 + 页面走 https」= 部署配错，没有第二种解释。本机 dev 缺 env 是正常的
+// （就该打 127.0.0.1），所以判据必须带上 protocol，不能只看 env。
+// 🔴 typeof location 守卫：SSR / node 测试 / 非浏览器环境里没有 location，这里不许炸。
+function apiBaseMisconfigured(): boolean {
+  if (envApiBase() !== undefined) return false
+  return typeof location !== 'undefined' && location.protocol === 'https:'
+}
+
+let misconfigLogged = false
+
 export function apiBase(): string {
-  const fromEnv =
-    typeof import.meta !== 'undefined' ? import.meta.env?.VITE_AVERY_API_BASE : undefined
-  return (fromEnv && String(fromEnv).replace(/\/$/, '')) || 'http://127.0.0.1:8137'
+  const fromEnv = envApiBase()
+  if (fromEnv) return fromEnv
+  // feat-068：配错的生产构建会静默把 localhost 烤进 bundle——UI 照常渲染，然后每一次调用都
+  // 打到**访客自己的机器**上（https 页还会被浏览器当混合内容直接掐断）。现场表现和"后端挂了"
+  // 一模一样，会把人整队送去查一个根本没问题的后端。所以这里吼一声。
+  // 🔴 只吼不 throw：apiBase() 在 render 路径上被调用，throw 会把整个应用白屏——把一个配置
+  // 事故升级成完全打不开。用户可见的那句话由 httpErrorMessage() 改口（说"构建配错"）。
+  if (apiBaseMisconfigured() && !misconfigLogged) {
+    misconfigLogged = true
+    console.error(
+      '[avery] VITE_AVERY_API_BASE was not set at build time — this build fell back to ' +
+        `${LOCAL_API_BASE}, which points at the visitor's own machine. This build is ` +
+        'misconfigured; the backend is not down. Set VITE_AVERY_API_BASE and rebuild.',
+    )
+  }
+  return LOCAL_API_BASE
+}
+
+// ── feat-068：HTTP 状态码 → 人话 ───────────────────────────────────────────────────────
+// 上线前每个失败点都是 `throw new Error(\`ingest HTTP ${res.status}\`)`，被限流的经理读到的是
+// 「读不出这些文件 — ingest HTTP 429」。生产护栏是真的会跳的：/ingest 10/min(burst 3)、
+// /advise 30/min(burst 10) → 429；超上传上限 → 413；魔数嗅探不认 → 415/422；owner_token
+// 缺/错 → 404（后端故意不发 403，避免把"这个 context 存在"泄露出去）。
+// 本函数是**传输层兜底文案**：英文、短句（i18n 词典另有其人，调用方可覆盖）；endpoint 名保留
+// 在句首，线上排查仍能一眼分辨是哪一次调用。
+export function httpErrorMessage(name: string, res?: Response): string {
+  // 配错的构建：一切失败都先说这句。否则"打不通"会被一路误读成服务器故障。
+  if (apiBaseMisconfigured()) {
+    return `${name} failed — this build is misconfigured: VITE_AVERY_API_BASE was not set, so calls go to ${LOCAL_API_BASE}.`
+  }
+  // 没有 Response = fetch 自己 reject 了（连接被拒 / 混合内容拦截 / CORS / 离线），无 status 可读。
+  if (!res) return `${name} failed — couldn't reach the server. Check your connection and try again.`
+  const status = res.status
+  if (status === 429) {
+    const wait = retryAfterSeconds(res)
+    return wait
+      ? `${name}: too many requests — wait ${wait}s and try again.`
+      : `${name}: too many requests — wait a moment and try again.`
+  }
+  if (status === 413) return `${name}: too much at once — the server caps 10 files, 10MB each.`
+  if (status === 415 || status === 422)
+    return `${name}: that file type isn't accepted, or its contents couldn't be read.`
+  // 🔴 404 在已鉴权的读路径上几乎从不是"空"——是这台浏览器手里的 owner_token 缺失/过期，
+  // 后端按"不泄露存在性"的规矩回 404 而不是 403。说成"没有数据"会让人白等一场。
+  if (status === 404)
+    return `${name}: not found — your access token for this company is missing or stale (not "no data yet").`
+  if (status >= 500) return `${name}: the server hit a problem (HTTP ${status}). Try again shortly.`
+  return `${name} failed — HTTP ${status}.`
+}
+
+// 429 的 Retry-After：规范允许「秒数」或「HTTP-date」两种写法。只认纯数字——不是数字就当没有
+// （宁可说"稍等片刻"，也不敢编一个具体秒数出来）。
+function retryAfterSeconds(res: Response): number | null {
+  try {
+    const raw = res.headers.get('Retry-After')
+    if (!raw) return null
+    const secs = Number(raw.trim())
+    return Number.isFinite(secs) && secs > 0 ? Math.ceil(secs) : null
+  } catch {
+    return null
+  }
 }
 
 // ── feat-047 移植（持久化链 feat-038 租户隔离）：owner_token 客户端存储（按 context_id）──────
@@ -288,13 +367,27 @@ export function createHttpTransport(base: string = apiBase()): LiveTransport {
   const rememberAskContext = (askId: string | undefined, contextId: string | undefined): void => {
     if (askId && contextId) askContexts[askId] = contextId
   }
+  // feat-068：fetch 自己 reject 时压根没有 Response/status 可读（连接被拒、https 页的混合内容
+  // 拦截、CORS、离线）——而"api base 配错"最常见的落地形态正是这一类。所有请求统一从这里出
+  // 错文案：配错的构建说"构建配错了"，其余说网络不通。
+  // 🔴 只包一层错误文案，url/init 原样透传——请求形状、header、URL 一个字节都没动。
+  // AbortError 原样抛回（streamAdvise 靠 controller.signal.aborted 判定，但不让包装吃掉调用方
+  // 可能依赖的错误类型）；不用 instanceof——老浏览器的 DOMException 不是 Error 子类。
+  const send = async (name: string, url: string, init?: RequestInit): Promise<Response> => {
+    try {
+      return await fetch(url, init)
+    } catch (err) {
+      if ((err as { name?: string } | null)?.name === 'AbortError') throw err
+      throw new Error(httpErrorMessage(name))
+    }
+  }
 
   return {
     streamAdvise(req, onEvent, onDone) {
       const controller = new AbortController()
       ;(async () => {
         try {
-          const res = await fetch(`${base}/advise`, {
+          const res = await send('advise', `${base}/advise`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -305,7 +398,7 @@ export function createHttpTransport(base: string = apiBase()): LiveTransport {
             signal: controller.signal,
           })
           if (!res.ok || !res.body) {
-            throw new Error(`advise HTTP ${res.status}`)
+            throw new Error(httpErrorMessage('advise', res))
           }
           const reader = res.body.getReader()
           const decoder = new TextDecoder()
@@ -340,8 +433,8 @@ export function createHttpTransport(base: string = apiBase()): LiveTransport {
     async ingest(files) {
       const form = new FormData()
       for (const f of files) form.append('files', f, f.name)
-      const res = await fetch(`${base}/ingest`, { method: 'POST', body: form })
-      if (!res.ok) throw new Error(`ingest HTTP ${res.status}`)
+      const res = await send('ingest', `${base}/ingest`, { method: 'POST', body: form })
+      if (!res.ok) throw new Error(httpErrorMessage('ingest', res))
       const payload = (await res.json()) as LiveTeamPayload
       // feat-047: store this company's owner_token so every later read/advise can present it.
       rememberToken(payload.context_id, payload.owner_token)
@@ -349,10 +442,10 @@ export function createHttpTransport(base: string = apiBase()): LiveTransport {
     },
 
     async fetchTeam(contextId) {
-      const res = await fetch(`${base}/team/${encodeURIComponent(contextId)}`, {
+      const res = await send('team', `${base}/team/${encodeURIComponent(contextId)}`, {
         headers: authHeader(contextId),
       })
-      if (!res.ok) throw new Error(`team HTTP ${res.status}`)
+      if (!res.ok) throw new Error(httpErrorMessage('team', res))
       return (await res.json()) as LiveTeamPayload
     },
 
@@ -362,7 +455,7 @@ export function createHttpTransport(base: string = apiBase()): LiveTransport {
     // 调用按它取 header。🔴 token 只进 header，绝不进 URL。
     // 未知 id 一律大声失败（与 feat-028 的 404 纪律同规格，绝不静默回落假数据）。
     async saveAsk(draft) {
-      const res = await fetch(`${base}/ask`, {
+      const res = await send('ask', `${base}/ask`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -370,45 +463,45 @@ export function createHttpTransport(base: string = apiBase()): LiveTransport {
         },
         body: JSON.stringify(draft),
       })
-      if (!res.ok) throw new Error(`ask HTTP ${res.status}`)
+      if (!res.ok) throw new Error(httpErrorMessage('ask', res))
       const saved = (await res.json()) as AskDraft
       rememberAskContext(saved.id, saved.company_context_id ?? draft.company_context_id)
       return saved
     },
 
     async shareAsk(askId) {
-      const res = await fetch(`${base}/ask/${encodeURIComponent(askId)}/share`, {
+      const res = await send('ask share', `${base}/ask/${encodeURIComponent(askId)}/share`, {
         method: 'POST',
         headers: authHeader(askContexts[askId]),
       })
-      if (!res.ok) throw new Error(`ask share HTTP ${res.status}`)
+      if (!res.ok) throw new Error(httpErrorMessage('ask share', res))
       return (await res.json()) as AskDraft
     },
 
     async fetchAsk(askId) {
-      const res = await fetch(`${base}/ask/${encodeURIComponent(askId)}`, {
+      const res = await send('ask', `${base}/ask/${encodeURIComponent(askId)}`, {
         headers: authHeader(askContexts[askId]),
       })
-      if (!res.ok) throw new Error(`ask HTTP ${res.status}`)
+      if (!res.ok) throw new Error(httpErrorMessage('ask', res))
       return (await res.json()) as AskDraft
     },
 
     // feat-047 移植：按 context_id 拉取「你的文件」清单——header-only owner_token（缺/伪 token
     // → 后端 404，前端不静默回落）。
     async fetchFiles(contextId) {
-      const res = await fetch(`${base}/team/${encodeURIComponent(contextId)}/files`, {
+      const res = await send('files', `${base}/team/${encodeURIComponent(contextId)}/files`, {
         headers: authHeader(contextId),
       })
-      if (!res.ok) throw new Error(`files HTTP ${res.status}`)
+      if (!res.ok) throw new Error(httpErrorMessage('files', res))
       return (await res.json()) as LiveFilesPayload
     },
 
     // feat-047 移植：按 context_id 拉取「Avery's notes」累积笔记——同上 header-only 纪律。
     async fetchNotes(contextId) {
-      const res = await fetch(`${base}/team/${encodeURIComponent(contextId)}/notes`, {
+      const res = await send('notes', `${base}/team/${encodeURIComponent(contextId)}/notes`, {
         headers: authHeader(contextId),
       })
-      if (!res.ok) throw new Error(`notes HTTP ${res.status}`)
+      if (!res.ok) throw new Error(httpErrorMessage('notes', res))
       return (await res.json()) as LiveNotesPayload
     },
   }
