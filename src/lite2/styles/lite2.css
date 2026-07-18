@@ -3429,6 +3429,8 @@
     width: 100%;
     opacity: 0.3;
   }
+}
+
 /* ── feat-053 账号入口（LiteTopbar 内，LiteBell 旁；.prototype-topbar 是
    pointer-events:none 容器，同 .scene-tabs/.lite-bell 的规矩自己 auto 回来）────────── */
 .lite2-shell .lite-auth {
