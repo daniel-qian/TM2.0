@@ -171,6 +171,15 @@ function LiteThinkingFlow({ run, running }: { run: LiveRunState; running: boolea
             ))}
           </ol>
 
+          {/* 🔴 复核打回（feat-059 finding 4）：SSE 中途断掉时，简化视图曾经只把某一相永久停在
+              active——看不出是失败还是还在跑（error 行只进原始流，而原始流默认是收起来的）。
+              这里在面板内直接说"断了"，并指向原始流看断点。绝不做假的"成功"态。 */}
+          {run.status === 'error' ? (
+            <p className="lite-flow-failed" data-flow-failed="" role="status">
+              {l.roomFlowFailed}
+            </p>
+          ) : null}
+
           {showCites && cites.length > 0 ? (
             <ul className="lite-flow-cite-list" aria-label={l.roomFlowCitesLabel}>
               {cites.map((cite, i) => (

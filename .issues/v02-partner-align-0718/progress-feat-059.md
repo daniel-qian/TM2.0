@@ -167,3 +167,138 @@
 - `.nexus-terminal` 系列样式在 `src/shared/styles/60-terminal.css`，被 story 与 lite/lite2
   三方共用；我用 `.lite2-shell` 覆盖而非改它，正是因为动它会波及 v01 与 story。
   若日后要统一，需单开一条线。
+
+---
+
+# 复核打回后的修复轮（2026-07-18，同分支追加）
+
+复核判定 `needs-fix`：1 条 major + 3 条 minor。逐条处理如下。
+
+## 修了（3 条）
+
+### 1. major · `streamSource.ts::extractCiteSnippet` 把原文截断了
+
+**复核者是对的，而且我上一轮的风险自述把后果说轻了。** 我在遗留第 3 条里写了
+「原文本身含括号时可能截偏一点」，紧接着又写「取不到就 null 不显，不会显错的原文」——
+**后半句是错的**。`lastIndexOf('(')` 落到原文内部的括号上时，`slice` 出的是一段
+**残句**，`resolved` 仍是 `true`，于是引用面板把残句当逐字原文显示给经理。
+不是"不显"，是"显错"。这正砸在这条 feature 的差异化卖点上（合伙人版全库零引用，
+我们的实质就是真原文）。
+
+- **修法**：解析锚在后端契约的确切形状上——`» ⟵ <ref>  (` 之后，贪婪吃到结尾最后一个 `)`：
+  `/»\s+⟵\s+\S+\s+\(([\s\S]*)\)\s*$/`。ref 无空格、claim 由 `«»` 定界，所以锚点唯一；
+  贪婪到末尾使嵌套/多组括号原样保留。形状对不上 → `null`（宁可不显，不显残缺原文）。
+- **契约核实**：`grep -rn "cited:" eval-harness/ --include=*.py` 全仓**只有一处产出方**
+  （`avery/tools.py:149`）。我用 python AST 取出 `_cite` 的那条 `return` 表达式**直接求值**
+  （不是照抄字面量），得到：
+  `✓ cited: «Pilot slips» ⟵ facts.md:15  (Phase 1 (Sanya) launch moved to Q3)`
+  ——与复核者复现用的串逐字一致，作为验证输入。
+
+### 2. minor · 一条裸 `think` 就把「读取事实」点亮成 done
+
+复核者是对的：`memory.py::load_facts_head` 已把 facts.md 头部预载进上下文，
+模型完全可以不调 `read_case` 直接 `recall`——此时经理看到「读取事实 ✓」，
+**实际一份原始材料都没读回来**。这与本 feature 自己定的"没有对应事件的相位不亮"矛盾。
+
+- **修法**：「读取事实」**只由 `read_case` 驱动**。证据还没开始收时的 `think`
+  归不到任何一相，谁也不点亮（那条 think 在原始流里一行不少）。
+  证据已开始收之后的 `think` 仍归「匹配方法」（未变）。
+- **映射表更正**（覆盖本文档上半部分那张表的最后两行）：
+
+  | 真事件 | 归相 |
+  |---|---|
+  | `think`（证据还没开始收） | ~~读取事实~~ → **不点亮任何相位** |
+  | `started` | 不点亮任何相位（未变） |
+
+### 3. minor · SSE 中途 error 时简化视图内无失败提示
+
+复核者是对的：改动前那条 error 行打在**常驻可见**的终端里，现在它只进 `run.lines`，
+而原始流默认是收起来的——面板里只剩一个不再前进、也没有光标的相位，
+看不出是失败还是卡住。
+
+- **修法**：`run.status === 'error'` 时在流面板内出一行明确失败态
+  （新增 i18n 键 `roomFlowFailed`，`[data-flow-failed]` 供门断言 + `.lite-flow-failed` 样式）。
+  ZH：「这一趟中途断了，没走完。展开原始流可以看到断在哪一步。」
+  指向原始流看断点，不做假的"成功"态。
+
+## 没修（1 条，理由如下）
+
+### minor · `cite.claim` 是模型自由散文，可能与界面语言串台
+
+**复核者的事实描述准确，但我不认为按同一口径处理是对的，所以留着并在此留痕。**
+
+- 我排除 `think` 原文的理由是它是**长篇工程推理噪音**（"英文脚手架换个形式放回来"）。
+  `cite.claim` 不是同一类东西：它是一个短句，在**两次点击之后**，且紧挨着真 `ref` + 真原文。
+- 更关键的是：**同一个面板里的 `snippet` 本来就必然是源文件的原始语言**。
+  瑞典建筑公司上传英文文档，中文界面下取回的原文行**就该是英文**——那是逐字证据，
+  翻译它才是造假。既然 snippet 必然可能非界面语言，单独摘掉 claim 并不能消除混排，
+  只会让引用失去含义（只剩 `facts.md:15` + 一行不知为何被引的原文）。
+- 真正的收敛点在后端（advise 链路给模型加语言引导，`ask_api.py` 已有先例），
+  那是 `eval-harness/**`，不在本条 feature 的改动面内。
+  **建议单开一条线处理，不在 059 里顺手改后端。**
+
+## 修复轮的验收（全部我自己跑的，输出如下）
+
+| 命令 | 结果 |
+|---|---|
+| `npm run typecheck` | **零错**（`tsc -b` 无任何后续输出） |
+| `npm run build` | **过**，`✓ built in 2.27s`；`index-CYy549ga.css 185.07 kB` / `index-DBu8aokD.js 680.26 kB │ gzip 219.38 kB`（>500kB 警告既有） |
+| `npm run lint` | `✖ 5 problems (0 errors, 5 warnings)` —— 与复核者重跑的 5 条既有 warning 位置完全一致，本轮零新增 |
+| pytest | **未跑**。本轮零后端改动（`git diff` 只有 5 个前端文件）；对后端的依赖是**只读契约核实**，已用上面的 AST 求值直接验证。 |
+
+### 灌真事件的派生断言（node，esbuild 转出真 `applyEvent`，脚本在 scratchpad）
+
+```
+PASS  原文自身含半角括号（复核者复现的那条）
+      got="Phase 1 (Sanya) launch moved to Q3"
+PASS  原文以右括号结尾            got="Anna Lindqvist (PM)"
+PASS  多组括号                    got="Q3 (revised) after review (2026)"
+PASS  无括号的普通原文            got="Weekly sync moved to Tuesday"
+PASS  中文原文含中文括号          got="一期（三亚）交付推到 Q3"
+PASS  claim 自身含括号            got="launch moved to Q3"
+PASS  形状对不上 → 不显（不编）   got=null
+PASS  ⚠ 分支 resolved=false / snippet=null
+
+--- 相位归属 ---
+无 read_case: read:pending:0 | crosscheck:done:2 | method:done:1 | act:done:1 | sourcesRead=0 | lines=5
+PASS  0 份材料时「读取事实」诚实停 pending
+有 read_case: read:done:2 | crosscheck:done:2 | method:pending:0 | act:done:1 | sourcesRead=1
+PASS  真读了材料时「读取事实」亮 done
+中断: read:active:2 | crosscheck:pending:0 | method:pending:0 | act:pending:0 | status=error
+PASS  error 落 status=error
+PASS  原始流一行不少（stub 6 事件 → 5 行，started 不产行）
+ALL PASS
+```
+
+### 真组件渲染断言（`renderToStaticMarkup`，真 `RoomScreen` + 真 zh 词典）
+
+本轮**没能用真浏览器**：8 条并行线已把浏览器 tab 占满（`tabs_context` 显示
+5050/5051/5052/5053/5151/5199/5252 都在别的线手里），关谁的 tab 都可能打断别人。
+改用 SSR 渲染真组件替代（比读代码强，比真浏览器弱——**这一点如实说明**）：
+
+```
+PASS  error 时简化视图面板内出失败行节点（[data-flow-failed] 在 DOM 里）
+PASS  error 失败行是中文人话「这一趟中途断了，没走完」（zh 词条生效）
+PASS  有引用时出「依据 N 条原文」按钮
+PASS  派生态里 snippet 是完整原文（括号未被截断）
+PASS  非 error 时不出失败行
+PASS  默认简化视图无英文脚手架 / 无 facts.md 转储（探针词表 0 命中）
+ALL PASS
+
+默认面板可见文案：
+  它是怎么想明白的 / 展开原始流 / 1 读取事实 读了 1 份原始材料 /
+  2 交叉验证 走了 2 步 依据 1 条原文 / 3 匹配方法 还没走到这一步 /
+  4 生成动作 结论已经出来了
+```
+
+> dev server 起过一次（:5059）但因上述 tab 限制未用上，已停并确认端口释放
+> （`Get-NetTCPConnection -LocalPort 5059` → 0）。
+
+## 本轮顺手看到、**没有修**（不在 059 范围，留给集成方 / 单开线）
+
+- 🟡 **`src/lite2/LiteAdviceCard.tsx` 的分区标题是硬编码英文**，没走 i18n：
+  `What it found`（:35）、`Yours to sign off`（:38）、`The backing`（:80）、
+  `How sure it is`（:93）等。SSR 渲染 `?lang=zh` 时实测这些标题**原样显示英文**，
+  而同一屏的流面板已是中文。这是**最终建议卡**——三亚 / 国内融资团队 7-25 试用时
+  正对着看的那张卡。属既有问题（非本 feature 引入），且 kickoff 明确写了
+  「不要顺手重写 LiteAdviceCard」，故**只报不改**。建议单开一条线。

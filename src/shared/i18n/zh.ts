@@ -392,6 +392,7 @@ export const zh: Dict = {
     "roomFlowCites": "依据 {count} 条原文",
     "roomFlowCitesLabel": "它引用的原文",
     "roomFlowUnresolved": "没对上真实的原文行",
+    "roomFlowFailed": "这一趟中途断了，没走完。展开原始流可以看到断在哪一步。",
     "bellAria": "通知",
     "bellTitle": "收到的消息",
     "bellEmpty": "还没有。文件读完了，或议事室想完了一轮，都会落到这里。",

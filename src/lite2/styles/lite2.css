@@ -863,6 +863,18 @@
   font-size: 11px;
 }
 
+/* 流面板内的诚实失败态（feat-059 复核 finding 4）——流中途断掉时不装成"还在跑"。 */
+.lite2-shell .lite-flow-failed {
+  margin: 14px 0 0;
+  padding: 9px 11px;
+  border: 1px solid rgba(var(--lite2-warn-deep-rgb), 0.35);
+  border-radius: 8px;
+  background: rgba(var(--lite2-warn-deep-rgb), 0.08);
+  color: rgb(var(--lite2-warn-deep-rgb));
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .lite2-shell .lite-room-canvas-controls {
   position: absolute;
   z-index: 5;

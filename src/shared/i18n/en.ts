@@ -578,6 +578,9 @@ export const en = {
     roomFlowCites: 'Grounded in {count} original lines',
     roomFlowCitesLabel: 'The lines it cited',
     roomFlowUnresolved: 'did not match a real line',
+    // Honest failure state inside the flow panel itself (feat-059 review finding 4): when the
+    // stream breaks mid-run the simplified view must say so, not leave a phase silently stalled.
+    roomFlowFailed: 'This run broke off partway and never finished. Open the raw stream to see where.',
 
     // ── Notification bell (feat-045, PRD F5 — REAL events only; zero hardcoded items; copy
     // never names an employee) ──

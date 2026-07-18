@@ -180,8 +180,13 @@ export function applyEvent(
     case 'think':
       // 真 agent 用泛 'agent'（display "AVERY"）——单 agent 不冒充多专家。
       push('agent', 'thought', ev.text ?? '')
-      // 证据还没开始收 → 这是在读题（读取事实）；已经在收 → 是在拿到的证据上判断怎么办（匹配方法）。
-      countStep(state, evidenceStarted(state) ? 'method' : 'read')
+      // 🔴 复核打回（feat-059 finding 2）：一条裸 think 曾经就能把「读取事实」点亮成 done，
+      //    哪怕全程没有 read_case（memory.py::load_facts_head 已把 facts.md 头部预载进上下文，
+      //    模型完全可以不调 read_case 直接 recall——那就是一份原始材料都没读回来）。
+      //    现在「读取事实」**只由 read_case 驱动**（见 toolPhase），裸 think 不点亮它。
+      // 证据已经开始收 → 这条 think 是在拿到的证据上判断怎么办（匹配方法）；
+      // 还没开始收 → 归不到任何一相，谁也不点亮（原始流里一行不少，简化视图不替它编一个相位）。
+      if (evidenceStarted(state)) countStep(state, 'method')
       break
     case 'tool':
       push('agent', 'tool-call', formatToolCall(ev.name, ev.input))
@@ -257,8 +262,8 @@ function toolPhase(name: string | undefined): LitePhaseId {
   }
 }
 
-// 「收证据」是否已经真的开始（决定一条 think 算读题还是算在挑做法）。
-// 看的是真事件计数，不是时间——没有 recall/cite 发生过，就还在读题。
+// 「收证据」是否已经真的开始（决定一条 think 算不算「匹配方法」的一步）。
+// 看的是真事件计数，不是时间——没有 recall/cite 发生过，这条 think 就还归不到任何一相。
 function evidenceStarted(state: LiveRunState): boolean {
   return state.phases[phaseIndex('crosscheck')].steps > 0
 }
@@ -336,12 +341,19 @@ function absorbObservation(state: LiveRunState, observation: string, isError: bo
 // `facts.md:15  正文…` —— memory.py::Hit.as_line 的形状（source 是 <file>:<line>）。
 const MEMORY_HIT = /^[\w.\-/]+:\d+\s/
 
-// 从 `✓ cited: «…» ⟵ facts.md:15  (原文)` 里取回原文。取不到就 null——宁可不显，不编。
+// 从 `✓ cited: «claim» ⟵ facts.md:15  (原文)` 里取回原文（tools.py::_cite 的确切形状）。
+// 🔴 复核打回（feat-059 finding 1）：早期版本用 lastIndexOf('(')/lastIndexOf(')') 全串扫，
+//    源文件行自己带半角括号时会从括号处截断——`(Phase 1 (Sanya) launch moved to Q3)` 被切成
+//    `Sanya) launch moved to Q3`，把残句当逐字原文显示给经理。半角括号在业务文档里极常见
+//    （`Q3 (revised)`、`Anna Lindqvist (PM)`），英文语境必踩。
+// 解法：锚在 `» ⟵ <ref>  (` 之后（ref 无空格；claim 由 «» 定界），贪婪吃到结尾最后一个 ')'，
+//    这样嵌套/多个括号都原样保留。形状对不上就 null——宁可不显，不显残缺的"原文"。
+const CITE_SNIPPET = /»\s+⟵\s+\S+\s+\(([\s\S]*)\)\s*$/
+
 function extractCiteSnippet(observation: string): string | null {
-  const open = observation.lastIndexOf('(')
-  const close = observation.lastIndexOf(')')
-  if (open < 0 || close < open) return null
-  const snippet = observation.slice(open + 1, close).trim()
+  const match = CITE_SNIPPET.exec(observation)
+  if (!match) return null
+  const snippet = match[1].trim()
   return snippet ? snippet : null
 }
 
