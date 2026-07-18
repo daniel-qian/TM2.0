@@ -27,6 +27,9 @@ export type LiteScreen =
   | 'closerlook'
   | 'playbooks'
   | 'vision'
+  // feat-055（PRD G9）：整屏项目看板。追加在末尾——本批另一条线（feat-057）同样往这个
+  // 联合类型末尾追加它的 'home'，各加各的一行就不会撞。
+  | 'projects'
 
 export type LiteDetail = { kind: 'person' | 'project'; id: string } | null
 
@@ -40,11 +43,17 @@ export const SCREEN_PATH: Record<LiteScreen, string> = {
   closerlook: '/closer-look',
   playbooks: '/playbooks',
   vision: '/vision',
+  // feat-055：项目屏。与下面的 PROJECT_PATH 同值——项目详情 `/projects/:projectId` 就是
+  // 这一屏的子段（不是另一棵树）。这里写字面量而不是引 PROJECT_PATH，只因常量声明在下面；
+  // 两者不许分叉，改一个必须改另一个。
+  projects: '/projects',
 }
 
 // 深链：人卡挂在「你的团队」下（`/team/:personId`）；项目详情是独立顶层段
-// （`/projects/:projectId`）—— feat-055 建整屏项目看板时直接换掉这条路由的 element，
-// 路径形状与这里的导航入口都不用动。
+// （`/projects/:projectId`）。
+// feat-055 已落地：`/projects` 本身成了整屏项目看板（见上面 SCREEN_PATH.projects），
+// 详情段一个字没改——路径形状、导航入口（openDetail('project', id)）全部照旧，变的只是
+// 「浮层底下垫哪一屏」：冷深链现在垫项目屏，不再垫团队屏（见 screenFromPathname）。
 export const PROJECT_PATH = '/projects'
 
 export const DEFAULT_SCREEN: LiteScreen = 'team'
@@ -54,13 +63,17 @@ const PATH_TO_SCREEN = new Map<string, LiteScreen>(
 )
 
 // 路径 → 屏。**只在没有来源屏可用时兜底**（冷深链：别人把 URL 发给你、或在详情页刷新前
-// 从没走过站内导航）。`/projects/:projectId` 这类顶层详情段没有任何路径线索能指回来源屏，
-// 只能退到默认屏——所以真正的底屏口径是下面的 `baseScreenFrom()`，别直接用这个函数。
+// 从没走过站内导航）——所以真正的底屏口径是下面的 `baseScreenFrom()`，别直接用这个函数。
+//
+// feat-055：`/projects/:projectId` 的冷深链底屏从 'team' 改成 'projects'。改造前项目屏
+// 还不存在，只能垫团队屏；现在有了整屏看板，把项目详情的链接发给别人、他点「关闭」应该
+// 落在项目屏而不是团队屏（PRD G9 验收原文）。从站内点开的路径不受影响——那条走 history
+// state 里的来源屏，压根不进这个函数。
 export function screenFromPathname(pathname: string): LiteScreen {
   const first = pathname.split('/').filter(Boolean)[0]
   if (!first) return DEFAULT_SCREEN
   const segment = `/${first}`
-  if (segment === PROJECT_PATH) return 'team'
+  if (segment === PROJECT_PATH) return 'projects'
   return PATH_TO_SCREEN.get(segment) ?? DEFAULT_SCREEN
 }
 

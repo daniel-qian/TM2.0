@@ -1288,23 +1288,31 @@
     // arguments rather than driving everything in-page. The driver session's job: navigate,
     // re-inject this snippet each time, call the matching phase, and carry the JSON forward.
     async assertV2Boots() {
-      // Phase v2Boots: `?v=2&mode=live` must render the .lite2-shell root with all 7 tabs
-      // (PRD order + feat-047's 7th tab: Your team · The room · Follow-ups · Avery's notes ·
-      // A closer look · Playbooks · Where this goes — "Avery's notes" ported from `lite`,
-      // placed after Follow-ups per feat-047's tab-order decision, see progress.md).
+      // Phase v2Boots: `?v=2&mode=live` must render the .lite2-shell root with all 8 tabs
+      // (PRD order + feat-047's "Avery's notes" + feat-055's "Projects":
+      //   Your team · Projects · The room · Follow-ups · Avery's notes · A closer look ·
+      //   Playbooks · Where this goes).
+      // "Avery's notes" was ported from `lite` and placed after Follow-ups per feat-047's
+      // tab-order decision (see progress.md); "Projects" sits at index 1 per feat-055 — the
+      // projects screen and the team screen are the two halves of the same upload (people /
+      // projects), so it rides next to "Your team" rather than at the tail.
+      // ⚠ The expected array below is the single source of truth for tab order in this gate.
+      // Any line that adds/removes/reorders a tab in src/lite2/LiteTopbar.tsx MUST update this
+      // array in the same commit, or the v2Boots phase goes red. Labels are the EN dict values
+      // (`resolveLocale()` defaults to EN when the gate URL carries no `?lang=`).
       try {
         await poll(() => ($('.lite2-shell') ? true : null), 8000, '.lite2-shell to mount');
       } catch (e) { /* fall through — assertions below report absence */ }
       const shell = $('.lite2-shell');
       const tabs = $$('.lite2-shell .scene-tabs .scene-tab').map((b) => (b.textContent || '').trim());
-      const expected = ['Your team', 'The room', 'Follow-ups', "Avery's notes", 'A closer look', 'Playbooks', 'Where this goes'];
+      const expected = ['Your team', 'Projects', 'The room', 'Follow-ups', "Avery's notes", 'A closer look', 'Playbooks', 'Where this goes'];
       const out = {
         shellPresent: !!shell,
         dataScene: shell ? shell.getAttribute('data-scene') : null,
         tabCount: tabs.length,
         tabLabels: tabs,
         tabOrderMatches: JSON.stringify(tabs) === JSON.stringify(expected),
-        pass: !!shell && tabs.length === 7 && JSON.stringify(tabs) === JSON.stringify(expected),
+        pass: !!shell && tabs.length === expected.length && JSON.stringify(tabs) === JSON.stringify(expected),
       };
       results.v2Boots = out;
       return out;

@@ -17,6 +17,7 @@ import { NotesScreen } from './screens/NotesScreen'
 import { CloserLookScreen } from './screens/CloserLookScreen'
 import { PlaybooksScreen } from './screens/PlaybooksScreen'
 import { VisionScreen } from './screens/VisionScreen'
+import { ProjectsScreen } from './screens/ProjectsScreen'
 import { DetailOverlay } from './DetailOverlay'
 import { DraftComposer } from './DraftComposer'
 import { Lite2Footer } from './Lite2Footer'
@@ -120,12 +121,17 @@ function Lite2Shell() {
           <Route path={SCREEN_PATH.closerlook} element={<ScreenView />} />
           <Route path={SCREEN_PATH.playbooks} element={<ScreenView />} />
           <Route path={SCREEN_PATH.vision} element={<ScreenView />} />
+          {/* feat-055（PRD G9）：整屏项目看板。追加在既有屏路由末尾——本批 feat-057 的
+              `/home` 同样追加在这之后，各加各的一行。 */}
+          <Route path={SCREEN_PATH.projects} element={<ScreenView />} />
 
-          {/* 深链：项目详情。整屏项目看板是 feat-055 的活——这里先把路径占住，落到今天
-              已有的真实项目浮层（真 payload，不是占位假屏；把已经能用的详情降级成
-              「Coming」反而是回归）。底下垫的是**来源屏**（routes.ts 的 baseScreenFrom），
-              不再一律垫团队屏。feat-055 建整屏看板时把这条路由从 ScreenView 换成自己的
-              element 即可，导航入口（openDetail('project', id)）与路径形状都不用动。 */}
+          {/* 深链：项目详情。底下垫的是**来源屏**（routes.ts 的 baseScreenFrom）。
+              feat-055 落地后这里**依然**是 <ScreenView />，而不是换成 ProjectsScreen：
+              051 留的那句「换成自己的 element」在整屏看板长出来之后反而是个陷阱——各写各的
+              element 会让「进详情 = 换了棵树」，底屏被偷换、本地状态清零（正是 051 复核逮到
+              的那条 major）。真正要改的是**底屏口径**：screenFromPathname 现在把
+              `/projects/*` 派生成 'projects'，于是冷深链的浮层垫的就是项目屏，站内点开的
+              仍垫用户原来那一屏。路径形状与导航入口（openDetail('project', id)）一个字没动。 */}
           <Route path={`${PROJECT_PATH}/:projectId`} element={<ScreenView />} />
 
           {/* 兜底：未知路径回默认屏，同样保住 query。 */}
@@ -160,6 +166,8 @@ const SCREEN_COMPONENT: Record<LiteScreen, ComponentType> = {
   closerlook: CloserLookScreen,
   playbooks: PlaybooksScreen,
   vision: VisionScreen,
+  // feat-055：项目屏。追加在既有条目末尾（本批 feat-057 的 'home' 同样追加在这之后）。
+  projects: ProjectsScreen,
 }
 
 // 所有屏路由共用的渲染位。屏组件由**底屏**决定（详情深链上 = 打开浮层时用户所在的那一屏），
