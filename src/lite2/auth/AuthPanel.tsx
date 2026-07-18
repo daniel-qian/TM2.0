@@ -119,10 +119,12 @@ export function clearCompanyScope(): void {
     noteJustAdded: false,
     ingestStatus: 'idle',
     ingestError: null,
-    // detail 必须清：它握着上一家公司的 person/project id，留着就是一张指向空气的浮层。
-    detail: null,
-    screen: 'team',
   })
+  // 🔴 集成期修正（feat-051 路由化落地后）：原来这里是 `setState({ detail: null, screen: 'team' })`。
+  // 051 之后这两个都不再是 store 状态——当前屏与当前详情由 URL 派生，写进 state 是静默空转：
+  // 换账号后 URL 还停在 `/team/<上一家公司的人 id>`，浮层照旧挂着，正是本函数要杀的那个 bug。
+  // goScreen 的签名 051 没动，内部改成推路由，一次调用同时收掉「关浮层」和「回团队屏」。
+  useLite.getState().goScreen('team')
 }
 
 export function AuthPanel() {
