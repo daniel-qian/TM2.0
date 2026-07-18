@@ -551,8 +551,8 @@
       "name": "前端首次真部署（Vercel）+ 接线上后端",
       "description": "把 SPA 部署到 avery-lite（averylite.dannyqian.com），接已上线的 https://avery.dannyqian.com。含只有真部署才暴露的修复：漏配 API base 的 live 构建改为构建期硬失败（此前静默把 localhost 烤进公开包，线上表现像后端挂了）；429/413/415/422/404 从 `HTTP 429` 改为人话；?transport=stub 逐出生产包；110 秒 ingest 的等待预期文案+计时+动效；v02 向导选文件按钮防重入（此前二次点击并发 /ingest，owner_token 只回传一次、后者覆盖前者=永久丢数据）；playwright 浏览器下载拖垮 npm ci；vercel.json 的 `//` 注释键被新 schema 拒收。后端侧配 AVERY_CORS_ORIGINS（此前只放行 localhost，任何部署前端 100% 被浏览器拦），并切断 tm2 的 git 连接以免 push 冲掉其审字 hold。contextId 持久化归 feat-050，不在本条范围。",
       "dependencies": [],
-      "status": "in-progress",
-      "evidence": ""
+      "status": "done",
+      "evidence": "上线 https://averylite.dannyqian.com（Vercel avery-lite，连 daniel-qian/avery，push 到 main 即自动构建上生产，构建 18s）。npm run typecheck 干净；构建闸两路都验（漏配 API base 即 fail、配对即 pass）。真机验收（浏览器在生产 origin 上跑，非自评）：/health 200 degraded:false；/ingest 200 35s extraction_mode=llm 未降级；带 token 读 /team 200、不带 token 404（租户隔离）；生产包内 transport=stub 0 命中；window.__AVERY_BUILD__={mode:live,locale:zh,apiBase:https://avery.dannyqian.com}；深链 /team/anything 200（SPA rewrite）；无 SSO 墙。v02 向导按钮激活 10 次只发出 1 个 POST /ingest（改前 11 个 token 全丢+429）。仓库外：法兰克福后端配 AVERY_CORS_ORIGINS 并重建容器（备份 ~/avery.env.bak-20260718-205914，合伙人 :5108 未碰、复验 200）；切断 tm2 的 git 连接。验收当场抓到后端真 bug：跨文档中文人名去重失效（同次 ingest 每人出现两次）→ issue #10。详见 .issues/feat-068-frontend-deploy/session-handoff.md 及 GitHub issues #10-#15。"
     }
   ]
 }
