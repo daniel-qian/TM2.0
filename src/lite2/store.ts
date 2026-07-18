@@ -80,6 +80,86 @@ export function rememberContextId(contextId: string | null): void {
   }
 }
 
+// ── fixD/B1 · 这台浏览器传过哪几份（"回得去"的名册）──────────────────────────────────────
+//
+// 病：上传完团队后 UI 继续摆着上传入口邀请"再加文件"，但 `POST /ingest` **每次都新建一个
+// context**（后端确认：`ingest_paths(context_id=...)` 也不是追加——它拿新文档重建一个
+// CompanyContext 再 `registry.put` 盖掉旧的，传旧 id 反而会把第一家公司的数据就地毁掉）。
+// 于是第二次上传 → contextId 换成新的 → 第一份从界面上消失，**且没有任何回得去的入口**。
+// 数据其实还在后端、token 还在 localStorage，但用户看不到、点不回去 —— 他以为自己弄丢了。
+//
+// 这里存的是"回得去"所缺的最后一块：**每次成功上传留一条名册**（id + 当时传了哪些文件 +
+// 时间）。owner_token 归 transport 的 `lite2:ownerTokens:v1` 管，不在这儿复制一份
+// （与 CONTEXT_STORE_KEY 同一条纪律：凭据只有一个家）。
+//
+// 🔴 为什么不去读 transport 那个 token map 的 key 来当名册：那是**凭据存储**，拿它当索引
+// 会让"有没有这份"和"有没有这份的钥匙"两件事永远绑死——恰恰是必须分开的两件事（钥匙没了
+// 但公司还在，UI 要能诚实说"这份回不去了"，而不是干脆当它不存在）。
+//
+// 🔴 `lite2:` 前缀不是装饰：换账号清场（AuthPanel.clearCompanyScope）按这个前缀整段清扫，
+// 所以本名册天然跟着走 —— A 公司传过什么，B 公司的经理不会在下拉里看见。
+const KNOWN_CONTEXTS_KEY = 'lite2:knownContexts:v1'
+const MAX_KNOWN_CONTEXTS = 12
+
+export interface KnownContext {
+  id: string
+  // 当时上传的文件名，原样保留 —— 用户自己的字。UI 负责排版成人话，store 不编标签，
+  // 也不在这里塞中文/英文（本文件不该持有 copy）。
+  files: string[]
+  at: string // ISO
+}
+
+function isKnownContext(v: unknown): v is KnownContext {
+  if (!v || typeof v !== 'object') return false
+  const c = v as KnownContext
+  return typeof c.id === 'string' && !!c.id && Array.isArray(c.files) && typeof c.at === 'string'
+}
+
+export function loadKnownContexts(): KnownContext[] {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return []
+    const raw = window.localStorage.getItem(KNOWN_CONTEXTS_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw) as unknown
+    return Array.isArray(parsed) ? parsed.filter(isKnownContext) : []
+  } catch {
+    return [] // 无痕/坏 JSON —— 名册为空，不崩（同 loadStoredContextId 的降级口径）
+  }
+}
+
+function saveKnownContexts(list: KnownContext[]): void {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return
+    window.localStorage.setItem(KNOWN_CONTEXTS_KEY, JSON.stringify(list))
+  } catch {
+    /* quota/无痕 —— 本次会话内存里仍有名册，只是下次打不开 */
+  }
+}
+
+/** 记一条（新→旧；同 id 覆盖并提到最前，避免重复上传把名册刷屏）。 */
+export function rememberKnownContext(entry: KnownContext): KnownContext[] {
+  const next = [entry, ...loadKnownContexts().filter((c) => c.id !== entry.id)].slice(
+    0,
+    MAX_KNOWN_CONTEXTS,
+  )
+  saveKnownContexts(next)
+  return next
+}
+
+/** 删一条（服务端已 404 —— 这份真没了，别再挂在名册上骗人点）。 */
+export function forgetKnownContext(contextId: string): KnownContext[] {
+  const next = loadKnownContexts().filter((c) => c.id !== contextId)
+  saveKnownContexts(next)
+  return next
+}
+
+// 切回上一份可能失败，而且必须**分得清是哪一种失败**——两种失败对用户的意思完全不同：
+//   'missing-credential' = 钥匙没了（登出清过 token / 换了浏览器）。公司数据多半还在，
+//                          但这台机器证明不了它是你的 —— 说实话，别装作这份不存在。
+//   'gone'               = 服务端 404。这份真没了，名册里也随手删掉。
+// 🔴 绝不允许第三种"静默失败"：切不过去就必须说，不能停在原地让人以为点没生效。
+export type ContextSwitchError = 'missing-credential' | 'gone' | 'failed'
+
 // 首帧同步取回（不等 effect）：store 建好时 contextId 就位，`restoreSession()` 才有的可拉。
 // feat-068 补漏：feat-050 用 isStubTransportSelected() 判断「这是 stub 的假 context，别持久化」，
 // 但那个函数直接读 URL 的 ?transport=stub，**不受 DEV 闸约束**——而 :181 的 defaultTransport 受。
@@ -136,6 +216,12 @@ interface LiteState {
   // 直接干净回上传态，不该冲用户报错。
   restoreError: string | null
 
+  // fixD/B1：这台浏览器传过的每一份（新→旧，含当前这份）。上传入口据此告诉用户
+  // "再传一次会新建一份，当前这份不会合并进去"，并列出回得去的入口。
+  knownContexts: KnownContext[]
+  // 切回上一份失败的原因（成功即 null）。🔴 只用于诚实报错，绝不用来伪装成功。
+  switchError: ContextSwitchError | null
+
   // ── The room 一次 live 运行（feat-015 /advise）──
   run: LiveRunState
   agentSource: LiveAgentSource
@@ -162,6 +248,10 @@ interface LiteState {
   // feat-050 的被覆盖口：谁拿到权威 contextId（现在是 localStorage，将来是 feat-053 的
   // 服务端按账号返回）就调它——落 state + 落锚点，一处收口。
   adoptContext: (contextId: string | null, ownerToken?: string | null) => void
+  // fixD/B1：切回名册里的某一份（第二次上传之后"回得去"的那条路）。
+  // 🔴 后端不支持追加（确认过 pipeline.ingest_docs：传旧 context_id 是**重建并覆盖**，
+  // 会就地毁掉第一家公司的数据），所以这里做的是"切换"，不是"合并"——UI 必须照实说。
+  switchContext: (contextId: string) => Promise<void>
   refreshTeam: () => Promise<void>
   refreshFiles: () => Promise<void>
   refreshNotes: () => Promise<void>
@@ -205,6 +295,8 @@ export const useLite = create<LiteState>((set, get) => ({
   // 有锚点才算"正在恢复"——没有锚点是干净首访，直接进上传引导，不该转圈。
   restoring: restoredContextId !== null,
   restoreError: null,
+  knownContexts: loadKnownContexts(),
+  switchError: null,
 
   run: emptyRunState(),
   agentSource: createLiveAgentSource(defaultTransport),
@@ -244,7 +336,20 @@ export const useLite = create<LiteState>((set, get) => ({
       })
       // feat-050：落锚点——这是"刷新还在"的全部秘密（数据本来就在后端，只差这根指针）。
       // stub 传输不落（它的 context 是进程内造的，落了下次真启动会拿去打真后端）。
-      if (!stubSelected) rememberContextId(payload.context_id)
+      if (!stubSelected) {
+        rememberContextId(payload.context_id)
+        // fixD/B1：同时记进名册。**这一步是"回得去"的全部前提**——`POST /ingest` 每次都
+        // 新建 context，上一份的 id 在这一刻之后就再也没有第二个地方能问到了
+        // （owner_token 还在，但 token map 的 key 是凭据存储，不该当索引使——见
+        // KNOWN_CONTEXTS_KEY 上面那段）。漏了这行，第二次上传就还是"数据凭空消失"。
+        set({
+          knownContexts: rememberKnownContext({
+            id: payload.context_id,
+            files: files.map((f) => f.name),
+            at: new Date().toISOString(),
+          }),
+        })
+      }
       // feat-047（feat-032）：拉一次持久文件清单（含 n_chunks）。次要视图，失败不影响上传成功。
       void get().refreshFiles()
     } catch (err) {
@@ -302,6 +407,8 @@ export const useLite = create<LiteState>((set, get) => ({
           ingestStatus: 'idle',
           restoring: false,
           restoreError: null,
+          // fixD/B1：这份服务端已经没了 —— 从名册里也删掉，别继续挂着一个点了会失败的入口。
+          knownContexts: contextId ? forgetKnownContext(contextId) : get().knownContexts,
         })
       } else {
         set({ restoring: false, restoreError: message, ingestStatus: 'idle' })
@@ -323,6 +430,36 @@ export const useLite = create<LiteState>((set, get) => ({
         ? { team: null, rawTeam: null, files: [], notes: [], ingestStatus: 'idle' as IngestStatus }
         : {}),
     })
+  },
+
+  // fixD/B1 · 切回名册里的某一份。
+  //
+  // 这是"第二次上传把第一家公司的数据从界面上抹掉，且回不去"里 **"回得去"** 的那一半；
+  // 另一半（上传入口在已有团队时把"会新建一份、不会合并"讲清楚）是 UI 的活。
+  //
+  // 🔴 三条失败路径都必须**说出来**，一条都不许静默：
+  //   ① 没有 owner_token —— 这台浏览器证明不了这份是你的（登出清过 token / 换了浏览器）。
+  //      公司数据多半还在服务端，所以措辞是"这份在这台机器上打不开了"，不是"这份没了"。
+  //      绝不硬着头皮打过去：没 token 的读必然 404，那会被下面当成"gone"，反手把一份
+  //      其实还活着的公司从名册里删掉 —— 用一次误判换来永久失去入口。
+  //   ② 404 —— 这份服务端真没了。restoreSession 的 404 分支已经干净回上传态并清名册。
+  //   ③ 其它（后端没起/网断）—— 保住锚点与名册，只报"这次没连上"。
+  switchContext: async (contextId) => {
+    const { contextId: current } = get()
+    if (!contextId || contextId === current) return
+    set({ switchError: null })
+    if (!storedOwnerToken(contextId)) {
+      set({ switchError: 'missing-credential' })
+      return
+    }
+    // adoptContext 一处收口：落 state + 落 localStorage 锚点 + 清掉上一份的派生数据
+    // （id 变了才清，见其实现）。清掉是必须的：restoreSession 见到 team 还在会直接让路。
+    get().adoptContext(contextId)
+    await get().restoreSession()
+    const after = get()
+    if (after.team) return // 切成功
+    // restoreSession 已按 404 / 网络错各自落地；这里只把结果翻译成 UI 能分辨的两种。
+    set({ switchError: after.contextId === null ? 'gone' : 'failed' })
   },
 
   refreshTeam: async () => {

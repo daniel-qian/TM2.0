@@ -46,6 +46,27 @@ export const en = {
     // feat-032 — the per-company file space: a look-back list of what you uploaded (persists).
     filesTitle: 'Your files',
     filesChunks: 'references',
+
+    // ── fixD/B1 — uploading a SECOND time starts a SEPARATE company, it does not merge ──────
+    // The backend mints a new context on every POST /ingest, and it cannot append (passing the
+    // old context_id REBUILDS and overwrites it). Previously the UI just kept inviting "add more
+    // files" and then silently swapped the screen to the new upload, with no way back — the
+    // manager's reading is "I lost my data". These strings say what actually happens, up front,
+    // and label the way back. Nothing here promises a merge, because there is no merge.
+    againTitle: 'Adding more files starts a separate company',
+    againBody:
+      "Avery reads each upload as its own company. A new upload will not be merged into the one you're looking at now — both are kept, and you can switch between them here.",
+    switchTitle: 'Uploads on this browser',
+    switchAction: 'Open this one',
+    switchCurrent: 'Currently open',
+    switchFilesLabel: 'Read from',
+    // 🔴 The two failure modes must stay distinguishable — they mean different things to a user.
+    // "no credential on this browser" is NOT "the data is gone", and must never be worded as if
+    // it were: the company is still on the server, this machine just can't prove it's yours.
+    switchErrorMissingCredential:
+      "This browser no longer holds the key to that upload, so it can't be opened here. The company itself is still on the server — signing in on the account it was attached to will bring it back.",
+    switchErrorGone: 'That upload is no longer on the server, so it has been removed from this list.',
+    switchErrorFailed: "Couldn't reach the server just now. Nothing was lost — try again.",
   },
 
   // ── Your team, live ───────────────────────────────────────────────────────

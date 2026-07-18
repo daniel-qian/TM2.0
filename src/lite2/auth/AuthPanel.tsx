@@ -3,6 +3,10 @@ import { useAuth } from './authStore'
 import { authConfigured } from './supabaseClient'
 import { useLite } from '../store'
 import { forgetAllOwnerTokens } from '../transport'
+// fixD/M2：换账号必须一并清掉这三个 localStorage store —— 它们装着上一家公司文档的**逐字原文**。
+import { useFlow } from '../flowStore'
+import { useNotify } from '../notifyStore'
+import { useOnboard, DEFAULT_PLAYBOOKS } from '../onboardStore'
 
 // feat-053 · 账号入口（顶栏，LiteBell 旁）。
 //
@@ -105,13 +109,73 @@ type ClaimState = 'idle' | 'claiming' | 'claimed' | 'failed'
 // 放在组件文件的模块层而不是 authStore：authStore 若 import useLite 就成环
 //（authStore → store → transport → authStore，transport 要拿 currentAccessToken）。
 // AuthPanel 本来就是连接这两边的那一层，是唯一不成环的落点。
+// ── fixD/M2 · `lite2:` 命名空间整段清扫 ───────────────────────────────────────────────────
+//
+// 原来这里只清 useLite + owner_token，于是 **flowStore / onboardStore / notifyStore 三个
+// localStorage store 原封不动地跨账号存活**。它们不是"偏好设置"，装的是上一家公司文档的
+// **逐字原文**：
+//   · `lite2:flow:v1`    —— 跟进队列条目（title/note 直接来自分诊卡与议事室，是文档原句）
+//   · `lite2:onboard:v1` —— 向导里填的公司名 / 部门 / 称呼
+//   · `lite2:notify:v1`  —— 通知条目与已见过的矛盾卡 id
+// 换账号后 B 公司的经理能在跟进队列里读到 A 公司文档的原文 —— 租户隔离的实质破口，
+// 而且是三家外部公司轮流在同一台机器上试用时**必然**踩到的那条路。
+//
+// 🔴 为什么按前缀扫而不是列三个 key：列举会漂。那三个 key 的常量私有在各自文件里（本线的
+// 文件边界也动不了它们），在这儿抄一份字面量，等谁把 `:v1` 升成 `:v2`，清扫就**静默失效**
+// ——而失效的表现正是"看得见别人公司的原文"，没有任何报错。按前缀扫则把不变式写死成
+// "`lite2:` 底下不许有任何东西活过一次换账号"，将来新增的 lite2 store 自动被覆盖。
+//
+// 留 supabase-js 自己的会话 key（不是 `lite2:` 前缀）—— 那是**新**账号的登录态，清了就等于
+// 刚登录就被登出。
+function wipeLite2LocalStorage(): void {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return
+    const doomed: string[] = []
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const key = window.localStorage.key(i)
+      if (key && key.startsWith('lite2:')) doomed.push(key)
+    }
+    // 先收集再删：removeItem 会让 length/索引在遍历途中塌陷，边遍历边删必漏。
+    for (const key of doomed) window.localStorage.removeItem(key)
+  } catch {
+    /* 无痕/被拒 —— 下面的内存态复位仍然生效，本会话不会串台 */
+  }
+}
+
+// localStorage 抹了还不够：那三个 store 的**内存态**是 store 创建时一次性读进来的，
+// 之后再也不读 localStorage。不复位的话，B 的经理这一整个标签页里照样看得见 A 的条目
+// （要等他手动刷新才消失，而演示时没人会刷新）。
+//
+// 用裸 setState 而不是给各 store 加 reset()：那三个文件不在本线的边界内。形状取自各自的
+// EMPTY_PERSISTED，`persist()` 不会被裸 setState 触发，所以不会把空态又写回去（写回去也无妨，
+// 上面已经删干净了）。
+function resetLite2MemoryStores(): void {
+  useFlow.setState({ triageMarks: {}, followups: [], gapMarks: {}, composerDraft: null })
+  useNotify.setState({ items: [], seenGapIds: [], seenAskIds: [], open: false })
+  useOnboard.setState({
+    status: 'unseen',
+    step: 'upload',
+    company: '',
+    dept: '',
+    yourName: '',
+    playbooks: [...DEFAULT_PLAYBOOKS],
+    pausedThisSession: false,
+  })
+}
+
 export function clearCompanyScope(): void {
   // 先掐凭据，再清屏上的数据：顺序反过来的话，中间那一拍已在飞的请求仍带着旧 token。
   forgetAllOwnerTokens()
   useLite.getState().resetRun() // abort 在飞的 /advise 流 + 清掉 ask 草稿
+  // fixD/M3+m4：走 adoptContext 而不是裸 setState —— 它是 feat-050 留的收口，一次调用同时
+  // 落 state 和**抹掉 localStorage 锚点 `lite2:contextId:v1`**。原来这里漏了后者，于是登出后
+  // 锚点还指着上一个账号的公司：下一个人打开就被 restoreSession 拿去请求（token 已清 → 404 →
+  // 才回上传态），中间那一拍屏幕上挂的是别人公司的 id。
+  useLite.getState().adoptContext(null)
   useLite.setState({
-    contextId: null,
-    ownerToken: null,
+    // adoptContext 只在 contextId **确实变了**时才清派生数据；登出时它多半确实变了，但
+    // "contextId 本来就是 null、team 却还挂着"这种中间态不该赌 —— 显式再清一遍，
+    // 租户隔离这种地方不留"多半"。
     team: null,
     rawTeam: null,
     files: [],
@@ -119,12 +183,33 @@ export function clearCompanyScope(): void {
     noteJustAdded: false,
     ingestStatus: 'idle',
     ingestError: null,
+    // fixD/B1：名册也是公司数据（谁传过哪些文件），跟着走。
+    knownContexts: [],
+    switchError: null,
   })
+  // fixD/M2：三个漏网 store —— 内存态先复位，再把 `lite2:` 底下整段抹掉。
+  resetLite2MemoryStores()
+  wipeLite2LocalStorage()
   // 🔴 集成期修正（feat-051 路由化落地后）：原来这里是 `setState({ detail: null, screen: 'team' })`。
   // 051 之后这两个都不再是 store 状态——当前屏与当前详情由 URL 派生，写进 state 是静默空转：
   // 换账号后 URL 还停在 `/team/<上一家公司的人 id>`，浮层照旧挂着，正是本函数要杀的那个 bug。
   // goScreen 的签名 051 没动，内部改成推路由，一次调用同时收掉「关浮层」和「回团队屏」。
   useLite.getState().goScreen('team')
+}
+
+// 门缝（🔴 DEV-ONLY）：同 store.ts 的 `__lite2Store` / authStore.ts 的 `__lite2Auth` 先例。
+// fixD 的数据边界门要断言「换账号后这三个 store 的**内存态**也复位了」——光看 localStorage
+// 不够：那三个 store 只在创建时读一次盘，不复位内存的话 B 的经理在这一整个标签页里照样
+// 看得见 A 的条目。它们各自的文件不在本线的边界内，而 AuthPanel 本来就是唯一同时持有这
+// 三个引用的模块，是唯一不成环也不越界的落点。
+//
+// 🔴 与 `__lite2Store` 不同，这里加了 DEV 闸：暴露的是三个可写 store 句柄，生产环境没有任何
+// 理由存在。`import.meta.env.DEV` 在生产构建里被静态求值成 false，rollup 直接 DCE 掉整块。
+if (import.meta.env.DEV && typeof window !== 'undefined') {
+  const w = window as unknown as Record<string, unknown>
+  w.__lite2Flow = useFlow
+  w.__lite2Notify = useNotify
+  w.__lite2Onboard = useOnboard
 }
 
 export function AuthPanel() {
@@ -194,8 +279,15 @@ export function AuthPanel() {
 
   // 登录后恢复本账号的公司数据 —— 只在"当前没有 context"时才接管，绝不覆盖用户
   // 手上正在看的那份（游客期刚传的东西不能被登录动作吞掉）。
-  // 刻意用 useLite.setState 而不是给 store 加 action：contextId 那块 feat-050 正在改，
-  // 这里少碰一行就少一处合并冲突。
+  //
+  // fixD/M3：原来这里是裸 `useLite.setState({ contextId: first })`。当时的理由是"contextId
+  // 那块 feat-050 正在改，少碰一行就少一处合并冲突"——躲冲突躲掉的恰恰是 feat-050 专门为
+  // 这一刻留的收口 `adoptContext()`，结果它**全仓零调用点**，成了死代码。
+  //
+  // 代价不是"少了个抽象"，是一个**方向反了的 bug**：adoptContext 里那句
+  // `rememberContextId(contextId)` 才是把锚点落进 localStorage 的唯一动作，绕过它 →
+  // **登录用户的 contextId 永远不落盘 → 登录用户刷新反而丢数据，游客却不丢**。
+  // 登录本该是"更牢靠"的那条路。
   useEffect(() => {
     if (status !== 'authed' || !userId) return
     if (restoredFor.current === userId) return
@@ -214,7 +306,8 @@ export function AuthPanel() {
         const first = context_ids[0]
         if (!first) return
         if (useLite.getState().contextId) return // 手上已有数据，不接管
-        useLite.setState({ contextId: first })
+        // 🔴 收口口子，别再改回裸 setState：落 state **和** 落 localStorage 锚点。
+        useLite.getState().adoptContext(first)
         void useLite.getState().refreshTeam()
         void useLite.getState().refreshNotes()
       })

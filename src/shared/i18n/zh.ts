@@ -57,7 +57,16 @@ export const zh: Dict = {
     "privacyNote": "不给任何人打分 —— 只看他们做什么、负责什么。",
     "empty": "还没有文件。上传几份，团队就会出现。",
     "filesTitle": "你的文件",
-    "filesChunks": "处引用"
+    "filesChunks": "处引用",
+    "againTitle": "再传文件会另起一家公司",
+    "againBody": "每次上传，Avery 都当作独立的一家公司来读。新传的不会并进你现在看的这一份——两份都留着，可以在这里来回切。",
+    "switchTitle": "这台电脑上传过的",
+    "switchAction": "打开这一份",
+    "switchCurrent": "当前打开的",
+    "switchFilesLabel": "读自",
+    "switchErrorMissingCredential": "这台电脑上已经没有打开那一份的钥匙了。公司数据本身还在服务端——用当初绑定的账号登录就能拿回来。",
+    "switchErrorGone": "那一份在服务端已经不在了，已从这个列表里移除。",
+    "switchErrorFailed": "刚才没连上服务器。什么都没丢，再试一次。"
   },
   "team": {
     "liveEyebrow": "从你上传的文件里",
