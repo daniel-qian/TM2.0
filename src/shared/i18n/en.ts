@@ -189,6 +189,18 @@ export const en = {
     // Your team — briefing header (real numbers from ingestion) + weak handoffs
     briefingEyebrow: 'From your uploads',
     metricsLabel: 'Team at a glance',
+    // feat-068 · localized briefing (see src/shared/briefing.ts). The backend's briefing() is
+    // locale-blind and hardcodes English; these keys are the ZH recomposition. They are NEVER read
+    // on the EN build — localizeBriefing() passes the backend's own strings through untouched —
+    // but they live in en.ts because zh.ts is typed `Dict` and every key must exist in both.
+    briefingHeadline: '{people} people, {projects} active projects.',
+    briefingSubheadRisk:
+      'Everything below is drawn from your uploads — nothing invented. {atRisk} project(s) worth a closer look.',
+    briefingSubheadCalm:
+      'Everything below is drawn from your uploads — nothing invented. No risk signals surfaced from the documents.',
+    briefingMetricPeople: 'people',
+    briefingMetricProjects: 'active projects',
+    briefingMetricNeedLook: 'need a look',
     handoffsTitle: 'Worth your attention today',
     handoffsEmpty: 'Nothing needs you right now — your uploads read steady.',
     handoffOpen: 'Open the project',
@@ -437,6 +449,16 @@ export const en = {
     // handoffs — the derivation itself stays in teamData.ts, unchanged from feat-024).
     briefingEyebrow: 'From your uploads',
     metricsLabel: 'Team at a glance',
+    // feat-068 · localized briefing — same keys as the `lite` section above (v01 and v02 keep
+    // parallel namespaces so wording can diverge). Never read on the EN build; see shared/briefing.ts.
+    briefingHeadline: '{people} people, {projects} active projects.',
+    briefingSubheadRisk:
+      'Everything below is drawn from your uploads — nothing invented. {atRisk} project(s) worth a closer look.',
+    briefingSubheadCalm:
+      'Everything below is drawn from your uploads — nothing invented. No risk signals surfaced from the documents.',
+    briefingMetricPeople: 'people',
+    briefingMetricProjects: 'active projects',
+    briefingMetricNeedLook: 'need a look',
     handoffsTitle: 'Worth your attention today',
     handoffsEmpty: 'Nothing needs you right now — your uploads read steady.',
     handoffOpen: 'Open the project',

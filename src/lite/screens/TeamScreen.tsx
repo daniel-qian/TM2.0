@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useLite } from '../store'
 import { useDict } from '../../shared/i18n/useDict'
+import { localizeBriefing } from '../../shared/briefing'
 import { UploadPanel } from '../UploadPanel'
 import { InitialAvatar } from '../InitialAvatar'
 import { LiteComposer } from '../LiteComposer'
@@ -97,9 +98,17 @@ function PeopleGroup({
 }
 
 export function TeamScreen() {
-  const { t } = useDict()
+  const { t, locale } = useDict()
   const team = useLite((s) => s.team)
   const openDetail = useLite((s) => s.openDetail)
+
+  // feat-068 · 后端 briefing() 只会说英文（registry.py 里三处字面量写死，无 locale 参数，
+  // 线上镜像不许重建）。中文构建下在这里本地重组；EN 下原样透传，视觉零变化。
+  // 详见 src/shared/briefing.ts 顶部——请不要"顺手"把这层删掉。
+  const briefing = useMemo(
+    () => (team ? localizeBriefing(team.briefing, team, t.lite, locale) : null),
+    [team, t, locale],
+  )
 
   return (
     <section className="scene scene-home is-active" aria-label="Your team — live">
@@ -107,15 +116,15 @@ export function TeamScreen() {
         <div className="home-frame">
           {/* ── 左脊柱 ─────────────────────────────────────────────── */}
           <div className="home-spine">
-            {team ? (
+            {team && briefing ? (
               <>
                 <header className="home-greeting">
                   <p className="eyebrow">{t.lite.briefingEyebrow}</p>
-                  <h1>{team.briefing.headline}</h1>
-                  <p className="home-greeting-sub">{team.briefing.subhead}</p>
-                  {team.briefing.metrics.length > 0 ? (
+                  <h1>{briefing.headline}</h1>
+                  <p className="home-greeting-sub">{briefing.subhead}</p>
+                  {briefing.metrics.length > 0 ? (
                     <div className="lite-metrics" aria-label={t.lite.metricsLabel}>
-                      {team.briefing.metrics.map((m) => (
+                      {briefing.metrics.map((m) => (
                         <span key={m.label} className="lite-metric-chip">
                           <strong>{m.value}</strong> {m.label}
                         </span>

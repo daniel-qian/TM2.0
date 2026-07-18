@@ -81,7 +81,15 @@ export function rememberContextId(contextId: string | null): void {
 }
 
 // 首帧同步取回（不等 effect）：store 建好时 contextId 就位，`restoreSession()` 才有的可拉。
-const restoredContextId = isStubTransportSelected() ? null : loadStoredContextId()
+// feat-068 补漏：feat-050 用 isStubTransportSelected() 判断「这是 stub 的假 context，别持久化」，
+// 但那个函数直接读 URL 的 ?transport=stub，**不受 DEV 闸约束**——而 :181 的 defaultTransport 受。
+// 于是生产环境里带着 ?transport=stub 打开会进入一个自相矛盾的状态：拿的是真 HTTP 数据（闸生效），
+// 却被当成 stub 而拒绝恢复/保存 contextId（三处判断生效）——真数据刷新即丢，且无任何提示。
+// 把 DEV 闸并进来，两侧口径就一致了：生产恒为 false（静态假值，rollup 直接 DCE 掉这条分支），
+// dev 行为一字不变、AFK 门照旧。
+const stubSelected = import.meta.env.DEV && isStubTransportSelected()
+
+const restoredContextId = stubSelected ? null : loadStoredContextId()
 
 // 恢复的重入闸（模块级，同 notifyStore 的 `wired` 先例）。**不能拿 state.restoring 当闸**——
 // 它首帧就是 true（为了不闪空态），拿它当闸会让挂载时的第一次调用直接被自己挡掉、永远不拉。
@@ -236,7 +244,7 @@ export const useLite = create<LiteState>((set, get) => ({
       })
       // feat-050：落锚点——这是"刷新还在"的全部秘密（数据本来就在后端，只差这根指针）。
       // stub 传输不落（它的 context 是进程内造的，落了下次真启动会拿去打真后端）。
-      if (!isStubTransportSelected()) rememberContextId(payload.context_id)
+      if (!stubSelected) rememberContextId(payload.context_id)
       // feat-047（feat-032）：拉一次持久文件清单（含 n_chunks）。次要视图，失败不影响上传成功。
       void get().refreshFiles()
     } catch (err) {
@@ -305,7 +313,7 @@ export const useLite = create<LiteState>((set, get) => ({
 
   // feat-050 的被覆盖口（见接口注释）：一处收口"权威 contextId 变了"这件事。
   adoptContext: (contextId, ownerToken) => {
-    if (!isStubTransportSelected()) rememberContextId(contextId)
+    if (!stubSelected) rememberContextId(contextId)
     set({
       contextId,
       ownerToken: ownerToken ?? storedOwnerToken(contextId),

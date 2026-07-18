@@ -26,6 +26,7 @@ import './lite2/styles/look-aurora.css'
 import './lite2/styles/lite2.css'
 import { App } from './App'
 import { useLite } from './lite/store'
+import { useLite as useLite2 } from './lite2/store'
 
 // feat-018 — expose the build-stamped dual-deploy target (see vite.config.ts). Lets Danny confirm
 // which target a deployed bundle is (mode/locale/api base) from devtools, and keeps the stamp in
@@ -40,6 +41,10 @@ if (typeof window !== 'undefined') {
 // production build, so Vite dead-code-eliminates this entire block — it never ships.
 if (import.meta.env.DEV && typeof window !== 'undefined') {
   ;(window as unknown as { __AVERY_LITE__?: unknown }).__AVERY_LITE__ = useLite
+  // feat-068 — 同一个测试缝补给 v02 壳。v01 的 __AVERY_LITE__ 只暴露了 lite/store，
+  // 而 briefing 本地化（shared/briefing.ts）两个壳都要在真 DOM 上验，v02 侧此前没有任何
+  // 注入点。写法与上一行逐字对齐，同样只在 DEV 存在（生产构建里整段被 Vite 剪掉）。
+  ;(window as unknown as { __AVERY_LITE2__?: unknown }).__AVERY_LITE2__ = useLite2
 }
 
 createRoot(document.getElementById('root')!).render(

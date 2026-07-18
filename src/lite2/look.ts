@@ -27,13 +27,33 @@ function normalize(raw: string | null | undefined): LiteLook | null {
   return (VALID as readonly string[]).includes(v) ? (v as LiteLook) : null
 }
 
+// feat-068：旧的 `?skin=` 不再被识别，但**必须响亮地失败**。静默回落是这里最坏的失败方式：
+// `?skin=paper` 恰好等于缺省，看不出区别；而 `?skin=aurora` 会安静地渲染成 paper —— 拿旧链接
+// 做双皮验收的人会得到一个「通过」的极光结论，实际测的是纸感。v02 对齐波那条线的所有验收基线
+// 和给子 agent 的指令里用的都是旧形式（`?v=2&mode=live&skin=paper&lang=zh`），所以这条提示是
+// 写给他们的。别把它升级成兼容别名 —— 两种写法并存正是这次更名要终结的东西。
+let warnedLegacy = false
+function warnLegacySkinParam(params: URLSearchParams): void {
+  if (warnedLegacy || typeof console === 'undefined') return
+  const legacy = params.get('skin')
+  if (!legacy) return
+  warnedLegacy = true
+  console.warn(
+    `[avery] \`?skin=${legacy}\` is no longer recognised — the parameter was renamed to \`?look=\` ` +
+      `(feat-068; \`Skin\` now means only ADR-0021's industry theme). ` +
+      `This page is rendering the default \`paper\` look. Use \`?look=${legacy}\` instead.`,
+  )
+}
+
 export function resolveLook(search?: string): LiteLook {
   const qs =
     search ??
     (typeof window !== 'undefined' && window.location ? window.location.search : '')
   try {
-    const fromUrl = normalize(new URLSearchParams(qs).get('look'))
+    const params = new URLSearchParams(qs)
+    const fromUrl = normalize(params.get('look'))
     if (fromUrl) return fromUrl
+    warnLegacySkinParam(params)
   } catch {
     // malformed search string — fall through to default
   }
