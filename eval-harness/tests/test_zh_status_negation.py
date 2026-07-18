@@ -66,29 +66,36 @@ _SHIPPED_BEFORE_THE_FIX = {
     "_ZH_AT_RISK": r"(?<![无没])风险|延期|逾期|滞后|落后|推迟|拖期|告急|吃紧|超期",
     "_ZH_DONE": r"(?<![未没待])完成|已交付|已上线|已结项|已验收|验收通过",
     "_ZH_ON_TRACK": r"进行中|推进中|(?<![不异])正常|按计划|如期|顺利|在轨",
+    # 这两条当时**不存在**，用一个永不匹配的模式表示「没有这条」。
+    # `_ZH_OFF_PLAN` 是第二轮新加的，必须一起退掉：不退，它会在突变态下继续开火，
+    # 于是「进展不顺利」在「修复前」的代码上也读出 at-risk，第三列就对不上了 —— 那不是语料抄错，
+    # 是突变没退干净，而两者的症状一模一样。
     "_ZH_CANNOT_DELIVER": r"(?!)",
+    "_ZH_OFF_PLAN": r"(?!)",
 }
 
 
 @contextmanager
 def before_the_fix():
-    """把 extract 模块**就地**退回修复前：四条常量换回带单字前瞻的原文，`_zh_states` 换回当时
-    那句裸 `re.search`。
+    """把 extract 模块**就地**退回修复前：常量换回带单字前瞻的原文，`_zh_states` 换回当时
+    那句裸 `re.search`，第二轮新增的后置否定 `_ZH_POST_NEG_RE` 一并停掉。
 
     在进程里改真模块，而不是在测试里抄一份 `_norm_status` 的旧副本 —— 抄一份会随实现漂移，
     然后某天变成「证明了一个早就没人跑的函数有 bug」。这里跑的是真的 `_norm_status`。
     """
     saved = {k: getattr(extract, k) for k in _SHIPPED_BEFORE_THE_FIX}
-    saved_states = extract._zh_states
+    saved_states, saved_post = extract._zh_states, extract._ZH_POST_NEG_RE
     try:
         for k, v in _SHIPPED_BEFORE_THE_FIX.items():
             setattr(extract, k, v)
         extract._zh_states = lambda t, pattern, **kw: bool(re.search(pattern, t))
+        extract._ZH_POST_NEG_RE = re.compile(r"(?!)")
         yield
     finally:
         for k, v in saved.items():
             setattr(extract, k, v)
         extract._zh_states = saved_states
+        extract._ZH_POST_NEG_RE = saved_post
 
 
 # =============================================================================================
@@ -135,15 +142,23 @@ _NEGATED_RISK = [
 ]
 
 # 三、否定掉的「正常」，修复前 on-track。任务书点名要查的「不是正常」在这里。
+#
+# 🔴 第二列在第二轮变了，是**刻意**的，不是把门改绿：前五条从 "" 提到了 "at-risk"。
+# 第一轮把它们从「反向」救到了「留白」，但留白到经理眼前是两句失实：wire 上 status 键整个消失
+# （registry.py `if pr.status:`），前端 `card.status ?? 'on-track'` 把它编回 on-track；决策卡则说
+# 「没读到状态…任何一项」——对一份第三行就写着「进展不顺利」的文档说这句话。
+# 「不顺利」「未按计划」不是「我没读到」，是客户自己写下的负面陈述，照读即可，落 at-risk
+# （extract._ZH_OFF_PLAN）。剩下六条仍是 ""：「不是正常」「不在轨」这类否定掉的是标签本身，
+# 归不出方向，留白才诚实。
 _NEGATED_ON_TRACK = [
-    ("未按计划推进", "", "on-track"),
-    ("没有按计划推进", "", "on-track"),
+    ("未按计划推进", "at-risk", "on-track"),
+    ("没有按计划推进", "at-risk", "on-track"),
+    ("进展不顺利", "at-risk", "on-track"),
+    ("不太顺利", "at-risk", "on-track"),
+    ("不够顺利", "at-risk", "on-track"),
     ("不按计划", "", "on-track"),
     ("未能如期", "", "on-track"),
     ("无法如期", "", "on-track"),
-    ("进展不顺利", "", "on-track"),
-    ("不太顺利", "", "on-track"),
-    ("不够顺利", "", "on-track"),
     ("不是正常", "", "on-track"),
     ("不太正常", "", "on-track"),
     ("不在轨", "", "on-track"),
