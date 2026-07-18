@@ -497,6 +497,53 @@ export const en = {
     detailSignals: 'What the documents say',
     detailSource: 'From your uploads',
     detailGone: 'This card is no longer in your uploads.',
+    // feat-055: the project overlay used to render `status` and `ownerName` straight from the
+    // defaulted view model, so a project the documents never gave a status to read as "on-track".
+    // It now labels each field and says so when the documents didn't state it.
+    detailStatus: 'Status',
+    detailOwner: 'Owner',
+    detailDue: 'Due',
+
+    // ── feat-055 · Projects screen (PRD G9 — the board; the biggest structural gap in the
+    // diff audit was that we had no projects screen at all). Field coverage in real payloads is
+    // uneven (progress 6/17, dueDate 7/17), so every field is either a real value or an explicit
+    // "the documents did not say" — never a silent 0% or an empty cell. ──
+    tabProjects: 'Projects',
+    projectsEyebrow: 'Projects',
+    projectsTitle: 'The projects in your documents',
+    projectsLede:
+      'Built only from what your uploads actually say. Anything a document never stated is marked as not stated — it is not filled in as zero.',
+    projectsCountOne: '1 project from your uploads',
+    projectsCountMany: '{count} projects from your uploads',
+    projectsCoverageTitle: 'What the documents left out',
+    projectsCoverageProgress: '{count} with no progress stated',
+    projectsCoverageDue: '{count} with no due date',
+    projectsCoverageStatus: '{count} with no status stated',
+    projectsCoverageNote: 'Avery leaves these unknown on purpose rather than filling in a zero.',
+    projectsSingleNote:
+      'Only one project came out of your uploads. If your documents cover more than one, they may not be split into sections Avery can tell apart yet — a heading per project usually helps.',
+    projectsEmptyTitle: 'No projects yet',
+    projectsEmptyBody:
+      'Upload a project plan, a weekly note or a status report from Your team, and the projects it describes will show up here.',
+    projectsEmptyCta: 'Go to Your team',
+    projectsGroupNeedsYou: 'Needs you',
+    projectsGroupMoving: 'Moving',
+    projectsGroupOther: 'Other status',
+    projectsGroupUnknown: 'No status in the documents',
+    projectsGroupDone: 'Done',
+    projectsStatusBlocked: 'Blocked',
+    projectsStatusAtRisk: 'At risk',
+    projectsStatusOnTrack: 'On track',
+    projectsStatusDone: 'Done',
+    projectsStatusUnknown: 'Status not stated',
+    projectsOwnerLabel: 'Owner',
+    projectsDueLabel: 'Due',
+    projectsProgressLabel: 'Progress',
+    projectsBlockersLabel: 'In the way',
+    projectsBlockersOne: '1 thing in the way',
+    projectsBlockersMany: '{count} things in the way',
+    projectsUnknownValue: 'The documents did not say',
+    projectsOpenAria: 'Open {title}',
 
     // ── Onboarding wizard (feat-045, PRD F7 — first-visit overlay; skippable; × pauses and
     // resumes next visit. NO fake connect-tools step, NO fake create-account step — every step

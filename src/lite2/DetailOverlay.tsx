@@ -1,9 +1,10 @@
-import { useRef } from 'react'
+import { useMemo, useRef } from 'react'
 import { useLite } from './store'
 import { useRouteDetail } from './routes'
 import { useDict } from '../shared/i18n/useDict'
 import { InitialAvatar } from './InitialAvatar'
 import { LiteModal } from './LiteModal'
+import { buildProjectViews, projectStatusLabel } from './projectView'
 import type { LiteDetail } from './store'
 import type { LiteTeam } from './teamData'
 
@@ -46,8 +47,16 @@ export function DetailOverlay() {
 
   const person =
     detail?.kind === 'person' && team ? team.people.find((p) => p.id === detail.id) ?? null : null
+
+  // feat-055：项目详情改吃**原始 payload**（rawTeam），不再吃 team.projects。
+  // 理由与项目屏同一条：teamData 的 `status ?? 'on-track'` / `ownerName ?? 'Unassigned'`
+  // 兜底会把「文档没写」抹成一个看起来正常的值，浮层于是把没写状态的项目显示成
+  // "on-track"。派生口径收在 projectView.ts，屏与浮层共用一份（同一个项目两处说法必须一致）。
+  // 注：store 里 team 与 rawTeam 永远成对写入（uploadFiles / restoreSession / refreshTeam
+  // 三处都在同一次 set 里落），所以「有 team 没 raw」不会发生。
+  const projectViews = useMemo(() => buildProjectViews(rawTeam?.projects, rawTeam?.people), [rawTeam])
   const project =
-    detail?.kind === 'project' && team ? team.projects.find((p) => p.id === detail.id) ?? null : null
+    detail?.kind === 'project' ? projectViews.find((p) => p.id === detail.id) ?? null : null
 
   return (
     <LiteModal
@@ -111,9 +120,29 @@ export function DetailOverlay() {
             <div>
               <p className="eyebrow">{t.lite2.detailProjectEyebrow}</p>
               <h2>{project.title}</h2>
+              {/* feat-055：副标题以前是 `{status} · {ownerName}`，直接吃 teamData 的兜底
+                  默认值——一个文档从没写过状态的项目会在这里显示成 "on-track"，把「没写」
+                  说成了「在按计划推进」。现在三项各自成行、各自会说「文档未提及」。 */}
               <p className="lite-detail-subtitle">
-                {project.status} · {project.ownerName}
-                {project.dueDate ? ` · ${project.dueDate}` : ''}
+                {t.lite2.detailStatus}
+                {': '}
+                <span className={project.statusKey === 'unknown' ? 'is-unknown' : undefined}>
+                  {projectStatusLabel(project, t.lite2)}
+                </span>
+              </p>
+              <p className="lite-detail-subtitle">
+                {t.lite2.detailOwner}
+                {': '}
+                <span className={project.ownerName ? undefined : 'is-unknown'}>
+                  {project.ownerName ?? t.lite2.projectsUnknownValue}
+                </span>
+              </p>
+              <p className="lite-detail-subtitle">
+                {t.lite2.detailDue}
+                {': '}
+                <span className={project.dueDate ? undefined : 'is-unknown'}>
+                  {project.dueDate ?? t.lite2.projectsUnknownValue}
+                </span>
               </p>
             </div>
           </header>
@@ -125,14 +154,18 @@ export function DetailOverlay() {
             </section>
           ) : null}
 
-          {typeof project.progress === 'number' ? (
-            <section className="lite-detail-section">
-              <p className="eyebrow">{t.lite2.detailProgress}</p>
-              <p>{project.progress}%</p>
-            </section>
-          ) : null}
+          {/* 🔴 进度未知时也要出这一节，写明「文档未提及」——以前是整节不渲染，于是
+              「文档没写进度」和「这个项目没有进度这回事」在屏幕上完全一样。 */}
+          <section className="lite-detail-section">
+            <p className="eyebrow">{t.lite2.detailProgress}</p>
+            <p className={project.progress === null ? 'is-unknown' : undefined}>
+              {project.progress === null
+                ? t.lite2.projectsUnknownValue
+                : `${project.progress}%`}
+            </p>
+          </section>
 
-          {project.blockers && project.blockers.length > 0 ? (
+          {project.blockers.length > 0 ? (
             <section className="lite-detail-section">
               <p className="eyebrow">{t.lite2.detailBlockers}</p>
               <ul>

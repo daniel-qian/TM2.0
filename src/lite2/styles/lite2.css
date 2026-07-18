@@ -3429,6 +3429,15 @@
     width: 100%;
     opacity: 0.3;
   }
+}
+/* ⬆ feat-055 补：上面这个收尾花括号原本缺失。`@media (prefers-reduced-motion: reduce)`
+   在 feat-053 追加账号样式时没有被关掉，于是**它之后的所有规则都被卷进了这条 media
+   query**——feat-053 的整套账号入口样式、以及 feat-055 追加在文件末尾的整个项目屏样式，
+   全都只在「用户开了减少动效」时才生效，默认状态下一条都不应用。
+   esbuild 一直在 `npm run build` 里报 unbalanced-brace 警告（是 warning 不是 error，
+   所以三道硬门全绿也照样漏过去）。本条属跨线修复但无法回避：不补这一个字符，feat-055
+   的样式表在多数用户那里等于不存在。见 progress-feat-055.md 的 Notes。 */
+
 /* ── feat-053 账号入口（LiteTopbar 内，LiteBell 旁；.prototype-topbar 是
    pointer-events:none 容器，同 .scene-tabs/.lite-bell 的规矩自己 auto 回来）────────── */
 .lite2-shell .lite-auth {
@@ -3609,4 +3618,380 @@
   color: var(--terracotta);
   font-size: 11.5px;
   line-height: 1.5;
+}
+
+/* ══ feat-055 · 项目屏（PRD G9）════════════════════════════════════════════════
+   布局与 Follow-ups / A closer look 同口径（scroll/frame/header），卡片语法沿用
+   .home-project-card 家族（hairline 边框、圆角、柔阴影、状态左缘）。
+   🔴 本屏的设计要点不在装饰，在「未知」：
+     · 进度未知 → 根本不出进度条（不是出一条 0 宽的），只出一行「文档未提及」；
+     · 到期/负责人/状态未知 → .is-unknown 弱化 + 斜体，一眼看出这是「文件里没写」
+       而不是一个正常的值；
+     · 「文件里没写状态」的卡片一律中性色 —— 绝不染成表示「没事」的绿。
+   分组只渲染非空的组，所以 1 个项目 = 一组一张卡，0 个项目 = 诚实空态，都不留空栏。 */
+.lite2-shell .lite-projects-scroll {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.lite2-shell .lite-projects-frame {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 84px 36px 90px;
+}
+
+.lite2-shell .lite-projects-header {
+  margin-bottom: 18px;
+}
+
+.lite2-shell .lite-projects-header h1 {
+  margin: 4px 0 8px;
+  font-family: var(--lite2-heading-font);
+  font-size: clamp(21px, 2.4vw, 27px);
+  font-weight: 500;
+  line-height: 1.32;
+}
+
+.lite2-shell .lite-projects-lede {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.6;
+  max-width: 62ch;
+}
+
+.lite2-shell .lite-projects-count {
+  margin: 8px 0 0;
+  color: var(--ink-faint);
+  font-size: 12px;
+}
+
+/* ── 覆盖率实况条（数字当场真算，零硬编码统计句）───────────────────────────── */
+.lite2-shell .lite-projects-coverage {
+  margin: 0 0 20px;
+  padding: 12px 14px;
+  border: 1px solid var(--rule);
+  border-left: 3px solid rgba(var(--lite2-warn-rgb), 0.5);
+  border-radius: var(--radius);
+  background: rgba(var(--lite2-ink-rgb), 0.03);
+}
+
+.lite2-shell .lite-projects-coverage-title {
+  margin: 0 0 6px;
+}
+
+.lite2-shell .lite-projects-coverage-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--ink-soft);
+  font-size: 12.5px;
+}
+
+.lite2-shell .lite-projects-coverage-note {
+  margin: 7px 0 0;
+  color: var(--ink-faint);
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+
+/* ── 只有 1 个项目时的说明（抽取粒度，不是「你只有一个项目」）────────────────── */
+.lite2-shell .lite-projects-single-note {
+  margin: 0 0 20px;
+  padding: 11px 14px;
+  border: 1px dashed var(--rule-strong);
+  border-radius: var(--radius);
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  line-height: 1.6;
+  max-width: 68ch;
+}
+
+/* ── 分组 ─────────────────────────────────────────────────────────────────── */
+.lite2-shell .lite-projects-group {
+  margin-bottom: 24px;
+}
+
+.lite2-shell .lite-projects-group-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+}
+
+.lite2-shell .lite-projects-group-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: rgba(var(--lite2-ink-rgb), 0.07);
+  color: var(--ink-soft);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+/* 自适应网格：宽屏多列、窄屏单列。**不设最小列数** —— 1 张卡就是 1 张卡，
+   不靠占位骨架把版面撑满。 */
+.lite2-shell .lite-projects-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(288px, 1fr));
+  gap: 12px;
+}
+
+/* ── 项目卡 ───────────────────────────────────────────────────────────────── */
+.lite2-shell .lite-project-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--rule);
+  border-radius: var(--radius);
+  background: rgba(var(--lite2-surface-rgb), 0.82);
+  box-shadow: var(--shadow-soft);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--fast) ease, transform var(--fast) ease,
+    box-shadow var(--fast) ease;
+}
+
+.lite2-shell .lite-project-card:hover,
+.lite2-shell .lite-project-card:focus-visible {
+  transform: translateY(-1px);
+  border-color: var(--rule-strong);
+  outline: none;
+}
+
+/* 状态左缘：与「你的团队」项目卡同一套族色。🔴 on-track / done / 状态未知一律不染色 ——
+   只有需要经理出手的两档才上色，避免把「文档没写」读成「一切正常」。 */
+.lite2-shell .lite-project-card.edge-at-risk {
+  border-left-color: rgba(var(--lite2-warn-rgb), 0.6);
+}
+
+.lite2-shell .lite-project-card.edge-blocked {
+  border-left-color: rgba(var(--lite2-danger-rgb), 0.65);
+}
+
+.lite2-shell .lite-project-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.lite2-shell .lite-project-title {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 600;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.lite2-shell .lite-project-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  color: var(--ink-soft);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.lite2-shell .lite-project-status.is-unknown {
+  color: var(--ink-faint);
+  font-style: italic;
+}
+
+.lite2-shell .lite-project-summary {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  line-height: 1.55;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+}
+
+/* ── 事实行（负责人 / 到期 / 未知进度）───────────────────────────────────── */
+.lite2-shell .lite-project-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+}
+
+.lite2-shell .lite-project-fact {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  font-size: 12px;
+}
+
+.lite2-shell .lite-project-fact-label {
+  color: var(--ink-faint);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.lite2-shell .lite-project-fact-value {
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+}
+
+/* 🔴「文档未提及」的统一视觉：更淡 + 斜体。它必须一眼区别于一个真值，
+   否则「没写」和「写了个空」在屏幕上又变成同一件事。 */
+.lite2-shell .lite-project-fact.is-unknown .lite-project-fact-value,
+.lite2-shell .lite-detail-subtitle .is-unknown,
+.lite2-shell .lite-detail-section p.is-unknown {
+  color: var(--ink-faint);
+  font-style: italic;
+}
+
+/* ── 进度（只有已知才画条）──────────────────────────────────────────────── */
+.lite2-shell .lite-project-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.lite2-shell .lite-project-progress-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.lite2-shell .lite-project-progress-value {
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.lite2-shell .lite-project-progress-track {
+  display: block;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(var(--lite2-ink-rgb), 0.08);
+  overflow: hidden;
+}
+
+.lite2-shell .lite-project-progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: rgba(var(--lite2-accent-rgb), 0.72);
+}
+
+/* ── 卡点 ─────────────────────────────────────────────────────────────────── */
+.lite2-shell .lite-project-blockers {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-top: 8px;
+  border-top: 1px solid var(--rule);
+}
+
+.lite2-shell .lite-project-blocker-count {
+  color: rgba(var(--lite2-danger-deep-rgb), 0.9);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.lite2-shell .lite-project-blocker-first {
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+
+/* ── 空态（0 个项目）：诚实说明 + 去上传，绝不摆骨架卡 ───────────────────── */
+.lite2-shell .lite-projects-empty {
+  padding: 26px 24px;
+  border: 1px dashed var(--rule-strong);
+  border-radius: var(--radius);
+  text-align: center;
+}
+
+.lite2-shell .lite-projects-empty h2 {
+  margin: 0 0 8px;
+  font-family: var(--lite2-heading-font);
+  font-size: 18px;
+  font-weight: 500;
+}
+
+.lite2-shell .lite-projects-empty p {
+  margin: 0 auto;
+  max-width: 46ch;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.lite2-shell .lite-projects-empty-cta {
+  margin-top: 14px;
+  padding: 7px 14px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 999px;
+  background: rgba(var(--lite2-surface-rgb), 0.9);
+  color: var(--ink);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.lite2-shell .lite-projects-empty-cta:hover,
+.lite2-shell .lite-projects-empty-cta:focus-visible {
+  border-color: rgba(var(--lite2-accent-rgb), 0.85);
+  background: rgba(var(--lite2-accent-rgb), 0.08);
+  outline: none;
+}
+
+.lite2-shell .lite-projects-restoring {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+
+.lite2-shell .lite-projects-restore-detail {
+  margin-top: 4px;
+  color: var(--terracotta);
+  font-size: 11.5px;
+}
+
+.lite2-shell .lite-projects-restore-failed button {
+  margin-top: 10px;
+  padding: 6px 12px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+@media (max-width: 720px) {
+  .lite2-shell .lite-projects-frame {
+    padding: 76px 18px 80px;
+  }
+
+  .lite2-shell .lite-projects-grid {
+    grid-template-columns: 1fr;
+  }
 }

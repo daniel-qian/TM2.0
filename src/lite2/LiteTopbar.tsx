@@ -25,6 +25,12 @@ export function LiteTopbar() {
   // （本棒的 tab 顺序决定，理由见 progress.md）。
   const tabs: { label: string; screen: LiteScreen }[] = [
     { label: t.lite2.tabTeam, screen: 'team' },
+    // feat-055（PRD G9）：第 8 个 tab「项目」。放在「你的团队」之后而不是队尾——它和团队屏
+    // 是同一份上传长出来的两半（人 / 项目），排到「Where this goes」后面等于把主数据屏
+    // 塞进未来叙事之后。⚠️ 门相位 v2Boots 硬编码了 7 个 tab 的标签数组，本条与 feat-057
+    // 的 tab 都会让它对不上——见 progress-feat-055.md 的 Notes（本条不改门，避免与并行线
+    // 在同一处打架，由集成方一次性更新期望值）。
+    { label: t.lite2.tabProjects, screen: 'projects' },
     { label: t.lite2.tabRoom, screen: 'room' },
     { label: t.lite2.tabFollowups, screen: 'followups' },
     { label: t.lite2.tabNotes, screen: 'notes' },
