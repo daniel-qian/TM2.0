@@ -117,6 +117,41 @@ def _zh_score_num_is_work(fld: str, m: re.Match) -> bool:
 def _person_text_fields(p: PersonEntity) -> list[str]:
     """Every person free-text field the red line must see.
 
+    `name` IS ON THIS LIST, AND IT IS feat-060's HOLE 1 (READ BEFORE REMOVING IT).
+    `name` is the ONE person field that is never derived from a model's judgement and never
+    sanitised: `llm_extract` runs `_strip_person_ratings` over role/tenure/owns/collaboration and
+    deliberately does NOT run it over `name` — you do not silently rewrite what somebody is called.
+    That is the right call, and it is exactly why `name` has to be GATED instead: the only honest
+    response to a person called 「绩效8分」 is to refuse the upload, not to rename them to 「绩效」.
+
+    HOW TEXT GETS IN THERE (this is not a hypothetical shape): `extract.py:801`, the resume path,
+    falls back to the FILE NAME when no name-like header is found —
+        name = re.sub(r"\\.[a-z0-9]+$", "", doc.name).replace("_", " ").strip()
+    So `绩效8分.docx` produces a person literally named 「绩效8分」, and `张三-KPI95.pdf` a person named
+    「张三-KPI95」. Three external companies are about to upload their own files.
+
+    MEASURED, before the fix — every one of these built a context with ok=True, no violations:
+        name='绩效8分'            -> 0 violations      (now caught)
+        name='张三-KPI95'         -> 0 violations      (now caught)
+        name='王五(离职风险高)'    -> 0 violations      (now caught)
+        name='赵六 末位淘汰名单'   -> 0 violations      (now caught)
+        name='Bob low performer'  -> 0 violations      (now caught)
+    TWO independent bugs produced that, and both are fixed by putting `name` here:
+      1. `_scan_person_value` iterates THIS list, so no structural rating-number scan ever saw the
+         name — 「张三-KPI95」 passed even with every other field populated.
+      2. `validate_extraction` guards the CONTENT scan with `if blob.strip()`. The anchored blob it
+         builds mentions `p.name`, so a scoring name in the company of a role WAS caught by luck —
+         but a resume with no detectable role/tenure/owns leaves the blob EMPTY, the guard skips,
+         and nothing is scanned at all. That is precisely the file-name-fallback person.
+
+    WHY IT IS SAFE TO SCAN (checked by running it, not by reasoning — a false positive here is worse
+    than the bug, because validate_extraction failing is a HARD FAIL at pipeline.ingest_docs:130 and
+    rejects the customer's ENTIRE upload): both scans fire on rating SHAPES (N/M, N%, N stars, a
+    score word next to a score-shaped number) and a person-scoring LEXICON. A personal name is a
+    proper noun and carries neither. Verified over Sanya's real 20-person roster, the English names
+    the corpus and both stub transports emit, and the file-name-derived shapes the resume fallback
+    actually produces (`test_real_names_are_not_violations`).
+
     `team` IS ON THIS LIST, AND IT IS THE WHOLE OF feat-048 ROUND 3's H1 (READ BEFORE REMOVING IT).
     It was absent for 47 features, and that absence was SAFE for exactly one reason: `team` was a
     closed enumeration. `extract._norm_team` mapped every stated department onto TEAMS or to "", so
@@ -142,7 +177,7 @@ def _person_text_fields(p: PersonEntity) -> list[str]:
     Sanya's real org chart plus every English value the corpus and both stub transports emit — 24
     values, all clean (test_real_departments_in_team_are_not_violations_H1).
     """
-    return [p.role, p.tenure, p.team, *p.owns, *p.collaboration]
+    return [p.name, p.role, p.tenure, p.team, *p.owns, *p.collaboration]
 
 
 def _scan_person_value(p: PersonEntity) -> list[ExtractionViolation]:
@@ -204,6 +239,10 @@ def validate_extraction(result: ExtractionResult) -> ExtractionRedlineResult:
         if blob.strip():
             # Anchor to a person so ambiguous forms fire (redline person-anchoring). Prefix a
             # pronoun/noun so _has_person() is true for the whole segment window.
+            # feat-060 — `p.name` is now INSIDE the blob too (_person_text_fields), which is what
+            # makes this `if` reachable for a person who has nothing but a name. It is deliberately
+            # ALSO left in the prefix: the prefix is the person-anchor, not the payload, and the
+            # duplication costs one extra snippet in `detail` at worst.
             anchored = f"This teammate ({p.name}), she: {blob}"
             rl = redline.validate(anchored)
             for v in rl.violations:
