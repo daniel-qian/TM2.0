@@ -26,9 +26,7 @@ dist-ssr
 # 门驱动辅助（gate snippet / evidence collector 的 public/ 临时拷贝）——收口必删，防漏兜底
 public/__gate_verify.js
 public/__evidence_collector.js
-# feat-047 e2e seed（鹿山雅居虚构数据，供真 LLM 抽取测试）——测试产物不入库
-.issues/lite-live-v02-0713/e2e-seeds/
 # 跑动产物（uvicorn 日志、Playwright 驱动与结果 JSON）——运行时输出，不入库
 runs/
-# 跑动产物（uvicorn 日志、Playwright 驱动与结果 JSON）——运行时输出，不入库
-runs/
+# 会话复盘存档（transcript-zh 产物）——本地留存，不入库
+transcripts/
