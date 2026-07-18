@@ -113,6 +113,10 @@ export function TeamScreen() {
   const team = useLite((s) => s.team)
   const openDetail = useLite((s) => s.openDetail)
   const goScreen = useLite((s) => s.goScreen)
+  // feat-050 · 会话不丢：空态下要分清"正在取回上次会话"和"真没有会话"。
+  const restoring = useLite((s) => s.restoring)
+  const restoreError = useLite((s) => s.restoreError)
+  const restoreSession = useLite((s) => s.restoreSession)
 
   const triageMarks = useFlow((s) => s.triageMarks)
   const markTriageDone = useFlow((s) => s.markTriageDone)
@@ -286,11 +290,32 @@ export function TeamScreen() {
                 <p className="eyebrow">{t.lite2.emptyEyebrow}</p>
                 <h1>{t.team.emptyTitle}</h1>
                 <p className="home-greeting-sub">{t.team.emptyBody}</p>
-                <ul className="lite-empty-hints">
-                  <li>{t.lite2.emptyHintRoster}</li>
-                  <li>{t.lite2.emptyHintProject}</li>
-                  <li>{t.lite2.emptyHintPrivacy}</li>
-                </ul>
+                {/* feat-050 · 会话不丢：有存下的 contextId 时，先说"正在取回"，别让人对着
+                    上传引导以为数据没了。取不回来（且非 404）就一行说明 + 重试，不堆红字；
+                    404 走干净空态（下面的默认分支）——context 真没了，上传引导就是诚实答案。 */}
+                {restoring ? (
+                  <p className="lite-empty-restoring" aria-live="polite">
+                    {t.lite2.restoringLabel}
+                  </p>
+                ) : restoreError ? (
+                  <div className="lite-empty-restore-failed" aria-live="polite">
+                    <p className="lite-empty-restore-note">{t.lite2.restoreFailed}</p>
+                    <p className="lite-empty-restore-detail">{restoreError}</p>
+                    <button
+                      type="button"
+                      className="lite-empty-restore-retry"
+                      onClick={() => void restoreSession()}
+                    >
+                      {t.lite2.restoreRetry}
+                    </button>
+                  </div>
+                ) : (
+                  <ul className="lite-empty-hints">
+                    <li>{t.lite2.emptyHintRoster}</li>
+                    <li>{t.lite2.emptyHintProject}</li>
+                    <li>{t.lite2.emptyHintPrivacy}</li>
+                  </ul>
+                )}
               </header>
             )}
           </div>

@@ -35,6 +35,10 @@ export function Lite2App() {
   // （覆盖层；unseen/in-progress 且本会话未 × 时挂载——localStorage 记状态与进度）。
   useEffect(() => {
     initNotifications()
+    // feat-050 · 会话不丢：刷新/关掉浏览器重开后，按 localStorage 里存的 contextId 把上次
+    // 的团队/文件/笔记取回来。走 getState() 而不是订阅——这是一次性的挂载副作用，
+    // 不该让整个壳跟着 restoring 重渲。幂等由 store 内的模块级闸看住（StrictMode 双跑安全）。
+    void useLite.getState().restoreSession()
   }, [])
   const wizardOpen = useOnboard(selectWizardOpen)
 
