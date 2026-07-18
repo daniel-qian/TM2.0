@@ -115,7 +115,34 @@ def _zh_score_num_is_work(fld: str, m: re.Match) -> bool:
 
 
 def _person_text_fields(p: PersonEntity) -> list[str]:
-    return [p.role, p.tenure, *p.owns, *p.collaboration]
+    """Every person free-text field the red line must see.
+
+    `team` IS ON THIS LIST, AND IT IS THE WHOLE OF feat-048 ROUND 3's H1 (READ BEFORE REMOVING IT).
+    It was absent for 47 features, and that absence was SAFE for exactly one reason: `team` was a
+    closed enumeration. `extract._norm_team` mapped every stated department onto TEAMS or to "", so
+    the only values that could reach this dataclass were 'Founders'/'Eng'/'Product'/'Design'/'GTM'/
+    'Ops'/'' — no document text could land here, so there was nothing to scan.
+
+    Round 2's BUG-4 pass-through REVOKED that premise: an unmappable department ('前厅部') is now kept
+    VERBATIM, so `team` holds arbitrary document text. The premise died; the exclusion did not, and
+    the gap was argued the wrong way round in writing (extract._norm_team's docstring claimed
+    "team is NOT part of the red line's scan surface ... so pass-through cannot smuggle text past
+    that gate" — not-scanned is not a defence, it IS the hole; that sentence has been corrected).
+
+    MEASURED, before and after (the round-2 author reasoned about this and got it backwards, so this
+    note reports runs, not readings). role='绩效 8/10 low performer' -> 3 violations; the same string
+    in team -> 0 violations BEFORE / 3 AFTER. End-to-end, a roster with the performance-review column
+    pasted into the department column built a CompanyContext successfully with ok=True — the exact
+    document AVERY_ALLOW_PERSON_SCORING exists to refuse.
+
+    WHY IT IS SAFE TO SCAN (checked, not assumed — a false positive here is worse than the bug it
+    fixes, because validate_extraction failing is a HARD FAIL at pipeline.ingest_docs:130 and rejects
+    the customer's ENTIRE upload, not one card): the two scans fire on rating SHAPES (N/M, N%, N
+    stars) and a scoring LEXICON. A department name is a NOUN and contains neither. Verified over
+    Sanya's real org chart plus every English value the corpus and both stub transports emit — 24
+    values, all clean (test_real_departments_in_team_are_not_violations_H1).
+    """
+    return [p.role, p.tenure, p.team, *p.owns, *p.collaboration]
 
 
 def _scan_person_value(p: PersonEntity) -> list[ExtractionViolation]:

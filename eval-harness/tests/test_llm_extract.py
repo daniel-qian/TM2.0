@@ -181,6 +181,87 @@ def test_header_cells_and_filename_titles_refused_even_from_the_model():
     assert all(pr.title.lower() != "team" for pr in res.projects)
 
 
+# --- (d2) the SAME header defence in Chinese (feat-048, round-2 follow-up) -----------------------
+# _NOT_A_PERSON is the belt to the model's suspenders: the prompt (llm_extract.py:76-77) already
+# tells the model 「姓名」/「序号」/「编号」are not people, and this guard is what catches it WHEN IT
+# DISOBEYS — which is the only scenario the guard exists for, so it may not assume compliance.
+# Until now that belt was ASCII-only, so a misbehaving model could still ship a colleague called
+# 「姓名」on the all-Chinese first customer's roster. feat-048 round 2 closed the identical hole on
+# the heuristic path (extract._NOT_NAME) and that list is the source of truth; these gates assert
+# the LLM path CONSULTS it rather than carrying a second hand-copied one — the duplication between
+# the two lists is exactly how they drifted apart.
+
+ZH_ROSTER_DOC = ParsedDoc(
+    name="团队花名册.xlsx",
+    text="\n".join([
+        "# sheet: 花名册",
+        "序号 | 姓名 | 职位 | 部门",
+        "1 | 陈思雨 | 项目负责人 | 市场推广部",
+        "2 | 孙浩 | 前厅主管 | 前厅部",
+    ]),
+    doc_kind="roster", ext="xlsx")
+
+
+def _zh_payload():
+    return {
+        "people": [
+            {"name": "陈思雨", "role": "项目负责人", "team": "市场推广部", "line": 3},
+            {"name": "孙浩", "role": "前厅主管", "team": "前厅部", "line": 4},
+        ],
+        "projects": [], "signals": [],
+    }
+
+
+@pytest.mark.parametrize("header", ["姓名", "职位", "部门", "序号"])
+def test_chinese_header_cells_refused_even_from_the_model(header):
+    """BOTH HALVES IN ONE ASSERTION, deliberately. The forward half: a model that emits the header
+    row as a person must not grow a colleague called 「姓名」. The reverse half: the two real
+    colleagues must still be there — so the cheap "fix" of rejecting anything Han turns this red
+    instead of passing. 序号 is the odd one out: it is NOT in _NOT_NAME (it lives in
+    extract._INDEX_TOKEN_RE, the other half of the heuristic's defence), so it fails unless the
+    reuse picks up both — which is the point."""
+    bad = _zh_payload()
+    bad["people"].insert(0, {"name": header, "role": "项目负责人", "line": 2})
+    res = LLMExtractor(FakeBrain([bad]), retry_backoff_s=0).extract(ZH_ROSTER_DOC)
+    assert {p.name for p in res.people} == {"陈思雨", "孙浩"}, f"{header!r} is a column header"
+
+
+def test_llm_path_reuses_the_whole_heuristic_stop_list():
+    """THE GATE THAT ENFORCES ONE LIST RATHER THAN TWO THAT AGREE TODAY.
+
+    Asserted as a RULE over every entry of extract._NOT_NAME, not as a handful of examples: an
+    example-shaped gate is satisfied by pasting four Chinese words into the regex, which is the
+    same hand-copy that drifted in the first place and would drift again on the next word added.
+    This one can only be satisfied by consulting the list, and it keeps paying: a word added to
+    _NOT_NAME tomorrow is covered on the LLM path for free.
+
+    _build (not extract()) is the subject on purpose — a payload of nothing but headers builds an
+    empty result, which extract() would hand to the heuristic fallback, so the fallback's own
+    stop-list would answer and this gate would test the wrong path. Chunked at 40 because _build
+    caps people at 40 per doc."""
+    from avery.ingest.extract import _NOT_NAME
+    ex = LLMExtractor(FakeBrain([{}]), retry_backoff_s=0)
+    words = sorted(_NOT_NAME)
+    leaked: list[str] = []
+    for i in range(0, len(words), 40):
+        chunk = words[i:i + 40]
+        res = ex._build(ZH_ROSTER_DOC, {"people": [{"name": w, "line": 2} for w in chunk]})
+        leaked += [p.name for p in res.people]
+    assert not leaked, f"stop-listed labels became people on the LLM path: {leaked}"
+
+
+@pytest.mark.parametrize(
+    "token", ["No.", "Name", "Role", "Case ID", "case-id 7", "Sheet1", "sheet: Profile", "12",
+              "n/a", "tbd", "Total"])
+def test_llm_path_english_rejection_is_unchanged(token):
+    """BORN GREEN — the safety catch. _NOT_A_PERSON carries three patterns that are regex-ONLY and
+    have no literal on _NOT_NAME (`case-id.*`, `sheet.*`, `\\d+`); routing the check through the
+    shared list must keep them, not trade one hole for another."""
+    res = LLMExtractor(FakeBrain([{}]), retry_backoff_s=0)._build(
+        ROSTER_DOC, {"people": [{"name": token, "role": "Founder", "line": 2}]})
+    assert [p.name for p in res.people] == []
+
+
 # --- (e) factory knobs ---------------------------------------------------------------------------
 
 def test_factory_forced_heuristic(monkeypatch):

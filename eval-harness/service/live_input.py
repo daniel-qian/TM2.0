@@ -32,7 +32,23 @@ class LiveSituation:
 
 
 def _slugify(text: str, fallback: str = "live-situation") -> str:
-    slug = re.sub(r"[^a-z0-9]+", "-", (text or "").lower()).strip("-")
+    """Derive a case_id from the manager's typed situation.
+
+    THE CHARACTER CLASS IS THE SAME LORE AS avery/ingest/extract.py::_slug — READ THAT DOCSTRING.
+    This was `[^a-z0-9]+`, which is ASCII-only: every Han character fell outside the class, the
+    string emptied, and the fallback fired — so EVERY Chinese situation became the same case_id,
+    the literal string "live-situation". The all-Chinese Sanya path walks straight through here
+    (build_live_case below: `case_id = sit.case_id or _slugify(...)`), so two different situations
+    typed by the same manager were one case.
+
+    `[\\W_]` and not the obvious `[^\\w]`: on str patterns `\\w` is unicode-aware (Han passes) but it
+    also counts '_' as a word character, so `[^\\w]+` would stop folding underscores next to a space
+    and change ENGLISH case ids ('Roadmap_ Q3' -> 'roadmap--q3'). On ASCII input `[\\W_]` is
+    provably identical to the old `[^a-z0-9]` (after .lower(), \\w == [a-z0-9_], so
+    [\\W_] == complement([a-z0-9]); verified exhaustively over all 128 ASCII codepoints).
+    test_cjk_identity.py freezes the English half row by row.
+    """
+    slug = re.sub(r"[\W_]+", "-", (text or "").lower()).strip("-")
     return (slug[:48] or fallback)
 
 
