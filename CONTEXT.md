@@ -108,6 +108,26 @@ _Avoid_: theme（太泛）；把 skin 当"改功能"（skin 只换表皮，功�
 部署给国内融资团队、拿去给 prospect 试玩的 Line A live-mode 表面。漏斗顶端的**演示/营销面**，不是付费产品（商业模式见 [ADR-0019](docs/adr/0019-commercial-model-four-layer-paid-no-free-tier.md) + 本文件 **Commercial language** 段）——用临时会话/上传样本，不持久化成公司工作区。
 _Avoid_: free tier / 免费版 Avery（违反"无免费层"，见本文件 Commercial language 段；sampler 是尝鲜演示，不是产品免费档）；trial（暗示产品试用期）
 
+## Tenancy & surfaces（2026-07-18 新增，前端首次真部署时补齐）
+
+这一组词在每一份 PRD、每一次交接、8 条并行线里天天出现，此前术语表零记录。
+
+**Context（公司上下文）**：
+一次上传所建立的、属于**某一家公司**的全部事实——人、项目、信号、笔记、文件都挂在它下面。它是租户边界：Avery 眼里"一家公司"就是一个 Context。由上传动作诞生，不需要注册。
+_Avoid_: workspace / tenant / account（都暗示一个先于数据存在的容器；Context 是被数据创建出来的）、session（Context 跨会话存活）
+
+**Owner token（主人凭证）**：
+证明"这个 Context 是我的"的凭证。**建立 Context 时只发一次**，此后每一次读取和提问都要出示它。出示不了的人得到的答案是"没有这个东西"，而不是"你没权限"——**刻意不告诉外人它是否存在**。
+_Avoid_: 登录 / 密码 / API key（它不是身份，是持有即所有权的凭证）、把它写进网址（凭证进网址等于泄露）
+
+**Lite（v01）/ Lite2（v02）**：
+同一个产品的两代外壳。**Lite 是当前对外默认**；Lite2 是正在成型的下一代（更多分面、更完整的日常动线）。两者共用同一个后端与同一套事实，差别只在外壳。
+_Avoid_: 新版/旧版（暗示 v01 会被直接替换，实际是 v01 网址全程不动）、MVP/正式版（两者都在真实使用）
+
+**Look（长相：paper / aurora）**：
+**同一个产品的两种长相**，按客户挑：`paper` 是暖纸编辑风（默认），`aurora` 是极光玻璃风。**它是选给客户的，不是客户自选的装饰**——同一家公司每次进来都该看到为它选定的那一张。只存在于 Lite2。与 **Skin** 是**正交**的两条轴：Skin 管"哪个行业"（酒店 vs 建筑，见上），Look 管"哪张脸"——一家酒店客户可以同时要酒店 Skin 和 aurora Look。
+_Avoid_: skin（**已被行业主题占用**，2026-07-18 定名时正是为了拆开这两个概念）、theme / 主题 / 换肤（都暗示用户自选的装饰偏好）、"saas 版"（aurora **不是另一个产品层级或价位**）
+
 ## Commercial language
 
 （口径 = 合伙人 2026-07-02 revenue deck，经 2026-07-03 对齐讨论确认。取代旧口径"advisor AI + tools 免费，playbooks 付费"——**无免费层**，最低入场门槛就是付费 Pilot。价格数字不进本文件。）

@@ -2083,7 +2083,7 @@
 
 /* ══ feat-045 · onboarding 向导 + 建议 chips + 通知铃铛（PRD F5+F7）══════════════════
    全部 .lite2-shell 前缀（S4 教训：壳级作用域隔离）；组件样式只消费皮肤令牌
-   （--ink/--rule/--sage/--lite2-surface 等），aurora 皮自动跟随，零 [data-skin] 分支。 */
+   （--ink/--rule/--sage/--lite2-surface 等），aurora 皮自动跟随，零 [data-look] 分支。 */
 
 /* ── 向导覆盖层（非路由）──────────────────────────────────────────────────────── */
 .lite2-shell .lite-onboard-backdrop {
@@ -2981,7 +2981,7 @@
    服务端不吐进度信号，假进度条卡在 90% 比诚实的秒数更伤信任。
 
    换皮纪律（kickoff §架构拍板 4）：颜色只消费令牌（--honey / --ink-soft / --ink-faint /
-   --rule），paper 与 aurora 各自的 token 层自动生效，本块不写死任何色值、不加 [data-skin] 分支。
+   --rule），paper 与 aurora 各自的 token 层自动生效，本块不写死任何色值、不加 [data-look] 分支。
    @keyframes 是全局命名空间，故名字带 v02 后缀，与 lite.css 里的 v01 组互不覆盖。
 
    两处：① Your team 的 UploadPanel（.upload-*）；② 首访向导上传步（.lite-onboard-upload-*）。 */
