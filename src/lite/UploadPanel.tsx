@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState, type ChangeEvent, type DragEvent } from 'react'
+import { useRef, useState, type ChangeEvent, type DragEvent } from 'react'
 import { useLite } from './store'
 import { useDict } from '../shared/i18n/useDict'
+import { clearIngestStart, useIngestElapsedSeconds } from '../shared/ingestClock'
 
 // feat-017 · 上传 UI——ADR-0020 决策 2 / 施工图 §2 表 #1；feat-024 随 lite 壳入墙。
 //
@@ -36,23 +37,11 @@ function fill(template: string, vars: Record<string, string | number>): string {
 // 刻意不做百分比进度条：服务端 /ingest 不吐任何进度信号，假进度条只会卡在 90% 一动不动，
 // 比一行诚实的秒数更伤信任。秒数是唯一我们真的知道的量。
 //
-// 生命周期：interval 只在 active（ingesting）期间存在。active 翻 false 时 effect cleanup
-// 立即清掉；组件卸载时同一个 cleanup 也会跑——两条路都不留悬挂定时器。
-function useElapsedSeconds(active: boolean): number {
-  const [seconds, setSeconds] = useState(0)
-  useEffect(() => {
-    if (!active) return
-    // 每次重新进入 ingesting 都从 0 起算（第二次上传不能继承上一次的秒数）。
-    setSeconds(0)
-    const startedAt = Date.now()
-    // 用 Date.now() 差值而非 count++：后台标签页会节流 setInterval，累加法会越走越慢说谎。
-    const id = window.setInterval(() => {
-      setSeconds(Math.floor((Date.now() - startedAt) / 1000))
-    }, 1000)
-    return () => window.clearInterval(id)
-  }, [active])
-  return seconds
-}
+// feat-068 修正：秒表原先是组件局部 state，surface 一 unmount 就归零重数——而 ingestingHint
+// 恰恰在劝用户「这期间可以先进行下一步」。锚点已移进 shared/ingestClock（模块级，跟着这一发
+// ingest 活而不是跟着组件活），任何 surface mid-ingest 挂上来算出的都是真实总时长。
+// 生命周期（interval 只在 ingesting 期间存在、unmount/路由切换/ingest 结束都清）同样收口在
+// 那个 hook 里，本文件不再自持定时器。
 
 export function UploadPanel() {
   const { t } = useDict()
@@ -66,11 +55,17 @@ export function UploadPanel() {
 
   const sourceFiles = team?.sourceFiles ?? []
   const busy = status === 'ingesting'
-  const elapsed = useElapsedSeconds(busy)
+  const elapsed = useIngestElapsedSeconds(busy)
 
   const onPick = (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? [])
-    if (files.length > 0) void uploadFiles(files)
+    // feat-068 · 发车前先松锚，保证这一发从 0 起算。
+    // hook 里的 effect 本来也会在 status 落回 ready/error 时松锚，但那依赖「上一发结束时
+    // 至少有一个 surface 挂着」。这里在触发点显式松一次，把那个前提彻底去掉。
+    if (files.length > 0) {
+      clearIngestStart()
+      void uploadFiles(files)
+    }
     // 允许重复选同名文件再次触发。
     event.target.value = ''
   }
@@ -80,7 +75,10 @@ export function UploadPanel() {
     setDragOver(false)
     if (busy) return
     const files = Array.from(event.dataTransfer.files ?? [])
-    if (files.length > 0) void uploadFiles(files)
+    if (files.length > 0) {
+      clearIngestStart()
+      void uploadFiles(files)
+    }
   }
 
   // feat-068 · 唯一的"开文件选择器"入口，ingesting 期间一律不开。

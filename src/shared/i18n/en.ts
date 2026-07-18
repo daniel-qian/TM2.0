@@ -32,10 +32,10 @@ export const en = {
     // feat-068 — ingest 真实耗时 100–120s（后端在法兰克福、LLM 在国内，跨境往返）。
     // 上线前这两分钟屏幕上只有一行静态字，真客户第一次接触就以为卡死。
     // ingestingHint 负责「事先把预期讲明白 + 说清值在哪」；ingestingElapsed 是活的秒表，
-    // 证明界面没冻。不承诺给不出的数字：只说 usually 1–2 minutes，不说 30 seconds，
+    // 证明界面没冻。数字必须是量过的：真 seed 文件在生产上实测 171.6s（feat-068 收工前跑的），
     // 也不做假百分比进度条（服务端没有任何进度信号，卡在 90% 比诚实的文字更糟）。
     ingestingHint:
-      'Usually 1–2 minutes. It reads every page of every file — that is the slow part, and the part that makes the team below worth reading. Leave this tab open.',
+      'Usually two to three minutes. It reads every page of every file — that is the slow part, and the part that makes the team below worth reading. Leave this tab open.',
     ingestingElapsed: '{seconds}s elapsed',
     readyLabel: 'Your team is ready',
     errorLabel: "Couldn't read those files",
@@ -64,6 +64,38 @@ export const en = {
     liveError: 'Something went wrong reaching the room.',
     askPlaceholder: 'Ask about your team…',
     ask: 'Ask',
+  },
+
+  // ── transport / HTTP failures (feat-068 · ZH-03) ──────────────────────────
+  // 传输层错误文案。**刻意不放进 lite.* / lite2.* 的平行结构**：这几句是后端护栏的说法，
+  // 两个壳读到的是同一台后端、同一条状态码，没有任何一句会因为壳不同而改口。复制成两份
+  // 只会制造"改了一边忘了另一边"的漂移面。
+  //
+  // 🔴 句子里绝不带 endpoint 名（`ingest:` / `team:` 是给控制台看的开发者输出，不是给客户
+  // 看的话）。endpoint + status 由 TransportError 带着走，控制台仍能一眼分辨是哪次调用。
+  transport: {
+    // 构建配错：VITE_AVERY_API_BASE 没注入，调用全打到访客自己的机器上。现场表现和"后端挂了"
+    // 一模一样——必须当场否掉这个误读，否则整队人去查一个根本没问题的后端。
+    // env 变量名 / localhost 地址属开发者细节，留在 console.error（apiBase() 那声吼）里。
+    misconfigured:
+      "This build is misconfigured — it went out without a backend address. Retrying won't help; it needs to be rebuilt and redeployed.",
+    // fetch 自己 reject：连接被拒 / 混合内容拦截 / CORS / 离线，压根没有 status 可读。
+    offline: "Couldn't reach the server. Check your connection and try again.",
+    // 429：/ingest 10/min(burst 3)、/advise 30/min(burst 10)，真会跳。
+    // Retry-After 只认纯数字秒数——读不出就走 rateLimitedWait，绝不编一个具体秒数。
+    rateLimited: 'Too many requests just now — wait {seconds}s and try again.',
+    rateLimitedWait: 'Too many requests just now — wait a moment and try again.',
+    // 413：超上传上限。
+    tooLarge: "That's too much at once — up to 10 files, 10MB each.",
+    // 415 / 422：魔数嗅探不认，或内容解不出来。
+    unsupportedType: "That file type isn't accepted, or its contents couldn't be read.",
+    // 🔴 404 在已鉴权的读路径上几乎从不是"空"——是这台浏览器手里的 owner_token 缺失/过期，
+    // 后端按"不泄露存在性"的规矩回 404 而不是 403。说成"还没有数据"是在对客户谎报他自己的
+    // 数据，必须写明"数据还在，是这台浏览器打不开了"。
+    staleToken:
+      "This browser's access to that company has expired or is missing — the data is still there, but this browser can't open it any more.",
+    serverError: 'The server hit a problem (HTTP {status}). Try again shortly.',
+    generic: 'Something went wrong (HTTP {status}). Try again.',
   },
 
   // ── lite shell (feat-024: the product shell behind the story/lite wall) ───
@@ -204,6 +236,24 @@ export const en = {
     handoffsTitle: 'Worth your attention today',
     handoffsEmpty: 'Nothing needs you right now — your uploads read steady.',
     handoffOpen: 'Open the project',
+    // feat-068 · triage-item copy (see src/shared/handoffCopy.ts). These strings used to be
+    // hardcoded English inside teamData.ts liveHandoffs()/liveRead(), so the ZH build showed
+    // English labels wrapped around Chinese evidence. They are FRONTEND-derived — no backend
+    // change can ever reach them. `{project}` / `{status}` / `{items}` / `{name}` / `{read}`
+    // are placeholders: keep them whole-sentence templates, never concatenate a verb onto a
+    // name (Chinese word order differs from English).
+    handoffToneLabel: 'Worth a closer look',
+    handoffAction: 'Take a look at {project}',
+    handoffEvidenceFallback: '{project} is flagged {status} in your uploads.',
+    handoffEvidenceTag: 'From your uploads',
+    handoffStatusAtRisk: 'at risk',
+    handoffStatusBlocked: 'blocked',
+    // 🔴 Redline: a person's read line states what they carry — never how well they carry it.
+    personReadOwns: 'Owns {items}',
+    personReadListSeparator: ', ',
+    personReadNone: 'On the team',
+    personCardOpenAria: 'Open {name} — {read}',
+    groupOwns: 'Owns {project}',
 
     // Upload empty state (the left spine speaks for itself — no scripted placeholders)
     emptyEyebrow: 'Getting started',
@@ -462,6 +512,20 @@ export const en = {
     handoffsTitle: 'Worth your attention today',
     handoffsEmpty: 'Nothing needs you right now — your uploads read steady.',
     handoffOpen: 'Open the project',
+    // feat-068 · triage-item copy — see the identical block in the `lite` section above for why
+    // this layer exists (frontend-derived strings; no backend change can reach them).
+    handoffToneLabel: 'Worth a closer look',
+    handoffAction: 'Take a look at {project}',
+    handoffEvidenceFallback: '{project} is flagged {status} in your uploads.',
+    handoffEvidenceTag: 'From your uploads',
+    handoffStatusAtRisk: 'at risk',
+    handoffStatusBlocked: 'blocked',
+    // 🔴 Redline: a person's read line states what they carry — never how well they carry it.
+    personReadOwns: 'Owns {items}',
+    personReadListSeparator: ', ',
+    personReadNone: 'On the team',
+    personCardOpenAria: 'Open {name} — {read}',
+    groupOwns: 'Owns {project}',
 
     // Triage three actions + the "Taken care of today" drawer
     triageRemaining: '{pending} of {total} still worth a look',
@@ -539,7 +603,7 @@ export const en = {
     // feat-068 — 同 upload.ingestingHint 的理由（真等 100–120s）。向导版多一句"可以先进行
     // 下一步"：Next/Skip 在 ingest 期间不禁用，读取在 store 里继续跑，这句是真的。
     onboardUploadHint:
-      'Usually 1–2 minutes — it reads every page, not just the file names. You can move on to the next step while it works.',
+      'Usually two to three minutes — it reads every page, not just the file names. You can move on to the next step while it works.',
     onboardUploadElapsed: '{seconds}s elapsed',
     onboardUploadReady: 'Your team is ready',
     onboardUploadError: "Couldn't read those files — try again, or move on and upload later.",
@@ -649,10 +713,23 @@ export const en = {
     draftTitle: 'Worth asking them directly',
     draftLede:
       "The missing piece isn't in the documents — it's in their own read of the situation. Review the questions, then hand each person their own link.",
-    // HONEST note: the red-line check on question text runs server-side at save time.
-    // That backend isn't wired in this preview — say so, don't pretend it already ran.
+    // feat-068 · HONEST note, now CONDITIONAL on the transport actually in use.
+    //
+    // The old copy asserted the pessimistic case unconditionally ("has not run in this preview
+    // yet"). That was written before stage C landed and went stale: the backend IS wired, and
+    // httpTransport.saveAsk POSTs /ask, where redline.validate runs server-side on every save.
+    // Telling a live customer that the one promise they care about ("nobody gets scored") is not
+    // actually running is self-harm — they conclude either that the demo is unfinished or that
+    // the promise is empty. Both are false, and both are ours to have caused.
+    //
+    // It IS genuinely conditional though, so the copy is too: the stub transport (`?transport=stub`,
+    // the deterministic offline demo) does no text validation and says so via `offlinePreview`.
+    // Pick by that flag — never assert the pessimistic case on the path customers actually take.
     redlineNote:
-      'Questions ask about the work, never rate a person. Each question passes the red-line check when saved — that check runs on the server and has not run in this preview yet.',
+      'Questions ask about the work, never rate a person. Every question goes through the red-line check when you save — it runs on the server, on every save.',
+    // Shown INSTEAD of redlineNote on the offline stub channel, where nothing is sent anywhere.
+    redlineNoteOffline:
+      'Questions ask about the work, never rate a person. The red-line check runs on the server when you save — this offline preview saves nothing, so it is not running here.',
     kindScale: '1–5',
     kindYesNo: 'Yes / No',
     questionAria: 'Question text',

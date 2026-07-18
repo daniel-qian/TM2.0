@@ -278,6 +278,11 @@ export function createStubTransport(): LiveTransport {
   return {
     streamAdvise: emitAdviseScript,
 
+    // feat-068 · 从 v01 补齐：本通道自我声明"离线预览"。下面 saveAsk 只做结构校验，红线
+    // 文本校验是服务端的活、本通道压根不联网——AskCard 据此把红线提示切成诚实的那一句，
+    // 而不是让联网用户也读到"检查没跑过"。真 HTTP transport 无此标。
+    offlinePreview: true,
+
     async ingest(files) {
       ingested = true
       sourceFiles = files.map((f) => f.name)
