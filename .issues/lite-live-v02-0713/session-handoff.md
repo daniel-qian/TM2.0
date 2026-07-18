@@ -2,6 +2,9 @@
 
 > 2026-07-18 收工。本线专属交接。**没碰** `progress.md` 与根 `session-handoff.md`
 > ——按 AGENTS.md 那两份归主检出集成者，而持久化线此刻正在 main 上活跃提交（c4d4564 收工广播）。
+>
+> 依本文件既有约定（同名覆盖、历史棒细节留在各自 commit）：**feat-047 的交接全文见 `git show ff00d25~1:.issues/lite-live-v02-0713/session-handoff.md`**
+> （209 行：引擎同步范围、F 组门相位、token 路变异测试、对抗验证打回复验）。feat-047 已 `done`，本文接续 feat-048/049。
 
 ## 分支状态（最要紧的一条）
 
