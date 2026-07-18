@@ -453,6 +453,13 @@ export const en = {
     triageRestoreLabel: 'Bring it back',
     triageAllDone: 'Everything from this morning is settled the way you chose.',
 
+    // feat-050 (session restore) — shown only while a stored context is being fetched back, or
+    // when that fetch could not reach the server. A 404 gets no copy at all: the context is
+    // genuinely gone, so the plain upload empty state IS the honest screen.
+    restoringLabel: 'Bringing back your last session…',
+    restoreFailed: 'Could not reach the server — your last session was not brought back.',
+    restoreRetry: 'Try again',
+
     // Upload empty state (the left spine speaks for itself — no scripted placeholders)
     emptyEyebrow: 'Getting started',
     emptyHintRoster: 'A team roster or a few resumes — the people appear as cards.',

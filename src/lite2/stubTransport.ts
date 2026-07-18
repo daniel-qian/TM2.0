@@ -363,15 +363,22 @@ export function createStubTransport(): LiveTransport {
   }
 }
 
-// ── 激活：URL `?transport=stub` → 确定性 stub；否则真 HTTP。store 的 setTransport 注入
-// 通道原样保留（门也可以运行时替换）。──────────────────────────────────────────────
-export function resolveTransport(): LiveTransport {
+// feat-050：stub 是确定性离线演示/门用的传输，它的 context 是进程内造的、不是真 context。
+// 会话恢复据此整体跳过：既不写锚点，也绝不让 stub 的 404 抹掉一个真会话的锚点
+//（否则"为跑一次门加个 ?transport=stub"就把用户真数据的指针擦了）。
+export function isStubTransportSelected(): boolean {
   try {
     const qs =
       typeof window !== 'undefined' && window.location ? window.location.search : ''
-    if (new URLSearchParams(qs).get('transport') === 'stub') return createStubTransport()
+    return new URLSearchParams(qs).get('transport') === 'stub'
   } catch {
-    // malformed search — fall through to the real transport
+    // malformed search — 按真 transport 处理
+    return false
   }
-  return createHttpTransport()
+}
+
+// ── 激活：URL `?transport=stub` → 确定性 stub；否则真 HTTP。store 的 setTransport 注入
+// 通道原样保留（门也可以运行时替换）。──────────────────────────────────────────────
+export function resolveTransport(): LiveTransport {
+  return isStubTransportSelected() ? createStubTransport() : createHttpTransport()
 }

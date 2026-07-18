@@ -425,6 +425,15 @@ function loadTokenStore(): Record<string, string> {
   }
 }
 
+// feat-050（会话不丢）：按 context_id 读回已存的 owner_token。transport 内部本就从
+// localStorage 播种 tokens（刷新后 header 一直是对的）——这个导出只是让 store 在恢复会话时
+// 把同一份 token 挂回 state 供 UI/门可见，与 feat-047 的 `ownerToken` 语义一致。
+// 🔴 只读；调用方一样只许把它放进 header，绝不进 URL。
+export function storedOwnerToken(contextId: string | null | undefined): string | null {
+  if (!contextId) return null
+  return loadTokenStore()[contextId] ?? null
+}
+
 function persistTokenStore(store: Record<string, string>): void {
   try {
     if (typeof localStorage === 'undefined') return
