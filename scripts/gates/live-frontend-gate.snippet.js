@@ -77,6 +77,20 @@
  * parallel visual language:
  *   [on `?v=2&mode=live&transport=stub`]
  *   __seedGate.defuseAnimations()
+ *   await __seedGate.injectSeeds([{name, b64}])      // REQUIRED FIRST — the stub transport does
+ *                                                    // NOT auto-populate: on a fresh load
+ *                                                    // team===null / ingestStatus==='idle', so
+ *                                                    // every derived surface below is honestly
+ *                                                    // empty and all four phases go red. Any file
+ *                                                    // works (stub returns its canned corpus
+ *                                                    // regardless of bytes). Since feat-045 a
+ *                                                    // first visit also mounts the onboarding
+ *                                                    // wizard — dismiss it (skip control) so it
+ *                                                    // cannot overlay the surfaces under test.
+ *                                                    // Same prerequisite applies to groups C and
+ *                                                    // F's stub phases (added 2026-07-15 — the
+ *                                                    // Playwright driver hit a full false-red
+ *                                                    // block following this protocol literally).
  *   await __seedGate.assertTriageRenders()          // triageRenders: >=1 derived card, zero
  *                                                    // person-number leak in the triage DOM
  *   await __seedGate.assertTriageActions()           // triageActions: done -> drawer + count
