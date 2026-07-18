@@ -618,6 +618,34 @@ export const en = {
     // ── Compliance footer (PRD F6) — shell-global, memo tone (not regulatory tone). ──
     footerText:
       "Avery informs your judgment — it never replaces it. Every read here needs your own review before it becomes a decision, and none of it should be the sole basis for a serious call about a person's job, pay, or standing.",
+
+    // ── In-app draft composer (feat-058, PRD G6) — replaces the bare mailto: link. Copy to
+    // chat is the PRIMARY outlet (teams here live in WeChat/Lark); email is secondary.
+    // 🔴 Recipients are NAMES, not addresses — we never had their emails, and the hint says so
+    // rather than letting the empty mailto To: field surprise anyone.
+    draftAria: 'Draft a message',
+    draftEyebrow: 'Yours to send',
+    draftTitle: 'Draft a message',
+    draftClose: 'Close',
+    draftRecipients: 'To',
+    draftRecipientHint:
+      'These are names, not email addresses — your files only ever gave us names. The email outlet opens with an empty To field; put the address in yourself.',
+    draftNoRecipient: 'Your files do not say who this one goes to — fill the recipient in yourself.',
+    draftSubject: 'Subject',
+    draftBody: 'Message',
+    draftBodyHint:
+      'Drafted from what your files actually say. Edit it into your own words before you send — you are the one sending it.',
+    draftCopy: 'Copy for chat',
+    draftCopied: 'Copied',
+    draftCopiedStatus: 'Copied — paste it wherever your team actually talks.',
+    draftCopyFailed:
+      'Could not reach the clipboard — select the message above and copy it by hand.',
+    draftMailto: 'Use email instead',
+    draftDoneAdd: 'Done — add to follow-ups',
+    draftDoneComplete: 'Done — mark this one handled',
+    draftAddedStatus: 'Written into your follow-ups.',
+    draftCompletedStatus: 'Marked handled in your follow-ups.',
+    draftGoFollowups: 'Open follow-ups',
   },
 
   // ── Ask / Quick ask (feat-034 stage B — ADR-0023 voice: asks about the WORK, never rates

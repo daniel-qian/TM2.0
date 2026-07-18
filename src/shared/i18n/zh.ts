@@ -32,6 +32,9 @@ import type { Dict } from "./index";
 //  变得可接受的唯一理由（用户默认以为在上传，上传不该要两分钟；读完每一页才该要）。
 //  后续若要再动这几条，走定向模式 `node scripts/i18n-zh.mjs upload lite2`，别全量重跑——
 //  会重译已锁定的 story 共享段，正是 kickoff 警告的 drift + token 风险。源 key 在 en.ts。
+// ✍ HAND-WRITTEN, NOT M3 (feat-058): lite2.draft* 那 20 条（应用内草稿框）由本棒直接定稿——
+//  AGENTS.md 已授权中文文案 act-first，不标"待审"。源 key 在 en.ts；后续若要重译走定向模式
+//  `node scripts/i18n-zh.mjs lite2`，别全量重跑（会重译已锁定的 story 共享段）。
 export const zh: Dict = {
   "mode": {
     "storyLabel": "演示",
@@ -415,7 +418,27 @@ export const zh: Dict = {
     "notifRun": "议事室想完了这一轮 —— 解读好了。",
     "notifAsk": "你的快问，回复都收齐了。",
     "notifGap": "文件里有一处值得多看一眼。",
-    "footerText": "Avery 只辅助你的判断，不替你做决定。这里的每一条读数，都要经过你亲自复核才能算数；涉及岗位、薪酬、员工去留的重大人事决策，不能只拿它当依据。"
+    "footerText": "Avery 只辅助你的判断，不替你做决定。这里的每一条读数，都要经过你亲自复核才能算数；涉及岗位、薪酬、员工去留的重大人事决策，不能只拿它当依据。",
+    "draftAria": "起草消息",
+    "draftEyebrow": "由你来发",
+    "draftTitle": "起草消息",
+    "draftClose": "关闭",
+    "draftRecipients": "发给",
+    "draftRecipientHint": "这里是名字，不是邮箱地址——你的文件里只给到了名字。邮件出口打开时收件人是空的，地址请你自己填。",
+    "draftNoRecipient": "文件里没写这条该发给谁——收件人请你自己填。",
+    "draftSubject": "主题",
+    "draftBody": "正文",
+    "draftBodyHint": "这份草稿出自你文件里真实写着的内容。发之前先改成你自己的口气——最后是你在发这条消息。",
+    "draftCopy": "复制到聊天应用",
+    "draftCopied": "已复制",
+    "draftCopiedStatus": "已复制——去你们平时说话的地方粘贴就行。",
+    "draftCopyFailed": "没能写进剪贴板——请手动选中上面的正文复制。",
+    "draftMailto": "改用邮件",
+    "draftDoneAdd": "完成 · 加进跟进",
+    "draftDoneComplete": "完成 · 这条已办",
+    "draftAddedStatus": "已写进你的跟进队列。",
+    "draftCompletedStatus": "已在跟进队列里标记为办完。",
+    "draftGoFollowups": "去跟进队列"
   },
   "ask": {
     "eyebrow": "快问",

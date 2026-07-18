@@ -1,9 +1,43 @@
-import type { LiteHandoff } from './teamData'
-import type { FollowupItem } from './flowStore'
+import type { LiteHandoff, LiteTeam } from './teamData'
+import type { FollowupItem, FollowupSource } from './flowStore'
 
 // feat-036 · mailto 起草深链（PRD F3）：Avery 起草、manager 来发（ADR-0015 authorship 原则——
-// 同 AskCard 的"人闸"精神，这里更朴素：直接把 mailto: 交给系统默认邮件客户端）。
-// 收件人永远留空——花名册里的是"真实姓名"，不是"真实邮箱"；捏造地址比不填更危险。
+// 同 AskCard 的"人闸"精神）。
+//
+// feat-058（PRD G6）· 应用内草稿框：入口不再是裸 `mailto:` 链接（点一下就被甩进系统邮件
+// 客户端，manager 连正文都没看见）。这里的职责因此从"造一条链接"变成"造一份草稿"：
+//   · `LiteDraft` = 收件人 + 主题 + 正文，交给 DraftComposer 弹层承载（可编辑）
+//   · mailto 降为**次出口**，且由**编辑后的**主题/正文实时重算（`mailtoForDraft`）
+//   · 主出口是复制到聊天应用（`clipboardTextForDraft`）——国内团队在微信/飞书
+//
+// 🔴 收件人永远是**人名**，不是邮箱：花名册里存的是真实姓名，我们从来没有他们的邮箱。
+// mailto 的 To 段因此恒为空（捏造地址比不填更危险），弹层里要把这件事明说，别让 manager
+// 以为点了邮件就自动填好收件人了。
+
+/**
+ * 「完成」这个出口对**这一份**草稿到底意味着什么。写成显式三态而不是靠「有没有 followupId」
+ * 去猜：分诊来的草稿和"来源那条已经办完了"的草稿都没有 followupId，靠猜会把后者错渲成
+ * 「加进跟进」，于是队列里长出一条重复。
+ */
+export type DraftCompletion =
+  /** 队列里还没有这件事 → 新建一条（分诊卡的草稿走这条）。 */
+  | { mode: 'add' }
+  /** 草稿就出自队列里的某条 → 把**那条**标已办（再 addFollowup 会长出重复条目）。 */
+  | { mode: 'complete'; followupId: string }
+  /** 来源那条早就办完了 → 没有完成出口，弹层不渲染这个按钮。 */
+  | { mode: 'none' }
+
+export interface LiteDraft {
+  /** 稳定 id（= 来源条目 id 派生），既做 React key 也做门断言钩子 data-draft-id。 */
+  id: string
+  subject: string
+  body: string
+  /** 人名，**不是邮箱**。可能为空（来源条目没指向具体的人）。 */
+  recipients: string[]
+  /** 「完成」新建跟进条目时写进去的来源标签。 */
+  source: FollowupSource
+  completion: DraftCompletion
+}
 
 function buildMailto(subject: string, body: string): string {
   // mailto 的 query 值只认 %XX 转义（RFC 6068）——不用 URLSearchParams（它对空格产出
@@ -11,14 +45,47 @@ function buildMailto(subject: string, body: string): string {
   return `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
 }
 
-export function draftMailForHandoff(handoff: LiteHandoff): string {
-  const subject = handoff.action
-  const body = [handoff.evidence, '', `(${handoff.evidenceTag})`].join('\n')
-  return buildMailto(subject, body)
+/** 次出口：mailto。用**当前（可能已被 manager 改过）**的主题/正文重算，不是开框那一刻的快照。 */
+export function mailtoForDraft(draft: Pick<LiteDraft, 'subject' | 'body'>): string {
+  return buildMailto(draft.subject, draft.body)
 }
 
-export function draftMailForFollowup(item: FollowupItem): string {
-  const subject = item.title
-  const body = item.note?.trim() ? item.note.trim() : item.title
-  return buildMailto(subject, body)
+/** 主出口：贴进微信/飞书的纯文本。标题一行 + 空行 + 正文，粘过去就是一条能读的消息。 */
+export function clipboardTextForDraft(draft: Pick<LiteDraft, 'subject' | 'body'>): string {
+  const subject = draft.subject.trim()
+  const body = draft.body.trim()
+  if (!subject) return body
+  if (!body) return subject
+  return `${subject}\n\n${body}`
+}
+
+/**
+ * 分诊条目 → 草稿。正文 = 该条目的**真证据 + 出处标签**（teamData.liveHandoffs() 的真派生），
+ * 不套任何"你好 X，最近……"的问候模板：那种模板会让一段静态样板文字看起来像 Avery 替你
+ * 写的私人信。manager 想加寒暄，弹层里正文可编辑。
+ */
+export function draftFromHandoff(handoff: LiteHandoff, team: LiteTeam | null): LiteDraft {
+  const names = handoff.personIds
+    .map((id) => team?.people.find((p) => p.id === id)?.name)
+    .filter((name): name is string => Boolean(name))
+  return {
+    id: `draft_${handoff.id}`,
+    subject: handoff.action,
+    body: [handoff.evidence, '', `(${handoff.evidenceTag})`].join('\n'),
+    recipients: names,
+    source: 'triage',
+    completion: { mode: 'add' },
+  }
+}
+
+/** 跟进条目 → 草稿。队列条目上没有人的指向，收件人只能留空——弹层显诚实空态，不猜。 */
+export function draftFromFollowup(item: FollowupItem): LiteDraft {
+  return {
+    id: `draft_${item.id}`,
+    subject: item.title,
+    body: item.note?.trim() ? item.note.trim() : item.title,
+    recipients: [],
+    source: item.source,
+    completion: item.done ? { mode: 'none' } : { mode: 'complete', followupId: item.id },
+  }
 }

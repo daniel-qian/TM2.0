@@ -6,7 +6,8 @@ import {
   type FollowupItem,
   type FollowupSource,
 } from '../flowStore'
-import { draftMailForFollowup } from '../draftLinks'
+import { draftFromFollowup } from '../draftLinks'
+import { useDraft } from '../draftStore'
 
 // feat-036 · lite2 屏 3：Follow-ups（PRD F3 real wiring — replaces the feat-035 coming-soon
 // placeholder). Active list grouped today/this-week/later + a manual add form + a History tab
@@ -29,6 +30,9 @@ export function FollowupsScreen() {
   const reopenFollowup = useFlow((s) => s.reopenFollowup)
   const deleteFollowup = useFlow((s) => s.deleteFollowup)
   const editFollowup = useFlow((s) => s.editFollowup)
+  // feat-058 · 应用内草稿框（弹层本体常驻挂在壳层 Lite2App，这里只负责开框）。队列条目开出来
+  // 的草稿，「完成」= 把**这一条**标已办；再 addFollowup 会长出一条一模一样的重复条目。
+  const openDraft = useDraft((s) => s.openDraft)
 
   const [tab, setTab] = useState<'active' | 'history'>('active')
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -159,9 +163,15 @@ export function FollowupsScreen() {
               </div>
             </div>
             <div className="lite-followup-actions">
-              <a className="lite-followup-mail" href={draftMailForFollowup(item)}>
+              {/* feat-058：曾是裸 mailto: 链接，现在开应用内草稿框（可改正文 → 复制到聊天
+                  应用 / 邮件 / 完成）。 */}
+              <button
+                type="button"
+                className="lite-followup-mail"
+                onClick={() => openDraft(draftFromFollowup(item))}
+              >
                 {t.lite2.followupsDraftMail}
-              </a>
+              </button>
               {!item.done ? (
                 <button
                   type="button"
