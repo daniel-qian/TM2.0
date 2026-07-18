@@ -109,9 +109,14 @@ Field rules:
   If a title maps onto none of the six, "".
   tenure = stated experience/tenure phrase (e.g. "8 years of B2B design", free text).
   owns = up to 6 short phrases of what they own / are responsible for, from the doc.
-- projects: one entry per distinct project, phase or engagement THE DOC DESCRIBES AS WORK (e.g.
-  "Phase 1" and "Phase 2" of an engagement are two entries). title must be a meaningful name from
-  the content — NEVER the source filename. status only from: on-track|at-risk|blocked|done|"".
+- projects: one entry per project THE DOCUMENT TRACKS IN ITS OWN RIGHT — it gives that project its
+  own owner, status, progress or deadline. A MILESTONE, phase, checkpoint or task INSIDE a project
+  is NOT a project: do not emit it. Concretely, a row under a 「里程碑：」/"Milestones:" list
+  (「预算缺口确认 — 受阻」, "Budget sign-off — done") belongs to the project above it and must be
+  left out. If the document says how many projects it covers (「本期周报覆盖 6 个在跟进项目」),
+  that is the number of entries to return.
+  title must be a meaningful name from the content — NEVER the source filename, and never a
+  milestone's name. status only from: on-track|at-risk|blocked|done|"".
   progress: integer 0-100 ONLY if the doc states a completion number for that project, else null.
 - signals: notable, doc-stated situation signals (blockers, unresolved feedback, workload spikes).
   For a person-directed signal, summary describes the SITUATION they are carrying — never a
