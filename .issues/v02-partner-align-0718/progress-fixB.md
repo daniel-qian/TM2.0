@@ -244,3 +244,230 @@ Excel 的「用密码加密」产出的不是加密 zip，而是把整个 OOXML 
 5. **`stubTransport.ts` 的 `fetchFiles` 不发 `status`** —— 因此 stub 面（AFK 门/离线演示）
    会显示「状态未知」。这是刻意的正确降级（缺席≠成功），但如果希望 stub 面也演示三态，
    需要动 `stubTransport.ts`（不在本轮边界内）。
+
+---
+---
+
+# fixB 收口（第二轮对抗审查的两条「修复引入的新问题」）
+
+复核判定 **原六条（B1 / M2 / M3 / M4 / m5 / m6）没有「没修好」的**（`[]`）。
+这一轮只处理**上一轮修复自己引入的两条**。两条的病根是同一个，而且正是本批纪律的反面：
+
+> 上一轮我把「读不到」修成了「读得到」，但顺手让产品在两个地方**开始编造**：
+> 后端编造客户文件里没有的中文，前端把「哪份文件没读进去」那一行挤到看不清。
+
+---
+
+## 新问题 ①（major）· 日文 / 韩文文件被 gb18030 解成「编造的汉字」并标 ingested
+
+### 病
+
+上一轮把 `gb18030` 放上候选梯子救 GB18030 中文，同时开了一个**更坏**的口子：
+gb18030 的双字节空间 ~99.8% 有定义，它几乎接受任意字节对，结果又落在常用汉字区，
+于是 `_implausibility`（只惩罚 PUA / 部首 / 彝文）在这里**一个信号都不响**。
+而 Shift_JIS / EUC-KR 当时根本不在梯子上，连当候选的机会都没有。
+
+我自己对跑旧代码，确认审查者说的完全属实：
+
+```
+### 1. decode_text: does the customer get their own words back?   <- 旧代码
+  JP roster shift_jis    -> read as gb18030   !!! FABRICATED / GARBLED !!!
+      customer wrote : '氏名,部署,役職'
+      Avery read     : '巵柤,晹彁,栶怑'
+  KR roster euc-kr       -> read as gb18030   !!! FABRICATED / GARBLED !!!
+      customer wrote : '이름,직위,부서'
+      Avery read     : '捞抚,流困,何辑'
+  TW roster big5         -> read as cp1252    !!! FABRICATED / GARBLED !!!
+      customer wrote : '姓名,職位,團隊'
+      Avery read     : '©m¦W,Â¾¦ì,¹Î¶¤'
+
+### 4. parse_bytes -> what the file manifest ends up claiming      <- 旧代码
+  JP roster: status would be INGESTED, meta={'bytes': 76, 'encoding': 'gb18030'}
+      text[0] = '巵柤 | 晹彁 | 栶怑'
+      contains customer's actual first row? False
+```
+
+修复前是「什么都没读到」，修复后变成「三段查无此据的中文被标成已读取、可被 advisor
+当客户原话引用」。**后者严重得多。**
+
+🔴 **顺带查出审查没提的第三条，同一个病**：`_looks_multibyte` 只看「高位字节连不连成串」，
+而 **Big5 / Shift_JIS 的尾字节可以落在 ASCII 区**（姓 = `A9 6D`，名 = `A6 57`）——
+于是整份繁体文件的高位字节全是长度 1 的孤立游程，和瑞典文打分一模一样，
+被判成西欧单字节走 cp1252。也就是说：**上一轮注释里写的「港台文件不再读成错字」，
+那条路径从来没有真的被走到过。**
+
+### 修
+
+`decode_text` 从「第一个能解通的梯级赢」改成「**打分裁决 + 不够可信就拒收**」：
+
+| 信号 | 作用 | 实测依据 |
+|---|---|---|
+| `_ENC_CJK` 加入 `shift_jis` / `euc_kr` | 让**正确答案至少可达**。缺了它，裁决器再准也没用 | 日/韩文件此前无梯级可走 |
+| `_looks_multibyte` 补**高位字节密度** | 修 Big5 盲点。密度不在乎尾字节落在哪 | CJK 文件 57–88%，西欧 5.5–7.9% |
+| `_implausibility` 收窄 debris 区间 | 旧区间 `0x2E80–0x4E00` 把**假名和中日标点**当残渣，于是**惩罚正确答案** | 正确日文正文旧得分 **0.778**，编造中文 0.000 |
+| `_rare_han_share`（只对 gb18030） | permissive 编解码器必须自证「产出的真是中文」。判据用 GB2312 ∪ Big5 | 合法简/繁 0.000；日文误读 0.417–0.483 |
+| `_script_profile`（连贯性 + 存在下限） | 谚文/假名当正面证据，但**只在通篇连贯时算** | 见下方「第一版做错了什么」 |
+| `_accented_density`（只对 cp1252） | 同样的 permissive 论证。真西欧散文 5.5–8%，误读 57–85% | 西里尔/希腊/Big5 误读全部被挡 |
+| `_halfwidth_kana_density`（只对 shift_jis） | 补**我自己新开的洞**：加了 shift_jis 后，泰文 cp874 被解成半角片假名 | 真日文材料 0% |
+| 西欧形状的字节**不再兜底走 CJK** | `'caf乪'` 就是从这条兜底掉出来的 | — |
+| 梯级只是**先验**，不再是判决 | 不够可信就继续找，全局最优才赢；仍然不可信（>0.65）→ `DecodeError` | 一次误判不再是终局 |
+
+🔴 **第一版做错了什么，写下来免得有人再走一遍**：我最初把「出现谚文/假名」直接当正面证据。
+它**偷走了三份中文文件** —— 一份 GBK 评分表被 euc_kr 解成 `'檎츰,섀槻팀롸'`（三分之一是谚文），
+奖励分让它赢了正确的 gb18030；同一份表被 big5 解出一个零星 `'こ'`，2/30 的假名也足够翻盘。
+判据必须是**连贯性**（汉+假名是一个体系，谚文对它是混杂）**加存在下限**（真日文 40–60% 假名、
+真韩文 60%+ 谚文，误读只有 2–6%），不是「出现过」。
+
+### 结果（同一支探针，新代码）
+
+```
+  JP roster shift_jis    -> read as shift_jis same text
+  KR roster euc-kr       -> read as euc_kr    same text
+  TW roster big5         -> read as big5      same text
+  CN roster gb18030      -> read as gb18030   same text
+  SV prose cp1252        -> read as cp1252    same text
+
+  caf\x81e           -> refused (DecodeError)      <- 旧: ACCEPTED as gb18030: 'caf乪'
+  cyrillic cp1251    -> refused (DecodeError)      <- 旧: ACCEPTED as cp1252: 'Ïðèâåò êîìàíäà…'
+  greek cp1253       -> refused (DecodeError)      <- 旧: ACCEPTED as cp1252: 'ÊáëçìÝñá ïìÜäá…'
+
+  _implausibility(correct Japanese prose) = 0.000  <- 旧 0.778
+  _implausibility(correct TW prose)       = 0.000  <- 旧 0.105
+  _looks_multibyte(Big5 roster bytes)     = True   <- 旧 False
+
+  JP roster: meta={'bytes':76,'encoding':'shift_jis','decode_confidence':'high','decode_penalty':0.0}
+      text[0] = '氏名 | 部署 | 役職'      contains customer's actual first row? True
+```
+
+26 份真实语料（简/繁/日/韩/瑞/德/法/英 × GBK/Big5/SJIS/EUC-KR/cp1252/UTF-8/BOM）**全部解回自身**，
+0 份误判、0 份被误拒。
+
+`meta` 按审查者建议加了 `decode_confidence` + `decode_penalty`：编码是个**判断**，
+判断要带可信度。旧 meta 的 `{'bytes': 72, 'encoding': 'gb18030'}` 在那份编造出来的日文花名册上
+看起来和真货一模一样。
+
+### 🔴 已知残留（**没修，如实写下来**）
+
+**短句泰文（cp874）仍可能被 gb18030 解成看起来正常的中文**：
+`'สวัสดีครับ ยินดีต้อนรับ'` 变成 `'是咽凑っ押 略勾盏橥姑押'`，得分 0.000。
+长一点的泰文现在会被挡住（半角片假名 / 脚本混杂信号会响），短句不会。
+
+**为什么不硬修**：区分「随机的常用汉字」和「中文」需要字频/二元组知识——那是语言模型，
+不是结构规则。我试过一个结构信号（高位字节奇数游程比例），实测泰文 0.20–0.25、
+**而一份合法的繁体中文 GB18030 文件是 0.667** —— 用它会为了挡泰文而误杀港台文件，
+属于「修日文弄坏港台」的同一类错误，所以放弃。
+正解是把 `charset-normalizer` 声明进 `requirements.txt` / `requirements-service.txt` 当**否决器**用
+（它已经作为 requests 的传递依赖装在 dev venv 里，但**没有声明** = 镜像里不保证有，
+用它就等于让 dev 和生产行为不一致）。两个 requirements 文件都不在本轮文件边界内。
+这条也写进了 `parse.py` 的注释，不只写在报告里。
+
+---
+
+## 新问题 ②（major）· UploadPanel 三个新元素完全没有样式，把失败行的文件名挤坏
+
+### 病
+
+审查者说的「实现者没有量过布局」——**属实，我确实没量**。这次在真浏览器里量了：
+
+```
+1280 宽 · look=paper · lang=zh          <- 旧代码
+  .upload-accepted        fs=11px  color=rgb(145,139,127)  mb=0px    <- lite2.css 认识它
+  .upload-accepted-exts   fs=16px  color=rgb(29,27,23)     mb=16px   <- 新加的，样式层不认识
+  .upload-accepted-legacy fs=16px  color=rgb(29,27,23)     mb=16px   <- 同上
+  .upload-dropzone 整卡高 214px
+
+  [ingested] name 81x15   status 48x20   hint 无
+  [failed]   name 34x30   status 39x40   hint 498x40      <- 「坏文件.csv」折成两行
+```
+
+窄屏更惨（**这一档是我自己加的，审查者没量过**）：
+
+```
+390 宽 · lang=en                        <- 旧代码
+  [failed]   name 12x75（**5 行，一列一个字**）  status 64x40  hint 92x300   整行高 310px
+```
+
+也就是说：**最需要看清「哪份文件没读进去」的那一行，文件名被压成一列一个字。**
+
+### 修
+
+文件边界不含 `src/lite2/styles/lite2.css`。但「边界外」不是「先上生产再说」的理由——
+合进 main = 自动上生产，这是三家公司的首屏。所以：
+
+* **accepted 三行合进同一个 `<p className="upload-accepted">`**，后两行做成块级 `<span>` 子元素，
+  直接继承样式层已有的 11px / `--ink-faint` / `margin:0`，不再退回浏览器默认。
+  类名保留，日后单独定样式不受影响。
+* **文件行**只用**布局原语**内联：`flex-wrap:wrap` + 文件名 `flex:1 1 auto; min-width:0`
+  + 状态 `flex:none; white-space:nowrap` + hint `flex-basis:100%`（独占一行）。
+  观感决策仍然留给样式层；集成方搬进 lite2.css 时删掉内联即可，行为不依赖它。
+
+### 结果
+
+```
+1280 宽 · paper · zh                    <- 新代码
+  三行 accepted 全部 11px rgb(145,139,127) mb=0     整卡高 214 -> 158px
+  [ingested] name 533x15 (1 行)  status 48x20 (1 行)
+  [failed]   name 517x15 (1 行)  status 64x20 (1 行)  hint 676x16 独占一行
+
+390 宽 · paper · en                     <- 新代码
+  [failed]   name 75x15 (1 行)   status 103x20 (1 行) hint 294x48
+```
+
+新增 `verify-fixB-upload-layout.mjs`：**两张皮 x 两种语言 x 宽窄两档 = 44 条断言**，
+量的是尺寸和行框数，不是「元素在不在」。
+🔴 断言用 `Range.getClientRects().length` 数**真实渲染行框**，不拿高度除 line-height 估——
+lite2.css 没给这些元素设 line-height，computed 是 `'normal'`，`parseFloat` 出来是 `NaN`，
+我第一版就是这么写的，结果把**已经修好**的版式全判成 FAIL（28/44）。这个错误本身也记在脚本注释里。
+
+---
+
+## 门（全部实跑，输出如实）
+
+| 门 | 结果 |
+|---|---|
+| `python -m pytest eval-harness/tests/ -q` | **3018 passed · 0 failed · 61 skipped · 4 xfailed**（基线 2956，本轮 +35） |
+| `npm run typecheck` | 0 错 |
+| `npm run build` | ok（2.62s；chunk >500kB 警告是既有的） |
+| `npm run lint` | **0 error** · 5 warning（全部既有，在 OnboardWizard / RoomScreen / story，非本轮文件） |
+| `verify-fixB-upload-layout.mjs`（新增） | **44/44**（旧代码 20/44） |
+| `verify-fixB-upload-ui.mjs` | 10/10 |
+| `verify-fixB-transport.mjs` | 11/11 |
+| `verify-p0.mjs` | 35 PASS · **2 FAIL** · 2 SKIP —— **两条 FAIL 与本轮无关，已实测确认**（见下） |
+
+### verify-p0 的两条 FAIL 不是我的
+
+```
+x [paper]  入口直链 / -> /team 且五参数不丢 — path=/home params={v,mode,look,lang}
+x [aurora] 同上
+```
+
+把 `UploadPanel.tsx` stash 掉重跑，结果**一字不差还是 35/2/2**。
+本轮只动了 `parse.py` / `UploadPanel.tsx` / 测试文件，没碰任何路由代码。
+这是路由化并入 main 之后 `verify-p0.mjs` 里的**过期期望**（落地页现在去 `/home` 不是 `/team`）。
+`verify-p0.mjs` 属于集成方。
+
+---
+
+## 每条修复怎么证明它抓得住原 bug
+
+不接受「写完就算」。所有对照都是**同一份测试**分别跑在 `6f838f3`（上一轮的代码）和新代码上。
+
+| 回归测试 | 旧代码 | 新代码 |
+|---|---|---|
+| `tests/test_decode_never_invents.py`（35 条） | 31 failed / 2 passed | **35 passed** |
+| 其中 `test_real_http_ingest_never_stores_words_the_file_does_not_contain` | FAIL：`AssertionError: 编造出来的中文进了可引用语料: '巵柤 | 晹彁 | 栶怑…'` | PASS |
+| 其中 `test_correct_japanese_is_not_penalised_for_containing_kana` | FAIL（`_implausibility` 返回 0.778） | PASS |
+| 其中 `test_big5_bytes_are_recognised_as_multibyte_despite_ascii_trail_bytes` | FAIL（`_looks_multibyte` 返回 False） | PASS |
+| 其中 `test_a_western_shaped_file_is_never_read_as_chinese` | FAIL（梯子末尾仍挂着 CJK 兜底） | PASS |
+| `verify-fixB-upload-layout.mjs`（44 条） | **20/44**，含 `[failed] 文件名单行不被挤折 — 12x75px, 5 行` | **44/44** |
+
+🔴 **一条我自己抓出来的假测试**：端到端那条最初断言在 `/ingest` 的**响应体**上，
+结果**旧代码照样绿**——因为响应里只有 people / projects / briefing，而日韩花名册两种读法
+都抽不出人，编造的中文一个字都不会露面。改成断言 `MaterialChunk.text`
+（advisor 真正会引用的那份语料）之后才真的红。测试的断言落点错了，等于没测。
+
+---
+
+## 端口
+
+`5302` / `8302` 用完即停，`netstat` 确认均已释放。全程未占用 5173 / 8137。

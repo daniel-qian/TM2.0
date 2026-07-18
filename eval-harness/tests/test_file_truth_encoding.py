@@ -189,8 +189,8 @@ def test_detected_encoding_is_recorded_on_the_doc():
 def test_empty_file_is_not_a_decode_failure():
     """空文件是空文件，不是编码错误 —— 别把它也报成读不出来。"""
     from avery.ingest.parse import decode_text
-    text, encoding = decode_text(b"")
-    assert text == "" and encoding == "utf-8"
+    text, encoding, penalty = decode_text(b"")
+    assert text == "" and encoding == "utf-8" and penalty == 0.0
 
 
 @pytest.mark.parametrize("raw,expected", [

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ChangeEvent, type DragEvent } from 'react'
+import { useEffect, useRef, useState, type ChangeEvent, type CSSProperties, type DragEvent } from 'react'
 import { useLite } from './store'
 import { useDict } from '../shared/i18n/useDict'
 
@@ -65,6 +65,39 @@ const STATUS_TONE_COLOR: Record<FileStatusView['tone'], string> = {
   warn: 'var(--honey, #b8860b)',
   bad: 'var(--alert, #b3261e)',
   unknown: 'var(--ink-faint, #8a8578)',
+}
+
+// fixB 收口 · 上一轮往这两处加了元素、却没有在浏览器里量过它们落在哪。真实测量（1280 宽，
+// look=paper，lang=zh）：
+//
+//   .upload-accepted        fs=11px  color=rgb(145,139,127)  mb=0     ← lite2.css 里有规则
+//   .upload-accepted-exts   fs=16px  color=rgb(29,27,23)     mb=16px  ← 新加的，样式层没有它
+//   .upload-accepted-legacy fs=16px  color=rgb(29,27,23)     mb=16px  ← 同上
+//
+// 也就是说：两行**补充说明**用浏览器默认的 16px 全墨字 + 未复位的 16px 下边距渲染，比它们要
+// 补充的那一行更大更黑，在一张 214px 高的上传卡里直接喧宾夺主。文件行更糟：.upload-file-row
+// 是 display:flex + justify-content:space-between，塞进一个 498px 宽的 hint 之后，失败那行的
+// 文件名从 81×15（成功行）被压成 34×30 ——「坏文件.csv」折成两行，状态徽章 39×40 也折了。
+// 恰恰是最需要看清"哪份文件没读进去"的那一行被挤坏。
+//
+// 🔴 为什么用内联 style 而不是补 CSS：本轮的文件边界不含 src/lite2/styles/lite2.css。
+// 但"边界外"不是"可以先上生产再说"的理由——合进 main = 自动上生产，这是三家公司的首屏。
+// 所以这里只用**布局原语**（display / flex / flex-basis / white-space）和一条与 .upload-accepted
+// 同源的字号，把新元素放回它们本该在的视觉层级；观感决策仍然留给样式层。
+// 集成方把它们搬进 lite2.css 时，删掉这些内联即可，行为不依赖它。
+const ACCEPTED_LINE_STYLE: CSSProperties = { display: 'block', marginTop: '2px' }
+
+// 文件行：换行 + 让文件名可伸缩，把 hint 挤到自己的一整行去。
+const FILE_ROW_STYLE: CSSProperties = { flexWrap: 'wrap' }
+// minWidth:0 是必须的——flex item 的默认 min-width:auto 会拒绝收缩到内容宽度以下，
+// 但 .upload-file-name 有 word-break:break-word，于是它改为把中文文件名逐字折行。
+const FILE_NAME_STYLE: CSSProperties = { flex: '1 1 auto', minWidth: 0 }
+const FILE_STATUS_STYLE: CSSProperties = { flex: 'none', whiteSpace: 'nowrap' }
+const FILE_HINT_STYLE: CSSProperties = {
+  flexBasis: '100%',      // 独占一行：hint 是一句话，不是一个能塞进标题行的徽章
+  fontSize: '11px',
+  lineHeight: 1.45,
+  color: 'var(--ink-faint, #8a8578)',
 }
 
 // feat-068 · 模板填充（与 OnboardWizard 的同名 helper 同形；这里只用于秒表文案）。
@@ -188,10 +221,19 @@ export function UploadPanel() {
           {t.upload.choose}
         </button>
         {/* fixB/M3 · 「支持哪些」不能只说 Word/Excel 这种族名——那正是让人挑中 .doc/.xls 的原因。
-            扩展名逐个列出，旧格式怎么办也明说。 */}
-        <p className="upload-accepted">{t.upload.accepted}</p>
-        <p className="upload-accepted-exts">{t.upload.acceptedExts}</p>
-        <p className="upload-accepted-legacy">{t.upload.acceptedLegacyNote}</p>
+            扩展名逐个列出，旧格式怎么办也明说。
+            fixB 收口 · 三行合进同一个 <p className="upload-accepted"> 里：样式层只认识这一个类，
+            后两行做成它的块级子元素，就直接继承 11px / --ink-faint / margin:0，不再各自
+            退回浏览器默认的 16px 全墨 + 16px 下边距。类名保留，方便日后单独定样式。 */}
+        <p className="upload-accepted">
+          {t.upload.accepted}
+          <span className="upload-accepted-exts" style={ACCEPTED_LINE_STYLE}>
+            {t.upload.acceptedExts}
+          </span>
+          <span className="upload-accepted-legacy" style={ACCEPTED_LINE_STYLE}>
+            {t.upload.acceptedLegacyNote}
+          </span>
+        </p>
       </div>
 
       <div className="upload-status" aria-live="polite">
@@ -251,8 +293,15 @@ export function UploadPanel() {
             {files.map((file) => {
               const view = fileStatusView(file.status)
               return (
-                <li key={file.idx} className="upload-file-row" data-status={file.status ?? 'unknown'}>
-                  <span className="upload-file-name">{file.filename}</span>
+                <li
+                  key={file.idx}
+                  className="upload-file-row"
+                  data-status={file.status ?? 'unknown'}
+                  style={FILE_ROW_STYLE}
+                >
+                  <span className="upload-file-name" style={FILE_NAME_STYLE}>
+                    {file.filename}
+                  </span>
                   <span className="upload-file-meta">
                     {formatBytes(file.size_bytes)} · {file.n_chunks} {t.upload.filesChunks}
                   </span>
@@ -261,12 +310,16 @@ export function UploadPanel() {
                   <span
                     className="upload-file-status"
                     data-tone={view.tone}
-                    style={{ color: STATUS_TONE_COLOR[view.tone] }}
+                    style={{ ...FILE_STATUS_STYLE, color: STATUS_TONE_COLOR[view.tone] }}
                   >
                     {t.upload[view.labelKey]}
                   </span>
+                  {/* fixB 收口 · hint 独占一整行。它塞在同一条 space-between 的 flex 行里时，
+                      把失败文件的文件名压成了 34px 两行——最需要看清"哪份文件没读进去"的那一行。 */}
                   {view.hintKey ? (
-                    <span className="upload-file-status-hint">{t.upload[view.hintKey]}</span>
+                    <span className="upload-file-status-hint" style={FILE_HINT_STYLE}>
+                      {t.upload[view.hintKey]}
+                    </span>
                   ) : null}
                 </li>
               )
