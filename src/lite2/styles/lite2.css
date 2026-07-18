@@ -3414,6 +3414,560 @@
   }
 }
 
+
+/* ── feat-057 · 聚合入口屏（PRD G4 / decisions.md Q2「两个都极端 → 结合」）──────────────
+   `/home`：四块摘要 + 每块一扇门。7 个分屏一个没退休，这一屏只回答"今天先看哪儿"。
+
+   布局与 A closer look / Follow-ups 同口径（scroll/frame/header 三件套），卡片语法沿用
+   .lite-gap-card 家族（hairline 边框 + var(--radius) + var(--shadow-soft)）——新屏不引入
+   第二套视觉语言。
+
+   🔴 两种 Look 靠令牌自动跟随：本块只消费 --ink/--ink-soft/--ink-faint/--rule/--rule-strong/
+   --paper-strong/--shadow-soft/--radius/--sage/--honey/--terracotta 与 --lite2-*-rgb 三元组，
+   **一个色值都不写死、零 [data-look] 分支**（同本文件 §feat-046 令牌纪律）。paper 与 aurora
+   各自的 token 层直接生效。 */
+.lite2-shell .lite-home-scroll {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.lite2-shell .lite-home-frame {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 84px 36px 90px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* 空态（team===null）复用 Your team 的空态骨架，宽度收窄到单栏阅读宽——这一屏是 `/` 的
+   落点，首访者第一眼落在这里，所以空态自己带 UploadPanel（见 HomeScreen.tsx §空态）。 */
+.lite2-shell .lite-home-frame-empty {
+  max-width: 640px;
+}
+
+.lite2-shell .lite-home-header {
+  margin-bottom: 4px;
+}
+
+.lite2-shell .lite-home-header h1 {
+  margin: 4px 0 8px;
+  font-family: var(--lite2-heading-font);
+  font-size: clamp(21px, 2.4vw, 27px);
+  font-weight: 500;
+  line-height: 1.32;
+}
+
+.lite2-shell .lite-home-lede {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.6;
+  max-width: 58ch;
+}
+
+/* ── 四块的共同外壳 ───────────────────────────────────────────────────────── */
+.lite2-shell .lite-home-block {
+  padding: 16px 18px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--paper-strong);
+  box-shadow: var(--shadow-soft);
+}
+
+.lite2-shell .lite-home-block-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  margin-bottom: 12px;
+}
+
+.lite2-shell .lite-home-block-head h2 {
+  margin: 0;
+  font-family: var(--lite2-heading-font);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--ink);
+}
+
+/* 计数徽章。🔴 里面的数一律由 homeDerive.ts 从真 payload 数出来（或真数组的 length），
+   没有一个是写死的——这条是本屏的验收线，改这里之前先读 HomeScreen.tsx 顶部注释。 */
+.lite2-shell .lite-home-count {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(var(--lite2-ink-rgb), 0.06);
+  color: var(--ink-soft);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 「点进对应分屏」的门。四块每块一个，右对齐。 */
+.lite2-shell .lite-home-block-link {
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--sage);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.lite2-shell .lite-home-block-link:hover,
+.lite2-shell .lite-home-block-link:focus-visible {
+  color: var(--ink);
+  text-decoration: underline;
+}
+
+.lite2-shell .lite-home-caption,
+.lite2-shell .lite-home-quiet {
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.lite2-shell .lite-home-caption {
+  margin-bottom: 10px;
+}
+
+/* ── ① 今天要决策的 ──────────────────────────────────────────────────────── */
+/* 分级计数条。label 来自 payload 的 grade_label（前端不硬编码那三个词），这里只上色。 */
+.lite2-shell .lite-home-grade-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.lite2-shell .lite-home-grade-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  border: 1px solid transparent;
+}
+
+.lite2-shell .lite-home-grade-chip strong {
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 语气温度三档（与全壳 home-tone-* 同族）：terracotta 今天需要你 · honey 值得一看 ·
+   sage 安稳。🔴 纯视觉分档，不参与判级——判级是后端 feat-056 的活。 */
+.lite2-shell .lite-home-grade-chip.home-tone-terracotta {
+  background: rgba(var(--lite2-danger-rgb), 0.1);
+  border-color: rgba(var(--lite2-danger-rgb), 0.28);
+  color: var(--terracotta);
+}
+
+.lite2-shell .lite-home-grade-chip.home-tone-honey {
+  background: rgba(var(--lite2-warn-rgb), 0.1);
+  border-color: rgba(var(--lite2-warn-rgb), 0.28);
+  color: var(--honey);
+}
+
+.lite2-shell .lite-home-grade-chip.home-tone-sage {
+  background: rgba(var(--lite2-accent-rgb), 0.1);
+  border-color: rgba(var(--lite2-accent-rgb), 0.28);
+  color: var(--sage);
+}
+
+/* 「按定级规则排序」这句口径必须一直在屏上——排序归后端、前端不 sort，客户问起要能指着说。 */
+.lite2-shell .lite-home-order-note {
+  margin-left: auto;
+  color: var(--ink-faint);
+  font-size: 11.5px;
+}
+
+.lite2-shell .lite-home-decision-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* 一张决策卡。左边一条 3px 的语气色带 = 严重度的视觉锚，不额外发明徽章体系。 */
+.lite2-shell .lite-home-decision {
+  position: relative;
+  padding: 12px 14px 12px 16px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: rgba(var(--lite2-surface-rgb), 0.55);
+}
+
+.lite2-shell .lite-home-decision::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 10px;
+  bottom: 10px;
+  width: 3px;
+  border-radius: 3px;
+  background: var(--ink-faint);
+}
+
+.lite2-shell .lite-home-decision.home-tone-terracotta::before {
+  background: var(--terracotta);
+}
+
+.lite2-shell .lite-home-decision.home-tone-honey::before {
+  background: var(--honey);
+}
+
+.lite2-shell .lite-home-decision.home-tone-sage::before {
+  background: var(--sage);
+}
+
+.lite2-shell .lite-home-decision-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+
+/* 用户面只显示 grade_label（后端发的中文档位），机器键 high_risk 只活在 data- 属性里。 */
+.lite2-shell .lite-home-decision-grade {
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.lite2-shell .home-tone-terracotta .lite-home-decision-grade {
+  color: var(--terracotta);
+}
+
+.lite2-shell .home-tone-honey .lite-home-decision-grade {
+  color: var(--honey);
+}
+
+.lite2-shell .home-tone-sage .lite-home-decision-grade {
+  color: var(--sage);
+}
+
+.lite2-shell .lite-home-decision-title {
+  margin: 0;
+  font-family: var(--lite2-heading-font);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--ink);
+}
+
+.lite2-shell .lite-home-decision-owner {
+  color: var(--ink-faint);
+  font-size: 11.5px;
+}
+
+.lite2-shell .lite-home-decision-reason {
+  margin: 7px 0 0;
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* 理由的出处（规则拼装 / Avery 自己写的）与上调说明——可溯源，客户问得起。 */
+.lite2-shell .lite-home-decision-source,
+.lite2-shell .lite-home-decision-escalation {
+  margin: 5px 0 0;
+  color: var(--ink-faint);
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+
+/* 🔴 两种"没值"永不混用同一套措辞：unknown = 文档确实没写（静音灰）；
+   unparsed = 文档写了、我们读不准（警示色 + 原文摆出来），后者必须显眼。 */
+.lite2-shell .lite-home-decision-unknown {
+  margin: 7px 0 0;
+  color: var(--ink-faint);
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+
+.lite2-shell .lite-home-decision-unparsed {
+  margin: 7px 0 0;
+  padding: 7px 10px;
+  list-style: none;
+  border-left: 2px solid rgba(var(--lite2-warn-rgb), 0.5);
+  border-radius: 0 6px 6px 0;
+  background: rgba(var(--lite2-warn-rgb), 0.07);
+  color: var(--ink-soft);
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+
+.lite2-shell .lite-home-decision-unparsed li + li {
+  margin-top: 4px;
+}
+
+.lite2-shell .lite-home-decision-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.lite2-shell .lite-home-decision-toggle,
+.lite2-shell .lite-home-decision-open,
+.lite2-shell .lite-home-decision-room {
+  padding: 4px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.lite2-shell .lite-home-decision-toggle:hover,
+.lite2-shell .lite-home-decision-toggle:focus-visible,
+.lite2-shell .lite-home-decision-open:hover,
+.lite2-shell .lite-home-decision-open:focus-visible,
+.lite2-shell .lite-home-decision-room:hover,
+.lite2-shell .lite-home-decision-room:focus-visible {
+  border-color: var(--rule-strong);
+  color: var(--ink);
+}
+
+/* 展开：命中的规则逐条列出（编号 / 说的是什么 / 看的哪些字段 / 原文证据）。
+   🔴 evidence 是文档原文，原样展示——不转述、不截断。 */
+.lite2-shell .lite-home-rule-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  list-style: none;
+}
+
+.lite2-shell .lite-home-rule-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+}
+
+.lite2-shell .lite-home-rule-id {
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(var(--lite2-ink-rgb), 0.06);
+  color: var(--ink-faint);
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 10.5px;
+}
+
+.lite2-shell .lite-home-rule-title {
+  color: var(--ink);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.lite2-shell .lite-home-rule-grade {
+  color: var(--ink-faint);
+  font-size: 11px;
+}
+
+.lite2-shell .lite-home-rule-basis {
+  margin: 4px 0 0;
+  color: var(--ink-faint);
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+
+.lite2-shell .lite-home-evidence-label {
+  margin: 6px 0 3px;
+  color: var(--ink-faint);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+}
+
+.lite2-shell .lite-home-rule-evidence {
+  margin: 0;
+  padding: 6px 10px;
+  list-style: none;
+  border-left: 2px solid var(--rule-strong);
+  border-radius: 0 6px 6px 0;
+  background: rgba(var(--lite2-ink-rgb), 0.035);
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.lite2-shell .lite-home-rule-evidence li + li {
+  margin-top: 4px;
+}
+
+/* 空态。两种"空"必须长得不一样也说得不一样：
+   absent = 后端根本没发 decisions 这个键；none = 发了、但今天确实没有要定的事。 */
+.lite2-shell .lite-home-empty {
+  padding: 12px 14px;
+  border: 1px dashed var(--rule);
+  border-radius: var(--radius);
+  background: rgba(var(--lite2-ink-rgb), 0.025);
+}
+
+.lite2-shell .lite-home-empty h3 {
+  margin: 0 0 5px;
+  font-family: var(--lite2-heading-font);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.lite2-shell .lite-home-empty p {
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+/* ── ②③ 并排两块（差距摘要 / 需关注的人）───────────────────────────────── */
+.lite2-shell .lite-home-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+
+.lite2-shell .lite-home-block.lite-home-gaps,
+.lite2-shell .lite-home-block.lite-home-attention {
+  min-width: 0;
+}
+
+@media (max-width: 720px) {
+  .lite2-shell .lite-home-row {
+    grid-template-columns: 1fr;
+  }
+
+  .lite2-shell .lite-home-frame {
+    padding: 72px 20px 80px;
+  }
+}
+
+.lite2-shell .lite-home-gap-list,
+.lite2-shell .lite-home-attention-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lite2-shell .lite-home-gap-item + .lite-home-gap-item,
+.lite2-shell .lite-home-attention-item + .lite-home-attention-item {
+  padding-top: 10px;
+  border-top: 1px solid var(--rule);
+}
+
+.lite2-shell .lite-home-gap-title,
+.lite2-shell .lite-home-attention-name {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.lite2-shell .lite-home-gap-title:hover,
+.lite2-shell .lite-home-gap-title:focus-visible,
+.lite2-shell .lite-home-attention-name:hover,
+.lite2-shell .lite-home-attention-name:focus-visible {
+  color: var(--sage);
+  text-decoration: underline;
+}
+
+.lite2-shell .lite-home-attention-role {
+  color: var(--ink-faint);
+  font-size: 11.5px;
+  font-weight: 400;
+}
+
+/* 「因为出现在 N 条信号里」——口径必须写在脸上，名单不可解释就不敢给人看。 */
+.lite2-shell .lite-home-attention-why {
+  margin: 4px 0 0;
+  color: var(--ink-soft);
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+
+/* 原文证据（verbatim）。差距那边引 gapDerive 已有的 blocker 原句，人这边引信号原句。 */
+.lite2-shell .lite-home-gap-evidence,
+.lite2-shell .lite-home-attention-evidence {
+  margin: 5px 0 0;
+  padding: 6px 10px;
+  border-left: 2px solid var(--rule-strong);
+  border-radius: 0 6px 6px 0;
+  background: rgba(var(--lite2-ink-rgb), 0.035);
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+/* ── ④ Avery 手上有什么 ──────────────────────────────────────────────────── */
+/* 每格一个数 + 一扇门。🔴 五个数全是真数组的 length（people/projects 来自 ingestion 回包，
+   files/notes 来自各自的持久化端点，跟进来自 flowStore 未完成条目）——一个都不是写死的。 */
+.lite2-shell .lite-home-counts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
+  gap: 10px;
+}
+
+.lite2-shell .lite-home-count-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 10px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: rgba(var(--lite2-ink-rgb), 0.025);
+  color: var(--ink-soft);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.lite2-shell .lite-home-count-cell:hover,
+.lite2-shell .lite-home-count-cell:focus-visible {
+  border-color: var(--rule-strong);
+  background: rgba(var(--lite2-ink-rgb), 0.05);
+}
+
+.lite2-shell .lite-home-count-cell strong {
+  font-family: var(--lite2-heading-font);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.1;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.lite2-shell .lite-home-count-cell span {
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
 /* prefers-reduced-motion：动效全停，但秒表（JS 侧）仍在跳——"没冻"的证据不依赖动画。 */
 @media (prefers-reduced-motion: reduce) {
   .lite2-shell .upload-ingesting-dot,

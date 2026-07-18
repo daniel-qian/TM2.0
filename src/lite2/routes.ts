@@ -30,6 +30,9 @@ export type LiteScreen =
   // feat-055（PRD G9）：整屏项目看板。追加在末尾——本批另一条线（feat-057）同样往这个
   // 联合类型末尾追加它的 'home'，各加各的一行就不会撞。
   | 'projects'
+  // feat-057（PRD G4）· 聚合入口屏。7 个分屏一个都没退休——聚合只是它们的门厅
+  // （decisions.md Q2「两个都极端 → 结合」）。追加在末尾，不重排既有条目。
+  | 'home'
 
 export type LiteDetail = { kind: 'person' | 'project'; id: string } | null
 
@@ -47,6 +50,7 @@ export const SCREEN_PATH: Record<LiteScreen, string> = {
   // 这一屏的子段（不是另一棵树）。这里写字面量而不是引 PROJECT_PATH，只因常量声明在下面；
   // 两者不许分叉，改一个必须改另一个。
   projects: '/projects',
+  home: '/home', // feat-057 · 聚合入口（追加，不动上面任何一条）
 }
 
 // 深链：人卡挂在「你的团队」下（`/team/:personId`）；项目详情是独立顶层段
@@ -56,7 +60,11 @@ export const SCREEN_PATH: Record<LiteScreen, string> = {
 // 「浮层底下垫哪一屏」：冷深链现在垫项目屏，不再垫团队屏（见 screenFromPathname）。
 export const PROJECT_PATH = '/projects'
 
-export const DEFAULT_SCREEN: LiteScreen = 'team'
+// feat-057：默认落点从 'team' 改成 'home'（聚合入口）。理由与代价写在
+// .issues/v02-partner-align-0718/progress-feat-057.md —— 一句话：Danny 拍板"聚合做入口"，
+// 而一个只能靠手改 URL 才到得了的屏不叫入口。首屏空态自带上传面板，首访者不会被晾在
+// 一屏空摘要上。`/team` 本身一个字没动，深链、后退、粘性 query 行为全不变。
+export const DEFAULT_SCREEN: LiteScreen = 'home'
 
 const PATH_TO_SCREEN = new Map<string, LiteScreen>(
   (Object.entries(SCREEN_PATH) as [LiteScreen, string][]).map(([screen, path]) => [path, screen]),

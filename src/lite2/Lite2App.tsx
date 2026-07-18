@@ -18,6 +18,7 @@ import { CloserLookScreen } from './screens/CloserLookScreen'
 import { PlaybooksScreen } from './screens/PlaybooksScreen'
 import { VisionScreen } from './screens/VisionScreen'
 import { ProjectsScreen } from './screens/ProjectsScreen'
+import { HomeScreen } from './screens/HomeScreen'
 import { DetailOverlay } from './DetailOverlay'
 import { DraftComposer } from './DraftComposer'
 import { Lite2Footer } from './Lite2Footer'
@@ -27,6 +28,7 @@ import { resolveLook } from './look'
 import {
   bindNavigator,
   publishBaseScreen,
+  DEFAULT_SCREEN,
   PROJECT_PATH,
   SCREEN_PATH,
   useCurrentScreen,
@@ -107,8 +109,9 @@ function Lite2Shell() {
             如果每条路由各写各的 element，进详情就等于换了棵树 —— 底屏被偷换、本地状态清零，
             正是复核逮到的那条 major。 */}
         <Routes>
-          {/* 入口：`/?v=2&mode=live&skin=paper&lang=zh` 落到 /team，query 原样带过去。
-              replace —— 否则后退键在 `/` 与 `/team` 之间反复横跳（重定向再把人推回来）。 */}
+          {/* 入口：`/?v=2&mode=live&look=paper&lang=zh` 落到 DEFAULT_SCREEN（feat-057 起
+              是聚合入口 /home），query 原样带过去。replace —— 否则后退键在 `/` 与落点之间
+              反复横跳（重定向再把人推回来）。 */}
           <Route path="/" element={<RedirectToDefault />} />
 
           <Route path={SCREEN_PATH.team} element={<ScreenView />} />
@@ -124,6 +127,8 @@ function Lite2Shell() {
           {/* feat-055（PRD G9）：整屏项目看板。追加在既有屏路由末尾——本批 feat-057 的
               `/home` 同样追加在这之后，各加各的一行。 */}
           <Route path={SCREEN_PATH.projects} element={<ScreenView />} />
+          {/* feat-057 · 聚合入口屏（追加在既有屏路由末尾，上面一条都没动）。 */}
+          <Route path={SCREEN_PATH.home} element={<ScreenView />} />
 
           {/* 深链：项目详情。底下垫的是**来源屏**（routes.ts 的 baseScreenFrom）。
               feat-055 落地后这里**依然**是 <ScreenView />，而不是换成 ProjectsScreen：
@@ -150,11 +155,13 @@ function Lite2Shell() {
   )
 }
 
-// 🔴 重定向必须原样转发 search + hash：`?v=2&mode=live&skin=paper&lang=zh` 是进 v02 的入口，
+// 🔴 重定向必须原样转发 search + hash：`?v=2&mode=live&look=paper&lang=zh` 是进 v02 的入口，
 // 丢一个 `v=2` 整个壳就掉回 v01。
+// feat-057：落点改读 routes.ts 的 DEFAULT_SCREEN（现在是聚合入口 /home），不再写死 team——
+// 默认落哪一屏是导航口径，属于 routes.ts，这里只跟着走，免得两处各说一套。
 function RedirectToDefault() {
   const { search, hash } = useLocation()
-  return <Navigate to={{ pathname: SCREEN_PATH.team, search, hash }} replace />
+  return <Navigate to={{ pathname: SCREEN_PATH[DEFAULT_SCREEN], search, hash }} replace />
 }
 
 // 屏 id → 屏组件。ScreenView 按当前底屏在这里挑一个渲染。
@@ -168,6 +175,7 @@ const SCREEN_COMPONENT: Record<LiteScreen, ComponentType> = {
   vision: VisionScreen,
   // feat-055：项目屏。追加在既有条目末尾（本批 feat-057 的 'home' 同样追加在这之后）。
   projects: ProjectsScreen,
+  home: HomeScreen, // feat-057 · 聚合入口（追加，不动上面任何一条）
 }
 
 // 所有屏路由共用的渲染位。屏组件由**底屏**决定（详情深链上 = 打开浮层时用户所在的那一屏），

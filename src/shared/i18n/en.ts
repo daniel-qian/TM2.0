@@ -714,6 +714,69 @@ export const en = {
     draftAddedStatus: 'Written into your follow-ups.',
     draftCompletedStatus: 'Marked handled in your follow-ups.',
     draftGoFollowups: 'Open follow-ups',
+    // ── Aggregate entry screen (feat-057 / PRD G4) — the landing surface. Four summary blocks,
+    // each a door into the screen that owns the detail. 🔴 Every number on this surface is
+    // counted from the live payload by homeDerive.ts; there is no hardcoded statistic here and
+    // there must never be one (the partner reference library's greeting line — "scanned 186
+    // signals" — is hardcoded; ours are counted or absent). ──
+    tabHome: 'Today',
+    homeEyebrow: 'Today',
+    homeTitle: 'What today asks of you',
+    homeLede:
+      'Four reads off the files you brought in. Each one opens into the screen that holds the rest.',
+
+    // Block 1 — decisions (graded by the backend rules, feat-056; the front end never re-grades
+    // and never re-sorts).
+    homeDecisionsTitle: 'To decide today',
+    homeDecisionsCount: '{total} on the table',
+    homeDecisionsOrderNote: 'Ordered by the grading rules — most serious first.',
+    homeDecisionsAbsentTitle: 'No grading came back with this data',
+    homeDecisionsAbsentBody:
+      'This company context was read before decision grading existed, or the backend serving it does not send it yet. Upload again against the current backend and the graded list appears here.',
+    homeDecisionsEmptyTitle: 'Nothing needs deciding today',
+    homeDecisionsEmptyBody:
+      'When a project shows a blocker, a passed date or a risk signal in your files, it lands here with the rule that caught it.',
+    homeDecisionOwner: 'Owned by',
+    homeDecisionReasonRule: 'By the rules',
+    homeDecisionReasonAvery: "Avery's own read",
+    homeDecisionEscalated: 'Avery raised this grade',
+    homeDecisionRulesToggle: 'Why this grade',
+    homeDecisionRuleBasis: 'Read from',
+    homeDecisionEvidenceLabel: 'Straight from your files',
+    // 🔴 Two different kinds of "no value" — never merge these two sentences. The first means
+    // the document genuinely says nothing; the second means it says something we could not pin
+    // to a comparable value, and the raw words MUST be shown (the manager is holding the
+    // original — telling him he never wrote it destroys the whole read).
+    homeDecisionUnknownLabel: 'Not mentioned in the files',
+    homeDecisionUnparsed: '{field} reads "{raw}" — that does not pin down a value.',
+    homeDecisionOpenProject: 'Open the project',
+    homeDecisionAskRoom: 'Take it to the room',
+    homeFieldStatus: 'Status',
+    homeFieldProgress: 'Progress',
+    homeFieldDueDate: 'Due date',
+
+    // Block 2 — closer-look summary.
+    homeGapsTitle: 'Where the files disagree with themselves',
+    homeGapsCount: '{count} open',
+    homeGapsEmpty: 'Nothing is contradicting itself right now.',
+    homeGapsLink: 'A closer look',
+
+    // Block 3 — people worth a look. 🔴 The count says how many times the FILES mention them.
+    // It is not a score, a rank or a rating, and the screen says so out loud.
+    homeAttentionTitle: 'People the files keep bringing up',
+    homeAttentionCaption: 'Counted from what your documents say — not a rating of anyone.',
+    homeAttentionWhySignals: 'named in {count} signals',
+    homeAttentionWhyBlockers: '{count} blockers on their projects',
+    homeAttentionEmpty: 'No one is being singled out by the files right now.',
+    homeAttentionLink: 'Your team',
+
+    // Block 4 — plain counts, each a door.
+    homeOverviewTitle: 'What Avery is working from',
+    homeOverviewPeople: 'people',
+    homeOverviewProjects: 'projects',
+    homeOverviewFiles: 'files read',
+    homeOverviewNotes: 'field notes',
+    homeOverviewFollowups: 'open follow-ups',
   },
 
   // ── Ask / Quick ask (feat-034 stage B — ADR-0023 voice: asks about the WORK, never rates

@@ -147,10 +147,12 @@ LiveTransport seam,与 v01 stub 独立实例)。跨 3 次页面导航 + 1 次仓
    起的 dev 端口),注入 snippet:
    - `__seedGate.defuseAnimations()`
    - `await __seedGate.assertV2Boots()` — **v2Boots**:`.lite2-shell` 挂载 + 8 个 tab、
-     顺序精确匹配(`Your team · Projects · The room · Follow-ups · Avery's notes ·
-     A closer look · Playbooks · Where this goes`)。PRD 的 6 个 + feat-047 的
-     `Avery's notes` + feat-055 的 `Projects`。⚠ 增删或重排 `src/lite2/LiteTopbar.tsx`
-     的 tab,必须在同一个 commit 里同步 snippet 里的 `expected` 数组,否则本相位必红。
+     顺序精确匹配(`Today · Your team · Projects · The room · Follow-ups · Avery's notes ·
+     A closer look · Playbooks · Where this goes`)。PRD 的 6 个 + feat-047 的 `Avery's notes`
+     + feat-055 的 `Projects` + feat-057 前置的聚合入口 `Today`(它同时是 `/` 的落点)。
+     🔴 7 个分屏一个都没退休(Danny 拍板「两个都极端 → 结合」),少掉其中任何一个都是回归,
+     不是契约更新。⚠ 增删或重排 `src/lite2/LiteTopbar.tsx` 的 tab,必须在同一个 commit 里
+     同步 snippet 里的 `expected` 数组,否则本相位必红。
    - `const before = __seedGate.readSkinSnapshot()` — 记下 paper 观感的 `data-look` + 关键计算值。
 2. 导航到同 URL 但 `&look=aurora`(整页刷新,重新注入 snippet——观感只在挂载时读一次 URL,
    见 `src/lite2/look.ts`):
