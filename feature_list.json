@@ -499,8 +499,8 @@
         "feat-052",
         "feat-054"
       ],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "分支 feat/055-projects-screen。⚠️ 前一轮 workflow 被中断，产出未提交；集成方抢救提交为 wip(732acc5) 后由新一轮接管核实补完。commit 266a98c(接管补完) + 394058b(复核返工)。复核 verdict=pass（0 blocker / 1 major 已修 / 1 minor 未修）。项目屏作为第 3 个 tab（Today · Your team · Projects · …），/projects/:id 详情沿用 DetailOverlay。🔴 「未知」态实测：无 progress 不出进度条只出「文档未提及」，无 dueDate/owner/status 显式弱化+斜体，缺状态的卡一律中性色绝不染绿；复核者用自己构造的稀疏 payload 加测了实现者没测的越界值（progress=150 / -5）均正确判未知。极少态：1 个项目出粒度说明不补位卡，0 个项目连覆盖率统计栏都不出、只留诚实空态+CTA。两种 Look 下 radius 与进度条填充色真的分叉（非回落默认值）。major(v2Boots 门 7-tab 期望值)已修并改为 expected.length 单一真相源。集成门（全部 11 条并入后）：CSS 15 个文件全部配平 · typecheck 0 错 · build 零 CSS 语法错误 · lint 0 error · pytest 2956 passed/0 failed/4 xfailed · 行为验证 verify-p0.mjs 41 PASS/0 FAIL（两张皮各跑一遍全流程）。 未修 minor：第 8 个 tab 把顶栏挤出 390px 手机视口 9px（中文桌面是主场景，判 minor；但 057 再加一个后叠加放大，见下）。本条还独立发现了 lite2.css 未闭合花括号（与集成方 bba9f1c 同一处，两条线各自撞上）。"
     },
     {
       "id": "feat-056",
@@ -517,8 +517,8 @@
       "dependencies": [
         "feat-056"
       ],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "分支 feat/057-home-aggregate。同为接管中断产出（wip e6fb94f）后补完，commit e28e1fc。复核 verdict=pass（0 blocker / 0 major / 2 minor）。聚合入口屏 /home，按 decisions.md Q2 拍板「两个都极端 → 结合」——聚合做入口且成为 / 的落点，7 个分屏一个没退休。四块摘要：今天要决策的（按 feat-056 severity 排序，后端已排好序前端不重排）/ 差距摘要 / 需关注的人 / 团队概览。🔴 unparsed_fields 显示文档原文（「到期日写的是『月底前』」）而非「文档未提及」——两者互斥不得混说。decisions 键缺席时有诚实空态（老后端不发这个键）。「需关注的人」用可得信号（关联 blockers、signals 提及次数）并在界面上说明口径。集成门（全部 11 条并入后）：CSS 15 个文件全部配平 · typecheck 0 错 · build 零 CSS 语法错误 · lint 0 error · pytest 2956 passed/0 failed/4 xfailed · 行为验证 verify-p0.mjs 41 PASS/0 FAIL（两张皮各跑一遍全流程）。 未修 minor 2 条：差距摘要列表 3 处 key 只补了 2 处（跨文档重复项目下会撞 React key）；tab 溢出（与 055 叠加）。🔴 跨文档人名重复（后端 issue #10）故意保留可见，只做 React key 防撞——前端去重会把后端 bug 藏起来。"
     },
     {
       "id": "feat-058",
@@ -527,8 +527,8 @@
       "dependencies": [
         "feat-052"
       ],
-      "status": "not-started",
-      "evidence": ""
+      "status": "done",
+      "evidence": "分支 feat/058-draft-composer。同为接管中断产出（wip 6886b96）后补完，commit 1743ea0。复核 verdict=pass（0 blocker / 0 major / 2 minor）。「起草消息」从裸 mailto 改为应用内草稿框（LiteModal 基座）。三处超过参考版：正文可编辑（她只读）；「复制到聊天应用」为主出口带明确反馈（国内在微信/飞书，mailto 基本是死路），mailto 降为次出口；「完成」真写进 flowStore 跟进队列，刷新仍在（她只弹 toast 不落库）。集成门（全部 11 条并入后）：CSS 15 个文件全部配平 · typecheck 0 错 · build 零 CSS 语法错误 · lint 0 error · pytest 2956 passed/0 failed/4 xfailed · 行为验证 verify-p0.mjs 41 PASS/0 FAIL（两张皮各跑一遍全流程）。 未修 minor 2 条：① 同一张分诊卡的「加入跟进」与草稿框「完成·加进跟进」不共享去重闸，连点会长出两条重复；② 🔴 lang=zh 下草稿主题仍是写死的英文模板「Take a look at <项目名>」，会被 manager 原样复制进微信——这条与本波「不许对客户说他文件里没有的话」同源，建议优先处理。本条还独立发现了 lite2.css 未闭合花括号（第二条撞上的线）。"
     },
     {
       "id": "feat-059",
