@@ -1,5 +1,27 @@
 # Avery Live — dual deployment runbook (境内中文 + 海外英文)
 
+> ## ⚠️ 2026-07-18 纠偏 —— 本文件的拓扑部分已作废
+>
+> **前后端都已真上线，形态与本 runbook 描述的不同。** 权威描述见
+> [ADR-0024](../adr/0024-single-target-deploy-frankfurt-backend-supersedes-dual-deploy.md)
+> 与 [vercel-config-notes.md](vercel-config-notes.md)。
+>
+> | 本文件写的 | 实际 |
+> |---|---|
+> | 前端双 target（海外 EN + 境内 ZH） | **单个** Vercel 项目 `avery-lite`，**中文默认**，`averylite.dannyqian.com` |
+> | 境内 ECS `120.55.97.151` + 宝塔 nginx | **法兰克福** 阿里云轻量 `8.211.28.11` + **Caddy**（systemd），合伙人的机器 |
+> | 域名 `avery.ima-read.com` | `avery.dannyqian.com`（后端）/ `averylite.dannyqian.com`（前端） |
+> | 服务双 host（境内 MiniMax / 海外 Claude） | **单 host**，brain = `minimax` |
+> | 「产出 = 配置 + runbook，NOT 实际部署」 | **已实际部署**，push 到 `main` 即自动构建上生产 |
+>
+> **§A.4（宝塔 nginx vhost / XFF recipe / ~150M-free 取舍）整段不再适用** —— 那台机器不存在于当前拓扑。
+> 仍然有效的部分：**§1 的 env 矩阵**（变量名与语义未变）、`scripts/deploy/smoke_docker.sh`、以及
+> pluggable brain/embeddings/retrieval 的思路。正文保留作历史，不逐句改写。
+>
+> 一条本文件从未提到、但现在是硬依赖的事：**后端 `AVERY_CORS_ORIGINS` 是精确匹配列表**，
+> 设置即完全替换默认的 `http://localhost:5173,http://127.0.0.1:5173` —— 漏带 localhost
+> 会掐断所有并行线的本地开发。见 issue #14。
+
 > **feat-018 · ADR-0021 §5.** Line A dual端上线: 境内中文给融资团队现场演示 (不卡/不翻墙),
 > 海外英文沿用 overseas-first。
 >

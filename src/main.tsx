@@ -17,10 +17,12 @@ import './story/styles/59-quick-ask.css'
 import './shared/styles/60-terminal.css'
 import './shared/styles/70-home-cards.css'
 import './lite/styles/lite.css'
-// feat-035：lite2 (v02) chunk — skin tokens first (paper defaults, aurora overrides), then the
+// feat-035：lite2 (v02) chunk — look tokens first (paper defaults, aurora overrides), then the
 // scoped .lite2-shell rules that consume them. Appended last; lite.css above is untouched.
-import './lite2/styles/skin-paper.css'
-import './lite2/styles/skin-aurora.css'
+// feat-068: renamed skin-*.css -> look-*.css (`Skin` is now exclusively ADR-0021's industry
+// theme); pure rename, chunk order unchanged — cascade stays byte-identical.
+import './lite2/styles/look-paper.css'
+import './lite2/styles/look-aurora.css'
 import './lite2/styles/lite2.css'
 import { App } from './App'
 import { useLite } from './lite/store'

@@ -11,8 +11,8 @@ import { useLocation, useMatch } from 'react-router-dom'
 // store 只保留 `goScreen()` 这个动作名（签名不变，7 个调用点一行没改）委托给下面的导航桥。
 //
 // ## 🔴 粘性 query：进 v02 的入口不许被吃掉
-// `?v=2&mode=live&skin=paper&lang=zh` 是所有人（含另外几条并行线与演示现场）进 v02 的入口，
-// 由 shared/version.ts · shared/mode.ts · lite2/skin.ts · i18n 各自读 `window.location.search`
+// `?v=2&mode=live&look=paper&lang=zh` 是所有人（含另外几条并行线与演示现场）进 v02 的入口，
+// 由 shared/version.ts · shared/mode.ts · lite2/look.ts · i18n 各自读 `window.location.search`
 // 解析 —— 它们与路径无关，但**只要有一次导航把 search 丢了，整个壳就掉回 v01**。
 // react-router 的 navigate('/team') 默认不带 search，所以每次导航都必须过 carrySearch()。
 //
@@ -90,7 +90,7 @@ export function baseScreenFrom(pathname: string, state: unknown): LiteScreen {
 // 一次性「接力棒」参数：导航离开时丢掉，不跟着人跑遍全屏。
 // `q` = `/room?q=<问题>`（从决策卡带着问题进议事室，feat-057 的上游接口）——它描述的是
 // 「这次进屋要问什么」，不是会话状态，带到 /notes 再带回来会诈尸重放。
-// 其余一切参数（v/mode/skin/lang/showInactive/transport/未来新增的）一律跟着走。
+// 其余一切参数（v/mode/look/lang/showInactive/transport/未来新增的）一律跟着走。
 const EPHEMERAL_PARAMS = ['q'] as const
 
 /**
