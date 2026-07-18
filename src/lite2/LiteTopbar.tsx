@@ -23,7 +23,10 @@ export function LiteTopbar() {
   // PRD 顺序（6 tab）+ feat-047 第 7 tab：Your team · The room · Follow-ups · Avery's notes ·
   // A closer look · Playbooks · Where this goes。笔记面移植自 src/lite，放在 Follow-ups 之后
   // （本棒的 tab 顺序决定，理由见 progress.md）。
+  // feat-057：聚合入口排在最前——它是 `/` 的落点，也是"今天先看哪儿"的那一屏；
+  // 排在末尾的入口不叫入口。7 个分屏一个没退休，顺序一个没动，只是前面多了一扇门。
   const tabs: { label: string; screen: LiteScreen }[] = [
+    { label: t.lite2.tabHome, screen: 'home' },
     { label: t.lite2.tabTeam, screen: 'team' },
     { label: t.lite2.tabRoom, screen: 'room' },
     { label: t.lite2.tabFollowups, screen: 'followups' },

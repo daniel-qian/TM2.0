@@ -17,6 +17,7 @@ import { NotesScreen } from './screens/NotesScreen'
 import { CloserLookScreen } from './screens/CloserLookScreen'
 import { PlaybooksScreen } from './screens/PlaybooksScreen'
 import { VisionScreen } from './screens/VisionScreen'
+import { HomeScreen } from './screens/HomeScreen'
 import { DetailOverlay } from './DetailOverlay'
 import { Lite2Footer } from './Lite2Footer'
 import { OnboardWizard } from './OnboardWizard'
@@ -25,6 +26,7 @@ import { resolveSkin } from './skin'
 import {
   bindNavigator,
   publishBaseScreen,
+  DEFAULT_SCREEN,
   PROJECT_PATH,
   SCREEN_PATH,
   useCurrentScreen,
@@ -104,8 +106,9 @@ function Lite2Shell() {
             如果每条路由各写各的 element，进详情就等于换了棵树 —— 底屏被偷换、本地状态清零，
             正是复核逮到的那条 major。 */}
         <Routes>
-          {/* 入口：`/?v=2&mode=live&skin=paper&lang=zh` 落到 /team，query 原样带过去。
-              replace —— 否则后退键在 `/` 与 `/team` 之间反复横跳（重定向再把人推回来）。 */}
+          {/* 入口：`/?v=2&mode=live&skin=paper&lang=zh` 落到 DEFAULT_SCREEN（feat-057 起
+              是聚合入口 /home），query 原样带过去。replace —— 否则后退键在 `/` 与落点之间
+              反复横跳（重定向再把人推回来）。 */}
           <Route path="/" element={<RedirectToDefault />} />
 
           <Route path={SCREEN_PATH.team} element={<ScreenView />} />
@@ -118,6 +121,8 @@ function Lite2Shell() {
           <Route path={SCREEN_PATH.closerlook} element={<ScreenView />} />
           <Route path={SCREEN_PATH.playbooks} element={<ScreenView />} />
           <Route path={SCREEN_PATH.vision} element={<ScreenView />} />
+          {/* feat-057 · 聚合入口屏（追加在既有屏路由末尾，上面一条都没动）。 */}
+          <Route path={SCREEN_PATH.home} element={<ScreenView />} />
 
           {/* 深链：项目详情。整屏项目看板是 feat-055 的活——这里先把路径占住，落到今天
               已有的真实项目浮层（真 payload，不是占位假屏；把已经能用的详情降级成
@@ -141,9 +146,11 @@ function Lite2Shell() {
 
 // 🔴 重定向必须原样转发 search + hash：`?v=2&mode=live&skin=paper&lang=zh` 是进 v02 的入口，
 // 丢一个 `v=2` 整个壳就掉回 v01。
+// feat-057：落点改读 routes.ts 的 DEFAULT_SCREEN（现在是聚合入口 /home），不再写死 team——
+// 默认落哪一屏是导航口径，属于 routes.ts，这里只跟着走，免得两处各说一套。
 function RedirectToDefault() {
   const { search, hash } = useLocation()
-  return <Navigate to={{ pathname: SCREEN_PATH.team, search, hash }} replace />
+  return <Navigate to={{ pathname: SCREEN_PATH[DEFAULT_SCREEN], search, hash }} replace />
 }
 
 // 屏 id → 屏组件。ScreenView 按当前底屏在这里挑一个渲染。
@@ -155,6 +162,7 @@ const SCREEN_COMPONENT: Record<LiteScreen, ComponentType> = {
   closerlook: CloserLookScreen,
   playbooks: PlaybooksScreen,
   vision: VisionScreen,
+  home: HomeScreen, // feat-057 · 聚合入口（追加，不动上面任何一条）
 }
 
 // 所有屏路由共用的渲染位。屏组件由**底屏**决定（详情深链上 = 打开浮层时用户所在的那一屏），
