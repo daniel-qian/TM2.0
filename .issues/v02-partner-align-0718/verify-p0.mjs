@@ -44,9 +44,11 @@ async function run() {
     await page.goto(entryUrl(look), { waitUntil: 'networkidle' })
     const u = new URL(page.url())
     const params = Object.fromEntries(u.searchParams)
+    // feat-057 起，`/` 落到聚合入口屏 `/home`（decisions.md Q2「两个都极端 → 结合」：
+    // 聚合做入口，7 个分屏一个没退休）。参数保全的要求不变——那才是这条断言的实质。
     record(
-      `[${look}] 入口直链 / → /team 且五参数不丢`,
-      u.pathname === '/team' && params.v === '2' && params.mode === 'live' &&
+      `[${look}] 入口直链 / → /home 且五参数不丢`,
+      u.pathname === '/home' && params.v === '2' && params.mode === 'live' &&
         params.look === look && params.lang === 'zh',
       `path=${u.pathname} params=${JSON.stringify(params)}`,
     )
@@ -224,6 +226,9 @@ async function run() {
     )
 
     // ── 7 · 详情浮层：路由 + 底屏不被偷换 + Esc 关闭 ────────────────────────────
+    // 落点已是 /home，人/项目卡在 /team 上——先切过去再找。
+    await page.evaluate(() => window.__lite2Store.getState().goScreen('team'))
+    await page.waitForTimeout(500)
     const card = page.locator('.home-person-card, .home-project-card').first()
     if ((await card.count()) > 0) {
       const sceneBefore = await shell.getAttribute('data-scene')
