@@ -42,6 +42,32 @@ script.
              宁缺勿滥                                   <- 勿
            6 / 50 real negations were falsely refused (未 / 莫 / 不可 / 以免 / 免得 absent entirely)
   AFTER:   0 and 0.
+
+ROUND 2 — and the reason this docstring now has a round 2 is the more useful lesson of the two.
+Round 1 shipped with all 376 assertions green and the hole still open, because the corpus had a
+SHAPE it did not contain. `_ORDINARY` covered cue+verb (「日期未定」) and cue+ordinary-noun
+(「无锡分公司」) but never once cue+SCORING-noun — which is the single shape the new lookahead
+would accept. So the one form that could still disarm the gate was the one form nobody tested:
+
+    「无绩效数据的部门里，陈思雨排名倒数第一，建议列入末位淘汰名单。」 -> PASSED, 0 violations
+    「在新成立的部门里，  陈思雨排名倒数第一，建议列入末位淘汰名单。」 -> BLOCKED
+
+Only the leading noun phrase differs. 「无绩效数据」/「非考核期间」/「未评级岗位」/「不能打分」 are
+ordinary roster Chinese, and all of them read as NOUN PHRASES — 绩效 modifies 数据; nothing is
+negated — while `_NEG_GOVERNS_TIGHT` counted the bare scoring noun as proof that an ACTION had been
+negated. MEASURED: 22 such words x 4 payloads = 88/88 leaked, 64 of them BLOCKED before round 1,
+i.e. a net regression. The fix is in `redline.py` (`_NEG_GOVERNS_ACTION`, and the modals split out
+of the prohibition list into `_NEG_ZH_MODAL`); the guard against it recurring is `_NOMINALISED`
+below, which is GENERATED from `redline._NEG_SCORE_NOUN` rather than hand-enumerated, so a scoring
+word added to that table cannot arrive without its corpus rows.
+
+The general lesson, recorded because it outlives this file: a mutation proof shows the rule works on
+the shapes you thought of. It cannot show the rule is safe on the shapes you did not. Only the
+corpus can, and only if the corpus is built from the RULE's own vocabulary instead of the author's
+imagination.
+
+STILL OPEN, on purpose and pinned by a test rather than left to be rediscovered: the clause-scope
+class (「避免打分的团队里，她排名倒数第一。」) — see test_the_clause_scope_gap_is_still_open.
 """
 from __future__ import annotations
 
@@ -267,7 +293,29 @@ _ORDINARY = [
     "莫名其妙", "莫斯科项目", "莫过于此", "莫大帮助", "莫非如此", "莫非对她有意见",
     # the prohibition verbs, used about something other than scoring
     "禁止吸烟", "以免超时", "免得麻烦", "切忌浮躁",
+    # --- ROUND 2: cue + SCORING NOUN, the shape this corpus was missing --------------------------
+    # Hand-written HR/roster Chinese, kept alongside the generated `_NOMINALISED` block because
+    # these are the actual phrases the three customers' documents use and they read as sentences a
+    # human can check. Every one of them is a NOUN PHRASE — 「无绩效数据」 is 'a department with no
+    # perf data', not 'do not score'. All 18 leaked before round 2; 14 of them BLOCKED before
+    # round 1, so round 1 regressed them.
+    "无绩效数据", "无考核记录", "无评分标准", "无打分权限", "无排序需求", "无淘汰指标",
+    "非考核期间", "非绩效面谈", "非评估范围", "未评级岗位", "未排名季度", "未考核完成",
+    "不能打分", "不可评级", "不必排名", "不再打分", "不予考核", "不宜排名",
 ]
+
+# The SAME shape, generated instead of imagined — the reason round 1's 376 green assertions did not
+# catch anything. `_NEG_SCORE_NOUN` is the rule's own vocabulary, so crossing it with every
+# nominalisable cue produces exactly the set of strings the lookahead could possibly accept, and it
+# grows by itself when somebody adds a scoring word to `redline.py`.
+#
+# 「数据」 is the head noun for all of them on purpose: it is the most ordinary thing an HR column
+# can be, it is not in any lexicon, and it makes every row a noun phrase rather than a clause.
+#     MEASURED: 11 cues x 33 nouns = 363 rows. Round 1 leaked 363/363; round 2 leaks 0/363.
+_NOMINALISABLE_CUES = ["未", "无", "非",
+                       "不准", "不许", "不能", "不可", "不必", "不宜", "不予", "不再"]
+_SCORE_NOUNS = redline._NEG_SCORE_NOUN.removeprefix("(?:").removesuffix(")").split("|")
+_NOMINALISED = [f"{cue}{noun}数据" for cue in _NOMINALISABLE_CUES for noun in _SCORE_NOUNS]
 
 
 def _row(word: str, payload: str) -> str:
@@ -292,6 +340,30 @@ def test_ordinary_words_do_not_switch_the_gate_off(word, payload):
         f"「{word}」 suppressed a person score: {text!r}\n"
         f"It is an ordinary word, not a negation. Control: {_row('金牌顾问', payload)!r} correctly "
         f"FAILS — the only difference is the cue-bearing word."
+    )
+
+
+@pytest.mark.parametrize("payload", _PAYLOADS)
+@pytest.mark.parametrize("word", _NOMINALISED)
+def test_a_nominalised_scoring_word_does_not_switch_the_gate_off(word, payload):
+    """BORN RED — all 363 of them, and 363/363 is the whole point.
+
+    A scoring word after 未/无/非 or a 不+modal is the HEAD OF A NOUN PHRASE, not a negated action:
+    「无绩效数据」 is a department without performance data, and it says nothing whatsoever about
+    whether the person after it was scored. Round 1's lookahead accepted it as proof that scoring
+    had been prohibited, and so switched the person-scoring gate off for 32 characters.
+
+    This block is GENERATED from `redline._NEG_SCORE_NOUN` rather than written out, which is the
+    actual fix to the process failure: round 1 hand-enumerated its corpus and hand-enumeration is
+    what let the one dangerous shape go missing. Add a word to `_NEG_SCORE_NOUN` and 11 new rows
+    appear here automatically.
+    """
+    text = _row(word, payload)
+    assert not redline.validate(text).passed, (
+        f"「{word}」 suppressed a person score: {text!r}\n"
+        f"It is a noun phrase (cue + scoring noun + head), not a prohibition. If this leaks, "
+        f"`_NEG_GOVERNS_ACTION` has gone back to accepting a bare `_NEG_SCORE_NOUN` as evidence "
+        f"that an action was negated. Control: {_row('金牌顾问', payload)!r} correctly FAILS."
     )
 
 
@@ -354,20 +426,34 @@ def test_real_negations_still_pass(text):
 
 # --- the mutation proofs: every piece of the rule is shown to carry weight, by execution --------
 
-def _alt_imperative() -> str:
-    alt = rf"(?:{redline._NEG_ZH_IMPERATIVE})(?={redline._NEG_GOVERNS})|"
+def _alt(name: str, alt: str) -> str:
     assert alt in redline._NEG.pattern, (
-        "the imperative-cue alternative is no longer in _NEG as constructed from its own constants "
-        "— the mutations below point at nothing and would pass vacuously. Re-derive them.")
+        f"the {name} alternative is no longer in _NEG as constructed from its own constants — the "
+        f"mutations below point at nothing and would pass VACUOUSLY. Re-derive them.")
     return alt
+
+
+def _alt_prohibition() -> str:
+    return _alt("prohibition-cue",
+                rf"(?:{redline._NEG_ZH_PROHIBITION})(?={redline._NEG_GOVERNS})|")
+
+
+def _alt_modal() -> str:
+    return _alt("不+modal cue",
+                rf"(?:{redline._NEG_ZH_MODAL})(?={redline._NEG_GOVERNS_ACTION})|")
 
 
 def _alt_plain() -> str:
-    alt = (rf"(?<![{redline._NEG_非_COMPOUND}])(?:未|无|非)"
-           rf"(?={redline._NEG_GOVERNS_TIGHT})|")
-    assert alt in redline._NEG.pattern, (
-        "the 未/无/非 alternative is no longer in _NEG as constructed from its own constants.")
-    return alt
+    return _alt("未/无/非",
+                rf"(?<![{redline._NEG_非_COMPOUND}])(?:未|无|非)"
+                rf"(?={redline._NEG_GOVERNS_ACTION})|")
+
+
+# Round 1's lookahead for the nominalisable cues, kept here as the thing to mutate BACK to. This is
+# the literal shipped-and-reviewed rule of commit 53f7041.
+def _round1_tight() -> str:
+    return (rf"(?:[{redline._NEG_COVERB}]|{redline._NEG_SCORE_NOUN}|"
+            rf"{redline._NEG_PERSON_OBJ})")
 
 
 def _with_neg(pattern: str, fn):
@@ -379,8 +465,8 @@ def _with_neg(pattern: str, fn):
         redline._NEG = original
 
 
-def _leaking_words() -> list[str]:
-    return [w for w in _ORDINARY
+def _leaking_words(corpus: list[str] | None = None) -> list[str]:
+    return [w for w in (_ORDINARY if corpus is None else corpus)
             if any(redline.validate(_row(w, p)).passed for p in _PAYLOADS)]
 
 
@@ -389,16 +475,20 @@ def _false_alarms() -> list[str]:
 
 
 @pytest.mark.parametrize("half,mutate,expect", [
-    ("the lookahead on the IMPERATIVE cues",
+    ("the lookahead on the PROHIBITION cues",
      lambda: redline._NEG.pattern.replace(
-         _alt_imperative(), rf"(?:{redline._NEG_ZH_IMPERATIVE})|"),
-     26),
+         _alt_prohibition(), rf"(?:{redline._NEG_ZH_PROHIBITION})|"),
+     22),
+    ("the lookahead on the 不+modal cues",
+     lambda: redline._NEG.pattern.replace(
+         _alt_modal(), rf"(?:{redline._NEG_ZH_MODAL})|"),
+     10),
     ("the lookahead on 未/无/非",
      lambda: redline._NEG.pattern.replace(_alt_plain(), r"(?:未|无|非)|"),
-     35),
+     47),
     ("the X非 lookbehind",
      lambda: redline._NEG.pattern.replace(
-         _alt_plain(), rf"(?:未|无|非)(?={redline._NEG_GOVERNS_TIGHT})|"),
+         _alt_plain(), rf"(?:未|无|非)(?={redline._NEG_GOVERNS_ACTION})|"),
      5),
 ])
 def test_each_half_of_the_negation_rule_is_load_bearing(half, mutate, expect):
@@ -411,10 +501,11 @@ def test_each_half_of_the_negation_rule_is_load_bearing(half, mutate, expect):
     adding 「除非给出方案」/「无非给点建议」/「是非对错」/「莫非对她有意见」/「岂非把人当机器」 —
     the X非 words followed by a COVERB rather than by a noun — put 5 leaks back.)
 
-    MEASURED counts, over the 66-word corpus:
+    MEASURED counts, over the 84-word ordinary corpus:
         shipped rule                    0 leaks
-        imperative cues bare           26 leaks   (不要紧/不用了/好得不得了/莫名其妙/禁止吸烟…)
-        未/无/非 bare                   35 leaks   (未来规划/日期未定/无锡分公司/非常好…)
+        prohibition cues bare          22 leaks   (不要紧/不用了/好得不得了/莫名其妙/禁止吸烟…)
+        不+modal cues bare             10 leaks   (不准确/不可思议/不能上线/不必要/不能打分…)
+        未/无/非 bare                   47 leaks   (未来规划/日期未定/无锡分公司/非常好…)
         X非 lookbehind dropped          5 leaks   (除非给出方案/无非给点建议/是非对错…)
     """
     leaked = _with_neg(mutate(), _leaking_words)
@@ -427,7 +518,8 @@ def test_each_half_of_the_negation_rule_is_load_bearing(half, mutate, expect):
 
 
 @pytest.mark.parametrize("alt,getter,expect", [
-    ("the IMPERATIVE cues", _alt_imperative, 11),
+    ("the PROHIBITION cues", _alt_prohibition, 10),
+    ("the 不+modal cues", _alt_modal, 1),
     ("the 未/无/非 cues", _alt_plain, 3),
 ])
 def test_each_cue_class_is_needed_by_a_real_negation(alt, getter, expect):
@@ -435,13 +527,102 @@ def test_each_cue_class_is_needed_by_a_real_negation(alt, getter, expect):
     negations start being refused. A cue that no sentence depends on should not be in the table.
 
     MEASURED:
-        imperative cues removed  -> 11 false alarms (不该对她做员工画像 / 杜绝末位淘汰名单 / …)
+        prohibition cues removed -> 10 false alarms (不该对她做员工画像 / 杜绝末位淘汰名单 / …)
+        不+modal cues removed     ->  1 false alarm  (不可给他定级为不合格)
         未/无/非 removed          ->  3 false alarms (未把她标成离职风险 / 并未给她定级为不合格 /
                                                      未把他列入末位淘汰名单)
+
+    The modal class earning exactly ONE sentence is worth stating plainly rather than rounding up:
+    the eight 不准/不许/不能/… negations in `_REAL_NEGATIONS` are mostly VACUOUS (nothing in them
+    fires even with `_NEG` switched off entirely), so 「不可给他定级为不合格。」 is the whole reason
+    the class exists. That is a thin justification for a cue class, and the honest reading is that
+    it is carried for the FALSE-ALARM direction on advice this corpus only barely samples — not
+    that it is load-bearing the way the prohibition cues are.
     """
     alarms = _with_neg(redline._NEG.pattern.replace(getter(), ""), _false_alarms)
     assert len(alarms) == expect, (
         f"removing {alt} produced {len(alarms)} false alarms, expected {expect}: {alarms}")
+
+
+@pytest.mark.parametrize("mutation,mutate,ordinary,nominalised", [
+    ("the nominalisable cues accept a bare scoring noun again (round 1's _NEG_GOVERNS_TIGHT)",
+     lambda: redline._NEG.pattern
+     .replace(_alt_modal(), rf"(?:{redline._NEG_ZH_MODAL})(?={_round1_tight()})|")
+     .replace(_alt_plain(),
+              rf"(?<![{redline._NEG_非_COMPOUND}])(?:未|无|非)(?={_round1_tight()})|"),
+     18, 363),
+    ("the 不+modals are folded back into the prohibition list (round 1's single class)",
+     lambda: redline._NEG.pattern.replace(_alt_modal(), "").replace(
+         _alt_prohibition(),
+         rf"(?:{redline._NEG_ZH_PROHIBITION}|{redline._NEG_ZH_MODAL})"
+         rf"(?={redline._NEG_GOVERNS})|"),
+     6, 264),
+])
+def test_round_2_is_load_bearing(mutation, mutate, ordinary, nominalised):
+    """BORN GREEN, and it is the proof that round 2 fixed something rather than restating round 1.
+
+    Each parametrisation reverts ONE half of the round-2 change to the rule that was actually
+    shipped and reviewed in 53f7041, and demands the leaks come back. This is the test round 1 did
+    not have: its own mutations all pointed at round-1 constructs, so every one of them stayed green
+    while the gate was open.
+
+    MEASURED:
+        shipped rule                              0 ordinary,   0 nominalised
+        bare scoring noun accepted again         18 ordinary, 363 nominalised
+        modals folded back in with prohibitions   6 ordinary, 264 nominalised
+
+    The nominalised counts are the load-bearing ones — 363/363 and 264/363 are total failures of the
+    generated corpus, which is exactly what round 1 shipped and no test noticed.
+    """
+    pattern = mutate()
+    leaked_ord = _with_neg(pattern, lambda: _leaking_words(_ORDINARY))
+    leaked_nom = _with_neg(pattern, lambda: _leaking_words(_NOMINALISED))
+    assert (len(leaked_ord), len(leaked_nom)) == (ordinary, nominalised), (
+        f"reverting «{mutation}» produced {len(leaked_ord)} ordinary / {len(leaked_nom)} "
+        f"nominalised leaks, expected {ordinary} / {nominalised}.\n"
+        f"ordinary: {leaked_ord}\n"
+        f"If both counts went to 0 the round-2 narrowing is dead weight and should be deleted "
+        f"rather than carried. If they moved, the corpus drifted — look before editing the number."
+    )
+
+
+# --- the gap that is still open, pinned rather than left to be rediscovered ---------------------
+
+# 避免/拒绝/杜绝/无须 + a scoring noun. These are REAL prohibitions ('avoid scoring', 'refuse to
+# rank'), so no lookahead can reject them — the cue is correct and the sentence around it is not.
+# What is wrong is SCOPE: the prohibition governs its own clause, and `_negated` has no notion of
+# one, so it reaches 32 characters into the next clause and disarms a score that is really there.
+_CLAUSE_SCOPE_LEAKS = ["避免打分", "拒绝打分", "杜绝排名", "无须评估"]
+
+
+@pytest.mark.parametrize("word", _CLAUSE_SCOPE_LEAKS)
+def test_the_clause_scope_gap_is_still_open(word):
+    """CHARACTERIZATION — this test asserts a BUG IS PRESENT, and it is here so that the gap is a
+    recorded decision instead of a thing the next reader has to find again.
+
+    Same disease as the rest of this file, one layer up: 「避免打分的团队里，她排名倒数第一。」 has a
+    genuine 避免打分 prohibition modifying 团队, and a genuine person score after it. PRE-EXISTING —
+    OLD (53f7041) and NEW behave identically here, so round 2 neither caused nor fixed it.
+
+    THE FIX IS KNOWN AND WAS MEASURED, then deliberately backed out: give `_negated` a clause /
+    CSV-field boundary (a cue may not reach across 「，。；！？、」 or ASCII `,;!?`, but NOT a colon —
+    「不给她打分：8/10。」 is one statement). That closes all four with 0 new false alarms on
+    `_REAL_NEGATIONS`. It was backed out because it CONTRADICTS an explicit contract one file over —
+    test_redline_villa_negation_b3.py::test_negated_window_is_the_scope_of_a_real_cue requires
+    「别给她打分,绩效评分2分」 to PASS, i.e. requires a cue to reach across a comma — and because
+    with the boundary in place `_row` goes VACUOUS (measured: bare cues leak 0/66 through it), so
+    the whole corpus above would have to be rebuilt on punctuation-free rows in the same change.
+    That is a design change to the moat with its own blast radius, including English. It needs its
+    own line, not a quiet ride on this one.
+
+    WHEN THAT LINE LANDS: delete this test rather than weakening it.
+    """
+    leaked = [p for p in _PAYLOADS if redline.validate(_row(word, p)).passed]
+    assert leaked == _PAYLOADS, (
+        f"「{word}」 no longer suppresses every payload (still leaking: {leaked}). If the clause-"
+        f"scope fix landed, DELETE this characterization test — do not weaken it. If something else "
+        f"changed, find out what: this file's other tests assume the gap is exactly this shape."
+    )
 
 
 def test_the_read_ahead_margin_is_load_bearing():
@@ -501,10 +682,20 @@ def test_the_negation_of_a_prohibition_is_not_a_negation():
 def test_bare_不_is_still_not_a_cue():
     """A standing constraint, not a new one, and the reason 不 is spelled out as bigrams: 不 lives
     inside 不合格 / 不在线 / 不动产 / 不锈钢, so a bare 不 would over-suppress on contact. feat-060
-    EXTENDS the modal list (不准/不许/不能/不可/不必/不宜/不予/不再) and must not shortcut it to 不."""
+    EXTENDS the modal list (不准/不许/不能/不可/不必/不宜/不予/不再) and must not shortcut it to 不.
+
+    Round 2 adds the other half of the same constraint: those extended modals nominalise
+    (「不能打分的实习生」), so the bigram alone is not enough either — it has to govern something
+    ACTION-shaped. 「不能打分」 is asserted here as a NON-cue for that reason."""
     assert not redline._NEG.search("不"), "bare 不 became a negation cue — it must stay a bigram"
     assert not redline._NEG.search("不合格"), "「不合格」 must not read as a negation"
     assert not redline._NEG.search("不动产"), "「不动产」 must not read as a negation"
+    assert not redline._NEG.search("不能打分"), (
+        "「不能打分」 read as a negation cue. The 不+modal bigrams must govern an ACTION "
+        "(_NEG_GOVERNS_ACTION), not a bare scoring noun — see test_round_2_is_load_bearing.")
+    assert redline._NEG.search("不能给她打分"), (
+        "「不能给她打分」 stopped reading as a negation — the round-2 narrowing ate the modal cue "
+        "instead of bounding it. 给 is the coverb that makes this an action.")
 
 
 def test_the_corpus_is_actually_chinese():
@@ -513,7 +704,34 @@ def test_the_corpus_is_actually_chinese():
     cannot exhibit a single failure in this file — every one of them is a morpheme boundary that
     only exists in the script. So the corpus is asserted to BE Chinese."""
     han = re.compile(r"[一-鿿]")
-    for item in _ORDINARY + _REAL_NEGATIONS + _SCORING_NAMES[:8] + _PAYLOADS:
+    for item in (_ORDINARY + _NOMINALISED + _REAL_NEGATIONS + _SCORING_NAMES[:8] + _PAYLOADS
+                 + _CLAUSE_SCOPE_LEAKS):
         assert han.search(item), f"corpus item carries no Han character: {item!r}"
-    assert len(_ORDINARY) >= 60, f"ordinary-vocabulary corpus shrank to {len(_ORDINARY)}"
+    assert len(_ORDINARY) >= 80, f"ordinary-vocabulary corpus shrank to {len(_ORDINARY)}"
     assert len(_REAL_NEGATIONS) >= 45, f"negation corpus shrank to {len(_REAL_NEGATIONS)}"
+    assert len(_NOMINALISED) >= 300, f"nominalised corpus shrank to {len(_NOMINALISED)}"
+
+
+def test_the_nominalised_corpus_is_generated_from_the_rules_own_vocabulary():
+    """The guard on the guard, and the actual lesson of round 2.
+
+    `_NOMINALISED` is only worth anything if it is derived from `redline._NEG_SCORE_NOUN` — that is
+    what makes it grow when the rule grows, and hand-enumeration is precisely what let round 1 ship
+    a corpus with the one dangerous shape missing. If someone ever replaces the derivation with a
+    frozen literal list, this goes red.
+
+    It also pins the parse: `_NEG_SCORE_NOUN` is a `(?:a|b|c)` alternation, and if it ever stops
+    being one, `_SCORE_NOUNS` would silently become a single junk string and the 363 rows would
+    collapse to 11 meaningless ones.
+    """
+    assert len(_SCORE_NOUNS) >= 30, (
+        f"_NEG_SCORE_NOUN parsed into {len(_SCORE_NOUNS)} entries ({_SCORE_NOUNS[:3]}…). It is no "
+        f"longer a flat (?:a|b|c) alternation, so the generated corpus is not what it claims.")
+    for noun in _SCORE_NOUNS:
+        assert re.fullmatch(r"[一-鿿]+", noun), (
+            f"parsed a non-word out of _NEG_SCORE_NOUN: {noun!r} — the alternation now carries "
+            f"regex syntax and the generated rows are malformed.")
+    assert len(_NOMINALISED) == len(_NOMINALISABLE_CUES) * len(_SCORE_NOUNS), (
+        "the nominalised corpus is no longer the full cartesian product of the cues and the rule's "
+        "own scoring vocabulary — it has been frozen or filtered, and the next scoring word added "
+        "to redline.py will arrive without any corpus rows.")
