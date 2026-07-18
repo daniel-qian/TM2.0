@@ -18,6 +18,15 @@
 //   node .issues/v02-partner-align-0718/verify-data-boundary.mjs
 // 退出码 0 = 全过；非 0 = 有 FAIL。
 //
+// ── born-red 开关（复核要求：证明测试真能抓到原 bug）───────────────────────────────────
+//   VERIFY_OLD_STORE=<git-ref> node .issues/v02-partner-align-0718/verify-data-boundary.mjs
+// 用一个 Vite `load` 钩子把 `git show <ref>:src/lite2/store.ts` **原样**喂给 dev server，
+// 工作树零改动、不 checkout、不 stash（本线禁止任何切换类 git）。于是同一份测试可以在
+// "修复前的 store" 上跑一遍看它 FAIL、在当前 store 上跑一遍看它 PASS。
+//   VERIFY_OLD_STORE=HEAD   → 复核那三条 newFinding 之前的 store（本次收口的对照组）
+//   VERIFY_OLD_STORE=HEAD~1 → B1/M2/M3/m4 五条修复之前的 store（上一轮的对照组）
+// 只换 store.ts 一个模块，是因为这三条 newFinding 全部落在它里面——换得越少，隔离越干净。
+//
 // 端口 5304 刻意避开集成方在用的 5173/8137。cacheDir 也是独立的：工作树共享 node_modules
 // junction ⇒ `.vite` 预构建缓存被所有工作树共用，多个 dev server 并发会互相把对方的缓存判为
 // outdated → 504 Outdated Optimize Dep → **白屏**，看起来就像"这条线把应用改崩了"
@@ -25,12 +34,35 @@
 
 import { chromium } from 'playwright'
 import { createServer } from 'vite'
+import { execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 const PORT = Number(process.env.VERIFY_PORT || 5304)
 const BASE = `http://127.0.0.1:${PORT}`
 const ENTRY = `${BASE}/?v=2&mode=live&look=paper&lang=zh`
+
+// born-red 用：把某个 git ref 的 store.ts 顶替掉工作树那份（见文件头）。
+const OLD_STORE_REF = process.env.VERIFY_OLD_STORE || null
+const oldStoreSource = OLD_STORE_REF
+  ? execFileSync('git', ['show', `${OLD_STORE_REF}:src/lite2/store.ts`], {
+      encoding: 'utf8',
+      cwd: process.cwd(),
+      maxBuffer: 8 * 1024 * 1024,
+    })
+  : null
+
+function oldStorePlugin() {
+  return {
+    name: 'fixd-old-store',
+    enforce: 'pre',
+    load(id) {
+      // id 是 Vite 解析后的绝对路径（Windows 上可能带反斜杠），统一成 / 再比后缀。
+      const norm = id.split('?')[0].replace(/\\/g, '/')
+      return norm.endsWith('/src/lite2/store.ts') ? oldStoreSource : null
+    },
+  }
+}
 
 const results = []
 function record(name, pass, detail) {
@@ -54,15 +86,20 @@ const A_COMPANY = '三亚鹿山雅居'
 // 假 transport：只实现被测路径要用到的方法，其余抛错（被调到就该炸，别静默）。
 function installFakeTransport(page) {
   return page.evaluate(() => {
+    // 🔴 人名里带 cid：跨公司串数据这件事只有"这个人属于哪一家"能证明。
+    // 全公司共用一个「李明」的话，A 的花名册渲染到 B 底下会长得和正确结果一模一样。
     const payloadFor = (cid) => ({
       context_id: cid,
       source_files: ['周报.docx'],
-      people: [{ id: 'p1', name: '李明', role: '项目经理', owns: ['婚宴厅交付'] }],
+      people: [{ id: 'p1', name: '员工-' + cid, role: '项目经理', owns: ['婚宴厅交付'] }],
       projects: [{ id: 'j1', title: '三期婚宴厅', status: 'unknown' }],
       briefing: { headline: '（测试）', body: '（测试）' },
       signals: [],
       decisions: [],
     })
+    // 让 fetchTeam 可控地慢下来 —— 竞态测试要的就是"请求还在飞的时候用户又点了一下"。
+    const lag = () =>
+      window.__fakeDelayMs ? new Promise((r) => setTimeout(r, window.__fakeDelayMs)) : null
     const notImpl = (n) => () => { throw new Error('fake transport: ' + n + ' not implemented') }
     const fake = {
       streamAdvise: () => ({ abort: () => {} }),
@@ -79,11 +116,16 @@ function installFakeTransport(page) {
         return p
       },
       fetchTeam: async (cid) => {
+        await lag()
         if (window.__fakeGone && window.__fakeGone[cid]) throw new Error('team HTTP 404')
         return payloadFor(cid)
       },
       fetchFiles: async (cid) => ({ context_id: cid, files: [] }),
-      fetchNotes: async (cid) => ({ context_id: cid, notes: [] }),
+      // 笔记按 context 分开存 —— 「A 的笔记挂在 B 底下」只有分开存才验得出来。
+      fetchNotes: async (cid) => ({
+        context_id: cid,
+        notes: (window.__fakeNotes && window.__fakeNotes[cid]) || [],
+      }),
       fetchAccountContexts: async () => ({ context_ids: window.__fakeAccountContexts || [] }),
       claimContext: async () => {},
       saveAsk: notImpl('saveAsk'),
@@ -126,16 +168,37 @@ async function main() {
     server: { port: PORT, strictPort: true },
     optimizeDeps: { force: true },
     logLevel: 'warn',
+    plugins: oldStoreSource ? [oldStorePlugin()] : [],
   })
   await server.listen()
   console.log(`dev server on ${BASE}（独立 cacheDir，见文件头 F9 注释）`)
+  if (oldStoreSource) {
+    console.log(
+      `🔴 born-red 模式：src/lite2/store.ts 用的是 ${OLD_STORE_REF} 那一版（工作树未改动）`,
+    )
+  }
 
   const browser = await chromium.launch({ headless: true })
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } })
-  const page = await ctx.newPage()
   const consoleErrors = []
-  page.on('console', (m) => { if (m.type() === 'error') consoleErrors.push(m.text()) })
-  page.on('pageerror', (e) => consoleErrors.push('pageerror: ' + e.message))
+  const harnessNoise = []
+  // 🔴 门自己的环境噪声，不是产品报错：本门**不起后端**，而每次 goto/reload 都有一帧是用
+  // 真 HTTP transport 跑的（注入假 transport 只能在页面加载之后）。那一帧的 restoreSession
+  // 必然打向 VITE_AVERY_API_BASE 并被 CORS/连接失败拦下。
+  // 放过它是刻意的，但白名单收得很窄：本门里所有产品流量都走假 transport（不碰网络），
+  // 所以"真的网络错误"在这个门里只可能是这一类。其余任何 console error 一律照旧算 FAIL。
+  // 不静默丢弃 —— 单独打出来，免得将来有人以为门什么都没看见。
+  const isHarnessNoise = (t) => /CORS policy|net::ERR_|Failed to load resource/.test(t)
+  // 每一页都要盯着 —— 原来只盯第一页，后面几页炸了也看不见。
+  const watch = (p) => {
+    p.on('console', (m) => {
+      if (m.type() !== 'error') return
+      ;(isHarnessNoise(m.text()) ? harnessNoise : consoleErrors).push(m.text())
+    })
+    p.on('pageerror', (e) => consoleErrors.push('pageerror: ' + e.message))
+    return p
+  }
+  const page = watch(await ctx.newPage())
 
   await page.goto(ENTRY, { waitUntil: 'networkidle' })
   await installFakeTransport(page)
@@ -254,7 +317,7 @@ async function main() {
   console.log('\n═══ M3 · 登录恢复走 adoptContext，锚点真的落盘 ═══')
 
   // 干净重开一页，模拟"换设备登录"：本机没有任何 context，账号名下有一份。
-  const page2 = await ctx.newPage()
+  const page2 = watch(await ctx.newPage())
   await page2.goto(ENTRY, { waitUntil: 'networkidle' })
   await page2.evaluate(() => localStorage.clear())
   await page2.reload({ waitUntil: 'networkidle' })
@@ -287,7 +350,165 @@ async function main() {
     afterReload.contextId === 'ctx_from_account_9911' && afterReload.hasTeam,
     JSON.stringify(afterReload))
 
+  // ══ N1 · 切换竞态：屏上的 id / 人 / 钥匙必须是同一家公司 ═══════════════════════════════
+  //
+  // 复核新 finding 1（blocker）。原实现是 `adoptContext(新 id)` 先换、`await restoreSession()`
+  // 后取，而 restoreSession 在 await 之后拿闭包里的旧 id 无条件写 team/ownerToken。于是
+  // 双击（或点了 A 又改主意点 B）之后：屏上挂着 B 的 contextId 和锚点，人却是 A 的人，
+  // 手里攥的是 A 的 owner_token —— B 公司经理看到的整份花名册来自 A 公司的文件。
+  // 这条门就是拿"双击"当输入，断言三者必须同源。
+  console.log('\n═══ N1 · 快速两次切换不许跨公司串数据 ═══')
+
+  const page3 = watch(await ctx.newPage())
+  await page3.goto(ENTRY, { waitUntil: 'networkidle' })
+  await page3.evaluate(() => localStorage.clear())
+  await page3.reload({ waitUntil: 'networkidle' })
+  await installFakeTransport(page3)
+
+  const rA = await upload(page3, ['A公司周报.docx'])
+  const rB = await upload(page3, ['B公司花名册.csv'])
+  await upload(page3, ['C公司预算.xlsx']) // 落脚在第三家，于是切 A 和切 B 都是"真的换一家"
+
+  const raced = await page3.evaluate(
+    async ({ a, b }) => {
+      window.__fakeDelayMs = 250
+      const st = () => window.__lite2Store.getState()
+      // 一次 fetchTeam 要 250ms，两次点击间隔 40ms —— 就是双击的手速。
+      const p1 = st().switchContext(a)
+      await new Promise((r) => setTimeout(r, 40))
+      const p2 = st().switchContext(b)
+      await Promise.all([p1, p2])
+      // 🔴 必须再等一会儿：脏数据是**先发的那次**在 400ms 之后写进来的。
+      // 不等就收摊，这条测试会在坏代码上假过。
+      await new Promise((r) => setTimeout(r, 500))
+      const s = st()
+      window.__fakeDelayMs = 0
+      return {
+        contextId: s.contextId,
+        teamPeople: s.team ? s.team.people.map((p) => p.name) : null,
+        ownerToken: s.ownerToken,
+        anchor: localStorage.getItem('lite2:contextId:v1'),
+        switchError: s.switchError,
+        switchPending: s.switchPending === undefined ? '(字段不存在)' : s.switchPending,
+      }
+    },
+    { a: rA, b: rB },
+  )
+
+  record('N1-1 落在最后点的那一份上（后点的赢，不是先发的赢）',
+    raced.contextId === rB, JSON.stringify(raced))
+  record('N1-2 🔴 屏上的人属于屏上那家公司（不是上一次点的那家）',
+    JSON.stringify(raced.teamPeople) === JSON.stringify(['员工-' + rB]),
+    `contextId=${raced.contextId} teamPeople=${JSON.stringify(raced.teamPeople)}`)
+  record('N1-3 🔴 手里的 owner_token 也是这一家的（错配 → 下一次读被后端 404）',
+    raced.ownerToken === 'tok_' + rB, `ownerToken=${raced.ownerToken} expect=tok_${rB}`)
+  record('N1-4 锚点跟着落在同一家（刷新不会跳回另一家）', raced.anchor === rB, raced.anchor)
+  record('N1-5 切成功了就不许同时挂着一句错误', raced.switchError === null,
+    `switchError=${raced.switchError}`)
+  record('N1-6 pending 态收干净了（UI 据此把名册按钮置灰，挡住误触）',
+    raced.switchPending === null, `switchPending=${raced.switchPending}`)
+
+  // ══ N2 · 404 只能说"打不开"，不能说"没了"，更不能据此删名册 ═════════════════════════
+  //
+  // 复核新 finding 2（major）。feat-038 **刻意**让"这份不存在"和"你证明不了这是你的"
+  // 返回同一个 404（不给存在性 oracle），所以前端根本分不出是哪一种。原实现把 404 读成
+  // 「服务端已经没了」并据此 forgetKnownContext —— 产品替客户断言了一个它无法知道的事实，
+  // 而且这个删除不可逆（POST /ingest 每次新建 context，名册是那个 id 唯一的第二处记录）。
+  console.log('\n═══ N2 · 「我打不开」不等于「这份不存在」 ═══')
+
+  const gone = await page3.evaluate(async (a) => {
+    window.__fakeGone = { [a]: true }
+    await window.__lite2Store.getState().switchContext(a)
+    const s = window.__lite2Store.getState()
+    return {
+      switchError: s.switchError,
+      stillListed: s.knownContexts.some((c) => c.id === a),
+      lsListed: (localStorage.getItem('lite2:knownContexts:v1') || '').includes(a),
+      contextId: s.contextId,
+      teamPeople: s.team ? s.team.people.map((p) => p.name) : null,
+      switchPending: s.switchPending === undefined ? '(字段不存在)' : s.switchPending,
+    }
+  }, rA)
+
+  record('N2-1 🔴 404 读成「打不开」而不是「没了」', gone.switchError === 'unreadable',
+    `switchError=${gone.switchError}`)
+  record('N2-2 🔴 一次 404 不许把这一份从名册上抹掉（内存态）',
+    gone.stillListed === true, `stillListed=${gone.stillListed}`)
+  record('N2-3 🔴 localStorage 里的名册也没被抹（否则刷新后永久失去入口）',
+    gone.lsListed === true, `lsListed=${gone.lsListed}`)
+  record('N2-4 切换失败不留半切状态：仍停在原来那家公司上',
+    gone.contextId === rB && JSON.stringify(gone.teamPeople) === JSON.stringify(['员工-' + rB]),
+    `contextId=${gone.contextId} teamPeople=${JSON.stringify(gone.teamPeople)}`)
+  record('N2-5 失败后 pending 态也收干净（按钮不会永久灰着）',
+    gone.switchPending === null, `switchPending=${gone.switchPending}`)
+
+  const forgot = await page3.evaluate(async (a) => {
+    const st = window.__lite2Store.getState()
+    if (typeof st.forgetContext !== 'function') return { ok: false, why: 'store 没有 forgetContext' }
+    st.forgetContext(a)
+    const s = window.__lite2Store.getState()
+    return {
+      ok:
+        !s.knownContexts.some((c) => c.id === a) &&
+        !(localStorage.getItem('lite2:knownContexts:v1') || '').includes(a),
+      why: '',
+    }
+  }, rA)
+  record('N2-6 名册删除有且只有「用户显式点移除」这一条路（forgetContext 存在且真删）',
+    forgot.ok === true, forgot.why)
+
+  // ══ N3 · 第二次上传必须把上一家的 Avery's notes 清掉 ═══════════════════════════════════
+  //
+  // 复核新 finding 3（major）。uploadFiles 原来用裸 setState 绕开 adoptContext 收口，
+  // 只重设 team/rawTeam，**唯独漏了 notes**：refreshNotes 不调、也不清空。于是 A 公司的
+  // 笔记原文原封不动挂在 B 公司的 contextId 底下，NotesScreen 直接渲染。
+  // 它就落在 B1「第二次上传」这个正主场景里，而 switchContext 走 adoptContext 那条路清得
+  // 干干净净 —— 同一件事两条路给出相反答案。
+  console.log('\n═══ N3 · 二次上传：A 公司的笔记不许挂到 B 公司底下 ═══')
+
+  const page4 = watch(await ctx.newPage())
+  await page4.goto(ENTRY, { waitUntil: 'networkidle' })
+  await page4.evaluate(() => localStorage.clear())
+  await page4.reload({ waitUntil: 'networkidle' })
+  await installFakeTransport(page4)
+
+  const nA = await upload(page4, ['A公司周报.docx'])
+  await page4.evaluate(
+    ({ cid, verbatim }) => {
+      // 只有第一份有笔记；第二份在后端是空的。于是"B 底下出现内容"只可能是 A 漏过来的。
+      window.__fakeNotes = {
+        [cid]: [
+          { id: 'note_a1', created_at: '2026-07-18T02:00:00Z', text: verbatim, source_excerpt: verbatim.slice(0, 20) },
+        ],
+      }
+    },
+    { cid: nA, verbatim: A_VERBATIM },
+  )
+  const notesA = await page4.evaluate(async () => {
+    await window.__lite2Store.getState().refreshNotes()
+    const s = window.__lite2Store.getState()
+    return { cid: s.contextId, notes: s.notes.map((n) => n.text) }
+  })
+  record('N3-0 前置：A 公司底下确实有一条笔记原文（否则本组测试是空转）',
+    notesA.notes.some((t) => t.includes(A_VERBATIM)), JSON.stringify(notesA))
+
+  const nB = await upload(page4, ['B公司花名册.csv'])
+  await page4.waitForTimeout(250) // uploadFiles 里的 refreshNotes 是 void 的，等它落定
+  const notesB = await page4.evaluate(() => {
+    const s = window.__lite2Store.getState()
+    return { cid: s.contextId, notes: s.notes.map((n) => n.text) }
+  })
+  record('N3-1 🔴 第二次上传后，A 公司的笔记原文不在屏上',
+    !JSON.stringify(notesB.notes).includes(A_VERBATIM),
+    `cid=${notesB.cid} notes=${JSON.stringify(notesB.notes)}`)
+  record('N3-2 且确实换到了第二家（不是靠"没换成"蒙混过关）',
+    notesB.cid === nB && nB !== nA, `${nA} -> ${notesB.cid}`)
+
   record('无 console 报错', consoleErrors.length === 0, consoleErrors.slice(0, 3).join(' | '))
+  if (harnessNoise.length) {
+    console.log(`\n（门环境噪声 ${harnessNoise.length} 条，已按白名单排除、不计入判定）`)
+    console.log('  ' + harnessNoise[0])
+  }
 
   await browser.close()
   await server.close() // 🔴 用完立刻停，端口不留给下一条线踩

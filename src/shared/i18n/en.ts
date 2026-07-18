@@ -58,14 +58,27 @@ export const en = {
       "Avery reads each upload as its own company. A new upload will not be merged into the one you're looking at now — both are kept, and you can switch between them here.",
     switchTitle: 'Uploads on this browser',
     switchAction: 'Open this one',
+    switchOpening: 'Opening…',
     switchCurrent: 'Currently open',
     switchFilesLabel: 'Read from',
-    // 🔴 The two failure modes must stay distinguishable — they mean different things to a user.
+    // Explicit, user-initiated removal — the ONLY way an entry leaves this list. A failed read
+    // must never remove one (see store.ts forgetKnownContext).
+    switchForget: 'Remove from this list',
+    switchForgetNote:
+      'This only removes the shortcut on this browser. Nothing is deleted on the server.',
+    // 🔴 The failure modes must stay distinguishable — they mean different things to a user.
     // "no credential on this browser" is NOT "the data is gone", and must never be worded as if
     // it were: the company is still on the server, this machine just can't prove it's yours.
     switchErrorMissingCredential:
       "This browser no longer holds the key to that upload, so it can't be opened here. The company itself is still on the server — signing in on the account it was attached to will bring it back.",
-    switchErrorGone: 'That upload is no longer on the server, so it has been removed from this list.',
+    // 🔴 A 404 does NOT mean the upload is gone, and this string must never say that it does.
+    // Tenant isolation (feat-038) deliberately answers "no such context" and "you can't prove
+    // this is yours" with the same 404, precisely so the status code carries no existence
+    // information — which means Avery genuinely cannot tell the two apart. Saying "no longer on
+    // the server" would be the product asserting a fact about the customer's data that it does
+    // not have. Say what we actually observed: we couldn't open it.
+    switchErrorUnreadable:
+      "Avery couldn't open that upload — the server didn't hand it over. That can mean it's gone, or that this browser can no longer prove it's yours; Avery can't tell which from here. It stays on this list either way, so you can try again.",
     switchErrorFailed: "Couldn't reach the server just now. Nothing was lost — try again.",
   },
 

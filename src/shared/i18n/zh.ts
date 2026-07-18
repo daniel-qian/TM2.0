@@ -62,10 +62,13 @@ export const zh: Dict = {
     "againBody": "每次上传，Avery 都当作独立的一家公司来读。新传的不会并进你现在看的这一份——两份都留着，可以在这里来回切。",
     "switchTitle": "这台电脑上传过的",
     "switchAction": "打开这一份",
+    "switchOpening": "打开中…",
     "switchCurrent": "当前打开的",
     "switchFilesLabel": "读自",
+    "switchForget": "从这个列表里移除",
+    "switchForgetNote": "只是把这台电脑上的入口去掉，服务端的数据不会被删。",
     "switchErrorMissingCredential": "这台电脑上已经没有打开那一份的钥匙了。公司数据本身还在服务端——用当初绑定的账号登录就能拿回来。",
-    "switchErrorGone": "那一份在服务端已经不在了，已从这个列表里移除。",
+    "switchErrorUnreadable": "打不开那一份——服务端没有把它交出来。可能是那一份真的没了，也可能是这台电脑已经证明不了它是你的，Avery 分不出是哪一种。两种情况下它都还留在这个列表里，可以再试一次。",
     "switchErrorFailed": "刚才没连上服务器。什么都没丢，再试一次。"
   },
   "team": {

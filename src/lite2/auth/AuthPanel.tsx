@@ -186,6 +186,9 @@ export function clearCompanyScope(): void {
     // fixD/B1：名册也是公司数据（谁传过哪些文件），跟着走。
     knownContexts: [],
     switchError: null,
+    // 换人时可能正有一次切换在飞。它自己会被 stillOn/switchSeq 判为过期而不写任何数据，
+    // 但屏上那个 pending 态得由这里收掉，否则名册按钮永远灰着。
+    switchPending: null,
   })
   // fixD/M2：三个漏网 store —— 内存态先复位，再把 `lite2:` 底下整段抹掉。
   resetLite2MemoryStores()
