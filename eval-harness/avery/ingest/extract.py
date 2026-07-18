@@ -31,7 +31,8 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Protocol
 
-from .granularity import Ruling, apply_gate, segment_projects
+from .granularity import (Ruling, apply_gate, project_header_title, segment_projects,
+                          strip_decoration)
 from .parse import ParsedDoc
 
 # The preset buckets _norm_team maps onto WHERE IT HONESTLY CAN; a department this startup taxonomy
@@ -931,9 +932,20 @@ class HeuristicExtractor:
         due = ""
         blockers: list[str] = []
         for i in range(lo, min(hi, len(doc.lines))):
-            s = doc.lines[i].strip()
-            m = re.match(r"^#+\s*(.+)$", s)
-            if m and not title:
+            raw = doc.lines[i].strip()
+            # FIELD LABELS ARE READ WITHOUT THEIR MARKDOWN MARKUP (see granularity.strip_decoration).
+            # Every label pattern below is `^`-anchored, so a weekly that writes its fields as a
+            # bullet list — 「- 负责人：陈思雨」/「- 状态：进行中」, ordinary .md — matched NONE of them
+            # and every project came back blank-owned and blank-status. That is not just a thin card:
+            # `granularity._tracked_fields` reads exactly these fields, so an untracked-looking
+            # project is demoted by R4 and vanishes from the screen entirely.
+            s = strip_decoration(raw)
+            # The `#`-heading title fallback still reads the RAW line, because it wants the markup —
+            # but a heading that is ITSELF a project header (「## 项目：X」) must not be taken
+            # literally as a project named 「项目：X」. `project_header_title` is the one place that
+            # distinguishes them; the project-label branch below then reads the real title.
+            m = re.match(r"^#+\s*(.+)$", raw)
+            if m and not title and not project_header_title(raw):
                 title = m.group(1).strip()
                 continue
             m = re.match(r"^(project|title)\s*[:\-]\s*(.+)$", s, re.I)

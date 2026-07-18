@@ -32,6 +32,16 @@ regression gates rather than xfails:
     fixture is byte-identical.
   * LAYER B — the field labels are read in both languages.
 
+LAYER A WAS CLOSED ONLY FOR A LABEL THAT LEADS ITS LINE, and this docstring claimed it outright for
+two features. Every structural label is `^`-anchored, so 「## 项目：X」 — a project written as an
+ordinary markdown heading — matched nothing, segmented to ZERO blocks, and fell straight back into
+the pre-054 whole-document scalar sweep. Caught on the real machine (2026-07-18, AVERY_BRAIN=stub,
+POST /ingest): a three-project ZH weekly returned ONE card, titled after the document and carrying
+three different projects' fields at once. Pure-ASCII 「## Project: X」 failed identically, so it was
+not a CJK gap either. Closed by `granularity.strip_decoration`; the regression cover — including the
+invariance property "decoration must not change what is extracted" — lives in
+test_markdown_decorated_labels.py. The tests below are the BARE-label half and stay as they are.
+
 The same ticket closed the OPPOSITE failure on this axis (the LLM path promoting 「里程碑」 rows to
 projects — 17 "projects" out of a 6-project weekly); see test_project_granularity.py. Both were the
 same hole: nothing ever defined what one project IS.
