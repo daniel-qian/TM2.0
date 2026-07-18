@@ -157,6 +157,7 @@ footer{margin-top:64px;padding-top:22px;border-top:1px solid var(--line);
   <h3>别把 Supabase 的两个 key 贴进 Vercel</h3>
   <p>审计单独把这条拎出来（SKEW-03，major，3/3 票）。<code>VITE_SUPABASE_URL</code> / <code>VITE_SUPABASE_ANON_KEY</code> 现在没配，所以登录入口<b>不渲染</b>，游客路径干净——这个状态是对的。</p>
   <p>但它看起来像「就差这一步」。一旦有人（包括未来的我）在面板上把这两个值贴进去，前端会立刻长出登录 UI，而后端<b>没有任何 <code>/auth/*</code> 端点</b>（决策 2），迁移 <code>0008</code> 也没 apply。结果是一个点了就 404 的登录框，出现在发给真客户的网址上。</p>
+  <p><b>收工前拆掉了这个陷阱的第二层。</b>feat-053 的认证面上还剩两处裸 <code>fetch</code>（<code>fetchAccountContexts</code> / <code>claimContext</code>），绕开了错误文案那层，抛的是 <code>account claim HTTP 401</code> 这种开发者串——正是今晚修的那个中文缺陷本身，只是躲在登录开关背后。今天打不到，配上 env 的那一刻就可达。已改走统一的错误层，全仓再无这种裸抛。</p>
   <div class="rec"><b>顺序是：先后端追平 + apply 迁移，最后才配这两个 env。</b>反过来做，中间那段时间线上就是坏的。</div>
 </div>
 </section>
