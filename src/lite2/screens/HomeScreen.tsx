@@ -206,8 +206,11 @@ export function HomeScreen() {
                 <ul className="lite-home-gap-list">
                   {/* 摘要只列前三条并写明还剩多少，细节在「多看一眼」屏。引用的是
                       gapDerive.ts 已有的原文 evidence（verbatim），不转述。 */}
-                  {gaps.slice(0, 3).map((gap) => (
-                    <li key={gap.id} className="lite-home-gap-item">
+                  {/* key 带下标：跨文档重复的项目会产出同 id 的 gap（后端 issue #10 —— 人名/项目
+                      去重在 LLM 抽取路径上失效），裸 gap.id 会撞键。本屏另外两个列表已经这么做了，
+                      这里是漏的第三处。🔴 不在前端去重：那会把后端的 bug 藏起来。 */}
+                  {gaps.slice(0, 3).map((gap, idx) => (
+                    <li key={`${gap.id}_${idx}`} className="lite-home-gap-item">
                       <button
                         type="button"
                         className="lite-home-gap-title"
