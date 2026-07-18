@@ -97,13 +97,14 @@ export function DraftComposer() {
     }
     if (draft.completion.mode !== 'add') return
     // 标题空了就用正文首行兜底——队列里长出一条没有标题的空条目比什么都糟。
-    const title = subject.trim() || body.trim().split('\n')[0]
-    addFollowup({
-      title,
-      source: draft.source,
-      dueGroup: 'today',
-      note: subject.trim() ? body.trim() || undefined : undefined,
-    })
+    const trimmedBody = body.trim()
+    const title = subject.trim() || trimmedBody.split('\n')[0]
+    // note 恒等于**整份正文**，只在它与标题逐字相同时省掉（"主题空 + 正文只有一行"的情形，
+    // 再存一遍等于队列条目上同一句话印两遍）。
+    // 🔴 这里原先写的是「主题非空才存 note」：主题一空，manager 刚改完的正文除首行外**整段
+    //    被丢掉**，队列里只剩一行残句，且屏上照样报"已写进跟进队列"——静默丢数据。
+    const note = trimmedBody && trimmedBody !== title ? trimmedBody : undefined
+    addFollowup({ title, source: draft.source, dueGroup: 'today', note })
     setStatus('added')
   }
 
@@ -193,7 +194,13 @@ export function DraftComposer() {
 
       {/* 状态行常驻渲染（不是只在有话说时才挂）——aria-live 区域要先在 DOM 里存在，读屏才
           播报后来填进去的文字；挂载的同时塞字是播不出来的。 */}
-      <p className="lite-draft-status" role="status" aria-live="polite">
+      <p
+        className="lite-draft-status"
+        role="status"
+        aria-live="polite"
+        // 成功与失败共用同一行字、同一个位置——颜色是唯一能一眼分开两者的信号。
+        data-tone={status === 'copyFailed' ? 'fail' : undefined}
+      >
         {statusText}
       </p>
 
@@ -208,8 +215,17 @@ export function DraftComposer() {
           {status === 'copied' ? t.lite2.draftCopied : t.lite2.draftCopy}
         </button>
 
-        {/* 次出口：mailto 由**当前**主题/正文实时重算，manager 改过的字带得进去。 */}
-        <a className="lite-draft-mailto" href={draft ? mailtoForDraft(draft) : '#'}>
+        {/* 次出口：mailto 由**当前**主题/正文实时重算，manager 改过的字带得进去。
+            空草稿时和另两个出口一起失效——`<a>` 没有 disabled，只能 aria-disabled + 拦点击。
+            兜底 href 用裸 `mailto:` 而不是 `#`：`#` 会往 router 历史里塞一条空导航。 */}
+        <a
+          className="lite-draft-mailto"
+          href={draft && !isEmpty ? mailtoForDraft(draft) : 'mailto:'}
+          aria-disabled={isEmpty || undefined}
+          onClick={(e) => {
+            if (isEmpty) e.preventDefault()
+          }}
+        >
           {t.lite2.draftMailto}
         </a>
 

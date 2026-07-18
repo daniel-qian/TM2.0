@@ -3431,12 +3431,18 @@
   }
 }
 
-/* ⚠ feat-058 顺手补的**一个右花括号**（本条 feature 的范围之外，但不补它本条就没法验收）：
-   上面这个 @media (prefers-reduced-motion: reduce) 此前**从未闭合**（HEAD 就是坏的：全文件
-   489 个 `{` 对 488 个 `}`，esbuild 在 build 时就报 "Expected }" 的 css-syntax-error）。
-   后果是从这里往下的**每一条规则**——feat-053 的整套账号入口样式、以及 feat-058 追加在文件
-   末尾的草稿框样式——全部被闷在那条媒体查询里，只有开了"减少动态效果"的用户才生效，其余人
-   看到的是没有任何样式的弹层。补一个 `}` 让它们回到顶层。 */
+/* ⚠ feat-058 补的**一个右花括号**（严格说超出本条 feature 的范围，但不补它本条根本没法验收）。
+   上面这个 @media (prefers-reduced-motion: reduce) 在 main 上**从未闭合**——实测数字（去掉
+   注释后计花括号）：
+     · main@5dce4f3 与合流基点 8be4ab4：470 个 `{` 对 469 个 `}`
+     · 本分支补上后：489 对 489
+   🔴 它**不会让 build 变红**，这正是它能活到今天的原因：esbuild 只报 warning（"Expected }"
+   to go with "{"），然后在 EOF 处替你自动闭合，产物照出。所以三门全绿 ≠ 这段 CSS 是对的。
+   真实后果在渲染面：从这里往下的**每一条规则**——feat-053 的整套账号入口样式，以及 feat-058
+   追加在文件末尾的草稿框样式——全被闷在那条媒体查询里，只有开了「减少动态效果」的用户才拿得到
+   样式，其余人看到的是一个完全裸奔的弹层。补一个 `}` 让它们回到顶层。
+   （main 目前仍是坏的；若 055/057 也各自补了这一个 `}`，合流时要**只留一个**，两个会反过来
+   多闭合一层——见 progress-feat-058.md 的合并风险一节。） */
 
 /* ── feat-053 账号入口（LiteTopbar 内，LiteBell 旁；.prototype-topbar 是
    pointer-events:none 容器，同 .scene-tabs/.lite-bell 的规矩自己 auto 回来）────────── */
@@ -3724,9 +3730,18 @@
 .lite2-shell .lite-draft-status {
   min-height: 17px;
   margin: 0;
-  color: var(--lite2-sage-deep, var(--ink-soft));
+  /* 🔴 这里原先写的是 var(--lite2-sage-deep, var(--ink-soft))——**两张皮里都没有
+     --lite2-sage-deep 这个令牌**（全仓仅此一处引用），兜底恒生效，写了等于没写。
+     真令牌是 --lite2-accent-deep-rgb（paper 深鼠尾草 74,96,78 / aurora 深蓝 47,75,176），
+     paper 与 aurora 都有定义，本文件既有的"已办"字样同款。 */
+  color: rgb(var(--lite2-accent-deep-rgb));
   font-size: 12px;
   line-height: 1.4;
+}
+
+/* 复制失败不许和「已复制」同色——同一行字、同一个位置，颜色是唯一能一眼分开成败的信号。 */
+.lite2-shell .lite-draft-status[data-tone='fail'] {
+  color: rgb(var(--lite2-danger-deep-rgb));
 }
 
 .lite2-shell .lite-draft-actions {
@@ -3779,7 +3794,10 @@
 }
 
 .lite2-shell .lite-draft-copy:disabled,
-.lite2-shell .lite-draft-done:disabled {
+.lite2-shell .lite-draft-done:disabled,
+/* `<a>` 没有 :disabled——空草稿时 mailto 走 aria-disabled，观感要和另两个出口一致，
+   否则屏上会出现"两个键灰了、第三个还亮着"的自相矛盾。 */
+.lite2-shell .lite-draft-mailto[aria-disabled='true'] {
   opacity: 0.5;
   cursor: default;
 }

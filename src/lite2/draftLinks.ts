@@ -60,9 +60,15 @@ export function clipboardTextForDraft(draft: Pick<LiteDraft, 'subject' | 'body'>
 }
 
 /**
- * 分诊条目 → 草稿。正文 = 该条目的**真证据 + 出处标签**（teamData.liveHandoffs() 的真派生），
- * 不套任何"你好 X，最近……"的问候模板：那种模板会让一段静态样板文字看起来像 Avery 替你
- * 写的私人信。manager 想加寒暄，弹层里正文可编辑。
+ * 分诊条目 → 草稿。正文 = 该条目的**真证据**（teamData.liveHandoffs() 的真派生），不套任何
+ * "你好 X，最近……"的问候模板：那种模板会让一段静态样板文字看起来像 Avery 替你写的私人信。
+ * manager 想加寒暄，弹层里正文可编辑。
+ *
+ * 🔴 正文里**不带** `handoff.evidenceTag`（"From your uploads"），两个独立理由：
+ *   ① 它是 teamData.ts 里写死的**英文**字面量、从未进 i18n 表——`lang=zh` 下把它拼进正文，
+ *      manager 复制到微信发出去的就是一句中文消息尾巴上挂着英文。
+ *   ② 就算翻成中文也不该在这儿：出处是给 manager 看的来源标注，不是要发给同事的消息内容；
+ *      收件人收到「（来自你的上传）」只会莫名其妙。弹层已有 draftBodyHint 常驻说明来源。
  */
 export function draftFromHandoff(handoff: LiteHandoff, team: LiteTeam | null): LiteDraft {
   const names = handoff.personIds
@@ -71,7 +77,7 @@ export function draftFromHandoff(handoff: LiteHandoff, team: LiteTeam | null): L
   return {
     id: `draft_${handoff.id}`,
     subject: handoff.action,
-    body: [handoff.evidence, '', `(${handoff.evidenceTag})`].join('\n'),
+    body: handoff.evidence,
     recipients: names,
     source: 'triage',
     completion: { mode: 'add' },
