@@ -68,3 +68,19 @@
 - ⏸ **两线均待机**（Danny 07-14 晚）：lite-v1 持久化线 + Ask 卡线**唯一阻塞=第二台 ECS**；DB 侧（新加坡库 + 实测打通的 AVERY_DB_URL 形态）+ 真 key 质量 + 后端代码全就绪。ECS 到位=部署波启动点。
 - 📌 连接串澄清：Avery 后端走**直连 Postgres + pgvector**（psycopg，feat-030/031），**不改用 client library/REST**（会重写整层召回+跨国 REST 更慢）。真缺值仍是 `AVERY_DB_URL` 直连串——但改用新项目后，Danny 建库时自设密码即得，无 imaread 纠缠。
 - ✅ 广播（Danny 07-14）：给 v02 UIUX 线（feat/036-v02-triage-followups）的集成广播已落 `broadcast-to-uiux-v02-line.md`（后端 HTTP 契约 + owner_token 隔离 + src/lite 集成点 + 红线开关对 UI 的影响 + 三方合流注意）。
+
+## 🚀 2026-07-18 收工:后端已真上线(本 session 终态)
+
+**`https://avery.dannyqian.com`** — 固定域名 + Let's Encrypt 真证书(Caddy 自动签发/续期,HTTP 308 跳 HTTPS)。
+
+- **机器**:轻量应用服务器 `8.211.28.11`(德国法兰克福,2vCPU/2GiB,**合伙人的机器,他的站在 :5108 别碰**)。容器 `avery-agent` `--restart unless-stopped --memory=700m`,只绑 127.0.0.1:8137;Caddy(systemd,开机自启)终止 TLS 反代。**重启后全套自动回来。**
+- **库**:Supabase `avery-fra`(`zlxpldzapyoacmgvlqpn`,eu-central-1),与服务器同城 ~15ms。迁移 0001–0007 全在。
+- **env**:`AVERY_ALLOW_PERSON_SCORING=1`(政策转向)· 限流 ingest 10/min·advise 30/min · 上传 10MB/10 files · LLM 预算 2000 · `AVERY_TRUSTED_PROXY_HOPS=1`(在 Caddy 后面,不设会全站共用一个限流桶)。
+- **实测**:ingest ~100–120s、advise ~120s(**德国机 + 国内 LLM**,DB 反而快)。真 30 人/9 项目、引用真实事实行、跨租户 404、数据扛过重部署、红线 clean(0)。
+- **Cloudflare 方案已整体拆除**(临时 trycloudflare 地址作废)。
+
+**两个"只在全新库/全新部署才炸"的雷已修入 main**(0001 的 `CREATE EXTENSION ... WITH SCHEMA public` + Dockerfile `COPY db/`),经 5 视角对抗验证 CLEAN。现在全新部署打全新库可零手工自举。
+
+**广播**:`broadcast-backend-live.md`(给前端/v02 线,含固定域名、契约、护栏、性能实况)。
+**下一步(其他 session)**:前端接 `VITE_AVERY_API_BASE=https://avery.dannyqian.com`。
+**仍待 Danny**:`git push`(对外闸,main 领先 origin 77)。
