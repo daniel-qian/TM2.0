@@ -163,9 +163,13 @@ export function HomeScreen() {
                 </div>
                 {/* 🔴 数组顺序 = 后端按严重度排好的顺序。前端不 sort。 */}
                 <ol className="lite-home-decision-list">
-                  {decisions.map((card) => (
+                  {/* key 带上数组下标：跨文档去重当前是坏的（后端 issue #10），同一个主体
+                      可能带着同一个 id 出现两遍。用纯 id 当 key 会撞键、React 复用错节点
+                      （展开态串到另一张卡上）。🔴 这里只是让重复**显示得出来**，
+                      刻意不在前端去重——那会把后端的 bug 藏起来。 */}
+                  {decisions.map((card, idx) => (
                     <DecisionCard
-                      key={`${card.subject_type}_${card.subject_id}`}
+                      key={`${card.subject_type}_${card.subject_id}_${idx}`}
                       card={card}
                       onOpenProject={() => openDetail('project', card.subject_id)}
                       onTakeToRoom={() =>
@@ -244,9 +248,10 @@ export function HomeScreen() {
                 <p className="lite-home-quiet">{t.lite2.homeAttentionEmpty}</p>
               ) : (
                 <ul className="lite-home-attention-list">
-                  {attention.slice(0, 4).map((person) => (
+                  {/* 同上：人名跨文档去重是坏的（issue #10），id 可能重复出现，key 带下标。 */}
+                  {attention.slice(0, 4).map((person, idx) => (
                     <AttentionRow
-                      key={person.id}
+                      key={`${person.id}_${idx}`}
                       person={person}
                       onOpen={() => openDetail('person', person.id)}
                     />
@@ -402,11 +407,15 @@ function DecisionCard({
                 {t.lite2.homeDecisionRuleBasis}：{hit.basis}
               </p>
               {hit.evidence.length > 0 ? (
-                <ul className="lite-home-rule-evidence">
-                  {hit.evidence.map((line, idx) => (
-                    <li key={`${hit.rule_id}_${idx}`}>{line}</li>
-                  ))}
-                </ul>
+                <>
+                  {/* 证据必须自报出处：下面这几行是文档原文，不是 Avery 的话。 */}
+                  <p className="lite-home-evidence-label">{t.lite2.homeDecisionEvidenceLabel}</p>
+                  <ul className="lite-home-rule-evidence">
+                    {hit.evidence.map((line, idx) => (
+                      <li key={`${hit.rule_id}_${idx}`}>{line}</li>
+                    ))}
+                  </ul>
+                </>
               ) : null}
             </li>
           ))}

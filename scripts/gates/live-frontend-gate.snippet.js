@@ -60,7 +60,8 @@
  * (full protocol: scripts/gates/live-frontend-gate.md):
  *   [on `?v=2&mode=live&transport=stub&look=paper`]
  *   __seedGate.defuseAnimations()
- *   await __seedGate.assertV2Boots()                              // v2Boots: .lite2-shell + 6 tabs, PRD order
+ *   await __seedGate.assertV2Boots()                              // v2Boots: .lite2-shell + 8 tabs, PRD
+ *                                                                // order (feat-057 prepended "Today")
  *   const before = __seedGate.readSkinSnapshot()
  *   [navigate to `?v=2&mode=live&transport=stub&look=aurora`, re-inject snippet]
  *   const after = __seedGate.readSkinSnapshot()
@@ -439,6 +440,19 @@
 
     async injectSeeds(files) {
       // files: [{name, b64}] — real bytes into the real <input class="upload-input">.
+      //
+      // feat-057: in v02 the default landing is now `/home` (the aggregate entry). Its EMPTY
+      // state mounts the UploadPanel, but the moment ingest succeeds `team` turns non-null and
+      // Home swaps to the summary layout — the panel unmounts and the `.upload-ready` /
+      // `.upload-error` markers this function polls for never appear (a 360s false red). Your
+      // team renders the UploadPanel in BOTH branches, so drive the upload from there. Guarded
+      // on `.lite2-shell` so the v01 phases (which have their own topbar) are untouched.
+      if ($('.lite2-shell')) {
+        this._clickTab('Your team');
+        try {
+          await poll(() => ($('.upload-input') ? true : null), 4000, 'Your team upload panel to mount');
+        } catch (e) { /* fall through — the null check below reports it */ }
+      }
       const input = $('.upload-input');
       if (!input) return (results.inject = { pass: false, error: 'no .upload-input in DOM' });
       const dt = new DataTransfer();
@@ -1288,23 +1302,30 @@
     // arguments rather than driving everything in-page. The driver session's job: navigate,
     // re-inject this snippet each time, call the matching phase, and carry the JSON forward.
     async assertV2Boots() {
-      // Phase v2Boots: `?v=2&mode=live` must render the .lite2-shell root with all 7 tabs
-      // (PRD order + feat-047's 7th tab: Your team · The room · Follow-ups · Avery's notes ·
-      // A closer look · Playbooks · Where this goes — "Avery's notes" ported from `lite`,
-      // placed after Follow-ups per feat-047's tab-order decision, see progress.md).
+      // Phase v2Boots: `?v=2&mode=live` must render the .lite2-shell root with all 8 tabs
+      // (feat-057's aggregate entry + PRD order + feat-047's "Avery's notes": Today · Your team ·
+      // The room · Follow-ups · Avery's notes · A closer look · Playbooks · Where this goes —
+      // "Avery's notes" ported from `lite`, placed after Follow-ups per feat-047's tab-order
+      // decision, see progress.md).
+      //
+      // feat-057 changed this expectation from 7 to 8: "Today" is the aggregate entry screen
+      // (`/home`, now the `/` landing). 🔴 The 7 detail screens did NOT retire — Danny's ruling
+      // was "aggregate AND split, both extremes", so the entry is PREPENDED and the seven keep
+      // their order verbatim. If a future line removes one of the seven, that is a regression,
+      // not a contract update.
       try {
         await poll(() => ($('.lite2-shell') ? true : null), 8000, '.lite2-shell to mount');
       } catch (e) { /* fall through — assertions below report absence */ }
       const shell = $('.lite2-shell');
       const tabs = $$('.lite2-shell .scene-tabs .scene-tab').map((b) => (b.textContent || '').trim());
-      const expected = ['Your team', 'The room', 'Follow-ups', "Avery's notes", 'A closer look', 'Playbooks', 'Where this goes'];
+      const expected = ['Today', 'Your team', 'The room', 'Follow-ups', "Avery's notes", 'A closer look', 'Playbooks', 'Where this goes'];
       const out = {
         shellPresent: !!shell,
         dataScene: shell ? shell.getAttribute('data-scene') : null,
         tabCount: tabs.length,
         tabLabels: tabs,
         tabOrderMatches: JSON.stringify(tabs) === JSON.stringify(expected),
-        pass: !!shell && tabs.length === 7 && JSON.stringify(tabs) === JSON.stringify(expected),
+        pass: !!shell && tabs.length === 8 && JSON.stringify(tabs) === JSON.stringify(expected),
       };
       results.v2Boots = out;
       return out;

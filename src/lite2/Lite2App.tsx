@@ -107,7 +107,7 @@ function Lite2Shell() {
             如果每条路由各写各的 element，进详情就等于换了棵树 —— 底屏被偷换、本地状态清零，
             正是复核逮到的那条 major。 */}
         <Routes>
-          {/* 入口：`/?v=2&mode=live&skin=paper&lang=zh` 落到 DEFAULT_SCREEN（feat-057 起
+          {/* 入口：`/?v=2&mode=live&look=paper&lang=zh` 落到 DEFAULT_SCREEN（feat-057 起
               是聚合入口 /home），query 原样带过去。replace —— 否则后退键在 `/` 与落点之间
               反复横跳（重定向再把人推回来）。 */}
           <Route path="/" element={<RedirectToDefault />} />
@@ -145,7 +145,7 @@ function Lite2Shell() {
   )
 }
 
-// 🔴 重定向必须原样转发 search + hash：`?v=2&mode=live&skin=paper&lang=zh` 是进 v02 的入口，
+// 🔴 重定向必须原样转发 search + hash：`?v=2&mode=live&look=paper&lang=zh` 是进 v02 的入口，
 // 丢一个 `v=2` 整个壳就掉回 v01。
 // feat-057：落点改读 routes.ts 的 DEFAULT_SCREEN（现在是聚合入口 /home），不再写死 team——
 // 默认落哪一屏是导航口径，属于 routes.ts，这里只跟着走，免得两处各说一套。
