@@ -583,6 +583,52 @@ export const en = {
     detailSignals: 'What the documents say',
     detailSource: 'From your uploads',
     detailGone: 'This card is no longer in your uploads.',
+    // feat-055: the project overlay used to render `status` and `ownerName` straight from the
+    // defaulted view model, so a project the documents never gave a status to read as "on-track".
+    // It now labels each field and says so when the documents didn't state it.
+    detailStatus: 'Status',
+    detailOwner: 'Owner',
+    detailDue: 'Due',
+
+    // ── feat-055 · Projects screen (PRD G9 — the board; the biggest structural gap in the
+    // diff audit was that we had no projects screen at all). Field coverage in real payloads is
+    // uneven (progress 6/17, dueDate 7/17), so every field is either a real value or an explicit
+    // "the documents did not say" — never a silent 0% or an empty cell. ──
+    tabProjects: 'Projects',
+    projectsEyebrow: 'Projects',
+    projectsTitle: 'The projects in your documents',
+    projectsLede:
+      'Built only from what your uploads actually say. Anything a document never stated is marked as not stated — it is not filled in as zero.',
+    projectsCountOne: '1 project from your uploads',
+    projectsCountMany: '{count} projects from your uploads',
+    projectsCoverageTitle: 'What the documents left out',
+    projectsCoverageProgress: '{count} with no progress stated',
+    projectsCoverageDue: '{count} with no due date',
+    projectsCoverageStatus: '{count} with no status stated',
+    projectsCoverageNote: 'Avery leaves these unknown on purpose rather than filling in a zero.',
+    projectsSingleNote:
+      'Only one project came out of your uploads. If your documents cover more than one, they may not be split into sections Avery can tell apart yet — a heading per project usually helps.',
+    projectsEmptyTitle: 'No projects yet',
+    projectsEmptyBody:
+      'Upload a project plan, a weekly note or a status report from Your team, and the projects it describes will show up here.',
+    projectsEmptyCta: 'Go to Your team',
+    projectsGroupNeedsYou: 'Needs you',
+    projectsGroupMoving: 'Moving',
+    projectsGroupOther: 'Other status',
+    projectsGroupUnknown: 'No status in the documents',
+    projectsGroupDone: 'Done',
+    projectsStatusBlocked: 'Blocked',
+    projectsStatusAtRisk: 'At risk',
+    projectsStatusOnTrack: 'On track',
+    projectsStatusDone: 'Done',
+    projectsStatusUnknown: 'Status not stated',
+    projectsOwnerLabel: 'Owner',
+    projectsDueLabel: 'Due',
+    projectsProgressLabel: 'Progress',
+    projectsBlockersOne: '1 thing in the way',
+    projectsBlockersMany: '{count} things in the way',
+    projectsUnknownValue: 'The documents did not say',
+    projectsOpenAria: 'Open {title}',
 
     // ── Onboarding wizard (feat-045, PRD F7 — first-visit overlay; skippable; × pauses and
     // resumes next visit. NO fake connect-tools step, NO fake create-account step — every step
@@ -704,6 +750,97 @@ export const en = {
     // ── Compliance footer (PRD F6) — shell-global, memo tone (not regulatory tone). ──
     footerText:
       "Avery informs your judgment — it never replaces it. Every read here needs your own review before it becomes a decision, and none of it should be the sole basis for a serious call about a person's job, pay, or standing.",
+
+    // ── In-app draft composer (feat-058, PRD G6) — replaces the bare mailto: link. Copy to
+    // chat is the PRIMARY outlet (teams here live in WeChat/Lark); email is secondary.
+    // 🔴 Recipients are NAMES, not addresses — we never had their emails, and the hint says so
+    // rather than letting the empty mailto To: field surprise anyone.
+    draftAria: 'Draft a message',
+    draftEyebrow: 'Yours to send',
+    draftTitle: 'Draft a message',
+    draftClose: 'Close',
+    draftRecipients: 'To',
+    draftRecipientHint:
+      'These are names, not email addresses — your files only ever gave us names. The email outlet opens with an empty To field; put the address in yourself.',
+    draftNoRecipient: 'Your files do not say who this one goes to — fill the recipient in yourself.',
+    draftSubject: 'Subject',
+    draftBody: 'Message',
+    draftBodyHint:
+      'Drafted from what your files actually say. Edit it into your own words before you send — you are the one sending it.',
+    draftCopy: 'Copy for chat',
+    draftCopied: 'Copied',
+    draftCopiedStatus: 'Copied — paste it wherever your team actually talks.',
+    draftCopyFailed:
+      'Could not reach the clipboard — select the message above and copy it by hand.',
+    draftMailto: 'Use email instead',
+    draftDoneAdd: 'Done — add to follow-ups',
+    draftDoneComplete: 'Done — mark this one handled',
+    draftAddedStatus: 'Written into your follow-ups.',
+    draftCompletedStatus: 'Marked handled in your follow-ups.',
+    draftGoFollowups: 'Open follow-ups',
+    // ── Aggregate entry screen (feat-057 / PRD G4) — the landing surface. Four summary blocks,
+    // each a door into the screen that owns the detail. 🔴 Every number on this surface is
+    // counted from the live payload by homeDerive.ts; there is no hardcoded statistic here and
+    // there must never be one (the partner reference library's greeting line — "scanned 186
+    // signals" — is hardcoded; ours are counted or absent). ──
+    tabHome: 'Today',
+    homeEyebrow: 'Today',
+    homeTitle: 'What today asks of you',
+    homeLede:
+      'Four reads off the files you brought in. Each one opens into the screen that holds the rest.',
+
+    // Block 1 — decisions (graded by the backend rules, feat-056; the front end never re-grades
+    // and never re-sorts).
+    homeDecisionsTitle: 'To decide today',
+    homeDecisionsCount: '{total} on the table',
+    homeDecisionsOrderNote: 'Ordered by the grading rules — most serious first.',
+    homeDecisionsAbsentTitle: 'No grading came back with this data',
+    homeDecisionsAbsentBody:
+      'This company context was read before decision grading existed, or the backend serving it does not send it yet. Upload again against the current backend and the graded list appears here.',
+    homeDecisionsEmptyTitle: 'Nothing needs deciding today',
+    homeDecisionsEmptyBody:
+      'When a project shows a blocker, a passed date or a risk signal in your files, it lands here with the rule that caught it.',
+    homeDecisionOwner: 'Owned by',
+    homeDecisionReasonRule: 'By the rules',
+    homeDecisionReasonAvery: "Avery's own read",
+    homeDecisionEscalated: 'Avery raised this grade',
+    homeDecisionRulesToggle: 'Why this grade',
+    homeDecisionRuleBasis: 'Read from',
+    homeDecisionEvidenceLabel: 'Straight from your files',
+    // 🔴 Two different kinds of "no value" — never merge these two sentences. The first means
+    // the document genuinely says nothing; the second means it says something we could not pin
+    // to a comparable value, and the raw words MUST be shown (the manager is holding the
+    // original — telling him he never wrote it destroys the whole read).
+    homeDecisionUnknownLabel: 'Not mentioned in the files',
+    homeDecisionUnparsed: '{field} reads "{raw}" — that does not pin down a value.',
+    homeDecisionOpenProject: 'Open the project',
+    homeDecisionAskRoom: 'Take it to the room',
+    homeFieldStatus: 'Status',
+    homeFieldProgress: 'Progress',
+    homeFieldDueDate: 'Due date',
+
+    // Block 2 — closer-look summary.
+    homeGapsTitle: 'Where the files disagree with themselves',
+    homeGapsCount: '{count} open',
+    homeGapsEmpty: 'Nothing is contradicting itself right now.',
+    homeGapsLink: 'A closer look',
+
+    // Block 3 — people worth a look. 🔴 The count says how many times the FILES mention them.
+    // It is not a score, a rank or a rating, and the screen says so out loud.
+    homeAttentionTitle: 'People the files keep bringing up',
+    homeAttentionCaption: 'Counted from what your documents say — not a rating of anyone.',
+    homeAttentionWhySignals: 'named in {count} signals',
+    homeAttentionWhyBlockers: '{count} blockers on their projects',
+    homeAttentionEmpty: 'No one is being singled out by the files right now.',
+    homeAttentionLink: 'Your team',
+
+    // Block 4 — plain counts, each a door.
+    homeOverviewTitle: 'What Avery is working from',
+    homeOverviewPeople: 'people',
+    homeOverviewProjects: 'projects',
+    homeOverviewFiles: 'files read',
+    homeOverviewNotes: 'field notes',
+    homeOverviewFollowups: 'open follow-ups',
   },
 
   // ── Ask / Quick ask (feat-034 stage B — ADR-0023 voice: asks about the WORK, never rates

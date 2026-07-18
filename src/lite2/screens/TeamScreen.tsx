@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
 import { useLite } from '../store'
 import { useFlow, selectTriagePending, selectTriageHandled, selectTriageSetAside } from '../flowStore'
-import { draftMailForHandoff } from '../draftLinks'
+import { draftFromHandoff } from '../draftLinks'
+import { useDraft } from '../draftStore'
 import { useDict } from '../../shared/i18n/useDict'
 import { localizeBriefing } from '../../shared/briefing'
 import {
@@ -136,6 +137,8 @@ export function TeamScreen() {
   const restoreTriage = useFlow((s) => s.restoreTriage)
   const addFollowup = useFlow((s) => s.addFollowup)
   const setComposerDraft = useFlow((s) => s.setComposerDraft)
+  // feat-058 · 应用内草稿框（弹层本体常驻挂在壳层 Lite2App，这里只负责开框）。
+  const openDraft = useDraft((s) => s.openDraft)
 
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [addedFollowupIds, setAddedFollowupIds] = useState<ReadonlySet<string>>(new Set())
@@ -274,9 +277,15 @@ export function TeamScreen() {
                                 ? t.lite2.followupAdded
                                 : t.lite2.triageAddFollowupLabel}
                             </button>
-                            <a className="lite-triage-draftmail" href={draftMailForHandoff(handoff)}>
+                            {/* feat-058：这里曾是一条裸 mailto: 链接（点一下人就被甩进系统
+                                邮件客户端，草稿正文根本没露过面）。现在开应用内草稿框。 */}
+                            <button
+                              type="button"
+                              className="lite-triage-draftmail"
+                              onClick={() => openDraft(draftFromHandoff(handoff, team))}
+                            >
                               {t.lite2.triageDraftMailLabel}
-                            </a>
+                            </button>
                             <button
                               type="button"
                               className="home-discard"
