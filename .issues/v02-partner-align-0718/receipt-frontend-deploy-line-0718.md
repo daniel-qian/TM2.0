@@ -145,3 +145,7 @@ feat-053 后端源码提交  2026-07-18 21:17   ← 不在镜像里
 ---
 
 **线上现状**：<https://averylite.dannyqian.com> · 中文默认 · v01 是默认壳 · v02 走 `?v=2` · 后端 <https://avery.dannyqian.com> 活着（`/health` `degraded:false`）。
+
+> 🔴 **07-19 更正**：挑壳那两句反了。Danny 拍板 ① 之后 **v02 是默认壳、v01 走 `?v=1`**
+> （`7ad968b`，随 `origin/main` = `de47ffe` 上线）。「中文默认」和后端那两句仍然成立，
+> 但后端至今仍是 `avery-agent:zh512`（源 `512b11d`），**没有追平 main**。
