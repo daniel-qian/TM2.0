@@ -8,7 +8,7 @@ import type {
   LiveTransport,
 } from './transport'
 import { isStubTransportSelected, resolveTransport } from './stubTransport'
-import { createHttpTransport, storedOwnerToken } from './transport'
+import { createHttpTransport, storedOwnerToken, TransportError } from './transport'
 import {
   coerceAskDraft,
   createLiveAgentSource,
@@ -219,10 +219,23 @@ function stillOn(get: () => LiteState, contextId: string | null): boolean {
   return get().contextId === contextId
 }
 
-// 后端/stub 都把 404 编码进 Error.message（`team HTTP 404` / `team HTTP 404 (stub)`）——
-// 这是 feat-028 立的"未知 id 大声失败"纪律留下的唯一可判据。404 = context 真没了/token 对不上
-// （feat-038 租户隔离：绝不给 403 这种可枚举的 oracle），其余（500/网络断）都是"这次没连上"。
-function isNotFound(message: string): boolean {
+// 404 = context 真没了/token 对不上（feat-038 租户隔离：绝不给 403 这种可枚举的 oracle），
+// 其余（500/网络断）都是"这次没连上"。
+//
+// 🔴 判据从"抠 message"改成"读 status"，因为前者已经被 ZH-03 拆掉了（0719 收尾复验逮到）：
+//   原注释说"后端/stub 都把 404 编码进 Error.message（`team HTTP 404`）"——那句话在 ZH-03
+//   之后不再成立。httpErrorMessage() 现在把 404 翻成给客户看的中文句子
+//   （transport.ts:399 `if (status === 404) return t.staleToken`），里面一个数字都没有。
+//   于是 /HTTP 404/ 对**真 HTTP 传输的每一次 404** 都返 false，只有 DEV 的 stub
+//   （仍抛 `team HTTP 404 (stub)`）还匹配得上——门跑 stub 全绿，生产两条路径全错：
+//     · 恢复路径：不再松开锚点，改走 else 把中文错误挂在屏幕上。localStorage 里那个死锚点
+//       原地不动，于是**每次刷新都再错一遍**，永远回不到干净的上传态。
+//     · switchContext：真 404 被判成 'failed'，文案说「刚才没连上服务器…再试一次」——
+//       服务器好得很，是凭据对不上，重试一万次也不会成。诚实的 'unreadable' 反倒成了死代码。
+//   状态码走 TransportError.status 这条结构化通道（transport.ts:421），message 只作为
+//   stub 的兜底——下一个人再改文案时，这里不会跟着塌。
+function isNotFound(err: unknown, message: string): boolean {
+  if (err instanceof TransportError && typeof err.status === 'number') return err.status === 404
   return /HTTP 404/.test(message)
 }
 
@@ -472,7 +485,7 @@ export const useLite = create<LiteState>((set, get) => ({
         return
       }
       const message = err instanceof Error ? err.message : String(err)
-      if (isNotFound(message)) {
+      if (isNotFound(err, message)) {
         // 锚点指不动了 —— 松开它，干净回上传态（feat-050 口径不变）。
         //
         // 🔴 但**名册不动**（fixD 复核 · 新 finding 2）。原来这里顺手 forgetKnownContext()，
@@ -568,7 +581,7 @@ export const useLite = create<LiteState>((set, get) => ({
       const message = err instanceof Error ? err.message : String(err)
       set({
         switchPending: null,
-        switchError: isNotFound(message) ? 'unreadable' : 'failed',
+        switchError: isNotFound(err, message) ? 'unreadable' : 'failed',
       })
     }
   },
