@@ -129,6 +129,7 @@ footer{margin-top:64px;padding-top:22px;border-top:1px solid var(--line);
   <div class="rec" style="border-left-color:#c0392b;margin-bottom:22px">
     <b>⚠️ 本文件写于 <code>039f1f1</code>，正文里所有「已上线」都只指那一版。</b>
     <p style="margin:8px 0 0">线上站点就是 <code>039f1f1</code> 构建的。此后本地 <code>main</code> 又多了 <b>22 个提交</b>（对齐波 P0 十一条的收尾 + 他们 15 条对抗审查修复 + 我 07-19 收尾的三条），<b>全部未 push、全部不在线上</b>。读这一页时请把「在 main 里」和「在线上」严格分开——它们从 07-19 起不再是同一件事。带 <span style="color:#c0392b">红字「07-19 更正」</span>的段落是我收尾时自己查出来写错的地方，已就地改正，没有删掉原文。</p>
+    <p style="margin:10px 0 0;color:#c0392b"><b>07-19 下午更正：上面这段整个失效了。</b>数字是 <b>23</b> 不是 22，而且<b>全部已 push</b>——<code>origin/main</code> 从 <code>039f1f1</code> 走到 <code>de47ffe</code>，线上前端现在就是 <code>de47ffe</code> 构建的。「在 main 里 ≠ 在线上」这条读法对这一整页仍然有效，<b>但分界点从 <code>039f1f1</code> 挪到了 <code>de47ffe</code></b>：正文里所有「已上线」现在都要按 <code>de47ffe</code> 读。<b>唯一没跟上的是后端</b>——后端仍是 <code>avery-agent:zh512</code>（源 <code>512b11d</code>），一行没动，原因见「决策 2」那一节的新增更正。</p>
   </div>
   <div class="live">
     <div><span class="k">前端</span><span class="v"><span class="dot"></span>averylite.dannyqian.com</span></div>
@@ -145,7 +146,7 @@ footer{margin-top:64px;padding-top:22px;border-top:1px solid var(--line);
 <thead><tr><th>发现</th><th>为什么两条线的门都没拦住</th><th>状态</th></tr></thead>
 <tbody>
 <tr>
-  <td><b>后端状态枚举直接糊到中文客户脸上</b><br><span class="sub">中文客户在「你的团队」首屏和项目详情里读到光秃秃的 <code>blocked</code> / <code>done</code>。v01 两处 + v02 一处，其中 v01 就是裸链默认。<b>在 <code>039f1f1</code> 里就是这样——写这份验收时正跑在线上。</b></span></td>
+  <td><b>后端状态枚举直接糊到中文客户脸上</b><br><span class="sub">中文客户在「你的团队」首屏和项目详情里读到光秃秃的 <code>blocked</code> / <code>done</code>。v01 两处 + v02 一处，其中 v01 就是裸链默认。<b>在 <code>039f1f1</code> 里就是这样——写这份验收时正跑在线上。</b><br><span style="color:#c0392b"><b>07-19 更正：</b>「v01 就是裸链默认」这半句已不成立——Danny 拍板 ① 之后<b>裸链默认是 v02</b>，v01 退到 <code>?v=1</code>。本条修复（<code>69bdeb7</code>）v01/v02 三处都改了，所以结论不变；变的是「哪一处影响最大」——现在是 v02 那处。</span></span></td>
   <td>我的门 grep 的是<b>已知英文句子</b>，<code>blocked</code> 是枚举 token 不在名单上；对齐波的门断言读 store 字段，它的 S1 证据行里其实已经打出 <code>frontendStatus: ["blocked", ...]</code>，但只判「别把没写状态的编成 on-track」，不判那是哪国话。</td>
   <td><span class="chip c-ok">已修</span> <code class="mono">69bdeb7</code></td>
 </tr>
@@ -176,9 +177,15 @@ footer{margin-top:64px;padding-top:22px;border-top:1px solid var(--line);
 <div class="dec crit">
   <span class="tag">决策 1 · 最重 · 审计判为 blocker（3/3 票）</span>
   <h3>裸域名打开是 v01 冻结壳，八条线的成果客户一条都看不见</h3>
+  <div class="rec" style="border-left-color:#c0392b;margin:0 0 14px">
+    <b>✅ 07-19 更正：这条已拍板并已上线，本节从「等你拍板」降为「已完成」。</b>
+    <p style="margin:8px 0 0">两处订正：① 标题里的「<b>八条线</b>」是错的，对齐波是<b>十一条</b>（feat-050..060）——本页 §「六」里已经为另一处纠过同一个数，这个标题当时漏了。② Danny 拍板 <b>裸链默认改成 v02</b>，<code>7ad968b</code> 落地、随 <code>de47ffe</code> 上线；<code>?v=1</code> 保留为 v01 逃生门。下面「我的建议」整段请按已执行读，但<b>实现方式与建议的不一样</b>，见该段末尾的更正。</p>
+  </div>
   <p>你昨天拍的是「v01 默认、v02 靠 <code>?v=2</code> 手打」。那时 feat-050..060 还没合。<b>现在合了，事实变了：</b>路由化、会话不丢、统一 modal、账号体系、决策定级、议事室简化——全在 <code>src/lite2</code> 里，而客户拿到裸链接看到的是冻结的 v01。</p>
   <p>更别扭的是深链：SPA rewrite 让 <code>/followups</code>、<code>/team/xxx</code> 都返回 200，但没带 <code>?v=2</code> 就都落回 v01 的团队屏——路径对、内容不对。</p>
-  <div class="rec"><b>我的建议：改成 v02 默认。</b>代价是给 <code>version.ts</code> 加一个构建期 env（约十行，它现在写死 <code>return '1'</code>）。当初否掉这条的理由是「feat-051 一周内要改路由、现在做白做」——feat-051 已经落地了，那个理由没了。<br>如果你仍要 v01 默认，那 7-25 发给三家公司的链接就必须带 <code>?v=2</code>，而且任何人转发时丢掉参数就会看到旧壳。</div>
+  <div class="rec"><b>我的建议：改成 v02 默认。</b>代价是给 <code>version.ts</code> 加一个构建期 env（约十行，它现在写死 <code>return '1'</code>）。当初否掉这条的理由是「feat-051 一周内要改路由、现在做白做」——feat-051 已经落地了，那个理由没了。<br>如果你仍要 v01 默认，那 7-25 发给三家公司的链接就必须带 <code>?v=2</code>，而且任何人转发时丢掉参数就会看到旧壳。
+  <p style="margin:10px 0 0;color:#c0392b"><b>07-19 更正：结论采纳了，但「加一个构建期 env」这个实现方式被刻意否掉了。</b>实际改法是把 <code>resolveVersion()</code> 里的字面量从 <code>'1'</code> 翻成 <code>'2'</code>，<b>不引入任何构建期 env</b>。理由：<code>src/shared/mode.ts</code> 已经有一套「本地默认 story / 生产 env 翻成 live」的分裂，再加第二套会让<b>裸 URL 的行为在门里和生产上不一致</b>——门跑本地（无 env）看到一种壳，客户在生产（有 env）看到另一种，而两边的门全绿。<b>一个只在生产上错的默认值是查不出来的。</b>写死字面量则是「门看到什么，客户就看到什么」。另补了 <code class="mono">verify-bare-url-shell.mjs</code>（4 条断言）把这个口径钉住。</p>
+  </div>
 </div>
 
 <div class="dec">
@@ -205,6 +212,17 @@ cd eval-harness &amp;&amp; AVERY_BRAIN=stub python -m pytest \
   tests/test_file_truth_encoding.py tests/test_advise_brain_config_error.py -q
 <span style="opacity:.6"># → 30 passed in 2.47s（已实跑，无 LLM 开销）</span></pre>
     <p style="margin:6px 0 0"><b>改后的建议：追平，但只追这个子集。</b>fixA/fixC/fixD 的 diff 依赖中间提交，要补得再挑一轮。<b>建不建、什么时候建仍然是你的闸——我没碰线上任何东西。</b></p>
+  </div>
+  <div class="rec" style="border-left-color:#c0392b">
+    <b>🛑 07-19 下午更正：这个子集被判为不安全，后端<b>没有</b>升级。线上仍是 <code>avery-agent:zh512</code>（源 <code>512b11d</code>），一行未动。</b>
+    <p style="margin:10px 0 6px">Danny 已授权按上面的范围重建，动手前复核时停在了边界上。<b>问题出在 <code>6f838f3</code> 自己身上，不是 0008：</b></p>
+    <ul style="margin:6px 0 10px 18px;line-height:1.75">
+      <li>它的编码梯子只有 <code>("gb18030","big5")</code> 两级，而 <code>decode_text</code> <b>返回第一个不抛异常的那一级</b>。</li>
+      <li><b>gb18030 解 Shift_JIS / EUC-KR 的字节不会抛异常</b>——它会「成功」解出一串被凭空发明的汉字。</li>
+      <li>后果：一份日文或韩文花名册会被<b>静默读成乱造的中文人名，并标记为已读入</b>，且没有任何存疑信号。这比它要修的 GB18030 缺陷更坏——原缺陷是「吃掉数据还说读入了」，这条是<b>编造数据还说读入了</b>。</li>
+    </ul>
+    <p style="margin:6px 0"><code>a45bb4a</code>（编码裁决器不许编造）正是修这条的，但<b>它在授权的两个提交之外</b>，所以没有自作主张扩大范围。<b>停在这里等你拍。</b></p>
+    <p style="margin:6px 0 0"><b>另一条顺带查出来的、比上面更宽的风险：</b><code>eval-harness/requirements-service.txt</code> <b>一个版本都没钉</b>（全是 <code>&gt;=</code>），Dockerfile 的 <code>FROM python:3.11-slim</code> 也没钉 digest。所以<b>任何一次后端重建都不只是上你挑的那几个补丁，同时还是一次范围不受控的依赖升级</b>——包括这次没做的这一次。重建前应先钉版本。</p>
   </div>
 </div>
 
