@@ -3,6 +3,7 @@ import { useLite } from '../store'
 import { useDict } from '../../shared/i18n/useDict'
 import { localizeBriefing } from '../../shared/briefing'
 import { localizeHandoff, localizePersonRead } from '../../shared/handoffCopy'
+import { projectStatusText } from '../../shared/projectStatus'
 import { UploadPanel } from '../UploadPanel'
 import { InitialAvatar } from '../InitialAvatar'
 import { LiteComposer } from '../LiteComposer'
@@ -251,7 +252,7 @@ export function TeamScreen() {
                       <h3>{project.title}</h3>
                       <span className="home-project-status">
                         <span className={`status-dot ${statusTone(project.status)}`} />
-                        {project.status}
+                        {projectStatusText(project.status, t.lite)}
                       </span>
                     </span>
                     {typeof project.progress === 'number' ? (

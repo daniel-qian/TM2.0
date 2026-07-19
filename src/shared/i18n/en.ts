@@ -341,6 +341,14 @@ export const en = {
     detailClose: 'Close',
     detailPersonEyebrow: 'Teammate',
     detailProjectEyebrow: 'Project',
+    // feat-068 追加 · 项目状态词。lite2 section 已有同名键（parallel namespaces，措辞可各自
+    // 演化）；这里镜像一份给 v01 —— 裸域名服务的正是 v01，此前它把后端枚举 `blocked`/`done`
+    // 原样渲染给中文客户。消费方是 src/shared/projectStatus.ts 的 projectStatusText()。
+    projectsStatusBlocked: 'Blocked',
+    projectsStatusAtRisk: 'At risk',
+    projectsStatusOnTrack: 'On track',
+    projectsStatusDone: 'Done',
+    projectsStatusUnknown: 'Status not stated',
     detailTenure: 'Tenure',
     detailOwns: 'Owns',
     detailCollab: 'Working with',

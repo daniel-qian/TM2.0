@@ -10,6 +10,7 @@ import {
   localizePersonRead,
   type HandoffDisplay,
 } from '../../shared/handoffCopy'
+import { projectStatusText } from '../../shared/projectStatus'
 import { UploadPanel } from '../UploadPanel'
 import { InitialAvatar } from '../InitialAvatar'
 import { LiteComposer } from '../LiteComposer'
@@ -418,7 +419,7 @@ export function TeamScreen() {
                       <h3>{project.title}</h3>
                       <span className="home-project-status">
                         <span className={`status-dot ${statusTone(project.status)}`} />
-                        {project.status}
+                        {projectStatusText(project.status, t.lite2)}
                       </span>
                     </span>
                     {typeof project.progress === 'number' ? (
