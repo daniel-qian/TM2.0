@@ -60,9 +60,11 @@ export function DetailOverlay() {
     detail?.kind === 'person' && team ? team.people.find((p) => p.id === detail.id) ?? null : null
 
   // feat-055：项目详情改吃**原始 payload**（rawTeam），不再吃 team.projects。
-  // 理由与项目屏同一条：teamData 的 `status ?? 'on-track'` / `ownerName ?? 'Unassigned'`
+  // 理由与项目屏同一条：teamData 当时的 `status ?? 'on-track'` / `ownerName ?? 'Unassigned'`
   // 兜底会把「文档没写」抹成一个看起来正常的值，浮层于是把没写状态的项目显示成
-  // "on-track"。派生口径收在 projectView.ts，屏与浮层共用一份（同一个项目两处说法必须一致）。
+  // "on-track"。（那两个兜底 07-19 已改成诚实文案 + Raw 判据，但 LiteProject 上的
+  // status/ownerName 依然是**渲染文案**，不能当判据——读 raw 这条不变。）
+  // 派生口径收在 projectView.ts，屏与浮层共用一份（同一个项目两处说法必须一致）。
   // 注：store 里 team 与 rawTeam 永远成对写入（uploadFiles / restoreSession / refreshTeam
   // 三处都在同一次 set 里落），所以「有 team 没 raw」不会发生。
   // 吃的是 held 快照里那份 raw（见上），不是 live rawTeam——理由同人卡。

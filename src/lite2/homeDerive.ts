@@ -97,7 +97,10 @@ export function deriveAttentionPeople(
     const owned = team.projects.filter((pr) => {
       const ownerId = ownerIdByProject.get(pr.id)
       if (ownerId) return ownerId === person.id
-      return pr.ownerName.trim() !== '' && pr.ownerName.trim() === person.name.trim()
+      // 🔴 认人只认 ownerNameRaw（文档自述的名字）。ownerName 是渲染文案，缺失时是
+      // 「文档未提及」这句话——拿它做字面比对等于让一句兜底文案有机会冒充某个人的名字。
+      const raw = pr.ownerNameRaw?.trim()
+      return !!raw && raw === person.name.trim()
     })
     const blockerLines: string[] = []
     const projectTitles: string[] = []

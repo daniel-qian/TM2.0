@@ -90,7 +90,8 @@ export function DetailOverlay() {
                 <p className="eyebrow">{t.lite.detailProjectEyebrow}</p>
                 <h2>{project.title}</h2>
                 <p className="lite-detail-subtitle">
-                  {projectStatusText(project.status, t.lite)} · {project.ownerName}
+                  {projectStatusText(project.status, t.lite)} ·{' '}
+                  {project.ownerName || t.lite.projectsUnknownValue}
                   {project.dueDate ? ` · ${project.dueDate}` : ''}
                 </p>
               </div>

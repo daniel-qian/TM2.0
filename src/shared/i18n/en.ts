@@ -349,6 +349,11 @@ export const en = {
     projectsStatusOnTrack: 'On track',
     projectsStatusDone: 'Done',
     projectsStatusUnknown: 'Status not stated',
+    // Mirrored from the lite2 section (same feat-068 rationale as the status words above): the
+    // bare domain used to serve v01, and v01 rendered a missing owner as the hard-coded English
+    // word 'Unassigned'. 🔴 It must read as "we did not read who" — NOT as "there is no owner",
+    // which the documents never said.
+    projectsUnknownValue: 'The documents did not say',
     detailTenure: 'Tenure',
     detailOwns: 'Owns',
     detailCollab: 'Working with',

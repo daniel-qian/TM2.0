@@ -266,7 +266,7 @@ export function TeamScreen() {
                       </span>
                     ) : null}
                     <span className="home-project-meta">
-                      <span>{project.ownerName}</span>
+                      <span>{project.ownerName || t.lite.projectsUnknownValue}</span>
                       {project.dueDate ? <span className="home-project-due">{project.dueDate}</span> : null}
                     </span>
                   </button>

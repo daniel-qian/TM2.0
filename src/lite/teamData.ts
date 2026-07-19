@@ -34,6 +34,12 @@ export interface LitePerson {
 export interface LiteProject {
   id: string
   title: string
+  /**
+   * 文档自述的负责人。**空串 = 文档里没读到是谁**（同本文件 `LitePerson.read` 的既有约定）。
+   * 🔴 这里曾经是 `card.ownerName ?? 'Unassigned'`——一个英文词，而且是一句文档从没说过的
+   * 管理判断（「这个项目没人负责」）。v01 的派生层是 locale-free 的（`liteTeamFromPayload`
+   * 不收 locale），所以兜底文案归渲染层：屏与浮层各自 `|| t.lite.projectsUnknownValue`。
+   */
   ownerName: string
   status: string
   progress?: number // 可量化（文档写了就显）——项目可硬
@@ -165,10 +171,11 @@ export function liteTeamFromPayload(payload: LiveTeamPayload): LiteTeam {
   const projects: LiteProject[] = payload.projects.map((card: LiveProjectCard) => ({
     id: card.id,
     title: card.title,
+    // 空串 = 没读到（空白/纯空格的 ownerName 同样不算一个人名）。绝不兜一个英文词。
     ownerName:
-      card.ownerName ??
-      cleanPeople.find((p) => p.id === card.ownerId)?.name ??
-      'Unassigned',
+      card.ownerName?.trim() ||
+      cleanPeople.find((p) => p.id === card.ownerId)?.name?.trim() ||
+      '',
     status: card.status ?? 'on-track',
     progress: card.progress,
     dueDate: card.dueDate,

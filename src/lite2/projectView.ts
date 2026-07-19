@@ -11,12 +11,17 @@ import type { Dict } from '../shared/i18n'
 // 二选一：要么显真值，要么显「文档未提及」，没有第三条路。
 //
 // ## 为什么读 rawTeam 而不是 team
-// `teamData.ts` 的 `liteTeamFromPayload()` 给缺失字段填了兜底默认值
+// `teamData.ts` 的 `liteTeamFromPayload()` 曾经给缺失字段填了兜底默认值
 //（`status ?? 'on-track'` · `ownerName ?? 'Unassigned'`）——那两个默认值一旦落地就再也
 // 分不出「文档说在推进」和「文档没写状态」。后端的 `project_cards()` 是**缺就不发这个键**
 //（registry.py：`if pr.status: card["status"] = ...`），所以原始 payload 才是唯一能分辨
 // 已知与未知的地方。本模块因此只吃 `LiveProjectCard`，不吃 `LiteProject`。
-// （teamData 的默认值属于既有行为，别的屏还在用，本条不动它——只是不经过它。）
+//
+// 07-19 更新：那两个兜底都已经改掉了（`status` 走 `projectStatusUnread`、`ownerName` 走
+// `projectsUnknownValue`，且各自留了 `statusRaw` / `ownerNameRaw` 作判据）。**本模块的存在
+// 理由不变**：`LiteProject` 上的 `status`/`ownerName` 现在装的是**渲染文案**（已本地化的
+// 句子），拿它当判据一样错——只是错法从「谎称正常」变成「把一句兜底文案当值」。判已知/未知
+// 仍然只认原始 payload。
 
 /** 后端归一化后的状态词表（extract.py `_normalize_status` / llm_extract `_ALLOWED_STATUS`）。 */
 export type ProjectStatusKey = 'blocked' | 'at-risk' | 'on-track' | 'done' | 'other' | 'unknown'

@@ -28,7 +28,9 @@ function ownedProjectTitle(
   projects: LiteProject[],
 ): string | null {
   for (const pr of projects) {
-    if (pr.ownerName && pr.ownerName === person.name) return pr.title
+    // 判据只认 ownerNameRaw（文档自述）——ownerName 缺失时是「文档未提及」这句渲染文案，
+    // 拿它比对会把一句兜底文案当成人名，凭空给人挂上一个项目。
+    if (pr.ownerNameRaw && pr.ownerNameRaw === person.name) return pr.title
   }
   return null
 }

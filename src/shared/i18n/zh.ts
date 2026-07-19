@@ -245,6 +245,7 @@ export const zh: Dict = {
     "projectsStatusOnTrack": "按计划推进",
     "projectsStatusDone": "已完成",
     "projectsStatusUnknown": "状态未提及",
+    "projectsUnknownValue": "文档未提及",
     "detailTenure": "在职时长",
     "detailOwns": "手上的事",
     "detailCollab": "协作中的伙伴",

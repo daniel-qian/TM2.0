@@ -35,7 +35,24 @@ export interface LitePerson {
 export interface LiteProject {
   id: string
   title: string
+  /**
+   * 🔴 **渲染用文案，不是判据**（同 `status`）。文档写了负责人 → 那个人名；文档里没读到 →
+   * 本地化的「文档未提及」。
+   *
+   * 判断一律用 `ownerNameRaw`。曾经这里写的是 `card.ownerName ?? 'Unassigned'`：后端在
+   * owner 缺失时**根本不发这个键**（registry.py 与 status 同一条 "R2 don't invent" 口径），
+   * 于是这一行替客户补了两样它没说的东西——① 一个**英文词**，印在中文客户的团队屏上；
+   * ② 一句**管理判断**（「这个项目没人负责」），而文档只是没提到是谁。
+   * 07-19 裸域名切成 v02 之后在**生产**上抓到：一个 `owner: null` 的项目，卡片上写着
+   * `Unassigned`，而后端 payload 里根本没有这个词——是前端自己编的。
+   *
+   * 复用 `projectsUnknownValue`（项目详情浮层 DetailOverlay 对同一处缺失早就是这么显示的）
+   * 而不是新造键：同一个项目在两处显示时不许说法不一致。
+   * ⚠️ **不要写成「未分配」**——那是在替客户断言「文档说了没有负责人」，正是本行原来犯的错。
+   */
   ownerName: string
+  /** 文档自述的负责人。**缺失就是缺失**（`undefined`），绝不兜底、绝不猜。 */
+  ownerNameRaw?: string
   /**
    * 🔴 **渲染用文案，不是判据。** 文档写了状态 → 原样是那个状态词（`on-track` / `blocked` …，
    * 抽取层归一后的词，状态点与卡片边色都按它取色）；文档里没读到 → 本地化的「未读到状态」。
@@ -212,13 +229,17 @@ export function liteTeamFromPayload(
     // 🔴 「我没读到」和「客户说没有」是两件事。空串也算没读到（后端只在有值时才发这个键，
     // 但契约上 status?: string，收到 '' 同样不许被当成一个状态词）。
     const statusRaw = card.status?.trim() ? card.status.trim() : undefined
+    // 🔴 owner 同理：空串也算没读到（契约上 ownerName?: string，收到 '' 不许被当成一个人名）。
+    // 认领顺序与 projectView.ts 同口径：文档写的名字 → ownerId 反查到的人 → 都没有就是没读到。
+    const ownerNameRaw =
+      card.ownerName?.trim() ||
+      cleanPeople.find((p) => p.id === card.ownerId)?.name?.trim() ||
+      undefined
     return {
       id: card.id,
       title: card.title,
-      ownerName:
-        card.ownerName ??
-        cleanPeople.find((p) => p.id === card.ownerId)?.name ??
-        'Unassigned',
+      ownerName: ownerNameRaw ?? copy.projectsUnknownValue,
+      ownerNameRaw,
       status: statusRaw ?? copy.projectStatusUnread,
       statusRaw,
       progress: card.progress,

@@ -168,8 +168,9 @@ function ProjectCard({ view, onOpen }: { view: ProjectView; onOpen: (id: string)
 export function ProjectsScreen() {
   const { t } = useDict()
   const l = t.lite2
-  // 🔴 读 rawTeam：teamData 的 `status ?? 'on-track'` / `ownerName ?? 'Unassigned'` 兜底
-  // 会把「文档没写」抹成一个看起来正常的值（见 projectView.ts 的说明）。
+  // 🔴 读 rawTeam：`LiteProject` 上的 status/ownerName 是**渲染文案**（历史上更糟——曾是
+  // `status ?? 'on-track'` / `ownerName ?? 'Unassigned'` 这种编出来的值）。判已知/未知只认
+  // 原始 payload（见 projectView.ts 的说明）。
   const rawTeam = useLite((s) => s.rawTeam)
   const openDetail = useLite((s) => s.openDetail)
   const goScreen = useLite((s) => s.goScreen)
