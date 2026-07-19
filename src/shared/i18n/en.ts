@@ -881,8 +881,12 @@ export const en = {
     homeDecisionsCount: '{total} on the table',
     homeDecisionsOrderNote: 'Ordered by the grading rules — most serious first.',
     homeDecisionsAbsentTitle: 'No grading came back with this data',
+    // 🔴 Never promise "just upload again" here. Grading is computed by the backend rule layer
+    // (feat-056); if the backend does not have that capability yet, re-uploading cannot produce
+    // decisions no matter how many times the customer tries. The two causes call for opposite
+    // actions and this data cannot tell them apart — so state both and don't pick one for them.
     homeDecisionsAbsentBody:
-      'This company context was read before decision grading existed, or the backend serving it does not send it yet. Upload again against the current backend and the graded list appears here.',
+      'Two possibilities, and this data cannot tell which. Either this company context was read before decision grading existed — in which case uploading again will surface it — or the backend serving it does not have grading yet, in which case uploading again will not help and it has to wait for the backend to catch up.',
     homeDecisionsEmptyTitle: 'Nothing needs deciding today',
     homeDecisionsEmptyBody:
       'When a project shows a blocker, a passed date or a risk signal in your files, it lands here with the rule that caught it.',

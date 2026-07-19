@@ -584,7 +584,11 @@ export const zh: Dict = {
     "homeDecisionsCount": "共 {total} 条",
     "homeDecisionsOrderNote": "按定级规则排序，最要紧的在最前。",
     "homeDecisionsAbsentTitle": "这份数据里没带决策定级",
-    "homeDecisionsAbsentBody": "这家公司的资料是在定级功能之前读进来的，或者当前后端还没发这个字段。对着现在的后端重新上传一次，定级列表就会出现在这里。",
+    // 🔴 不许在这里承诺「重新传一次就好了」。定级由后端的规则层算（feat-056），
+    // 后端没上这个能力时，客户重传多少次都不会有结果——那句承诺会把人按在一个
+    // 永远走不通的动作上循环。两种成因的补救动作相反，而这份数据分不出是哪一种，
+    // 所以两种都摊开讲，不替客户挑一个。
+    "homeDecisionsAbsentBody": "两种可能，这份数据本身分不出是哪一种。一种是这家公司的资料在定级功能上线之前就读进来了，那么重新上传一次就会有；另一种是当前后端还没上定级这个能力，那么重新传多少次都不会有，得等后端跟上。",
     "homeDecisionsEmptyTitle": "今天没有要你定夺的事",
     "homeDecisionsEmptyBody": "等文件里出现卡点、过期的日子或风险信号，它会带着命中的规则出现在这里。",
     "homeDecisionOwner": "负责人",
