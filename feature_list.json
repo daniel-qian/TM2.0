@@ -488,7 +488,7 @@
       "description": "LLM 把里程碑当项目，三亚 seed 抽出 17 个（应有约 6）。加粒度门收敛；同源查 H4 中文项目轴幽灵 5 条 strict xfail（非 CJK bug，结构性）。",
       "dependencies": [],
       "status": "done",
-      "evidence": "分支 feat/054-project-granularity，commit 61f2414 + 74908d4(复核 3 major 全修)。新增 ingest/granularity.py 粒度门 + 31 条测试 + 中英双 fixture。三亚 seed 8→6 收敛。H4 中文项目轴幽灵 5 条 strict xfail：4 条转正、1 条保留并改写论证。复核 3 major 全是静默失效路径（里程碑行带冒号清空整块索引、R3 子串包含吞掉真项目并编造父子关系等），均已修且实测复现过。集成门（integration/p0-wave1 全合完后）：typecheck 0 错 · build 通过 · lint 0 错 · pytest 2953 passed/0 failed/4 xfailed。 🔴 两处未验：① 真 LLM 端到端（无 AVERY_BRAIN=minimax key，属凭据墙），门逻辑以 LLM 形态输入走 _build 纯函数路径验证、复核者独立复现；② 集成期真机发现：离线 heuristic 路径仍是「每篇文档只吐 1 个项目」——喂 3 个「## 项目：」标题的中文周报只抽出 1 个。这是 _projects_from_doc 的结构性缺陷（与 H4 同源），054 的门只覆盖 LLM 路径。无 key 演示会撞上。"
+      "evidence": "分支 feat/054-project-granularity，commit 61f2414 + 74908d4(复核 3 major 全修)。新增 ingest/granularity.py 粒度门 + 31 条测试 + 中英双 fixture。三亚 seed 8→6 收敛。H4 中文项目轴幽灵 5 条 strict xfail：4 条转正、1 条保留并改写论证。复核 3 major 全是静默失效路径（里程碑行带冒号清空整块索引、R3 子串包含吞掉真项目并编造父子关系等），均已修且实测复现过。集成门（integration/p0-wave1 全合完后）：typecheck 0 错 · build 通过 · lint 0 错 · pytest 2953 passed/0 failed/4 xfailed。 🔴 两处未验：① 真 LLM 端到端（无 AVERY_BRAIN=minimax key，属凭据墙），门逻辑以 LLM 形态输入走 _build 纯函数路径验证、复核者独立复现；② 集成期真机发现：离线 heuristic 路径仍是「每篇文档只吐 1 个项目」——喂 3 个「## 项目：」标题的中文周报只抽出 1 个。这是 _projects_from_doc 的结构性缺陷（与 H4 同源），054 的门只覆盖 LLM 路径。无 key 演示会撞上。 🔴 2026-07-19 更正（原文不删，保持可追溯）：上面 ① 里「无 AVERY_BRAIN=minimax key，属凭据墙」是错的——key 一直都在 eval-harness/.env 里，且 service/app.py 导入时就会加载它。这正是跑全量 pytest 会真调 MiniMax、约 11 分钟真实计费的原因。所以 ① 不是凭据墙挡住的，是没跑；要验随时可验，只是要花钱。同样的错在 progress-feat-054.md:377 也有一份，已就地纠。② 那条（离线 heuristic 每篇文档只吐 1 个项目）不受影响，仍然成立。"
     },
     {
       "id": "feat-055",
