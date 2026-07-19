@@ -68,10 +68,23 @@ function report(title, surfaces) {
 const browser = await chromium.launch({ headless: true })
 const pageErrors = []
 
-// ── v01（裸链默认 —— 生产上不带 ?v=2 打开的就是这一版）────────────────────────
+// ── v01（`?v=1` 逃生门）─────────────────────────────────────────────────────
+//
+// 🔴 2026-07-19 起裸链不再是 v01。Danny 拍板 ① 把 resolveVersion() 的缺省翻成了 '2'，
+//    所以 `?mode=live&lang=zh`（不带 v=）现在开出来的是 **v02**。要取 v01 的面，必须
+//    显式写 `?v=1`。
+//
+// ⚠️ **这条改错了不会报错，只会静悄悄地测两遍 v02 然后报告「v01 干净」。** 机制：
+//    `src/main.tsx:43` 在 DEV 下**无条件**把 `window.__AVERY_LITE__`（v01 的 store）
+//    挂到 window 上——挂不挂和当前渲染的是哪张壳完全无关。于是漏改这一行的后果是：
+//      · 页面渲染的是 v02；
+//      · 下面的 uploadFiles 成功写进了一个**没有被渲染**的 v01 store；
+//      · openDetail 拿到真实的 project id，返回值看着完全正常；
+//      · 而 innerText 刮的是 v02 的 DOM。
+//    → 退出码 0、报告可信、结论是错的。改这一行时请连同本段注释一起读。
 const p1 = await (await browser.newContext({ viewport: { width: 1280, height: 900 } })).newPage()
 p1.on('pageerror', (e) => pageErrors.push(`v01: ${e.message}`))
-await p1.goto(`${UI}/?mode=live&lang=zh`, { waitUntil: 'networkidle' })
+await p1.goto(`${UI}/?v=1&mode=live&lang=zh`, { waitUntil: 'networkidle' })
 await p1.waitForTimeout(600)
 await p1.evaluate(async (t) => {
   await window.__AVERY_LITE__.getState().uploadFiles([new File([t], 'w29.md', { type: 'text/markdown' })])
@@ -88,9 +101,12 @@ const opened = await p1.evaluate(() => {
 })
 await p1.waitForTimeout(700)
 v01['项目详情浮层'] = latinHits(await p1.evaluate(() => document.body.innerText))
-const n1 = report(`v01（裸链默认）· 打开的项目 ${JSON.stringify(opened)}`, v01)
+const n1 = report(`v01（?v=1 逃生门）· 打开的项目 ${JSON.stringify(opened)}`, v01)
 
-// ── v02（?v=2）逐屏 ───────────────────────────────────────────────────────────
+// ── v02（`?v=2`）逐屏 ────────────────────────────────────────────────────────
+// v02 自 2026-07-19 起就是**裸链默认**（拍板 ①）。这里仍然显式写 `?v=2` 是刻意的：
+// 门的结论不该依赖「当前缺省值恰好是几」——缺省再翻一次时，这一段测的还是 v02。
+// 裸链本身开出哪张壳，由 verify-bare-url-shell.mjs 单独守。
 const p2 = await (await browser.newContext({ viewport: { width: 1280, height: 900 } })).newPage()
 p2.on('pageerror', (e) => pageErrors.push(`v02: ${e.message}`))
 await p2.goto(`${UI}/?v=2&mode=live&look=paper&lang=zh`, { waitUntil: 'networkidle' })
@@ -106,7 +122,7 @@ for (const screen of V2_SCREENS) {
   await p2.waitForTimeout(800)
   v02[`/${screen}`] = latinHits(await p2.evaluate(() => document.body.innerText))
 }
-const n2 = report('v02（?v=2）逐屏', v02)
+const n2 = report('v02（?v=2 显式；亦即现在的裸链默认）逐屏', v02)
 
 console.log(`\n  pageerror: ${pageErrors.length} 条${pageErrors.length ? ' — ' + pageErrors.join(' | ') : ''}`)
 console.log(`═══ 合计 ${n1 + n2} 处待人工判读（v01 ${n1} · v02 ${n2}）═══`)

@@ -160,7 +160,10 @@ LiveTransport seam,与 v01 stub 独立实例)。跨 3 次页面导航 + 1 次仓
    - `__seedGate.assertSkinTokens(before, after)` — **skinTokens**:`data-look` 属性变化
      **且**至少一个关键计算值(背景图/文字色)随之变化(证明令牌层真的接进去了,不是挂了个
      没人消费的属性)。
-3. 导航到默认 URL `?mode=live&transport=stub`(不带 `v=`)——**先跑一遍既有 10 相位**
+3. 导航到 `?v=1&mode=live&transport=stub`——🔴 **2026-07-19 起必须显式写 `?v=1`**。
+   这一步原本写的是「默认 URL(不带 `v=`)」;Danny 拍板 ① 把 `resolveVersion()` 的缺省翻成
+   了 `'2'`,裸链现在开出来的是 v02,照原文跑等于拿 v02 去断言「v01 未受影响」。
+   ——**先跑一遍既有 10 相位**
    (相位 A-J,同一 stub session,seed 内容任意字节即可)拿到 `verdict()`,再:
    - `__seedGate.assertV1Untouched(verdictResult.pass)` — **v1Untouched**:当前页零
      `.lite2-shell` 节点 **且** 传入的 v01 十相位 verdict 全绿。

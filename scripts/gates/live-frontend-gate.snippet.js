@@ -66,8 +66,10 @@
  *   [navigate to `?v=2&mode=live&transport=stub&look=aurora`, re-inject snippet]
  *   const after = __seedGate.readSkinSnapshot()
  *   __seedGate.assertSkinTokens(before, after)                    // skinTokens: data-look + computed value both change
- *   [on default URL `?mode=live&transport=stub` (no v=) — re-run the existing 10-phase gate here
- *    first (phases A-J above), take its verdict().pass, THEN:]
+ *   [on `?v=1&mode=live&transport=stub` — 🔴 2026-07-19: `?v=1` is now REQUIRED here. The bare
+ *    URL used to mean v01; Danny's ruling ① flipped resolveVersion()'s default to '2', so the
+ *    bare URL now renders v02 and this phase would assert v02 against itself. Re-run the
+ *    existing 10-phase gate here first (phases A-J above), take its verdict().pass, THEN:]
  *   __seedGate.assertV1Untouched(verdictResult.pass)               // v1Untouched: 0 .lite2-shell + v01 10-phase pass
  *   [on `?mode=story`]
  *   __seedGate.assertStoryUntouched()                              // storyUntouched: 0 .lite2-shell
@@ -278,7 +280,8 @@
  *   __seedGate.assertPaperUnchanged(paperProbe)        // paperUnchanged: every field in paperProbe
  *                                                       // byte-equal to the PAPER_BASELINE constant
  *                                                       // captured pre-implementation (see above)
- *   [on default URL `?mode=live&transport=stub` (no v=)]
+ *   [on `?v=1&mode=live&transport=stub` — 🔴 2026-07-19: was "default URL (no v=)"; the bare URL
+ *    is v02 now (ruling ①), so v01 must be named explicitly or this probe leaks-tests v02]
  *   const defaultLeak = __seedGate.readLeakProbe()
  *   [on `?mode=story`]
  *   const storyLeak = __seedGate.readLeakProbe()
@@ -1297,7 +1300,7 @@
     // ── feat-035 (lite-live-v02) — v2Verdict, independent aggregate, phase group A ─────────────
     // Driven with `?transport=stub` (deterministic, offline — no real backend needed). Unlike the
     // 10-phase verdict()/askVerdict() above (which live inside a single `?mode=live` page), these
-    // phases span THREE separate page loads (default URL, `?v=2`, `?mode=story`) plus one lint
+    // phases span THREE separate page loads (`?v=1`, `?v=2`, `?mode=story`) plus one lint
     // run the browser can't do itself — so most of them take externally-computed evidence as
     // arguments rather than driving everything in-page. The driver session's job: navigate,
     // re-inject this snippet each time, call the matching phase, and carry the JSON forward.
@@ -1343,10 +1346,15 @@
     },
 
     assertV1Untouched(v01VerdictPass) {
-      // Phase v1Untouched: called on the DEFAULT URL (`?mode=live`, no `v=`) — must render ZERO
+      // Phase v1Untouched: called on `?v=1&mode=live` — must render ZERO
       // .lite2-shell nodes (v01 stays LiteApp), AND the caller passes in the already-computed
       // v01 ten-phase verdict().pass from a same-session re-run on this same page (this snippet
       // can't itself remember state across navigations — the driver carries the boolean over).
+      //
+      // 🔴 2026-07-19: this phase used to be driven on the DEFAULT URL (`?mode=live`, no `v=`).
+      // Danny's ruling ① flipped resolveVersion()'s default to '2', so the bare URL renders v02
+      // and driving this phase there would assert "v01 is untouched" against a v02 page.
+      // `?v=1` is now the only way to reach v01.
       const leaked = $$('.lite2-shell').length;
       const out = {
         lite2ShellCount: leaked,
@@ -2470,8 +2478,11 @@
     },
 
     readLeakProbe() {
-      // Helper for skinNoLeak: call on the default URL (`?mode=live`, no `v=`) and on
-      // `?mode=story`. `.scene-tabs` is the shared topbar chrome both v01 and story render —
+      // Helper for skinNoLeak: call on `?v=1&mode=live` and on `?mode=story`.
+      // 🔴 2026-07-19: this used to say "the default URL (no `v=`)". Ruling ① flipped
+      // resolveVersion()'s default to '2', so the bare URL is v02 — probing it would report
+      // lite2ShellCount === 1 and fail, or worse, quietly measure the wrong shell.
+      // `.scene-tabs` is the shared topbar chrome both v01 and story render —
       // reading its computed background proves `[data-look='aurora']`-scoped rules (which all
       // require a `.lite2-shell` ancestor to match at all) truly never reach outside lite2, not
       // just "structurally can't" by inspection.
