@@ -1,5 +1,29 @@
 # feat-068 · 前端首次真部署 — session handoff（2026-07-18）
 
+> ## ⚠️ 07-19 收尾更正（原文一律不删，只在这里统一纠偏）
+>
+> 本文件写于 `039f1f1`。**线上站点就是 `039f1f1` 构建的**；本地 `main` 此后又多了 22 个提交
+> （对齐波 P0 十一条收尾 + 他们 15 条对抗审查修复 + 我收尾的三条），**全部未 push、全部不在线上**。
+> 下面正文里凡是「已上线 / 已 push」，都只指 `039f1f1` 那一版。
+>
+> 逐条纠偏：
+>
+> | 原文 | 现况 |
+> |---|---|
+> | `:5` 「已并入 main 并 **push 到 origin**」 | 那四条确实推了；但**本地 main 现在 ahead 22**。「在 main 里」≠「在线上」，从 07-19 起必须分开读。 |
+> | `:6` `origin/main` 停在 `1526e78` | 现在是 `039f1f1`。 |
+> | `:62` 「凭据墙这一轮全部走完了」 | 仍然成立。⚠️ 但这句说的是**部署凭据**（push 授权 / Vercel CLI / SSH 公钥），**与 LLM key 无关**——对齐波广播误把它读成「LLM 路径无法验证」。那句话实际出自他们自己的 `feature_list.json:491` 与 `progress-feat-054.md:377`，要改的是那两处。我这条线跑过真 LLM（`extraction_mode=llm`、真 seed 171.6s）。 |
+> | `:73` feat-050「已有 worktree」（列为待办） | **已解决**——feat-050 已合入 main 并在生产 URL 实测通过（整页刷新后团队恢复）。 |
+> | `:74` `store.uploadFiles` 无 store 层防重入 | 已由对齐波 fixD（S5 blocker）在 store 层处理（`src/lite2/store.ts` +278/-11）。本行改为「复核 fixD 是否也覆盖了防重入」。 |
+> | `:75` 不抽 `shared/transport.ts` 的理由是「会和 8 条并行 UI 线正面冲突」 | **理由已消失**：并行线全部合流、两条线都停。且重复已经真实付了代价——fixB 只修了 `lite2/transport.ts`，`lite/transport.ts` 没跟上。现在是抽 shared/ 的窗口期。 |
+> | 各处「八条并行线」 | 对齐波是**十一条**（feat-050..060）。红线复核当时树上只有八条，**feat-055 / 057 / 058 三条的红线复核仍待补**。 |
+> | `:70` #13「上传前无客户端预检（10 文件 / 10MB / 类型）」 | 数字**是对的**，别照对齐波 S9 改。线上 env 显式覆盖了默认值：`AVERY_MAX_FILES=10`、`AVERY_MAX_UPLOAD_BYTES=10485760`（env 名与 `guards.py:41,46` 一致）。S9 说的 15 个 / 8 MiB 是**代码默认值**，不是生产真值。 |
+>
+> 07-19 收尾另修两条（详见 `acceptance-0719.html` 第「零」节与
+> `.issues/v02-partner-align-0718/receipt-deploy-line-0719-wrapup.md`）：
+> `69bdeb7` 后端状态枚举原样渲染给中文客户（写这份交接时正跑在线上）·
+> `ccc470e` 我自己的 ZH-03 拆了 feat-050 的 404 判据。
+
 ## 状态
 
 - 分支 `feat/068-frontend-deploy`（worktree `D:/avery-wt/068`），base `890ac64`，已并入 `main` 并 **push 到 origin**。

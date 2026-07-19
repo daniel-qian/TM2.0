@@ -124,13 +124,50 @@ footer{margin-top:64px;padding-top:22px;border-top:1px solid var(--line);
 <header>
   <span class="eyebrow">AFK 值夜 · 2026-07-18 → 07-19</span>
   <h1>Avery 上线夜</h1>
-  <p class="lede">前端第一次真部署，后端换了镜像，八条并行线合流上线。这一页按<b>你早上要做什么</b>排序，不是按我做了什么排。三件事等你拍板，其余已经跑完并留了证据。</p>
+  <p class="lede">前端第一次真部署，后端换了镜像，并行线合流上线。这一页按<b>你早上要做什么</b>排序，不是按我做了什么排。三件事等你拍板，其余已经跑完并留了证据。</p>
+
+  <div class="rec" style="border-left-color:#c0392b;margin-bottom:22px">
+    <b>⚠️ 本文件写于 <code>039f1f1</code>，正文里所有「已上线」都只指那一版。</b>
+    <p style="margin:8px 0 0">线上站点就是 <code>039f1f1</code> 构建的。此后本地 <code>main</code> 又多了 <b>22 个提交</b>（对齐波 P0 十一条的收尾 + 他们 15 条对抗审查修复 + 我 07-19 收尾的三条），<b>全部未 push、全部不在线上</b>。读这一页时请把「在 main 里」和「在线上」严格分开——它们从 07-19 起不再是同一件事。带 <span style="color:#c0392b">红字「07-19 更正」</span>的段落是我收尾时自己查出来写错的地方，已就地改正，没有删掉原文。</p>
+  </div>
   <div class="live">
     <div><span class="k">前端</span><span class="v"><span class="dot"></span>averylite.dannyqian.com</span></div>
     <div><span class="k">后端</span><span class="v"><span class="dot"></span>avery.dannyqian.com</span></div>
     <div><span class="k">发布方式</span><span class="v">push main → 自动上线 ≈19s</span></div>
   </div>
 </header>
+
+<section id="wrapup">
+<h2>零 · 07-19 收尾时新查出来的（这一节是后加的）</h2>
+<p class="sub">你叫停两条线之后，我在<b>合流后的树</b>上又跑了一轮。两条线的门是互补的，但中间漏了一条缝：<b>对齐波查行为（断言读 store 字段），我查打包产物（grep 已知英文句子）。屏幕上真正渲染出来的中文，谁都没查。</b>下面三条都是从那条缝里掉出来的。</p>
+
+<table>
+<thead><tr><th>发现</th><th>为什么两条线的门都没拦住</th><th>状态</th></tr></thead>
+<tbody>
+<tr>
+  <td><b>后端状态枚举直接糊到中文客户脸上</b><br><span class="sub">中文客户在「你的团队」首屏和项目详情里读到光秃秃的 <code>blocked</code> / <code>done</code>。v01 两处 + v02 一处，其中 v01 就是裸链默认。<b>在 <code>039f1f1</code> 里就是这样——写这份验收时正跑在线上。</b></span></td>
+  <td>我的门 grep 的是<b>已知英文句子</b>，<code>blocked</code> 是枚举 token 不在名单上；对齐波的门断言读 store 字段，它的 S1 证据行里其实已经打出 <code>frontendStatus: ["blocked", ...]</code>，但只判「别把没写状态的编成 on-track」，不判那是哪国话。</td>
+  <td><span class="chip c-ok">已修</span> <code class="mono">69bdeb7</code></td>
+</tr>
+<tr>
+  <td><b>真 404 判据被我自己上一轮的修复拆了</b><br><span class="sub"><code>feat-050</code> 用 <code>/HTTP 404/.test(err.message)</code> 判「context 没了/token 对不上」，而我的 ZH-03 把 404 换成了不含数字的中文句子。后果：死锚点永远清不掉（<b>每次刷新都再错一遍</b>），切换公司时对客户谎称「服务器没连上，再试一次」——服务器好得很，重试一万次也不会成。</span></td>
+  <td>DEV 的 stub 传输<b>仍然</b>抛 <code>team HTTP 404 (stub)</code>，正则匹配得上。<b>凡是跑 stub 的门都绿，只有真后端会错。</b></td>
+  <td><span class="chip c-ok">已修</span> <code class="mono">ccc470e</code></td>
+</tr>
+<tr>
+  <td><b>⚠️ 对齐波 fixB 的前端半边没进 main</b><br><span class="sub"><code>src/lite2/UploadPanel.tsx</code> 和 <code>src/lite2/transport.ts</code> 与 <code>origin/main</code> <b>逐字节相同</b>，而 <code>6f838f3</code>/<code>a45bb4a</code> 明明改过它们（+79/+71/+93）。合并时被丢掉了。落进来的只有 i18n 那半边，于是成了<b>零消费方的死键</b>。</span></td>
+  <td>后果是他们判为已修的 <b>S9 / S10 / S11 三条在 main 上其实没修</b>。最刺眼的是 S10：三处 <code>ACCEPT</code> 还在给客户 <code>.doc</code>/<code>.xls</code>，后端拿到直接 415。</td>
+  <td><span class="chip">未动</span><br><span class="sub">是他们的改动被合丢的，停工期我不替另一条线重写代码。已在回执里点名。</span></td>
+</tr>
+</tbody>
+</table>
+
+<div class="rec">
+  <b>另外拦下一条差点被我改错的：</b>对齐波判 S9 说「<code>10 个文件 / 10MB</code> 两个数字都错，真值 15 个 / 8 MiB」。那是<b>代码默认值</b>——线上机器显式覆盖了（<code class="mono">AVERY_MAX_FILES=10</code>、<code class="mono">AVERY_MAX_UPLOAD_BYTES=10485760</code>，env 名与 <code>guards.py:41,46</code> 读的完全一致）。<b>所以生产上真值就是 10 个 / 10 MiB，我那句中文文案是对的</b>，照 S9 去改反而会把对的改成错的。我已经动手要改了，是去线上核了一遍 env 才拦住。
+</div>
+
+<p class="sub">补的两道门（都验过 teeth——把修复删掉它们立刻变红）：<code class="mono">verify-zh-purity.mjs</code>（真中文数据，v01 两面 + v02 九屏逐屏抓 innerText 捞拉丁残留）· <code class="mono">verify-404-discriminator.mjs</code>（真后端 + 真的对不上的 owner_token 触发真 404）。合流树上复跑对齐波的两个脚本：<b>verify-p0 41 PASS · verify-blockers 15 PASS</b>，我这三条修复零回归。</p>
+</section>
 
 <section id="decisions">
 <h2>一 · 等你拍板（3 件）</h2>
@@ -149,7 +186,26 @@ footer{margin-top:64px;padding-top:22px;border-top:1px solid var(--line);
   <h3>后端现在停在 <code>512b11d</code>，是我刻意选的落后点</h3>
   <p>今晚我把后端从 07-17 的旧镜像换成了 <code>512b11d</code> 构建的新镜像，修掉了中文 id/去重/部门三个 blocker（见下）。<b>选这个点是刻意的</b>：它含中文修复链，<b>不含</b> feat-053 的账号体系和迁移 <code>0008</code>——那条迁移从没往任何库 apply 过，把它带上生产是另一个量级的动作。</p>
   <p>代价是后端比 main 落后两项：<code>/auth/*</code> 端点线上不存在；<code>/team/{id}</code> 不返回 feat-056 的 <code>decisions[]</code>。前端对后者已按 optional 处理（<code>transport.ts</code> 注释明写「老后端 pre-056 不发这个键」），所以不炸，只是那个功能在线上是空的。</p>
-  <div class="rec"><b>我的建议：暂时不追平。</b>7-25 的演示不需要账号体系，而迁移 + 账号一起上生产库，值得你清醒时看着做。等对齐波那条线自己来收这个口。</div>
+
+  <div class="rec" style="border-left-color:#c0392b">
+    <b>⚠️ 07-19 上午更正：上面这段「落后两项」和下面原来那句「建议暂时不追平」，写的时候是对的，现在不对了。</b>
+    <p style="margin:10px 0 6px">对齐波在我写完之后又把四条<b>数据真相</b>级别的后端修复合进了 main，线上（<code>512b11d</code>）一条都没有。不是功能缺失，是产品会对客户说假话：</p>
+    <ul style="margin:6px 0 10px 18px;line-height:1.75">
+      <li><b>GB18030 静默销毁</b>——中文 Windows 用 Excel 存的 CSV 被按 UTF-8 硬解成乱码，抽出 <b>0 个人</b>，却仍然回 <b>HTTP 200 +「已读入 1 个文件」</b>。我独立核过：<code>512b11d</code> 的 <code>_parse_csv</code>/<code>_parse_text</code> 仍是 <code>data.decode("utf-8", errors="replace")</code>；main 已换成带编码梯子的 <code>decode_text</code>。<b>那就是国内 Excel 存 CSV 的默认编码，正对着 7-25 那批客户。</b></li>
+      <li><b>「本月无法完成」读成 <code>done</code></b>，再被判「可推进」，理由写「项目自报已完成，且无风险信号」。（<code>_NEG</code> 在 main 里 12 处、线上 0 处）</li>
+      <li><b>首屏摘要谎报「没有风险信号」</b>，而同一份 payload 明明带着 blockers。</li>
+      <li><b>非 ASCII token → 500</b>（真 id 回 500、假 id 回 404），等于零凭据的存在性枚举 oracle，破 feat-038 那条红线。</li>
+    </ul>
+    <p style="margin:6px 0"><b>好消息：有一条不碰数据库的路，我验过了。</b>迁移 <code>0008</code> 的牵连是<b>文件级</b>的——<code>_ensure_schema()</code> 对 <code>db/migrations/*.sql</code> 全量执行，<code>Dockerfile</code> 又 <code>COPY db/</code>，所以<b>任何 tree 里带着 0008 的镜像都会在第一个请求时无条件把它推进生产库</b>。但只取 <code>eval-harness/</code> 的 diff 是干净的（冲突全在前端）：</p>
+    <pre class="mono" style="margin:6px 0;padding:10px;overflow-x:auto;font-size:13px;line-height:1.6">git checkout -b backend-subset 512b11d
+git diff 6f838f3^ 6f838f3 -- eval-harness/ | git apply   <span style="opacity:.6"># GB18030 + 413 人话上限</span>
+git diff d184b6c^ d184b6c -- eval-harness/ | git apply   <span style="opacity:.6"># /advise 错误路径自己崩（NameError）</span>
+<span style="opacity:.6"># → tree 里没有 0008，数据库一个字节都不动</span>
+cd eval-harness &amp;&amp; AVERY_BRAIN=stub python -m pytest \
+  tests/test_file_truth_encoding.py tests/test_advise_brain_config_error.py -q
+<span style="opacity:.6"># → 30 passed in 2.47s（已实跑，无 LLM 开销）</span></pre>
+    <p style="margin:6px 0 0"><b>改后的建议：追平，但只追这个子集。</b>fixA/fixC/fixD 的 diff 依赖中间提交，要补得再挑一轮。<b>建不建、什么时候建仍然是你的闸——我没碰线上任何东西。</b></p>
+  </div>
 </div>
 
 <div class="dec">
@@ -210,7 +266,7 @@ footer{margin-top:64px;padding-top:22px;border-top:1px solid var(--line);
 <pre>http=200  <b>真实耗时 = 171.6 秒</b>（2 分 52 秒）
 people 30 / projects 7   unique id <b>30/30 · 7/7</b>   extraction_mode=llm</pre>
 <p><b>比广播里说的 100–120 秒还慢 43%。</b>而我今晚写的等待文案承诺的是「通常需要 1–2 分钟」——<b>这是一个产品兑现不了的承诺</b>，客户会盯着一个写着「1-2 分钟」的屏幕等三分钟。文案已改成诚实的区间。</p>
-<p class="sub">另：项目数从广播里的 9 变成 7，<b>不是回归</b>——是 feat-054「抽取粒度门」在按设计收敛（里程碑不算项目）。人数 30 一致，且 30 个 id 全部唯一，等于在真实体量上再次确认了后端换镜像的效果。</p>
+<p class="sub">另：项目数从广播里的 9 变成 7，<b>不是回归</b>。人数 30 一致，且 30 个 id 全部唯一，在真实体量上再次确认了后端换镜像的效果。<br><span style="color:#c0392b"><b>07-19 更正：</b>我原来把 9→7 归因于 feat-054「抽取粒度门」，<b>那是错的</b>——线上镜像源 <code>512b11d</code> 里根本没有 feat-054（<code>git log 512b11d --grep=feat-054</code> 为空）。9→7 的真实原因未查明，只能说「不是回归」这半句仍有 30/30 唯一 id 撑着。</span></p>
 
 <h3>拿这 30 人做了一次演示彩排</h3>
 <p>把这个真 context 灌进生产站的 localStorage，走 feat-050 的恢复路径打开——就是客户第二天回来时会走的那条路。屏幕上真实长这样：</p>
@@ -294,7 +350,7 @@ people 30 / projects 7   unique id <b>30/30 · 7/7</b>   extraction_mode=llm</pr
 <div class="tw"><table>
 <thead><tr><th>#</th><th>事</th><th>归属</th></tr></thead>
 <tbody>
-<tr><td class="num">#10</td><td>中文去重——<b>已修并上线</b>，定性从「代码 bug」改判为「部署缺口」</td><td><span class="chip c-ok">已解决</span></td></tr>
+<tr><td class="num">#10</td><td>中文去重——镜像换代修好了 <code>u_x</code> 单一 id 那半边。<b>但「跨文档去重」本身尚未在 LLM 路径上验证</b>：对齐波 F6 证明启发式路径的 <code>_dedupe_entities</code> 一直是好的，所以射程要缩到 <code>llm_extract.py</code>；171.6s 那次用的两份文件没有花名册重叠，不构成去重证据。</td><td><span class="chip">部分解决</span></td></tr>
 <tr><td class="num">#12</td><td>前端丢弃后端 <code>detail</code> 体（里面带着「为什么被拒」的真实原因）+ 无 ErrorBoundary + <code>degraded</code> 信号不可见</td><td>可 AFK</td></tr>
 <tr><td class="num">#13</td><td>上传前无客户端预检——50MB 文件要真跑一趟法兰克福才被拒</td><td>可 AFK</td></tr>
 <tr><td class="num">#14</td><td><b>Vercel preview 部署 100% CORS 失败</b>（后端是精确匹配无通配）——八条并行线没法用 preview 对着真后端验证</td><td>需后端改 + 先广播</td></tr>
@@ -307,12 +363,14 @@ people 30 / projects 7   unique id <b>30/30 · 7/7</b>   extraction_mode=llm</pr
 </tbody></table></div>
 
 <h3>一条好消息</h3>
-<p>红线复核<b>通过</b>：八条新线（含 feat-056 决策定级）里<b>没有任何附着在「人」身上的分数、等级、排名或血条</b>。唯一的百分比条绑在 <code>project.progress</code> 上——项目可以量化，人不行，这条边界守住了。<span class="sub">记一笔是因为下一条线容易把这个合规的项目进度条误当违规删掉。</span></p>
+<p>红线复核<b>通过</b>：复核覆盖到的新线里<b>没有任何附着在「人」身上的分数、等级、排名或血条</b>。唯一的百分比条绑在 <code>project.progress</code> 上——项目可以量化，人不行，这条边界守住了。<span class="sub">记一笔是因为下一条线容易把这个合规的项目进度条误当违规删掉。</span></p>
+<p style="color:#c0392b"><b>07-19 更正：复核范围要说清楚。</b>对齐波是<b>十一条</b>（feat-050..060），不是八条。<code>f5a95ae</code>（并入 feat-055/057/058）落在 00:50，而这份验收提交于 01:02——也就是说复核当时树上只有其中八条，<b>feat-055 / 057 / 058 这三条的红线复核仍待补</b>。</p>
 </section>
 
 <footer>
 <p><b>怎么回滚</b>：后端 <code class="mono">sudo docker rm -f avery &amp;&amp; sudo docker rename avery-prev-20260718-233256 avery &amp;&amp; sudo docker start avery</code>（旧镜像另有标签 <code class="mono">avery-agent:rollback-20260718</code>）。前端在 Vercel 面板上 promote 任一历史部署即可。</p>
-<p><b>今晚的 commit</b>：<code class="mono">ff7094e</code> 部署配置与六项修复 · <code class="mono">6abbf2d</code> Look 定名与文档纠偏 · <code class="mono">5dce4f3</code> 并入对齐波八条线 · <code class="mono">30a0ad7</code> 中文 briefing 本地化。全部已 push 到 <code class="mono">origin/main</code>——GitHub 上从 07-08 停摆的 121 个 commit 也一并推上去了。</p>
+<p><b>今晚的 commit</b>：<code class="mono">ff7094e</code> 部署配置与六项修复 · <code class="mono">6abbf2d</code> Look 定名与文档纠偏 · <code class="mono">5dce4f3</code> 并入对齐波 · <code class="mono">30a0ad7</code> 中文 briefing 本地化。这四条已 push 到 <code class="mono">origin/main</code>——GitHub 上从 07-08 停摆的 121 个 commit 也一并推上去了。</p>
+<p style="color:#c0392b"><b>07-19 收尾追加（均未 push）</b>：<code class="mono">69bdeb7</code> 后端状态枚举不许直接糊到中文客户脸上（<code>blocked</code>/<code>done</code> 原样渲染，<b>写这份验收时正跑在线上</b>，v01 两处 + v02 一处）· <code class="mono">ccc470e</code> 真 404 判据——我自己的 ZH-03 把 <code>feat-050</code> 的 <code>/HTTP 404/</code> 正则拆了，导致死锚点永远清不掉、切换公司时对客户谎称「服务器没连上，再试一次」。两条都配了会红的门：<code class="mono">verify-zh-purity.mjs</code>、<code class="mono">verify-404-discriminator.mjs</code>。</p>
 <p style="margin-top:18px;color:var(--mute)">交接细节在 <code class="mono">.issues/feat-068-frontend-deploy/session-handoff.md</code>（含六条我自己不满意的地方）；给对齐波那条线的回执在 <code class="mono">.issues/v02-partner-align-0718/receipt-frontend-deploy-line-0718.md</code>。</p>
 </footer>
 
