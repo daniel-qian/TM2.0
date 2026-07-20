@@ -128,6 +128,14 @@ story 的 Wang 用其文案签名 "Wang has it steady" 代替(实跑抓到过此
 
 ## v2 相位(feat-035,独立聚合 `v2Verdict()`,相位组 A)
 
+> **feat-068 更名**:本门驱动的 paper|aurora 开关已从旧的 skin 查询参数/DOM 属性改名为
+> `?look=` / `data-look`
+> (`Skin` 此后专指 ADR-0021 的行业视觉主题;Lite2 的两张审美面孔叫 `Look`)。下方 URL 与
+> DOM 属性均已更新;门自身的相位名/函数名(`readSkinSnapshot` / `assertSkinTokens` /
+> `skinTokens` / `skinVerdict` / `skinNoLeak`)**故意保持原名**——这些 key 被 feature_list.json
+> 里已归档的 evidence 逐字引用,改名会切断可追溯性。读作 Look 相位的历史名即可。
+> 旧的 skin 查询参数不再被识别(回落 paper 缺省),不留兼容别名。
+
 **出生即红**(2026-07-14,feat-035 实现前):无 `.lite2-shell`、无 `?v=` 开关——立门先于实现。
 全程 `?transport=stub`(离线确定性,不需要真后端;`src/lite2/stubTransport.ts`,同一
 LiveTransport seam,与 v01 stub 独立实例)。跨 3 次页面导航 + 1 次仓外 lint,驱动器
@@ -135,20 +143,27 @@ LiveTransport seam,与 v01 stub 独立实例)。跨 3 次页面导航 + 1 次仓
 
 跑法:
 
-1. 打开 `http://localhost:5173/?v=2&mode=live&transport=stub&skin=paper`(或 preview_start
+1. 打开 `http://localhost:5173/?v=2&mode=live&transport=stub&look=paper`(或 preview_start
    起的 dev 端口),注入 snippet:
    - `__seedGate.defuseAnimations()`
-   - `await __seedGate.assertV2Boots()` — **v2Boots**:`.lite2-shell` 挂载 + 6 个 tab、
-     顺序精确匹配 PRD(`Your team · The room · Follow-ups · A closer look · Playbooks ·
-     Where this goes`)。
-   - `const before = __seedGate.readSkinSnapshot()` — 记下 paper 皮的 `data-skin` + 关键计算值。
-2. 导航到同 URL 但 `&skin=aurora`(整页刷新,重新注入 snippet——皮肤只在挂载时读一次 URL,
-   见 `src/lite2/skin.ts`):
+   - `await __seedGate.assertV2Boots()` — **v2Boots**:`.lite2-shell` 挂载 + 8 个 tab、
+     顺序精确匹配(`Today · Your team · Projects · The room · Follow-ups · Avery's notes ·
+     A closer look · Playbooks · Where this goes`)。PRD 的 6 个 + feat-047 的 `Avery's notes`
+     + feat-055 的 `Projects` + feat-057 前置的聚合入口 `Today`(它同时是 `/` 的落点)。
+     🔴 7 个分屏一个都没退休(Danny 拍板「两个都极端 → 结合」),少掉其中任何一个都是回归,
+     不是契约更新。⚠ 增删或重排 `src/lite2/LiteTopbar.tsx` 的 tab,必须在同一个 commit 里
+     同步 snippet 里的 `expected` 数组,否则本相位必红。
+   - `const before = __seedGate.readSkinSnapshot()` — 记下 paper 观感的 `data-look` + 关键计算值。
+2. 导航到同 URL 但 `&look=aurora`(整页刷新,重新注入 snippet——观感只在挂载时读一次 URL,
+   见 `src/lite2/look.ts`):
    - `const after = __seedGate.readSkinSnapshot()`
-   - `__seedGate.assertSkinTokens(before, after)` — **skinTokens**:`data-skin` 属性变化
+   - `__seedGate.assertSkinTokens(before, after)` — **skinTokens**:`data-look` 属性变化
      **且**至少一个关键计算值(背景图/文字色)随之变化(证明令牌层真的接进去了,不是挂了个
      没人消费的属性)。
-3. 导航到默认 URL `?mode=live&transport=stub`(不带 `v=`)——**先跑一遍既有 10 相位**
+3. 导航到 `?v=1&mode=live&transport=stub`——🔴 **2026-07-19 起必须显式写 `?v=1`**。
+   这一步原本写的是「默认 URL(不带 `v=`)」;Danny 拍板 ① 把 `resolveVersion()` 的缺省翻成
+   了 `'2'`,裸链现在开出来的是 v02,照原文跑等于拿 v02 去断言「v01 未受影响」。
+   ——**先跑一遍既有 10 相位**
    (相位 A-J,同一 stub session,seed 内容任意字节即可)拿到 `verdict()`,再:
    - `__seedGate.assertV1Untouched(verdictResult.pass)` — **v1Untouched**:当前页零
      `.lite2-shell` 节点 **且** 传入的 v01 十相位 verdict 全绿。

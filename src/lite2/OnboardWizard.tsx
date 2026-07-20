@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ChangeEvent } from 'react'
+import { useEffect, useRef, type ChangeEvent } from 'react'
 import { useLite } from './store'
 import {
   ONBOARD_STEPS,
@@ -8,6 +8,7 @@ import {
   type OnboardStep,
 } from './onboardStore'
 import { useDict } from '../shared/i18n/useDict'
+import { clearIngestStart, useIngestElapsedSeconds } from '../shared/ingestClock'
 import { LiteModal } from './LiteModal'
 
 // feat-045 · lite2 onboarding 向导（PRD F7）——覆盖层，非路由。首访 v02 自动弹出
@@ -37,31 +38,20 @@ function fill(template: string, vars: Record<string, string | number>): string {
   return template.replace(/\{(\w+)\}/g, (_, k: string) => String(vars[k] ?? ''))
 }
 
-// feat-068 · 活的秒表（与 lite2/UploadPanel 同源，按本仓 v01→v02 各留一份的惯例复制）。
-//
-// ingest 真实耗时 100–120s（后端法兰克福 / LLM 国内，跨境往返）。向导是首访 v02 用户的
-// 主上传路径，这两分钟里必须有可见证据说明"没冻"——否则用户判定卡死、去戳按钮，就落进
-// 下面 StepUpload 注释里那条数据毁灭链。
+// feat-068 · 活的秒表。ingest 真实耗时 100–120s（后端法兰克福 / LLM 国内，跨境往返）。
+// 向导是首访 v02 用户的主上传路径，这两分钟里必须有可见证据说明"没冻"——否则用户判定卡死、
+// 去戳按钮，就落进下面 StepUpload 注释里那条数据毁灭链。
 //
 // 刻意不做百分比进度条：服务端 /ingest 不吐任何进度信号，假进度条只会卡在 90% 一动不动。
 //
-// 生命周期：interval 只在 active（ingesting）期间存在。active 翻 false 时 effect cleanup
-// 立即清掉；向导被 × / Escape / Skip 关掉时整个组件 unmount，同一个 cleanup 也会跑
-// ——两条路都不留悬挂定时器（与上面 Escape 监听器的注销纪律同源）。
-function useElapsedSeconds(active: boolean): number {
-  const [seconds, setSeconds] = useState(0)
-  useEffect(() => {
-    if (!active) return
-    setSeconds(0)
-    const startedAt = Date.now()
-    // 用 Date.now() 差值而非 count++：后台标签页会节流 setInterval，累加法会越走越慢说谎。
-    const id = window.setInterval(() => {
-      setSeconds(Math.floor((Date.now() - startedAt) / 1000))
-    }, 1000)
-    return () => window.clearInterval(id)
-  }, [active])
-  return seconds
-}
+// 🔴 feat-068 修正——本组件是这个 bug 最严重的现场。onboardUploadHint 明写「这期间可以先
+// 进行下一步」，而"下一步"在向导里就是 StepUpload **unmount**。秒表原先是组件局部 state，
+// 用户完全照提示做 → t=100s 切回上传步 → 屏幕写「已用时 4 秒」。产品亲口教用户走的那条路，
+// 恰好是唯一能把秒表打回 0 的路；而秒表存在的唯一理由是证明"没冻"，归零反而像"上传自己
+// 重来了一遍"。锚点已移进 shared/ingestClock，跟着这一发 ingest 活、不跟着组件活。
+//
+// 生命周期收口在那个 hook 里：向导被 × / Escape / Skip 关掉、换步、ingest 结束——三条路
+// 共用同一个 cleanup，不留悬挂定时器（与上面 Escape 监听器的注销纪律同源）。
 
 export function OnboardWizard() {
   const { t } = useDict()
@@ -183,11 +173,15 @@ function StepUpload() {
 
   // feat-068 · ingesting 期间这一步整体上锁。
   const busy = ingestStatus === 'ingesting'
-  const elapsed = useElapsedSeconds(busy)
+  const elapsed = useIngestElapsedSeconds(busy)
 
   const onPick = (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? [])
-    if (files.length > 0) void uploadFiles(files)
+    // feat-068 · 发车前先松锚，保证这一发从 0 起算（理由见 lite/UploadPanel 同处注释）。
+    if (files.length > 0) {
+      clearIngestStart()
+      void uploadFiles(files)
+    }
     event.target.value = ''
   }
 

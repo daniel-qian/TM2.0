@@ -1,0 +1,711 @@
+<title>Avery 三线合流 · 验收单 07-19（AFK 续跑）</title>
+<style>
+:root{
+  --ink:#10223d; --ink-2:#2c3e5c; --mute:#6e6a61;
+  --paper:#faf7f2; --paper-2:#f2ede4; --line:rgba(16,34,61,.14);
+  --honey:#b8752a; --honey-ink:#7d4a12; --honey-soft:rgba(184,117,42,.10);
+  --ok:#2c6e4b; --ok-soft:rgba(44,110,75,.10);
+  --warn:#8a4a16; --warn-soft:rgba(168,98,42,.10);
+  --bad:#a83b2c; --bad-soft:rgba(168,59,44,.10);
+  --sans:-apple-system,"Segoe UI Variable Text","Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  --mono:"Cascadia Mono","JetBrains Mono",ui-monospace,Consolas,"Courier New",monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --ink:#e8e2d6; --ink-2:#b9b2a4; --mute:#8b8578;
+    --paper:#0d1826; --paper-2:#131f31; --line:rgba(232,226,214,.13);
+    --honey:#d88a2d; --honey-ink:#e5a253; --honey-soft:rgba(216,138,45,.12);
+    --ok:#5aa87a; --ok-soft:rgba(90,168,122,.13);
+    --warn:#d19553; --warn-soft:rgba(209,149,83,.13);
+    --bad:#d4705e; --bad-soft:rgba(212,112,94,.13);
+  }
+}
+:root[data-theme="dark"]{
+  --ink:#e8e2d6; --ink-2:#b9b2a4; --mute:#8b8578;
+  --paper:#0d1826; --paper-2:#131f31; --line:rgba(232,226,214,.13);
+  --honey:#d88a2d; --honey-ink:#e5a253; --honey-soft:rgba(216,138,45,.12);
+  --ok:#5aa87a; --ok-soft:rgba(90,168,122,.13);
+  --warn:#d19553; --warn-soft:rgba(209,149,83,.13);
+  --bad:#d4705e; --bad-soft:rgba(212,112,94,.13);
+}
+:root[data-theme="light"]{
+  --ink:#10223d; --ink-2:#2c3e5c; --mute:#6e6a61;
+  --paper:#faf7f2; --paper-2:#f2ede4; --line:rgba(16,34,61,.14);
+  --honey:#b8752a; --honey-ink:#7d4a12; --honey-soft:rgba(184,117,42,.10);
+  --ok:#2c6e4b; --ok-soft:rgba(44,110,75,.10);
+  --warn:#8a4a16; --warn-soft:rgba(168,98,42,.10);
+  --bad:#a83b2c; --bad-soft:rgba(168,59,44,.10);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);
+  font-size:16px;line-height:1.68;-webkit-font-smoothing:antialiased;}
+.wrap{max-width:880px;margin:0 auto;padding:0 24px 96px}
+a{color:var(--honey);text-underline-offset:3px}
+code,.mono{font-family:var(--mono);font-size:.86em;font-variant-ligatures:none}
+h1,h2,h3{text-wrap:balance;line-height:1.25;margin:0}
+hr{border:0;border-top:1px solid var(--line);margin:0}
+header{padding:56px 0 30px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:14px}
+.eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute)}
+h1{font-size:clamp(30px,5vw,42px);font-weight:660;letter-spacing:-.022em}
+.lede{color:var(--ink-2);font-size:17px;max-width:64ch}
+.live{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:1px;
+  background:var(--line);border:1px solid var(--line);border-radius:3px;overflow:hidden;margin-top:8px}
+.live div{background:var(--paper-2);padding:13px 15px;display:flex;flex-direction:column;gap:3px}
+.live .k{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute)}
+.live .v{font-family:var(--mono);font-size:13px;word-break:break-all}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--ok);margin-right:7px;vertical-align:1px}
+.dot.warn{background:var(--warn)} .dot.bad{background:var(--bad)}
+section{padding:44px 0 8px;border-bottom:1px solid var(--line)}
+h2{font-size:25px;font-weight:640;letter-spacing:-.014em;margin-bottom:6px;display:flex;gap:12px;align-items:baseline}
+h2 .n{font-family:var(--mono);font-size:14px;color:var(--honey);font-weight:500;flex:none}
+h3{font-size:17px;font-weight:640;margin:26px 0 8px}
+p{margin:12px 0;max-width:70ch}
+ul,ol{max-width:70ch;padding-left:22px}
+li{margin:7px 0}
+pre{background:var(--paper-2);border:1px solid var(--line);border-left:2px solid var(--honey);
+  border-radius:2px;padding:13px 15px;overflow-x:auto;font-family:var(--mono);font-size:12.5px;
+  line-height:1.6;margin:14px 0}
+.card{border:1px solid var(--line);border-radius:3px;padding:18px 20px;margin:16px 0;background:var(--paper-2)}
+.card.ask{border-left:3px solid var(--honey);background:var(--honey-soft)}
+.card.ok{border-left:3px solid var(--ok);background:var(--ok-soft)}
+.card.warn{border-left:3px solid var(--warn);background:var(--warn-soft)}
+.card.bad{border-left:3px solid var(--bad);background:var(--bad-soft)}
+.card h3{margin-top:0}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14.5px}
+.scroll{overflow-x:auto;margin:16px 0}
+.scroll table{margin:0}
+th,td{border:1px solid var(--line);padding:8px 11px;text-align:left;vertical-align:top}
+th{background:var(--paper-2);font-weight:620;font-size:13px;letter-spacing:.01em}
+.tag{display:inline-block;font-family:var(--mono);font-size:11px;letter-spacing:.06em;
+  padding:2px 7px;border-radius:2px;white-space:nowrap}
+.tag.pass{background:var(--ok-soft);color:var(--ok);border:1px solid var(--ok)}
+.tag.fail{background:var(--bad-soft);color:var(--bad);border:1px solid var(--bad)}
+.tag.block{background:var(--warn-soft);color:var(--warn);border:1px solid var(--warn)}
+.tag.na{background:var(--paper-2);color:var(--mute);border:1px solid var(--line)}
+.corr{border-left:3px solid var(--bad);background:var(--bad-soft);padding:10px 14px;margin:12px 0;
+  font-size:14.5px;border-radius:2px}
+.corr b{color:var(--bad)}
+.small{font-size:14px;color:var(--ink-2)}
+.toc{margin:22px 0 0;padding:16px 20px;border:1px solid var(--line);border-radius:3px;background:var(--paper-2)}
+.toc ol{margin:6px 0 0;padding-left:20px;columns:2;column-gap:34px}
+.toc li{margin:4px 0;break-inside:avoid}
+footer{padding:40px 0;color:var(--mute);font-size:14px}
+</style>
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">v02 三线合流 · AFK 续跑 · 2026-07-19 夜</div>
+  <h1>验收单：一件事要你拍，其余已经落地</h1>
+  <p class="lede">
+    按「你早上要做什么」排，不按我做了什么排。每条结论后面都跟着可复现的命令和它真实的输出；
+    没有一条写「应该没问题」。凡是我没验到的，写的是「没验到」，不是「通过」。
+  </p>
+  <div class="live">
+    <div><span class="k">线上前端</span><span class="v"><span class="dot"></span>bdf8c46（已部署）</span></div>
+    <div><span class="k">线上后端</span><span class="v"><span class="dot warn"></span>avery-agent:zh512 未动</span></div>
+    <div><span class="k">裸链现在是</span><span class="v">v02 九屏</span></div>
+    <div><span class="k">逃生门</span><span class="v">?v=1 实测可用</span></div>
+  </div>
+  <div class="toc">
+    <div class="eyebrow">这份单子怎么读</div>
+    <ol>
+      <li><b>只有一件事要你拍</b> —— 后端</li>
+      <li>客户现在打开看到什么</li>
+      <li>出事了怎么办</li>
+      <li>我改了什么</li>
+      <li>我没做什么，为什么</li>
+      <li>顺手抓到的六条</li>
+      <li>验收清单逐条对照</li>
+      <li>证据附录</li>
+    </ol>
+  </div>
+</header>
+
+<section>
+<h2><span class="n">01</span>只有一件事要你拍：后端子集不能按原样上</h2>
+
+<div class="card ask">
+<h3>一句话</h3>
+<p>
+拍板 ② 里那两条 <code>6f838f3</code> + <code>d184b6c</code>，<b>我没上，而且建议不要按原样上</b>。
+<code>6f838f3</code> 单独上线会把「读坏了」变成「读出了假的」——对日文/韩文名册，它会静默编出一串
+看起来完全正常的中文名，还标上 <code>encoding: gb18030</code>，没有任何存疑信号。
+修它的那条是 <code>a45bb4a</code>，但拍板文档白纸黑字只授权了两条，所以我停在这儿等你。
+</p>
+<p style="margin-bottom:0">
+<b>建议：授权 <code>a45bb4a</code>，三条一起上。</b>
+如果你不想授权它，正确动作是 <b>一条都不上</b>，而不是按原样上 ②。
+</p>
+</div>
+
+<h3>为什么 <code>6f838f3</code> 单独上比不上还糟</h3>
+<p>
+它的编码梯子只有两级 —— <code>_ENC_CJK = ("gb18030", "big5")</code> —— 而
+<code>decode_text()</code> 的规则是<b>「第一个不报错的就算赢」</b>。GB18030 的双字节空间几乎全被
+占满，所以拿它去解 Shift_JIS / EUC-KR 的字节<b>永远不会抛异常</b>，只会解出一串合法的汉字。
+我自己复算过这一步，不是照抄谁的结论：
+</p>
+<pre>$ python -c "print('氏名,部署,役職'.encode('shift_jis').decode('gb18030'))"
+巵柤,晹彁,栶怑          # 没有异常，没有 U+FFFD，看着就是三个正常的词
+
+$ git show 6f838f3:eval-harness/avery/ingest/parse.py | grep -n '_ENC_CJK\|if won is not None'
+256:_ENC_CJK: tuple[str, ...] = ("gb18030", "big5")
+354:        if won is not None:
+355:            return won        # ← 第一个能解的就返回，没有全局打分、没有置信下限</pre>
+
+<p>三份真名册跑下来（脚本直接 <code>git show</code> 出三个 commit 的真实 <code>parse.py</code> 来调，不是复刻）：</p>
+<div class="scroll">
+<table>
+<tr><th style="width:15%">输入</th><th style="width:24%">字节实际说的</th><th style="width:31%">线上现在（512b11d）</th><th style="width:30%">6f838f3 单独上</th></tr>
+<tr>
+  <td><b>中文</b><br>GB18030</td>
+  <td class="mono">张伟,产品经理,产品组</td>
+  <td class="mono">��ΰ,��Ʒ����<br><span class="small">12/17 字被毁 —— 这就是要修的</span></td>
+  <td class="mono">张伟,产品经理,产品组<br><span class="small">✅ 修好了</span></td>
+</tr>
+<tr>
+  <td><b>日文</b><br>Shift_JIS</td>
+  <td class="mono">田中太郎,製品マネージャー</td>
+  <td class="mono">�c�����Y,���i�}<br><span class="small">看着就是坏的</span></td>
+  <td class="mono" style="color:var(--bad)"><b>揷拞懢榊,惢昳儅僱乕僕儍乕</b><br><span class="small">编的，标 gb18030，无异常</span></td>
+</tr>
+<tr>
+  <td><b>韩文</b><br>EUC-KR</td>
+  <td class="mono">김민준,제품 매니저</td>
+  <td class="mono">�����,��ǰ �Ŵ���<br><span class="small">看着就是坏的</span></td>
+  <td class="mono" style="color:var(--bad)"><b>辫刮霖,力前 概聪历</b><br><span class="small">编的，标 gb18030，无异常</span></td>
+</tr>
+</table>
+</div>
+
+<div class="card bad">
+<p style="margin:0">
+<b>最该看的是韩文那行。</b><code>김민준</code>（金珉俊）变成 <b>辫刮霖</b> —— 三个真实存在、
+毫不起眼的汉字，标着 <code>encoding: gb18030</code>，没有报错，返回里<b>连一个置信度字段都没有</b>。
+一个读中文的人，没有任何办法看出那不是一个人名。<br>
+线上现在的 mojibake 至少<b>长得就是坏的</b>；<code>6f838f3</code> 单独上，会让它<b>长得像是对的</b>。
+</p>
+</div>
+
+<h3>三条路，和它们真实的代价</h3>
+<div class="scroll">
+<table>
+<tr><th style="width:22%">选项</th><th style="width:26%">修好什么</th><th style="width:26%">担什么风险</th><th style="width:26%">还坏着什么</th></tr>
+<tr>
+  <td><b>(a) 授权 a45bb4a</b><br>三条一起上<br><span class="tag pass">建议</span></td>
+  <td>GB18030 真修好；日韩伪造<b>从来不会出现</b>；解码带出 <code>decode_confidence</code></td>
+  <td>只剩换容器本身。依赖漂移实测 <b>0/36</b>（见下）；<code>parse.py</code> 约 409 行重写是真实面积</td>
+  <td>fixA / fixC / fixD（依赖中间提交，挑不干净）</td>
+</tr>
+<tr>
+  <td>(b) 只上 d184b6c</td>
+  <td><b>一个生产上够不着的 NameError</b></td>
+  <td>为零收益换一次容器</td>
+  <td>四条数据真相缺陷全部</td>
+</tr>
+<tr>
+  <td>(c) 一条都不上</td>
+  <td>无</td>
+  <td>无</td>
+  <td>四条全部</td>
+</tr>
+</table>
+</div>
+
+<p>
+<b>(b) 我本来想替你做掉，查完放弃了。</b>那条 NameError 只在 <code>make_brain()</code> 抛
+<code>RuntimeError</code> 时触发，而它的三个触发条件在线上逐条都不成立：
+<code>AVERY_BRAIN=minimax</code> 合法、<code>openai 2.46.0</code> 装着、<code>MINIMAX_API_KEY</code>
+在（len=125）。预算耗尽也到不了它 —— <code>BudgetExceeded</code> 是在
+<code>BudgetedBrain.respond()</code> 里抛的，不在构造期，而且 <code>/health</code> 报
+<code>llm_calls_remaining: 1995 / 2000</code>。<b>为一个够不着的 bug 换一次生产容器，不值。</b>
+</p>
+
+<div class="card">
+<h3>我一度以为的一个风险，查完是假的</h3>
+<p style="margin-bottom:0">
+<code>requirements-service.txt</code> 里 36 个依赖<b>一个都没钉版本</b>（全是 <code>&gt;=</code>），
+基础镜像 <code>python:3.11-slim</code> 也没钉 digest。我判断「任何重建都会顺带把所有依赖抬到今天最新」，
+差点据此建议先钉版本再重建。<b>实测推翻了：漂移是 0。</b>
+因为线上镜像的 <code>pip install</code> 层是 <b>15 小时前</b>真解析出来的，今天重建拿到的是同一批版本
+（唯一变动 <code>pydantic_core 2.46.4→2.47.0</code> 又被 <code>pydantic</code> 的精确 pin 摁回去了）；
+基础镜像四层 <code>diff_id</code> 逐字节相同。<br>
+<span class="small">钉版本这笔债是真的，但它是<b>下次</b>的事 —— 两周后重建才是抽奖。不要用它卡住今天的决定。</span>
+</p>
+</div>
+
+<p class="small">
+一分钟复现脚本在 scratchpad：<code>repro_jako.py</code>，离线、无依赖，直接 <code>git show</code>
+三个 commit 的真 <code>parse.py</code> 调它们各自的函数。
+</p>
+</section>
+
+<section>
+<h2><span class="n">02</span>客户现在打开看到什么（已经变了）</h2>
+
+<p>
+<code>https://averylite.dannyqian.com</code> 裸链<b>现在打开就是 v02</b>，不用再手打 <code>?v=2</code>。
+feat-050..060 十一条从今天起客户能看见了。全部在<b>生产域名</b>上实测，不是本地。
+</p>
+
+<pre>$ curl -s https://averylite.dannyqian.com/assets/index-BOABWSKf.js | grep -o 'VITE_VERCEL_GIT_COMMIT_SHA:"[a-f0-9]*"'
+VITE_VERCEL_GIT_COMMIT_SHA:"bdf8c46f431c7a3aed680b7e484d619eab94e560"   # = 本次推的 HEAD
+
+# 裸链，一个参数都不带
+{"url":"https://averylite.dannyqian.com/home","search":"(none)",
+ "rootClass":"app-shell lite2-shell","isLite2":true,"isLite1":false,"tabCount":9,
+ "tabs":["今天","你的团队","项目","议事室","跟进","Avery 的笔记","多看一眼","操作手册","未来方向"]}</pre>
+
+<p>
+九个标签，全中文，<code>/</code> 自动路由到 <code>/home</code>。
+<b>标签数是最好认的判据</b>：v01 五个，v02 九个。你早上打开数一眼就知道翻没翻。
+</p>
+
+<div class="card ok">
+<h3>顺带确认了两件让这次切换是安全的事</h3>
+<ul style="margin-bottom:0">
+<li><b>登录框没出现，一次 <code>/account/*</code> 请求都没发。</b>
+走遍 v02 九屏后读 Resource Timing，全部请求只有：JS、CSS、<code>/team/{ctx}</code>、
+<code>/files</code>、<code>/notes</code>。<code>/account/status|contexts|claim</code> 一次都没出现 ——
+这正是拍板 ③ 不填 Supabase 密钥要保住的那道闸。</li>
+<li><b>后端状态枚举没有糊到客户脸上。</b>线上 payload 里项目状态是
+<code>done / done / on-track / null×4</code>，而这些词在渲染文本里一个都搜不到 ——
+<code>69bdeb7</code> 那条修复在生产上真的生效了。</li>
+</ul>
+</div>
+
+<h3>落地首屏那段话，我改了</h3>
+<p>
+<code>/home</code> 现在是默认屏，它第一块在线上真的会渲染「没带决策定级」这个空态。
+原文案最后一句是<b>「对着现在的后端重新上传一次，定级列表就会出现在这里」</b> ——
+这句话在生产上<b>是假的</b>：定级由 feat-056（<code>2672bad</code>）算，那条既不在线上镜像里，
+也不在拍板 ② 的授权范围里，客户重传多少次都不会有结果。
+</p>
+<p>
+这正是自审要抓的第一类（产品在替客户说话）：对「缺了什么」诚实，对「该怎么办」撒谎，
+而且是<b>默认屏的第一块</b>，把人按在一个永远走不通的动作上循环。已改成两种可能都摊开、不打包票。
+线上实测拿到的就是新文案：
+</p>
+<pre>$ # 生产 DOM 里 data-empty-kind="absent" 那块的实际文本
+{"kind":"absent","text":"这份数据里没带决策定级 两种可能，这份数据本身分不出是哪一种。
+一种是这家公司的资料在定级功能上线之前就读进来了，那么重新上传一次就会有；
+另一种是当前后端还没上定级这个能力，那么重新传多少次都不会有，得等后端跟上。"}
+
+$ # 为什么这个空态是对的 —— 只读 GET，没上传任何东西
+$ curl -s -H "X-Avery-Token: …" https://avery.dannyqian.com/team/ctx_d342181ed9fc
+people: 30 / projects: 7
+top-level keys: ['briefing','context_id','people','projects','signals','source_files']
+has decisions key: False        # ← 后端确实不发这个键</pre>
+</section>
+
+<section>
+<h2><span class="n">03</span>出事了怎么办</h2>
+
+<div class="card ok">
+<h3>前端：<code>?v=1</code> 切回 v01，实测可用</h3>
+<pre style="margin-bottom:8px">$ https://averylite.dannyqian.com/?v=1
+{"rootClass":"app-shell lite-shell","isLite2":false,"isLite1":true,"tabCount":5,
+ "tabs":["你的团队","议事室","Avery 的笔记","操作手册","未来方向"]}
+
+$ https://averylite.dannyqian.com/home?v=1     → 也切得回来（深链也认）
+$ https://averylite.dannyqian.com/?v=99        → 落回 v02（非法值不报错，走默认）</pre>
+<p style="margin-bottom:0">
+v01 一个字节没动，<code>normalize()</code> 一个字没改。这次只翻了
+<code>resolveVersion()</code> 里那一个字面量。
+</p>
+</div>
+
+<div class="card warn">
+<h3>⚠️ 但逃生门保的是壳，不是数据</h3>
+<p style="margin-bottom:0">
+实测 v01 渲染正常，但它<b>一个后端请求都不发</b> —— 整个资源列表只有 JS 和 CSS。
+会话恢复（feat-050）是 v02 才有的能力，所以 <code>?v=1</code> 落地是空的上传态，
+<b>不是那家公司已有的资料</b>。真要在事故里用它，预期是让客户重新传一次。
+这条以前没人写下来过。
+</p>
+</div>
+
+<div class="card">
+<h3>后端：不需要回滚，因为我没动</h3>
+<p style="margin-bottom:0">
+容器 <code>avery</code> 仍是 <code>avery-agent:zh512</code>（<code>df09186d6a80</code>），
+<code>Up · healthy</code>，<code>restartCount=0</code>。没建镜像、没换容器、没打补丁、没跑迁移、没上传。
+<code>/home/admin/build-zh</code> 仍然干净、仍然 detached 在 <code>512b11d</code>。
+</p>
+</div>
+
+<div class="card bad">
+<h3>🔴 如果将来要换容器：那颗地雷还在</h3>
+<p>
+停着的容器 <code>avery-prev</code> <b>依然存在</b> —— 上次事故（生产挂 1–2 分钟）就是
+<code>set -e</code> 直线脚本执行 <code>docker rename</code> 撞到同名容器中途 abort。
+换容器必须用<b>时间戳命名</b> + <b>每条失败路径都调 <code>rollback()</code></b>。
+</p>
+<pre style="margin-bottom:8px">$ sudo docker ps -a | grep avery-prev
+avery-prev-20260718-233256   avery-agent   Exited (0)   15 hours ago
+avery-prev                   avery-agent   Exited (0)   18 hours ago      ← 地雷</pre>
+<p style="margin-bottom:0" class="small">
+另外：<b>迁移 0008 的检查要用 <code>avery.</code> 前缀，不能用 <code>public.</code></b>。
+kickoff 里写的 <code>to_regclass('public.account_contexts')</code> 是错的 schema ——
+0008 建的是 <code>avery.account_contexts</code>，用 <code>public.</code> 查永远返回 None，
+是个假阴性发生器。要用 <code>pg_class</code> 全库扫。
+</p>
+</div>
+</section>
+
+<section>
+<h2><span class="n">04</span>我改了什么</h2>
+
+<p><code>origin/main</code>：<code>039f1f1</code> → <code>bdf8c46</code>，共 28 个提交，已 push，Vercel 已构建上线。</p>
+
+<div class="scroll">
+<table>
+<tr><th style="width:26%">改动</th><th style="width:40%">为什么</th><th style="width:34%">动了哪儿</th></tr>
+<tr>
+  <td><b>裸链默认翻 v02</b><br><span class="tag pass">拍板 ①</span></td>
+  <td>十一条全在 main 里，客户一条都看不见</td>
+  <td><code>version.ts</code> 一个字面量 <code>'1'→'2'</code>；<code>App.tsx</code> 注释</td>
+</tr>
+<tr>
+  <td><b>落地首屏文案</b><br><span class="tag fail">新发现</span></td>
+  <td>教客户做一件生产上永远不成立的事</td>
+  <td><code>zh.ts</code> / <code>en.ts</code> <code>homeDecisionsAbsentBody</code></td>
+</tr>
+<tr>
+  <td><b>没有负责人的项目写着 <code>Unassigned</code></b><br><span class="tag fail">生产上抓到</span></td>
+  <td>中文客户读到一个英文词，而且是前端自己编的管理判断</td>
+  <td><code>lite/lite2 teamData.ts</code> + 四处渲染 + 新增 <code>ownerNameRaw</code> 判据</td>
+</tr>
+<tr>
+  <td>门的 v01 口径修正</td>
+  <td>翻默认后「不带 v= 就是 v01」这个前提反了</td>
+  <td><code>verify-zh-purity.mjs</code>、<code>live-frontend-gate.*</code></td>
+</tr>
+<tr>
+  <td>新增两个门</td>
+  <td>没有任何门跑客户真会打开的那个 URL</td>
+  <td><code>verify-bare-url-shell.mjs</code>(4)、<code>verify-null-owner.mjs</code>(15)</td>
+</tr>
+<tr>
+  <td>旧 artifact 就地纠正</td>
+  <td>四份文档里的假结论还挂在源头，下一个人会照着再踩一遍</td>
+  <td>15 个文件，<b>原文一律不删</b>，只加 07-19 更正</td>
+</tr>
+</table>
+</div>
+
+<h3>那两条「不是我干的、但翻默认把它推到客户面前」的</h3>
+<p>
+<code>Unassigned</code> 和落地首屏文案<b>都不是这次引入的</b>（<code>git log -S</code> 定位到 07-14 的
+<code>25ecdcc</code>；<code>git diff 039f1f1..de47ffe</code> 对那些文件是空的）。但翻默认之前它们藏在
+<code>?v=2</code> 后面只有我们自己看得见，翻完就是每个客户的落地页。所以顺手修了。
+</p>
+
+<div class="card">
+<h3>修 <code>Unassigned</code> 时带出来的一个更深的洞</h3>
+<p>
+同一个项目，<b>团队屏写 <code>Unassigned</code>，它自己的详情浮层写「文档未提及」</b> ——
+同一个项目两处说法不一致，正是 <code>projectView.ts</code> 明令禁止的。
+复用已有的 <code>projectsUnknownValue</code> 把两处统一了。
+</p>
+<p style="margin-bottom:0">
+更要紧的是<b>新增了 <code>ownerNameRaw</code></b>：<code>homeDerive.ts</code> 和
+<code>teamGroups.ts</code> 会拿 <code>ownerName</code> 去和人名做<b>字面比对</b>。
+如果只把兜底文案换成中文而不拆出 raw 判据，就等于让「文档未提及」这句话
+<b>有机会冒充某个人的名字</b>，把项目挂到人头上 —— 修一个洞开一个更大的。
+</p>
+</div>
+
+<h3>门：基线全部守住</h3>
+<pre>verify-p0.mjs                  41 PASS ·  0 FAIL     （基线 41）
+verify-blockers.mjs            15 PASS ·  0 FAIL     （基线 15）
+verify-404-discriminator.mjs    4 PASS ·  0 FAIL     （基线  4）
+verify-bare-url-shell.mjs       4 PASS ·  0 FAIL     ← 新增
+verify-null-owner.mjs          15 PASS ·  0 FAIL     ← 新增
+verify-zh-purity.mjs           v01 0 · v02 9（全在 /vision，issue #19，没动）
+tsc -b / eslint / vite build / css-brace-check       0 err · 0 err · ok · 15 文件配平</pre>
+<p class="small">
+每个门<b>单独跑、单独读退出码</b>，没有 <code>| tail</code> 之后 <code>&&</code> 串联 ——
+上次就是这么把一个真失败提交进去的。<br>
+两个新门都做过<b>反向验证</b>：把改动撤掉重新构建，<code>verify-bare-url-shell</code> 变 2 PASS·2 FAIL、
+<code>verify-null-owner</code> 变 10 PASS·5 FAIL 并打印出 <code>"meta":"Unassigned"</code>。
+<b>一个撤掉改动也照样绿的门，什么都没证明。</b>
+</p>
+</section>
+
+<section>
+<h2><span class="n">05</span>我没做什么，为什么</h2>
+
+<div class="card">
+<h3>① 没往 Vercel 填 Supabase 密钥</h3>
+<p style="margin-bottom:0">
+文档明确标了「不要做」，我停在这儿。理由仍然成立且今晚实测确认了：
+<code>AuthPanel.tsx:334</code> 的唯一判据是那两个环境变量在不在，<b>完全不探测后端能力</b>。
+而后端仍然没有 feat-053，<code>/account/*</code> 仍然 404。填了就等于给客户一个
+<b>能登进去、然后告诉他没权限的登录框</b>。今晚走遍九屏确认：零次 <code>/account/*</code> 请求，闸是好的。
+</p>
+</div>
+
+<div class="card">
+<h3>② 没上后端子集</h3>
+<p style="margin-bottom:0">
+见 §01。撞到「只升这两条」这条明确边界，而这两条里有一条单独上会造成伪造。<b>停下来记录，没有绕过去。</b>
+</p>
+</div>
+
+<div class="card">
+<h3>③ 没动「未来方向」屏那 9 处中英混排</h3>
+<p style="margin-bottom:0">
+issue #19，归品牌口径不归工程，等你拍。<br>
+<b>但那条 issue 的前提是错的</b>，见 §06 第一条 —— 你拍之前值得先知道。
+</p>
+</div>
+
+<div class="card warn">
+<h3>④ 没动 v01 的 <code>status ?? 'on-track'</code>（需要你拍）</h3>
+<p style="margin-bottom:0">
+<code>src/lite/teamData.ts:179</code> 是我刚修的那个洞的<b>孪生兄弟，而且更严重</b>：
+<code>Unassigned</code> 只是编了个负责人，这条是<b>文档没说状态时直接断言「项目在正常推进」</b>。
+没修是因为它改的不只是文案 —— 状态点颜色、卡片描边、分组全跟着变，超出「等价的诚实文案修复」。
+v01 现在是逃生门，动它要格外小心。<b>需要你拍。</b>
+</p>
+</div>
+
+<div class="card">
+<h3>⑤ 没跑全量 pytest、没往生产上传任何文件</h3>
+<p style="margin-bottom:0">
+全量 pytest ≈ 11 分钟真实计费。生产上传会写生产库（建 context / source_document / materials）
+并花真实 LLM 调用。§01 那张日韩伪造表是<b>本地直接调三个 commit 的真函数</b>跑出来的，一分钱没花，
+也没往生产库写一行。<b>不需要为了拿证据去污染生产。</b>
+</p>
+</div>
+</section>
+
+<section>
+<h2><span class="n">06</span>顺手抓到的六条（都没改，按该不该管排）</h2>
+
+<div class="card bad">
+<h3>① 🔴 「v01 中文纯度 0 处」是个假数字，真值是 9</h3>
+<p>
+这条推翻了 kickoff §4/§7 的验收基线本身，也推翻了 issue #19 的前提。
+<b>门只采样了 v01 五屏里的两屏</b>（团队屏、项目详情浮层），<b>从来没访问过 v01 自己的「未来方向」屏</b>，
+而那一屏装着<b>一模一样的 9 个字符串</b>（它们在 <code>zh.ts</code> 里 v01 / v02 各存了一份）。
+生产上点进去实测：
+</p>
+<pre style="margin-bottom:8px">$ https://averylite.dannyqian.com/?v=1  →  点「未来方向」
+{"shell":"app-shell lite-shell","currentScreen":"vision","hitCount":9,
+ "hits":["demo","agent","DEMO","Skills","tools","onboarding","review","skill","prompt"]}
+                                        ↑ 与 v02 完全相同的 9 个</pre>
+<p style="margin-bottom:0">
+所以诚实的说法是<b>「两张皮都是 9 处，全在未来方向屏」</b>，不是「v01 干净、v02 有 9 处」。
+issue #19 写的「v02-only 回归」不成立 —— 这些字符串<b>此刻正跑在线上的 v01 上</b>，
+而且已经跑了很久。你拍 #19 的时候，拍的是两张皮，不是一张。
+</p>
+</div>
+
+<div class="card warn">
+<h3>② 提交信息被打包进了公开 JS，客户在 devtools 里能读</h3>
+<p style="margin-bottom:0">
+Vercel 的「自动暴露系统环境变量」是开的，<b>19 个 <code>VITE_VERCEL_*</code> 被内联进公开 bundle</b>，
+其中包括 <code>VITE_VERCEL_GIT_COMMIT_MESSAGE</code>。当前 bundle 因此对每个访客原样提供约 945 字节的
+提交正文 —— 包括<b>「这句在生产上是假的」</b>、「决策定级没部署」、内部路径
+<code>eval-harness/avery/decision_rules.py</code>、commit SHA、门的正则。<br>
+不是密钥，但这是<b>我们内部对「产品哪里在撒谎」的讨论，客户能直接读到</b>。
+这是 Vercel 项目设置，不是代码改动 —— <b>改账号设置需要你点头，我没动。</b>
+</p>
+</div>
+
+<div class="card warn">
+<h3>③ v02 的无障碍标签全是英文</h3>
+<p style="margin-bottom:0">
+88 处 <code>aria-label</code>，抽查全英文：<code>"Avery controls"</code>、<code>"Screen"</code>、
+每屏都有的合规页脚 <code>"How to use what Avery tells you"</code>。
+<b>中文读屏用户听到的整套导航是英文的。</b>
+纯度门<b>结构上看不见它</b> —— 门扫的是 <code>innerText</code>，<code>aria-label</code> 是属性。
+不是这次引入的（<code>git diff 039f1f1..de47ffe -- src/ | grep aria-label</code> 是空的）。
+</p>
+</div>
+
+<div class="card warn">
+<h3>④ 议事室对话流里六句硬编码英文，门同样够不着</h3>
+<p style="margin-bottom:0">
+<code>streamSource.ts</code> 里 <code>'The read is ready'</code>、<code>'Done'</code>、
+<code>'Something went wrong reaching the room.'</code> 等六句会推进议事室对话流。
+<b>纯度门访问 <code>/room</code> 时报「干净」，因为它从不真的发起一次运行</b>，采样时对话流是空的 ——
+和 ①③ 是同一个结构性盲区。已开后台任务记录，含复现和门的缺口。
+</p>
+</div>
+
+<div class="card">
+<h3>⑤ 老客户回来还是先看到「开始上手」弹窗</h3>
+<p style="margin-bottom:0">
+裸链落地时，已有 context 的回访客户<b>依然被 onboarding 弹窗盖在首屏上</b>。
+翻默认之前这条只影响手打 <code>?v=2</code> 的我们自己，现在影响每个客户。没改（属产品判断）。
+</p>
+</div>
+
+<div class="card">
+<h3>⑥ 两条环境问题，跟这次上线无关但会绊下一个人</h3>
+<ul style="margin-bottom:0">
+<li><b>共享 <code>node_modules</code> 是坏的</b>：整个 <code>@babel</code> 域和 <code>.bin/</code> 都不在，
+所以 <code>npm run typecheck|lint|build</code> 全部按名字找不到命令，vite dev server 起不来。
+本 worktree 连 junction 都没有（我补了 junction，<b>没有 <code>npm install</code></b>）。
+今晚的门是用 <code>vite build --mode development</code> + <code>vite preview</code> 绕过去跑的。</li>
+<li><b>另一个 Vercel 项目 <code>avery</code> 连续 15 小时构建失败</b>：它是 Next.js 16 应用却配了
+<code>outputDirectory: "dist"</code>。<b>与 <code>averylite.dannyqian.com</code> 无关</b>
+（后端 <code>avery.dannyqian.com</code> 是 ECS 上的 uvicorn，不走 Vercel），但它红了很久了。</li>
+</ul>
+</div>
+</section>
+
+<section>
+<h2><span class="n">07</span>验收清单逐条对照（kickoff §7）</h2>
+<div class="scroll">
+<table>
+<tr><th style="width:44%">验收条目</th><th style="width:12%">结论</th><th style="width:44%">依据</th></tr>
+<tr>
+  <td>裸链默认 v02，<code>?v=1</code> 仍能切回 v01，两个都在<b>生产域名</b>实测</td>
+  <td><span class="tag pass">PASS</span></td>
+  <td>§02 / §03。裸链 9 标签 <code>lite2-shell</code>；<code>?v=1</code> 5 标签 <code>lite-shell</code>；深链 <code>/home?v=1</code> 也切得回</td>
+</tr>
+<tr>
+  <td>后端子集已上线，且核对过生产库没有 <code>account_contexts</code></td>
+  <td><span class="tag block">未做</span></td>
+  <td><b>刻意停在授权边界</b>，见 §01。生产库确认无 <code>account_contexts</code>（<code>avery.</code> 限定 + <code>pg_class</code> 全扫），因为镜像根本没换</td>
+</tr>
+<tr>
+  <td>GB18030 在<b>生产</b>上验过，真造 GB18030 名册传上去抽得出人</td>
+  <td><span class="tag block">做不到</span></td>
+  <td>没上那条修复就没有可验的对象。<b>不做「上传一次证明它还是坏的」</b>——会写生产库+花 LLM 调用，去证明一件已知的事</td>
+</tr>
+<tr>
+  <td>§4 全部门在合流树上通过，<b>没有一条靠 stub 蒙混</b></td>
+  <td><span class="tag pass">PASS</span></td>
+  <td>§04，41/15/4/4/15 + 纯度。<b>所有涉及 HTTP 状态码与客户可见文案的结论都在生产域名上复验过</b>（§02/§03/§06①），不是只跑 stub</td>
+</tr>
+<tr>
+  <td>中文纯度门：v01 0 处、v02 除「往哪走」屏外 0 处</td>
+  <td><span class="tag block">口径被推翻</span></td>
+  <td><b>这条验收标准本身是错的</b>，见 §06①：真值是两张皮各 9 处。门报的 v01 0 是采样盲区。另外 §04 修掉的 <code>Unassigned</code> 是门<b>结构上够不着</b>的第三处残留</td>
+</tr>
+<tr>
+  <td>出一份按「Danny 早上要做什么」排序的验收 artifact，每条带可复现证据</td>
+  <td><span class="tag pass">PASS</span></td>
+  <td>本文件</td>
+</tr>
+<tr>
+  <td>本次改动全部 push 到 <code>origin/main</code>，写清线上是哪个 commit</td>
+  <td><span class="tag pass">PASS</span></td>
+  <td><code>039f1f1 → bdf8c46</code>，28 个提交。线上 bundle 内嵌 SHA 实测 <code>bdf8c46f4317…</code></td>
+</tr>
+<tr>
+  <td>老 artifact 里被推翻的结论就地加更正、不删原文</td>
+  <td><span class="tag pass">PASS</span></td>
+  <td>15 个文件、+312/−3，3 处删除全是行内替换，<b>无原文被移除</b></td>
+</tr>
+</table>
+</div>
+<p class="small">
+<b>三条没打勾的，两条是同一个原因</b>（后端刻意没上），一条是<b>验收标准自己写错了</b>。
+没有一条是「跑不动 / 没时间 / 应该没问题」。
+</p>
+</section>
+
+<section>
+<h2><span class="n">08</span>证据附录</h2>
+
+<h3>线上现状</h3>
+<pre>$ git log --oneline -1 origin/main
+bdf8c46 fix(zh): 没有负责人的项目，屏幕上写着 Unassigned —— 生产上抓到的，门结构上够不着
+
+$ curl -s https://averylite.dannyqian.com/assets/index-BOABWSKf.js | grep -o 'COMMIT_SHA:"[a-f0-9]*"'
+VITE_VERCEL_GIT_COMMIT_SHA:"bdf8c46f431c7a3aed680b7e484d619eab94e560"
+
+$ sudo docker inspect avery
+name=/avery  image=avery-agent:zh512  imageID=sha256:df09186d6a80…
+running=true  health=healthy  restartPolicy=unless-stopped  restartCount=0
+ports={"8137/tcp":[{"HostIp":"127.0.0.1","HostPort":"8137"}]}
+
+$ curl -s http://127.0.0.1:8137/health
+{"status":"ok","brain":"minimax","live":true,"extractor":"llm:minimax",
+ "memory":{"rss_mb":132.0,"warn_mb":550.0,"high":false},
+ "llm_calls_remaining":1995,"degraded":false}</pre>
+
+<h3>迁移 0008 从未被应用（三种方式互证）</h3>
+<pre>$ sudo docker exec avery ls /app/db/migrations/
+0001_… 0002_… 0003_… 0004_… 0005_… 0006_… 0007_ask.sql      ← 无 0008
+
+database/user: ('postgres', 'postgres')
+  to_regclass(avery.account_contexts ) = None
+  to_regclass(public.account_contexts) = None
+  to_regclass(account_contexts       ) = None
+pg_class 全 schema 扫 %account% → 无任何 relation 命中
+avery schema 现有表: ask_recipients, asks, company_notes, contexts,
+                     entities, materials, memory_files, source_documents</pre>
+<p class="small">
+🔴 顺带纠正一条机制描述：<b>根本不存在迁移账本</b>。<code>_ensure_schema()</code>
+（<code>pg_registry.py:113</code>，glob 在 :123）每次冷启动<b>无条件重放</b>所有
+<code>db/migrations/*.sql</code>，不记录已应用过什么。而且生产连的是 <code>postgres</code>
+<b>超级用户</b>，所以 <code>InsufficientPrivilege</code> 那条逃生分支<b>永远不会触发</b> ——
+带着 0008 的镜像会<b>必然</b>把它推进生产库，不是「有可能」。
+</p>
+
+<h3>上传上限：线上 env 覆盖了代码默认值（S9 那条不要改）</h3>
+<pre>$ sudo docker exec avery env | grep AVERY_MAX
+AVERY_MAX_UPLOAD_BYTES=10485760      # = 10 MiB
+AVERY_MAX_FILES=10</pre>
+<p class="small">
+对齐线 S9 判「10 个 / 10MB 两个数字都错、真值 15 个 / 8 MiB」——
+那是<b>代码默认值，不是生产真值</b>。现有中文文案是对的。
+这条的错误结论此前只在 kickoff 和几份回执里被拦下，<b>源头 <code>progress-fixB.md</code> 一直没撤</b>，
+下一个读它的人会再推导一遍 —— 今晚已就地加了撤回。<br>
+补一条实测：<code>AVERY_MAX_TOTAL_UPLOAD_BYTES</code> <b>没设</b>，所以单请求总量走默认 32 MiB。
+完整口径是「10 个文件 / 单个 10 MiB / 单请求总计 32 MiB」。
+</p>
+
+<h3>依赖漂移：0/36（我自己提出的担心，被实测推翻）</h3>
+<pre>$ sudo docker history --no-trunc avery-agent:zh512
+15 hours ago  91MB  RUN pip install --upgrade pip && pip install -r requirements-service.txt
+                    ↑ 15 小时前真解析过，不是缓存
+
+TOTAL packages: 36   CHANGED on rebuild: 1
+  pydantic_core 2.46.4 → 2.47.0   [被 pydantic 的精确 pin 摁回 2.46.4，净变化 0]
+anthropic 0.117.0 · openai 2.46.0 · fastapi 0.139.2 · pydantic 2.13.4
+psycopg 3.3.4 · httpx 0.28.1      —— 全部 same
+
+base image python:3.11-slim 四层 diff_id 与 zh512 内嵌层逐字节相同</pre>
+
+<h3>门（每条单独跑、单独读退出码）</h3>
+<pre>verify-p0.mjs                  41 PASS ·  0 FAIL ·  0 SKIP    exit 0
+verify-blockers.mjs            15 PASS ·  0 FAIL              exit 0
+verify-404-discriminator.mjs    4 PASS ·  0 FAIL              exit 0
+verify-bare-url-shell.mjs       4 PASS ·  0 FAIL              exit 0   ← 新增
+verify-null-owner.mjs          15 PASS ·  0 FAIL              exit 0   ← 新增
+verify-zh-purity.mjs           v01 0 · v02 9（全 /vision）     exit 0
+tsc -b                         0 error                        exit 0
+eslint                         0 error · 5 warning（既有，未触文件）  exit 0
+vite build                     ok                             exit 0
+css-brace-check.mjs            ✓ 15 个 CSS 文件全部配平        exit 0
+
+反向验证（撤掉改动重新构建）：
+  verify-bare-url-shell   →  2 PASS · 2 FAIL
+  verify-null-owner       → 10 PASS · 5 FAIL，打印 {"meta":"Unassigned"}</pre>
+</section>
+
+<footer>
+<hr style="margin-bottom:24px">
+<p style="max-width:70ch">
+<b>一句话收尾：</b>前端该翻的翻了、该修的修了、该证的在生产上证了；
+后端<b>撞到边界停住了，没有绕过去</b> —— 而停住的理由不是「没把握」，是实测证明按原样上会让产品开始编造客户的数据。
+<b>你醒来只需要拍一件事：<code>a45bb4a</code> 授不授权。</b>
+授 → 三条一起上；不授 → 一条都不上。
+</p>
+<p class="small" style="max-width:70ch">
+本文件是新增的，没有覆盖任何旧 artifact。
+<code>acceptance-0719.html</code>、<code>session-handoff.md</code>、<code>HANDOFF.md</code>、
+两份 receipt、<code>_diff-audit/</code> 四份、<code>progress-fixB.md</code>、
+<code>progress-feat-054.md</code>、<code>feature_list.json</code> 均已就地加注 07-19 更正，原文一字未删。
+</p>
+</footer>
+
+</div>

@@ -12,6 +12,10 @@
 
 import { currentAccessToken } from './auth/authStore'
 
+// feat-068 · ZH-03：非 hook 的 i18n 取词路径（useDict 内部用的就是这两个纯函数）。
+// 🔴 只 import index.ts，绝不 import useDict.ts——那个才带 React，本模块必须保持零 React。
+import { getDict, resolveLocale } from '../shared/i18n'
+
 // ── SSE 事件（feat-015 /advise 契约，见 service/engine.py::stream_advice）───────────────
 export type LiveAgentEventType =
   | 'started'
@@ -284,6 +288,13 @@ export interface LiveTransport {
   // manager 侧拉取状态/回执（PRD Q7：打开时 HTTP 拉取刷新，无推送）。
   fetchAsk: (askId: string) => Promise<AskDraft>
 
+  // feat-068 · 从 v01 补齐（此前只有 lite 壳有）：离线预览通道（stub）自我声明。
+  // 🔴 用途已不止"链接是假的"——AskCard 的红线提示按它二选一：真 HTTP 通道下 saveAsk 打
+  // POST /ask，服务端 redline.validate 每次保存都真跑；stub 通道 saveAsk 只做结构校验、
+  // 明确不假装校验过红线文本。文案必须跟着通道走，不能两边都说同一句。
+  // 真 HTTP transport 恒缺省（undefined = 联网、红线在跑、链接是真的）。
+  readonly offlinePreview?: boolean
+
   // feat-047 移植：按 context_id 拉取「你的文件」清单（feat-032 file space；重启后仍在）。
   fetchFiles: (contextId: string) => Promise<LiveFilesPayload>
 
@@ -347,36 +358,82 @@ export function apiBase(): string {
   return LOCAL_API_BASE
 }
 
-// ── feat-068：HTTP 状态码 → 人话 ───────────────────────────────────────────────────────
-// 上线前每个失败点都是 `throw new Error(\`ingest HTTP ${res.status}\`)`，被限流的经理读到的是
-// 「读不出这些文件 — ingest HTTP 429」。生产护栏是真的会跳的：/ingest 10/min(burst 3)、
-// /advise 30/min(burst 10) → 429；超上传上限 → 413；魔数嗅探不认 → 415/422；owner_token
-// 缺/错 → 404（后端故意不发 403，避免把"这个 context 存在"泄露出去）。
-// 本函数是**传输层兜底文案**：英文、短句（i18n 词典另有其人，调用方可覆盖）；endpoint 名保留
-// 在句首，线上排查仍能一眼分辨是哪一次调用。
-export function httpErrorMessage(name: string, res?: Response): string {
+// ── feat-068 · ZH-03：HTTP 状态码 → 人话（本地化）────────────────────────────────────────
+// 上线前每个失败点都是 `throw new Error(\`ingest HTTP ${res.status}\`)`；feat-068 把它们换成了
+// 人话，但那一波正是把中文设成生产默认的同一波——于是被限流的三亚经理读到的是
+// 「无法读取这些文件」压着一行 `ingest: too many requests — wait 34s and try again.`：
+// 中文那句只说"出错了"，**真正带信息的是他读不懂的那行英文**。ZH-03 修的就是这个。
+//
+// 生产护栏是真的会跳的：/ingest 10/min(burst 3)、/advise 30/min(burst 10) → 429；超上传上限
+// → 413；魔数嗅探不认 → 415/422；owner_token 缺/错 → 404（后端故意不发 403，避免把"这个
+// context 存在"泄露出去）。
+//
+// ── 分层选择（本次的关键决定）─────────────────────────────────────────────────────────
+// transport.ts 是传输层不是组件，没有 useDict() 可用（hook 只能在 render 里跑）。这里走
+// useDict 自己内部就在用的那条**非 hook 路径**：getDict(resolveLocale())。
+//   · 两者都是纯函数，shared/i18n/index.ts 不 import React——本模块因此仍然零 React 依赖。
+//   · 和 useDict 同一条 locale 解析（?lang= > VITE_AVERY_LOCALE > en），传输层文案和界面
+//     文案不可能各说各的语言。
+// 没选"把 resolver 当参数传进来"：那要改 LiveTransport seam，并让 AFK 门的 stub transport
+// 也背一个它不需要的参数。也没选"抛结构化错误、让 UI 自己本地化"：那要求每个消费者
+// （UploadPanel / OnboardWizard / RoomScreen / ask 链）各写一份 status→key 的 switch，四份
+// 拷贝迟早分叉。TransportError 把后者的**好处**单独拿了过来——见下。
+export function httpErrorMessage(res?: Response): string {
+  const t = getDict(resolveLocale()).transport
   // 配错的构建：一切失败都先说这句。否则"打不通"会被一路误读成服务器故障。
-  if (apiBaseMisconfigured()) {
-    return `${name} failed — this build is misconfigured: VITE_AVERY_API_BASE was not set, so calls go to ${LOCAL_API_BASE}.`
-  }
+  // env 变量名 / localhost 地址属开发者细节，留在 apiBase() 那声 console.error 里。
+  if (apiBaseMisconfigured()) return t.misconfigured
   // 没有 Response = fetch 自己 reject 了（连接被拒 / 混合内容拦截 / CORS / 离线），无 status 可读。
-  if (!res) return `${name} failed — couldn't reach the server. Check your connection and try again.`
+  if (!res) return t.offline
   const status = res.status
   if (status === 429) {
+    // Retry-After 读得出就把秒数折进句子；读不出就说"稍等片刻"，绝不编一个具体秒数。
     const wait = retryAfterSeconds(res)
-    return wait
-      ? `${name}: too many requests — wait ${wait}s and try again.`
-      : `${name}: too many requests — wait a moment and try again.`
+    return wait ? fill(t.rateLimited, { seconds: wait }) : t.rateLimitedWait
   }
-  if (status === 413) return `${name}: too much at once — the server caps 10 files, 10MB each.`
-  if (status === 415 || status === 422)
-    return `${name}: that file type isn't accepted, or its contents couldn't be read.`
+  if (status === 413) return t.tooLarge
+  if (status === 415 || status === 422) return t.unsupportedType
   // 🔴 404 在已鉴权的读路径上几乎从不是"空"——是这台浏览器手里的 owner_token 缺失/过期，
-  // 后端按"不泄露存在性"的规矩回 404 而不是 403。说成"没有数据"会让人白等一场。
-  if (status === 404)
-    return `${name}: not found — your access token for this company is missing or stale (not "no data yet").`
-  if (status >= 500) return `${name}: the server hit a problem (HTTP ${status}). Try again shortly.`
-  return `${name} failed — HTTP ${status}.`
+  // 后端按"不泄露存在性"的规矩回 404 而不是 403。说成"还没有数据"是在对客户谎报他自己的
+  // 数据，必须写明"数据还在，是这台浏览器打不开了"。
+  if (status === 404) return t.staleToken
+  if (status >= 500) return fill(t.serverError, { status })
+  return fill(t.generic, { status })
+}
+
+// 词典占位符替换（与 lite2/OnboardWizard.tsx 的 fill 同形——传输层不 import 组件里的局部 helper）。
+function fill(template: string, vars: Record<string, string | number>): string {
+  return template.replace(/\{(\w+)\}/g, (_, k: string) => String(vars[k] ?? ''))
+}
+
+/**
+ * feat-068 · ZH-03：带身份的传输层错误。
+ *
+ * message —— 已本地化、可直接上屏的**整句**，句子里没有 endpoint 名。
+ * endpoint / status —— 这次失败的身份，留给控制台与调用方排查。
+ *
+ * 🔴 为什么身份不能进 message：`ingest: ` / `team: ` 是开发者输出。UI 就是把 err.message
+ * 原样贴在中文标题下面的（lite2/OnboardWizard.tsx、lite2/UploadPanel.tsx 都这么渲染），
+ * 客户于是读到半句英文技术词。身份挂到字段上，客户的句子和排查线索两边都不牺牲。
+ */
+export class TransportError extends Error {
+  readonly endpoint: string
+  readonly status?: number
+
+  constructor(message: string, endpoint: string, status?: number) {
+    super(message)
+    this.name = 'TransportError'
+    this.endpoint = endpoint
+    this.status = status
+  }
+}
+
+// 抛给调用方的错误：人话 message + 可排查的身份。
+// 开发者那行（`ingest: HTTP 429`）从用户句子里搬到了 console.debug——没有丢，只是不再上屏。
+export function transportError(name: string, res?: Response): TransportError {
+  const message = httpErrorMessage(res)
+  console.debug(`[avery] ${name}: ${res ? `HTTP ${res.status}` : 'network failure'} — ${message}`)
+  return new TransportError(message, name, res?.status)
 }
 
 // 429 的 Retry-After：规范允许「秒数」或「HTTP-date」两种写法。只认纯数字——不是数字就当没有
@@ -514,7 +571,7 @@ export function createHttpTransport(base: string = apiBase()): LiveTransport {
       return await fetch(url, init)
     } catch (err) {
       if ((err as { name?: string } | null)?.name === 'AbortError') throw err
-      throw new Error(httpErrorMessage(name))
+      throw transportError(name)
     }
   }
 
@@ -534,7 +591,7 @@ export function createHttpTransport(base: string = apiBase()): LiveTransport {
             signal: controller.signal,
           })
           if (!res.ok || !res.body) {
-            throw new Error(httpErrorMessage('advise', res))
+            throw transportError('advise', res)
           }
           const reader = res.body.getReader()
           const decoder = new TextDecoder()
@@ -578,7 +635,7 @@ export function createHttpTransport(base: string = apiBase()): LiveTransport {
         body: form,
         headers: accountHeader(),
       })
-      if (!res.ok) throw new Error(httpErrorMessage('ingest', res))
+      if (!res.ok) throw transportError('ingest', res)
       const payload = (await res.json()) as LiveTeamPayload
       // feat-047: store this company's owner_token so every later read/advise can present it.
       rememberToken(payload.context_id, payload.owner_token)
@@ -589,7 +646,7 @@ export function createHttpTransport(base: string = apiBase()): LiveTransport {
       const res = await send('team', `${base}/team/${encodeURIComponent(contextId)}`, {
         headers: authHeader(contextId),
       })
-      if (!res.ok) throw new Error(httpErrorMessage('team', res))
+      if (!res.ok) throw transportError('team', res)
       return (await res.json()) as LiveTeamPayload
     },
 
@@ -607,7 +664,7 @@ export function createHttpTransport(base: string = apiBase()): LiveTransport {
         },
         body: JSON.stringify(draft),
       })
-      if (!res.ok) throw new Error(httpErrorMessage('ask', res))
+      if (!res.ok) throw transportError('ask', res)
       const saved = (await res.json()) as AskDraft
       rememberAskContext(saved.id, saved.company_context_id ?? draft.company_context_id)
       return saved
@@ -618,7 +675,7 @@ export function createHttpTransport(base: string = apiBase()): LiveTransport {
         method: 'POST',
         headers: authHeader(askContexts[askId]),
       })
-      if (!res.ok) throw new Error(httpErrorMessage('ask share', res))
+      if (!res.ok) throw transportError('ask share', res)
       return (await res.json()) as AskDraft
     },
 
@@ -626,7 +683,7 @@ export function createHttpTransport(base: string = apiBase()): LiveTransport {
       const res = await send('ask', `${base}/ask/${encodeURIComponent(askId)}`, {
         headers: authHeader(askContexts[askId]),
       })
-      if (!res.ok) throw new Error(httpErrorMessage('ask', res))
+      if (!res.ok) throw transportError('ask', res)
       return (await res.json()) as AskDraft
     },
 
@@ -636,7 +693,7 @@ export function createHttpTransport(base: string = apiBase()): LiveTransport {
       const res = await send('files', `${base}/team/${encodeURIComponent(contextId)}/files`, {
         headers: authHeader(contextId),
       })
-      if (!res.ok) throw new Error(httpErrorMessage('files', res))
+      if (!res.ok) throw transportError('files', res)
       return (await res.json()) as LiveFilesPayload
     },
 
@@ -645,27 +702,31 @@ export function createHttpTransport(base: string = apiBase()): LiveTransport {
       const res = await send('notes', `${base}/team/${encodeURIComponent(contextId)}/notes`, {
         headers: authHeader(contextId),
       })
-      if (!res.ok) throw new Error(httpErrorMessage('notes', res))
+      if (!res.ok) throw transportError('notes', res)
       return (await res.json()) as LiveNotesPayload
     },
 
     // ── 账号（feat-053）────────────────────────────────────────────────────────────────
     // 登录后恢复：本账号名下的 context id。未登录 → 后端 401 → 大声失败（不静默回落）。
     async fetchAccountContexts() {
-      const res = await fetch(`${base}/account/contexts`, { headers: accountHeader() })
-      if (!res.ok) throw new Error(`account contexts HTTP ${res.status}`)
+      // feat-068：走 send() + transportError()，不再裸 fetch。这两条曾是 ZH-03 那个缺陷的
+      // 最后残留——抛的是 `account contexts HTTP 401` 这种开发者串，中文用户读到的就是它。
+      // 今天打不到（Supabase env 未配 → 登录入口不渲染），但配上 env 的那一刻就可达，
+      // 所以先拆掉，别把雷留在开关背后。
+      const res = await send('account contexts', `${base}/account/contexts`, { headers: accountHeader() })
+      if (!res.ok) throw transportError('account contexts', res)
       return (await res.json()) as AccountContextsPayload
     },
 
     // 认领：把游客期建的 context 绑进本账号。owner_token 走 **body**——它是被交出的"标的"，
     // 不是授权本次调用的凭据（授权的是账号 header）。🔴 仍然绝不进 URL。
     async claimContext(contextId, ownerToken) {
-      const res = await fetch(`${base}/account/claim`, {
+      const res = await send('account claim', `${base}/account/claim`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...accountHeader() },
         body: JSON.stringify({ context_id: contextId, owner_token: ownerToken }),
       })
-      if (!res.ok) throw new Error(`account claim HTTP ${res.status}`)
+      if (!res.ok) throw transportError('account claim', res)
     },
   }
 }

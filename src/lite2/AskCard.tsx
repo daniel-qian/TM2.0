@@ -33,6 +33,8 @@ export function AskCard() {
   const askBusy = useLite((s) => s.askBusy)
   const askError = useLite((s) => s.askError)
   const team = useLite((s) => s.team)
+  // feat-068 · 离线预览通道（stub）自我声明，v01 早有、本壳此前缺——红线提示据此分流。
+  const offlinePreview = useLite((s) => !!s.transport.offlinePreview)
   const editAskQuestion = useLite((s) => s.editAskQuestion)
   const addAskQuestion = useLite((s) => s.addAskQuestion)
   const removeAskQuestion = useLite((s) => s.removeAskQuestion)
@@ -128,8 +130,13 @@ export function AskCard() {
       {isDraft ? (
         <>
           <p className="ask-lede">{t.ask.draftLede}</p>
-          {/* 诚实提示：红线校验发生在保存时、在服务端（阶段 C）——预览里还没真跑过。 */}
-          <p className="ask-redline-note">{t.ask.redlineNote}</p>
+          {/* feat-068 · 红线提示按**当前真在用的通道**二选一（与 v01 AskCard 同源，
+              完整理由见那一处注释）。要点：旧文案无条件写死「目前预览里还没跑过」，而线上
+              走的是 httpTransport.saveAsk → POST /ask，服务端 redline.validate 每次保存都真跑；
+              只有 stub 通道（?transport=stub）确实不跑。悲观那句只留给 stub。 */}
+          <p className="ask-redline-note">
+            {offlinePreview ? t.ask.redlineNoteOffline : t.ask.redlineNote}
+          </p>
 
           <div className="ask-questions">
             {ask.questions.map((q) => (

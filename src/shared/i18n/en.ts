@@ -32,10 +32,10 @@ export const en = {
     // feat-068 — ingest 真实耗时 100–120s（后端在法兰克福、LLM 在国内，跨境往返）。
     // 上线前这两分钟屏幕上只有一行静态字，真客户第一次接触就以为卡死。
     // ingestingHint 负责「事先把预期讲明白 + 说清值在哪」；ingestingElapsed 是活的秒表，
-    // 证明界面没冻。不承诺给不出的数字：只说 usually 1–2 minutes，不说 30 seconds，
+    // 证明界面没冻。数字必须是量过的：真 seed 文件在生产上实测 171.6s（feat-068 收工前跑的），
     // 也不做假百分比进度条（服务端没有任何进度信号，卡在 90% 比诚实的文字更糟）。
     ingestingHint:
-      'Usually 1–2 minutes. It reads every page of every file — that is the slow part, and the part that makes the team below worth reading. Leave this tab open.',
+      'Usually two to three minutes. It reads every page of every file — that is the slow part, and the part that makes the team below worth reading. Leave this tab open.',
     ingestingElapsed: '{seconds}s elapsed',
     readyLabel: 'Your team is ready',
     errorLabel: "Couldn't read those files",
@@ -46,6 +46,56 @@ export const en = {
     // feat-032 — the per-company file space: a look-back list of what you uploaded (persists).
     filesTitle: 'Your files',
     filesChunks: 'references',
+    // fixB/M3 — the exact extensions the backend accepts (guards.SUPPORTED_EXTS). The line above
+    // says "Word, Excel", which the picker used to back with `.doc,.xls` — types the server has
+    // never supported, so they were selectable, uploadable, and guaranteed to 422. Naming the
+    // extensions is the only version of this a user can act on.
+    acceptedExts: '.pdf · .docx · .xlsx · .csv · .tsv · .md · .txt',
+    acceptedLegacyNote: 'Older .doc and .xls files need a Save As to the newer format first.',
+    // fixB/M4 — read or not read, per file. Without these a scanned PDF that yielded nothing looks
+    // exactly like a roster that came through whole.
+    fileStatusIngested: 'Read',
+    fileStatusEmpty: 'Nothing readable',
+    fileStatusFailed: "Couldn't read",
+    fileStatusUnknown: 'Status unknown',
+    fileStatusEmptyHint:
+      'This file opened but no text came out of it — a scan or an image-only export usually does this. Nothing from it reached your team.',
+    fileStatusFailedHint:
+      "This file couldn't be opened at all — often a character-encoding mismatch (save it as UTF-8 and upload again). Nothing from it reached your team.",
+
+    // ── fixD/B1 — uploading a SECOND time starts a SEPARATE company, it does not merge ──────
+    // The backend mints a new context on every POST /ingest, and it cannot append (passing the
+    // old context_id REBUILDS and overwrites it). Previously the UI just kept inviting "add more
+    // files" and then silently swapped the screen to the new upload, with no way back — the
+    // manager's reading is "I lost my data". These strings say what actually happens, up front,
+    // and label the way back. Nothing here promises a merge, because there is no merge.
+    againTitle: 'Adding more files starts a separate company',
+    againBody:
+      "Avery reads each upload as its own company. A new upload will not be merged into the one you're looking at now — both are kept, and you can switch between them here.",
+    switchTitle: 'Uploads on this browser',
+    switchAction: 'Open this one',
+    switchOpening: 'Opening…',
+    switchCurrent: 'Currently open',
+    switchFilesLabel: 'Read from',
+    // Explicit, user-initiated removal — the ONLY way an entry leaves this list. A failed read
+    // must never remove one (see store.ts forgetKnownContext).
+    switchForget: 'Remove from this list',
+    switchForgetNote:
+      'This only removes the shortcut on this browser. Nothing is deleted on the server.',
+    // 🔴 The failure modes must stay distinguishable — they mean different things to a user.
+    // "no credential on this browser" is NOT "the data is gone", and must never be worded as if
+    // it were: the company is still on the server, this machine just can't prove it's yours.
+    switchErrorMissingCredential:
+      "This browser no longer holds the key to that upload, so it can't be opened here. The company itself is still on the server — signing in on the account it was attached to will bring it back.",
+    // 🔴 A 404 does NOT mean the upload is gone, and this string must never say that it does.
+    // Tenant isolation (feat-038) deliberately answers "no such context" and "you can't prove
+    // this is yours" with the same 404, precisely so the status code carries no existence
+    // information — which means Avery genuinely cannot tell the two apart. Saying "no longer on
+    // the server" would be the product asserting a fact about the customer's data that it does
+    // not have. Say what we actually observed: we couldn't open it.
+    switchErrorUnreadable:
+      "Avery couldn't open that upload — the server didn't hand it over. That can mean it's gone, or that this browser can no longer prove it's yours; Avery can't tell which from here. It stays on this list either way, so you can try again.",
+    switchErrorFailed: "Couldn't reach the server just now. Nothing was lost — try again.",
   },
 
   // ── Your team, live ───────────────────────────────────────────────────────
@@ -64,6 +114,38 @@ export const en = {
     liveError: 'Something went wrong reaching the room.',
     askPlaceholder: 'Ask about your team…',
     ask: 'Ask',
+  },
+
+  // ── transport / HTTP failures (feat-068 · ZH-03) ──────────────────────────
+  // 传输层错误文案。**刻意不放进 lite.* / lite2.* 的平行结构**：这几句是后端护栏的说法，
+  // 两个壳读到的是同一台后端、同一条状态码，没有任何一句会因为壳不同而改口。复制成两份
+  // 只会制造"改了一边忘了另一边"的漂移面。
+  //
+  // 🔴 句子里绝不带 endpoint 名（`ingest:` / `team:` 是给控制台看的开发者输出，不是给客户
+  // 看的话）。endpoint + status 由 TransportError 带着走，控制台仍能一眼分辨是哪次调用。
+  transport: {
+    // 构建配错：VITE_AVERY_API_BASE 没注入，调用全打到访客自己的机器上。现场表现和"后端挂了"
+    // 一模一样——必须当场否掉这个误读，否则整队人去查一个根本没问题的后端。
+    // env 变量名 / localhost 地址属开发者细节，留在 console.error（apiBase() 那声吼）里。
+    misconfigured:
+      "This build is misconfigured — it went out without a backend address. Retrying won't help; it needs to be rebuilt and redeployed.",
+    // fetch 自己 reject：连接被拒 / 混合内容拦截 / CORS / 离线，压根没有 status 可读。
+    offline: "Couldn't reach the server. Check your connection and try again.",
+    // 429：/ingest 10/min(burst 3)、/advise 30/min(burst 10)，真会跳。
+    // Retry-After 只认纯数字秒数——读不出就走 rateLimitedWait，绝不编一个具体秒数。
+    rateLimited: 'Too many requests just now — wait {seconds}s and try again.',
+    rateLimitedWait: 'Too many requests just now — wait a moment and try again.',
+    // 413：超上传上限。
+    tooLarge: "That's too much at once — up to 10 files, 10MB each.",
+    // 415 / 422：魔数嗅探不认，或内容解不出来。
+    unsupportedType: "That file type isn't accepted, or its contents couldn't be read.",
+    // 🔴 404 在已鉴权的读路径上几乎从不是"空"——是这台浏览器手里的 owner_token 缺失/过期，
+    // 后端按"不泄露存在性"的规矩回 404 而不是 403。说成"还没有数据"是在对客户谎报他自己的
+    // 数据，必须写明"数据还在，是这台浏览器打不开了"。
+    staleToken:
+      "This browser's access to that company has expired or is missing — the data is still there, but this browser can't open it any more.",
+    serverError: 'The server hit a problem (HTTP {status}). Try again shortly.',
+    generic: 'Something went wrong (HTTP {status}). Try again.',
   },
 
   // ── lite shell (feat-024: the product shell behind the story/lite wall) ───
@@ -189,9 +271,47 @@ export const en = {
     // Your team — briefing header (real numbers from ingestion) + weak handoffs
     briefingEyebrow: 'From your uploads',
     metricsLabel: 'Team at a glance',
+    // feat-068 · localized briefing (see src/shared/briefing.ts). The backend's briefing() is
+    // locale-blind and hardcodes English; these keys are the ZH recomposition. They are NEVER read
+    // on the EN build — localizeBriefing() passes the backend's own strings through untouched —
+    // but they live in en.ts because zh.ts is typed `Dict` and every key must exist in both.
+    briefingHeadline: '{people} people, {projects} active projects.',
+    briefingSubheadRisk:
+      'Everything below is drawn from your uploads — nothing invented. {atRisk} project(s) worth a closer look.',
+    // fixA · the SAME count, worded for the case where part of it is not a project. The backend
+    // ships the count's shape (briefing.look_kind: 'projects' | 'items' | 'none'); 'items' means a
+    // signal in there reached no decision card, so naming it a project would invent a project —
+    // worst case measured: zero projects on screen, two signals, 「2 个项目值得多看一眼」 printed
+    // right under 「没有一处是编的」. Byte-identical to what registry.py emits for that branch, so
+    // the EN passthrough and the ZH recomposition say the same thing.
+    briefingSubheadRiskItems:
+      'Everything below is drawn from your uploads — nothing invented. {atRisk} item(s) worth a closer look.',
+    briefingSubheadCalm:
+      'Everything below is drawn from your uploads — nothing invented. No risk signals surfaced from the documents.',
+    briefingMetricPeople: 'people',
+    briefingMetricProjects: 'active projects',
+    briefingMetricNeedLook: 'need a look',
     handoffsTitle: 'Worth your attention today',
     handoffsEmpty: 'Nothing needs you right now — your uploads read steady.',
     handoffOpen: 'Open the project',
+    // feat-068 · triage-item copy (see src/shared/handoffCopy.ts). These strings used to be
+    // hardcoded English inside teamData.ts liveHandoffs()/liveRead(), so the ZH build showed
+    // English labels wrapped around Chinese evidence. They are FRONTEND-derived — no backend
+    // change can ever reach them. `{project}` / `{status}` / `{items}` / `{name}` / `{read}`
+    // are placeholders: keep them whole-sentence templates, never concatenate a verb onto a
+    // name (Chinese word order differs from English).
+    handoffToneLabel: 'Worth a closer look',
+    handoffAction: 'Take a look at {project}',
+    handoffEvidenceFallback: '{project} is flagged {status} in your uploads.',
+    handoffEvidenceTag: 'From your uploads',
+    handoffStatusAtRisk: 'at risk',
+    handoffStatusBlocked: 'blocked',
+    // 🔴 Redline: a person's read line states what they carry — never how well they carry it.
+    personReadOwns: 'Owns {items}',
+    personReadListSeparator: ', ',
+    personReadNone: 'On the team',
+    personCardOpenAria: 'Open {name} — {read}',
+    groupOwns: 'Owns {project}',
 
     // Upload empty state (the left spine speaks for itself — no scripted placeholders)
     emptyEyebrow: 'Getting started',
@@ -221,6 +341,19 @@ export const en = {
     detailClose: 'Close',
     detailPersonEyebrow: 'Teammate',
     detailProjectEyebrow: 'Project',
+    // feat-068 追加 · 项目状态词。lite2 section 已有同名键（parallel namespaces，措辞可各自
+    // 演化）；这里镜像一份给 v01 —— 裸域名服务的正是 v01，此前它把后端枚举 `blocked`/`done`
+    // 原样渲染给中文客户。消费方是 src/shared/projectStatus.ts 的 projectStatusText()。
+    projectsStatusBlocked: 'Blocked',
+    projectsStatusAtRisk: 'At risk',
+    projectsStatusOnTrack: 'On track',
+    projectsStatusDone: 'Done',
+    projectsStatusUnknown: 'Status not stated',
+    // Mirrored from the lite2 section (same feat-068 rationale as the status words above): the
+    // bare domain used to serve v01, and v01 rendered a missing owner as the hard-coded English
+    // word 'Unassigned'. 🔴 It must read as "we did not read who" — NOT as "there is no owner",
+    // which the documents never said.
+    projectsUnknownValue: 'The documents did not say',
     detailTenure: 'Tenure',
     detailOwns: 'Owns',
     detailCollab: 'Working with',
@@ -437,9 +570,53 @@ export const en = {
     // handoffs — the derivation itself stays in teamData.ts, unchanged from feat-024).
     briefingEyebrow: 'From your uploads',
     metricsLabel: 'Team at a glance',
+    // feat-068 · localized briefing — same keys as the `lite` section above (v01 and v02 keep
+    // parallel namespaces so wording can diverge). Never read on the EN build; see shared/briefing.ts.
+    briefingHeadline: '{people} people, {projects} active projects.',
+    briefingSubheadRisk:
+      'Everything below is drawn from your uploads — nothing invented. {atRisk} project(s) worth a closer look.',
+    // fixA · the SAME count, worded for the case where part of it is not a project. The backend
+    // ships the count's shape (briefing.look_kind: 'projects' | 'items' | 'none'); 'items' means a
+    // signal in there reached no decision card, so naming it a project would invent a project —
+    // worst case measured: zero projects on screen, two signals, 「2 个项目值得多看一眼」 printed
+    // right under 「没有一处是编的」. Byte-identical to what registry.py emits for that branch, so
+    // the EN passthrough and the ZH recomposition say the same thing.
+    briefingSubheadRiskItems:
+      'Everything below is drawn from your uploads — nothing invented. {atRisk} item(s) worth a closer look.',
+    briefingSubheadCalm:
+      'Everything below is drawn from your uploads — nothing invented. No risk signals surfaced from the documents.',
+    briefingMetricPeople: 'people',
+    briefingMetricProjects: 'active projects',
+    briefingMetricNeedLook: 'need a look',
     handoffsTitle: 'Worth your attention today',
     handoffsEmpty: 'Nothing needs you right now — your uploads read steady.',
     handoffOpen: 'Open the project',
+    // feat-068 · triage-item copy — see the identical block in the `lite` section above for why
+    // this layer exists (frontend-derived strings; no backend change can reach them).
+    handoffToneLabel: 'Worth a closer look',
+    handoffAction: 'Take a look at {project}',
+    handoffEvidenceFallback: '{project} is flagged {status} in your uploads.',
+    handoffEvidenceTag: 'From your uploads',
+    handoffStatusAtRisk: 'at risk',
+    handoffStatusBlocked: 'blocked',
+    // 🔴 Redline: a person's read line states what they carry — never how well they carry it.
+    personReadOwns: 'Owns {items}',
+    personReadListSeparator: ', ',
+    personReadNone: 'On the team',
+    personCardOpenAria: 'Open {name} — {read}',
+    groupOwns: 'Owns {project}',
+
+    // fixA 的分诊卡文案键在集成时**去掉了**——不是丢弃，是被更好的实现取代：
+    // feat-068 已经把这四个键放进本 section 上方（用 {project} 占位符），并配了
+    // src/shared/handoffCopy.ts 的 localizeHandoff()，把拼句留在文案层、派生层只吐结构化数据。
+    // fixA 是在派生层拼句，同样能治好「中文页顶着英文标签」，但分层不如前者。
+    // 两者留一份即可，重复定义会直接 TS1117。fixA 独有的 projectStatusUnread 保留在下方。
+
+    // fixA · a project whose documents state no status we could read. 🔴 It is NOT rendered as
+    // 'on-track' (that was a front-end invention: the backend deliberately omits the key, and the
+    // decision layer records it as 未读到) and NOT rendered blank. It says which of the two it is:
+    // we did not read a status — never that the customer's file failed to state one.
+    projectStatusUnread: 'no status read',
 
     // Triage three actions + the "Taken care of today" drawer
     triageRemaining: '{pending} of {total} still worth a look',
@@ -497,6 +674,52 @@ export const en = {
     detailSignals: 'What the documents say',
     detailSource: 'From your uploads',
     detailGone: 'This card is no longer in your uploads.',
+    // feat-055: the project overlay used to render `status` and `ownerName` straight from the
+    // defaulted view model, so a project the documents never gave a status to read as "on-track".
+    // It now labels each field and says so when the documents didn't state it.
+    detailStatus: 'Status',
+    detailOwner: 'Owner',
+    detailDue: 'Due',
+
+    // ── feat-055 · Projects screen (PRD G9 — the board; the biggest structural gap in the
+    // diff audit was that we had no projects screen at all). Field coverage in real payloads is
+    // uneven (progress 6/17, dueDate 7/17), so every field is either a real value or an explicit
+    // "the documents did not say" — never a silent 0% or an empty cell. ──
+    tabProjects: 'Projects',
+    projectsEyebrow: 'Projects',
+    projectsTitle: 'The projects in your documents',
+    projectsLede:
+      'Built only from what your uploads actually say. Anything a document never stated is marked as not stated — it is not filled in as zero.',
+    projectsCountOne: '1 project from your uploads',
+    projectsCountMany: '{count} projects from your uploads',
+    projectsCoverageTitle: 'What the documents left out',
+    projectsCoverageProgress: '{count} with no progress stated',
+    projectsCoverageDue: '{count} with no due date',
+    projectsCoverageStatus: '{count} with no status stated',
+    projectsCoverageNote: 'Avery leaves these unknown on purpose rather than filling in a zero.',
+    projectsSingleNote:
+      'Only one project came out of your uploads. If your documents cover more than one, they may not be split into sections Avery can tell apart yet — a heading per project usually helps.',
+    projectsEmptyTitle: 'No projects yet',
+    projectsEmptyBody:
+      'Upload a project plan, a weekly note or a status report from Your team, and the projects it describes will show up here.',
+    projectsEmptyCta: 'Go to Your team',
+    projectsGroupNeedsYou: 'Needs you',
+    projectsGroupMoving: 'Moving',
+    projectsGroupOther: 'Other status',
+    projectsGroupUnknown: 'No status in the documents',
+    projectsGroupDone: 'Done',
+    projectsStatusBlocked: 'Blocked',
+    projectsStatusAtRisk: 'At risk',
+    projectsStatusOnTrack: 'On track',
+    projectsStatusDone: 'Done',
+    projectsStatusUnknown: 'Status not stated',
+    projectsOwnerLabel: 'Owner',
+    projectsDueLabel: 'Due',
+    projectsProgressLabel: 'Progress',
+    projectsBlockersOne: '1 thing in the way',
+    projectsBlockersMany: '{count} things in the way',
+    projectsUnknownValue: 'The documents did not say',
+    projectsOpenAria: 'Open {title}',
 
     // ── Onboarding wizard (feat-045, PRD F7 — first-visit overlay; skippable; × pauses and
     // resumes next visit. NO fake connect-tools step, NO fake create-account step — every step
@@ -517,7 +740,7 @@ export const en = {
     // feat-068 — 同 upload.ingestingHint 的理由（真等 100–120s）。向导版多一句"可以先进行
     // 下一步"：Next/Skip 在 ingest 期间不禁用，读取在 store 里继续跑，这句是真的。
     onboardUploadHint:
-      'Usually 1–2 minutes — it reads every page, not just the file names. You can move on to the next step while it works.',
+      'Usually two to three minutes — it reads every page, not just the file names. You can move on to the next step while it works.',
     onboardUploadElapsed: '{seconds}s elapsed',
     onboardUploadReady: 'Your team is ready',
     onboardUploadError: "Couldn't read those files — try again, or move on and upload later.",
@@ -618,6 +841,101 @@ export const en = {
     // ── Compliance footer (PRD F6) — shell-global, memo tone (not regulatory tone). ──
     footerText:
       "Avery informs your judgment — it never replaces it. Every read here needs your own review before it becomes a decision, and none of it should be the sole basis for a serious call about a person's job, pay, or standing.",
+
+    // ── In-app draft composer (feat-058, PRD G6) — replaces the bare mailto: link. Copy to
+    // chat is the PRIMARY outlet (teams here live in WeChat/Lark); email is secondary.
+    // 🔴 Recipients are NAMES, not addresses — we never had their emails, and the hint says so
+    // rather than letting the empty mailto To: field surprise anyone.
+    draftAria: 'Draft a message',
+    draftEyebrow: 'Yours to send',
+    draftTitle: 'Draft a message',
+    draftClose: 'Close',
+    draftRecipients: 'To',
+    draftRecipientHint:
+      'These are names, not email addresses — your files only ever gave us names. The email outlet opens with an empty To field; put the address in yourself.',
+    draftNoRecipient: 'Your files do not say who this one goes to — fill the recipient in yourself.',
+    draftSubject: 'Subject',
+    draftBody: 'Message',
+    draftBodyHint:
+      'Drafted from what your files actually say. Edit it into your own words before you send — you are the one sending it.',
+    draftCopy: 'Copy for chat',
+    draftCopied: 'Copied',
+    draftCopiedStatus: 'Copied — paste it wherever your team actually talks.',
+    draftCopyFailed:
+      'Could not reach the clipboard — select the message above and copy it by hand.',
+    draftMailto: 'Use email instead',
+    draftDoneAdd: 'Done — add to follow-ups',
+    draftDoneComplete: 'Done — mark this one handled',
+    draftAddedStatus: 'Written into your follow-ups.',
+    draftCompletedStatus: 'Marked handled in your follow-ups.',
+    draftGoFollowups: 'Open follow-ups',
+    // ── Aggregate entry screen (feat-057 / PRD G4) — the landing surface. Four summary blocks,
+    // each a door into the screen that owns the detail. 🔴 Every number on this surface is
+    // counted from the live payload by homeDerive.ts; there is no hardcoded statistic here and
+    // there must never be one (the partner reference library's greeting line — "scanned 186
+    // signals" — is hardcoded; ours are counted or absent). ──
+    tabHome: 'Today',
+    homeEyebrow: 'Today',
+    homeTitle: 'What today asks of you',
+    homeLede:
+      'Four reads off the files you brought in. Each one opens into the screen that holds the rest.',
+
+    // Block 1 — decisions (graded by the backend rules, feat-056; the front end never re-grades
+    // and never re-sorts).
+    homeDecisionsTitle: 'To decide today',
+    homeDecisionsCount: '{total} on the table',
+    homeDecisionsOrderNote: 'Ordered by the grading rules — most serious first.',
+    homeDecisionsAbsentTitle: 'No grading came back with this data',
+    // 🔴 Never promise "just upload again" here. Grading is computed by the backend rule layer
+    // (feat-056); if the backend does not have that capability yet, re-uploading cannot produce
+    // decisions no matter how many times the customer tries. The two causes call for opposite
+    // actions and this data cannot tell them apart — so state both and don't pick one for them.
+    homeDecisionsAbsentBody:
+      'Two possibilities, and this data cannot tell which. Either this company context was read before decision grading existed — in which case uploading again will surface it — or the backend serving it does not have grading yet, in which case uploading again will not help and it has to wait for the backend to catch up.',
+    homeDecisionsEmptyTitle: 'Nothing needs deciding today',
+    homeDecisionsEmptyBody:
+      'When a project shows a blocker, a passed date or a risk signal in your files, it lands here with the rule that caught it.',
+    homeDecisionOwner: 'Owned by',
+    homeDecisionReasonRule: 'By the rules',
+    homeDecisionReasonAvery: "Avery's own read",
+    homeDecisionEscalated: 'Avery raised this grade',
+    homeDecisionRulesToggle: 'Why this grade',
+    homeDecisionRuleBasis: 'Read from',
+    homeDecisionEvidenceLabel: 'Straight from your files',
+    // 🔴 Two different kinds of "no value" — never merge these two sentences. The first means
+    // the document genuinely says nothing; the second means it says something we could not pin
+    // to a comparable value, and the raw words MUST be shown (the manager is holding the
+    // original — telling him he never wrote it destroys the whole read).
+    homeDecisionUnknownLabel: 'Not mentioned in the files',
+    homeDecisionUnparsed: '{field} reads "{raw}" — that does not pin down a value.',
+    homeDecisionOpenProject: 'Open the project',
+    homeDecisionAskRoom: 'Take it to the room',
+    homeFieldStatus: 'Status',
+    homeFieldProgress: 'Progress',
+    homeFieldDueDate: 'Due date',
+
+    // Block 2 — closer-look summary.
+    homeGapsTitle: 'Where the files disagree with themselves',
+    homeGapsCount: '{count} open',
+    homeGapsEmpty: 'Nothing is contradicting itself right now.',
+    homeGapsLink: 'A closer look',
+
+    // Block 3 — people worth a look. 🔴 The count says how many times the FILES mention them.
+    // It is not a score, a rank or a rating, and the screen says so out loud.
+    homeAttentionTitle: 'People the files keep bringing up',
+    homeAttentionCaption: 'Counted from what your documents say — not a rating of anyone.',
+    homeAttentionWhySignals: 'named in {count} signals',
+    homeAttentionWhyBlockers: '{count} blockers on their projects',
+    homeAttentionEmpty: 'No one is being singled out by the files right now.',
+    homeAttentionLink: 'Your team',
+
+    // Block 4 — plain counts, each a door.
+    homeOverviewTitle: 'What Avery is working from',
+    homeOverviewPeople: 'people',
+    homeOverviewProjects: 'projects',
+    homeOverviewFiles: 'files read',
+    homeOverviewNotes: 'field notes',
+    homeOverviewFollowups: 'open follow-ups',
   },
 
   // ── Ask / Quick ask (feat-034 stage B — ADR-0023 voice: asks about the WORK, never rates
@@ -627,10 +945,23 @@ export const en = {
     draftTitle: 'Worth asking them directly',
     draftLede:
       "The missing piece isn't in the documents — it's in their own read of the situation. Review the questions, then hand each person their own link.",
-    // HONEST note: the red-line check on question text runs server-side at save time.
-    // That backend isn't wired in this preview — say so, don't pretend it already ran.
+    // feat-068 · HONEST note, now CONDITIONAL on the transport actually in use.
+    //
+    // The old copy asserted the pessimistic case unconditionally ("has not run in this preview
+    // yet"). That was written before stage C landed and went stale: the backend IS wired, and
+    // httpTransport.saveAsk POSTs /ask, where redline.validate runs server-side on every save.
+    // Telling a live customer that the one promise they care about ("nobody gets scored") is not
+    // actually running is self-harm — they conclude either that the demo is unfinished or that
+    // the promise is empty. Both are false, and both are ours to have caused.
+    //
+    // It IS genuinely conditional though, so the copy is too: the stub transport (`?transport=stub`,
+    // the deterministic offline demo) does no text validation and says so via `offlinePreview`.
+    // Pick by that flag — never assert the pessimistic case on the path customers actually take.
     redlineNote:
-      'Questions ask about the work, never rate a person. Each question passes the red-line check when saved — that check runs on the server and has not run in this preview yet.',
+      'Questions ask about the work, never rate a person. Every question goes through the red-line check when you save — it runs on the server, on every save.',
+    // Shown INSTEAD of redlineNote on the offline stub channel, where nothing is sent anywhere.
+    redlineNoteOffline:
+      'Questions ask about the work, never rate a person. The red-line check runs on the server when you save — this offline preview saves nothing, so it is not running here.',
     kindScale: '1–5',
     kindYesNo: 'Yes / No',
     questionAria: 'Question text',

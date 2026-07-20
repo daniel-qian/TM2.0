@@ -1,5 +1,6 @@
 import { useLite } from './store'
 import { useDict } from '../shared/i18n/useDict'
+import { projectStatusText } from '../shared/projectStatus'
 import { InitialAvatar } from './InitialAvatar'
 
 // feat-024 · 薄只读详情浮层——ADR-0022 决策 2（v1 范围拍板）。
@@ -89,7 +90,8 @@ export function DetailOverlay() {
                 <p className="eyebrow">{t.lite.detailProjectEyebrow}</p>
                 <h2>{project.title}</h2>
                 <p className="lite-detail-subtitle">
-                  {project.status} · {project.ownerName}
+                  {projectStatusText(project.status, t.lite)} ·{' '}
+                  {project.ownerName || t.lite.projectsUnknownValue}
                   {project.dueDate ? ` · ${project.dueDate}` : ''}
                 </p>
               </div>

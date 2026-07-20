@@ -1,6 +1,9 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useLite } from '../store'
 import { useDict } from '../../shared/i18n/useDict'
+import { localizeBriefing } from '../../shared/briefing'
+import { localizeHandoff, localizePersonRead } from '../../shared/handoffCopy'
+import { projectStatusText } from '../../shared/projectStatus'
 import { UploadPanel } from '../UploadPanel'
 import { InitialAvatar } from '../InitialAvatar'
 import { LiteComposer } from '../LiteComposer'
@@ -30,6 +33,10 @@ function classNames(parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(' ')
 }
 
+function fill(template: string, vars: Record<string, string | number>): string {
+  return template.replace(/\{(\w+)\}/g, (_, k: string) => String(vars[k] ?? ''))
+}
+
 // 单张人卡（分组视图与兜底 flat 视图共用）。🔴 红线：永不渲染任何数字/评分/排名。
 function PersonCard({
   person,
@@ -38,18 +45,24 @@ function PersonCard({
   person: LitePerson
   onOpen: (id: string) => void
 }) {
+  const { t } = useDict()
+  // feat-068 · 读数在这里才成句（派生层只给语料原文 + owns 条目）。localizePersonRead 恒返回
+  // 非空串——无信号时走 personReadNone 兜底，所以不再需要 person.read 的空值分支。
+  const read = localizePersonRead(person, t.lite)
   return (
     <button
       type="button"
-      className={classNames(['home-person-card', person.read && `home-tone-${person.tone}`])}
+      className={classNames(['home-person-card', `home-tone-${person.tone}`])}
       onClick={() => onOpen(person.id)}
-      aria-label={`Open ${person.name}${person.read ? ` — ${person.read}` : ''}`}
+      // feat-068 · aria-label 以前是 `Open ${name}` 的硬编码拼接——中文屏幕阅读器会念出英文
+      // 动词。整句模板 + 占位符，语序交给各语言自己定。
+      aria-label={fill(t.lite.personCardOpenAria, { name: person.name, read })}
     >
       <InitialAvatar name={person.name} size={44} className="home-person-avatar" />
       <span className="home-person-body">
         <h3>{person.name}</h3>
         <p className="home-person-role">{person.role}</p>
-        {person.read ? <p className="home-person-read">{person.read}</p> : null}
+        <p className="home-person-read">{read}</p>
       </span>
       {/* 🔴 红线：人卡永不渲染任何数字 —— 无 moodPct/capacityPct/% */}
     </button>
@@ -97,9 +110,24 @@ function PeopleGroup({
 }
 
 export function TeamScreen() {
-  const { t } = useDict()
+  const { t, locale } = useDict()
   const team = useLite((s) => s.team)
   const openDetail = useLite((s) => s.openDetail)
+
+  // feat-068 · 后端 briefing() 只会说英文（registry.py 里三处字面量写死，无 locale 参数，
+  // 线上镜像不许重建）。中文构建下在这里本地重组；EN 下原样透传，视觉零变化。
+  // 详见 src/shared/briefing.ts 顶部——请不要"顺手"把这层删掉。
+  const briefing = useMemo(
+    () => (team ? localizeBriefing(team.briefing, team, t.lite, locale) : null),
+    [team, t, locale],
+  )
+
+  // feat-068 · 分诊条目的文案层（ZH-02）。teamData.ts 的 liveHandoffs() 现在只吐结构化信号，
+  // 成句在这里按当前字典拼——详见 src/shared/handoffCopy.ts 顶部。
+  const handoffs = useMemo(
+    () => (team?.handoffs ?? []).map((h) => localizeHandoff(h, t.lite)),
+    [team, t],
+  )
 
   return (
     <section className="scene scene-home is-active" aria-label="Your team — live">
@@ -107,15 +135,15 @@ export function TeamScreen() {
         <div className="home-frame">
           {/* ── 左脊柱 ─────────────────────────────────────────────── */}
           <div className="home-spine">
-            {team ? (
+            {team && briefing ? (
               <>
                 <header className="home-greeting">
                   <p className="eyebrow">{t.lite.briefingEyebrow}</p>
-                  <h1>{team.briefing.headline}</h1>
-                  <p className="home-greeting-sub">{team.briefing.subhead}</p>
-                  {team.briefing.metrics.length > 0 ? (
+                  <h1>{briefing.headline}</h1>
+                  <p className="home-greeting-sub">{briefing.subhead}</p>
+                  {briefing.metrics.length > 0 ? (
                     <div className="lite-metrics" aria-label={t.lite.metricsLabel}>
-                      {team.briefing.metrics.map((m) => (
+                      {briefing.metrics.map((m) => (
                         <span key={m.label} className="lite-metric-chip">
                           <strong>{m.value}</strong> {m.label}
                         </span>
@@ -128,15 +156,25 @@ export function TeamScreen() {
                   <h2>{t.lite.handoffsTitle}</h2>
                 </div>
 
-                {team.handoffs.length > 0 ? (
+                {handoffs.length > 0 ? (
                   <ol className="home-handoff-list">
-                    {team.handoffs.map((handoff) => (
+                    {handoffs.map((handoff) => (
                       <li
                         key={handoff.id}
                         className={classNames(['home-handoff', `home-tone-${handoff.tone}`])}
                       >
                         <div className="home-handoff-body">
-                          <span className="home-handoff-tone">{handoff.toneLabel}</span>
+                          {/* feat-068 · is-cjk：基线样式给这行加了 text-transform:uppercase +
+                              0.14em 字距（英文小标签的排版语言）。中文没有大小写，宽字距只会
+                              读成"喊话"，所以中文构建下关掉大写、收紧字距。 */}
+                          <span
+                            className={classNames([
+                              'home-handoff-tone',
+                              locale === 'zh' && 'is-cjk',
+                            ])}
+                          >
+                            {handoff.toneLabel}
+                          </span>
                           <h3>{handoff.action}</h3>
                           <p>{handoff.evidence}</p>
                           <div className="home-handoff-links">
@@ -182,7 +220,12 @@ export function TeamScreen() {
               {/* feat-025 Q2：轻量分组视图——按部门/项目归属/角色聚类，带分组容器 + 折叠。
                   人卡本身零改（.home-person-card 仍在 DOM、仍可点，门相位 C/E 不受影响）。 */}
               <div className="home-people-groups" aria-label={t.lite.peopleLane}>
-                {groupPeople(team.people, team.projects, t.lite.groupUngrouped).map((group) => (
+                {groupPeople(
+                  team.people,
+                  team.projects,
+                  t.lite.groupUngrouped,
+                  t.lite.groupOwns,
+                ).map((group) => (
                   <PeopleGroup
                     key={group.key}
                     title={group.title}
@@ -209,7 +252,7 @@ export function TeamScreen() {
                       <h3>{project.title}</h3>
                       <span className="home-project-status">
                         <span className={`status-dot ${statusTone(project.status)}`} />
-                        {project.status}
+                        {projectStatusText(project.status, t.lite)}
                       </span>
                     </span>
                     {typeof project.progress === 'number' ? (
@@ -223,7 +266,7 @@ export function TeamScreen() {
                       </span>
                     ) : null}
                     <span className="home-project-meta">
-                      <span>{project.ownerName}</span>
+                      <span>{project.ownerName || t.lite.projectsUnknownValue}</span>
                       {project.dueDate ? <span className="home-project-due">{project.dueDate}</span> : null}
                     </span>
                   </button>

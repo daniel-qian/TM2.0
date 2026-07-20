@@ -81,6 +81,39 @@ def extract_owner_token(x_avery_token: str | None, authorization: str | None) ->
     return None
 
 
+def tokens_match(supplied: str, required: str) -> bool:
+    """Constant-time owner_token comparison that CANNOT raise — fixD/M5.
+
+    `secrets.compare_digest` refuses `str` operands containing non-ASCII characters and raises
+    `TypeError: comparing strings with non-ASCII characters is not supported`. That exception used to
+    escape `authorize_context`, so FastAPI rendered it as a 500 — and it could only ever fire AFTER
+    `reg.get()` had found a real context with a non-empty owner_token. An unknown id short-circuits
+    to 404 long before the compare. The status code therefore ANSWERED the one question feat-038
+    exists to refuse:
+
+        GET /team/<real-id>    X-Avery-Token: 令牌   -> 500   "this id exists"
+        GET /team/<bogus-id>   X-Avery-Token: 令牌   -> 404   "this id does not"
+
+    That is a working enumeration oracle reachable with no credential at all, on every protected
+    read (/team, /notes, /files, /advise, all of ask_api, /account/claim). Encoding both sides to
+    bytes first removes the raise: `compare_digest` over `bytes` accepts any byte sequence and stays
+    constant-time. For a real token (url-safe base64, pure ASCII) the encode is the identity map, so
+    the happy path is bit-for-bit unchanged.
+
+    The blanket `except` is deliberate and is the point of the function: EVERY malformed-token path
+    must converge on "not a match" so the caller can raise the SAME opaque 404 it raises for an
+    unknown id. `surrogatepass` covers the one remaining encode failure — a lone surrogate, which a
+    JSON body (/account/claim) can legally carry but UTF-8 cannot normally encode.
+    """
+    try:
+        return secrets.compare_digest(
+            supplied.encode("utf-8", "surrogatepass"),
+            required.encode("utf-8", "surrogatepass"),
+        )
+    except Exception:
+        return False   # malformed input is a NON-MATCH, never a 500 — see docstring
+
+
 def account_owns_context(reg: ContextRegistry, user_id: str | None, context_id: str) -> bool:
     """feat-053: does this VERIFIED Supabase user own this context? Duck-typed and fail-closed — a
     registry without the account seam (an old fake/stub in a test) simply reports False, which falls
@@ -118,7 +151,10 @@ def authorize_context(reg: ContextRegistry, context_id: str,
         return ctx
     required = getattr(ctx, "owner_token", "") or ""
     if required:
-        if not token or not secrets.compare_digest(token, required):
+        # fixD/M5: `tokens_match` never raises — a malformed token (non-ASCII / control chars /
+        # over-long / lone surrogate) is a NON-MATCH and lands on the same opaque 404 as an unknown
+        # id, instead of a 500 that would confirm this context exists.
+        if not token or not tokens_match(token, required):
             raise unknown
     elif getattr(reg, "persistent", False):
         # feat-038 hardening: a SERVED (DB-backed) context with no owner_token must FAIL CLOSED — a

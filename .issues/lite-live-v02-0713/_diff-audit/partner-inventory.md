@@ -1,5 +1,18 @@
 # Partner "manager-command-room" — Exhaustive Interaction Inventory
 
+> ## 🔴 2026-07-19 更正 · baseline note (this file itself is unchanged)
+>
+> This inventory maps **the partner's app**, which we never touched — so nothing below is
+> factually stale about her repo. The banner is here because the **comparison it feeds** has moved:
+> the other three files in `_diff-audit/` were written against **our** baseline
+> `feat/047 @ 1833d97`, i.e. **before feat-050..060 landed**. Those eleven features are now
+> merged and live (`origin/main` = `de47ffe`).
+>
+> So when this file is read side-by-side with `ours-lite2-inventory.md` or the diff clists,
+> several "she has it / we don't" rows no longer hold — we now have a router (feat-051),
+> a projects screen (feat-055), an aggregate home screen that is also the **default landing
+> screen** (feat-057), and an in-app draft composer (feat-058). See the banners on those files.
+
 READ-ONLY audit of `D:/avery-command-room (2)/avery-command-room/src`. Design reference for a feature-comparison / screen-by-screen diff. Every interactive element with `file:line` evidence. All paths relative to that repo's `src/`.
 
 Stack: Next.js App Router, all pages `"use client"`, framer-motion animations, lucide-react icons, Tailwind. State is React `useState` on mock data from `lib/data.ts` (no backend, no persistence — edits/adds/completes live only in component state and reset on reload). Two global React contexts: `ModalProvider` (single centered modal) + `ToastProvider` (single bottom toast). See `app/providers.tsx:7-13`.

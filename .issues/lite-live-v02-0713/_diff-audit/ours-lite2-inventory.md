@@ -1,15 +1,47 @@
 # OUR v02 app (lite2) — exhaustive interaction inventory
 
+> ## 🔴 2026-07-19 更正 · 这份清单的基线早于 feat-050..060，多处已失效
+>
+> **Baseline is `feat/047 @ 1833d97` — i.e. BEFORE the eleven-feature wave (feat-050..060) landed.**
+> That wave is now merged into `main` and **live** (`origin/main` = `de47ffe`).
+> This file is still accurate as a snapshot of `1833d97`, but **do not use it to answer
+> "what does lite2 have today"** without checking the corrections below.
+>
+> What changed under this document's feet:
+>
+> | This file says | Now |
+> |---|---|
+> | No router — screens are Zustand state, not URLs | **feat-051 shipped real `react-router`** (`BrowserRouter` in `Lite2App.tsx`, one `<Route>` per screen + deep links) |
+> | 7 screens | **9** — `/projects` (feat-055) and `/home` (feat-057) were added; **`/home` is now the default screen** |
+> | `?skin=` / `data-skin` | **renamed to `?look=` / `data-look`** by feat-068 (`lite2/skin.ts` → `lite2/look.ts`) |
+> | No in-app message-draft box anywhere | **feat-058 shipped `src/lite2/DraftComposer.tsx`** |
+> | Bare URL renders v01 unless `?v=2` | **Bare URL now renders v02**; `?v=1` is the v01 escape hatch |
+>
+> ⚠️ **The `?skin=` rename has a trap.** The old parameter is **deliberately not aliased** —
+> `?skin=aurora` logs a `console.error` but the page still renders the default `paper` look.
+> So **any old script or checklist still driving `?skin=aurora` gets a false pass**: it thinks
+> it verified the aurora look, and it actually verified paper twice.
+> Inline 「07-19 更正」 notes are added at each affected entry below. **No original text was deleted.**
+
 Baseline: `feat/047 @ 1833d97` (worktree `D:/avery/.claude/worktrees/v02-baseline-ro/`).
 Scope: `src/lite2/**` + `src/shared/**` (v01 `src/lite/**` and `src/story/**` NOT mapped — forbidden/out of scope).
 All `file:line` paths are relative to the worktree root. Read-only map for a screen-by-screen diff vs a design-reference app.
 
 App type: Vite + React + Zustand. No router — screen switching is Zustand state, not URLs. Entry component: `src/lite2/Lite2App.tsx`.
 
+> 🔴 **07-19 更正**: "No router" is obsolete. **feat-051 shipped `react-router`** — `Lite2App.tsx`
+> wraps the lite2 tree in `<BrowserRouter>` with one `<Route>` per screen plus deep links
+> (`/team/:personId`, `/projects/:projectId`). Screen state is now derived from the URL.
+
 ---
 
 ## App shell — Lite2App.tsx
 **Purpose:** Single-page shell; renders topbar, one of 7 screens (switch on `screen` state), optional detail overlay + onboarding wizard, and a persistent footer. No client router; screens are conditional renders.
+
+> 🔴 **07-19 更正**: **9 screens, not 7** (`/projects` from feat-055, `/home` from feat-057),
+> and **`/home` is the default landing screen**. "No client router; screens are conditional
+> renders" is obsolete — see the router note above. The `data-skin` attribute mentioned in the
+> next bullet is now **`data-look`**, resolved from **`?look=`** (feat-068 rename).
 
 - Shell root `<div class="app-shell lite2-shell">` — carries `data-scene={screen}`, `data-mode="live"`, `data-skin={skin}`; skin resolved once at mount from URL [Lite2App.tsx:42, :32].
 - `<LiteTopbar/>` — always mounted (nav tabs + bell + optional mode switch) [Lite2App.tsx:43].
@@ -23,6 +55,10 @@ App type: Vite + React + Zustand. No router — screen switching is Zustand stat
 **Purpose:** The ONLY inter-screen navigation control. Renders 7 tab buttons + a notification bell + an optional Story/Live mode switch. There is no footer nav and no breadcrumb.
 
 - 7 tab buttons `.scene-tab` — `onClick=goScreen(tab.screen)`; active tab gets `is-active`. Order: Your team(team) · The room(room) · Follow-ups(followups) · Avery's notes(notes) · A closer look(closerlook) · Playbooks(playbooks) · Where this goes(vision) [LiteTopbar.tsx:23-31, :41-50].
+
+> 🔴 **07-19 更正**: now **9 screens** — feat-055 added the projects board and feat-057 added the
+> aggregate home screen, which is also the **default landing screen**. Navigation is by route,
+> not `goScreen` state alone.
 - `<LiteBell/>` — notification bell, rendered outside the `.scene-tabs` nav (deliberately, so a gate that counts 6/7 tabs isn't polluted) [LiteTopbar.tsx:53].
 - Mode switch `.mode-switch` (Story / Live buttons) — **hidden by default**; only rendered when `showModeSwitch()` is true (URL `?modeSwitch=1`). `onClick=switchMode('story'|'live')` sets shared mode + writes to URL [LiteTopbar.tsx:56-77, :33-36].
 
@@ -215,6 +251,10 @@ Notification triggers (notifyStore.initNotifications subscribes to the lite stor
 
 ## draftLinks.ts — "draft message" precise behavior
 **Purpose:** Builds `mailto:` deep links only. There is NO in-app message-draft box/popup anywhere in lite2.
+
+> 🔴 **07-19 更正**: the second sentence is obsolete. **feat-058 shipped `src/lite2/DraftComposer.tsx`**
+> — there IS an in-app draft box now. This entry was one of the gaps the diff flagged; it has
+> been closed. The `mailto:` behaviour described below is still accurate as far as it goes.
 - `buildMailto(subject, body)` → returns `mailto:?subject=...&body=...` string (recipient deliberately blank — roster holds real names, not real emails) [draftLinks.ts:8-12].
 - `draftMailForHandoff(handoff)` — subject=action, body=evidence + tag [draftLinks.ts:14-18].
 - `draftMailForFollowup(item)` — subject=title, body=note or title [draftLinks.ts:20-24].
@@ -223,6 +263,19 @@ Notification triggers (notifyStore.initNotifications subscribes to the lite stor
 ---
 
 ## SKINS — skin.ts + skin-paper.css / skin-aurora.css
+
+> 🔴 **07-19 更正 · renamed, and the old name fails silently.**
+> feat-068 renamed this whole layer: **`skin.ts` → `look.ts`**, **`?skin=` → `?look=`**,
+> **`data-skin` → `data-look`**, `skin-*.css` → `look-*.css`. Reason: it collided with
+> ADR-0021's `Skin`. Every `skin` token in this section (and in the Navigation section below)
+> should be read as `look`.
+>
+> ⚠️ **The old `?skin=` is deliberately NOT aliased** — `look.ts` logs a loud `console.error`
+> but still renders the default `paper`. Consequence worth spelling out: **`?skin=aurora`
+> now silently renders paper**, so any old script, checklist, or gate still using `?skin=aurora`
+> **passes while testing the wrong look** — a false pass, not a visible failure.
+> `?skin=paper` happens to equal the default, so it looks correct and hides the problem.
+
 **Purpose:** `?skin=paper|aurora` chooses a CSS-custom-property token table applied via `.lite2-shell[data-skin="..."]`. Resolved once at mount (URL only; live switch = full page reload) [skin.ts:22-33, Lite2App.tsx:32].
 - Default = **paper** (warm-paper editorial: cream bg `#f7f4ee`, ink `#1d1b17`, sage/honey/terracotta earth tones, 16px base, 8px radius) — byte-for-byte the existing look, zero visual regression [skin-paper.css:8-40].
 - **aurora** = glassmorphism (aurora gradient bg violet/cyan radial + 135deg, glass surfaces `rgba(255,255,255,.82)` + `blur(20px) saturate(1.1)`, blue/purple/orange/red palette, 15px base, 10px radius, violet shadows) [skin-aurora.css:17-60].
@@ -231,6 +284,16 @@ Notification triggers (notifyStore.initNotifications subscribes to the lite stor
 ---
 
 ## Navigation & shell
+
+> 🔴 **07-19 更正 · this whole subsection was invalidated by feat-051.**
+> There **is** a client-side router and there **are** URLs per screen: `<BrowserRouter>` in
+> `Lite2App.tsx`, one `<Route>` per screen, plus deep links `/team/:personId` and
+> `/projects/:projectId`. Screen count is **9**, not 7 (`/projects` feat-055, `/home` feat-057),
+> and **`/home` is the default landing route**. The URL-params bullet at the end of this
+> subsection is also stale: **`?skin=` is now `?look=`** (old name silently falls back to
+> `paper` — see the SKINS correction above), and `?v=` now defaults to **v02**, not v01.
+> Everything below is retained as the `1833d97` snapshot.
+
 - **Model:** no client-side router / no URLs per screen. Navigation is Zustand state `screen` on the lite store; `goScreen(screen)` sets it (and clears `detail` + `noteJustAdded`) [store.ts:39-47, :87, :137].
 - **Only navigation surface = the topbar's 7 tab buttons** (LiteTopbar). There is NO footer navigation (the footer is a static compliance disclaimer) and no side nav [LiteTopbar.tsx:41-50, Lite2Footer.tsx:9-11].
 - All 7 screens are reachable via tabs: team, room, followups, notes, closerlook, playbooks, vision [LiteTopbar.tsx:23-31, Lite2App.tsx:44-60].

@@ -11,8 +11,8 @@ import { useLocation, useMatch } from 'react-router-dom'
 // store 只保留 `goScreen()` 这个动作名（签名不变，7 个调用点一行没改）委托给下面的导航桥。
 //
 // ## 🔴 粘性 query：进 v02 的入口不许被吃掉
-// `?v=2&mode=live&skin=paper&lang=zh` 是所有人（含另外几条并行线与演示现场）进 v02 的入口，
-// 由 shared/version.ts · shared/mode.ts · lite2/skin.ts · i18n 各自读 `window.location.search`
+// `?v=2&mode=live&look=paper&lang=zh` 是所有人（含另外几条并行线与演示现场）进 v02 的入口，
+// 由 shared/version.ts · shared/mode.ts · lite2/look.ts · i18n 各自读 `window.location.search`
 // 解析 —— 它们与路径无关，但**只要有一次导航把 search 丢了，整个壳就掉回 v01**。
 // react-router 的 navigate('/team') 默认不带 search，所以每次导航都必须过 carrySearch()。
 //
@@ -27,6 +27,12 @@ export type LiteScreen =
   | 'closerlook'
   | 'playbooks'
   | 'vision'
+  // feat-055（PRD G9）：整屏项目看板。追加在末尾——本批另一条线（feat-057）同样往这个
+  // 联合类型末尾追加它的 'home'，各加各的一行就不会撞。
+  | 'projects'
+  // feat-057（PRD G4）· 聚合入口屏。7 个分屏一个都没退休——聚合只是它们的门厅
+  // （decisions.md Q2「两个都极端 → 结合」）。追加在末尾，不重排既有条目。
+  | 'home'
 
 export type LiteDetail = { kind: 'person' | 'project'; id: string } | null
 
@@ -40,27 +46,42 @@ export const SCREEN_PATH: Record<LiteScreen, string> = {
   closerlook: '/closer-look',
   playbooks: '/playbooks',
   vision: '/vision',
+  // feat-055：项目屏。与下面的 PROJECT_PATH 同值——项目详情 `/projects/:projectId` 就是
+  // 这一屏的子段（不是另一棵树）。这里写字面量而不是引 PROJECT_PATH，只因常量声明在下面；
+  // 两者不许分叉，改一个必须改另一个。
+  projects: '/projects',
+  home: '/home', // feat-057 · 聚合入口（追加，不动上面任何一条）
 }
 
 // 深链：人卡挂在「你的团队」下（`/team/:personId`）；项目详情是独立顶层段
-// （`/projects/:projectId`）—— feat-055 建整屏项目看板时直接换掉这条路由的 element，
-// 路径形状与这里的导航入口都不用动。
+// （`/projects/:projectId`）。
+// feat-055 已落地：`/projects` 本身成了整屏项目看板（见上面 SCREEN_PATH.projects），
+// 详情段一个字没改——路径形状、导航入口（openDetail('project', id)）全部照旧，变的只是
+// 「浮层底下垫哪一屏」：冷深链现在垫项目屏，不再垫团队屏（见 screenFromPathname）。
 export const PROJECT_PATH = '/projects'
 
-export const DEFAULT_SCREEN: LiteScreen = 'team'
+// feat-057：默认落点从 'team' 改成 'home'（聚合入口）。理由与代价写在
+// .issues/v02-partner-align-0718/progress-feat-057.md —— 一句话：Danny 拍板"聚合做入口"，
+// 而一个只能靠手改 URL 才到得了的屏不叫入口。首屏空态自带上传面板，首访者不会被晾在
+// 一屏空摘要上。`/team` 本身一个字没动，深链、后退、粘性 query 行为全不变。
+export const DEFAULT_SCREEN: LiteScreen = 'home'
 
 const PATH_TO_SCREEN = new Map<string, LiteScreen>(
   (Object.entries(SCREEN_PATH) as [LiteScreen, string][]).map(([screen, path]) => [path, screen]),
 )
 
 // 路径 → 屏。**只在没有来源屏可用时兜底**（冷深链：别人把 URL 发给你、或在详情页刷新前
-// 从没走过站内导航）。`/projects/:projectId` 这类顶层详情段没有任何路径线索能指回来源屏，
-// 只能退到默认屏——所以真正的底屏口径是下面的 `baseScreenFrom()`，别直接用这个函数。
+// 从没走过站内导航）——所以真正的底屏口径是下面的 `baseScreenFrom()`，别直接用这个函数。
+//
+// feat-055：`/projects/:projectId` 的冷深链底屏从 'team' 改成 'projects'。改造前项目屏
+// 还不存在，只能垫团队屏；现在有了整屏看板，把项目详情的链接发给别人、他点「关闭」应该
+// 落在项目屏而不是团队屏（PRD G9 验收原文）。从站内点开的路径不受影响——那条走 history
+// state 里的来源屏，压根不进这个函数。
 export function screenFromPathname(pathname: string): LiteScreen {
   const first = pathname.split('/').filter(Boolean)[0]
   if (!first) return DEFAULT_SCREEN
   const segment = `/${first}`
-  if (segment === PROJECT_PATH) return 'team'
+  if (segment === PROJECT_PATH) return 'projects'
   return PATH_TO_SCREEN.get(segment) ?? DEFAULT_SCREEN
 }
 
@@ -90,7 +111,7 @@ export function baseScreenFrom(pathname: string, state: unknown): LiteScreen {
 // 一次性「接力棒」参数：导航离开时丢掉，不跟着人跑遍全屏。
 // `q` = `/room?q=<问题>`（从决策卡带着问题进议事室，feat-057 的上游接口）——它描述的是
 // 「这次进屋要问什么」，不是会话状态，带到 /notes 再带回来会诈尸重放。
-// 其余一切参数（v/mode/skin/lang/showInactive/transport/未来新增的）一律跟着走。
+// 其余一切参数（v/mode/look/lang/showInactive/transport/未来新增的）一律跟着走。
 const EPHEMERAL_PARAMS = ['q'] as const
 
 /**

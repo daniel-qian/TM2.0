@@ -17,14 +17,18 @@ import { NotesScreen } from './screens/NotesScreen'
 import { CloserLookScreen } from './screens/CloserLookScreen'
 import { PlaybooksScreen } from './screens/PlaybooksScreen'
 import { VisionScreen } from './screens/VisionScreen'
+import { ProjectsScreen } from './screens/ProjectsScreen'
+import { HomeScreen } from './screens/HomeScreen'
 import { DetailOverlay } from './DetailOverlay'
+import { DraftComposer } from './DraftComposer'
 import { Lite2Footer } from './Lite2Footer'
 import { OnboardWizard } from './OnboardWizard'
 import { initNotifications } from './notifyStore'
-import { resolveSkin } from './skin'
+import { resolveLook } from './look'
 import {
   bindNavigator,
   publishBaseScreen,
+  DEFAULT_SCREEN,
   PROJECT_PATH,
   SCREEN_PATH,
   useCurrentScreen,
@@ -34,7 +38,7 @@ import {
 // feat-035（lite-live-v02 kickoff §架构拍板 1）· lite2 壳 = v02 并排产品本体。
 // copy-then-wall：整树从 src/lite/** 复制而来（引擎含在内），lite ↔ lite2 零交叉 import——
 // 边界由 ESLint no-restricted-imports 机器闸看住（这个壳也从不 import src/story/**）。
-// v1 冻结：src/lite/** 一行不改；这里独立生长六屏骨架 + 皮肤令牌层 + 合规页脚。
+// v1 冻结：src/lite/** 一行不改；这里独立生长六屏骨架 + 观感（Look）令牌层 + 合规页脚。
 //
 // 6-tab 骨架（PRD 顺序）：Your team · The room · Follow-ups · A closer look · Playbooks ·
 // Where this goes。Follow-ups / A closer look 本波先空态占位（feat-036/037 真派生）。
@@ -55,9 +59,10 @@ export function Lite2App() {
 function Lite2Shell() {
   const navigate = useNavigate()
   const screen = useCurrentScreen()
-  // 皮肤只在挂载时读一次 URL（与 useDict 的 locale 解析同口径）——现场切皮走整页刷新
-  // （试玩场景足够；运行时热切换留待需要时再做）。
-  const skin = useMemo(() => resolveSkin(), [])
+  // feat-068：观感（Look，原 skin——`Skin` 现专指 ADR-0021 的行业视觉主题，见 CONTEXT.md）
+  // 只在挂载时读一次 URL（与 useDict 的 locale 解析同口径）——现场切换走整页刷新（试玩场景
+  // 足够；运行时热切换留待需要时再做，见 issue #16）。
+  const look = useMemo(() => resolveLook(), [])
 
   // store 的 goScreen/openDetail/closeDetail 经这个桥推路由（Zustand action 里没有 hook）。
   // 两处都绑，缺一不可：
@@ -92,7 +97,7 @@ function Lite2Shell() {
   }, [])
 
   return (
-    <div className="app-shell lite2-shell" data-scene={screen} data-mode="live" data-skin={skin}>
+    <div className="app-shell lite2-shell" data-scene={screen} data-mode="live" data-look={look}>
       <LiteTopbar />
       <main className="scene-stage">
         {/* 🔴 每条屏路由的 element 都是同一个 <ScreenView />，这不是偷懒——是修复的关键。
@@ -104,8 +109,9 @@ function Lite2Shell() {
             如果每条路由各写各的 element，进详情就等于换了棵树 —— 底屏被偷换、本地状态清零，
             正是复核逮到的那条 major。 */}
         <Routes>
-          {/* 入口：`/?v=2&mode=live&skin=paper&lang=zh` 落到 /team，query 原样带过去。
-              replace —— 否则后退键在 `/` 与 `/team` 之间反复横跳（重定向再把人推回来）。 */}
+          {/* 入口：`/?v=2&mode=live&look=paper&lang=zh` 落到 DEFAULT_SCREEN（feat-057 起
+              是聚合入口 /home），query 原样带过去。replace —— 否则后退键在 `/` 与落点之间
+              反复横跳（重定向再把人推回来）。 */}
           <Route path="/" element={<RedirectToDefault />} />
 
           <Route path={SCREEN_PATH.team} element={<ScreenView />} />
@@ -118,32 +124,44 @@ function Lite2Shell() {
           <Route path={SCREEN_PATH.closerlook} element={<ScreenView />} />
           <Route path={SCREEN_PATH.playbooks} element={<ScreenView />} />
           <Route path={SCREEN_PATH.vision} element={<ScreenView />} />
+          {/* feat-055（PRD G9）：整屏项目看板。追加在既有屏路由末尾——本批 feat-057 的
+              `/home` 同样追加在这之后，各加各的一行。 */}
+          <Route path={SCREEN_PATH.projects} element={<ScreenView />} />
+          {/* feat-057 · 聚合入口屏（追加在既有屏路由末尾，上面一条都没动）。 */}
+          <Route path={SCREEN_PATH.home} element={<ScreenView />} />
 
-          {/* 深链：项目详情。整屏项目看板是 feat-055 的活——这里先把路径占住，落到今天
-              已有的真实项目浮层（真 payload，不是占位假屏；把已经能用的详情降级成
-              「Coming」反而是回归）。底下垫的是**来源屏**（routes.ts 的 baseScreenFrom），
-              不再一律垫团队屏。feat-055 建整屏看板时把这条路由从 ScreenView 换成自己的
-              element 即可，导航入口（openDetail('project', id)）与路径形状都不用动。 */}
+          {/* 深链：项目详情。底下垫的是**来源屏**（routes.ts 的 baseScreenFrom）。
+              feat-055 落地后这里**依然**是 <ScreenView />，而不是换成 ProjectsScreen：
+              051 留的那句「换成自己的 element」在整屏看板长出来之后反而是个陷阱——各写各的
+              element 会让「进详情 = 换了棵树」，底屏被偷换、本地状态清零（正是 051 复核逮到
+              的那条 major）。真正要改的是**底屏口径**：screenFromPathname 现在把
+              `/projects/*` 派生成 'projects'，于是冷深链的浮层垫的就是项目屏，站内点开的
+              仍垫用户原来那一屏。路径形状与导航入口（openDetail('project', id)）一个字没动。 */}
           <Route path={`${PROJECT_PATH}/:projectId`} element={<ScreenView />} />
 
           {/* 兜底：未知路径回默认屏，同样保住 query。 */}
           <Route path="*" element={<RedirectToDefault />} />
         </Routes>
       </main>
-      {/* feat-052：两个弹层都常驻挂载，开关在各自组件里（LiteModal 的 open）——父层条件挂载
+      {/* feat-052：弹层一律常驻挂载，开关在各自组件里（LiteModal 的 open）——父层条件挂载
           会把组件直接摘掉，出场动画没机会跑。 */}
       <DetailOverlay />
       <OnboardWizard />
+      {/* feat-058 · 应用内草稿框。挂在壳层而不是各屏内部：开框的入口在「你的团队」的分诊卡
+          和「跟进」的队列条目上，跨两棵子树；且弹层必须盖在整壳之上（同 DetailOverlay）。 */}
+      <DraftComposer />
       <Lite2Footer />
     </div>
   )
 }
 
-// 🔴 重定向必须原样转发 search + hash：`?v=2&mode=live&skin=paper&lang=zh` 是进 v02 的入口，
+// 🔴 重定向必须原样转发 search + hash：`?v=2&mode=live&look=paper&lang=zh` 是进 v02 的入口，
 // 丢一个 `v=2` 整个壳就掉回 v01。
+// feat-057：落点改读 routes.ts 的 DEFAULT_SCREEN（现在是聚合入口 /home），不再写死 team——
+// 默认落哪一屏是导航口径，属于 routes.ts，这里只跟着走，免得两处各说一套。
 function RedirectToDefault() {
   const { search, hash } = useLocation()
-  return <Navigate to={{ pathname: SCREEN_PATH.team, search, hash }} replace />
+  return <Navigate to={{ pathname: SCREEN_PATH[DEFAULT_SCREEN], search, hash }} replace />
 }
 
 // 屏 id → 屏组件。ScreenView 按当前底屏在这里挑一个渲染。
@@ -155,6 +173,9 @@ const SCREEN_COMPONENT: Record<LiteScreen, ComponentType> = {
   closerlook: CloserLookScreen,
   playbooks: PlaybooksScreen,
   vision: VisionScreen,
+  // feat-055：项目屏。追加在既有条目末尾（本批 feat-057 的 'home' 同样追加在这之后）。
+  projects: ProjectsScreen,
+  home: HomeScreen, // feat-057 · 聚合入口（追加，不动上面任何一条）
 }
 
 // 所有屏路由共用的渲染位。屏组件由**底屏**决定（详情深链上 = 打开浮层时用户所在的那一屏），

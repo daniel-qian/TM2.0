@@ -378,6 +378,19 @@ DOCS = 5   PROJECTS = 6   RULINGS = 8
   凭据墙没动。门逻辑本身是用 `_build` 纯函数路径以 LLM 形态输入验证的（复核者独立复现过），
   `pipeline.py:117 → extract.py:1091 apply_gate` 这条链确认覆盖 LLM 路径而非只覆盖启发式路径；
   但 prompt 文本在真模型上的效果仍未验证。**拿到 key 必须复跑。**
+
+  > ### 🔴 07-19 更正 ·「没有 key、属凭据墙」是错的（原文保留）
+  >
+  > **key 一直都在** —— `eval-harness/.env` 里有真的 MiniMax key，且 `service/app.py`
+  > **导入时就会加载它**。这正是「跑全量 pytest 会真调 MiniMax、约 11 分钟真实计费」的原因；
+  > 那条计费警告和这条「无 key」写在同一波文档里，互相矛盾。
+  >
+  > 所以这条 `unverifiable` **不是凭据墙挡住的，是没跑**。要验随时能验，代价是真金白银，
+  > 不是权限。**别再把它当作「等 Danny 给 key」的待办**——没有人在等谁。
+  >
+  > 同一处错误在 `feature_list.json` 的 feat-054 evidence 里也有一份，已一并就地纠正。
+  > `.issues/feat-068-frontend-deploy/session-handoff.md` 在 07-19 上午就点名了这两处该改，
+  > 但当时**并没有真的改**，所以拖到现在。
 - **`待确认` 的产品定夺没动**（见修复 4）。现在是 docstring 和测试都说实话，行为原样。
 - **Layer C（signal 轴）没动**，第 5 条 strict xfail 仍保留。理由同上一轮，复核者核实成立。
 - **`granularity` 仍不落库** —— ruling 只在内存里，项目屏为空时用户看不到解释。

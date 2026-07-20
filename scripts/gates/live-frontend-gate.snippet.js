@@ -43,21 +43,33 @@
  *   await __seedGate.assertAskRedline()        // K6: whole-DOM — person cards zero numbers, no score tables, story nouns 0
  *   __seedGate.askVerdict()                    // aggregate (6 ask phases)
  *
- * feat-035 (lite-live-v02) — v2 shell + skin infra phases, SEPARATE aggregate (v2Verdict below,
+ * feat-068 (v02-align) — the paper|aurora switch this gate drives was renamed from the old `skin`
+ * query param / DOM attribute to `?look=` / `data-look` (`Skin` is now exclusively ADR-0021's
+ * industry visual theme; the two
+ * aesthetic faces of Lite2 are a `Look`). URLs and DOM attributes below are updated. The gate's
+ * OWN identifiers (readSkinSnapshot / assertSkinTokens / skinTokens / skinVerdict / skinNoLeak /
+ * skinAttr) are deliberately NOT renamed: those phase keys are quoted verbatim in already-recorded
+ * feature_list.json evidence, and renaming them would orphan that traceability. Read them as
+ * legacy names for the Look phases.
+ *
+ * feat-035 (lite-live-v02) — v2 shell + look infra phases, SEPARATE aggregate (v2Verdict below,
  * phase group A). GATE-FIRST: written and run red BEFORE the v02 shell existed (no .lite2-shell
  * anywhere, no `?v=` switch) — feat-035's implementation turns this green. Driven with
  * `?transport=stub` (deterministic, offline — no real backend). Spans THREE page loads plus one
  * external lint run; the driver re-injects this snippet each navigation and carries JSON forward
  * (full protocol: scripts/gates/live-frontend-gate.md):
- *   [on `?v=2&mode=live&transport=stub&skin=paper`]
+ *   [on `?v=2&mode=live&transport=stub&look=paper`]
  *   __seedGate.defuseAnimations()
- *   await __seedGate.assertV2Boots()                              // v2Boots: .lite2-shell + 6 tabs, PRD order
+ *   await __seedGate.assertV2Boots()                              // v2Boots: .lite2-shell + 8 tabs, PRD
+ *                                                                // order (feat-057 prepended "Today")
  *   const before = __seedGate.readSkinSnapshot()
- *   [navigate to `?v=2&mode=live&transport=stub&skin=aurora`, re-inject snippet]
+ *   [navigate to `?v=2&mode=live&transport=stub&look=aurora`, re-inject snippet]
  *   const after = __seedGate.readSkinSnapshot()
- *   __seedGate.assertSkinTokens(before, after)                    // skinTokens: data-skin + computed value both change
- *   [on default URL `?mode=live&transport=stub` (no v=) — re-run the existing 10-phase gate here
- *    first (phases A-J above), take its verdict().pass, THEN:]
+ *   __seedGate.assertSkinTokens(before, after)                    // skinTokens: data-look + computed value both change
+ *   [on `?v=1&mode=live&transport=stub` — 🔴 2026-07-19: `?v=1` is now REQUIRED here. The bare
+ *    URL used to mean v01; Danny's ruling ① flipped resolveVersion()'s default to '2', so the
+ *    bare URL now renders v02 and this phase would assert v02 against itself. Re-run the
+ *    existing 10-phase gate here first (phases A-J above), take its verdict().pass, THEN:]
  *   __seedGate.assertV1Untouched(verdictResult.pass)               // v1Untouched: 0 .lite2-shell + v01 10-phase pass
  *   [on `?mode=story`]
  *   __seedGate.assertStoryUntouched()                              // storyUntouched: 0 .lite2-shell
@@ -231,22 +243,22 @@
  *                                                    // carried from pages B/C/E for the phases
  *                                                    // that ran before this page load
  *
- * feat-046 (lite-live-v02, kickoff-dev.md §feat-046 / decisions.md 终盘形态) — aurora skin polish
+ * feat-046 (lite-live-v02, kickoff-dev.md §feat-046 / decisions.md 终盘形态) — aurora look polish
  * pass, SEPARATE aggregate (skinVerdict below, phase group E). BORN RED (2026-07-14, before
  * implementation, on the feat-042..045 rough-draft tokens): `readSkinProbe()`'s computed values on
- * `?skin=aurora` did NOT yet hit the target shape (glass was still cream-tinted rgba(255,253,248,…)
+ * `?look=aurora` did NOT yet hit the target shape (glass was still cream-tinted rgba(255,253,248,…)
  * not white, shadows were ink-tinted not violet, density/radius/badge tokens did not exist yet) —
  * `assertAuroraApplied()` failed several of its >=8 sub-checks. `PAPER_BASELINE` below is a REAL
  * computed-value snapshot captured live (this session, on `integrate/v02-main-sync`@feff6be, BEFORE
  * any feat-046 CSS edit) — not a guess; `assertPaperUnchanged()` diffs the CURRENT paper probe
  * against these exact literal strings, so any future edit that nudges a paper pixel — even one this
- * skin pass didn't intend — goes red. Pure-visual scope: zero DOM structural change (two authorized
+ * look pass didn't intend — goes red. Pure-visual scope: zero DOM structural change (two authorized
  * functional exceptions carried on this branch: DetailOverlay Escape-to-close, onboarding wizard
  * backdrop switched from a hardcoded warm rgba to consuming `--lite2-ink-rgb`). Driven with
  * `?transport=stub`. `readSkinProbe()` clicks through Your team + Playbooks internally (both are
  * needed to read `.upload-panel` and `.lite-playbooks-slot-tag`) and returns to Your team when done
  * — call it fresh on each of the three URLs below:
- *   [on `?v=2&mode=live&transport=stub&skin=aurora`]
+ *   [on `?v=2&mode=live&transport=stub&look=aurora`]
  *   __seedGate.defuseAnimations()
  *   const auroraProbe = await __seedGate.readSkinProbe()
  *   __seedGate.assertAuroraApplied(auroraProbe)        // auroraApplied: >=8 independently-checked
@@ -263,12 +275,13 @@
  *                                                       // the bumped 10px, .lite-playbooks-slot-tag
  *                                                       // reads as a real blue-soft badge (not the
  *                                                       // flat gray chip)
- *   [on `?v=2&mode=live&transport=stub&skin=paper`]
+ *   [on `?v=2&mode=live&transport=stub&look=paper`]
  *   const paperProbe = await __seedGate.readSkinProbe()
  *   __seedGate.assertPaperUnchanged(paperProbe)        // paperUnchanged: every field in paperProbe
  *                                                       // byte-equal to the PAPER_BASELINE constant
  *                                                       // captured pre-implementation (see above)
- *   [on default URL `?mode=live&transport=stub` (no v=)]
+ *   [on `?v=1&mode=live&transport=stub` — 🔴 2026-07-19: was "default URL (no v=)"; the bare URL
+ *    is v02 now (ruling ①), so v01 must be named explicitly or this probe leaks-tests v02]
  *   const defaultLeak = __seedGate.readLeakProbe()
  *   [on `?mode=story`]
  *   const storyLeak = __seedGate.readLeakProbe()
@@ -276,7 +289,7 @@
  *                                                       // .lite2-shell AND their shared `.scene-tabs`
  *                                                       // chrome still computes to the ORIGINAL
  *                                                       // shared/00-base.css value (proves
- *                                                       // `[data-skin='aurora']`-scoped rules never
+ *                                                       // `[data-look='aurora']`-scoped rules never
  *                                                       // reach outside lite2, not just "structurally
  *                                                       // can't" by inspection)
  *   __seedGate.skinVerdict({ auroraApplied, paperUnchanged, skinNoLeak })
@@ -430,6 +443,19 @@
 
     async injectSeeds(files) {
       // files: [{name, b64}] — real bytes into the real <input class="upload-input">.
+      //
+      // feat-057: in v02 the default landing is now `/home` (the aggregate entry). Its EMPTY
+      // state mounts the UploadPanel, but the moment ingest succeeds `team` turns non-null and
+      // Home swaps to the summary layout — the panel unmounts and the `.upload-ready` /
+      // `.upload-error` markers this function polls for never appear (a 360s false red). Your
+      // team renders the UploadPanel in BOTH branches, so drive the upload from there. Guarded
+      // on `.lite2-shell` so the v01 phases (which have their own topbar) are untouched.
+      if ($('.lite2-shell')) {
+        this._clickTab('Your team');
+        try {
+          await poll(() => ($('.upload-input') ? true : null), 4000, 'Your team upload panel to mount');
+        } catch (e) { /* fall through — the null check below reports it */ }
+      }
       const input = $('.upload-input');
       if (!input) return (results.inject = { pass: false, error: 'no .upload-input in DOM' });
       const dt = new DataTransfer();
@@ -1274,38 +1300,61 @@
     // ── feat-035 (lite-live-v02) — v2Verdict, independent aggregate, phase group A ─────────────
     // Driven with `?transport=stub` (deterministic, offline — no real backend needed). Unlike the
     // 10-phase verdict()/askVerdict() above (which live inside a single `?mode=live` page), these
-    // phases span THREE separate page loads (default URL, `?v=2`, `?mode=story`) plus one lint
+    // phases span THREE separate page loads (`?v=1`, `?v=2`, `?mode=story`) plus one lint
     // run the browser can't do itself — so most of them take externally-computed evidence as
     // arguments rather than driving everything in-page. The driver session's job: navigate,
     // re-inject this snippet each time, call the matching phase, and carry the JSON forward.
     async assertV2Boots() {
-      // Phase v2Boots: `?v=2&mode=live` must render the .lite2-shell root with all 7 tabs
-      // (PRD order + feat-047's 7th tab: Your team · The room · Follow-ups · Avery's notes ·
-      // A closer look · Playbooks · Where this goes — "Avery's notes" ported from `lite`,
-      // placed after Follow-ups per feat-047's tab-order decision, see progress.md).
+      // Phase v2Boots: `?v=2&mode=live` must render the .lite2-shell root with all 8 tabs
+      // Tab order = feat-057's aggregate entry + PRD order + feat-047's "Avery's notes"
+      // + feat-055's "Projects":
+      //   Today · Your team · Projects · The room · Follow-ups · Avery's notes ·
+      //   A closer look · Playbooks · Where this goes
+      //
+      // "Avery's notes" was ported from `lite` and placed after Follow-ups per feat-047's
+      // tab-order decision (see progress.md).
+      // "Today" is PREPENDED (feat-057): it is the `/` landing and the "where do I look first"
+      // screen — an entry placed at the tail is not an entry. 🔴 The 7 detail screens did NOT
+      // retire; Danny's ruling was "aggregate AND split, both extremes". If a future line
+      // removes one of the seven, that is a regression, not a contract update.
+      // "Projects" sits at index 2 (feat-055): the projects screen and the team screen are the
+      // two halves of the same upload (people / projects), so it rides next to "Your team"
+      // rather than at the tail.
+      //
+      // ⚠ The expected array below is the SINGLE SOURCE OF TRUTH for tab order in this gate.
+      // Any line that adds/removes/reorders a tab in src/lite2/LiteTopbar.tsx MUST update this
+      // array in the same commit, or the v2Boots phase goes red. Labels are the EN dict values
+      // (`resolveLocale()` defaults to EN when the gate URL carries no `?lang=`).
+      // Count is derived from the array (`expected.length`) — never hardcode it separately,
+      // or the two drift the moment a tab is added.
       try {
         await poll(() => ($('.lite2-shell') ? true : null), 8000, '.lite2-shell to mount');
       } catch (e) { /* fall through — assertions below report absence */ }
       const shell = $('.lite2-shell');
       const tabs = $$('.lite2-shell .scene-tabs .scene-tab').map((b) => (b.textContent || '').trim());
-      const expected = ['Your team', 'The room', 'Follow-ups', "Avery's notes", 'A closer look', 'Playbooks', 'Where this goes'];
+      const expected = ['Today', 'Your team', 'Projects', 'The room', 'Follow-ups', "Avery's notes", 'A closer look', 'Playbooks', 'Where this goes'];
       const out = {
         shellPresent: !!shell,
         dataScene: shell ? shell.getAttribute('data-scene') : null,
         tabCount: tabs.length,
         tabLabels: tabs,
         tabOrderMatches: JSON.stringify(tabs) === JSON.stringify(expected),
-        pass: !!shell && tabs.length === 7 && JSON.stringify(tabs) === JSON.stringify(expected),
+        pass: !!shell && tabs.length === expected.length && JSON.stringify(tabs) === JSON.stringify(expected),
       };
       results.v2Boots = out;
       return out;
     },
 
     assertV1Untouched(v01VerdictPass) {
-      // Phase v1Untouched: called on the DEFAULT URL (`?mode=live`, no `v=`) — must render ZERO
+      // Phase v1Untouched: called on `?v=1&mode=live` — must render ZERO
       // .lite2-shell nodes (v01 stays LiteApp), AND the caller passes in the already-computed
       // v01 ten-phase verdict().pass from a same-session re-run on this same page (this snippet
       // can't itself remember state across navigations — the driver carries the boolean over).
+      //
+      // 🔴 2026-07-19: this phase used to be driven on the DEFAULT URL (`?mode=live`, no `v=`).
+      // Danny's ruling ① flipped resolveVersion()'s default to '2', so the bare URL renders v02
+      // and driving this phase there would assert "v01 is untouched" against a v02 page.
+      // `?v=1` is now the only way to reach v01.
       const leaked = $$('.lite2-shell').length;
       const out = {
         lite2ShellCount: leaked,
@@ -1337,7 +1386,7 @@
     },
 
     readSkinSnapshot() {
-      // Helper (not a phase itself): snapshot the shell's data-skin attribute + a couple of
+      // Helper (not a phase itself): snapshot the shell's data-look attribute + a couple of
       // computed values that the token layer is expected to move. Called once per page load
       // (paper, then aurora) — the driver holds both JSON snapshots and feeds them into
       // assertSkinTokens() together (cross-navigation, so this can't be done in one call).
@@ -1345,15 +1394,15 @@
       if (!shell) return null;
       const cs = getComputedStyle(shell);
       return {
-        skinAttr: shell.getAttribute('data-skin'),
+        skinAttr: shell.getAttribute('data-look'),
         backgroundImage: cs.backgroundImage,
         color: cs.color,
       };
     },
 
     assertSkinTokens(before, after) {
-      // Phase skinTokens: switching `?skin=paper` -> `?skin=aurora` must change BOTH the shell
-      // root's data-skin attribute AND at least one key computed value (proves the token layer
+      // Phase skinTokens: switching `?look=paper` -> `?look=aurora` must change BOTH the shell
+      // root's data-look attribute AND at least one key computed value (proves the token layer
       // actually wires through — not just an inert attribute).
       const skinAttrChanged = !!before && !!after && before.skinAttr !== after.skinAttr;
       const computedChanged =
@@ -1636,7 +1685,7 @@
     async snapshotFollowups() {
       // Helper (not a phase itself): collect every follow-up title currently held (active +
       // history) BEFORE a reload — the driver carries this JSON across the navigation the same
-      // way readSkinSnapshot()/assertSkinTokens() do for the skin-token phase above.
+      // way readSkinSnapshot()/assertSkinTokens() do for the look-token phase above.
       // NOTE (caught live, 2026-07-14): clicking a subtab and reading the DOM in the same tick
       // can catch React's PRE-click render (batched update not yet flushed) — this produced a
       // false "same item in both active and history" snapshot the first time this ran. A short
@@ -2325,7 +2374,7 @@
     },
 
     // ── feat-046 (lite-live-v02) — skinVerdict, independent aggregate, phase group E ───────────
-    // Aurora skin polish pass. See the usage block above for the full 3-URL drive protocol.
+    // Aurora look polish pass. See the usage block above for the full 3-URL drive protocol.
     async readSkinProbe() {
       // Helper (not a phase itself): snapshot the full set of computed values the E-group phases
       // assert against. Clicks through Your team (for `.upload-panel`, the radius probe) and
@@ -2335,7 +2384,7 @@
       const shell = $('.lite2-shell');
       if (!shell) return null;
       const cs = (el) => getComputedStyle(el);
-      const out = { skinAttr: shell.getAttribute('data-skin') };
+      const out = { skinAttr: shell.getAttribute('data-look') };
       const shellCs = cs(shell);
       out.shellFontSize = shellCs.fontSize;
       out.shellBackgroundImage = shellCs.backgroundImage;
@@ -2368,7 +2417,7 @@
     },
 
     assertAuroraApplied(probe) {
-      // Phase auroraApplied: `?skin=aurora` — 11 independently-checked computed values (>= the
+      // Phase auroraApplied: `?look=aurora` — 11 independently-checked computed values (>= the
       // kickoff's required 8), each a POSITIVE assertion against the target aurora shape (not
       // merely "differs from paper" — a regression to some other wrong value would still be
       // caught). Target values sourced from kickoff-dev.md §feat-046 / the partner reference
@@ -2396,7 +2445,7 @@
     },
 
     // Literal computed-value snapshot captured LIVE on `integrate/v02-main-sync`@feff6be
-    // (2026-07-14, before any feat-046 CSS edit) via `?v=2&mode=live&transport=stub&skin=paper` —
+    // (2026-07-14, before any feat-046 CSS edit) via `?v=2&mode=live&transport=stub&look=paper` —
     // not a guess. assertPaperUnchanged() diffs the current probe against these exact strings
     // field-by-field so any future paper drift (even unintended) goes red.
     PAPER_BASELINE: {
@@ -2414,7 +2463,7 @@
     },
 
     assertPaperUnchanged(probe) {
-      // Phase paperUnchanged: `?skin=paper` computed values must be byte-identical to
+      // Phase paperUnchanged: `?look=paper` computed values must be byte-identical to
       // PAPER_BASELINE — proves the aurora polish pass touched zero paper pixels.
       const p = probe || {};
       const base = this.PAPER_BASELINE;
@@ -2429,9 +2478,12 @@
     },
 
     readLeakProbe() {
-      // Helper for skinNoLeak: call on the default URL (`?mode=live`, no `v=`) and on
-      // `?mode=story`. `.scene-tabs` is the shared topbar chrome both v01 and story render —
-      // reading its computed background proves `[data-skin='aurora']`-scoped rules (which all
+      // Helper for skinNoLeak: call on `?v=1&mode=live` and on `?mode=story`.
+      // 🔴 2026-07-19: this used to say "the default URL (no `v=`)". Ruling ① flipped
+      // resolveVersion()'s default to '2', so the bare URL is v02 — probing it would report
+      // lite2ShellCount === 1 and fail, or worse, quietly measure the wrong shell.
+      // `.scene-tabs` is the shared topbar chrome both v01 and story render —
+      // reading its computed background proves `[data-look='aurora']`-scoped rules (which all
       // require a `.lite2-shell` ancestor to match at all) truly never reach outside lite2, not
       // just "structurally can't" by inspection.
       const tabs = $('.scene-tabs');

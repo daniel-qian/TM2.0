@@ -1,4 +1,7 @@
-/* feat-035（lite-live-v02 kickoff §架构拍板 4）· aurora 皮肤令牌层 — `?skin=aurora`。
+/* feat-035（lite-live-v02 kickoff §架构拍板 4）· aurora 观感（Look）令牌层 — `?look=aurora`。
+   feat-068 更名：本层原名 skin（查询参数与 DOM 属性同名），与 ADR-0021 的 `Skin`（垂直包里的
+   行业视觉主题）撞词，已整体改叫 Look——本次纯属性/文件名改名，规则顺序与数值一字未动，计算
+   结果与更名前逐字节相同（见 src/lite2/look.ts 头部）。
    feat-046（阶段 C 精修棒）在此基础上把粗调初版的色表/渐变/阴影/密度/圆角对齐合伙人参考库
    `D:\avery-command-room (2)\avery-command-room` 的 src/app/globals.css 精确值（只抄 CSS 数值，
    零 TSX/JSX 进仓）：bg #edf6ff · surface #ffffff/soft #eef3fa · ink #10223d/ink-2 #263850 ·
@@ -12,9 +15,9 @@
    架构纪律（kickoff §架构拍板 4）：组件样式只消费令牌——shared 设计系统里消费这批 CSS 自定义
    属性的组件（文字色/边框/多数阴影）随令牌自动换皮，约覆盖八成；令牌覆盖不到的语法差异（玻璃
    chrome 硬编码在 shared/lite2.css 老代里、徽章 vs 左边条这类结构性差异）用本文件底部的少量
-   `[data-skin="aurora"]` 组件级分支处理，逐条注释、控制在少数（见各分支上方注释）。红线不随
-   皮肤松动：人卡在 aurora 下同样零数字零血条（本文件不触碰任何人身数据渲染逻辑，纯视觉令牌）。 */
-.lite2-shell[data-skin='aurora'] {
+   `[data-look="aurora"]` 组件级分支处理，逐条注释、控制在少数（见各分支上方注释）。红线不随
+   观感松动：人卡在 aurora 下同样零数字零血条（本文件不触碰任何人身数据渲染逻辑，纯视觉令牌）。 */
+.lite2-shell[data-look='aurora'] {
   --paper: #edf6ff;
   --paper-strong: #ffffff;
   --ink: #10223d;
@@ -34,12 +37,12 @@
   --shadow: 0 20px 64px rgba(36, 32, 95, 0.16);
   --shadow-soft: 0 1px 2px rgba(16, 34, 61, 0.08), 0 12px 30px rgba(36, 32, 95, 0.1);
   /* 局部覆盖共享 --radius（shared/styles/00-base.css :root 里定义的 8px 基准）——作用域锁在
-     .lite2-shell[data-skin='aurora'] 子树内，v01/story 够不到（它们的壳没有这个属性选择器)，
+     .lite2-shell[data-look='aurora'] 子树内，v01/story 够不到（它们的壳没有这个属性选择器)，
      paper 侧不声明、继续吃 :root 的 8px，两皮圆角差异由这一条 token 覆盖统一带动几十个消费
      var(--radius) 的元素（dropzone/卡片/输入框等），无需逐元素改。 */
   --radius: 10px;
   /* 密度基准：aurora 参考库全局 body font-size:15px（比浏览器默认 16px 更紧凑）——paper 侧
-     显式声明维持 16px（见 skin-paper.css），两值都不依赖浏览器默认，可稳定断言。 */
+     显式声明维持 16px（见 look-paper.css），两值都不依赖浏览器默认，可稳定断言。 */
   font-size: 15px;
 
   --lite2-surface: rgba(255, 255, 255, 0.86);
@@ -56,11 +59,11 @@
 
   /* feat-046 · lite2.css 老代（feat-024/025 时代）大量硬编码 rgba(255,253,248,X)/
      rgba(29,27,23,X)，本棒把它们改消费下面两个 RGB 三元组令牌——aurora 侧给出白色/深藏青
-     三元组，paper 侧镜像原硬编码值（见 skin-paper.css，零漂移）。 */
+     三元组，paper 侧镜像原硬编码值（见 look-paper.css，零漂移）。 */
   --lite2-surface-rgb: 255, 255, 255;
   --lite2-ink-rgb: 16, 34, 61;
   --lite2-paper-rgb: 237, 246, 255;
-  /* 语气色三元组（镜像 skin-paper.css 的同名令牌）——aurora 值取参考库色表：
+  /* 语气色三元组（镜像 look-paper.css 的同名令牌）——aurora 值取参考库色表：
      accent=blue #496ee8 / deep=blue-fg #2f4bb0 · danger=red #d95757 / deep=red-fg #a5322f ·
      warn=orange #d88a2d / deep=orange-fg #9a5a12 · violet=purple #6b5bd6 / deep=purple-fg
      #4b3ca8 · sky=blue（聚焦描边同主色）· ink-hover=navy-2 #193454。 */
@@ -97,20 +100,20 @@
   --lite2-tone-gray-fg: #667085;
 }
 
-/* ═══ [data-skin="aurora"] 组件级分支（逐条记录，kickoff §feat-046 要求"控制在少数"）═══
+/* ═══ [data-look="aurora"] 组件级分支（逐条记录，kickoff §feat-046 要求"控制在少数"）═══
    下面每一条都是"令牌覆盖不到的语法差异"，不是行为改动——零 DOM 结构变化，只重新分配已有
    元素/已有 class 的视觉表现。 */
 
 /* ── ① 玻璃质感 chrome 扩面：初版只盖了 3 个类，精修补齐顶栏/铃铛/建议 chip/页脚——
    这些都是 shared chunk 或 lite2.css 里硬编码暖纸半透明白的顶层 chrome，令牌盖不到。
    blur 强度按参考库精确值升级到 20px+saturate(1.1)（初版是朴素 16px）。 */
-.lite2-shell[data-skin='aurora'] .scene-tabs,
-.lite2-shell[data-skin='aurora'] .mode-switch,
-.lite2-shell[data-skin='aurora'] .composer-card,
-.lite2-shell[data-skin='aurora'] .nexus-empty,
-.lite2-shell[data-skin='aurora'] .lite2-compliance-footer,
-.lite2-shell[data-skin='aurora'] .lite-bell-toggle,
-.lite2-shell[data-skin='aurora'] .lite-room-chip {
+.lite2-shell[data-look='aurora'] .scene-tabs,
+.lite2-shell[data-look='aurora'] .mode-switch,
+.lite2-shell[data-look='aurora'] .composer-card,
+.lite2-shell[data-look='aurora'] .nexus-empty,
+.lite2-shell[data-look='aurora'] .lite2-compliance-footer,
+.lite2-shell[data-look='aurora'] .lite-bell-toggle,
+.lite2-shell[data-look='aurora'] .lite-room-chip {
   background: var(--lite2-glass);
   backdrop-filter: var(--lite2-glass-blur);
 }
@@ -119,13 +122,13 @@
    的冻结类（v01 也用），只能用属性选择器从 lite2 侧覆盖，v01 物理够不到。左边条(::before)
    在 aurora 下隐去，语气改由 .home-handoff-tone 文字标签的软底徽章样式承载——badge 语法
    与参考库 badge.tsx 一致（tone-soft 底色 + 饱和字色 + 全圆角）。 */
-.lite2-shell[data-skin='aurora'] .home-handoff::before {
+.lite2-shell[data-look='aurora'] .home-handoff::before {
   display: none;
 }
-.lite2-shell[data-skin='aurora'] .home-handoff {
+.lite2-shell[data-look='aurora'] .home-handoff {
   padding-left: 16px;
 }
-.lite2-shell[data-skin='aurora'] .home-handoff-tone {
+.lite2-shell[data-look='aurora'] .home-handoff-tone {
   display: inline-flex;
   align-items: center;
   padding: 2px 9px;
@@ -134,60 +137,60 @@
   background: var(--lite2-tone-blue-bg);
   letter-spacing: 0.04em;
 }
-.lite2-shell[data-skin='aurora'] .home-tone-honey .home-handoff-tone {
+.lite2-shell[data-look='aurora'] .home-tone-honey .home-handoff-tone {
   color: var(--lite2-tone-orange-fg);
   background: var(--lite2-tone-orange-bg);
 }
-.lite2-shell[data-skin='aurora'] .home-tone-terracotta .home-handoff-tone {
+.lite2-shell[data-look='aurora'] .home-tone-terracotta .home-handoff-tone {
   color: var(--lite2-tone-red-fg);
   background: var(--lite2-tone-red-bg);
 }
 
 /* ── ③ A closer look 对照卡：claim/evidence 两栏左边条 → pane 标签软底徽章（同②语法，
    claim=蓝 evidence=红，呼应 sage/terracotta 的语气温度而非红绿评判色）。 */
-.lite2-shell[data-skin='aurora'] .lite-gap-pane-claim,
-.lite2-shell[data-skin='aurora'] .lite-gap-pane-evidence {
+.lite2-shell[data-look='aurora'] .lite-gap-pane-claim,
+.lite2-shell[data-look='aurora'] .lite-gap-pane-evidence {
   border-left: none;
 }
-.lite2-shell[data-skin='aurora'] .lite-gap-pane-label {
+.lite2-shell[data-look='aurora'] .lite-gap-pane-label {
   display: inline-flex;
   padding: 2px 8px;
   border-radius: 999px;
   color: var(--lite2-tone-blue-fg);
   background: var(--lite2-tone-blue-bg);
 }
-.lite2-shell[data-skin='aurora'] .lite-gap-pane-evidence .lite-gap-pane-label {
+.lite2-shell[data-look='aurora'] .lite-gap-pane-evidence .lite-gap-pane-label {
   color: var(--lite2-tone-red-fg);
   background: var(--lite2-tone-red-bg);
 }
 
 /* ── ④ A closer look 历史徽章：resolved=绿（安心落定）/dismissed=灰（中性搁置），
    替换初版的 sage 系半透明底（与③的蓝/红一起，一张卡的生命周期读作三种清楚的徽章色）。 */
-.lite2-shell[data-skin='aurora'] .lite-gap-history-badge.is-resolved {
+.lite2-shell[data-look='aurora'] .lite-gap-history-badge.is-resolved {
   color: var(--lite2-tone-green-fg);
   background: var(--lite2-tone-green-bg);
 }
-.lite2-shell[data-skin='aurora'] .lite-gap-history-badge.is-dismissed {
+.lite2-shell[data-look='aurora'] .lite-gap-history-badge.is-dismissed {
   color: var(--lite2-tone-gray-fg);
   background: var(--lite2-tone-gray-bg);
 }
 
 /* ── ⑤ Playbooks 槽位标签：纯灰 chip → 蓝色软底徽章（gate 门 auroraApplied 的其中一个真机
    探针即取自此元素——它在默认/onboarding 前也无条件渲染，验证徽章语法零依赖额外前置操作）。 */
-.lite2-shell[data-skin='aurora'] .lite-playbooks-slot-tag {
+.lite2-shell[data-look='aurora'] .lite-playbooks-slot-tag {
   color: var(--lite2-tone-blue-fg);
   background: var(--lite2-tone-blue-bg);
 }
 
 /* ── ⑥ Vision「诚实标注」pill（Coming/Preview）：honey 半透明描边 → 完整 orange 软底徽章。 */
-.lite2-shell[data-skin='aurora'] .lite-vision-tag {
+.lite2-shell[data-look='aurora'] .lite-vision-tag {
   border-color: transparent;
   color: var(--lite2-tone-orange-fg);
   background: var(--lite2-tone-orange-bg);
 }
 
 /* ── ⑦ Ask 卡状态 chip：sage 半透明底 → 蓝色软底徽章，与①③⑤同一套语法统一识别。 */
-.lite2-shell[data-skin='aurora'] .ask-status-chip {
+.lite2-shell[data-look='aurora'] .ask-status-chip {
   border-color: transparent;
   color: var(--lite2-tone-blue-fg);
   background: var(--lite2-tone-blue-bg);
@@ -195,7 +198,7 @@
 
 /* ── ⑧ Follow-ups 来源标签：纯大写小字 → purple 软底徽章（PRD F3 的"来源标签"在 aurora 下
    获得独立可读的视觉身份，不与标题同色阶混在一起）。 */
-.lite2-shell[data-skin='aurora'] .lite-followup-source {
+.lite2-shell[data-look='aurora'] .lite-followup-source {
   display: inline-flex;
   padding: 2px 8px;
   border-radius: 999px;
@@ -208,20 +211,20 @@
    serif 显示标题是 500（Georgia 的手写温度），aurora 的 sans 标题按参考库语法加重到 700，
    只列今天显式 500 的"显示级标题"（prose 级 serif——report-script-line/receipt 值等——
    只换族不加重）。 */
-.lite2-shell[data-skin='aurora'] .home-greeting h1,
-.lite2-shell[data-skin='aurora'] .home-spine-head h2,
-.lite2-shell[data-skin='aurora'] .home-handoff-body h3,
-.lite2-shell[data-skin='aurora'] .home-closing h3,
-.lite2-shell[data-skin='aurora'] .structured-output-header h2,
-.lite2-shell[data-skin='aurora'] .mismatch-card h2,
-.lite2-shell[data-skin='aurora'] .nexus-empty h2,
-.lite2-shell[data-skin='aurora'] .upload-panel-head h2,
-.lite2-shell[data-skin='aurora'] .lite-detail-head h2,
-.lite2-shell[data-skin='aurora'] .home-people-group-title,
-.lite2-shell[data-skin='aurora'] .lite-vision-head h2,
-.lite2-shell[data-skin='aurora'] .lite-vision-mocks-head h2,
-.lite2-shell[data-skin='aurora'] .lite-closerlook-header h1,
-.lite2-shell[data-skin='aurora'] .lite-followups-header h1,
-.lite2-shell[data-skin='aurora'] .lite-gap-empty h2 {
+.lite2-shell[data-look='aurora'] .home-greeting h1,
+.lite2-shell[data-look='aurora'] .home-spine-head h2,
+.lite2-shell[data-look='aurora'] .home-handoff-body h3,
+.lite2-shell[data-look='aurora'] .home-closing h3,
+.lite2-shell[data-look='aurora'] .structured-output-header h2,
+.lite2-shell[data-look='aurora'] .mismatch-card h2,
+.lite2-shell[data-look='aurora'] .nexus-empty h2,
+.lite2-shell[data-look='aurora'] .upload-panel-head h2,
+.lite2-shell[data-look='aurora'] .lite-detail-head h2,
+.lite2-shell[data-look='aurora'] .home-people-group-title,
+.lite2-shell[data-look='aurora'] .lite-vision-head h2,
+.lite2-shell[data-look='aurora'] .lite-vision-mocks-head h2,
+.lite2-shell[data-look='aurora'] .lite-closerlook-header h1,
+.lite2-shell[data-look='aurora'] .lite-followups-header h1,
+.lite2-shell[data-look='aurora'] .lite-gap-empty h2 {
   font-weight: 700;
 }

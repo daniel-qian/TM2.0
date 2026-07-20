@@ -1,0 +1,395 @@
+<title>Avery 上线夜 · 验收单 07-18</title>
+<style>
+:root{
+  --ink:#10223d; --ink-2:#2c3e5c; --mute:#6e6a61;
+  --paper:#faf7f2; --paper-2:#f2ede4; --line:rgba(16,34,61,.14);
+  --honey:#b8752a; --honey-ink:#7d4a12; --honey-soft:rgba(184,117,42,.10);
+  --ok:#2c6e4b; --ok-soft:rgba(44,110,75,.10);
+  --warn:#8a4a16; --warn-soft:rgba(168,98,42,.10);
+  --bad:#a83b2c; --bad-soft:rgba(168,59,44,.10);
+  --sans:-apple-system,"Segoe UI Variable Text","Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  --mono:"Cascadia Mono","JetBrains Mono",ui-monospace,Consolas,"Courier New",monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --ink:#e8e2d6; --ink-2:#b9b2a4; --mute:#8b8578;
+    --paper:#0d1826; --paper-2:#131f31; --line:rgba(232,226,214,.13);
+    --honey:#d88a2d; --honey-ink:#e5a253; --honey-soft:rgba(216,138,45,.12);
+    --ok:#5aa87a; --ok-soft:rgba(90,168,122,.13);
+    --warn:#d19553; --warn-soft:rgba(209,149,83,.13);
+    --bad:#d4705e; --bad-soft:rgba(212,112,94,.13);
+  }
+}
+:root[data-theme="dark"]{
+  --ink:#e8e2d6; --ink-2:#b9b2a4; --mute:#8b8578;
+  --paper:#0d1826; --paper-2:#131f31; --line:rgba(232,226,214,.13);
+  --honey:#d88a2d; --honey-ink:#e5a253; --honey-soft:rgba(216,138,45,.12);
+  --ok:#5aa87a; --ok-soft:rgba(90,168,122,.13);
+  --warn:#d19553; --warn-soft:rgba(209,149,83,.13);
+  --bad:#d4705e; --bad-soft:rgba(212,112,94,.13);
+}
+:root[data-theme="light"]{
+  --ink:#10223d; --ink-2:#2c3e5c; --mute:#6e6a61;
+  --paper:#faf7f2; --paper-2:#f2ede4; --line:rgba(16,34,61,.14);
+  --honey:#b8752a; --honey-ink:#7d4a12; --honey-soft:rgba(184,117,42,.10);
+  --ok:#2c6e4b; --ok-soft:rgba(44,110,75,.10);
+  --warn:#8a4a16; --warn-soft:rgba(168,98,42,.10);
+  --bad:#a83b2c; --bad-soft:rgba(168,59,44,.10);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);
+  font-size:16px;line-height:1.68;-webkit-font-smoothing:antialiased;}
+.wrap{max-width:860px;margin:0 auto;padding:0 24px 96px}
+a{color:var(--honey);text-underline-offset:3px}
+code,.mono{font-family:var(--mono);font-size:.86em;font-variant-ligatures:none}
+h1,h2,h3{text-wrap:balance;line-height:1.25;margin:0}
+hr{border:0;border-top:1px solid var(--line);margin:0}
+
+/* header */
+header{padding:56px 0 30px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:14px}
+.eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute)}
+h1{font-size:clamp(30px,5vw,42px);font-weight:660;letter-spacing:-.022em}
+.lede{color:var(--ink-2);font-size:17px;max-width:62ch}
+
+/* live strip */
+.live{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1px;
+  background:var(--line);border:1px solid var(--line);border-radius:3px;overflow:hidden;margin-top:8px}
+.live div{background:var(--paper-2);padding:13px 15px;display:flex;flex-direction:column;gap:3px}
+.live .k{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute)}
+.live .v{font-family:var(--mono);font-size:13px;word-break:break-all}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--ok);margin-right:7px;vertical-align:1px}
+
+section{padding-top:52px}
+h2{font-size:13px;font-family:var(--mono);letter-spacing:.15em;text-transform:uppercase;
+  color:var(--mute);padding-bottom:10px;border-bottom:1px solid var(--line);margin-bottom:26px}
+h3{font-size:19px;font-weight:640;letter-spacing:-.012em;margin-bottom:7px}
+p{margin:0 0 14px}
+.sub{color:var(--ink-2)}
+ul{margin:0 0 14px;padding-left:20px}
+li{margin-bottom:6px}
+li::marker{color:var(--mute)}
+
+/* decision blocks */
+.dec{border:1px solid var(--line);border-radius:3px;background:var(--paper-2);
+  padding:22px 24px;margin-bottom:18px;border-left:3px solid var(--honey)}
+.dec.crit{border-left-color:var(--bad)}
+.dec .tag{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--honey-ink);margin-bottom:9px;display:block}
+.dec.crit .tag{color:var(--bad)}
+.rec{margin-top:14px;padding-top:13px;border-top:1px dashed var(--line);font-size:15px}
+.rec b{color:var(--honey-ink)}
+
+/* chips */
+.chip{display:inline-block;font-family:var(--mono);font-size:11px;letter-spacing:.06em;
+  padding:2px 7px;border-radius:2px;white-space:nowrap;text-transform:uppercase}
+.c-ok{background:var(--ok-soft);color:var(--ok)}
+.c-warn{background:var(--warn-soft);color:var(--warn)}
+.c-bad{background:var(--bad-soft);color:var(--bad)}
+.c-mute{background:var(--paper-2);color:var(--mute);border:1px solid var(--line)}
+
+/* evidence */
+pre{background:var(--paper-2);border:1px solid var(--line);border-radius:3px;
+  padding:14px 16px;overflow-x:auto;font-family:var(--mono);font-size:12.5px;line-height:1.62;margin:0 0 16px}
+pre b{color:var(--ok);font-weight:600}
+pre i{color:var(--bad);font-style:normal}
+
+/* tables */
+.tw{overflow-x:auto;margin-bottom:18px;border:1px solid var(--line);border-radius:3px}
+table{border-collapse:collapse;width:100%;font-size:14.5px}
+th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-family:var(--mono);font-size:11px;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--mute);background:var(--paper-2);font-weight:500;white-space:nowrap}
+tr:last-child td{border-bottom:0}
+td.num{font-variant-numeric:tabular-nums;font-family:var(--mono);font-size:13px;white-space:nowrap}
+
+/* ab compare */
+.ab{display:grid;grid-template-columns:1fr;gap:1px;background:var(--line);
+  border:1px solid var(--line);border-radius:3px;margin-bottom:18px;overflow:hidden}
+@media(min-width:640px){.ab{grid-template-columns:1fr 1fr}}
+.ab>div{background:var(--paper-2);padding:16px 18px}
+.ab h4{margin:0 0 10px;font-family:var(--mono);font-size:11px;letter-spacing:.1em;
+  text-transform:uppercase;font-weight:500}
+.ab .before h4{color:var(--bad)} .ab .after h4{color:var(--ok)}
+.ab code{display:block;font-size:12.5px;line-height:1.75;word-break:break-all}
+
+footer{margin-top:64px;padding-top:22px;border-top:1px solid var(--line);
+  color:var(--mute);font-size:13.5px}
+@media(prefers-reduced-motion:no-preference){
+  .dec{transition:border-left-color .2s}
+}
+</style>
+
+<div class="wrap">
+
+<header>
+  <span class="eyebrow">AFK 值夜 · 2026-07-18 → 07-19</span>
+  <h1>Avery 上线夜</h1>
+  <p class="lede">前端第一次真部署，后端换了镜像，并行线合流上线。这一页按<b>你早上要做什么</b>排序，不是按我做了什么排。三件事等你拍板，其余已经跑完并留了证据。</p>
+
+  <div class="rec" style="border-left-color:#c0392b;margin-bottom:22px">
+    <b>⚠️ 本文件写于 <code>039f1f1</code>，正文里所有「已上线」都只指那一版。</b>
+    <p style="margin:8px 0 0">线上站点就是 <code>039f1f1</code> 构建的。此后本地 <code>main</code> 又多了 <b>22 个提交</b>（对齐波 P0 十一条的收尾 + 他们 15 条对抗审查修复 + 我 07-19 收尾的三条），<b>全部未 push、全部不在线上</b>。读这一页时请把「在 main 里」和「在线上」严格分开——它们从 07-19 起不再是同一件事。带 <span style="color:#c0392b">红字「07-19 更正」</span>的段落是我收尾时自己查出来写错的地方，已就地改正，没有删掉原文。</p>
+    <p style="margin:10px 0 0;color:#c0392b"><b>07-19 下午更正：上面这段整个失效了。</b>数字是 <b>23</b> 不是 22，而且<b>全部已 push</b>——<code>origin/main</code> 从 <code>039f1f1</code> 走到 <code>de47ffe</code>，线上前端现在就是 <code>de47ffe</code> 构建的。「在 main 里 ≠ 在线上」这条读法对这一整页仍然有效，<b>但分界点从 <code>039f1f1</code> 挪到了 <code>de47ffe</code></b>：正文里所有「已上线」现在都要按 <code>de47ffe</code> 读。<b>唯一没跟上的是后端</b>——后端仍是 <code>avery-agent:zh512</code>（源 <code>512b11d</code>），一行没动，原因见「决策 2」那一节的新增更正。</p>
+  </div>
+  <div class="live">
+    <div><span class="k">前端</span><span class="v"><span class="dot"></span>averylite.dannyqian.com</span></div>
+    <div><span class="k">后端</span><span class="v"><span class="dot"></span>avery.dannyqian.com</span></div>
+    <div><span class="k">发布方式</span><span class="v">push main → 自动上线 ≈19s</span></div>
+  </div>
+</header>
+
+<section id="wrapup">
+<h2>零 · 07-19 收尾时新查出来的（这一节是后加的）</h2>
+<p class="sub">你叫停两条线之后，我在<b>合流后的树</b>上又跑了一轮。两条线的门是互补的，但中间漏了一条缝：<b>对齐波查行为（断言读 store 字段），我查打包产物（grep 已知英文句子）。屏幕上真正渲染出来的中文，谁都没查。</b>下面三条都是从那条缝里掉出来的。</p>
+
+<table>
+<thead><tr><th>发现</th><th>为什么两条线的门都没拦住</th><th>状态</th></tr></thead>
+<tbody>
+<tr>
+  <td><b>后端状态枚举直接糊到中文客户脸上</b><br><span class="sub">中文客户在「你的团队」首屏和项目详情里读到光秃秃的 <code>blocked</code> / <code>done</code>。v01 两处 + v02 一处，其中 v01 就是裸链默认。<b>在 <code>039f1f1</code> 里就是这样——写这份验收时正跑在线上。</b><br><span style="color:#c0392b"><b>07-19 更正：</b>「v01 就是裸链默认」这半句已不成立——Danny 拍板 ① 之后<b>裸链默认是 v02</b>，v01 退到 <code>?v=1</code>。本条修复（<code>69bdeb7</code>）v01/v02 三处都改了，所以结论不变；变的是「哪一处影响最大」——现在是 v02 那处。</span></span></td>
+  <td>我的门 grep 的是<b>已知英文句子</b>，<code>blocked</code> 是枚举 token 不在名单上；对齐波的门断言读 store 字段，它的 S1 证据行里其实已经打出 <code>frontendStatus: ["blocked", ...]</code>，但只判「别把没写状态的编成 on-track」，不判那是哪国话。</td>
+  <td><span class="chip c-ok">已修</span> <code class="mono">69bdeb7</code></td>
+</tr>
+<tr>
+  <td><b>真 404 判据被我自己上一轮的修复拆了</b><br><span class="sub"><code>feat-050</code> 用 <code>/HTTP 404/.test(err.message)</code> 判「context 没了/token 对不上」，而我的 ZH-03 把 404 换成了不含数字的中文句子。后果：死锚点永远清不掉（<b>每次刷新都再错一遍</b>），切换公司时对客户谎称「服务器没连上，再试一次」——服务器好得很，重试一万次也不会成。</span></td>
+  <td>DEV 的 stub 传输<b>仍然</b>抛 <code>team HTTP 404 (stub)</code>，正则匹配得上。<b>凡是跑 stub 的门都绿，只有真后端会错。</b></td>
+  <td><span class="chip c-ok">已修</span> <code class="mono">ccc470e</code></td>
+</tr>
+<tr>
+  <td><b>⚠️ 对齐波 fixB 的前端半边没进 main</b><br><span class="sub"><code>src/lite2/UploadPanel.tsx</code> 和 <code>src/lite2/transport.ts</code> 与 <code>origin/main</code> <b>逐字节相同</b>，而 <code>6f838f3</code>/<code>a45bb4a</code> 明明改过它们（+79/+71/+93）。合并时被丢掉了。落进来的只有 i18n 那半边，于是成了<b>零消费方的死键</b>。</span></td>
+  <td>后果是他们判为已修的 <b>S9 / S10 / S11 三条在 main 上其实没修</b>。最刺眼的是 S10：三处 <code>ACCEPT</code> 还在给客户 <code>.doc</code>/<code>.xls</code>，后端拿到直接 415。</td>
+  <td><span class="chip">未动</span><br><span class="sub">是他们的改动被合丢的，停工期我不替另一条线重写代码。已在回执里点名。</span></td>
+</tr>
+</tbody>
+</table>
+
+<div class="rec">
+  <b>另外拦下一条差点被我改错的：</b>对齐波判 S9 说「<code>10 个文件 / 10MB</code> 两个数字都错，真值 15 个 / 8 MiB」。那是<b>代码默认值</b>——线上机器显式覆盖了（<code class="mono">AVERY_MAX_FILES=10</code>、<code class="mono">AVERY_MAX_UPLOAD_BYTES=10485760</code>，env 名与 <code>guards.py:41,46</code> 读的完全一致）。<b>所以生产上真值就是 10 个 / 10 MiB，我那句中文文案是对的</b>，照 S9 去改反而会把对的改成错的。我已经动手要改了，是去线上核了一遍 env 才拦住。
+</div>
+
+<p class="sub">补的两道门（都验过 teeth——把修复删掉它们立刻变红）：<code class="mono">verify-zh-purity.mjs</code>（真中文数据，v01 两面 + v02 九屏逐屏抓 innerText 捞拉丁残留）· <code class="mono">verify-404-discriminator.mjs</code>（真后端 + 真的对不上的 owner_token 触发真 404）。合流树上复跑对齐波的两个脚本：<b>verify-p0 41 PASS · verify-blockers 15 PASS</b>，我这三条修复零回归。</p>
+</section>
+
+<section id="decisions">
+<h2>一 · 等你拍板（3 件）</h2>
+<p class="sub">这三件我都没有替你做。前两件会改变客户看到什么，第三件是个陷阱预警。</p>
+
+<div class="dec crit">
+  <span class="tag">决策 1 · 最重 · 审计判为 blocker（3/3 票）</span>
+  <h3>裸域名打开是 v01 冻结壳，八条线的成果客户一条都看不见</h3>
+  <div class="rec" style="border-left-color:#c0392b;margin:0 0 14px">
+    <b>✅ 07-19 更正：这条已拍板并已上线，本节从「等你拍板」降为「已完成」。</b>
+    <p style="margin:8px 0 0">两处订正：① 标题里的「<b>八条线</b>」是错的，对齐波是<b>十一条</b>（feat-050..060）——本页 §「六」里已经为另一处纠过同一个数，这个标题当时漏了。② Danny 拍板 <b>裸链默认改成 v02</b>，<code>7ad968b</code> 落地、随 <code>de47ffe</code> 上线；<code>?v=1</code> 保留为 v01 逃生门。下面「我的建议」整段请按已执行读，但<b>实现方式与建议的不一样</b>，见该段末尾的更正。</p>
+  </div>
+  <p>你昨天拍的是「v01 默认、v02 靠 <code>?v=2</code> 手打」。那时 feat-050..060 还没合。<b>现在合了，事实变了：</b>路由化、会话不丢、统一 modal、账号体系、决策定级、议事室简化——全在 <code>src/lite2</code> 里，而客户拿到裸链接看到的是冻结的 v01。</p>
+  <p>更别扭的是深链：SPA rewrite 让 <code>/followups</code>、<code>/team/xxx</code> 都返回 200，但没带 <code>?v=2</code> 就都落回 v01 的团队屏——路径对、内容不对。</p>
+  <div class="rec"><b>我的建议：改成 v02 默认。</b>代价是给 <code>version.ts</code> 加一个构建期 env（约十行，它现在写死 <code>return '1'</code>）。当初否掉这条的理由是「feat-051 一周内要改路由、现在做白做」——feat-051 已经落地了，那个理由没了。<br>如果你仍要 v01 默认，那 7-25 发给三家公司的链接就必须带 <code>?v=2</code>，而且任何人转发时丢掉参数就会看到旧壳。
+  <p style="margin:10px 0 0;color:#c0392b"><b>07-19 更正：结论采纳了，但「加一个构建期 env」这个实现方式被刻意否掉了。</b>实际改法是把 <code>resolveVersion()</code> 里的字面量从 <code>'1'</code> 翻成 <code>'2'</code>，<b>不引入任何构建期 env</b>。理由：<code>src/shared/mode.ts</code> 已经有一套「本地默认 story / 生产 env 翻成 live」的分裂，再加第二套会让<b>裸 URL 的行为在门里和生产上不一致</b>——门跑本地（无 env）看到一种壳，客户在生产（有 env）看到另一种，而两边的门全绿。<b>一个只在生产上错的默认值是查不出来的。</b>写死字面量则是「门看到什么，客户就看到什么」。另补了 <code class="mono">verify-bare-url-shell.mjs</code>（4 条断言）把这个口径钉住。</p>
+  </div>
+</div>
+
+<div class="dec">
+  <span class="tag">决策 2 · 后端要不要追平 main</span>
+  <h3>后端现在停在 <code>512b11d</code>，是我刻意选的落后点</h3>
+  <p>今晚我把后端从 07-17 的旧镜像换成了 <code>512b11d</code> 构建的新镜像，修掉了中文 id/去重/部门三个 blocker（见下）。<b>选这个点是刻意的</b>：它含中文修复链，<b>不含</b> feat-053 的账号体系和迁移 <code>0008</code>——那条迁移从没往任何库 apply 过，把它带上生产是另一个量级的动作。</p>
+  <p>代价是后端比 main 落后两项：<code>/auth/*</code> 端点线上不存在；<code>/team/{id}</code> 不返回 feat-056 的 <code>decisions[]</code>。前端对后者已按 optional 处理（<code>transport.ts</code> 注释明写「老后端 pre-056 不发这个键」），所以不炸，只是那个功能在线上是空的。</p>
+
+  <div class="rec" style="border-left-color:#c0392b">
+    <b>⚠️ 07-19 上午更正：上面这段「落后两项」和下面原来那句「建议暂时不追平」，写的时候是对的，现在不对了。</b>
+    <p style="margin:10px 0 6px">对齐波在我写完之后又把四条<b>数据真相</b>级别的后端修复合进了 main，线上（<code>512b11d</code>）一条都没有。不是功能缺失，是产品会对客户说假话：</p>
+    <ul style="margin:6px 0 10px 18px;line-height:1.75">
+      <li><b>GB18030 静默销毁</b>——中文 Windows 用 Excel 存的 CSV 被按 UTF-8 硬解成乱码，抽出 <b>0 个人</b>，却仍然回 <b>HTTP 200 +「已读入 1 个文件」</b>。我独立核过：<code>512b11d</code> 的 <code>_parse_csv</code>/<code>_parse_text</code> 仍是 <code>data.decode("utf-8", errors="replace")</code>；main 已换成带编码梯子的 <code>decode_text</code>。<b>那就是国内 Excel 存 CSV 的默认编码，正对着 7-25 那批客户。</b></li>
+      <li><b>「本月无法完成」读成 <code>done</code></b>，再被判「可推进」，理由写「项目自报已完成，且无风险信号」。（<code>_NEG</code> 在 main 里 12 处、线上 0 处）</li>
+      <li><b>首屏摘要谎报「没有风险信号」</b>，而同一份 payload 明明带着 blockers。</li>
+      <li><b>非 ASCII token → 500</b>（真 id 回 500、假 id 回 404），等于零凭据的存在性枚举 oracle，破 feat-038 那条红线。</li>
+    </ul>
+    <p style="margin:6px 0"><b>好消息：有一条不碰数据库的路，我验过了。</b>迁移 <code>0008</code> 的牵连是<b>文件级</b>的——<code>_ensure_schema()</code> 对 <code>db/migrations/*.sql</code> 全量执行，<code>Dockerfile</code> 又 <code>COPY db/</code>，所以<b>任何 tree 里带着 0008 的镜像都会在第一个请求时无条件把它推进生产库</b>。但只取 <code>eval-harness/</code> 的 diff 是干净的（冲突全在前端）：</p>
+    <pre class="mono" style="margin:6px 0;padding:10px;overflow-x:auto;font-size:13px;line-height:1.6">git checkout -b backend-subset 512b11d
+git diff 6f838f3^ 6f838f3 -- eval-harness/ | git apply   <span style="opacity:.6"># GB18030 + 413 人话上限</span>
+git diff d184b6c^ d184b6c -- eval-harness/ | git apply   <span style="opacity:.6"># /advise 错误路径自己崩（NameError）</span>
+<span style="opacity:.6"># → tree 里没有 0008，数据库一个字节都不动</span>
+cd eval-harness &amp;&amp; AVERY_BRAIN=stub python -m pytest \
+  tests/test_file_truth_encoding.py tests/test_advise_brain_config_error.py -q
+<span style="opacity:.6"># → 30 passed in 2.47s（已实跑，无 LLM 开销）</span></pre>
+    <p style="margin:6px 0 0"><b>改后的建议：追平，但只追这个子集。</b>fixA/fixC/fixD 的 diff 依赖中间提交，要补得再挑一轮。<b>建不建、什么时候建仍然是你的闸——我没碰线上任何东西。</b></p>
+  </div>
+  <div class="rec" style="border-left-color:#c0392b">
+    <b>🛑 07-19 下午更正：这个子集被判为不安全，后端<b>没有</b>升级。线上仍是 <code>avery-agent:zh512</code>（源 <code>512b11d</code>），一行未动。</b>
+    <p style="margin:10px 0 6px">Danny 已授权按上面的范围重建，动手前复核时停在了边界上。<b>问题出在 <code>6f838f3</code> 自己身上，不是 0008：</b></p>
+    <ul style="margin:6px 0 10px 18px;line-height:1.75">
+      <li>它的编码梯子只有 <code>("gb18030","big5")</code> 两级，而 <code>decode_text</code> <b>返回第一个不抛异常的那一级</b>。</li>
+      <li><b>gb18030 解 Shift_JIS / EUC-KR 的字节不会抛异常</b>——它会「成功」解出一串被凭空发明的汉字。</li>
+      <li>后果：一份日文或韩文花名册会被<b>静默读成乱造的中文人名，并标记为已读入</b>，且没有任何存疑信号。这比它要修的 GB18030 缺陷更坏——原缺陷是「吃掉数据还说读入了」，这条是<b>编造数据还说读入了</b>。</li>
+    </ul>
+    <p style="margin:6px 0"><code>a45bb4a</code>（编码裁决器不许编造）正是修这条的，但<b>它在授权的两个提交之外</b>，所以没有自作主张扩大范围。<b>停在这里等你拍。</b></p>
+    <p style="margin:6px 0 0"><b>另一条顺带查出来的、比上面更宽的风险：</b><code>eval-harness/requirements-service.txt</code> <b>一个版本都没钉</b>（全是 <code>&gt;=</code>），Dockerfile 的 <code>FROM python:3.11-slim</code> 也没钉 digest。所以<b>任何一次后端重建都不只是上你挑的那几个补丁，同时还是一次范围不受控的依赖升级</b>——包括这次没做的这一次。重建前应先钉版本。</p>
+  </div>
+</div>
+
+<div class="dec">
+  <span class="tag">决策 3 · 一个 30 秒就能踩的坑</span>
+  <h3>别把 Supabase 的两个 key 贴进 Vercel</h3>
+  <p>审计单独把这条拎出来（SKEW-03，major，3/3 票）。<code>VITE_SUPABASE_URL</code> / <code>VITE_SUPABASE_ANON_KEY</code> 现在没配，所以登录入口<b>不渲染</b>，游客路径干净——这个状态是对的。</p>
+  <p>但它看起来像「就差这一步」。一旦有人（包括未来的我）在面板上把这两个值贴进去，前端会立刻长出登录 UI，而后端<b>没有任何 <code>/auth/*</code> 端点</b>（决策 2），迁移 <code>0008</code> 也没 apply。结果是一个点了就 404 的登录框，出现在发给真客户的网址上。</p>
+  <p><b>收工前拆掉了这个陷阱的第二层。</b>feat-053 的认证面上还剩两处裸 <code>fetch</code>（<code>fetchAccountContexts</code> / <code>claimContext</code>），绕开了错误文案那层，抛的是 <code>account claim HTTP 401</code> 这种开发者串——正是今晚修的那个中文缺陷本身，只是躲在登录开关背后。今天打不到，配上 env 的那一刻就可达。已改走统一的错误层，全仓再无这种裸抛。</p>
+  <div class="rec"><b>顺序是：先后端追平 + apply 迁移，最后才配这两个 env。</b>反过来做，中间那段时间线上就是坏的。</div>
+</div>
+</section>
+
+<section id="verified">
+<h2>二 · 已上线并验过</h2>
+
+<h3>今晚最大的一件：中文客户的人卡本来是全坏的</h3>
+<p>我当第一个用户跑真上传时抓到的。上线的后端把<b>每一个中文名字都压成同一个 id</b>：</p>
+
+<div class="ab">
+  <div class="before">
+    <h4>今晚之前（线上 07-17 镜像）</h4>
+    <code>person id  u_x × 10 &nbsp;&nbsp;unique 1/10<br>
+    project id p_x × 3<br>
+    部门 &nbsp;&nbsp;&nbsp;&nbsp; Eng · Design · Ops · GTM · <b style="color:inherit">Founders</b><br>
+    people &nbsp;&nbsp;&nbsp; 10（5 人的花名册）</code>
+  </div>
+  <div class="after">
+    <h4>现在（<span class="mono">avery-agent:zh512</span>）</h4>
+    <code>person id&nbsp; u_沈亦舟 u_柳文清 … unique 5/5<br>
+    project id p_客房系统改造 …<br>
+    部门 &nbsp;&nbsp;&nbsp;&nbsp; 工程部 · 设计部 · 运营部 · 市场部<br>
+    people &nbsp;&nbsp;&nbsp; 5</code>
+  </div>
+</div>
+
+<p>所有人共享一个 id 意味着 <b>点谁都打开同一个人</b>，转发出去的人卡链接也全指向同一张。三亚酒店的员工被标成 “Founders”。</p>
+<p><b>但这不是代码 bug，是部署缺口</b>——修复 <code>0b6f5c2</code>（07-18 11:31）比线上镜像（07-17 22:03）晚了 13 个半小时，从来没被部署过。那个 commit 自己的注释里逐字写着我们看到的现象：<code>'陈思雨' '李明轩' … ALL became 'u_x'. 39 people, 1 id</code>。我把 issue #10 的定性改了。</p>
+<p class="sub">做法：先在 <code>127.0.0.1:8138</code> 起侧容器做同机 A/B，线上 8137 全程不动；验过才切。回滚镜像已打标 <code class="mono">avery-agent:rollback-20260718</code>，旧容器保留未删。</p>
+
+<h3>其余真机断言</h3>
+<div class="tw"><table>
+<thead><tr><th>验的什么</th><th>怎么验的</th><th>结果</th></tr></thead>
+<tbody>
+<tr><td>路由深链不 404</td><td>生产域名 11 条路径，含 <code>/team/p_abc123</code>、<code>/projects/xxx</code>、不存在的路径</td><td class="num">全部 200 + 真 SPA 壳 <span class="chip c-ok">通过</span></td></tr>
+<tr><td>CORS</td><td>四个 origin 打 <code>/advise</code> 预检</td><td class="num">生产/预览/本地 200，evil.example 400 <span class="chip c-ok">通过</span></td></tr>
+<tr><td>真上传（走 UI）</td><td>构造 DataTransfer 塞真文件输入，和用户点「选择文件」同一条路径</td><td class="num">200 <span class="chip c-ok">通过</span></td></tr>
+<tr><td>等待态</td><td>110 秒里屏上有什么</td><td class="num">中文预期文案 + 秒计时在跑 <span class="chip c-ok">通过</span></td></tr>
+<tr><td>会话不丢（feat-050）</td><td>上传后整页刷新</td><td class="num">团队回来了，空态未出现 <span class="chip c-ok">通过</span></td></tr>
+<tr><td>租户隔离</td><td>带 token / 不带 token 读 <code>/team</code></td><td class="num">200 / 404 <span class="chip c-ok">通过</span></td></tr>
+<tr><td>stub 不进生产</td><td>生产包 grep 三个 stub 标记</td><td class="num">全 0 命中 <span class="chip c-ok">通过</span></td></tr>
+<tr><td>构建闸</td><td>故意漏配 <code>VITE_AVERY_API_BASE</code> 再构建</td><td class="num">构建期抛错；配对则通过 <span class="chip c-ok">通过</span></td></tr>
+<tr><td>无 SSO 墙</td><td>生产域名响应头</td><td class="num">无 <code>_vercel_sso</code> <span class="chip c-ok">通过</span></td></tr>
+</tbody></table></div>
+<p class="sub">全部是真域名、真后端、真 LLM 的实测，没有一条是本地自评或 fixture。</p>
+
+<h3>演示当天要等多久：<span style="color:var(--warn)">近 3 分钟，不是 1–2 分钟</span></h3>
+<p>我一开始用的是自己现编的小语料（25–35 秒），那个数字对演示没有参考价值。收工前拿<b>真 seed 文件</b>（<code>LogiPulse-Roadmap.pdf</code> + <code>PrismDesign_TeamProfile_EN.xlsx</code>，就是演示要用的那两个）打了一次生产：</p>
+<pre>http=200  <b>真实耗时 = 171.6 秒</b>（2 分 52 秒）
+people 30 / projects 7   unique id <b>30/30 · 7/7</b>   extraction_mode=llm</pre>
+<p><b>比广播里说的 100–120 秒还慢 43%。</b>而我今晚写的等待文案承诺的是「通常需要 1–2 分钟」——<b>这是一个产品兑现不了的承诺</b>，客户会盯着一个写着「1-2 分钟」的屏幕等三分钟。文案已改成诚实的区间。</p>
+<p class="sub">另：项目数从广播里的 9 变成 7，<b>不是回归</b>。人数 30 一致，且 30 个 id 全部唯一，在真实体量上再次确认了后端换镜像的效果。<br><span style="color:#c0392b"><b>07-19 更正：</b>我原来把 9→7 归因于 feat-054「抽取粒度门」，<b>那是错的</b>——线上镜像源 <code>512b11d</code> 里根本没有 feat-054（<code>git log 512b11d --grep=feat-054</code> 为空）。9→7 的真实原因未查明，只能说「不是回归」这半句仍有 30/30 唯一 id 撑着。</span></p>
+
+<h3>拿这 30 人做了一次演示彩排</h3>
+<p>把这个真 context 灌进生产站的 localStorage，走 feat-050 的恢复路径打开——就是客户第二天回来时会走的那条路。屏幕上真实长这样：</p>
+<pre>你的团队 | 议事室 | 跟进 | Avery 的笔记 | 多看一眼 | 操作手册 | 未来方向
+<b>你的团队：30 位成员，7 个进行中的项目。</b>
+<b>以下内容全部来自你上传的文件，没有一处是编的。文件里没有读出风险信号。</b>
+30 位成员    7 个进行中的项目
+今天值得你留意   4 / 4 还值得看一眼
+<i>WORTH A CLOSER LOOK</i>  <i>Take a look at LogiPulse Ph…</i>   ← 还没修完的那块</pre>
+<p>30 张人卡全部恢复，中文 briefing 在真数据上正确。当时唯一还刺眼的是最后那两行——「今天值得你留意」是产品最值钱的一块，标签却是英文全大写。</p>
+<p><b>收工前已修完并上线，同一块现在长这样：</b></p>
+<pre>今天值得你留意          4 / 4 还值得看一眼
+✓ <b>多看一眼</b>
+<b>LogiPulse Phase 1：今天先过一下</b>
+  CASE-001: motion design rejected by client tech team, resolved via tiered experience fallback
+打开项目 → | 带进议事室 ↗ | 加到跟进 | 起草消息 | 今天先放放</pre>
+<p><code>WORTH A CLOSER LOOK</code> 变成了「多看一眼」——<b>复用产品里已锁的页签名，没有另造同义词</b>；<code>Take a look at X</code> 变成「X：今天先过一下」，把项目名摆句首而不是逐字直译成「看一下 X」（英文动词在前的语序，中文读起来就是机翻）。</p>
+<p class="sub">剩下的那行英文是<b>逐字引自上传文件的证据原文</b>——这是对的，不是漏改：红线要求引用的语料一个字都不许改写，而这两份 seed 恰好是英文素材。换成客户自己的中文文件，这一行也会是中文。</p>
+</section>
+
+<section id="incident">
+<h2>三 · 我搞砸的两次</h2>
+<p><b>后端被我停机了约一到两分钟。</b>换镜像的第一次尝试写成了 <code>set -e</code> 的直线脚本：<code>docker stop avery</code> 成功，紧接着 <code>docker rename</code> 撞上另一个 session 15:46 留下的同名 exited 容器，脚本当场中止——<b>容器停着，没人把它起回来</b>。</p>
+<pre><i>Error response from daemon: Conflict. The container name "/avery-prev" is already in use</i>
+<i>Error: failed to rename container named avery</i></pre>
+<p>发现后立刻 <code>docker start avery</code> 恢复，随后改成「任何一步失败自动回滚」的写法重做，成功。</p>
+<p class="sub">当时 URL 还没交付任何人，没有用户受影响。但这是我的操作失误，不是环境问题：<b>我在一个共享的、有别的 session 在动的机器上，用了一个假设名字没被占用的脚本。</b>教训已经写进本线的 session-handoff。</p>
+
+<h3>其二：我提交过一次带冲突标记的代码</h3>
+<p>凌晨合 main 时，我把验证和提交写成了一条链：</p>
+<pre>npm run typecheck 2>&amp;1 | tail -2 <i>&amp;&amp;</i> git add -A <i>&amp;&amp;</i> git commit …</pre>
+<p><b><code>&amp;&amp;</code> 取的是管道最后一环 <code>tail</code> 的退出码，不是 <code>tsc</code> 的。</b>于是 typecheck 明明报了 <code>TS1185: Merge conflict marker encountered</code>，链条照走，把还带着 <code>&lt;&lt;&lt;&lt;&lt;&lt;&lt;</code> 的 <code>draftLinks.ts</code> 提交了进去。</p>
+<p>下一步改用 <code>npm run typecheck &gt; log 2&gt;&amp;1; echo exit=$?</code> 单独取真退出码，当场发现，<b>该提交未推送</b>，已 <code>--amend</code> 修正并把三处冲突逐一解掉（其中一处是真实的类型冲突：feat-058 把 mailto 路径换成了应用内草稿框，我那个函数已被取代）。</p>
+<p class="sub">教训比这次的后果重要：<b>把闸门写进管道，闸门就形同虚设。</b>本仓的验证命令以后都单独跑、单独取退出码。</p>
+</section>
+
+<section id="fixed">
+<h2>四 · 今晚修掉的</h2>
+<p class="sub">按「只有真部署才会暴露」分类——这些在本地开发里永远不会出现。</p>
+
+<div class="tw"><table>
+<thead><tr><th>问题</th><th>为什么本地看不见</th><th>状态</th></tr></thead>
+<tbody>
+<tr><td><b>中文 id / 去重 / 部门</b> 三个 blocker</td><td>后端镜像比修复早 13.5 小时，只有打线上才知道</td><td><span class="chip c-ok">已上线</span></td></tr>
+<tr><td><b>中文站顶栏是英文</b><br><span class="sub mono" style="font-size:12px">Ingested 2 file(s): 10 people…</span></td><td>本地默认就是英文，看不出漏</td><td><span class="chip c-ok">已上线</span></td></tr>
+<tr><td><code>vercel.json</code> 的 <code>//</code> 注释键</td><td>新 schema 才拒收，建项目当场才报</td><td><span class="chip c-ok">已上线</span></td></tr>
+<tr><td><b>漏配 API base 静默烤 localhost</b></td><td>本地那个 fallback 恰好是对的</td><td><span class="chip c-ok">已上线</span> 改为构建期硬失败</td></tr>
+<tr><td><code>?transport=stub</code> 进生产包</td><td>本地就该能用，不会觉得有问题</td><td><span class="chip c-ok">已上线</span> 生产包 0 命中</td></tr>
+<tr><td>stub 判定漏出 DEV 闸</td><td>我自己上一轮没修干净，审计抓出来的</td><td><span class="chip c-ok">已上线</span></td></tr>
+<tr><td><b>110 秒死屏</b></td><td>本地后端秒回，根本不痛</td><td><span class="chip c-ok">已上线</span> 预期文案 + 计时</td></tr>
+<tr><td><b>向导并发上传永久丢 token</b></td><td>本地快到来不及点第二下</td><td><span class="chip c-ok">已上线</span> 点 10 次只发 1 个请求</td></tr>
+<tr><td><code>playwright</code> 拖垮 <code>npm ci</code></td><td>本地早装好了</td><td><span class="chip c-ok">已上线</span> 构建 19s</td></tr>
+<tr><td><b>后端 CORS 只放行 localhost</b></td><td>本地就在白名单里</td><td><span class="chip c-ok">已上线</span></td></tr>
+<tr><td><code>tm2</code> 会被 push 连带重建</td><td>只在真 push 时发生</td><td><span class="chip c-ok">已切断</span> 你的审字 hold 保住了</td></tr>
+<tr><td><b>HTTP 错误文案是英文</b><br><span class="sub mono" style="font-size:12px">ingest: too many requests — wait 34s</span></td><td>同上，本地默认英文</td><td><span class="chip c-ok">已上线</span></td></tr>
+<tr><td><b>「今天值得你留意」整块是英文</b></td><td>同上；且这些串是前端派生的，后端改不动</td><td><span class="chip c-ok">已上线</span></td></tr>
+<tr><td>秒计时切走再回来从 0 重数</td><td>本地没有近 3 分钟可以切走</td><td><span class="chip c-ok">已上线</span> 改为锚定起始时刻</td></tr>
+<tr><td><b>等待文案承诺 1–2 分钟，真实近 3 分钟</b></td><td>只有拿真 seed 文件打生产才量得到</td><td><span class="chip c-ok">已上线</span> 改成「两三分钟」</td></tr>
+<tr><td>半角标点夹在中文里（含主动作按钮「确认,生成链接」）</td><td>—</td><td><span class="chip c-ok">已上线</span></td></tr>
+</tbody></table></div>
+
+<p class="sub">线上包 <code class="mono">index-DvaT2Yg_.js</code> 实测断言：<code>两三分钟</code> ✓ · <code>请求太频繁了</code> ✓ · <code>今天先过一下</code> ✓ · <code>WORTH A CLOSER LOOK</code> 0 命中 · <code>transport=stub</code> 0 命中。</p>
+
+<h3>中文是 MiniMax 过一轮、我定稿的——驳回了一条</h3>
+<p>M3 把 404 那句改成「访问凭据失效，公司数据仍在，<b>请重新登录</b>」。<b>线上根本没有登录</b>（Supabase 未配、登录入口不渲染），那是让用户去做一件做不到的事。定稿保留：「这台浏览器的访问凭据没了 —— 公司数据还在，只是这台浏览器打不开它了。」</p>
+<p class="sub">其余采纳它的精简，尤其把「一次传得太多了」换成「一次最多上传 10 个文件，单个不超过 10MB」——陈述规则而不是责怪用户。分诊那句也刻意避开逐字直译：<code>Take a look at {project}</code> 没译成「看一下 X」，而是「{project}：今天先过一下」，项目名摆句首。</p>
+
+<h3>顺手清掉的三份会误导下一个人的文档</h3>
+<ul>
+<li><b>新增 ADR-0024</b>——ADR-0021 §5 的对称双端（海外 EN Vercel + 境内 ZH 静态托管 + 双 host）<b>逐条都没发生</b>。实际是单端、中文默认、三地分布（前端 Vercel / 后端德国 / LLM 中国）。里面写了「为什么后端在德国」是清醒选的，以及换就近机器的触发条件。</li>
+<li><b>runbook 顶部加纠偏横幅</b>——它还在教人往境内 ECS <code>120.55.97.151</code> + 宝塔 nginx 部署，那台机器不在当前拓扑里。</li>
+<li><b><code>CONTEXT.md</code> 补四条词条</b>——<code>Context</code> / <code>Owner token</code> / <code>Lite·Lite2</code> / <code>Look</code>。前三个天天在用，术语表里一个都没有。第四个是新定名：<code>Skin</code> 归还给 ADR-0021 的行业主题，paper/aurora 改叫 <code>Look</code>，两条轴正交——<b>「一家酒店客户可以同时要酒店 Skin 和 aurora Look」这句话在改名之前说不出来</b>。</li>
+</ul>
+<p class="sub">⚠️ 进 v02 的链接形式变了：<code>?look=aurora</code>，不再是 <code>?skin=aurora</code>。旧写法会静默回落成 paper（<b>拿旧链接验极光皮会得到一个假的「通过」</b>），所以我加了 console 警告指明新写法。已回执给对齐波那条线。</p>
+</section>
+
+<section id="open">
+<h2>五 · 还开着的</h2>
+<p>今晚跑了一轮对抗审计：四路并行审 + 每条发现三个不同视角的 refuter 独立反驳，<b>只有 ≥2/3 票认为「驳不倒」的才留下</b>。17 条留下，5 条被驳回丢弃。其中一半是我今晚已经修掉的（等于交叉验证了根因），剩下这些：</p>
+
+<div class="tw"><table>
+<thead><tr><th>#</th><th>事</th><th>归属</th></tr></thead>
+<tbody>
+<tr><td class="num">#10</td><td>中文去重——镜像换代修好了 <code>u_x</code> 单一 id 那半边。<b>但「跨文档去重」本身尚未在 LLM 路径上验证</b>：对齐波 F6 证明启发式路径的 <code>_dedupe_entities</code> 一直是好的，所以射程要缩到 <code>llm_extract.py</code>；171.6s 那次用的两份文件没有花名册重叠，不构成去重证据。</td><td><span class="chip">部分解决</span></td></tr>
+<tr><td class="num">#12</td><td>前端丢弃后端 <code>detail</code> 体（里面带着「为什么被拒」的真实原因）+ 无 ErrorBoundary + <code>degraded</code> 信号不可见</td><td>可 AFK</td></tr>
+<tr><td class="num">#13</td><td>上传前无客户端预检——50MB 文件要真跑一趟法兰克福才被拒</td><td>可 AFK</td></tr>
+<tr><td class="num">#14</td><td><b>Vercel preview 部署 100% CORS 失败</b>（后端是精确匹配无通配）——八条并行线没法用 preview 对着真后端验证</td><td>需后端改 + 先广播</td></tr>
+<tr><td class="num">#15</td><td><code>index.html</code> 硬编码 <code>lang="en"</code> + 标题 <code>Avery Prototype</code>——发给真客户的页面标签上写着 “Prototype”</td><td>可 AFK</td></tr>
+<tr><td class="num">#16</td><td><b>Look 按客户记住</b>——你拍的是「同一产品两种长相、按客户选」，但现在是 URL 参数，<b>客户刷新就变回 paper</b>。依赖 feat-050 + feat-053</td><td>你我交界</td></tr>
+<tr><td class="num">#17</td><td>语言切换器做进界面（你已拍板要做）</td><td>可 AFK</td></tr>
+<tr><td class="num">#18</td><td>后端 <code>briefing()</code> 硬编码英文——前端已本地化绕过，但正解在后端</td><td>可 AFK</td></tr>
+<tr><td class="num">ZH-08</td><td>lite2 全树的 <code>aria-label</code> 是英文——中文读屏用户听到的整套导航是英文</td><td>可 AFK</td></tr>
+<tr><td class="num">SKEW-05</td><td>Supabase SDK 静态 import，进了生产包却永远跑不到——国内访客白下载一份</td><td>可 AFK</td></tr>
+</tbody></table></div>
+
+<h3>一条好消息</h3>
+<p>红线复核<b>通过</b>：复核覆盖到的新线里<b>没有任何附着在「人」身上的分数、等级、排名或血条</b>。唯一的百分比条绑在 <code>project.progress</code> 上——项目可以量化，人不行，这条边界守住了。<span class="sub">记一笔是因为下一条线容易把这个合规的项目进度条误当违规删掉。</span></p>
+<p style="color:#c0392b"><b>07-19 更正：复核范围要说清楚。</b>对齐波是<b>十一条</b>（feat-050..060），不是八条。<code>f5a95ae</code>（并入 feat-055/057/058）落在 00:50，而这份验收提交于 01:02——也就是说复核当时树上只有其中八条，<b>feat-055 / 057 / 058 这三条的红线复核仍待补</b>。</p>
+</section>
+
+<footer>
+<p><b>怎么回滚</b>：后端 <code class="mono">sudo docker rm -f avery &amp;&amp; sudo docker rename avery-prev-20260718-233256 avery &amp;&amp; sudo docker start avery</code>（旧镜像另有标签 <code class="mono">avery-agent:rollback-20260718</code>）。前端在 Vercel 面板上 promote 任一历史部署即可。</p>
+<p><b>今晚的 commit</b>：<code class="mono">ff7094e</code> 部署配置与六项修复 · <code class="mono">6abbf2d</code> Look 定名与文档纠偏 · <code class="mono">5dce4f3</code> 并入对齐波 · <code class="mono">30a0ad7</code> 中文 briefing 本地化。这四条已 push 到 <code class="mono">origin/main</code>——GitHub 上从 07-08 停摆的 121 个 commit 也一并推上去了。</p>
+<p style="color:#c0392b"><b>07-19 收尾追加（均未 push）</b>：<code class="mono">69bdeb7</code> 后端状态枚举不许直接糊到中文客户脸上（<code>blocked</code>/<code>done</code> 原样渲染，<b>写这份验收时正跑在线上</b>，v01 两处 + v02 一处）· <code class="mono">ccc470e</code> 真 404 判据——我自己的 ZH-03 把 <code>feat-050</code> 的 <code>/HTTP 404/</code> 正则拆了，导致死锚点永远清不掉、切换公司时对客户谎称「服务器没连上，再试一次」。两条都配了会红的门：<code class="mono">verify-zh-purity.mjs</code>、<code class="mono">verify-404-discriminator.mjs</code>。</p>
+<p style="margin-top:18px;color:var(--mute)">交接细节在 <code class="mono">.issues/feat-068-frontend-deploy/session-handoff.md</code>（含六条我自己不满意的地方）；给对齐波那条线的回执在 <code class="mono">.issues/v02-partner-align-0718/receipt-frontend-deploy-line-0718.md</code>。</p>
+</footer>
+
+</div>

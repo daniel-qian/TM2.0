@@ -166,6 +166,18 @@
   text-transform: uppercase;
 }
 
+/* feat-068 · 中文分诊标签的排版修正（ZH-02 的样式半边）。
+   上面那组 uppercase + 0.14em 宽字距是**英文小标签**的排版语言——全大写在英文里表示"这是个
+   分类标签"，是有语义的。中文没有大小写，uppercase 对汉字是空操作，但 0.14em 的字距会把
+   「多看一眼」四个字拉散成标语，读起来是在喊人，而不是一个安静的分类签。
+   所以中文构建下：关掉 uppercase（对拉丁混排的项目名也一并生效——中文语境里把项目名喊成
+   全大写同样刺眼），字距收到 0.02em。
+   ⚠️ 只在 locale === 'zh' 时由渲染层挂 .is-cjk，英文构建视觉零变化。 */
+.home-handoff-tone.is-cjk {
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+
 .home-tone-terracotta .home-handoff-tone {
   color: rgba(160, 74, 58, 0.9);
 }
