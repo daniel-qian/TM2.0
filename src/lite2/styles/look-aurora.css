@@ -33,6 +33,12 @@
   --iris: #6b5bd6;
   --honey: #d88a2d;
   --terracotta: #d95757;
+  /* UIUX 棒 2026-07-20 · 小字专用深色调（与 look-paper 同一套机制，值按 aurora 白底重算）：
+     #496ee8 小字 4.1–4.5:1 临界、#d88a2d 只有 2.8:1（「需确认」定级 chip 实测 2.77）。
+     装饰用途保持原亮度，10–13px 文本切 *-text（实测白底 4.8–5.6:1）。 */
+  --sage-text: #3d5fd2;
+  --honey-text: #965916;
+  --terracotta-text: #c23b3b;
   --sky: #496ee8;
   --shadow: 0 20px 64px rgba(36, 32, 95, 0.16);
   --shadow-soft: 0 1px 2px rgba(16, 34, 61, 0.08), 0 12px 30px rgba(36, 32, 95, 0.1);

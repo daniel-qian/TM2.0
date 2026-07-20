@@ -54,9 +54,10 @@ function fileStatusView(status: string | undefined): FileStatusView {
 
 // 状态色内联而不进样式表（同 v02 的取舍）：一个**看不见的**状态徽章等于没修这条。
 // v01 走 paper 皮的既有变量，取不到时退到同一组字面量。
+// UIUX 棒 2026-07-20 · ok/warn 换小字深色调（--*-text，定义在 lite.css 尾部 .lite-shell 段）。
 const STATUS_TONE_COLOR: Record<FileStatusView['tone'], string> = {
-  ok: 'var(--sage, #4a7c59)',
-  warn: 'var(--honey, #b8860b)',
+  ok: 'var(--sage-text, var(--sage, #4a7c59))',
+  warn: 'var(--honey-text, var(--honey, #b8860b))',
   bad: 'var(--alert, #b3261e)',
   unknown: 'var(--ink-faint, #8a8578)',
 }

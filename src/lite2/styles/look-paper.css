@@ -11,10 +11,21 @@
   --paper-strong: #fffdf8;
   --ink: #1d1b17;
   --ink-soft: #5e5a51;
-  --ink-faint: #918b7f;
+  /* UIUX 棒 2026-07-20 · 对比度：#918b7f 在 --paper 上只有 3.08:1，而它顶着 eyebrow/计数/
+     时间戳/meta 这些 10–13px 的真信息（WCAG AA 小字要 4.5）。压深到 4.7:1，仍明显浅于
+     --ink-soft（#5e5a51），三级灰阶层次不变。只动 lite2 paper 这一处 scope——shared :root
+     的同名 token 喂着 story（冻结），一个字没碰。 */
+  --ink-faint: #736c5f;
   --rule: rgba(52, 48, 40, 0.15);
   --rule-strong: rgba(52, 48, 40, 0.28);
   --sage: #69806d;
+  /* UIUX 棒 · 小字专用深色调（text-tone）：sage/honey/terracotta 兼任「装饰色」（左条、
+     底纹、边框）与「小字文本色」，前者要浅雅、后者要 ≥4.5:1，一个值伺候不了两头。
+     装饰用途保持原 token；10–13px 文本切到 *-text（同色相压深，实测 paper 上 4.5–5.3:1）。
+     消费点见 lite2.css 尾部「小字对比度」段 + UploadPanel 的 STATUS_TONE_COLOR。 */
+  --sage-text: #56705c;
+  --honey-text: #96661f;
+  --terracotta-text: #a34a38;
   --iris: #6c63b5;
   --honey: #b27b2b;
   --terracotta: #bc5c49;

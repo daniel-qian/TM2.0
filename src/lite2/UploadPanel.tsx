@@ -65,9 +65,11 @@ function fileStatusView(status: string | undefined): FileStatusView {
 // 状态色。刻意内联而不进 CSS 文件（同 07-19 fixB 收口的取舍）：本轮的文件边界不含样式表，
 // 而一个**看不见的**状态徽章等于没修这条 finding。后续可把这些搬进 lite2 的样式层，行为
 // 不依赖它。
+// UIUX 棒 2026-07-20 · ok/warn 换小字深色调（--*-text，见 look-*.css）：13px 的「已读取」
+// 用装饰亮度的 sage/honey 只有 3.9–4.5:1，不够 AA 小字。取不到 text token 时逐级回落。
 const STATUS_TONE_COLOR: Record<FileStatusView['tone'], string> = {
-  ok: 'var(--sage, #4a7c59)',
-  warn: 'var(--honey, #b8860b)',
+  ok: 'var(--sage-text, var(--sage, #4a7c59))',
+  warn: 'var(--honey-text, var(--honey, #b8860b))',
   bad: 'var(--alert, #b3261e)',
   unknown: 'var(--ink-faint, #8a8578)',
 }
