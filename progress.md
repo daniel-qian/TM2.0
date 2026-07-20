@@ -536,3 +536,114 @@ avery loop 补 cite-before-number。
 
 ### Next steps（下一棒）
 先等**合伙人端到端试用反馈**。并行可做、无需 Danny 拍板的是 Blockers 第 3 / 4 / 5 / 6 条。第 1 条需要 Danny 定夺。中文文案（开关 + 判读卡）目前是 **M3 草稿**（`zh.ts` 头部有 provenance NOTE），按惯例直接上线不等审字，Danny 可回头调词。
+
+## Update — 2026-07-20 · 开工四条 blocker（第 3/4/5/6 条）+ 第七次后端上线
+
+> 起点：07-20 收盘后等合伙人端到端试用反馈。反馈未到，按交接单把**四条不需要 Danny 拍板**的
+> blocker 并行做掉。四条上线时都带了红→绿证据；**每一条的"红"都是用变异真跑出来的，不是推断的。**
+> 提交：`8228c35`（B3）· `b2e1b10`（B4+B5）· `e4edca3`（B6）· `b054117`（纯度门修复）· `7017597`（部署回执）。
+
+### 当前线上状态
+- 前端 `averylite.dannyqian.com` = **`b054117`**（Vercel 已自动部署，bundle 内 `__AVERY_BUILD__.commit` 实测确认）
+- 后端 `avery.dannyqian.com` = 镜像 **`avery-agent:main-20260720-211529`**（= main `b054117` 本身）
+- 生产库 `avery` schema **仍是 9 张表**，迁移仍停在 0008 —— 本次后端改动面只有 `service/ask_api.py` 一个文件
+- **回滚梯现在七级**，退一级 = `avery-prev-20260720-211529`（回到今天下午那版）。命令见部署回执
+
+### 四条修了什么（细节在各自 commit message 里，这里只记结论与教训）
+
+**B3 · 换设备登录后「快问一句」404** —— 五个 ask manager 端点只解析 owner_token，不收
+`X-Avery-Account`；而换设备的浏览器手上**没有** owner_token（那枚 token 服务端只返一次，
+留在上传那台机器上）。团队/笔记/文件早就接了账号支路，所以「读什么都行、一发问就说找不到
+这家公司」。改法照抄 `/team`。所有权判定**只在 `authorize_context` 一处做**，不在 ask 侧重
+新推导——两处各判一次正是它们日后长歪的方式。
+> 🔴 **这次不是一个端点漏了，是一整族五个漏了两天。** 所以除了修，还加了一条**结构门**：
+> 凡是收 owner_token 的端点必须同时收 `X-Avery-Account`，判据取 FastAPI 的**路由签名**而不是
+> 路径前缀（按前缀列白名单，加个新前缀门自己就绕过去了）。摘掉任一端点的账号参数，它当场
+> 点名那条路由。这条门不是为了这次，是为了下一个漏接的端点。
+
+**B4 · 能力探测抖一下，账号面板整场消失但仍用上一个人身份发请求** —— 修法的分界线就是本轮
+反复出现的那条纪律：**「后端说没有」和「我没问到」是两件事**。拿到 HTTP 回执（404/4xx）=
+后端回答了，立刻落定不重试（重试只会拖慢一个诚实的答案）；没拿到回执（网络错误/超时/
+502·503·504 网关代答）= 没问到，重试。另一半：探测判据**只管游客侧**——它回答的是「要不要
+**邀请**一个人去登录」，不确定就别邀请；已经有会话时那个人**已经在里面了**，藏起出口不会让他
+退回游客，只会让他退不出去。
+
+**B5 · 切语言的三处后遗症** —— 三条同源于一个已失效的前提（「壳内没有运行时切换语言的入口」）。
+最值得记的是第三条：`lite2/teamData.ts` 在**取数期**就把兜底文案连同语言焊进
+`LiteProject.ownerName`，而详情浮层走 locale-free 的 `projectView` + 当前字典。于是切完语言，
+**同一个项目的同一个事实，卡片说旧语言、浮层说新语言**——比两处都是旧语言更糟，它让人怀疑的
+是数据而不是界面。已改成与 `src/lite` 同一条纪律：派生层保持沉默（原值或空串），兜底归渲染层。
+判据值（`statusRaw`/`ownerNameRaw`）一个字没动——把判据翻译掉，就是「文字修好了、颜色还在
+撒谎」那条老账反过来犯一遍。
+> AuthPanel 那份私有字典**没有只加个订阅了事，是整批收编进 `en/zh.lite2.auth*`**：它还有另一半
+> 问题——对所有扫字典的门（纯度门 / aria 门）是隐形的，22 条客户会读到的文案从来没进过任何
+> 采样范围。**一份没人扫得到的文案等于没有质量信号。** 中文逐字搬运原字典、**刻意不重过 M3**
+> （那批词已在生产跑了两天、客户看过，重译只会造成线上词漂），provenance 已按 zh.ts 惯例记档。
+
+**B6 · v01 逃生门补文件状态渲染** —— 后端一直发 `status` 三态，v01 类型里没有这个字段、界面
+也就不显示：一份一个字没抽出来的扫描件，和一份读全了的花名册在「你的文件」里像素级相同。
+i18n 零新增（键本就在 shared 的 `t.upload.*`）。
+
+### 🔴 本次最该记住的两条（都不是产品缺陷，是**质量信号本身失效**）
+
+1. **`verify-fixA.mjs` 在 main 上就是红的（26 ok / 6 failed），而且没人发现。** 它那 6 条断言在
+   `liteTeamFromPayload` 的产出上找 `toneLabel`/`action`/`evidenceTag`，可 **feat-068 起这三个
+   字段就搬到 `shared/handoffCopy.ts` 了**，门没跟着搬，长期读到 `undefined`。已按新分层重写
+   → 37/0。
+2. **`verify-zh-purity.mjs` 在 build+preview 下是「崩」不是「失败」** —— 它用 `__AVERY_LITE__`，
+   而那是 `import.meta.env.DEV` 门控的、`vite build` 会整段剪掉（`--mode development` 也一样，
+   实测 dist 里 grep 不到）；本仓共享 node_modules 缺 `@babel`，`vite dev` 又起不来。
+   换成无条件缝 `__liteStore` 后真跑出 **14 处**，与 07-20 记录的基线逐字一致。
+> 本轮反复在讲「绿灯盖着坏屏幕」，这两条是它的镜像：**一道长期红着但没人跑的门、一道一跑就
+> 崩的门，作为质量信号，和「绿而看错屏幕」是等价的零。** 门的健康度本身需要被巡检。
+
+### 门自身踩过的两个坑（已写进门里，供后人别再踩）
+- **只断言一拍会漏**：换账号后立刻查 `data-look`，`lookStore` 的内存态不随 localStorage 走，
+  把白名单**整个去掉**那条断言仍然 PASS。用户真正看见丢偏好是「下次打开」——判据必须跨一次
+  **裸链**重开（带 `?look=` 刷新只会验出「URL 参数优先」这条既有行为）。
+- **判别器必须在两种世界里给出不同答案**：语言偏好原本存的是 `en`，恰好**等于**构建期默认，
+  于是偏好被抹光、界面照样是英文，那条断言「因错而对」地绿着。改存 `zh` 才有判别力。
+
+### Files Modified
+- **后端**：`eval-harness/service/ask_api.py`、`eval-harness/tests/test_account_auth.py`
+- **前端**：`src/lite2/{teamData,projectView,LiteComposer}.ts(x)`、`src/lite2/auth/{AuthPanel,authStore}.ts(x)`、
+  `src/lite2/screens/{TeamScreen,CloserLookScreen}.tsx`、`src/lite2/look.ts`、
+  `src/lite/{UploadPanel.tsx,transport.ts}`、`src/shared/i18n/{en,zh,index}.ts`
+- **门**：`eval-harness/tools/verify-{auth-capability,auth-form,file-manifest-truth}.mjs`、
+  `.issues/v02-joint-0719/verify-null-owner.mjs`、`.issues/v02-partner-align-0718/verify-fixA.mjs`、
+  `.issues/feat-068-frontend-deploy/verify-zh-purity.mjs`
+- **文档**：`feature_list.json`（feat-079）、`.issues/v02-joint-0719/deploy-receipt-backend-0720.md`（第七次上线）、本文件
+
+### Blockers / 下一棒（更新自 07-20 收盘那份）
+
+**已解决（本次）**：原第 3 / 4 / 5 / 6 条全部修完并上线。
+
+**仍然要等 Danny 拍板（不许替他决定）**
+1. **裸「风险：」（无「点」字）识别不到** —— main 自己也没盖。刻意没在生产单方面加宽词表：
+   那会造成只有生产才有的补丁（下次重拉基线被静默回收），且会把「无重大风险→判有风险」
+   那个 bug 从另一扇门放回来。**未动。**
+2. **`origin/p5-04-nexus-safe-zone`**（2026-06-07 废弃实验分支，内容不在 main）—— **没删，待处置。**
+3. **「正向状态词一命中，全文风险兜底扫描就永不运行」** —— 控制流问题，main 同样没改，
+   非独立可修复项。
+
+**新记录的问题（未修，都不阻塞）**
+4. 🔴 **`.issues/v02-partner-align-0718/` 下有 6 道门一跑就崩**（不是断言失败，是抛异常退出）：
+   `verify-data-boundary` / `verify-fixB-transport` / `verify-fixB-upload-ui` /
+   `verify-fixB-upload-layout` / `verify-fixA-live` / `verify-server`。
+   **全部先于本 session 存在**，已取证：例如 `verify-fixB-transport` 用 `ts.transpileModule`
+   单文件转译 transport.ts 后当 data: URL import（**不 bundle**、只 stub 了 `./auth/authStore`），
+   而 **2026-07-19 的提交 `f8dc7bf`** 给 transport.ts 加了 `import … from '../shared/i18n'`，
+   从那天起这道门就解析失败；`verify-data-boundary` 则是自己起 `vite dev`，撞上「共享
+   node_modules 缺 @babel/core」这条已记档的环境限制。
+   **和上面那两条（fixA 长期红着、纯度门一跑就崩）是同一类账**：门的健康度需要被巡检，
+   建议下一棒做一次「把 20 道门逐个跑一遍、把跑不起来的分类处置」的清仓。
+5. **凭据轮换建议**：为复用生产 env 跑过一次 `docker inspect avery --format {{.Config.Env}}`，
+   三个 LLM key 与 Supabase DSN **在 agent 会话里明文出现过一次**（未外传、未落盘进仓库）。
+   按凭据卫生该轮换。取 env 的做法已改成「重定向进 600 权限文件、全程不打印」，不会再复现。
+6. **测试盲区（未变）**：并发多标签 / 多 context 的真实竞争没测；`verify-p0` 的 tab 点击循环
+   封顶 5 个而现在有 9 个 tab；登出流程与 guest→authed→guest→authed 清场分支未覆盖。
+7. 后端依赖没钉版本（36 个 `>=`）、基础镜像没钉 digest —— 本次重建实测漂移 0，但两周后重建
+   是抽奖，建议择机钉住。
+
+**下一棒该干什么**：仍然是**先等合伙人端到端试用反馈**——真实用户第一次撞到的东西比我们列的
+清单更有价值。反馈没来之前可做：上面第 4 条的门清仓、第 6 条的测试盲区补齐。

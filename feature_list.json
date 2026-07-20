@@ -661,6 +661,18 @@
       ],
       "status": "done",
       "evidence": "2026-07-20，全文 .issues/v02-joint-0719/review-0720-adversarial.md，索引提交 0bdd73e。共提出 26 条、幸存 13 条（13 条被两名独立怀疑者证伪剔除）。**最重要的发现不是某个 bug，是部署方法本身**：生产镜像基线一直停在 7/18，每次子集只带指名的东西，于是 main 上一整批中文修复漏了两天没上线；六条「必修」全部修完并上线（见 feat-077 第五次上线 + feat-075 + feat-056 的 R-UNCLASSIFIED）。另两条方法论收获：① 孤儿文案键 = 某次合并悄悄吃掉了一整个功能（feat-075 的 236 行丢弃），靠读代码发现不了，是从「客户会怎么撞上」倒推出来的——以后看到没人引用的文案键要当红旗；② 中文 headline 删掉了英文版才有的诚实兜底，理由「取材自已经列了文件名更诚实」是错的，source_files 只排除 failed 不排除 empty。判定「开票但不卡 7/25」的两条（换设备登录后 ask 端点 404、能力探测抖一下账号面板整场消失）记在 feat-053 的已知未修里。如实记录的复审盲区：本轮没跑昂贵的前端发现 campaign；后端服务端强制（上限/超量/空文件/越权/坏文件）已被对抗电池覆盖（那是真正的执行点，前端没有客户端校验），前端剩余次要盲区=并发多标签/多 context 真实竞争没测（现有门都是单 page 内 setTimeout 模拟）、verify-p0.mjs 的 tab 点击循环封顶 5 个而现在有 9 个 tab（notes/closer-look/playbooks/vision 拿不到「参数跨导航存活」断言）、登出流程未覆盖。"
+    },
+    {
+      "id": "feat-079",
+      "name": "开工四条 blocker（换设备 ask 404 / 探测抖动吞登出口 / 切语言三处后遗症 / v01 文件状态）",
+      "description": "07-20 收盘 Blockers 第 3/4/5/6 条——四条都不需要 Danny 拍板，趁等合伙人反馈的窗口并行做掉。共同背景：07-20 上线的语言/皮肤开关推翻了一条写在注释里的前提（「壳内没有运行时切换语言的入口」），而代码没跟上。",
+      "dependencies": [
+        "feat-053",
+        "feat-068",
+        "feat-078"
+      ],
+      "status": "done",
+      "evidence": "2026-07-20（提交 8228c35 / b2e1b10 / e4edca3 / b054117 / 7017597；已上线：后端镜像 avery-agent:main-20260720-211529、前端 Vercel b054117）。\n· B3 ask 账号支路：五个 manager 端点 + authorize_ask 接 X-Avery-Account，所有权判定只在 authorize_context 一处做。门 test_account_auth.py +6 条，含**结构门**（凡收 owner_token 必收 X-Avery-Account，判据取 FastAPI 路由签名不取路径前缀），变异实证会红。离线全测 3343 passed。\n· B4 能力探测：区分「后端回答了」(4xx→立刻落定，不重试) 与「我没问到」(网络/超时/502·503·504→重试，退避 400/1200ms)；探测判据只管游客侧，已登录时面板与登出口永远可达。verify-auth-capability 14→25，新增相位④⑤，双变异实证。\n· B5 三条：(a) AuthPanel 私有字典收编进 en/zh.lite2.auth*（22 键，中文逐字搬运、零 M3 调用，理由：那批词已在生产跑了两天，重译=线上词漂；收编的真正动机是私有字典对纯度门/aria 门隐形）；(b) wipeLite2LocalStorage 加极窄白名单（import 常量不抄字面量）；(c) lite2/teamData.ts 去 locale，兜底归渲染层，与 src/lite 对齐，顺带删孤儿键 projectStatusUnread。门 verify-null-owner 15→24、verify-auth-form 39→57，双变异实证。\n· B6 v01 文件状态：照搬 v02（拷贝不 import），i18n 零新增（键本就在 shared t.upload.*）。verify-file-manifest-truth 15→30（参数化成两张皮各跑一遍）。\n· 顺带修好两道**本来就坏但没人发现**的门：verify-fixA 在 main 上就是红的（26 ok/6 failed，断言的三个字段 feat-068 起就搬去 shared/handoffCopy.ts 了）→ 37/0；verify-zh-purity 在 build+preview 下是**崩**不是失败（用了 DEV-only 的 __AVERY_LITE__）→ 换 __liteStore 后真跑出 14 处，与 07-20 基线逐字一致。\n· 零回归：lint 0 error/5 既有 warning、tsc 干净、build 576 模块；verify-p0 41 / blockers 15 / switchers 20 / status-truth 27 / aria-zh 4 / onboarding 15 / bundle-privacy 7 / 404 4 / bare-url 4 全部持平。\n· 生产真机目测（live 站点）：点语言开关不刷新 → 账号按钮 登录→Sign in、面板整体英文，切回中文全还原。\n· 遗留（未修，已记 progress.md）：.issues/v02-partner-align-0718/ 下 6 道门一跑就崩，全部先于本 session 存在（如 verify-fixB-transport 自 2026-07-19 的 f8dc7bf 给 transport.ts 加了 shared/i18n import 后就解析失败）。"
     }
   ]
 }
