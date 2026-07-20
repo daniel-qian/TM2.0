@@ -59,6 +59,104 @@ _PROJECT_HEADER_ZH = re.compile(
 _PROJECT_HEADER_EN = re.compile(
     r"^(?:project|initiative|workstream|title)\s*\d*\s*[:\-]\s*(.+)$", re.I)
 
+# ── markdown decoration ──────────────────────────────────────────────────────────────────────────
+# EVERY STRUCTURAL LABEL IN THIS MODULE IS ANCHORED AT `^`, AND THAT ANCHOR WAS READING THE MARKUP
+# RATHER THAN THE LABEL. This is the second half of H4 LAYER A, found on the real machine after
+# feat-054 shipped: `segment_projects` matched 「项目：」 only when the label led the line, so a
+# weekly whose projects are written as MARKDOWN HEADINGS — 「## 项目：别墅交付验收」, the ordinary way
+# to write a weekly in a .md file — segmented into ZERO blocks and fell back to the pre-054
+# whole-document scalar sweep. Measured on a three-project ZH weekly, before this block:
+#
+#     ## 项目：别墅交付验收 / 渠道合作拓展 / 客户投诉处理   ->  projects == 1
+#       title    '三亚鹿山雅居 · 周报 W29'   <- the DOCUMENT's own heading
+#       ownerName '吴桂芳'                   <- project 3's owner
+#       status    'blocked'                  <- project 3's status
+#       progress  30                         <- project 2's progress
+#
+# So it is not merely "one project instead of three": the survivor is a SMEAR, carrying three
+# different projects' fields on a card named after the file. That is strictly worse than the empty
+# screen — and it also defeats this module's own phantom defence, because the smeared owner/status/
+# progress make `_tracked_fields` non-empty, so R4-document-not-project cannot fire and R0-tracked
+# keeps the phantom while CITING the fields it was smeared from.
+#
+# NOT A CJK BUG, for the same reason LAYER A never was: the pure-ASCII 「## Project: Villa Handover」
+# fails identically (measured: 1 project, titled 'Lushan Weekly W29'). Bullets 「- 项目：」, ordered
+# rows 「1. 项目：」, bold 「**项目：**」 and blockquoted 「> 项目：」 all fail the same anchor.
+#
+# THE FIX IS A DECORATION STRIPPER, NOT A WIDER LABEL REGEX, and that distinction is the design:
+# widening each of the six anchored patterns to tolerate `#`/`-`/`*`/`>` would be six independent
+# edits that drift apart exactly the way feat-048 round 1's duplicated identity rules did. One
+# ruler, every consumer — `segment_projects`, `_milestones_in`, `docs_stating_status` and
+# `extract._project_from_span` all read their labels through this function.
+#
+# IT IS A NO-OP ON AN UNDECORATED LINE, BY CONSTRUCTION AND BY MEASUREMENT — which is what lets it
+# sit under six live patterns without moving the 2953-test baseline. Every branch below requires a
+# leading `>` / `#` / bullet / ordered-row marker, an embedded `**`/`__`, or a trailing `#`; a line
+# carrying none of those cannot match any branch and is returned as itself. Verified:
+#   * all 128 ASCII codepoints x 7 line shapes — the ONLY leading characters that change a payload
+#     are `>` (bare) and `# * + -` (marker + space), i.e. exactly the decoration set and nothing else
+#   * fuzz over an undecorated pool [a-zA-Z0-9 项目负责人截止：:/，、], len 0..24, seed 54,
+#     n = 200,000 -> 0 lines changed
+#   * idempotence fuzz over a pool that DOES include markup, same seed, n = 200,000 -> 0 violations
+#
+# THE OUTER CONVERGENCE LOOP IS LOAD-BEARING, not defensive padding. Stripping `**` can EXPOSE a
+# leading marker the inner loop has already walked past — 「**- 项目：X**」 strips to 「- 项目：X」,
+# which still leads with a bullet. A single pass left 149 such lines non-idempotent (measured, same
+# fuzz); looping until the string stops changing takes it to 0. Termination is guaranteed because
+# every branch strictly shortens the string.
+_LEAD_MARKER_RE = re.compile(
+    r"^(?:>\s*"                                   # blockquote 「> 项目：X」
+    r"|#{1,6}(?=\s|$|[^\w#])\s*"                  # ATX heading 「## 项目：X」
+    r"|[-*+•·]\s+"                                # bullet 「- 项目：X」
+    r"|\d{1,3}[.)]\s+"                            # ordered row 「1. 项目：X」
+    r")")
+# Bold/emphasis wrappers. `**`/`__` only: a single `*`/`_` is left alone because it is also ordinary
+# punctuation inside a title, and the paired form is what a label actually gets written in
+# (「**项目：X**」 / 「**项目**：X」 — both reduce to 「项目：X」).
+_EMPHASIS_RE = re.compile(r"\*\*|__")
+_TRAIL_HASH_RE = re.compile(r"\s*#+\s*$")
+
+
+def strip_decoration(line: str) -> str:
+    """A document line -> the same line with its MARKDOWN MARKUP removed, for LABEL DETECTION only.
+
+    「## 项目：别墅交付验收」-> 「项目：别墅交付验收」, so the `^`-anchored label patterns in this
+    module see the label instead of the markup. See the block comment above for why this exists,
+    why it is one shared function rather than six widened regexes, and the no-op proof.
+
+    FOR DETECTION, NOT FOR CONTENT: callers match their label patterns against the return value and
+    capture the title/field out of THAT, but nothing in the corpus is rewritten — material chunks,
+    blocker text and the `#`-heading title fallback all still read the raw line.
+    """
+    s = (line or "").strip()
+    prev = None
+    while s != prev:
+        prev = s
+        while True:
+            nxt = _LEAD_MARKER_RE.sub("", s, count=1).lstrip()
+            if nxt == s:
+                break
+            s = nxt
+        if _EMPHASIS_RE.search(s):
+            s = _EMPHASIS_RE.sub("", s).strip()
+        if s.endswith("#"):
+            s = _TRAIL_HASH_RE.sub("", s).strip()
+    return s
+
+
+def project_header_title(line: str) -> str:
+    """The project title this line declares ('' if it declares none), markup-tolerant.
+
+    THE ONE PLACE that answers "is this a project header?". `extract._project_from_span` reads it
+    too, so the heading-title fallback there can tell 「## 项目：X」 (a project header that happens to
+    be a heading — title is X) from 「# 三亚鹿山雅居 · 周报 W29」 (the document's own heading — title
+    is the whole line). Before this, that fallback saw only `^#+` and took the former as a project
+    literally named 「项目：X」.
+    """
+    s = strip_decoration(line)
+    m = _PROJECT_HEADER_ZH.match(s) or _PROJECT_HEADER_EN.match(s)
+    return next((g for g in m.groups() if g), "").strip() if m else ""
+
 # A milestone SECTION header: the label alone on its line (the items follow beneath it). An inline
 # form (「里程碑：A、B、C」) is also accepted and split — same intent, one line.
 _MILESTONE_HEADER = re.compile(
@@ -186,11 +284,12 @@ def segment_projects(doc: ParsedDoc) -> list[ProjectBlock]:
         s = ln.strip()
         if not s:
             continue
-        m = _PROJECT_HEADER_ZH.match(s) or _PROJECT_HEADER_EN.match(s)
-        if m:
-            title = next((g for g in m.groups() if g), "").strip()
-            if title:
-                heads.append((i, title))
+        # Markup-tolerant since the H4-LAYER-A follow-up: 「## 项目：X」/「- 项目：X」/「**项目：X**」
+        # are the SAME declaration as 「项目：X」, and reading only the bare form segmented a
+        # markdown weekly into zero blocks. See `strip_decoration`.
+        title = project_header_title(s)
+        if title:
+            heads.append((i, title))
     if not heads:
         return []
 
@@ -212,9 +311,13 @@ def _milestones_in(doc: ParsedDoc, start: int, end: int) -> list[tuple[str, int]
     out: list[tuple[str, int]] = []
     collecting = False
     for i in range(start, min(end, len(doc.lines))):
-        s = doc.lines[i].strip()
-        if not s:
+        raw = doc.lines[i].strip()
+        if not raw:
             continue
+        # Labels are DETECTED on the undecorated line (「## 里程碑：」/「- 阻碍项：」 are the same
+        # labels as their bare forms), but the milestone ROW below is still appended from `raw` —
+        # its own `^[-*••]` strip is what shapes the item text, and the milestone index keys on it.
+        s = strip_decoration(raw)
         m = _MILESTONE_HEADER.match(s)
         if m:
             inline = next((g for g in m.groups() if g), "").strip()
@@ -238,7 +341,7 @@ def _milestones_in(doc: ParsedDoc, start: int, end: int) -> list[tuple[str, int]
         if _ANY_LABEL.match(s) and not _CHECKLIST_ROW.match(s):
             collecting = False
             continue
-        out.append((re.sub(r"^[-*••]\s*", "", s), i))
+        out.append((re.sub(r"^[-*••]\s*", "", raw), i))
     return out
 
 
@@ -313,7 +416,10 @@ def docs_stating_status(docs: list[ParsedDoc]) -> set[str]:
     """
     out: set[str] = set()
     for doc in docs:
-        if any(_STATUS_LABEL.match(ln.strip()) for ln in doc.lines):
+        # Markup-tolerant for the same reason R4 needs this set at all: 「- 状态：进行中」 is a
+        # LABELLED status, and reading it as unlabelled prose would let R4 demote a real
+        # single-project file whose fields happen to be written as a bullet list.
+        if any(_STATUS_LABEL.match(strip_decoration(ln)) for ln in doc.lines):
             out.add(doc.name)
     return out
 

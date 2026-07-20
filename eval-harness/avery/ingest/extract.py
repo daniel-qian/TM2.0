@@ -31,7 +31,8 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Protocol
 
-from .granularity import Ruling, apply_gate, segment_projects
+from .granularity import (Ruling, apply_gate, project_header_title, segment_projects,
+                          strip_decoration)
 from .parse import ParsedDoc
 
 # The preset buckets _norm_team maps onto WHERE IT HONESTLY CAN; a department this startup taxonomy
@@ -1070,17 +1071,37 @@ class HeuristicExtractor:
         due = ""
         blockers: list[str] = []
         for i in range(lo, min(hi, len(doc.lines))):
-            s = doc.lines[i].strip()
-            m = re.match(r"^#+\s*(.+)$", s)
-            if m and not title:
+            raw = doc.lines[i].strip()
+            # FIELD LABELS ARE READ WITHOUT THEIR MARKDOWN MARKUP (see granularity.strip_decoration).
+            # Every label pattern below is `^`-anchored, so a weekly that writes its fields as a
+            # bullet list — 「- 负责人：陈思雨」/「- 状态：进行中」, ordinary .md — matched NONE of them
+            # and every project came back blank-owned and blank-status. That is not just a thin card:
+            # `granularity._tracked_fields` reads exactly these fields, so an untracked-looking
+            # project is demoted by R4 and vanishes from the screen entirely.
+            s = strip_decoration(raw)
+            # ONE RULER for "does this line declare a project?" — `granularity.project_header_title`,
+            # the very function `segment_projects` cuts blocks with. Read ONCE and used twice below,
+            # so this span's title and the segmentation that produced the span cannot disagree about
+            # what a header IS.
+            # This was two hand-copied regexes, and the EN copy had ALREADY drifted: it knew
+            # 「project:／title:」 but not 「initiative:／workstream:」 nor the ordinal 「Project 2:」
+            # that granularity accepts. The ZH copies were still identical, which reads as if the
+            # pair were in sync — the worse failure, because it hides the EN gap. The drift was
+            # masked rather than live (`segment_projects` passes `labelled_title` in, so the narrow
+            # copy never had to match), which is exactly the feat-048 round-1 shape the
+            # `_ZH_HEADER_MAP`／`_NOT_NAME` notes were written about: a copy that stays correct only
+            # while nobody exercises it, and goes silently wrong the day somebody does.
+            header_title = project_header_title(raw)
+            # The `#`-heading title fallback still reads the RAW line, because it wants the markup —
+            # but a heading that is ITSELF a project header (「## 项目：X」) must not be taken
+            # literally as a project named 「项目：X」. `header_title` is what distinguishes them;
+            # the branch just below then takes the real title out of it.
+            m = re.match(r"^#+\s*(.+)$", raw)
+            if m and not title and not header_title:
                 title = m.group(1).strip()
                 continue
-            m = re.match(r"^(project|title)\s*[:\-]\s*(.+)$", s, re.I)
-            if m:
-                title = m.group(2).strip()
-            m = re.match(r"^(?:项目|专案|课题|工程)\s*[0-9０-９一二三四五六七八九十]*\s*[：:]\s*(.+)$", s)
-            if m:
-                title = m.group(1).strip()
+            if header_title:
+                title = header_title
             m = re.match(r"^(owner|lead|dri)\s*[:\-]\s*(.+)$", s, re.I)
             if m:
                 owner = m.group(2).strip()
