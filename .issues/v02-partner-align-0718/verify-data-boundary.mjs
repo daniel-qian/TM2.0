@@ -164,6 +164,25 @@ const snapshot = (page) =>
 async function main() {
   const server = await createServer({
     root: process.cwd(),
+    // 门清仓 2026-07-20（progress.md Blockers 4）：本门此前一跑就崩——createServer 默认会加载
+    // vite.config.ts，其 react() 插件要 @babel/core，而本仓共享 node_modules 从来没装过它
+    //（实测崩形：`Cannot find package '@babel/core'` at vite:react-babel on main.tsx，白屏、
+    // __lite2Store undefined）。门只需要能跑 TSX，不需要 fast-refresh：关掉 configFile、
+    // 让 esbuild 原生转 JSX（automatic runtime，与 tsconfig "jsx": "react-jsx" 同口径）。
+    configFile: false,
+    esbuild: { jsx: 'automatic' },
+    // vite.config.ts 被关掉后，这两样必须手动搬过来（照抄，别发散）：
+    // · envPrefix：隐私闸——只放 VITE_AVERY_/VITE_SUPABASE_ 进 bundle；
+    // · __AVERY_BUILD__：main.tsx 无条件引用这个编译期全局，不 define 就是 ReferenceError 白屏。
+    envPrefix: ['VITE_AVERY_', 'VITE_SUPABASE_'],
+    define: {
+      __AVERY_BUILD__: JSON.stringify({
+        mode: 'story',
+        locale: 'en',
+        apiBase: '(local default 127.0.0.1:8137)',
+        commit: '(verify-data-boundary dev server)',
+      }),
+    },
     cacheDir: join(tmpdir(), 'avery-fixd-vite-cache'),
     server: { port: PORT, strictPort: true },
     optimizeDeps: { force: true },
