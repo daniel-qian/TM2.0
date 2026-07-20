@@ -28,7 +28,11 @@ export function LitePanZoom({ children }: { children: ReactNode }) {
         limitToBounds={false}
         centerOnInit={false}
         doubleClick={{ disabled: true }}
-        wheel={{ step: 0.1 }}
+        // 滚动区内滚轮必须是滚动，不是缩放：8 字段结果卡（max-height + overflow:auto，实测内容
+        // 1700px+ 高）、简化流、原始流终端都是经理要往下读的地方。excluded 的匹配含后代
+        //（isExcludedNode: `.X, .X *`），所以列容器类名即可。空白画布上 wheel-zoom 保留。
+        // verify-room-usability 两个方向都盯着（卡上不缩放 + 空白处仍缩放）。
+        wheel={{ step: 0.1, excluded: ['lite-room-card', 'lite-flow-body', 'nexus-terminal-log'] }}
         panning={{ velocityDisabled: true, excluded: ['input', 'textarea', 'button'] }}
       >
         <div className="lite-room-canvas-controls" aria-hidden="false">

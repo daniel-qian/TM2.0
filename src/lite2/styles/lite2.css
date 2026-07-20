@@ -758,6 +758,20 @@
 .lite2-shell .lite-room-board .nexus-brief-hud {
   position: static;
   flex: 1 1 260px;
+  /* 00-base 的 story 定位残留必须清干净：translateX(-50%) 会把这个 flex 子项左拖半个身位、
+     压在终端头栏上（z 40 > 30 连带吃掉「展开原始流」的点击）。verify-room-usability 盯着。 */
+  transform: none;
+  z-index: auto;
+  max-width: 100%;
+}
+
+/* board 内的 brief bar 是纯状态 pill（v02 无掉落卡、无点击行为）——去掉 00-base 带来的
+   pointer 手势与 hover 抬升，别让它长得像个按钮。 */
+.lite2-shell .lite-room-board .nexus-brief-bar {
+  cursor: default;
+}
+.lite2-shell .lite-room-board .nexus-brief-bar:hover {
+  transform: none;
 }
 
 .lite2-shell .lite-room-board .lite-room-card {
@@ -4826,4 +4840,61 @@
 .lite2-shell .scene-tabs .scene-tab {
   flex: 0 0 auto;
   white-space: nowrap;
+}
+
+/* ── UIUX 棒 2026-07-20 · 小字对比度（F6/F7/F8）──────────────────────────────
+   sage/honey/terracotta 顶着 10–13px 小字时不到 4.5:1（aurora 的「需确认」定级 chip 实测
+   2.77）。装饰用途不动，这里只把**小字文本**消费点切到每皮的 *-text 深色调（定义在
+   look-paper.css / look-aurora.css）。带 var() 兜底：token 缺失时回落原色，行为不炸。
+   report-card 的规则本体在 shared/20-report-card.css（story 冻结面）——全部用 .lite2-shell
+   前缀在这里覆盖，shared 一个字不碰。verify-contrast-smalltext 盯着这批判据。 */
+.lite2-shell .hypothesis-kind {
+  color: var(--sage-text, var(--sage));
+}
+
+.lite2-shell .confidence-badge.is-high,
+.lite2-shell .escalation-badge {
+  color: var(--sage-text, var(--sage));
+}
+
+.lite2-shell .confidence-badge.is-medium {
+  color: var(--terracotta-text, var(--terracotta));
+}
+
+.lite2-shell .escalation-badge.is-legal,
+.lite2-shell .escalation-badge.is-compensation,
+.lite2-shell .escalation-badge.is-executive {
+  color: var(--terracotta-text, var(--terracotta));
+}
+
+.lite2-shell .structured-output-header > span {
+  color: var(--sage-text, var(--sage));
+}
+
+.lite2-shell .upload-ready-label {
+  color: var(--sage-text, var(--sage));
+}
+
+.lite2-shell .upload-ingesting {
+  color: var(--honey-text, var(--honey));
+}
+
+.lite2-shell .lite-home-block-link {
+  color: var(--sage-text, var(--sage));
+}
+
+.lite2-shell .home-tone-terracotta .lite-home-decision-grade {
+  color: var(--terracotta-text, var(--terracotta));
+}
+
+.lite2-shell .home-tone-honey .lite-home-decision-grade {
+  color: var(--honey-text, var(--honey));
+}
+
+.lite2-shell .home-tone-sage .lite-home-decision-grade {
+  color: var(--sage-text, var(--sage));
+}
+
+.lite2-shell .lite-vision-tag {
+  color: var(--honey-text, var(--honey));
 }

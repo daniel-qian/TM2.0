@@ -28,7 +28,10 @@ export function LitePanZoom({ children }: { children: ReactNode }) {
         limitToBounds={false}
         centerOnInit={false}
         doubleClick={{ disabled: true }}
-        wheel={{ step: 0.1 }}
+        // 滚动区内滚轮必须是滚动，不是缩放（8 字段结果卡与终端流都是 overflow:auto 的阅读区）。
+        // excluded 的匹配含后代（isExcludedNode: `.X, .X *`）。与 lite2 同款修法（墙纪律：拷贝）。
+        // verify-room-usability 两个方向都盯着（卡上不缩放 + 空白处仍缩放）。
+        wheel={{ step: 0.1, excluded: ['lite-room-card', 'nexus-terminal-log'] }}
         panning={{ velocityDisabled: true, excluded: ['input', 'textarea', 'button'] }}
       >
         <div className="lite-room-canvas-controls" aria-hidden="false">

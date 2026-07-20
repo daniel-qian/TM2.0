@@ -640,6 +640,19 @@
 .lite-shell .lite-room-board .nexus-brief-hud {
   position: static;
   flex: 1 1 260px;
+  /* 00-base 的 story 定位残留必须清干净：translateX(-50%) 会把这个 flex 子项左拖半个身位、
+     压在终端头栏上。与 lite2 同款修法（墙纪律：拷贝不 import）。verify-room-usability 盯着。 */
+  transform: none;
+  z-index: auto;
+  max-width: 100%;
+}
+
+/* board 内的 brief bar 在 v01 同为纯状态 pill——去掉 pointer 手势与 hover 抬升。 */
+.lite-shell .lite-room-board .nexus-brief-bar {
+  cursor: default;
+}
+.lite-shell .lite-room-board .nexus-brief-bar:hover {
+  transform: none;
 }
 
 .lite-shell .lite-room-board .lite-room-card {
@@ -1642,4 +1655,50 @@
     width: 100%;
     opacity: 0.3;
   }
+}
+
+/* ── UIUX 棒 2026-07-20 · 小字对比度（与 lite2 同款修法，墙纪律：拷贝不 import）────
+   v01 无 look 开关，token 定义直接挂 .lite-shell scope（shared :root 的同名 token 喂着
+   story 冻结面，不动）。--ink-faint 从 #918b7f（paper 上 3.08:1）压深到 4.7:1，三级灰阶
+   层次不变；sage/honey/terracotta 的小字消费点切到 *-text 深色调。 */
+.lite-shell {
+  --ink-faint: #736c5f;
+  --sage-text: #56705c;
+  --honey-text: #96661f;
+  --terracotta-text: #a34a38;
+}
+
+.lite-shell .hypothesis-kind {
+  color: var(--sage-text, var(--sage));
+}
+
+.lite-shell .confidence-badge.is-high,
+.lite-shell .escalation-badge {
+  color: var(--sage-text, var(--sage));
+}
+
+.lite-shell .confidence-badge.is-medium {
+  color: var(--terracotta-text, var(--terracotta));
+}
+
+.lite-shell .escalation-badge.is-legal,
+.lite-shell .escalation-badge.is-compensation,
+.lite-shell .escalation-badge.is-executive {
+  color: var(--terracotta-text, var(--terracotta));
+}
+
+.lite-shell .structured-output-header > span {
+  color: var(--sage-text, var(--sage));
+}
+
+.lite-shell .upload-ready-label {
+  color: var(--sage-text, var(--sage));
+}
+
+.lite-shell .upload-ingesting {
+  color: var(--honey-text, var(--honey));
+}
+
+.lite-shell .lite-vision-tag {
+  color: var(--honey-text, var(--honey));
 }
