@@ -160,6 +160,9 @@ def _team_payload(ctx: CompanyContext) -> dict:
         "projects": ctx.project_cards(),
         "briefing": ctx.briefing(),
         "signals": ctx.signal_cards(),
+        # feat-056 决策定级（additive）：feat-057「今天要决策的」按此列表的顺序展示。
+        # 纯规则产出、无 LLM —— 不增加任何请求延迟，也不受模型随机性影响。
+        "decisions": ctx.decision_cards(),
     }
 
 

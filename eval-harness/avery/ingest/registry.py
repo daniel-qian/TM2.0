@@ -186,6 +186,21 @@ class CompanyContext:
                  "subjectId": s.subjectRef, "summary": s.summary, "tag": s.tag}
                 for s in self.extraction.signals]
 
+    def decision_cards(self, as_of=None) -> list[dict]:
+        """feat-056 决策定级：给每个项目算一个 高风险/需确认/可推进，按严重度排好序。
+
+        前端 feat-057 的「今天要决策的」直接吃这个列表（顺序即展示顺序）。等级由
+        `avery/decision_rules.py` 的规则表算出——确定、可复现、可当场把口径表给客户看
+        （`eval-harness/decision_grading_rules.md`）。Avery 的一句人话理由是在这之上的
+        叠加层（`decision_grading.apply_review`），只许上调、不许下调；本方法产出的是
+        纯规则版，reason_source == "rule"。
+
+        `as_of` 不传则取今天——时间类规则（到期日）以它为准，显式传入即可复现。
+        """
+        from ..decision_grading import grade_projects
+        return [d.to_dict() for d in grade_projects(self.project_cards(), self.signal_cards(),
+                                                    as_of=as_of)]
+
     def briefing(self) -> dict:
         """A calm, HONEST 'organization weather' briefing. Counts are real (people/projects); it
         emits NO invented aggregate health score (R2: real-or-nothing)."""

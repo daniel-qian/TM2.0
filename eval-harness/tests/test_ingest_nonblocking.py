@@ -36,6 +36,9 @@ def _stub_report():
         context_id="ctx_stub", source_files=[],
         team_cards=lambda: [], project_cards=lambda: [],
         briefing=lambda: {}, signal_cards=lambda: [],
+        # feat-056: _team_payload now also projects the decision grades. This gate is about the
+        # event loop, not payload shape — the fake just has to satisfy the same surface.
+        decision_cards=lambda: [],
     )
     return SimpleNamespace(ok=True, context=ctx, violations=[], parse_errors=[])
 
