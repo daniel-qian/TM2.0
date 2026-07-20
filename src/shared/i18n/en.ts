@@ -281,6 +281,11 @@ export const en = {
     // on the EN build — localizeBriefing() passes the backend's own strings through untouched —
     // but they live in en.ts because zh.ts is typed `Dict` and every key must exist in both.
     briefingHeadline: '{people} people, {projects} active projects.',
+    // fixA2 (adversarial review, 07-20) — never read on the EN build (EN passthrough already
+    // carries the backend's own "Ingested N of M file(s)" prefix verbatim), but zh.ts is typed
+    // `Dict` and every key must exist in both. See shared/briefing.ts::localizeBriefing for why
+    // the ZH side needs this: the ZH headline used to drop the file-count fact entirely.
+    briefingHeadlineFilesPartial: 'Read {ingested} of {uploaded} file(s): {people} people, {projects} active projects.',
     briefingSubheadRisk:
       'Everything below is drawn from your uploads — nothing invented. {atRisk} project(s) worth a closer look.',
     // fixA · the SAME count, worded for the case where part of it is not a project. The backend
@@ -688,6 +693,9 @@ export const en = {
     // feat-068 · localized briefing — same keys as the `lite` section above (v01 and v02 keep
     // parallel namespaces so wording can diverge). Never read on the EN build; see shared/briefing.ts.
     briefingHeadline: '{people} people, {projects} active projects.',
+    // fixA2 (adversarial review, 07-20) — same as the `lite` section's twin key above; never
+    // read on the EN build, kept only because zh.ts is typed `Dict`.
+    briefingHeadlineFilesPartial: 'Read {ingested} of {uploaded} file(s): {people} people, {projects} active projects.',
     briefingSubheadRisk:
       'Everything below is drawn from your uploads — nothing invented. {atRisk} project(s) worth a closer look.',
     // fixA · the SAME count, worded for the case where part of it is not a project. The backend

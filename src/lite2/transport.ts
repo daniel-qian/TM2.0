@@ -235,6 +235,18 @@ export interface AskDraft {
 // 每公司「你的文件」薄清单：回看上传过哪些材料、Avery 的记忆基于什么。
 // 纯元数据（不含字节）；n_chunks = 该文件贡献的 material chunk 数（经 materials.source 前缀链接）。
 // 🔴 文件内容是不可信数据——此处只列/只显，绝不作指令跟随。
+// 对抗复审 fixB1（找回 07-19 fixB 的修复——合流时被一次"整份取 ours"的冲突解决悄悄丢掉，见
+// git show 6f838f3/a45bb4a）：后端每份文件都带 `status`，前端类型里此前没有这个键，界面也就
+// 永远不显示它。后果不是少一个徽章——是**读进去了和没读进去长得一模一样**：一份扫描版 PDF
+// 一个字都没抽出来，和一份读全了的花名册在「你的文件」里像素级相同，headline 还照样说
+// 「团队已就绪」。
+// 🔴 三个词的口径由后端 registry.SourceDocument.status 定，前端不得自行判定、不得改写：
+//   'ingested' 真读进去了并产出了引用 · 'empty' 解析成功但没抽到内容（扫描件/空表）
+//   'failed'   根本没解析成（编码不认、格式不认、库缺）
+// optional + 兜底 string：老后端不发这个键，stub transport 也不发——缺席时界面显示「未知」，
+// 绝不默认当成 ingested（"我没读到" 和 "客户说没有" 是两件事，这里是同一条纪律的下游）。
+export type LiveFileStatus = 'ingested' | 'empty' | 'failed'
+
 export interface LiveFileEntry {
   idx: number
   filename: string
@@ -243,6 +255,7 @@ export interface LiveFileEntry {
   doc_kind: string
   uploaded_at: string
   n_chunks: number
+  status?: LiveFileStatus | string
 }
 
 export interface LiveFilesPayload {

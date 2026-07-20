@@ -118,6 +118,13 @@ import type { Dict } from "./index";
 //  `mmx text chat`，M3 独立译出的结果与人工拟稿（任务原话建议的措辞）逐字重合（重看上手引导），
 //  未手改一字。
 //  ⚠ Draft / 待 Danny 审字（与 M3 独立交叉验证一致）。
+// NOTE (对抗复审 fixA2, 2026-07-20): lite.briefingHeadlineFilesPartial / lite2.同名键 2 个全新
+//  键——文件没有全部读进去时的 headline 变体（此前中文 headline 完全不提文件数，见
+//  shared/briefing.ts::localizeBriefing 头部注释）。人工拟稿（沿用已锁定的 briefingHeadline
+//  句式「你的团队：{people} 位成员，{projects} 个进行中的项目」，只在前面加「读取了 N/M
+//  份文件：」这一句实指，不新造措辞风格），未过 M3——这个 worktree 同样没有
+//  eval-harness/.env（MINIMAX_API_KEY 未拷进来，主检出才有、且本棒禁止碰主检出）。
+//  ⚠ Draft / 待 Danny 审字。
 export const zh: Dict = {
   "mode": {
     "storyLabel": "演示",
@@ -262,6 +269,7 @@ export const zh: Dict = {
     "briefingEyebrow": "来自你上传的文件",
     "metricsLabel": "团队一览",
     "briefingHeadline": "你的团队：{people} 位成员，{projects} 个进行中的项目。",
+    "briefingHeadlineFilesPartial": "读取了 {ingested}/{uploaded} 份文件：{people} 位成员，{projects} 个进行中的项目。",
     "briefingSubheadRisk": "以下内容全部来自你上传的文件，没有一处是编的。其中 {atRisk} 个项目值得多看一眼。",
     "briefingSubheadRiskItems": "以下内容全部来自你上传的文件，没有一处是编的。其中 {atRisk} 处值得多看一眼。",
     "briefingSubheadCalm": "以下内容全部来自你上传的文件，没有一处是编的。文件里没有读出风险信号。",
@@ -495,6 +503,7 @@ export const zh: Dict = {
     "briefingEyebrow": "来自你上传的文件",
     "metricsLabel": "团队一览",
     "briefingHeadline": "你的团队：{people} 位成员，{projects} 个进行中的项目。",
+    "briefingHeadlineFilesPartial": "读取了 {ingested}/{uploaded} 份文件：{people} 位成员，{projects} 个进行中的项目。",
     "briefingSubheadRisk": "以下内容全部来自你上传的文件，没有一处是编的。其中 {atRisk} 个项目值得多看一眼。",
     "briefingSubheadRiskItems": "以下内容全部来自你上传的文件，没有一处是编的。其中 {atRisk} 处值得多看一眼。",
     "briefingSubheadCalm": "以下内容全部来自你上传的文件，没有一处是编的。文件里没有读出风险信号。",

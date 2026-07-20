@@ -1,4 +1,4 @@
-import { useRef, useState, type ChangeEvent, type DragEvent } from 'react'
+import { useRef, useState, type ChangeEvent, type CSSProperties, type DragEvent } from 'react'
 import { useLite } from './store'
 import { useDict } from '../shared/i18n/useDict'
 import { clearIngestStart, useIngestElapsedSeconds } from '../shared/ingestClock'
@@ -24,7 +24,68 @@ function formatBytes(bytes: number): string {
   return `${i === 0 ? value : value.toFixed(1)} ${units[i]}`
 }
 
-const ACCEPT = '.pdf,.docx,.doc,.xlsx,.xls,.csv,.md,.markdown,.txt'
+// 对抗复审 fixB1（找回 07-19 fixB/M3）· accept 必须与后端 guards.SUPPORTED_EXTS 一致。
+//
+// 这里曾经多列了 `.doc` 和 `.xls`——后端从来不支持这两个。后果不是"少一种格式"，是**用户能在
+// 文件选择器里挑中它、能传出去、然后必然 422**：我们主动把人领进一条死路，还在终点告诉他文件有问题。
+// 少列一种格式只是少一种；多列一种格式是撒谎。旧格式怎么办由界面明说（acceptedLegacyNote），
+// 不靠用户自己猜。
+// 🔴 改这一行时同步 eval-harness/avery/ingest/guards.py::SUPPORTED_EXTS，两边必须一致。
+const ACCEPT = '.pdf,.docx,.xlsx,.csv,.tsv,.md,.markdown,.txt'
+
+// 对抗复审 fixB1（找回 07-19 fixB/M4）· 每份文件"读没读进去"的展示口径。
+//
+// 后端 registry.SourceDocument.status 发 'ingested' / 'empty' / 'failed'——前端此前既没有这个
+// 字段也不显示，于是一份扫描版 PDF（一个字没抽出来）和一份读全了的花名册在清单里长得一模一样，
+// 头部还照样说「团队已就绪」。这条渲染 07-19 就修过一次，07-19 深夜的一次合并冲突按"整份取
+// ours"解决时被悄悄丢回了这个没有状态的版本——见 git show 6f838f3 / a45bb4a 与
+// 3106536（丢弃点）。
+// 🔴 缺席不等于成功：老后端 / stub transport 不发这个键，那种情况显示「状态未知」，
+// 绝不默认渲染成「已读取」。这就是本轮的总纪律在这一格里的样子——
+// 「我没读到」和「客户说没有」是两件事，永远不许混。
+type FileStatusView = {
+  labelKey: 'fileStatusIngested' | 'fileStatusEmpty' | 'fileStatusFailed' | 'fileStatusUnknown'
+  hintKey: 'fileStatusEmptyHint' | 'fileStatusFailedHint' | null
+  tone: 'ok' | 'warn' | 'bad' | 'unknown'
+}
+
+function fileStatusView(status: string | undefined): FileStatusView {
+  switch (status) {
+    case 'ingested':
+      return { labelKey: 'fileStatusIngested', hintKey: null, tone: 'ok' }
+    case 'empty':
+      return { labelKey: 'fileStatusEmpty', hintKey: 'fileStatusEmptyHint', tone: 'warn' }
+    case 'failed':
+      return { labelKey: 'fileStatusFailed', hintKey: 'fileStatusFailedHint', tone: 'bad' }
+    default:
+      return { labelKey: 'fileStatusUnknown', hintKey: null, tone: 'unknown' }
+  }
+}
+
+// 状态色。刻意内联而不进 CSS 文件（同 07-19 fixB 收口的取舍）：本轮的文件边界不含样式表，
+// 而一个**看不见的**状态徽章等于没修这条 finding。后续可把这些搬进 lite2 的样式层，行为
+// 不依赖它。
+const STATUS_TONE_COLOR: Record<FileStatusView['tone'], string> = {
+  ok: 'var(--sage, #4a7c59)',
+  warn: 'var(--honey, #b8860b)',
+  bad: 'var(--alert, #b3261e)',
+  unknown: 'var(--ink-faint, #8a8578)',
+}
+
+// 07-19 fixB 收口的版式修正一并找回：accepted 三行合并、文件行换行——原因见当时的注释
+// （真机实测：新元素落在浏览器默认 16px 全墨字 + 16px 下边距，失败行的文件名被压成两行）。
+const ACCEPTED_LINE_STYLE: CSSProperties = { display: 'block', marginTop: '2px' }
+const FILE_ROW_STYLE: CSSProperties = { flexWrap: 'wrap' }
+// minWidth:0 是必须的——flex item 的默认 min-width:auto 会拒绝收缩到内容宽度以下，
+// 但 .upload-file-name 有 word-break:break-word，于是它改为把中文文件名逐字折行。
+const FILE_NAME_STYLE: CSSProperties = { flex: '1 1 auto', minWidth: 0 }
+const FILE_STATUS_STYLE: CSSProperties = { flex: 'none', whiteSpace: 'nowrap' }
+const FILE_HINT_STYLE: CSSProperties = {
+  flexBasis: '100%',      // 独占一行：hint 是一句话，不是一个能塞进标题行的徽章
+  fontSize: '11px',
+  lineHeight: 1.45,
+  color: 'var(--ink-faint, #8a8578)',
+}
 
 // feat-068 · 模板填充（与 OnboardWizard 的同名 helper 同形；这里只用于秒表文案）。
 function fill(template: string, vars: Record<string, string | number>): string {
@@ -139,7 +200,19 @@ export function UploadPanel() {
         >
           {t.upload.choose}
         </button>
-        <p className="upload-accepted">{t.upload.accepted}</p>
+        {/* fixB1/M3 · 「支持哪些」不能只说 Word/Excel 这种族名——那正是让人挑中 .doc/.xls 的
+            原因。扩展名逐个列出，旧格式怎么办也明说。三行合进同一个 <p className="upload-accepted">
+            里：样式层只认识这一个类，后两行做成它的块级子元素，就直接继承 11px / --ink-faint /
+            margin:0，不再各自退回浏览器默认的 16px 全墨字 + 16px 下边距。 */}
+        <p className="upload-accepted">
+          {t.upload.accepted}
+          <span className="upload-accepted-exts" style={ACCEPTED_LINE_STYLE}>
+            {t.upload.acceptedExts}
+          </span>
+          <span className="upload-accepted-legacy" style={ACCEPTED_LINE_STYLE}>
+            {t.upload.acceptedLegacyNote}
+          </span>
+        </p>
       </div>
 
       <div className="upload-status" aria-live="polite">
@@ -196,14 +269,38 @@ export function UploadPanel() {
         <div className="upload-files" aria-label={t.upload.filesTitle}>
           <p className="upload-files-title">{t.upload.filesTitle}</p>
           <ul className="upload-files-list">
-            {files.map((file) => (
-              <li key={file.idx} className="upload-file-row">
-                <span className="upload-file-name">{file.filename}</span>
-                <span className="upload-file-meta">
-                  {formatBytes(file.size_bytes)} · {file.n_chunks} {t.upload.filesChunks}
-                </span>
-              </li>
-            ))}
+            {files.map((file) => {
+              const view = fileStatusView(file.status)
+              return (
+                <li
+                  key={file.idx}
+                  className="upload-file-row"
+                  data-status={file.status ?? 'unknown'}
+                  style={FILE_ROW_STYLE}
+                >
+                  <span className="upload-file-name" style={FILE_NAME_STYLE}>
+                    {file.filename}
+                  </span>
+                  <span className="upload-file-meta">
+                    {formatBytes(file.size_bytes)} · {file.n_chunks} {t.upload.filesChunks}
+                  </span>
+                  {/* fixB1/M4 · 每一行都表态，包括成功的那些——只给失败的加标记，用户就得靠
+                      "没有标记" 反推 "读进去了"，那仍然是让人猜。 */}
+                  <span
+                    className="upload-file-status"
+                    data-tone={view.tone}
+                    style={{ ...FILE_STATUS_STYLE, color: STATUS_TONE_COLOR[view.tone] }}
+                  >
+                    {t.upload[view.labelKey]}
+                  </span>
+                  {view.hintKey ? (
+                    <span className="upload-file-status-hint" style={FILE_HINT_STYLE}>
+                      {t.upload[view.hintKey]}
+                    </span>
+                  ) : null}
+                </li>
+              )
+            })}
           </ul>
         </div>
       ) : null}

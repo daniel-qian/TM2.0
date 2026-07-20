@@ -24,10 +24,16 @@
 //      team.projects.length / at-risk 计数。at-risk 计数**取自后端自己的 metrics 条目**，不在前端
 //      重新按 project.status 推导——后端的判据是 status in ("at-risk", "blocked")，前端复制一份
 //      迟早漂移。
-//   3) 中文 headline **不复述文件数**。后端的 files_phrase 可能是 "3 of 5"（解析成功 / 实际上传），
-//      这个区分是一道诚实闸，而前端拿不到——payload 的 source_files 只装解析成功的那些，前端复述
-//      任何数字都可能比后端更乐观。UI 在右栏 UploadPanel 里已经把「取材自: <真实文件名>」逐个列
-//      出来了，那比一个计数严格更诚实。所以中文 headline 只说人和项目，出处交给文件名。
+//   3) 对抗复审 fixA2（原 3) 的推翻）：中文 headline 曾经**不复述文件数**，理由是"UI 在右栏
+//      UploadPanel 已经把「取材自: <真实文件名>」逐个列出来了，那比一个计数更诚实"——这个理由
+//      站不住：source_files 里混着 status='empty' 的文件（parse 成功但一个字没抽出来，比如
+//      扫描版 PDF），它们的文件名照样出现在「取材自」，那份清单从来不是"真正贡献了内容的文件"
+//      清单，只是"没被判定为彻底读不进去"的清单。于是英文客户在 headline 就先看到
+//      "Ingested 2 of 3 file(s)"这行诚实自曝，中文客户在 headline 和「取材自」两处都看不到
+//      任何信号——生产是中文，等于**production 上线的那张皮把这句诚实话删掉了**。
+//      后端的 briefing.headline 永远是英文字面量（locale-blind，见文件顶部），"Ingested N
+//      (of M) file(s)" 这个前缀是本函数在**丢弃它之前**唯一能读到这个事实的地方——不需要改
+//      后端契约，只需要在丢弃前把这个前缀解出来，缺文件时换一句中文说出同一件事。
 //   4) 「值得多看一眼」的量词认 `briefing.lookKind`——只有确知每一样都是项目才说「个项目」，
 //      否则说不点名的「处」。这个数里可以混着挂不到任何项目上的信号，详见 localizeBriefing。
 //
@@ -67,6 +73,10 @@ export interface TeamCountsLike {
 // 壳字典里本地化简报所需的那几个键（t.lite 和 t.lite2 两个 section 都满足）。
 export interface BriefingCopy {
   briefingHeadline: string
+  // fixA2 · 缺文件时用的 headline 变体（见 localizeBriefing 里为什么中文必须认它）。
+  // EN 从不读这个键（早退直接透传后端字符串）——但 zh.ts 是按 `Dict = typeof en` 强类型
+  // 对齐的，所以 en.ts 里同样要有这一条，只是永远不会被渲染。
+  briefingHeadlineFilesPartial: string
   briefingSubheadRisk: string
   briefingSubheadRiskItems: string
   briefingSubheadCalm: string
@@ -114,8 +124,28 @@ export function localizeBriefing(
   const atRiskCount = needLookMetric ? Number(needLookMetric.value) : 0
   const hasRisk = needLookMetric !== undefined && Number.isFinite(atRiskCount) && atRiskCount > 0
 
-  // 约束 3：headline 只说人和项目，绝不复述文件数（"3 of 5" 的诚实区分前端复现不了）。
-  const headline = fill(copy.briefingHeadline, { people: peopleCount, projects: projectCount })
+  // fixA2 · 从后端**永远是英文字面量**的 headline 里解出 "Ingested N (of M) file(s)" 这个前缀
+  // ——registry.py::briefing() 恒定这样写（见文件顶部），locale 无关。约束 1 的早退只保证 EN
+  // 原样透传；这里在**丢弃它之前**顺手把这个事实读出来，不需要后端多发一个字段。
+  // 解不出来（老后端 pre-032、payload 形状变了）→ filesIncomplete 为 false，走原来的分支，
+  // 绝不因为解析失败就编一个数字出来。
+  const filesMatch = /^Ingested (\d+)(?: of (\d+))? file/i.exec(briefing.headline)
+  const filesIngested = filesMatch ? Number(filesMatch[1]) : null
+  const filesUploaded = filesMatch && filesMatch[2] ? Number(filesMatch[2]) : filesIngested
+  const filesIncomplete =
+    filesIngested !== null && filesUploaded !== null && filesIngested < filesUploaded
+
+  // 约束 3（对抗复审 fixA2 推翻原版）：文件没有全部读进去时，中文 headline 必须说出这件事——
+  // 「取材自」清单不能替它背书（见上方 fixA2 注释：那份清单混着 empty 状态的文件）。
+  // 正常情形（全读进去了 / 老后端没给这个信号）用原句，只说人和项目，一个字不多说。
+  const headline = filesIncomplete
+    ? fill(copy.briefingHeadlineFilesPartial, {
+        ingested: filesIngested as number,
+        uploaded: filesUploaded as number,
+        people: peopleCount,
+        projects: projectCount,
+      })
+    : fill(copy.briefingHeadline, { people: peopleCount, projects: projectCount })
 
   // 约束 4：量词认 look_kind，**只有确知每一样都是项目时才敢说「个项目」**。
   //

@@ -29,7 +29,11 @@ const UI = process.env.VERIFY_BASE || 'http://127.0.0.1:5173'
 const V2_SCREENS = ['home', 'team', 'projects', 'room', 'followups', 'notes', 'closerlook', 'playbooks', 'vision']
 
 // 允许出现的拉丁串：品牌名 / 文件格式专名 / 单位。命中这些的不计入。
-const ALLOW = /^(Avery|Esc|W\d+|\d+%|v\d+|MB|PDF|CSV|XLSX|MD|OK|Word|Excel|Markdown)$/i
+// 对抗复审 fixA1：找回 07-19 fixB 的上传清单状态渲染后，「支持哪些格式」那句补充说明
+// （t.upload.acceptedExts）第一次真的显示在 /team 屏上——此前这个键存在但没有任何组件
+// 渲染它，所以 DOCX 这个格式专名从没被本门扫到过。补进允许名单，和已有的 PDF/CSV/XLSX/MD
+// 同一类（文件格式专名，不是英文残留），不是放宽判据。
+const ALLOW = /^(Avery|Esc|W\d+|\d+%|v\d+|MB|PDF|CSV|XLSX|DOCX|TSV|TXT|MD|OK|Word|Excel|Markdown)$/i
 
 const DOC = [
   '# 三亚鹿山雅居 · 周报 W29', '',
