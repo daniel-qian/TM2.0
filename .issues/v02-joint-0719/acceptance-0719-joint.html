@@ -124,6 +124,22 @@ footer{padding:40px 0;color:var(--mute);font-size:14px}
 <section>
 <h2><span class="n">01</span>只有一件事要你拍：后端子集不能按原样上</h2>
 
+<div class="corr">
+<b>07-20 更正（Danny 读后追问「为什么要考虑韩文和日文？？？」——他是对的，本节把边缘情况说成了主线）：</b><br>
+收工前补跑了真实矩阵（直接 import <code>6f838f3</code> 的真 <code>parse.py</code> 调 <code>decode_text</code>）：
+<pre style="margin:8px 0;border-left-color:var(--bad)">TW/Big5      declared=big5      correct=True    ← 繁体中文，对的
+CN/GB18030   declared=gb18030   correct=True    ← 简体中文，对的
+JP/ShiftJIS  declared=gb18030   correct=False   ← 编的
+KR/EUC-KR    declared=gb18030   correct=False   ← 编的</pre>
+<code>gb18030</code> 与 <code>big5</code> <b>在同一级梯子里</b>，由 <code>_implausibility()</code> 打分裁决，
+所以中文两种都判对了；日韩坏是因为 <code>shift_jis</code>/<code>euc_kr</code> <b>根本不在梯子上</b>。<br>
+⇒ <b>对 Danny 真实的客户群（中国公司、中文文件），<code>6f838f3</code> 单独上是净改善。</b>
+下面「比不上还糟」那句对日韩文件成立，<b>对实际用例不成立</b>。<br>
+<b>但 <code>a45bb4a</code> 仍然值得要，理由要换</b>：不是「防日韩伪造」，是
+<b>解码器从不说「我不确定」</b>——没有置信度字段，判错了也没有信号，而这个项目栽过的跟头全是这一类。
+<code>a45bb4a</code> 补的正是 <code>decode_confidence</code>。<b>原文一字未删，保持可追溯。</b>
+</div>
+
 <div class="card ask">
 <h3>一句话</h3>
 <p>
