@@ -399,6 +399,16 @@ export const en = {
     // (no fresh M3 call needed). Placed after Follow-ups in the topbar (LiteTopbar.tsx).
     tabNotes: "Avery's notes",
 
+    // ── Topbar controls: language / look switches (open-loop-0720). URL param wins over the
+    // remembered localStorage choice, which wins over the default — see
+    // shared/i18n/localeStore.ts (language) and lite2/lookStore.ts (look). ──
+    langSwitchAria: 'Language',
+    langSwitchZh: 'Chinese',
+    langSwitchEn: 'English',
+    lookSwitchAria: 'Look',
+    lookSwitchPaper: 'Paper',
+    lookSwitchAurora: 'Aurora',
+
     // ── Team grouping view (feat-025 Q2: cluster people cards by department/role) ──
     groupAllLabel: 'Grouped by team',
     groupUngrouped: 'Everyone else',

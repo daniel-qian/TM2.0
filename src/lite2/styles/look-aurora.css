@@ -109,6 +109,8 @@
    blur 强度按参考库精确值升级到 20px+saturate(1.1)（初版是朴素 16px）。 */
 .lite2-shell[data-look='aurora'] .scene-tabs,
 .lite2-shell[data-look='aurora'] .mode-switch,
+.lite2-shell[data-look='aurora'] .lang-switch,
+.lite2-shell[data-look='aurora'] .look-switch,
 .lite2-shell[data-look='aurora'] .composer-card,
 .lite2-shell[data-look='aurora'] .nexus-empty,
 .lite2-shell[data-look='aurora'] .lite2-compliance-footer,

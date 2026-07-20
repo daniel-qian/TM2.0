@@ -544,6 +544,59 @@
   outline-offset: 2px;
 }
 
+/* ── 顶栏语言（中文/英文）+ 观感（暖纸/极光）开关（open-loop-0720）──────────────
+   与上面的 .mode-switch/.mode-switch-btn 同款药丸，同一套理由：`.prototype-topbar`
+   容器 pointer-events:none，可点子元素各自 auto 回来（同 .scene-tabs/.mode-switch/
+   .lite-bell 的规矩，这两个类自己在这里补，不动 shared/00-base.css）。 */
+.lite2-shell .lang-switch,
+.lite2-shell .look-switch {
+  display: flex;
+  gap: 6px;
+  padding: 5px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: rgba(var(--lite2-surface-rgb), 0.78);
+  box-shadow: var(--shadow-soft);
+  backdrop-filter: blur(12px);
+  pointer-events: auto;
+}
+
+.lite2-shell .lang-switch-btn,
+.lite2-shell .look-switch-btn {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 13px;
+  transition:
+    background var(--fast) ease,
+    color var(--fast) ease,
+    border-color var(--fast) ease;
+}
+
+.lite2-shell .lang-switch-btn:hover,
+.lite2-shell .lang-switch-btn:focus-visible,
+.lite2-shell .look-switch-btn:hover,
+.lite2-shell .look-switch-btn:focus-visible {
+  background: rgba(var(--lite2-ink-rgb), 0.06);
+  color: var(--ink);
+  outline: none;
+}
+
+.lite2-shell .lang-switch-btn.is-active,
+.lite2-shell .look-switch-btn.is-active {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.lite2-shell .lang-switch-btn:focus-visible,
+.lite2-shell .look-switch-btn:focus-visible {
+  outline: 2px solid rgba(var(--lite2-sky-rgb), 0.75);
+  outline-offset: 2px;
+}
+
 /* ── Your team 人栏限高自滚（S4 · 首页 UI bug 4）──────────────────────────────
    真 ingestion 下 people 可达 20+，`.home-lane-people` 是 auto-fill grid 无高度上限，
    整列（连同外层 `.home-scroll`）被撑爆，projects 栏被推到很深的滚动位。给 people

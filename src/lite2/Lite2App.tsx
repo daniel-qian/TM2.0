@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, type ComponentType } from 'react'
+import { useEffect, useRef, type ComponentType } from 'react'
 import {
   BrowserRouter,
   Navigate,
@@ -24,7 +24,7 @@ import { DraftComposer } from './DraftComposer'
 import { Lite2Footer } from './Lite2Footer'
 import { OnboardWizard } from './OnboardWizard'
 import { initNotifications } from './notifyStore'
-import { resolveLook } from './look'
+import { useLook } from './lookStore'
 import {
   bindNavigator,
   publishBaseScreen,
@@ -59,10 +59,10 @@ export function Lite2App() {
 function Lite2Shell() {
   const navigate = useNavigate()
   const screen = useCurrentScreen()
-  // feat-068：观感（Look，原 skin——`Skin` 现专指 ADR-0021 的行业视觉主题，见 CONTEXT.md）
-  // 只在挂载时读一次 URL（与 useDict 的 locale 解析同口径）——现场切换走整页刷新（试玩场景
-  // 足够；运行时热切换留待需要时再做，见 issue #16）。
-  const look = useMemo(() => resolveLook(), [])
+  // feat-068：观感（Look，原 skin——`Skin` 现专指 ADR-0021 的行业视觉主题，见 CONTEXT.md）。
+  // open-loop-0720：issue #16 提到的「运行时热切换」在本棒落地——从 lookStore 订阅而不是
+  // useMemo 挂载时算一次，LiteTopbar 的开关点下去后这里跟着重渲染，不必整页刷新。
+  const look = useLook((s) => s.look)
 
   // store 的 goScreen/openDetail/closeDetail 经这个桥推路由（Zustand action 里没有 hook）。
   // 两处都绑，缺一不可：

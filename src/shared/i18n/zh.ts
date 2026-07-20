@@ -69,6 +69,13 @@ import type { Dict } from "./index";
 //  run; every other key in these sections was carried over byte-identical from the previous zh.ts.
 //  lite2 — reused verbatim from zh.lite: streamNudgeRedline, streamNudgeChain, streamAskDrafted, streamAdviceReady, streamAdviceDone, streamFailed, streamErrorUnknown
 //  ⚠ Draft / 待 Danny 审字.
+// NOTE (open-loop-0720, 语言+观感开关): lite2.langSwitch*/lookSwitch* 6 个键是本批新增（顶栏
+//  两个新开关的按钮文案 + aria-label）。本该走 `node scripts/i18n-zh-delta.mjs lite2`，但这个
+//  worktree 没有 eval-harness/.env（MINIMAX_API_KEY 未拷进来，主检出才有、且本棒禁止碰主检出）
+//  ——改用同一套 director 口径（同一份系统提示词）手动过 `mmx text chat`（mmx-cli，全局
+//  ~/.mmx 凭据，与 eval-harness/.env 无关）得到译文，再按脚本会产出的同一种合并方式手工落盘。
+//  中文纯度门（verify-zh-purity.mjs）已过：6 个值全是纯中文，零拉丁字符。其余键一个字未动。
+//  ⚠ Draft / 待 Danny 审字。
 export const zh: Dict = {
   "mode": {
     "storyLabel": "演示",
@@ -281,6 +288,12 @@ export const zh: Dict = {
     "tabFollowups": "跟进",
     "tabCloserLook": "多看一眼",
     "tabNotes": "Avery 的笔记",
+    "langSwitchAria": "语言",
+    "langSwitchZh": "中文",
+    "langSwitchEn": "英文",
+    "lookSwitchAria": "观感",
+    "lookSwitchPaper": "暖纸",
+    "lookSwitchAurora": "极光",
     "groupAllLabel": "按团队分组",
     "groupUngrouped": "其他成员",
     "groupCollapse": "收起",

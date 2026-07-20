@@ -16,6 +16,11 @@
 //
 // 解析形状与 mode.ts / shared/version.ts 同口径：URL `?look=` 唯一来源，无构建期 env（观感
 // 是试玩期现场切换的展示维度，不是部署目标）。
+//
+// open-loop-0720（v02 观感开关）：链条里插了一级 localStorage —— URL `?look=` > localStorage
+// （开关记住的选择）> 默认 paper。key `lite2:look:v1`，与 store.ts/onboardStore.ts 等既有
+// v02 key 同一命名族。反应式消费见 lookStore.ts（Lite2App.tsx 的壳根订阅它，点开关立即
+// 生效、不必刷新；早读——store 在模块加载时就跑完初始化，避免首帧闪错皮）。
 
 export type LiteLook = 'paper' | 'aurora'
 
@@ -45,7 +50,7 @@ function warnLegacySkinParam(params: URLSearchParams): void {
   )
 }
 
-export function resolveLook(search?: string): LiteLook {
+function lookFromUrl(search?: string): LiteLook | null {
   const qs =
     search ??
     (typeof window !== 'undefined' && window.location ? window.location.search : '')
@@ -54,8 +59,48 @@ export function resolveLook(search?: string): LiteLook {
     const fromUrl = normalize(params.get('look'))
     if (fromUrl) return fromUrl
     warnLegacySkinParam(params)
+    return null
   } catch {
-    // malformed search string — fall through to default
+    return null // malformed search string
   }
+}
+
+// 观感开关的 localStorage 落点。
+const LOOK_STORAGE_KEY = 'lite2:look:v1'
+
+function readStoredLook(): LiteLook | null {
+  if (typeof window === 'undefined' || !window.localStorage) return null
+  try {
+    return normalize(window.localStorage.getItem(LOOK_STORAGE_KEY))
+  } catch {
+    return null // private mode / storage disabled — fall through the chain
+  }
+}
+
+export function persistLook(look: LiteLook): void {
+  if (typeof window === 'undefined' || !window.localStorage) return
+  try {
+    window.localStorage.setItem(LOOK_STORAGE_KEY, look)
+  } catch {
+    // storage full/disabled — the switch still works in-memory, it just won't survive a refresh
+  }
+}
+
+// 供 lookStore.ts 在挂载时判断"这次的值是不是 URL 给的"，从而把深链参数同步进 localStorage
+// （kickoff 需求②）。resolveLook 本身保持纯函数——没有写盘副作用。
+export function lookFromUrlParam(search?: string): LiteLook | null {
+  return lookFromUrl(search)
+}
+
+export function resolveLook(search?: string): LiteLook {
+  // 1) URL query（现场覆盖——赢过 localStorage 和默认值）
+  const fromUrl = lookFromUrl(search)
+  if (fromUrl) return fromUrl
+
+  // 2) localStorage（观感开关记住的选择）
+  const fromStorage = readStoredLook()
+  if (fromStorage) return fromStorage
+
+  // 3) safe default
   return 'paper'
 }
