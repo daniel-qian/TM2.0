@@ -699,14 +699,154 @@ def _norm_team(raw: str) -> str:
 #      aligning to.
 #   2. the project fell through to the no-evidence rule, whose reason text told the manager the
 #      document never stated a status — while his own report says 进行中 in plain sight.
-# Chinese has no word boundaries, so these are substring matches; the negative lookbehinds are
-# what keep 未完成 / 没完成 / 待完成 out of "done" and 无风险 / 没风险 out of "at-risk".
+# Chinese has no word boundaries, so these are substring matches.
 # 🔴 Precedence is deliberately risk-first (blocked > at-risk > done > on-track), matching the
 # English arm: when a line supports two readings, take the one that gets the project LOOKED AT.
-_ZH_BLOCKED = r"阻塞|卡住|停滞|停工|中止|搁置|无法推进|推不动"
-_ZH_AT_RISK = r"(?<![无没])风险|延期|逾期|滞后|落后|推迟|拖期|告急|吃紧|超期"
-_ZH_DONE = r"(?<![未没待])完成|已交付|已上线|已结项|已验收|验收通过"
-_ZH_ON_TRACK = r"进行中|推进中|(?<![不异])正常|按计划|如期|顺利|在轨"
+#
+# --- negation: ONE mechanism, all four rungs --------------------------------------------------
+# Each rung used to carry its own single-glyph lookbehind — (?<![未没待])完成, (?<![无没])风险,
+# (?<![不异])正常 — and a one-character lookbehind can only see ONE glyph back. Chinese negates
+# with PHRASES, so all three were sieves. Measured on the shipped code, every line real:
+#     无法完成 / 未能完成 / 不能完成 / 没能完成 / 难以完成   -> "done"      <- the blocker
+#     没有风险 / 未发现风险 / 无明显风险 / 无重大风险        -> "at-risk"   <- false alarm
+#     未按计划推进 / 未能如期交付 / 进展不顺利 / 不太顺利    -> "on-track"  <- reversed
+#     未受阻 / 没有卡住 / 不会停工                           -> "blocked"   <- false alarm
+# The first row is why this was a blocker rather than a bug: status="done" is what decision_grading
+# `_m_done` reads, so a project whose own weekly says 「本月无法完成」 was graded 可推进 with the
+# reason 「项目自报已完成，且无风险信号」. Not a miss — the OPPOSITE of the document.
+#
+# The replacement is a BOUNDARY-EXACT backward scan, deliberately not a sliding window. B3
+# (「别墅」 disarming the red line) is what a window does: redline._negated asks only whether a cue
+# sits within 32 chars, so any nearby glyph suppresses everything after it. Here a negation counts
+# only when it ENDS exactly where the keyword BEGINS. That is what lets 「未来风险」(future risk),
+# 「非常正常」(perfectly normal) and 「不过完成了」(but it did finish) through untouched: 来 / 常 /
+# 过 are not link glyphs, so the negator never reaches the keyword. All three are gated in
+# tests/test_zh_status_negation.py, which measures both directions on real Han text.
+_ZH_NEG_HEAD = r"(?:不|没|未|无|非)"
+# Glyphs allowed BETWEEN the negator and the keyword without breaking the negation:
+# 无【法】完成 · 没【有及时】完成 · 未【发现】风险 · 无【明显】风险 · 不【存在】延期.
+# Longest alternatives first — the engine backtracks anyway, but the order states the intent.
+#
+# 【得】 IS LOAD-BEARING AND WAS THE ROUND-1 REGRESSION. Without it the commonest double negative in
+# written Chinese, 「不得不」, was counted as ONE negation instead of two, which REVERSED the reading:
+# 「不得不推迟上线」 went at-risk -> "" (and "" is rendered on-track by the frontend default, see the
+# note on `_norm_status`). 不 sat flush against 推迟 so the inner 不 counted; scanning further back
+# hit 得, which was not a link, so the outer 不 was never reached — depth 1, odd, suppressed. This is
+# the same class of failure the whole block exists to stop, introduced by the fix for it. With 得 in
+# the set 「不得不延期」 is depth 2 (= stated, at-risk) while 「不得延期」 stays depth 1 (a rule saying
+# it may not slip — genuinely not a status). Both directions are gated in the test file.
+_ZH_NEG_LINK = (r"(?:及时|按时|按期|如期|准时|存在|出现|发现|达到|明显|重大|实质|任何|完全"
+                r"|办法|法子|把握|信心|可能|能|会|有|是|太|够|大|很|甚|算|予|再|曾|见|及|法"
+                r"|从|力|得)")
+# Negators that are not head+link runs. Each must still END exactly at the keyword.
+#   难[以于]完成          — the round-1 form, kept verbatim.
+#   很难 / 太难 / 极难    — 难 alone is NOT accepted, because 「克服困难完成了交付」 would then read
+#                           as negated. A degree adverb is what makes 难 a negation rather than a
+#                           noun ending; 困 / 灾 are not degree adverbs, so 困难 / 灾难 cannot match.
+#   赶不上 / 来不及       — the V不C potential complement. 差不多 / 说不定 do not match: 多 and 定
+#                           are not complements in this set.
+#   不确定能否            — 能否 / 是否 is REQUIRED. Without it 「尚不确定风险是否可控」 would be
+#                           suppressed to "", losing a risk the document states.
+_ZH_NEG_DEGREE = r"(?:很|太|极|挺|颇|较|更|最|特|尤|非常)"
+_ZH_NEG_ALT = (rf"难[以于]|{_ZH_NEG_DEGREE}难"
+               r"|[一-鿿]不(?:了|上|及|起|动|完|下)"
+               r"|(?:不|尚不|暂不|还不)(?:确定|清楚|知道)(?:能否|可否|是否|会不会)")
+_ZH_NEG_RE = re.compile(rf"(?:{_ZH_NEG_HEAD}{_ZH_NEG_LINK}*|{_ZH_NEG_ALT})\Z")
+_ZH_NEG_REACH = 12   # a head+links run longer than this does not occur in real prose
+
+# Negation that TRAILS the keyword. Chinese puts the potential complement after the verb, so
+# 「完成不了」 and 「验收通过不了」 are negations that a backward-only scan cannot see — and both read
+# as done on the round-1 code. Boundary-exact in the same way: it must start exactly where the
+# keyword ends. 「不成」 is deliberately EXCLUDED — 「按时完成不成问题」 means finishing on time is no
+# problem, and treating it as a negation would reverse a sentence that is good news.
+_ZH_POST_NEG_RE = re.compile(r"\A(?:不了|不完|不下去|不上去|不动)")
+
+
+def _zh_negation_depth(t: str, start: int) -> int:
+    """How many negations stack up immediately before the keyword at `start`.
+
+    COUNTED, not flagged, because Chinese double-negates and the two readings are OPPOSITE:
+    「并非没有风险」 means there IS risk. 非 governs 没有, depth 2, and depth 2 has to read exactly
+    like depth 0 or the fix would newly break a sentence the old code happened to get right.
+    """
+    depth, pos = 0, start
+    while pos > 0:
+        lo = max(0, pos - _ZH_NEG_REACH)
+        m = _ZH_NEG_RE.search(t[lo:pos])
+        if m is None:
+            break
+        depth += 1
+        pos = lo + m.start()   # strictly decreases: _ZH_NEG_RE cannot match empty
+    return depth
+
+
+def _zh_states(t: str, pattern: str, *, positive_claim: bool = False) -> bool:
+    """True when `t` actually STATES `pattern` — at least one hit that negation does not cancel.
+
+    Every hit is checked, not just the first: 「无法完成，风险已上报」 must still read as risk off
+    its second clause even though its first clause's 完成 is negated away.
+
+    `positive_claim=True` (the done / on-track rungs) demands depth 0 rather than merely even, and
+    the asymmetry is deliberate — it is the same argument `risk_only` makes below. A double negative
+    is a fine way to STATE RISK: 「并非没有风险」 is a manager saying there is risk, and it must
+    reach at-risk. It is NOT a self-report of completion: 「并非无法完成」 means "we could still
+    finish", which is a rebuttal, not 「已完成」. Reading it as done would hand out 可推进 with the
+    reason 「项目自报已完成」 over a sentence that reports nothing of the sort — the exact failure
+    this whole block exists to stop, one negation deeper.
+    """
+    for m in re.finditer(pattern, t):
+        depth = _zh_negation_depth(t, m.start())
+        if _ZH_POST_NEG_RE.match(t, m.end()):
+            depth += 1   # 完成【不了】 — trailing negation counts like a leading one
+        if depth == 0 or (not positive_claim and depth % 2 == 0):
+            return True
+    return False
+
+
+# 受阻/已阻断: on main this pair arrived via the feat-054 x feat-056 merge (3ef4224) — the
+# granularity-gate branch had grown its OWN separate Chinese blocked-detector with these two
+# synonyms and the merge folded them into this ladder instead of keeping two. Pulled forward here
+# on their own (NOT the granularity gate itself, which this subset deliberately excludes) purely so
+# fixC/fixC-2's diff has the context it expects; they are plain synonyms of 阻塞/卡住, not new logic.
+_ZH_BLOCKED = r"受阻|已阻断|阻塞|卡住|停滞|停工|中止|搁置|无法推进|推不动"
+_ZH_AT_RISK = r"风险|延期|逾期|滞后|落后|推迟|拖期|告急|吃紧|超期"
+# INABILITY is not absence. 「未完成」 is a neutral fact about a date — the thing is not finished
+# yet, which is what "in progress" looks like — and it stays a blank. 「无法完成」 is the project
+# telling its own manager it will MISS. Suppressing that to '' would be honest but deaf, and the
+# blank then reaches decision_grading as "the document did not state a status", which is itself
+# untrue of a document that said so in plain sight. So inability is READ (off the sentence, not
+# invented) and routed to at-risk — the rung that drives 「多看一眼」. It is checked with the same
+# negation scan as everything else, so 「并非无法完成」 does not fire it.
+#
+# THE HEAD LIST IS A WHITELIST, AND THAT IS ITS KNOWN LIMIT. Round 1 shipped six heads and the
+# review found the customer's own phrasings sitting just outside them — 「没办法完成」「很难完成」
+# 「不太可能完成」「完成不了」 all still reached done. Every one of those is ordinary weekly-report
+# Chinese, not a corner case. The list below is the measured set; anything outside it degrades to
+# "" (blank) rather than to done, because the negation scan above suppresses the completion word
+# independently of whether this pattern recognises the phrase. Blank is wrong-but-quiet; done is
+# wrong-and-loud. That two-layer arrangement is deliberate, not redundancy.
+_ZH_CANNOT_DELIVER = (
+    r"(?:无法|没法|没办法|无办法|未能|不能|没能|不会|难以|无从|无力"
+    rf"|{_ZH_NEG_DEGREE}难|不太可能|不大可能|不可能|无把握|没把握|无信心|没信心"
+    r"|不确定(?:能否|可否|是否)|来不及|赶不上)"
+    r"(?:按时|按期|如期|准时|及时)?"
+    r"(?:完成|交付|上线|结项|验收|完工|竣工|收尾|达成)"
+    # trailing form: 完成不了 / 验收通过不了. 验收通过 must precede 验收 in the alternation or the
+    # engine commits to 验收 and then fails on 通.
+    r"|(?:验收通过|完成|交付|上线|结项|验收|完工|竣工|收尾|达成)(?:不了|不完|不下去)")
+# 「未按计划推进」「进展不顺利」 are the document STATING that things are off plan. Round 1 stopped
+# reading them as on-track (they were reversed before that) but landed them on "", and "" travels to
+# the manager as 「没读到状态」 — telling a customer his file says nothing when line three of it says
+# 进展不顺利. That is the same untruth in a different direction. These are read, off the sentence,
+# onto at-risk: the rung that surfaces 多看一眼, which is exactly what "off plan" asks for.
+# Guarded by the same scan, so 「并非不顺利」 and 「没有不顺利的地方」 do NOT fire it.
+_ZH_OFF_PLAN = (r"(?:不太|不够|不很|不甚|不算|不大|不怎么|不)(?:顺利|理想|乐观)"
+                r"|(?:未|没有|没|未能)按(?:原|既定)?(?:计划|进度|节点)")
+# The two surviving lookbehinds are NOT negation and are deliberately kept out of the shared
+# mechanism: 待 in 「待完成」 is "pending", 异 in 「异常」 is "abnormal". Neither is a negator, and
+# neither can be reached by a negator scan.
+_ZH_DONE = r"(?<![待])完成|已交付|已上线|已结项|已验收|验收通过"
+_ZH_ON_TRACK = r"进行中|推进中|(?<![异])正常|按计划|如期|顺利|在轨"
 
 
 def _norm_status(text: str, *, risk_only: bool = False) -> str:
@@ -719,15 +859,19 @@ def _norm_status(text: str, *, risk_only: bool = False) -> str:
     Reading risk out of prose stays on, because there the bias points at getting a second look.
     """
     t = text.lower()
-    if re.search(r"\bblocked\b", t) or re.search(_ZH_BLOCKED, t):
+    if re.search(r"\bblocked\b", t) or _zh_states(t, _ZH_BLOCKED):
         return "blocked"
-    if re.search(r"\bat[\s-]?risk\b|behind|slipping|delayed", t) or re.search(_ZH_AT_RISK, t):
+    if (re.search(r"\bat[\s-]?risk\b|behind|slipping|delayed", t)
+            or _zh_states(t, _ZH_AT_RISK) or _zh_states(t, _ZH_CANNOT_DELIVER)
+            or _zh_states(t, _ZH_OFF_PLAN)):
         return "at-risk"
     if risk_only:
         return ""
-    if re.search(r"\b(done|shipped|complete|launched)\b", t) or re.search(_ZH_DONE, t):
+    if (re.search(r"\b(done|shipped|complete|launched)\b", t)
+            or _zh_states(t, _ZH_DONE, positive_claim=True)):
         return "done"
-    if re.search(r"\bon[\s-]?track\b|on schedule", t) or re.search(_ZH_ON_TRACK, t):
+    if (re.search(r"\bon[\s-]?track\b|on schedule", t)
+            or _zh_states(t, _ZH_ON_TRACK, positive_claim=True)):
         return "on-track"
     return ""
 
