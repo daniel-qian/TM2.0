@@ -70,101 +70,124 @@ const GOOD_NAME = 'w32-weekly.md'
 const BAD_NAME = 'w32-scan.pdf'
 
 const browser = await chromium.launch({ headless: true })
-const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } })
-const page = await ctx.newPage()
-const pageErrors = []
-page.on('pageerror', (e) => pageErrors.push(e.message))
 
-await page.goto(`${UI}/?v=2&mode=live&look=paper&lang=zh`, { waitUntil: 'networkidle' })
-if (await page.locator('.lite-onboard').count()) {
-  await page.keyboard.press('Escape')
-  await page.waitForTimeout(700)
+// ── 07-20 复审 Blockers 6：本门原来只跑 v02 ────────────────────────────────────────────────
+// 缺陷本身（后端发 status、前端不渲染）在 **两张皮上都存在**，07-20 只修了 v02，于是 v01
+// 逃生门里坏文件和好文件仍旧长得一模一样——而逃生门恰恰是别的路都不通时用的那条。
+// 门只跑一张皮，就永远看不见另一张皮上的同一个洞：这跟「门看的那一屏恰好是缺陷不在的那一屏」
+// 是同一类错误，只不过维度是"皮"而不是"屏"。故本门参数化成对两张皮各跑一遍同一套判据。
+async function driveShell({ label, url, storeSeam }) {
+  console.log(`\n═══ ${label} ═══`)
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } })
+  const page = await ctx.newPage()
+  const pageErrors = []
+  page.on('pageerror', (e) => pageErrors.push(e.message))
+  const tag = (n) => `[${label}] ${n}`
+
+  await page.goto(url, { waitUntil: 'networkidle' })
+  if (await page.locator('.lite-onboard').count()) {
+    await page.keyboard.press('Escape')
+    await page.waitForTimeout(700)
+  }
+
+  // 真上传：一份好文件 + 一份坏文件，同一个 /ingest 请求。
+  await page.evaluate(
+    async ({ goodText, goodName, badBytes, badName, seam }) => {
+      const enc = new TextEncoder()
+      const good = new File([enc.encode(goodText)], goodName, { type: 'text/markdown' })
+      const bad = new File([enc.encode(badBytes)], badName, { type: 'application/pdf' })
+      await window[seam].getState().uploadFiles([good, bad])
+    },
+    { goodText: GOOD_DOC, goodName: GOOD_NAME, badBytes: BAD_PDF_BYTES, badName: BAD_NAME, seam: storeSeam },
+  )
+
+  // mock brain 走离线启发式抽取，比真 LLM 快得多，但仍要等 ingest 状态落地 + refreshFiles()
+  // 的异步 GET /team/{id}/files 打完（uploadFiles 里 `void get().refreshFiles()`，不等它）。
+  await page.waitForFunction(
+    (seam) => window[seam].getState().ingestStatus === 'ready'
+       || window[seam].getState().ingestStatus === 'error',
+    storeSeam,
+    { timeout: 20000 },
+  ).catch(() => {})
+  const ingestStatus = await page.evaluate((seam) => window[seam].getState().ingestStatus, storeSeam)
+  rec(tag('上传本身成功（ingestStatus === ready，坏文件没有拖垮好文件那一半）'), ingestStatus === 'ready',
+    `ingestStatus=${ingestStatus}`)
+
+  await page.waitForTimeout(1500) // 给 refreshFiles() 的 GET 一点时间落地
+  await page.evaluate((seam) => window[seam].getState().goScreen('team'), storeSeam)
+  await page.waitForTimeout(600)
+
+  // ── 断言 1：manifest 里两份文件的 status 字段真的不同（派生层，证明后端确实吐了三态）────
+  const manifestFiles = await page.evaluate((seam) =>
+    (window[seam].getState().files ?? []).map((f) => ({
+      filename: f.filename, status: f.status ?? '(无此字段)', n_chunks: f.n_chunks,
+    })), storeSeam,
+  )
+  console.log('  manifest（store.files）:', JSON.stringify(manifestFiles))
+  const goodEntry = manifestFiles.find((f) => f.filename === GOOD_NAME)
+  const badEntry = manifestFiles.find((f) => f.filename === BAD_NAME)
+  rec(tag('两份文件都出现在 manifest 里（坏文件没有被后端悄悄丢弃）'),
+    Boolean(goodEntry) && Boolean(badEntry),
+    `good=${JSON.stringify(goodEntry)} bad=${JSON.stringify(badEntry)}`)
+  rec(tag('好文件 status=ingested'), goodEntry?.status === 'ingested', `实际 ${goodEntry?.status}`)
+  rec(tag('坏文件 status=failed（不是 ingested，不是空字段冒充成功）'),
+    badEntry?.status === 'failed', `实际 ${badEntry?.status}`)
+
+  // ── 断言 2：屏幕上两行确实长得不一样（视觉判据，不是只查 store）────────────────────────
+  const rows = await page.evaluate(() =>
+    [...document.querySelectorAll('.upload-file-row')].map((el) => ({
+      name: el.querySelector('.upload-file-name')?.innerText ?? '',
+      statusText: el.querySelector('.upload-file-status')?.innerText ?? '(无状态文案)',
+      tone: el.querySelector('.upload-file-status')?.getAttribute('data-tone') ?? '(无 tone)',
+      hint: el.querySelector('.upload-file-status-hint')?.innerText ?? '',
+      dataStatus: el.getAttribute('data-status') ?? '(无 data-status)',
+    })),
+  )
+  console.log('  屏幕行:', JSON.stringify(rows))
+  const goodRow = rows.find((r) => r.name === GOOD_NAME)
+  const badRow = rows.find((r) => r.name === BAD_NAME)
+  rec(tag('屏幕上两行都渲染出来了'), Boolean(goodRow) && Boolean(badRow),
+    `good=${JSON.stringify(goodRow)} bad=${JSON.stringify(badRow)}`)
+  rec(tag('🔴 两行的状态文案不同（此前的缺陷：两行像素级相同，只有文件名不一样）'),
+    Boolean(goodRow) && Boolean(badRow) && goodRow.statusText !== badRow.statusText,
+    `good="${goodRow?.statusText}" bad="${badRow?.statusText}"`)
+  rec(tag('好文件那行说「已读取」'), goodRow?.statusText === '已读取', `实际 "${goodRow?.statusText}"`)
+  rec(tag('坏文件那行说「没能读取」（不是「已读取」，不是空白）'),
+    badRow?.statusText === '没能读取', `实际 "${badRow?.statusText}"`)
+  rec(tag('坏文件那行的 tone 是 bad（不是默认色/ok 色）'), badRow?.tone === 'bad', `实际 ${badRow?.tone}`)
+  rec(tag('坏文件那行带一句"读不进去怎么回事"的说明（不是让客户自己猜）'),
+    Boolean(badRow?.hint) && badRow.hint.length > 0, `hint="${badRow?.hint}"`)
+  rec(tag('坏文件的说明不替客户编原因——只说文件没能打开，不猜是不是客户的问题'),
+    badRow?.hint.includes('没能打开') || badRow?.hint.includes('编码') || false,
+    `hint="${badRow?.hint}"`)
+
+  // ── 断言 3：headline 不能说「一切正常」而只字不提有文件没读进去 ───────────────────────
+  const headline = await page.evaluate(() => document.querySelector('.home-greeting h1')?.innerText ?? '')
+  console.log('  headline:', headline)
+  rec(tag('headline 提到了文件数（读取了 N/M 份），不是只说人和项目'),
+    /\d+\s*\/\s*\d+/.test(headline), `headline="${headline}"`)
+  rec(tag('headline 里的 N/M 确实反映"没有全部读进去"（1/2，不是 2/2）'),
+    headline.includes('1/2'), `headline="${headline}"`)
+
+  // ── 断言 4：readyLabel（上传面板头部「团队已就绪」）本身没有撒谎——它只是一句总括，
+  // 真正的诚实信号在下面的逐行状态里，这里只确认它没有被误改成别的谎话。──────────────
+  const readyLabel = await page.evaluate(() => document.querySelector('.upload-ready-label')?.innerText ?? '')
+  rec(tag('upload 面板的 readyLabel 存在（本门不是在一个空面板上断言）'), readyLabel.length > 0, readyLabel)
+
+  rec(tag('无 pageerror'), pageErrors.length === 0, pageErrors.slice(0, 2).join(' | ') || '0 条')
+  await ctx.close()
 }
 
-// 真上传：一份好文件 + 一份坏文件，同一个 /ingest 请求。
-await page.evaluate(
-  async ({ goodText, goodName, badBytes, badName }) => {
-    const enc = new TextEncoder()
-    const good = new File([enc.encode(goodText)], goodName, { type: 'text/markdown' })
-    const bad = new File([enc.encode(badBytes)], badName, { type: 'application/pdf' })
-    await window.__lite2Store.getState().uploadFiles([good, bad])
-  },
-  { goodText: GOOD_DOC, goodName: GOOD_NAME, badBytes: BAD_PDF_BYTES, badName: BAD_NAME },
-)
-
-// mock brain 走离线启发式抽取，比真 LLM 快得多，但仍要等 ingest 状态落地 + refreshFiles()
-// 的异步 GET /team/{id}/files 打完（uploadFiles 里 `void get().refreshFiles()`，不等它）。
-await page.waitForFunction(
-  () => window.__lite2Store.getState().ingestStatus === 'ready'
-     || window.__lite2Store.getState().ingestStatus === 'error',
-  { timeout: 20000 },
-).catch(() => {})
-const ingestStatus = await page.evaluate(() => window.__lite2Store.getState().ingestStatus)
-rec('上传本身成功（ingestStatus === ready，坏文件没有拖垮好文件那一半）', ingestStatus === 'ready',
-  `ingestStatus=${ingestStatus}`)
-
-await page.waitForTimeout(1500) // 给 refreshFiles() 的 GET 一点时间落地
-await page.evaluate(() => window.__lite2Store.getState().goScreen('team'))
-await page.waitForTimeout(600)
-
-// ── 断言 1：manifest 里两份文件的 status 字段真的不同（派生层，证明后端确实吐了三态）──────
-const manifestFiles = await page.evaluate(() =>
-  (window.__lite2Store.getState().files ?? []).map((f) => ({
-    filename: f.filename, status: f.status ?? '(无此字段)', n_chunks: f.n_chunks,
-  })),
-)
-console.log('  manifest（store.files）:', JSON.stringify(manifestFiles))
-const goodEntry = manifestFiles.find((f) => f.filename === GOOD_NAME)
-const badEntry = manifestFiles.find((f) => f.filename === BAD_NAME)
-rec('两份文件都出现在 manifest 里（坏文件没有被后端悄悄丢弃）',
-  Boolean(goodEntry) && Boolean(badEntry),
-  `good=${JSON.stringify(goodEntry)} bad=${JSON.stringify(badEntry)}`)
-rec('好文件 status=ingested', goodEntry?.status === 'ingested', `实际 ${goodEntry?.status}`)
-rec('坏文件 status=failed（不是 ingested，不是空字段冒充成功）',
-  badEntry?.status === 'failed', `实际 ${badEntry?.status}`)
-
-// ── 断言 2：屏幕上两行确实长得不一样（视觉判据，不是只查 store）──────────────────────────
-const rows = await page.evaluate(() =>
-  [...document.querySelectorAll('.upload-file-row')].map((el) => ({
-    name: el.querySelector('.upload-file-name')?.innerText ?? '',
-    statusText: el.querySelector('.upload-file-status')?.innerText ?? '(无状态文案)',
-    tone: el.querySelector('.upload-file-status')?.getAttribute('data-tone') ?? '(无 tone)',
-    hint: el.querySelector('.upload-file-status-hint')?.innerText ?? '',
-    dataStatus: el.getAttribute('data-status') ?? '(无 data-status)',
-  })),
-)
-console.log('  屏幕行:', JSON.stringify(rows))
-const goodRow = rows.find((r) => r.name === GOOD_NAME)
-const badRow = rows.find((r) => r.name === BAD_NAME)
-rec('屏幕上两行都渲染出来了', Boolean(goodRow) && Boolean(badRow),
-  `good=${JSON.stringify(goodRow)} bad=${JSON.stringify(badRow)}`)
-rec('🔴 两行的状态文案不同（此前的缺陷：两行像素级相同，只有文件名不一样）',
-  Boolean(goodRow) && Boolean(badRow) && goodRow.statusText !== badRow.statusText,
-  `good="${goodRow?.statusText}" bad="${badRow?.statusText}"`)
-rec('好文件那行说「已读取」', goodRow?.statusText === '已读取', `实际 "${goodRow?.statusText}"`)
-rec('坏文件那行说「没能读取」（不是「已读取」，不是空白）',
-  badRow?.statusText === '没能读取', `实际 "${badRow?.statusText}"`)
-rec('坏文件那行的 tone 是 bad（不是默认色/ok 色）', badRow?.tone === 'bad', `实际 ${badRow?.tone}`)
-rec('坏文件那行带一句"读不进去怎么回事"的说明（不是让客户自己猜）',
-  Boolean(badRow?.hint) && badRow.hint.length > 0, `hint="${badRow?.hint}"`)
-rec('坏文件的说明不替客户编原因——只说文件没能打开，不猜是不是客户的问题',
-  badRow?.hint.includes('没能打开') || badRow?.hint.includes('编码') || false,
-  `hint="${badRow?.hint}"`)
-
-// ── 断言 3：headline 不能说「一切正常」而只字不提有文件没读进去 ─────────────────────────
-const headline = await page.evaluate(() => document.querySelector('.home-greeting h1')?.innerText ?? '')
-console.log('  headline:', headline)
-rec('headline 提到了文件数（读取了 N/M 份），不是只说人和项目',
-  /\d+\s*\/\s*\d+/.test(headline), `headline="${headline}"`)
-rec('headline 里的 N/M 确实反映"没有全部读进去"（1/2，不是 2/2）',
-  headline.includes('1/2'), `headline="${headline}"`)
-
-// ── 断言 4：readyLabel（上传面板头部「团队已就绪」）本身没有撒谎——它只是一句总括，
-// 真正的诚实信号在下面的逐行状态里，这里只确认它没有被误改成别的谎话。────────────────
-const readyLabel = await page.evaluate(() => document.querySelector('.upload-ready-label')?.innerText ?? '')
-rec('upload 面板的 readyLabel 存在（本门不是在一个空面板上断言）', readyLabel.length > 0, readyLabel)
-
-rec('无 pageerror', pageErrors.length === 0, pageErrors.slice(0, 2).join(' | ') || '0 条')
+await driveShell({
+  label: 'v02',
+  url: `${UI}/?v=2&mode=live&look=paper&lang=zh`,
+  storeSeam: '__lite2Store',
+})
+await driveShell({
+  label: 'v01',
+  url: `${UI}/?v=1&mode=live&lang=zh`,
+  storeSeam: '__liteStore',   // 无条件存在的缝（`__AVERY_LITE__` 是 DEV 门控的，build 后会整段剪掉）
+})
 
 await browser.close()
 

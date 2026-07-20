@@ -1,4 +1,4 @@
-import { useRef, useState, type ChangeEvent, type DragEvent } from 'react'
+import { useRef, useState, type ChangeEvent, type CSSProperties, type DragEvent } from 'react'
 import { useLite } from './store'
 import { useDict } from '../shared/i18n/useDict'
 import { clearIngestStart, useIngestElapsedSeconds } from '../shared/ingestClock'
@@ -25,6 +25,54 @@ function formatBytes(bytes: number): string {
 }
 
 const ACCEPT = '.pdf,.docx,.doc,.xlsx,.xls,.csv,.md,.markdown,.txt'
+
+// ── 07-20 复审 Blockers 6：v01 逃生门补上「每份文件读没读进去」──────────────────────────
+// 后端 registry.SourceDocument.status 发 'ingested' / 'empty' / 'failed'，v01 此前既没有这个
+// 字段也不显示，于是一份扫描版 PDF（一个字没抽出来）和一份读全了的花名册在清单里长得一模一样。
+// v02 07-20 已补上，v01 落后了 —— 而逃生门恰恰是别的路都不通时用的那条，在它上面撒谎代价更高。
+// 实现与 src/lite2/UploadPanel.tsx 同形（**拷贝不 import**，两张皮互不引用）。
+// 🔴 缺席不等于成功：老后端 / stub transport 不发这个键，那种情况显示「状态未知」，
+// 绝不默认渲染成「已读取」——"我没读到" 和 "客户说没有" 是两件事。
+type FileStatusView = {
+  labelKey: 'fileStatusIngested' | 'fileStatusEmpty' | 'fileStatusFailed' | 'fileStatusUnknown'
+  hintKey: 'fileStatusEmptyHint' | 'fileStatusFailedHint' | null
+  tone: 'ok' | 'warn' | 'bad' | 'unknown'
+}
+
+function fileStatusView(status: string | undefined): FileStatusView {
+  switch (status) {
+    case 'ingested':
+      return { labelKey: 'fileStatusIngested', hintKey: null, tone: 'ok' }
+    case 'empty':
+      return { labelKey: 'fileStatusEmpty', hintKey: 'fileStatusEmptyHint', tone: 'warn' }
+    case 'failed':
+      return { labelKey: 'fileStatusFailed', hintKey: 'fileStatusFailedHint', tone: 'bad' }
+    default:
+      return { labelKey: 'fileStatusUnknown', hintKey: null, tone: 'unknown' }
+  }
+}
+
+// 状态色内联而不进样式表（同 v02 的取舍）：一个**看不见的**状态徽章等于没修这条。
+// v01 走 paper 皮的既有变量，取不到时退到同一组字面量。
+const STATUS_TONE_COLOR: Record<FileStatusView['tone'], string> = {
+  ok: 'var(--sage, #4a7c59)',
+  warn: 'var(--honey, #b8860b)',
+  bad: 'var(--alert, #b3261e)',
+  unknown: 'var(--ink-faint, #8a8578)',
+}
+
+// 文件行换行：新增的状态徽章会把长中文文件名挤成两行（v02 真机实测过），这几条把它按住。
+const FILE_ROW_STYLE: CSSProperties = { flexWrap: 'wrap' }
+// minWidth:0 是必须的——flex item 默认 min-width:auto 拒绝收缩到内容宽度以下，
+// 而 .upload-file-name 有 word-break:break-word，于是它改为把中文文件名逐字折行。
+const FILE_NAME_STYLE: CSSProperties = { flex: '1 1 auto', minWidth: 0 }
+const FILE_STATUS_STYLE: CSSProperties = { flex: 'none', whiteSpace: 'nowrap' }
+const FILE_HINT_STYLE: CSSProperties = {
+  flexBasis: '100%',      // 独占一行：hint 是一句话，不是一个能塞进标题行的徽章
+  fontSize: '11px',
+  lineHeight: 1.45,
+  color: 'var(--ink-faint, #8a8578)',
+}
 
 // feat-068 · 模板填充（与 lite2/OnboardWizard 的同名 helper 同形；这里只用于秒表文案）。
 function fill(template: string, vars: Record<string, string | number>): string {
@@ -198,14 +246,38 @@ export function UploadPanel() {
         <div className="upload-files" aria-label={t.upload.filesTitle}>
           <p className="upload-files-title">{t.upload.filesTitle}</p>
           <ul className="upload-files-list">
-            {files.map((file) => (
-              <li key={file.idx} className="upload-file-row">
-                <span className="upload-file-name">{file.filename}</span>
-                <span className="upload-file-meta">
-                  {formatBytes(file.size_bytes)} · {file.n_chunks} {t.upload.filesChunks}
-                </span>
-              </li>
-            ))}
+            {files.map((file) => {
+              const view = fileStatusView(file.status)
+              return (
+                <li
+                  key={file.idx}
+                  className="upload-file-row"
+                  data-status={file.status ?? 'unknown'}
+                  style={FILE_ROW_STYLE}
+                >
+                  <span className="upload-file-name" style={FILE_NAME_STYLE}>
+                    {file.filename}
+                  </span>
+                  <span className="upload-file-meta">
+                    {formatBytes(file.size_bytes)} · {file.n_chunks} {t.upload.filesChunks}
+                  </span>
+                  {/* 每一行都表态，包括成功的那些——只给失败的加标记，用户就得靠"没有标记"
+                      反推"读进去了"，那仍然是让人猜。 */}
+                  <span
+                    className="upload-file-status"
+                    data-tone={view.tone}
+                    style={{ ...FILE_STATUS_STYLE, color: STATUS_TONE_COLOR[view.tone] }}
+                  >
+                    {t.upload[view.labelKey]}
+                  </span>
+                  {view.hintKey ? (
+                    <span className="upload-file-status-hint" style={FILE_HINT_STYLE}>
+                      {t.upload[view.hintKey]}
+                    </span>
+                  ) : null}
+                </li>
+              )
+            })}
           </ul>
         </div>
       ) : null}

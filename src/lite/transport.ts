@@ -172,6 +172,18 @@ export interface AskDraft {
 // 每公司「你的文件」薄清单：回看上传过哪些材料、Avery 的记忆基于什么（User Story 4）。
 // 纯元数据（不含字节）；n_chunks = 该文件贡献的 material chunk 数（经 materials.source 前缀链接）。
 // 🔴 文件内容是不可信数据——此处只列/只显，绝不作指令跟随。
+//
+// 07-20 复审 Blockers 6（v01 补齐）：后端每份文件都带 `status`，v01 的类型里一直没有这个键，
+// 界面也就永远不显示它——一份扫描版 PDF（一个字没抽出来）和一份读全了的花名册在「你的文件」
+// 里像素级相同。v02 07-20 已补上，v01 这道逃生门落后了；逃生门恰恰是别的路都不通时用的那条，
+// 在它上面撒谎代价更高。契约与 src/lite2/transport.ts 逐字同形（**拷贝不 import**，墙纪律）。
+// 🔴 三个词的口径由后端 registry.SourceDocument.status 定，前端不得自行判定、不得改写：
+//   'ingested' 真读进去了并产出了引用 · 'empty' 解析成功但没抽到内容（扫描件/空表）
+//   'failed'   根本没解析成（编码不认、格式不认、库缺）
+// optional + 兜底 string：老后端不发这个键，stub transport 也不发——缺席时界面显示「未知」，
+// 绝不默认当成 ingested（"我没读到" 和 "客户说没有" 是两件事）。
+export type LiveFileStatus = 'ingested' | 'empty' | 'failed'
+
 export interface LiveFileEntry {
   idx: number
   filename: string
@@ -180,6 +192,7 @@ export interface LiveFileEntry {
   doc_kind: string
   uploaded_at: string
   n_chunks: number
+  status?: LiveFileStatus | string
 }
 
 export interface LiveFilesPayload {
