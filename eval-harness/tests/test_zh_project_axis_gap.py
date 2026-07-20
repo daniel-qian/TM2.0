@@ -2,6 +2,20 @@
 CJK bug. Every test here is `xfail(strict=True)`: it must FAIL today, and the moment it starts
 passing pytest turns RED so nobody can quietly close this gap without retiring the quarantine.
 
+🔴 2026-07-20 UPDATE, ONE TEST RETIRED (`test_zh_weekly_surfaces_the_blocker` below), the other
+two LEFT QUARANTINED. A minimal, independent fix for the zh512 production subset (adversarial
+review item 2 — see tests/test_zh_blocker_risk_label.py) taught `_projects_from_doc` the label
+vocabulary `阻碍项|阻碍|阻塞|卡点|风险点`. That is a whole-document scalar scan, same as the
+ASCII blocker regex it sits next to, so it does not need Layer A (the segment-per-project
+restructure) to fire — it just needed the word. Measured: the guard below turned RED as an
+XPASS(strict) the moment that landed, exactly as designed. Retiring it here is a deliberate,
+visible act, not a quiet one.
+DO NOT read this as H4 being closed. Layer A (one-doc-one-project) and Layer C (Han person-signal
+matching) are UNTOUCHED and still xfail below. The retired test's own blocker string still lands
+on the WRONG project — the phantom "本周项目周报" card, not "销售 FAQ 梳理" — because Layer A
+still overwrites per-project boundaries with one scalar accumulator. The text surfaces; the
+attribution is still a lie. See the retired test's docstring for the exact measurement.
+
 WHY QUARANTINED RATHER THAN GATED RED — the scope argument, with the measurement that drives it.
 
 The brief framed H4 as "the label regexes are ASCII, so 「项目：」doesn't match, so Chinese docs
@@ -110,13 +124,27 @@ def test_zh_weekly_resolves_owners_to_real_people():
     assert owners.get("销售 FAQ 梳理") == "陈思雨", f"got {owners}"
 
 
-@pytest.mark.xfail(strict=True, reason="H4 LAYER B — 「阻塞：」unmatched; the at-risk line is lost")
 def test_zh_weekly_surfaces_the_blocker():
-    """「阻塞：退改签口径未确认，法务尚未回复」is the most decision-relevant line in the weekly and is
-    currently extracted nowhere — not as a blocker, not as a signal."""
+    """RETIRED from H4 quarantine 2026-07-20. 「阻塞：退改签口径未确认，法务尚未回复」used to be
+    extracted nowhere — not as a blocker, not as a signal. It is now, via the independent minimal
+    fix in `_projects_from_doc` (see tests/test_zh_blocker_risk_label.py) that taught the blocker
+    scan the label vocabulary `阻碍项|阻碍|阻塞|卡点|风险点`.
+
+    🔴 STILL A LIE, JUST A SMALLER ONE. This assertion does not check WHICH project the blocker
+    landed on, and it should not be read as if it does: Layer A (below, still xfail) means this
+    document still yields exactly ONE project — a phantom named after the `#` heading, not either
+    of the two real ones — and the blocker text is scalar-accumulated onto THAT phantom, not onto
+    「销售 FAQ 梳理」 where the document actually puts it. A manager reading the real product would
+    see the warning on the wrong card. That misattribution is Layer A's bug, unrelated to and not
+    fixed by this test's passing, and remains open in `test_zh_weekly_yields_its_real_projects`."""
     res = _heuristic(ZH_WEEKLY)
     blockers = [b for p in res.projects for b in p.blockers]
     assert any("退改签" in b for b in blockers), f"got {blockers}"
+    # pin the misattribution so it stays visible rather than silently "fixing itself" unnoticed
+    titles_with_that_blocker = {p.title for p in res.projects if any("退改签" in b for b in p.blockers)}
+    assert titles_with_that_blocker != {"销售 FAQ 梳理"}, (
+        "if this fails, Layer A got fixed as a side effect — go update the quarantine note above, "
+        "do not just delete this assertion")
 
 
 @pytest.mark.xfail(strict=True, reason="H4 LAYER A — STRUCTURAL, ENGLISH-NATIVE: one doc, one project")

@@ -1048,6 +1048,24 @@ class HeuristicExtractor:
             m = re.match(r"^(summary|overview|goal)\s*[:\-]\s*(.+)$", s, re.I)
             if m and not summary:
                 summary = m.group(2).strip()
+            # Chinese blocker/risk label line. NOT a cherry-pick: on main this exact vocabulary
+            # lives inside `_project_from_span`, a function that only exists because feat-054's
+            # project-granularity gate (segment_projects / strip_decoration / multi-project spans —
+            # a ~500-line unrelated feature) replaced this whole-document single-project function.
+            # Bringing main's diff across would mean bringing that feature; this subset does not.
+            # So this is an independent, minimal re-implementation, scoped to this simpler
+            # single-project function — and the vocabulary is kept letter-for-letter IDENTICAL to
+            # main's (`阻碍项|阻碍|阻塞|卡点|风险点`, not a wider net) for two reasons: (1) if this
+            # subset is ever re-baselined from main, production behaviour does not silently change;
+            # (2) 风险点 (not bare 风险) is deliberate on main, not an oversight — bare 风险 would
+            # match the defect-4 fix's own negative cases (无重大风险 / 无明显风险 / 没有风险 / the
+            # section heading 风险与缓解) and reopen exactly the false-positive this line exists
+            # next to. A bare 「风险：人手不足」 label is therefore a KNOWN, DELIBERATE gap, left
+            # unfixed here to match main, not silently patched over.
+            m = re.match(r"^(?:阻碍项|阻碍|阻塞|卡点|风险点)\s*[：:]\s*(.+)$", s)
+            if m:
+                blockers.append(m.group(1).strip()[:180])
+                continue
             if re.search(r"\b(blocker|blocked|waiting on|stuck|unresolved|no sign-?off|"
                          r"acceptance (?:not|un)|not defined)\b", s, re.I):
                 blockers.append(s.lstrip("-*• ").strip()[:180])
