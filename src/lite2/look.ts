@@ -66,7 +66,7 @@ function lookFromUrl(search?: string): LiteLook | null {
 }
 
 // 观感开关的 localStorage 落点。
-const LOOK_STORAGE_KEY = 'lite2:look:v1'
+export const LOOK_STORAGE_KEY = 'lite2:look:v1'
 
 function readStoredLook(): LiteLook | null {
   if (typeof window === 'undefined' || !window.localStorage) return null

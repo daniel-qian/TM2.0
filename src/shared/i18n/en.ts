@@ -497,6 +497,42 @@ export const en = {
     lookSwitchPaper: 'Paper',
     lookSwitchAurora: 'Aurora',
 
+    // ── Account panel (feat-053; 收编自 AuthPanel.tsx 的私有字典，07-20 Blockers 5a) ──
+    //
+    // 这 22 条原本是 `src/lite2/auth/AuthPanel.tsx` 里一份就地写死的 `COPY = { zh, en }`。
+    // 当时的理由（写在那个文件里）是「本波 8 条线并行，往 i18n 加键几乎必然撞车」——单线之后
+    // 这个前提就不成立了，而私有字典留下了两个真问题：
+    //   ① 它挂载时算一次、只看 URL `?lang=` 和构建期变量，**不订阅 localeStore**——07-20 加了
+    //      语言开关之后，点开关整个应用都变了，只有账号按钮还是旧语言，刷新也修不回来；
+    //   ② 它对**所有扫字典的门都是隐形的**（中文纯度门 / aria 门都从 en.ts 这一侧取样）。
+    //      一份没人扫得到的文案，等于没有质量信号。
+    // 收编到这里两个问题一起没。zh 值**逐字沿用原私有字典里那份已在生产上跑着的中文**，
+    // 不重新过 M3——那批词是真客户看过的，重译只会造成线上词漂。
+    authSignIn: 'Sign in',
+    authAccount: 'Account',
+    authTitle: 'Account',
+    authEmailLabel: 'Email',
+    authPasswordLabel: 'Password',
+    authDoSignIn: 'Sign in',
+    authDoSignUp: 'Sign up',
+    authSwitchToSignUp: 'No account yet? Sign up',
+    authSwitchToSignIn: 'Already have an account? Sign in',
+    authSignOut: 'Sign out',
+    authWorking: 'Working…',
+    // 游客态的诚实说明：不登录能干什么、登录多给什么。
+    authGuestNote:
+      'You can use Avery without an account. Signing in just keeps your company data under your name, so it opens on another device.',
+    authVerifyNote: 'Account created. Click the confirmation link in your email, then sign in.',
+    authSignedInAs: 'Signed in',
+    authClaimTitle: 'This company data is not attached to your account yet',
+    authClaimAction: 'Attach to my account',
+    authClaiming: 'Attaching…',
+    authClaimed: 'Attached to your account',
+    authClaimFailed: 'Could not attach it — try again later',
+    authRestoreFailed: 'Could not load the companies on your account',
+    authRetry: 'Try again',
+    authPasswordHint: 'At least 6 characters',
+
     // ── Team grouping view (feat-025 Q2: cluster people cards by department/role) ──
     groupAllLabel: 'Grouped by team',
     groupUngrouped: 'Everyone else',
@@ -745,14 +781,15 @@ export const en = {
     // feat-068 已经把这四个键放进本 section 上方（用 {project} 占位符），并配了
     // src/shared/handoffCopy.ts 的 localizeHandoff()，把拼句留在文案层、派生层只吐结构化数据。
     // fixA 是在派生层拼句，同样能治好「中文页顶着英文标签」，但分层不如前者。
-    // 两者留一份即可，重复定义会直接 TS1117。fixA 独有的 projectStatusUnread 保留在下方。
-
-    // fixA · a project whose documents state no status we could read. 🔴 It is NOT rendered as
-    // 'on-track' (that was a front-end invention: the backend deliberately omits the key, and the
-    // decision layer records it as 未读到) and NOT rendered blank. It says which of the two it is:
-    // we did not read a status — never that the customer's file failed to state one.
-    projectStatusUnread: 'no status read',
-
+    // 两者留一份即可，重复定义会直接 TS1117。
+    //
+    // 07-20（Blockers 5c）· fixA 独有的 `projectStatusUnread` 已**删除**，不是丢弃：
+    // 它唯一的用处是被 `lite2/teamData.ts` 在**取数期**塞进 `LiteProject.status` 当兜底文案。
+    // 语言开关上线后，取数期焊死 locale 会让首页卡与详情浮层对同一事实各说各话，于是派生层
+    // 改成 locale-free（空串 = 没读到），兜底统一由渲染层的 `projectStatusText()` 出——而它
+    // 对空串本来就返回 `projectsStatusUnknown`（「未读到状态」，浮层一直用的就是这个词）。
+    // 留着它就成了 AGENTS.md 点名的那种「孤儿文案键」：有键、无人引用，下一棒读代码时看不出
+    // 是功能被合并吃掉了还是本就没人用。同一个意思只留一个键，说法才不会分叉。
     // Triage three actions + the "Taken care of today" drawer
     triageRemaining: '{pending} of {total} still worth a look',
     triageDoneAria: 'Done — {action}',

@@ -99,7 +99,8 @@ export function CloserLookScreen() {
                       <span className="lite-gap-project-title">{gap.projectTitle}</span> →
                     </button>
                     <span className="lite-gap-owner">
-                      {t.lite2.gapOwnerPrefix} {gap.ownerName}
+                      {/* 兜底在渲染层（Blockers 5c）：gapDerive 透传的是原值或空串。 */}
+                      {t.lite2.gapOwnerPrefix} {gap.ownerName || t.lite2.projectsUnknownValue}
                     </span>
                   </div>
                   <div className="lite-gap-actions">

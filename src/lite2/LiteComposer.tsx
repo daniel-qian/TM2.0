@@ -55,7 +55,9 @@ export function LiteComposer() {
         id: `project-${p.id}`,
         kind: 'project' as const,
         label: p.title,
-        meta: p.ownerName,
+        // 兜底在渲染层（Blockers 5c）：派生层只给原值或空串。`t` 因此进了下面的 deps——
+        // 少了它，切语言后这份引用清单会停在旧语言（正是本条 blocker 的形状）。
+        meta: p.ownerName || t.lite2.projectsUnknownValue,
       })),
     ]
     return all.filter((option) => {
@@ -63,7 +65,7 @@ export function LiteComposer() {
       if (!query) return true
       return `${option.label} ${option.meta}`.toLowerCase().includes(query)
     })
-  }, [team, referenceFilter, referenceQuery])
+  }, [team, referenceFilter, referenceQuery, t])
 
   const isExpanded = composerOpen || referenceMenuOpen || references.length > 0
 

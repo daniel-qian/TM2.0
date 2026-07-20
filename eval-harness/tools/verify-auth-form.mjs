@@ -216,6 +216,17 @@ async function openPanel(p) {
   await p.waitForTimeout(200)
 }
 
+// 弹层是 toggle 语义，且**没有** Escape 关闭处理（Escape 归首访向导）。所以按"当前在不在"
+// 决定点不点，否则一次多余的点击会把它关掉，下一个 innerText 就等一个永远不出现的元素。
+async function ensurePanelOpen(p) {
+  if ((await p.locator('.lite-auth-pop').count()) === 0) await openPanel(p)
+  await p.waitForTimeout(150)
+}
+async function ensurePanelClosed(p) {
+  if ((await p.locator('.lite-auth-pop').count()) > 0) await openPanel(p)
+  await p.waitForTimeout(150)
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════════════
 // ① 表单渲染 + 零拉丁词残留
 // ═══════════════════════════════════════════════════════════════════════════════════════
@@ -560,6 +571,171 @@ console.log('\n═══ ⑦ 换身份（A→B 直接换会话）→ clearCompan
     String(after.marker),
   )
   rec('换人后落回「你的团队」屏（goScreen("team")）', after.pathname === '/team', after.pathname)
+
+  rec('无 pageerror', errs.length === 0, errs.slice(0, 2).join(' | ') || '0 条')
+  await ctx.close()
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ⑧ 语言开关（07-20 Blockers 5a）：账号面板的文案必须跟着开关走
+//
+// 缺陷：AuthPanel 曾带一份**就地写死的 zh/en 私有字典**，取词函数 `useMemo(…, [])` 只看
+// URL `?lang=` 与构建期变量——语言开关改的是 localeStore 和 localStorage，它两个都不看。
+// 于是点开关整个应用都变了，只有账号按钮还是旧语言，**刷新也修不回来**（境内构建 env=zh
+// 会永远判 zh）。附带一半同样重要：私有字典对所有扫 en.ts/zh.ts 的门都是隐形的，
+// 22 条客户会读到的文案从来没进过中文纯度门 / aria 门的采样范围。
+// ═══════════════════════════════════════════════════════════════════════════════════════
+console.log('\n═══ ⑧ 点语言开关 → 账号面板文案跟着变（不刷新）═══')
+{
+  const { ctx, p, errs } = await openPage()
+  await boot(p)
+
+  const toggleZh = await p.locator('.lite-auth-toggle').innerText()
+  rec('中文态：账号按钮是「登录」', toggleZh.trim() === '登录', `实得 "${toggleZh}"`)
+
+  await ensurePanelOpen(p)
+  const panelZh = await p.locator('.lite-auth-pop').innerText()
+  // 只在 zh 态下跑纯度断言（切 EN 之后拉丁词本来就是对的）。
+  const hitsZh = latinHits(panelZh)
+  rec('中文态：面板零拉丁词残留', hitsZh.length === 0, hitsZh.map((h) => `"${h.frag}"`).join(', '))
+  await ensurePanelClosed(p)
+
+  // 🔴 刻意不 reload：刷新会让这个 bug 自愈，也就测不到它。
+  await p.locator('.lang-switch-btn').nth(1).click()   // → English
+  await p.waitForTimeout(400)
+
+  const toggleEn = await p.locator('.lite-auth-toggle').innerText()
+  rec('🔴 切 EN 后账号按钮变成 "Sign in"（此前它卡在中文，刷新也不变）',
+    toggleEn.trim() === 'Sign in', `实得 "${toggleEn}"`)
+
+  await ensurePanelOpen(p)
+  const panelEn = await p.locator('.lite-auth-pop').innerText()
+  rec('🔴 弹层内文案整体跟着变（邮箱/密码标签是英文）',
+    panelEn.includes('Email') && panelEn.includes('Password'), panelEn.replace(/\n+/g, ' / ').slice(0, 120))
+  rec('🔴 弹层内不再残留中文（旧语言没有卡在任何一格里）',
+    !panelEn.includes('邮箱') && !panelEn.includes('密码') && !panelEn.includes('不登录也能用'),
+    panelEn.replace(/\n+/g, ' / ').slice(0, 120))
+  await p.keyboard.press('Escape')
+
+  // 回程：防「只翻一次就锁死」。
+  await p.locator('.lang-switch-btn').nth(0).click()   // → 中文
+  await p.waitForTimeout(400)
+  const toggleBack = await p.locator('.lite-auth-toggle').innerText()
+  rec('切回中文后账号按钮回到「登录」（双向，不是只翻一次）',
+    toggleBack.trim() === '登录', `实得 "${toggleBack}"`)
+
+  rec('无 pageerror', errs.length === 0, errs.slice(0, 2).join(' | ') || '0 条')
+  await ctx.close()
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ⑨ 换身份清场（07-20 Blockers 5b）：清公司数据，**不清用户偏好**
+//
+// 缺陷：`wipeLite2LocalStorage` 按 `lite2:` 前缀整段清——这条不变式本身是对的（公司数据
+// 一样都不许活过换账号），但 07-20 新加的两个偏好键 `lite2:lang:v1` / `lite2:look:v1`
+// 正落在同一个前缀下，于是退出登录会顺手把人的皮肤和语言偏好一起抹掉。
+//
+// 🔴 本相位必须**两侧都断言**：白名单放行了偏好（正向），且公司域键与未知 lite2 键仍然
+// 一个不剩（反向）。只测一侧的话，白名单前缀写错、把公司数据放行过一次换账号，门照样绿。
+// ═══════════════════════════════════════════════════════════════════════════════════════
+console.log('\n═══ ⑨ 换身份：偏好留下、公司数据清光 ═══')
+{
+  const { ctx, p, errs } = await openPage()
+  await boot(p)
+
+  // 走**真开关**写偏好，而不是 setItem：这样同时证明壳真的在读这个键。
+  await p.locator('.look-switch-btn').nth(1).click()   // → aurora（≠ 默认 paper）
+  await p.waitForTimeout(300)
+  // 🔴 语言这一侧**刻意不点开关**：boot() 的 URL 带 `?lang=zh`，localeStore 的深链同步已经
+  // 把 'zh' 落进了 `lite2:lang:v1`，而本门的构建**没有**设 VITE_AVERY_LOCALE，构建期默认是
+  // 'en'。于是"偏好丢了"与"偏好还在"两种情况下界面语言不同（en / zh），断言才有判别力。
+  // 反例记在这儿供后人别再踩：先前这里点成 English，存进去的偏好恰好**等于**构建期默认，
+  // 于是把白名单整个去掉、偏好被抹光，界面照样是英文——那条断言"因错而对"地绿着。
+  // 判别器的第一要求是它在两种世界里给出不同答案。
+
+  // 先落成 A 身份 + 一份公司数据 + 一个「未知的 lite2 键」（反向探针）。
+  await p.evaluate((u) => {
+    window.__lite2Auth.setState({ status: 'authed', userId: u.id, email: u.email })
+    window.__lite2Store.setState({
+      contextId: 'ctx-fake-company-a',
+      ownerToken: 'owner-tok-fake-a',
+      team: { people: [], projects: [] },
+      files: [{ name: 'w29.md' }],
+    })
+    window.localStorage.setItem('lite2:contextId:v1', 'ctx-fake-company-a')
+    window.localStorage.setItem('lite2:flow:v1', JSON.stringify({ followups: [{ title: 'A 公司文档原句' }] }))
+    window.localStorage.setItem('lite2:test-marker:v1', JSON.stringify({ leftover: true }))
+  }, FAKE_USER_A)
+  await p.waitForTimeout(300)
+
+  const pre = await p.evaluate(() => ({
+    look: window.localStorage.getItem('lite2:look:v1'),
+    lang: window.localStorage.getItem('lite2:lang:v1'),
+    marker: window.localStorage.getItem('lite2:test-marker:v1'),
+    domLook: document.querySelector('.lite2-shell')?.getAttribute('data-look') ?? null,
+  }))
+  rec('前置：两个偏好键确实被真开关写进去了（否则下面全是空真）',
+    pre.look !== null && pre.lang !== null && pre.marker !== null, JSON.stringify(pre))
+
+  // 换人 A → B
+  await p.evaluate((u) => {
+    window.__lite2Auth.setState({ status: 'authed', userId: u.id, email: u.email })
+  }, FAKE_USER_B)
+  await p
+    .waitForFunction(() => window.__lite2Store.getState().contextId === null, undefined, { timeout: 5000 })
+    .catch(() => {})
+  await p.waitForTimeout(300)
+
+  const post = await p.evaluate(() => ({
+    look: window.localStorage.getItem('lite2:look:v1'),
+    lang: window.localStorage.getItem('lite2:lang:v1'),
+    domLook: document.querySelector('.lite2-shell')?.getAttribute('data-look') ?? null,
+    marker: window.localStorage.getItem('lite2:test-marker:v1'),
+    contextIdKey: window.localStorage.getItem('lite2:contextId:v1'),
+    flowKey: window.localStorage.getItem('lite2:flow:v1'),
+    ownerTokensKey: window.localStorage.getItem('lite2:ownerTokens:v1'),
+    contextId: window.__lite2Store.getState().contextId,
+  }))
+  console.log('         换人后 localStorage:', JSON.stringify(post))
+
+  // 正向：偏好活下来了。
+  rec('🔴 皮肤偏好活过换账号（lite2:look:v1 仍在，且值没变）',
+    post.look === pre.look && post.look !== null, `前 ${pre.look} → 后 ${post.look}`)
+  // ⚠️ 刻意**不**在换人这一拍断言 data-look：lookStore 的内存态不随 localStorage 走，
+  // 键被抹掉后当前这一屏照样还是 aurora——只断言这一拍，缺陷会从眼皮底下溜过去
+  // （实测：把白名单去掉，这条仍然 PASS）。用户真正看见丢偏好是**下次打开**，
+  // 所以判据必须跨一次真实的重新加载。
+  //
+  // 🔴 重开时必须走**裸链**（不带 `?look=`/`?lang=`）。boot() 用的那条 URL 把 look=paper
+  // 钉死了，而 URL 参数**按设计**赢过记住的选择（深链优先，见 lookStore.ts / localeStore.ts）
+  // ——带着参数刷新只会验出"参数优先"这条既有行为，验不出"偏好还在不在"。裸链才是
+  // 「下次打开」的真实形状。
+  await p.goto(`${UI}/?v=2&mode=live`, { waitUntil: 'networkidle' })
+  await dismissOnboardIfAny(p)
+  await p.waitForTimeout(400)
+  const reloaded = await p.evaluate(() => ({
+    domLook: document.querySelector('.lite2-shell')?.getAttribute('data-look') ?? null,
+    look: window.localStorage.getItem('lite2:look:v1'),
+    lang: window.localStorage.getItem('lite2:lang:v1'),
+    toggle: document.querySelector('.lite-auth-toggle')?.innerText?.trim() ?? null,
+  }))
+  console.log('         裸链重开:', JSON.stringify(reloaded))
+  rec('🔴 重新打开后皮肤还是他选的那个（不是弹回默认 paper）',
+    reloaded.domLook === pre.domLook && reloaded.domLook !== null,
+    `换人前 ${pre.domLook} → 重开后 ${reloaded.domLook}`)
+  rec('🔴 重新打开后语言也还是他选的那个（记住的是 zh，而构建期默认是 en —— 两者不同才验得出）',
+    reloaded.toggle === '登录', `实得 "${reloaded.toggle}"`)
+  rec('🔴 语言偏好活过换账号（lite2:lang:v1 仍在，且值没变）',
+    post.lang === pre.lang && post.lang !== null, `前 ${pre.lang} → 后 ${post.lang}`)
+
+  // 反向：白名单只开了那两个口子，公司数据一样都没漏。
+  rec('未知的 lite2 键仍被清（白名单没有把「默认全清」放宽）',
+    post.marker === null, String(post.marker))
+  rec('公司锚点被清（lite2:contextId:v1）', post.contextIdKey === null, String(post.contextIdKey))
+  rec('跟进队列被清（lite2:flow:v1 —— 它装的是上一家公司文档的原句）',
+    post.flowKey === null, String(post.flowKey))
+  rec('读权限凭据被清（lite2:ownerTokens:v1）', post.ownerTokensKey === null, String(post.ownerTokensKey))
+  rec('内存态的 contextId 也清了', post.contextId === null, String(post.contextId))
 
   rec('无 pageerror', errs.length === 0, errs.slice(0, 2).join(' | ') || '0 条')
   await ctx.close()

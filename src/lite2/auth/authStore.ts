@@ -82,20 +82,61 @@ function applySession(session: Session | null): Partial<AuthState> {
 }
 
 // 门缝二：探测这份部署的后端有没有挂账号路由。只在 `configured` 分支被调用一次
-// （复用 `initialized` 那道模块级闸——init() 本身就只跑一次，探测跟着只发一次请求）。
+// （复用 `initialized` 那道模块级闸——init() 本身就只跑一次，探测跟着只发一趟）。
 // 🔴 超时也算失败：探测绝不允许无限期悬着——那样 accountCapability 会卡在 'unknown'，
 // 面板永远隐藏，效果等同于"探测失败"，但缺了"曾经试过"这个事实（下面 gate 脚本要断言的
 // 正是这件事）。5s 足够覆盖真实网络延迟，又不会让首屏体验被一次慢请求拖住太久
 // ——反正探测结果只影响"要不要出登录入口"这一件事，不挡游客路径。
 const ACCOUNT_STATUS_TIMEOUT_MS = 5000
 
-function probeAccountCapability(): Promise<AccountCapability> {
+// ── 07-20 复审 Blockers 4：一次抖动 = 整场判死刑 ────────────────────────────────────────
+//
+// 原实现只发一次请求，超时或任意非 200 就把 accountCapability 永久钉成 'unsupported'。
+// 后果不是"少个登录框"：会话恢复是**并行且成功**的——人还登着、transport 照旧带着他的
+// access_token 发请求——但整块面板（含**退出登录**）不见了。演示机 / 共享机上，上一个人的
+// 身份就这样留在页面里，下一个人没有任何界面手段把它退掉。
+//
+// 修法的分界线是本轮反复出现的同一条纪律：**「后端说没有」和「我没问到」是两件事。**
+//   · 拿到了 HTTP 回执（404 / 501 / 4xx）—— 后端**回答**了："这份部署没挂账号路由"。
+//     这是答案，不是抖动，立刻落定 unsupported，一次都不重试（重试只会拖慢诚实的答案）。
+//   · 没拿到回执（网络错误 / 超时 / CORS / 502·503·504 这类网关代答）—— 我们**没问到**。
+//     这不是"后端说没有"，重试。
+//
+// 退避刻意小（400ms / 1200ms）：最坏情况约 16.6s 才落定 unsupported，这期间游客侧登录入口
+// 保持隐藏（与探测未回来时的行为完全一致，不会先亮再收）。代价只落在"多等一会儿才看到登录
+// 按钮"，而永不落在"能不能用"上——游客路径全程不受影响。
+const ACCOUNT_STATUS_RETRY_BACKOFF_MS = [400, 1200]
+
+/** 5xx 里网关代答的那几个：请求根本没被应用处理过，与"应用回答了没有"不是一回事。 */
+function isNoAnswer(status: number): boolean {
+  return status === 502 || status === 503 || status === 504
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/** 单发探测。'retry' = 没问到（可重试）；其余两个是**落定**的答案。 */
+function probeOnce(): Promise<AccountCapability | 'retry'> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), ACCOUNT_STATUS_TIMEOUT_MS)
   return fetch(`${apiBase()}/account/status`, { signal: controller.signal })
-    .then((res): AccountCapability => (res.ok ? 'supported' : 'unsupported'))
-    .catch((): AccountCapability => 'unsupported') // 网络错误 / 超时 / CORS —— 一律当无能力
+    .then((res): AccountCapability | 'retry' => {
+      if (res.ok) return 'supported'
+      return isNoAnswer(res.status) ? 'retry' : 'unsupported'
+    })
+    .catch((): AccountCapability | 'retry' => 'retry') // 网络错误 / 超时 / CORS —— 没问到
     .finally(() => clearTimeout(timer))
+}
+
+async function probeAccountCapability(): Promise<AccountCapability> {
+  for (let attempt = 0; ; attempt++) {
+    const outcome = await probeOnce()
+    if (outcome !== 'retry') return outcome
+    const backoff = ACCOUNT_STATUS_RETRY_BACKOFF_MS[attempt]
+    if (backoff === undefined) return 'unsupported' // 重试用尽 —— 仍然 fail-safe 降级
+    await sleep(backoff)
+  }
 }
 
 // Supabase 的报错原文是英文且偏技术（"Invalid login credentials"）。给经理看的是人话。

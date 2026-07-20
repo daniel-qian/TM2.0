@@ -44,7 +44,7 @@ function localeFromUrl(search?: string): Locale | null {
 
 // 语言开关的 localStorage 落点。key 带 `lite2:` 前缀——与 store.ts/onboardStore.ts 等既有
 // v02 key 同一命名族（只有 v02 的开关写它）。
-const LOCALE_STORAGE_KEY = 'lite2:lang:v1'
+export const LOCALE_STORAGE_KEY = 'lite2:lang:v1'
 
 function readStoredLocale(): Locale | null {
   if (typeof window === 'undefined' || !window.localStorage) return null

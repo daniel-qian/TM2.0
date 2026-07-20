@@ -1,8 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAuth } from './authStore'
 import { authConfigured } from './supabaseClient'
 import { useLite } from '../store'
 import { forgetAllOwnerTokens } from '../transport'
+import { useDict } from '../../shared/i18n/useDict'
+// 🔴 换账号清场的白名单读的是**常量本身**，不是抄一份字面量 —— 理由见 KEEP_ACROSS_ACCOUNTS。
+import { LOCALE_STORAGE_KEY } from '../../shared/i18n'
+import { LOOK_STORAGE_KEY } from '../look'
 // fixD/M2：换账号必须一并清掉这三个 localStorage store —— 它们装着上一家公司文档的**逐字原文**。
 import { useFlow } from '../flowStore'
 import { useNotify } from '../notifyStore'
@@ -15,81 +19,10 @@ import { useOnboard, DEFAULT_PLAYBOOKS } from '../onboardStore'
 // · 配置了但没登录 → 只是顶栏多一个「登录」按钮，七屏、上传、议事室一个都不拦。
 // 没有任何一条路径会因为"没登录"而不可用——把 demo 挡在登录墙后面这条线就作废了。
 //
-// 文案就地定稿（zh/en 两份小字典），**不进 src/shared/i18n**：那两份是脚本生成的，
-// 本波 8 条线并行，往里加键几乎必然撞车。等合流后由集成方决定要不要收编。
-
-// 值类型放宽成 string —— `as const` 会把 zh 的字面量钉成类型，en 那份就装不进去了。
-type Copy = Record<keyof typeof COPY.zh, string>
-
-const COPY = {
-  zh: {
-    signIn: '登录',
-    account: '账号',
-    title: '账号',
-    emailLabel: '邮箱',
-    passwordLabel: '密码',
-    doSignIn: '登录',
-    doSignUp: '注册',
-    switchToSignUp: '还没有账号？注册',
-    switchToSignIn: '已有账号？登录',
-    signOut: '退出登录',
-    working: '处理中…',
-    // 游客态的诚实说明：不登录能干什么、登录多给什么。
-    guestNote: '不登录也能用。登录只是把上传的公司数据存到你名下，换设备还能打开。',
-    verifyNote: '注册成功。去邮箱点一下确认链接，然后回来登录。',
-    signedInAs: '已登录',
-    claimTitle: '当前这份公司数据还没归到账号名下',
-    claimAction: '绑定到我的账号',
-    claiming: '绑定中…',
-    claimed: '已绑定到你的账号',
-    claimFailed: '绑定失败，稍后再试',
-    restoreFailed: '取不到你名下的公司数据',
-    retry: '重试',
-    passwordHint: '至少 6 位',
-  },
-  en: {
-    signIn: 'Sign in',
-    account: 'Account',
-    title: 'Account',
-    emailLabel: 'Email',
-    passwordLabel: 'Password',
-    doSignIn: 'Sign in',
-    doSignUp: 'Sign up',
-    switchToSignUp: "No account yet? Sign up",
-    switchToSignIn: 'Already have an account? Sign in',
-    signOut: 'Sign out',
-    working: 'Working…',
-    guestNote:
-      'You can use Avery without an account. Signing in just keeps your company data under your name, so it opens on another device.',
-    verifyNote: 'Account created. Click the confirmation link in your email, then sign in.',
-    signedInAs: 'Signed in',
-    claimTitle: 'This company data is not attached to your account yet',
-    claimAction: 'Attach to my account',
-    claiming: 'Attaching…',
-    claimed: 'Attached to your account',
-    claimFailed: 'Could not attach it — try again later',
-    restoreFailed: 'Could not load the companies on your account',
-    retry: 'Try again',
-    passwordHint: 'At least 6 characters',
-  },
-} as const
-
-function useCopy(): Copy {
-  return useMemo(() => {
-    let lang: string | null = null
-    try {
-      lang = new URLSearchParams(window.location.search).get('lang')
-    } catch {
-      lang = null
-    }
-    if (lang !== 'zh' && lang !== 'en') {
-      const env =
-        typeof import.meta !== 'undefined' ? import.meta.env?.VITE_AVERY_LOCALE : undefined
-      lang = String(env ?? '').trim().toLowerCase() === 'zh' ? 'zh' : 'en'
-    }
-    return lang === 'zh' ? COPY.zh : COPY.en
-  }, [])
-}
+// 文案走 src/shared/i18n（07-20 Blockers 5a 收编）。原来这里有一份就地写死的 zh/en 小字典，
+// 挂载时算一次、只看 URL `?lang=` 和构建期变量——语言开关点了它不变，刷新也修不回来；而且
+// 它对所有扫字典的门（中文纯度门 / aria 门）是隐形的。两个问题的同一个根：文案不在唯一源里。
+// 现在 22 条键在 `en.lite2.auth*` / `zh.lite2.auth*`，`useDict()` 订阅 localeStore，跟着开关走。
 
 type ClaimState = 'idle' | 'claiming' | 'claimed' | 'failed'
 
@@ -127,13 +60,30 @@ type ClaimState = 'idle' | 'claiming' | 'claimed' | 'failed'
 //
 // 留 supabase-js 自己的会话 key（不是 `lite2:` 前缀）—— 那是**新**账号的登录态，清了就等于
 // 刚登录就被登出。
+//
+// ── 07-20 Blockers 5b · 一个**极窄**的白名单 ────────────────────────────────────────────
+// 「`lite2:` 底下不许有任何东西活过一次换账号」这条不变式没有变，默认仍然是**全清**。
+// 但 07-20 新加的两个键落进了同一个命名空间，而它们不是公司数据、是**用户偏好**：
+//   · `lite2:lang:v1` —— 界面语言（这个键甚至不是 v02 专属，v01 也读它，挂 lite2 前缀属误置）
+//   · `lite2:look:v1` —— 皮肤
+// 于是「退出登录」会顺手把人的皮肤和语言偏好一起抹掉。语言有构建期兜底所以看不太出来，
+// 皮肤是当场弹回 paper。
+//
+// 🔴 两条纪律，改这里的人必须一起守住：
+// ① **import 常量，绝不抄字面量**。抄一份 'lite2:look:v1' 进来，等谁把 `:v1` 升成 `:v2`，
+//    白名单就静默失效——而失效的表现只是"偏好又被清了"，没有任何报错。这正是下面那段注释
+//    当初拒绝列举 key 的同一个理由，白名单同样适用。
+// ② **进这个集合的门槛是「不含任何公司数据」**。装了文档原文 / context id / 凭据的，
+//    一个都不许进——放进来一个，就等于把公司数据放行过了一次换账号。
+const KEEP_ACROSS_ACCOUNTS: ReadonlySet<string> = new Set([LOCALE_STORAGE_KEY, LOOK_STORAGE_KEY])
+
 function wipeLite2LocalStorage(): void {
   try {
     if (typeof window === 'undefined' || !window.localStorage) return
     const doomed: string[] = []
     for (let i = 0; i < window.localStorage.length; i++) {
       const key = window.localStorage.key(i)
-      if (key && key.startsWith('lite2:')) doomed.push(key)
+      if (key && key.startsWith('lite2:') && !KEEP_ACROSS_ACCOUNTS.has(key)) doomed.push(key)
     }
     // 先收集再删：removeItem 会让 length/索引在遍历途中塌陷，边遍历边删必漏。
     for (const key of doomed) window.localStorage.removeItem(key)
@@ -216,7 +166,8 @@ if (import.meta.env.DEV && typeof window !== 'undefined') {
 }
 
 export function AuthPanel() {
-  const c = useCopy()
+  const { t } = useDict()
+  const c = t.lite2
   const status = useAuth((s) => s.status)
   const accountCapability = useAuth((s) => s.accountCapability)
   const email = useAuth((s) => s.email)
@@ -334,13 +285,25 @@ export function AuthPanel() {
   // 未配置这份部署就没有账号能力 —— 不出假入口（点了必然失败的按钮比没有按钮更糟）。
   if (status === 'disabled' || !authConfigured()) return null
   if (status === 'loading') return null
+
+  const authed = status === 'authed'
+
   // 门缝二（07-20）：key 配了不代表这份后端部署真的挂了账号路由。生产实测过
   // avery.dannyqian.com 有 key 但 /account/status 404——只看 authConfigured() 会让客户看到一个
   // 能点、能登进 Supabase、然后处处 403/404 的登录框，比没有入口更糟。'unknown'（探测还没回来）
   // 和 'unsupported'（探测回来说没有）一样藏起来——绝不先亮出登录框再收回去。
-  if (accountCapability !== 'supported') return null
+  //
+  // 🔴 但这条判据**只管游客侧**（复审 Blockers 4）。原来它盖住整个组件，于是探测抖一下、
+  // 已登录的人整块面板连同**退出登录**一起消失——而会话恢复是并行且成功的：人还登着，
+  // transport 照旧带着他的 access_token 发请求，界面上却再没有任何手段把这个身份退掉。
+  // 演示机 / 共享机上，那就是上一个人的身份留在页面里。
+  //
+  // 两件事本就正交：探测回答的是"要不要**邀请**一个人去登录"（不确定就别邀请）；
+  // 已经有会话时，那个人**已经在里面了**，藏起出口不会让他退回游客，只会让他退不出去。
+  // 手上握着一份真会话时，登出永远可达。
+  if (!authed && accountCapability !== 'supported') return null
 
-  const authed = status === 'authed'
+
   const working = busy !== 'idle'
 
   // 认领入口只在"手上这份数据确实还没归属"时出现：已登录 + 有 context + 有 owner_token
@@ -383,49 +346,49 @@ export function AuthPanel() {
         className="lite-auth-toggle"
         onClick={toggle}
         aria-expanded={open}
-        aria-label={c.account}
-        title={authed && email ? email : c.signIn}
+        aria-label={c.authAccount}
+        title={authed && email ? email : c.authSignIn}
       >
-        {authed ? (email ? email.slice(0, 1).toUpperCase() : '·') : c.signIn}
+        {authed ? (email ? email.slice(0, 1).toUpperCase() : '·') : c.authSignIn}
       </button>
 
       {open ? (
-        <div className="lite-auth-pop" role="dialog" aria-label={c.title}>
+        <div className="lite-auth-pop" role="dialog" aria-label={c.authTitle}>
           <div className="lite-auth-head">
-            <span className="lite-auth-title">{c.title}</span>
+            <span className="lite-auth-title">{c.authTitle}</span>
           </div>
 
           {authed ? (
             <div className="lite-auth-body">
               <p className="lite-auth-who">
-                <span className="lite-auth-who-label">{c.signedInAs}</span>
+                <span className="lite-auth-who-label">{c.authSignedInAs}</span>
                 <span className="lite-auth-who-email">{email ?? ''}</span>
               </p>
 
               {canClaim ? (
                 <div className="lite-auth-claim">
-                  <p className="lite-auth-note">{c.claimTitle}</p>
+                  <p className="lite-auth-note">{c.authClaimTitle}</p>
                   <button
                     type="button"
                     className="lite-auth-submit"
                     onClick={() => void doClaim()}
                     disabled={claim === 'claiming'}
                   >
-                    {claim === 'claiming' ? c.claiming : c.claimAction}
+                    {claim === 'claiming' ? c.authClaiming : c.authClaimAction}
                   </button>
                   {claim === 'failed' ? (
-                    <p className="lite-auth-error">{c.claimFailed}</p>
+                    <p className="lite-auth-error">{c.authClaimFailed}</p>
                   ) : null}
                 </div>
               ) : null}
 
               {contextId && attached ? (
-                <p className="lite-auth-note">{c.claimed}</p>
+                <p className="lite-auth-note">{c.authClaimed}</p>
               ) : null}
 
               {restoreError ? (
                 <div className="lite-auth-claim">
-                  <p className="lite-auth-error">{c.restoreFailed}</p>
+                  <p className="lite-auth-error">{c.authRestoreFailed}</p>
                   {/* 失败必须有出路 —— 此前只剩 F5（复核 finding 4）。
                       不按 restoreInFlight 置 disabled：那是个 ref，render 里读它不会随变化
                       重渲染，只会渲染出一个可能已经过时的禁用态。并发本身在副作用里已经挡住
@@ -435,24 +398,27 @@ export function AuthPanel() {
                     className="lite-auth-secondary"
                     onClick={() => setRestoreAttempt((n) => n + 1)}
                   >
-                    {c.retry}
+                    {c.authRetry}
                   </button>
                 </div>
               ) : null}
 
+              {/* data-role 是给门用的稳定抓手：`.lite-auth-secondary` 这个类在同一个弹层里
+                  还挂着「重试」按钮，按类计数分不清谁是谁；按文案定位又会被 i18n 改动绊住。 */}
               <button
                 type="button"
                 className="lite-auth-secondary"
+                data-role="sign-out"
                 onClick={() => void signOut()}
                 disabled={working}
               >
-                {busy === 'signing-out' ? c.working : c.signOut}
+                {busy === 'signing-out' ? c.authWorking : c.authSignOut}
               </button>
             </div>
           ) : (
             <form className="lite-auth-body" onSubmit={submit}>
               <label className="lite-auth-field">
-                <span className="lite-auth-label">{c.emailLabel}</span>
+                <span className="lite-auth-label">{c.authEmailLabel}</span>
                 <input
                   type="email"
                   autoComplete="email"
@@ -462,7 +428,7 @@ export function AuthPanel() {
                 />
               </label>
               <label className="lite-auth-field">
-                <span className="lite-auth-label">{c.passwordLabel}</span>
+                <span className="lite-auth-label">{c.authPasswordLabel}</span>
                 <input
                   type="password"
                   autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
@@ -472,12 +438,12 @@ export function AuthPanel() {
                   onChange={(e) => setPassword(e.target.value)}
                 />
                 {mode === 'signup' ? (
-                  <span className="lite-auth-hint">{c.passwordHint}</span>
+                  <span className="lite-auth-hint">{c.authPasswordHint}</span>
                 ) : null}
               </label>
 
               <button type="submit" className="lite-auth-submit" disabled={working}>
-                {working ? c.working : mode === 'signup' ? c.doSignUp : c.doSignIn}
+                {working ? c.authWorking : mode === 'signup' ? c.authDoSignUp : c.authDoSignIn}
               </button>
 
               <button
@@ -488,12 +454,12 @@ export function AuthPanel() {
                   clearError()
                 }}
               >
-                {mode === 'signin' ? c.switchToSignUp : c.switchToSignIn}
+                {mode === 'signin' ? c.authSwitchToSignUp : c.authSwitchToSignIn}
               </button>
 
               {error ? <p className="lite-auth-error">{error}</p> : null}
-              {pendingVerification ? <p className="lite-auth-note">{c.verifyNote}</p> : null}
-              <p className="lite-auth-note">{c.guestNote}</p>
+              {pendingVerification ? <p className="lite-auth-note">{c.authVerifyNote}</p> : null}
+              <p className="lite-auth-note">{c.authGuestNote}</p>
             </form>
           )}
         </div>

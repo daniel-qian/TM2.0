@@ -109,36 +109,56 @@ async function dismissOnboardIfAny(p) {
   }
 }
 
-// backendMode: 404 | 200 | 'abort'（连接直接掐断——模拟网络错误/超时的失败分支）。
-async function probe(backendMode) {
+const OK_BODY = JSON.stringify({ configured: true, signed_in: false })
+const NOT_FOUND_BODY = JSON.stringify({ detail: 'not found' })
+
+// backendMode:
+//   404      —— 后端**回答**了「这份部署没挂账号路由」。落定 unsupported，不该重试。
+//   200      —— 挂了。
+//   'abort'  —— 连接被掐（网络错误/超时的失败分支）。**没问到**，该重试，重试用尽仍降级。
+//   数组     —— 逐次回应的脚本，如 [502, 502, 200]：模拟「抖一下就恢复」。用完最后一项后
+//              沿用最后一项（探测若多发，行为仍确定）。
+async function probe(backendMode, opts = {}) {
+  const { settleMs = 1200, seedAuthed = false } = opts
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } })
   const p = await ctx.newPage()
   const errs = []
   p.on('pageerror', (e) => errs.push(e.message))
 
-  let hit = false
+  const script = Array.isArray(backendMode) ? backendMode : null
+  let calls = 0
   await p.route('**/account/status', async (route) => {
-    hit = true
-    if (backendMode === 'abort') return route.abort('failed')
-    if (backendMode === 200) {
-      return route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ configured: true, signed_in: false }),
-      })
+    const mode = script ? script[Math.min(calls, script.length - 1)] : backendMode
+    calls += 1
+    if (mode === 'abort') return route.abort('failed')
+    if (mode === 200) {
+      return route.fulfill({ status: 200, contentType: 'application/json', body: OK_BODY })
     }
     return route.fulfill({
-      status: 404,
+      status: mode,
       contentType: 'application/json',
-      body: JSON.stringify({ detail: 'not found' }),
+      body: NOT_FOUND_BODY,
     })
   })
 
   await p.goto(`${UI}/?v=2&mode=live&look=paper&lang=zh`, { waitUntil: 'networkidle' })
   await dismissOnboardIfAny(p)
-  // 探测有 5s 超时兜底（authStore.ts ACCOUNT_STATUS_TIMEOUT_MS）——给它足够时间落地，
-  // 尤其是 abort 分支：fetch reject 也要走一趟 .catch() 才把 accountCapability 定下来。
-  await p.waitForTimeout(1200)
+  if (seedAuthed) {
+    // store 缝播种一个已登录会话（同 v01 assertAskStatusGuards 的手法）。本门用的是假 Supabase
+    // key，走不通真登录流程；而要断言的那条性质——**探测失败时登出口仍在**——只跟"手上有没有
+    // 会话"有关，跟这个会话怎么来的无关。绝不为了造这个条件去注册真账号。
+    await p.evaluate(() => {
+      window.__lite2Auth?.setState?.({
+        status: 'authed',
+        email: 'seeded@gate.local',
+        userId: 'gate-seeded-user',
+      })
+    })
+    await p.waitForTimeout(200)
+  }
+  // 探测有 5s 超时兜底（authStore.ts ACCOUNT_STATUS_TIMEOUT_MS）+ 重试退避
+  // （ACCOUNT_STATUS_RETRY_BACKOFF_MS = [400, 1200]）——给它足够时间落地。
+  await p.waitForTimeout(settleMs)
 
   const store = await p.evaluate(() => {
     const s = window.__lite2Auth?.getState?.()
@@ -152,15 +172,19 @@ async function probe(backendMode) {
 
   let popoverOpened = false
   let hasEmailField = false
+  let signOutCount = 0
   if (toggleCount > 0) {
     await p.locator('.lite-auth-toggle').first().click()
     await p.waitForTimeout(200)
     popoverOpened = (await p.locator('.lite-auth-pop').count()) > 0
     hasEmailField = (await p.locator('.lite-auth-pop input[type="email"]').count()) > 0
+    // 退出登录按 data-role 定位：同一弹层里「重试」也是 .lite-auth-secondary，按类分不清；
+    // 按文案又会被 i18n 改动绊住。
+    signOutCount = await p.locator('.lite-auth-pop [data-role="sign-out"]').count()
   }
 
   await ctx.close()
-  return { hit, store, toggleCount, sceneTabCount, popoverOpened, hasEmailField, errs }
+  return { hit: calls > 0, calls, store, toggleCount, sceneTabCount, popoverOpened, hasEmailField, signOutCount, errs }
 }
 
 console.log('\n═══ ① 后端 404（账号路由没挂）：即便 key 已配置，登录入口必须不出现 ═══')
@@ -195,14 +219,42 @@ const r200 = await probe(200)
   rec('无 pageerror', r.errs.length === 0, r.errs.slice(0, 2).join(' | ') || '0 条')
 }
 
-console.log('\n═══ ③ 探测本身失败（网络错误/连接被掐）：一律降级成不支持，绝不弹一个赌一半的登录框 ═══')
+console.log('\n═══ ③ 探测持续失败（网络错误/连接被掐）：重试用尽后仍降级成不支持，绝不弹一个赌一半的登录框 ═══')
+const r503 = await probe('abort', { settleMs: 3000 })
 {
-  const r = await probe('abort')
-  console.log(`         store=${JSON.stringify(r.store)} toggle=${r.toggleCount} sceneTabs=${r.sceneTabCount}`)
+  const r = r503
+  console.log(`         store=${JSON.stringify(r.store)} toggle=${r.toggleCount} calls=${r.calls}`)
   rec('accountCapability 落定为 unsupported（fail-safe）', r.store?.accountCapability === 'unsupported', JSON.stringify(r.store))
   rec('🔴 登录入口不出现', r.toggleCount === 0, `实得 ${r.toggleCount}`)
   rec('游客路径原样健在（场景 tab 数与① 一致）', r.sceneTabCount === r404.sceneTabCount, `①=${r404.sceneTabCount} ③=${r.sceneTabCount}`)
   // abort 分支的 requestfailed 不是 JS 异常，不该冒出 pageerror。
+  rec('无 pageerror', r.errs.length === 0, r.errs.slice(0, 2).join(' | ') || '0 条')
+}
+
+// ── 以下两相位是 07-20 复审 Blockers 4 的判据（此前整道门都没有过这两条分支）────────────
+console.log('\n═══ ④ 抖一下就恢复（502 · 502 · 200）：一次网关抖动不许把整场判死刑 ═══')
+{
+  // 502/503/504 = 网关代答，请求根本没到应用 —— 这是「没问到」，不是「后端说没有」。
+  const r = await probe([502, 502, 200], { settleMs: 3000 })
+  console.log(`         store=${JSON.stringify(r.store)} toggle=${r.toggleCount} calls=${r.calls}`)
+  rec('探测真的重试了（/account/status 被打了 ≥3 次）', r.calls >= 3, `实得 ${r.calls} 次`)
+  rec('🔴 最终落定 supported（抖动没有变成永久判决）', r.store?.accountCapability === 'supported', JSON.stringify(r.store))
+  rec('登录入口出现', r.toggleCount === 1, `实得 ${r.toggleCount}`)
+  rec('无 pageerror', r.errs.length === 0, r.errs.slice(0, 2).join(' | ') || '0 条')
+}
+
+console.log('\n═══ ⑤ 已登录 + 探测判不支持：面板必须还在，退出登录必须可达 ═══')
+{
+  // 这是本条 blocker 里真正伤人的那一半：探测失败时面板整块消失，**而会话还活着**——
+  // transport 照旧带着上一个人的 access_token 发请求，界面上却没有任何手段把他退掉。
+  // 演示机 / 共享机上，那就是上一个人的身份留在页面里给下一个人用。
+  const r = await probe(404, { settleMs: 1500, seedAuthed: true })
+  console.log(`         store=${JSON.stringify(r.store)} toggle=${r.toggleCount} signOut=${r.signOutCount}`)
+  rec('accountCapability 确实是 unsupported（条件真的造出来了）', r.store?.accountCapability === 'unsupported', JSON.stringify(r.store))
+  rec('会话确实还在（status=authed）', r.store?.status === 'authed', JSON.stringify(r.store))
+  rec('🔴 账号入口仍在（探测结果不该吞掉一个已存在的会话）', r.toggleCount === 1, `实得 ${r.toggleCount}`)
+  rec('🔴 退出登录按钮可达', r.signOutCount === 1, `实得 ${r.signOutCount}`)
+  rec('未登录的登录表单没有因此漏出来（弹层里没有邮箱输入框）', !r.hasEmailField)
   rec('无 pageerror', r.errs.length === 0, r.errs.slice(0, 2).join(' | ') || '0 条')
 }
 

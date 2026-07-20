@@ -17,11 +17,13 @@ import type { Dict } from '../shared/i18n'
 //（registry.py：`if pr.status: card["status"] = ...`），所以原始 payload 才是唯一能分辨
 // 已知与未知的地方。本模块因此只吃 `LiveProjectCard`，不吃 `LiteProject`。
 //
-// 07-19 更新：那两个兜底都已经改掉了（`status` 走 `projectStatusUnread`、`ownerName` 走
-// `projectsUnknownValue`，且各自留了 `statusRaw` / `ownerNameRaw` 作判据）。**本模块的存在
-// 理由不变**：`LiteProject` 上的 `status`/`ownerName` 现在装的是**渲染文案**（已本地化的
-// 句子），拿它当判据一样错——只是错法从「谎称正常」变成「把一句兜底文案当值」。判已知/未知
-// 仍然只认原始 payload。
+// 07-19 更新：那两个兜底都已经改掉了（各自留了 `statusRaw` / `ownerNameRaw` 作判据）。
+// 07-20 再更新（Blockers 5c）：`LiteProject` 上的 `status`/`ownerName` 一度装的是**已本地化的
+// 渲染文案**，拿它当判据一样错——只是错法从「谎称正常」变成「把一句兜底文案当值」；语言开关
+// 上线后更暴露出第三种错法：那句文案在取数期就焊死了语言，切语言后不跟着变。现在它们已经
+// 降级成「原值或空串」，兜底文案归渲染层。
+// **本模块的存在理由不变**：判已知/未知仍然只认原始 payload——空串虽然比一句兜底文案好读，
+// 但 `''` 与「文档确实写了空状态」在 LiteProject 这一层依旧分不开，只有原始 payload 分得开。
 
 /** 后端归一化后的状态词表（extract.py `_normalize_status` / llm_extract `_ALLOWED_STATUS`）。 */
 export type ProjectStatusKey = 'blocked' | 'at-risk' | 'on-track' | 'done' | 'other' | 'unknown'

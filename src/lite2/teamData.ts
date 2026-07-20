@@ -7,7 +7,6 @@
 //   ② 指向人的信号停在"情境"（她在扛什么），不变成对人的负面标签。
 //   ③ 聚合数字 R2：真算或不显示，绝不编——briefing.metrics 直接来自 ingestion（人数/项目数真数）。
 
-import { getDict, resolveLocale, type Locale } from '../shared/i18n'
 import type { LivePersonCard, LiveProjectCard, LiveTeamPayload } from './transport'
 
 // 卡片左缘墨条的语气温度（与 shared CSS 的 home-tone-* 类同名）：
@@ -36,31 +35,33 @@ export interface LiteProject {
   id: string
   title: string
   /**
-   * 🔴 **渲染用文案，不是判据**（同 `status`）。文档写了负责人 → 那个人名；文档里没读到 →
-   * 本地化的「文档未提及」。
+   * 文档自述的负责人，**没读到就是空串**（07-20 Blockers 5c 起：本字段不再装本地化文案）。
+   * 兜底文案由渲染层出（`ownerName || t.lite2.projectsUnknownValue`），理由见
+   * `liteTeamFromPayload` 头部——在取数期焊进 locale，切语言后卡片与浮层会对同一事实各说各话。
+   * 🔴 判据仍然一律用 `ownerNameRaw`：本字段与它的差别只剩「缺失时是 `''` 还是 `undefined`」，
+   * 绝不许再往里塞任何本地化产物。
    *
-   * 判断一律用 `ownerNameRaw`。曾经这里写的是 `card.ownerName ?? 'Unassigned'`：后端在
-   * owner 缺失时**根本不发这个键**（registry.py 与 status 同一条 "R2 don't invent" 口径），
-   * 于是这一行替客户补了两样它没说的东西——① 一个**英文词**，印在中文客户的团队屏上；
-   * ② 一句**管理判断**（「这个项目没人负责」），而文档只是没提到是谁。
-   * 07-19 裸域名切成 v02 之后在**生产**上抓到：一个 `owner: null` 的项目，卡片上写着
-   * `Unassigned`，而后端 payload 里根本没有这个词——是前端自己编的。
-   *
-   * 复用 `projectsUnknownValue`（项目详情浮层 DetailOverlay 对同一处缺失早就是这么显示的）
-   * 而不是新造键：同一个项目在两处显示时不许说法不一致。
-   * ⚠️ **不要写成「未分配」**——那是在替客户断言「文档说了没有负责人」，正是本行原来犯的错。
+   * 沿革（两条都别再犯）：这里曾经是 `card.ownerName ?? 'Unassigned'`——后端在 owner 缺失时
+   * **根本不发这个键**（registry.py 与 status 同一条 "R2 don't invent" 口径），于是这一行替
+   * 客户补了两样它没说的东西：① 一个**英文词**，印在中文客户的团队屏上；② 一句**管理判断**
+   * （「这个项目没人负责」），而文档只是没提到是谁。07-19 在**生产**上抓到过。
+   * 07-20 改成了 `?? copy.projectsUnknownValue`——文案对了，但把 locale 焊进了取数期（见上）。
+   * ⚠️ 渲染层兜底一律复用 `projectsUnknownValue`（详情浮层对同一处缺失早就这么显示），
+   * 不新造键：同一个项目在两处显示时不许说法不一致。**永远不要写「未分配」**——那是在替客户
+   * 断言「文档说了没有负责人」。
    */
   ownerName: string
   /** 文档自述的负责人。**缺失就是缺失**（`undefined`），绝不兜底、绝不猜。 */
   ownerNameRaw?: string
   /**
-   * 🔴 **渲染用文案，不是判据。** 文档写了状态 → 原样是那个状态词（`on-track` / `blocked` …，
-   * 抽取层归一后的词，状态点与卡片边色都按它取色）；文档里没读到 → 本地化的「未读到状态」。
+   * 文档自述的状态原值，**没读到就是空串**（07-20 Blockers 5c 起：本字段不再装本地化文案）。
+   * 兜底文案由渲染层出（`projectStatusText(statusRaw, t.lite2)`，卡片与浮层早已都走这条）。
+   * 🔴 判据仍然一律用 `statusRaw`。
    *
-   * 判断一律用 `statusRaw`。曾经这里写的是 `card.status ?? 'on-track'`：后端在 status 为空时
-   * **根本不发这个键**（registry.py 注释写着 "left absent (R2 don't invent)"）、决策层把它记进
-   * `unknown_fields` 并写「未读到：状态」，唯独这一行替客户补了一句「一切正常」。实测约四分之一
-   * 的项目命中，后果一路传到「多看一眼」——一句客户从没说过的话被加上引号，摆进「文件里的说法」。
+   * 沿革：这里曾经是 `card.status ?? 'on-track'`——后端在 status 为空时**根本不发这个键**
+   * （registry.py 注释写着 "left absent (R2 don't invent)"）、决策层把它记进 `unknown_fields`
+   * 并写「未读到：状态」，唯独这一行替客户补了一句「一切正常」。实测约四分之一的项目命中，
+   * 后果一路传到「多看一眼」——一句客户从没说过的话被加上引号，摆进「文件里的说法」。
    */
   status: string
   /** 文档自述的状态原值。**缺失就是缺失**（`undefined`），绝不兜底、绝不猜。 */
@@ -171,12 +172,7 @@ function fill(template: string, vars: Record<string, string>): string {
   return template.replace(/\{(\w+)\}/g, (_, k: string) => vars[k] ?? '')
 }
 
-type HandoffCopy = Pick<
-  ReturnType<typeof getDict>['lite2'],
-  'handoffToneLabel' | 'handoffAction' | 'handoffEvidenceFallback' | 'handoffEvidenceTag'
->
-
-function liveHandoffs(payload: LiveTeamPayload, copy: HandoffCopy): LiteHandoff[] {
+function liveHandoffs(payload: LiveTeamPayload): LiteHandoff[] {
   const out: LiteHandoff[] = []
   for (const pr of payload.projects) {
     // feat-068 · 空白 blocker 行不算信号：以前 `['']` 这种脏数据会当成"有原文"，渲染出一条
@@ -200,13 +196,15 @@ function liveHandoffs(payload: LiveTeamPayload, copy: HandoffCopy): LiteHandoff[
 
 // 上传产出 → lite 屏幕数据。入口即剥净每张人卡的数字字段（红线）。
 //
-// `locale` 默认现取（`resolveLocale()` 读 `?lang=` / 构建期 `VITE_AVERY_LOCALE`，与 useDict 同源；
-// 壳内没有运行时切换语言的入口，所以在映射期定文案与在渲染期定文案等价）。显式传入是给测试用的。
-export function liteTeamFromPayload(
-  payload: LiveTeamPayload,
-  locale: Locale = resolveLocale(),
-): LiteTeam {
-  const copy = getDict(locale).lite2
+// 🔴 本函数是 **locale-free** 的（07-20 复审 Blockers 5c 修正，与 src/lite/teamData.ts 对齐）。
+// 它曾经收一个 `locale` 参数、在取数期就把「文档未提及」「未读到状态」写进 ownerName/status，
+// 理由是当时那句注释：「壳内没有运行时切换语言的入口，所以在映射期定文案与在渲染期定文案等价」。
+// **07-20 加了语言开关，这个前提当场作废**，而代码没跟上：
+//   派生结果只在上传 / 刷新 / 切公司时重算，locale 变了它不重算；详情浮层却走 locale-free 的
+//   projectView.ts + 当前字典，随开关立刻变。于是**同一个项目的同一个事实，首页卡和浮层两处
+//   说法不同**，刷新才自洽——比两处都是旧语言更糟，因为它让人怀疑的是数据而不是界面。
+// v01 从一开始就把兜底留在渲染层，结构上不可能出这个 bug；这里是补上同一条纪律。
+export function liteTeamFromPayload(payload: LiveTeamPayload): LiteTeam {
   const cleanPeople = payload.people.map(stripPersonNumbers)
 
   const people: LitePerson[] = cleanPeople.map((card) => {
@@ -238,9 +236,11 @@ export function liteTeamFromPayload(
     return {
       id: card.id,
       title: card.title,
-      ownerName: ownerNameRaw ?? copy.projectsUnknownValue,
+      // 兜底文案归渲染层（见函数头注释）：这里只落**原值或空串**，逐字对齐
+      // src/lite/teamData.ts 的既有约定。
+      ownerName: ownerNameRaw ?? '',
       ownerNameRaw,
-      status: statusRaw ?? copy.projectStatusUnread,
+      status: statusRaw ?? '',
       statusRaw,
       progress: card.progress,
       dueDate: card.dueDate,
@@ -255,7 +255,7 @@ export function liteTeamFromPayload(
     sourceFiles: payload.source_files ?? [],
     people,
     projects,
-    handoffs: liveHandoffs(payload, copy),
+    handoffs: liveHandoffs(payload),
     briefing: {
       tone: b.tone === 'alert' ? 'alert' : 'calm',
       headline: b.headline,

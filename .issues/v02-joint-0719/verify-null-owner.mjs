@@ -108,8 +108,68 @@ async function run(shellQuery, seam) {
   }
 
   const body = await p.evaluate(() => document.body.innerText)
+
+  // ── 07-20 Blockers 5c 相位：**点一下语言开关，不刷新** ────────────────────────────────
+  // 只有 v02 有这个开关（v01 逃生门没有顶栏 switcher），所以按开关是否存在决定跑不跑——
+  // 不是按 shellQuery 硬编码：将来 v01 若也加了开关，这段自动跟着覆盖。
+  //
+  // 这一相位盯的缺陷：`lite2/teamData.ts` 曾在**取数期**就把兜底文案连同语言一起焊进
+  // `LiteProject.ownerName`。派生结果只在上传/刷新/切公司时重算，locale 变了它不重算；而详情
+  // 浮层走的是 locale-free 的 projectView + 当前字典，随开关立刻变。于是切完语言，**同一个
+  // 项目的同一个事实，卡片说旧语言、浮层说新语言**——刷新才自洽。
+  // 比"两处都是旧语言"更糟：它让人怀疑的是数据，不是界面。
+  let langSwitch = null
+  if (await p.locator('.lang-switch-btn').count()) {
+    const readSurfaces = async () => {
+      const cardMeta = await p.evaluate(
+        (title) =>
+          [...document.querySelectorAll('.home-project-card')]
+            .filter((el) => (el.querySelector('h3')?.innerText ?? '').includes(title))
+            .map((el) => el.querySelector('.home-project-meta')?.innerText ?? '')[0] ?? '',
+        CLONE_TITLE,
+      )
+      let overlayText = ''
+      const card = p.locator('.home-project-card', { hasText: CLONE_TITLE }).first()
+      if (await card.count()) {
+        await card.click()
+        await p.waitForTimeout(600)
+        overlayText = await p.evaluate(() => document.querySelector('.lite-detail-card')?.innerText ?? '')
+        await p.keyboard.press('Escape')
+        await p.waitForTimeout(400)
+      }
+      const controlMeta = await p.evaluate(
+        (title) =>
+          [...document.querySelectorAll('.home-project-card')]
+            .filter((el) => !(el.querySelector('h3')?.innerText ?? '').includes(title))
+            .map((el) => el.querySelector('.home-project-meta')?.innerText ?? ''),
+        CLONE_TITLE,
+      )
+      const raws = await p.evaluate(
+        (s) =>
+          (window[s].getState().team?.projects ?? []).map((x) => ({
+            title: x.title,
+            ownerName: x.ownerName,
+            ownerNameRaw: x.ownerNameRaw ?? null,
+          })),
+        seam,
+      )
+      return { cardMeta, overlayText, controlMeta, raws, body: await p.evaluate(() => document.body.innerText) }
+    }
+
+    const clickLang = async (which) => {
+      await p.locator('.lang-switch-btn').nth(which).click()
+      await p.waitForTimeout(500)   // 🔴 刻意不 reload：刷新会让这个 bug 自愈，也就测不到它
+    }
+
+    await clickLang(1)                       // → English
+    const en = await readSurfaces()
+    await clickLang(0)                       // → 中文（回程，防「只翻一次就锁死」）
+    const backToZh = await readSurfaces()
+    langSwitch = { en, backToZh }
+  }
+
   await ctx.close()
-  return { cards, derived, overlay, body, errs }
+  return { cards, derived, overlay, body, errs, langSwitch }
 }
 
 // open-loop-0720：`__AVERY_LITE__` → `__liteStore`。前者是 src/main.tsx 里 DEV-only 的测试缝
@@ -123,7 +183,7 @@ for (const [q, seam, label] of [
   ['v=1', '__liteStore', 'v01（?v=1 逃生门）'],
 ]) {
   console.log(`\n═══ ${label} · 团队屏项目卡 ═══`)
-  const { cards, derived, overlay, body, errs } = await run(q, seam)
+  const { cards, derived, overlay, body, errs, langSwitch } = await run(q, seam)
   for (const c of cards) console.log(`         卡片 ${JSON.stringify(c)}`)
   for (const d of derived) console.log(`         派生 ${JSON.stringify(d)}`)
 
@@ -148,6 +208,43 @@ for (const [q, seam, label] of [
       overlay.replace(/\n+/g, ' / ').slice(0, 120))
   }
   rec(`[${label}] 无 pageerror`, errs.length === 0, errs.slice(0, 2).join(' | ') || '0 条')
+
+  // ── Blockers 5c 判据（只在有语言开关的壳上跑）───────────────────────────────────────
+  if (langSwitch) {
+    const EN_FALLBACK = 'The documents did not say'
+    const { en, backToZh } = langSwitch
+    console.log(`         切 EN 后：卡片="${en.cardMeta}" 浮层="${en.overlayText.replace(/\n+/g, ' / ').slice(0, 90)}"`)
+    console.log(`         切回 ZH 后：卡片="${backToZh.cardMeta}"`)
+
+    rec(`[${label}] 切 EN（不刷新）· 卡片跟着换语言`,
+      en.cardMeta.includes(EN_FALLBACK), `实得 "${en.cardMeta}"`)
+    rec(`[${label}] 切 EN（不刷新）· 卡片不再残留中文兜底`,
+      !en.cardMeta.includes('文档未提及'), `实得 "${en.cardMeta}"`)
+    rec(`[${label}] 🔴 切 EN（不刷新）· 卡片与浮层对同一事实说法一致`,
+      en.cardMeta.includes(EN_FALLBACK) && en.overlayText.includes(EN_FALLBACK),
+      `卡片="${en.cardMeta}" / 浮层含EN=${en.overlayText.includes(EN_FALLBACK)}`)
+    rec(`[${label}] 切 EN 后全页不再出现中文兜底「文档未提及」`,
+      !en.body.includes('文档未提及'),
+      `命中 ${(en.body.match(/文档未提及/g) || []).length} 次`)
+    // 🔴 显示值变了、判据值一个字都不许变。翻译判据 = 把「文字修好了、颜色还在撒谎」
+    // 那条老账反过来犯一遍。
+    const subj = en.raws.find((x) => x.title.includes(CLONE_TITLE))
+    const ctrl = en.raws.find((x) => !x.title.includes(CLONE_TITLE))
+    rec(`[${label}] 🔴 判据没被翻译：缺 owner 的项目 ownerNameRaw 仍是 null`,
+      subj !== undefined && subj.ownerNameRaw === null, JSON.stringify(subj))
+    rec(`[${label}] 🔴 判据没被翻译：对照组 ownerNameRaw 仍是「李明」`,
+      ctrl !== undefined && ctrl.ownerNameRaw === '李明', JSON.stringify(ctrl))
+    rec(`[${label}] 派生层对缺失保持沉默（ownerName 是空串，不是任何一种语言的文案）`,
+      subj !== undefined && subj.ownerName === '', JSON.stringify(subj?.ownerName))
+    rec(`[${label}] 人名不随语言变（对照卡切 EN 后仍显示「李明」）`,
+      en.controlMeta.length >= 1 && en.controlMeta.every((m) => m.includes('李明')),
+      en.controlMeta.join(' | '))
+    rec(`[${label}] 切回中文（不刷新）· 卡片与浮层一起回到「文档未提及」`,
+      backToZh.cardMeta.includes('文档未提及') && backToZh.overlayText.includes('文档未提及'),
+      `卡片="${backToZh.cardMeta}"`)
+  } else {
+    console.log(`         （本壳没有语言开关，跳过 Blockers 5c 相位）`)
+  }
 }
 
 await browser.close()

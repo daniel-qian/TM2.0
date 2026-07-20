@@ -98,6 +98,13 @@ import type { Dict } from "./index";
 //  通顺人话"的专项说明 + 术语表锁定），手动过 `mmx text chat` 拿到译文，再按脚本会产出的
 //  同一种合并方式手工落盘。projectsOpenAria 的译文与 lite2 里已经 Danny 审过的同名键
 //  （"打开 {title}"）逐字重合——M3 独立译出同一个结果，未手工对齐，视为交叉验证。
+// NOTE (Blockers 5a, 2026-07-20): lite2.auth* 22 个键**不是新译文**，是**搬家**——它们此前
+//  就地写死在 src/lite2/auth/AuthPanel.tsx 的私有 `COPY` 字典里，且已经在生产上跑了两天。
+//  这里逐字照搬那份中文，**刻意不过 M3**：重译等于让客户已经看过的词无缘无故变一遍
+//  （线上词漂），而这批词本身没有任何质量问题。搬家的动机是两件事：① 私有字典不订阅
+//  localeStore，语言开关点了它不变；② 它对所有扫 en.ts/zh.ts 的门（中文纯度门 / aria 门）
+//  是隐形的——一份没人扫得到的文案等于没有质量信号。搬进来后两件事一起解决。
+//  故本批**零 M3 调用**，也不标"待审"（AGENTS.md 已授权中文文案 act-first，且这批早已上线）。
 //  33 个键逐字采纳 M3 输出，未手改一字。
 //  ⚠ Draft / 待 Danny 审字。
 // NOTE (open-loop-0720, zh-purity 收尾, 2026-07-20): 两类改动都是本批新增。
@@ -392,6 +399,28 @@ export const zh: Dict = {
     "lookSwitchAria": "观感",
     "lookSwitchPaper": "暖纸",
     "lookSwitchAurora": "极光",
+    "authSignIn": "登录",
+    "authAccount": "账号",
+    "authTitle": "账号",
+    "authEmailLabel": "邮箱",
+    "authPasswordLabel": "密码",
+    "authDoSignIn": "登录",
+    "authDoSignUp": "注册",
+    "authSwitchToSignUp": "还没有账号？注册",
+    "authSwitchToSignIn": "已有账号？登录",
+    "authSignOut": "退出登录",
+    "authWorking": "处理中…",
+    "authGuestNote": "不登录也能用。登录只是把上传的公司数据存到你名下，换设备还能打开。",
+    "authVerifyNote": "注册成功。去邮箱点一下确认链接，然后回来登录。",
+    "authSignedInAs": "已登录",
+    "authClaimTitle": "当前这份公司数据还没归到账号名下",
+    "authClaimAction": "绑定到我的账号",
+    "authClaiming": "绑定中…",
+    "authClaimed": "已绑定到你的账号",
+    "authClaimFailed": "绑定失败，稍后再试",
+    "authRestoreFailed": "取不到你名下的公司数据",
+    "authRetry": "重试",
+    "authPasswordHint": "至少 6 位",
     "groupAllLabel": "按团队分组",
     "groupUngrouped": "其他成员",
     "groupCollapse": "收起",
@@ -531,7 +560,6 @@ export const zh: Dict = {
     "streamAdviceDone": "好了",
     "streamFailed": "连上议事室时出了点状况。",
     "streamErrorUnknown": "暂时没拿到失败详情。",
-    "projectStatusUnread": "未读到状态",
     "triageRemaining": "{pending} / {total} 还值得看一眼",
     "triageDoneAria": "已完成 — {action}",
     "triageDiscardLabel": "今天先放放",

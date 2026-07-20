@@ -449,7 +449,9 @@ export function TeamScreen() {
                       </span>
                     ) : null}
                     <span className="home-project-meta">
-                      <span>{project.ownerName}</span>
+                      {/* 兜底在渲染层（Blockers 5c）：派生层只给原值或空串，这一句跟着当前
+                          字典走，切语言立刻变——与详情浮层同一口径，同一事实不出现两种说法。 */}
+                      <span>{project.ownerName || t.lite2.projectsUnknownValue}</span>
                       {project.dueDate ? <span className="home-project-due">{project.dueDate}</span> : null}
                     </span>
                   </button>
