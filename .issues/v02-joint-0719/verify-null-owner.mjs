@@ -112,9 +112,15 @@ async function run(shellQuery, seam) {
   return { cards, derived, overlay, body, errs }
 }
 
+// open-loop-0720：`__AVERY_LITE__` → `__liteStore`。前者是 src/main.tsx 里 DEV-only 的测试缝
+// （`import.meta.env.DEV` 门死代码消除，`vite build` 产物里整段没有），门只要不是跑在真
+// dev server 上（build+preview 是本仓唯一能绕开共享 node_modules 缺 @babel/* 那个坑的路子）
+// 就会在 v01 分支直接炸成 `window.__liteStore` … `Cannot read properties of undefined`。
+// `__liteStore` 是 src/lite/store.ts:350 的无条件测试缝（同一先例见 verify-status-truth.mjs /
+// verify-aria-zh.mjs），两个环境都挂着，换这一个词其余断言零改动、15 条全绿（已跑过验证）。
 for (const [q, seam, label] of [
   ['v=2', '__lite2Store', 'v02（裸链默认壳）'],
-  ['v=1', '__AVERY_LITE__', 'v01（?v=1 逃生门）'],
+  ['v=1', '__liteStore', 'v01（?v=1 逃生门）'],
 ]) {
   console.log(`\n═══ ${label} · 团队屏项目卡 ═══`)
   const { cards, derived, overlay, body, errs } = await run(q, seam)
