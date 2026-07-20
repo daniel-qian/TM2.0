@@ -34,6 +34,7 @@ Use this at session start and before ending a session. Keep it mechanical; if an
    - `git status --short`
    - Separate in-scope changes from pre-existing local noise.
    - Do not sweep unrelated `.claude/`, `marketing/`, generated output, or local temp files into a commit.
+   - When several agents share one working tree: `git add` only the files you were assigned. Never `git commit -a` / `git commit <path>` on someone else's in-flight edits.
 3. Reconfirm verification:
    - For code/types/routes/state/import changes: run `./init.sh` or `npm run build`.
    - For docs-only harness changes: run the relevant script checks plus `git diff --check`.
@@ -47,6 +48,10 @@ Use this at session start and before ending a session. Keep it mechanical; if an
    - Every configured hook command that points into this repo must resolve to an existing file.
    - Every configured hook script should have git history: `git log --all -- <exact path>`.
    - Deleted hook scripts must have their config entry removed in the same change.
+
+6. If anything was deployed this session:
+   - Record the source SHA of the running production image in the deploy receipt.
+   - If that SHA is not `main`, say so explicitly and name what `git diff <SHA> main` still excludes. An undeclared gap here is how five fixes sat unshipped for two days on 2026-07-20.
 
 ## Main Fast Lane Rule
 

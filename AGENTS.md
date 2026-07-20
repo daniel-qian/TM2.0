@@ -14,6 +14,15 @@ Danny 一个人背 N 个项目，没时间逐项审。默认 **act first, report
 
 质量不靠 Danny 复看，靠 maker≠checker 的 checker 子 agent 兜（见 global + `roles.md`）。审美/口味类分歧记进报告供事后抽查，不阻塞发布。
 
+## Deploy（生产镜像，2026-07-20 血教训）
+
+**默认从 `main` 构建**。别长期用「旧基线叠子集」——只带被指名的修复，等于系统性漏掉没人指名的修复：7/20 复审发现生产基线停在 7/18，main 上五条中文缺陷修复漏了两天没上线（回执见 `.issues/v02-joint-0719/deploy-receipt-backend-0720.md`）。
+
+急事必须挑子集时，两条硬约束：
+
+1. 先跑 `git diff <生产镜像SHA> main -- <后端路径>`，在部署回执里写清**排除了什么**，并给出重拉基线的时间点。
+2. 从 main 往子集搬修复，**词表/常量逐字照抄，不许顺手改得更宽**。发散出的「只有生产有」的补丁，会在下次对齐 main 时被静默回收。
+
 ## Startup Workflow
 
 Before writing code:
@@ -35,8 +44,17 @@ Before writing code:
 - `./init.sh` —— 一键跑全部检查（typecheck + build，fail fast）。
 - `npm run typecheck` —— `tsc -b` 零错。
 - `npm run build` —— typecheck + vite build。
+- 前端行为门是 `verify-*.mjs`（真浏览器），分散在**两处**：2026-07-20 新增的 8 道在 `eval-harness/tools/`，更早的既有门在 `.issues/<issue-dir>/`（`verify-p0` / `verify-blockers` 在 `.issues/v02-partner-align-0718/`，`verify-zh-purity` / `verify-404-discriminator` / `verify-bare-url-shell` 在 `.issues/feat-068-frontend-deploy/`，`verify-null-owner` 在 `.issues/v02-joint-0719/`）。找门用 `git ls-files "*verify-*.mjs"`，别只翻一个目录。跑之前：后端 `AVERY_BRAIN=mock` 起 8137、前端起 5173；端口被占就用隔离端口 + `VERIFY_BASE` + `AVERY_CORS_ORIGINS`（CORS 精确匹配，端口对不上会被浏览器静默拦掉，门看起来像"页面空的"）。
+- 后端电池：`cd eval-harness && python -m pytest -m "not smoke and not seedgate and not needs_keys and not needs_db"`。**这四个 deselect 不是可选的**——本机 `eval-harness/.env`（untracked）里有真 key，漏掉就真出网烧钱。
 - 没有自动化 test suite：行为验证靠 `npm run dev` 目测，验证了什么写进 evidence。
 - Harness 收尾机械门见 `docs/agents/clean-state-checklist.md`；较大 session 的验收评分见 `docs/agents/evaluator-rubric.md`。
+
+## 易复发陷阱（都真被咬过，写门时先看这里）
+
+- **显示值和判据值必须分开**（`ownerNameRaw` / `statusRaw` 模式）：把兜底文案直接当判据，结果是"文字修好了、颜色还在撒谎"。7/20 在 v02 状态点上真发生过。
+- **门扫 `innerText` 看不见属性**：`aria-label` / `title` / `alt` 从不进 innerText，要单独扫（见 `eval-harness/tools/verify-aria-zh.mjs`）。一条门全绿不等于那一类值被采过样。
+- **`__AVERY_LITE__` / `__AVERY_LITE2__` 是 `import.meta.env.DEV` 门控的**，`vite build` 会整段剪掉——引用它们的门在 build+preview 下是**崩**不是失败。无条件存在的缝是 `__liteStore` / `__lite2Store` / `__lite2Auth`。
+- **i18n 里的孤儿文案键是红旗**：有键但没有任何组件引用，往往说明某次合并悄悄吃掉了一整个功能。7/19 一个合并提交就这样整边丢弃了 236 行文件状态渲染，只剩键留在原地。
 
 ## Definition of Done
 

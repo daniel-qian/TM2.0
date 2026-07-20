@@ -1,4 +1,4 @@
-# 后端上线回执 · 2026-07-20（open loop）
+# 后端上线回执 · 2026-07-20（open loop）—— 共六次上线，第六次为基线重拉
 
 **一句话**：后端子集三条已上生产，热替换成功，公网健康，生产库零新写入。旧容器完整保留可一键回滚。
 
@@ -61,36 +61,52 @@
 
 本地验证：全量过滤套件 **1697 passed / 0 failed**。另含决策卡兜底文案修复（`ae46ab9`，新增 R-UNCLASSIFIED 规则）。
 
+## 第六次上线（基线重拉：直接从 main 构建，"叠子集"打法就此终结）
+上面第五次之后 Danny 拍板立刻做基线重拉。**生产镜像不再是手工叠出来的子集，就是 main 本身。**
+
+上线前的安全核验（三条全部成立，所以这次重拉比预想安全得多）：
+- **main 的迁移也停在 0008** —— 和生产一样，**不新建任何表**，最大的地雷根本不存在
+- 后端差异只剩 **5 个文件 / 836 行**（不是早先估的 2600 行 —— 当天已陆续搬过去大半），主要是 feat-054 项目粒度闸
+- main 全量过滤套件 **3337 passed / 0 failed**
+- **五条中文修复在 main 上行为与生产逐字一致**，包括缺陷②（它的宿主函数 `_projects_from_doc` 被 feat-054 的 `_project_from_span` 整个替换掉了）——当初坚持"词表与 main 逐字一致、不许加宽"，正是在这一刻兑现：换了宿主，行为没变
+
+上线后生产内实测：中文完成词否定、无风险表述、`blockers=['等待法务确认','人手不足']`、
+`decision_cards` + `R-UNCLASSIFIED`、GB18030 解码 —— 全部与重拉前一致；公网 `/health` 与
+`/account/status` 均 200；生产库仍是 **9 张表**一行没动。
+
 ## 镜像与容器状态（最新）
 ```
-当前镜像 avery-agent:zh512zh-20260720-164609    ← 含五条中文修复，生产在跑，healthy
-上一版   avery-agent:zh512grade-20260720-140955 ← 含决策定级
+当前镜像 avery-agent:main-20260720-193804       ← = main(43e1ddb) 本身，生产在跑，healthy
+上一版   avery-agent:zh512zh-20260720-164609    ← 含五条中文修复（最后一个"子集"镜像）
+更早     avery-agent:zh512grade-20260720-140955 ← 含决策定级
 更早     avery-agent:zh512acct-20260720-123003  ← 含 feat-053 账号层
 更早     avery-agent:zh512sub2-* (parse兜底) / zh512sub-* (编码修复) / zh512 (最初)  均未删
-五级回滚容器（全部 Exited 完整保留，逐级可退）：
+六级回滚容器（全部 Exited 完整保留，逐级可退）：
+  avery-prev-20260720-193804  → zh512zh   （最后一个子集镜像，无 feat-054 粒度闸）
   avery-prev-20260720-164609  → zh512grade（有决策定级，无五条中文修复）
   avery-prev-20260720-140955  → zh512acct （有账号层，无决策定级）
   avery-prev-20260720-123003  → zh512sub2 （无账号层）
   avery-prev-20260720-102149  → zh512sub  （无 parse 兜底）
   avery-prev-20260720-095401  → zh512     （最初，什么都没有）
 ```
-构建源：`origin/deploy/zh512-subset-0720`（HEAD `ae46ab9`）。服务器 `/home/admin/build-zh` detached 在 `ae46ab9`。
+**构建源现在是 `origin/main`**（本次 = `43e1ddb`）。服务器 `/home/admin/build-zh` detached 在 `43e1ddb`。
+`origin/deploy/zh512-subset-0720`（HEAD `ae46ab9`）**已退休**，仅作历史记录保留 —— 别再往它上面叠。
 
 ## 一键回滚（退一级）
 ```bash
 ssh admin@8.211.28.11
 sudo docker rm -f avery
-sudo docker rename avery-prev-20260720-164609 avery   # 退一级（回到无中文修复）
+sudo docker rename avery-prev-20260720-193804 avery   # 退一级（回到最后一个子集镜像）
 sudo docker start avery
 curl -s http://127.0.0.1:8137/health
 # 想退更多级，换成上面列表里更早的那个名字即可
 ```
 
-## 🔴 下一棒最该做的一件事：把生产基线重新从 main 拉一次
-今天五次上线全部是「在 7/18 旧基线上叠子集」。这个打法救了急，但复审已经证明它会**系统性漏掉
-没人显式指名的修复**——五条中文缺陷就是这么漏了两天。7/25 之后建议重新从 main 拉一次基线，
-别再往旧分支上叠。查生产还缺什么：
-`git diff ae46ab9 main -- eval-harness/avery eval-harness/service eval-harness/db`
+## ✅ 「基线重拉」已完成（本节保留为流程结论）
+前五次上线都是「在 7/18 旧基线上叠子集」。这个打法救了急，但复审证明它会**系统性漏掉
+没人显式指名的修复**——五条中文缺陷就是这么漏了两天。**第六次已重拉，今后生产镜像一律从 main 构建。**
+若将来因故又必须挑子集，务必先 `git diff <生产SHA> main -- eval-harness/avery eval-harness/service eval-harness/db`
+并在回执里写明**排除了什么、为什么**。
 ⚠️ 回滚容器**不会删掉 `account_contexts` 表**（表留着无害：没有账号层的镜像根本不读它）。真要退表得手动 DROP，本回执不建议。
 换容器脚本 `/tmp/swap.sh` 用的是时间戳命名 + 每条失败路径调 `rollback()`，避开了 kickoff 警告的 `avery-prev` 撞名地雷（那个停着的 `avery-prev` 仍在，没动它）。
 
