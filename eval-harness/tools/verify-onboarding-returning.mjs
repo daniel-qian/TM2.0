@@ -21,6 +21,15 @@
 //       "上周已经传过"）→ 向导不自动弹出，且**全程不闪现**：不是"关闭那一刻检查一次"，
 //       是从 reload 提交的那一刻起就高频轮询，覆盖 restoreSession() 那次异步网络请求
 //       还没回来的整个窗口，一次都不能采到它出现过。
+//   (c) open-loop-0720 补的第三条：Danny 拍板「有数据就不弹」选的那个选项原话是「弹窗
+//       保留在菜单里随时能再看」——但那个入口从没被造出来。同一个返回访客（(b) 那次
+//       reload 之后，向导确认没自动弹）点 Playbooks 屏的「重看上手引导」链接
+//       （.lite-playbooks-reopen-onboarding）→ 向导必须真的打开。
+//       🔴 这条不是"点了 begin() 就算过"：begin() 守着 status!=='unseen' 才生效，对已经
+//       done/skipped 的老客户是空操作；就算 status 变了，selectWizardOpen 第一行
+//       `if (hasStoredContext) return false` 还是会把它按回去——hadContextOnLoad 对这批
+//       "有数据的返回客户"恒真，这正是本次要补的那个洞。所以断言的是**屏幕上真的出现了
+//       .lite-onboard**，不是 store 某个字段翻了没意义的值。
 //
 // 🔴 为什么"全程不闪现"比"关闭时刻检查一次"更硬：本修复选的信号（src/lite2/OnboardWizard.tsx
 // 里的 `hadContextOnLoad`）是模块顶层只读一次的 localStorage 快照，不是响应式订阅
@@ -169,6 +178,36 @@ rec(
   JSON.stringify(finalState),
 )
 rec('返回访客场景全程无 pageerror', returnErrors.length === 0, returnErrors.slice(0, 3).join(' | ') || '0 条')
+
+// ── (c) 同一个返回访客：点 Playbooks 屏的「重看上手引导」→ 向导必须真的打开 ────────
+console.log('\n═══ (c) 返回访客点「重看上手引导」—— 向导必须真的打开 ═══')
+await page.evaluate(() => window.__lite2Store.getState().goScreen('playbooks'))
+await page.waitForTimeout(300)
+
+const reopenBtnCount = await page
+  .evaluate(() => document.querySelectorAll('.lite-playbooks-reopen-onboarding').length)
+  .catch(() => -1)
+rec('Playbooks 屏上有「重看上手引导」入口', reopenBtnCount === 1, `采到 ${reopenBtnCount} 个`)
+
+if (reopenBtnCount === 1) {
+  await page.click('.lite-playbooks-reopen-onboarding')
+  await page.waitForTimeout(400)
+}
+
+const reopenedCount = await onboardOpenCount(page)
+rec('点了之后向导真的打开了（.lite-onboard 在 DOM 里）', reopenedCount === 1, `采到 ${reopenedCount} 个`)
+
+const reopenedStep = await page
+  .evaluate(() => document.querySelector('.lite-onboard')?.getAttribute('data-onboard-step'))
+  .catch(() => null)
+rec('重新打开落在第①步（upload）——"重看"是完整再走一遍，不是接着旧进度', reopenedStep === 'upload', `data-onboard-step="${reopenedStep}"`)
+
+rec('点开之后 store 里团队数据仍在（重看没把已加载的数据冲掉）',
+  (await page.evaluate(() => window.__lite2Store.getState().team !== null)))
+
+const reopenErrors = []
+page.on('pageerror', (e) => reopenErrors.push(e.message))
+rec('重看场景全程无 pageerror', reopenErrors.length === 0, reopenErrors.slice(0, 3).join(' | ') || '0 条')
 
 await ctx.close()
 await browser.close()

@@ -115,6 +115,19 @@ interface OnboardState extends PersistedOnboard {
   // 下次访问从记住的 step 续进度——"可中途关闭下次续进度"（PRD F7）。
   pausedThisSession: boolean
 
+  // open-loop-0720 · Danny 拍板「有数据就不弹」时选的那个选项原话是「弹窗保留在菜单里
+  // 随时能再看」——但那个"随时能再看"的入口从没被造出来（Playbooks 屏加了一个按钮调
+  // reopen()）。session-only、不持久化，同 pausedThisSession 一个道理：这只是"这次访问
+  // 里向导正被强制掀开"的开关，不是持久状态的一部分。
+  //
+  // 🔴 为什么不能只调 begin()：① begin() 守着 `status !== 'unseen'` 才生效，对已经
+  // done/skipped 的老客户是空操作；② 就算 status 变回来了，selectWizardOpen 第一行
+  // `if (hasStoredContext) return false` 会把它按回去——hadContextOnLoad 对老客户恒真，
+  // 这条线直接杀死"已有数据"的返回客户，而这批人恰恰是「重看」这个入口要服务的对象。
+  // 所以 forceOpen 必须是独立于 hasStoredContext 的第二条门（OnboardWizard 里 `||` 合并），
+  // 手动点开就无视"有没有数据"这条自动弹出的规矩——用户自己要看，不是产品硬塞。
+  forceOpen: boolean
+
   begin: () => void // unseen → in-progress（向导首次挂载时调）
   goStep: (step: OnboardStep) => void
   setField: (field: 'company' | 'dept' | 'yourName', value: string) => void
@@ -122,6 +135,8 @@ interface OnboardState extends PersistedOnboard {
   pause: () => void // × 关闭（session-only）
   skip: () => void // 明确跳过 → 永不再骚扰
   finish: () => void // 走完 → 永不再弹，勾选生效
+  reopen: () => void // open-loop-0720：菜单里的「重看上手引导」入口调这个——强制掀开，
+  // 从第①步起（不续旧进度："重看"是完整再走一遍，不是"接着上次卡住的地方"）。
 }
 
 export const useOnboard = create<OnboardState>((set, get) => {
@@ -135,6 +150,7 @@ export const useOnboard = create<OnboardState>((set, get) => {
   return {
     ...initial,
     pausedThisSession: false,
+    forceOpen: false,
 
     begin: () => {
       if (get().status !== 'unseen') return
@@ -157,15 +173,18 @@ export const useOnboard = create<OnboardState>((set, get) => {
       }))
       persist()
     },
-    pause: () => set({ pausedThisSession: true }),
+    // forceOpen 一并落回 false——三条关闭路径（× / 跳过 / 走完）都是"这次强制掀开的向导
+    // 该收起了"，不然 reopen 之后再关一次，屏幕上还是照样挂着。
+    pause: () => set({ pausedThisSession: true, forceOpen: false }),
     skip: () => {
-      set({ status: 'skipped' })
+      set({ status: 'skipped', forceOpen: false })
       persist()
     },
     finish: () => {
-      set({ status: 'done' })
+      set({ status: 'done', forceOpen: false })
       persist()
     },
+    reopen: () => set({ forceOpen: true, pausedThisSession: false, step: 'upload' }),
   }
 })
 

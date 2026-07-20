@@ -73,7 +73,12 @@ export function OnboardWizard() {
   // 用 open 开关，出场动画才有机会跑完）。07-20 起再叠一层：hasStoredContext
   // （hadContextOnLoad）由这里传给 selectWizardOpen——老客户已经有数据就不自动弹
   // （Danny 拍板，见 onboardStore.ts 的选择器注释）。
-  const open = useOnboard((s) => selectWizardOpen(s, hadContextOnLoad))
+  //
+  // open-loop-0720：`forceOpen` 单独 `||` 进来，不改 selectWizardOpen 本身——那个函数的
+  // 契约只管"要不要自动弹"，手动重看是另一件事，两条判据不该纠缠在同一个函数里
+  // （改错一处，另一处也可能被带歪）。见 onboardStore.ts 里 forceOpen 上的调用方契约注释：
+  // 这是让「重看上手引导」（Playbooks 屏）对已有数据的老客户也真正打得开的那个开关。
+  const open = useOnboard((s) => s.forceOpen || selectWizardOpen(s, hadContextOnLoad))
   const begin = useOnboard((s) => s.begin)
   const goStep = useOnboard((s) => s.goStep)
   const pause = useOnboard((s) => s.pause)

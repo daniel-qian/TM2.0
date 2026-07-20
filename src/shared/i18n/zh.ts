@@ -113,6 +113,11 @@ import type { Dict } from "./index";
 //  roomFlowTitle 已经 Danny 审过的原句（同一个终端标题，两壳只是外壳不同），M3 给的替代句
 //  「它是怎么推出来的」语气也通，但为了 v01/v02 措辞一致性没有采纳。
 //  ⚠ Draft / 待 Danny 审字（除 terminalTitle 外两键与 M3 独立交叉验证一致）。
+// NOTE (open-loop-0720, 重看上手引导入口, 2026-07-20): lite2.playbooksReopenOnboarding 1 个
+//  全新键——Playbooks 屏新增的"重新打开上手向导"链接文案。同一份 director 系统提示词过了
+//  `mmx text chat`，M3 独立译出的结果与人工拟稿（任务原话建议的措辞）逐字重合（重看上手引导），
+//  未手改一字。
+//  ⚠ Draft / 待 Danny 审字（与 M3 独立交叉验证一致）。
 export const zh: Dict = {
   "mode": {
     "storyLabel": "演示",
@@ -455,6 +460,7 @@ export const zh: Dict = {
     "playbooksSlotLabel": "这里会有什么",
     "playbooksComingSoon": "暂未接入——这里是 Avery 接下来会落地的方向预览。",
     "playbooksEmptyTag": "暂无操作手册",
+    "playbooksReopenOnboarding": "重看上手引导",
     "visionEyebrow": "未来方向",
     "visionTitle": "你刚才试的是 demo。这背后才是产品。",
     "visionLede": "其它标签页里跑的一切，都基于你自己上传的文件。这是有意为之——这是最快的方式，让你感受到 Avery 是如何读懂一个团队的。真正的产品，比这再往前走一步。",

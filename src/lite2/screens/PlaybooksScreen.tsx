@@ -18,6 +18,7 @@ export function PlaybooksScreen() {
   const onboardStatus = useOnboard((s) => s.status)
   const picks = useOnboard((s) => s.playbooks)
   const company = useOnboard((s) => s.company)
+  const reopenOnboarding = useOnboard((s) => s.reopen)
 
   // 只有真正走完向导的勾选才改变槽位（skipped/中途关闭不算"选过"——不替用户做主）。
   const chosen =
@@ -76,6 +77,19 @@ export function PlaybooksScreen() {
         )}
 
         <p className="lite-playbooks-comingsoon">{l.playbooksComingSoon}</p>
+
+        {/* open-loop-0720：Danny 拍板「有数据就不弹」时选的那个选项原话是「弹窗保留在菜单里
+            随时能再看」——但那个入口从没被造出来，老客户从此再也翻不到上手向导。Playbooks
+            是它的自然落点：本屏本来就是"怎么用这个产品"的地方。只加一个链接，不加新屏、
+            不加设置面板。reopen() 会无视"有没有数据"那条自动弹出的规矩强制掀开向导
+            （见 onboardStore.ts forceOpen 的调用方契约注释）。 */}
+        <button
+          type="button"
+          className="lite-playbooks-reopen-onboarding"
+          onClick={() => reopenOnboarding()}
+        >
+          {l.playbooksReopenOnboarding} →
+        </button>
       </section>
     </section>
   )

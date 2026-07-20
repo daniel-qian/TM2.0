@@ -608,6 +608,12 @@ export const en = {
     playbooksSlotLabel: 'What will live here',
     playbooksComingSoon: 'Not connected yet — this is a preview of where Avery is headed.',
     playbooksEmptyTag: 'No playbooks yet',
+    // open-loop-0720: Danny approved "don't auto-open once there's data" for the onboarding
+    // wizard, on the option that explicitly said the dialog stays reachable from the menu any
+    // time — but that reopen affordance never existed, so returning customers could never see
+    // the guide again. This is that entry (onboardStore.ts `reopen()` + `forceOpen`). Playbooks
+    // is the natural home: it's already the "how to use this" surface.
+    playbooksReopenOnboarding: 'Revisit the getting-started guide',
 
     // ── Vision surface (feat-026: positioning narrative + honestly-labeled capability mock) ──
     // The narrative is deliberately calm and does not interrupt the trial flow — it's its own tab.
