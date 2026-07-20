@@ -113,3 +113,59 @@ curl -s http://127.0.0.1:8137/health
 ## 还没做 / 留给后续
 - 依赖没钉版本（36 个 `>=`）、基础镜像没钉 digest —— 这次重建实测漂移 0，但两周后重建是抽奖。建议下次钉。
 - 旧的 `avery-prev`（无时间戳，07-18 那个）仍在，是历史地雷，可择机清掉。
+
+---
+
+## 第七次上线（2026-07-20 21:15）· Blockers 3：ask 端点接账号支路
+
+**这是第一次严格照「从 main 构建」的新流程走完的上线**，不是叠子集。
+
+```
+新镜像 avery-agent:main-20260720-211529   ← = main(b054117) 本身
+旧镜像 avery-agent:main-20260720-193804   ← = main(43e1ddb)，保留为 avery-prev-20260720-211529
+```
+
+**后端改动面：1 个文件 / +36 −14**（`git diff 43e1ddb b054117 -- eval-harness/avery eval-harness/service eval-harness/db`
+只命中 `service/ask_api.py`）。**迁移仍停在 0008，不新建任何表，生产库仍是 9 张。**
+
+### 上线前验证（按纪律逐条，全部真跑）
+1. **本机全测**：`pytest -m "not smoke and not seedgate and not needs_keys and not needs_db"`
+   → **3343 passed / 0 failed**（含本次新增 6 条账号×ask 测试）。
+2. **8138 预检**：同一份生产 env、隔离端口拉起新镜像 → `/health` 2 秒内 `status:ok`。
+3. **在镜像内自省真实路由表**（不是读源码，是问那个即将变成生产的产物）：
+   ```
+   account POST /ask · GET /ask/{id} · POST /ask/{id} · POST /ask/{id}/revoke · POST /ask/{id}/share
+   account GET /team/{ctx} · /notes · /files · /files/{idx}
+   MISSING_ACCOUNT_BRANCH: 0 / 9
+   ```
+4. **fail-closed 冒烟**：无凭据 → 404；伪造账号 token → 404（不是 500、不是 200）；
+   `/account/status` → 200。
+5. 换容器（`/tmp/swap2.sh`，由 `/tmp/swap.sh` 泛化而来：镜像名改成第二个参数，
+   其余逐字未动 —— 时间戳命名 + 每条失败路径调 `rollback()` 的结构保持原样）。
+
+### 上线后
+- 公网 `https://avery.dannyqian.com/health` **200**、`/account/status` **200**、
+  无凭据 `POST /ask` **404**（fail-closed 在公网侧同样成立）。
+- 前端 `averylite.dannyqian.com` 已由 Vercel 自动部署到 **b054117**（bundle 内
+  `__AVERY_BUILD__.commit` 实测为 `b054117b7c2…`）。
+- **生产真机目测**（live 站点，非本地）：点语言开关**不刷新** → 账号按钮
+  `登录` → `Sign in`、面板整体英文、tab 变 `Today/Your team/Projects`，
+  `lite2:lang:v1` 落 `en`；切回中文全部还原。这正是 Blockers 5a 的那条缺陷。
+
+### 回滚梯（现在是七级）
+```
+avery-prev-20260720-211529 → main-20260720-193804  ← 退一级 = 本次上线前
+avery-prev-20260720-193804 → zh512zh
+avery-prev-20260720-164609 → zh512grade
+avery-prev-20260720-140955 → zh512acct
+avery-prev-20260720-123003 → zh512sub2
+avery-prev-20260720-102149 → zh512sub
+avery-prev-20260720-095401 → zh512
+```
+一键回滚命令同上文 §一键回滚，把名字换成 `avery-prev-20260720-211529` 即可。
+
+### ⚠️ 运维待办（本次新增，需 Danny）
+- **凭据轮换建议**：本次为了复用生产 env 跑过一次 `docker inspect avery --format {{.Config.Env}}`，
+  MiniMax / DashScope / DeepSeek 三个 key 与 Supabase DSN **曾在 agent 会话里以明文出现过一次**。
+  没有外传、没有落盘到仓库，但按凭据卫生该轮换。后续取 env 已改成「重定向进 600 权限文件、
+  全程不打印」（本回执里的做法），不会再复现。
