@@ -19,9 +19,15 @@
 - **Vercel `avery-lite` 现在没配 Supabase key**（只有 API_BASE + LOCALE）。所以登录框本来就不显示。
 - 生产库仍无 `account_contexts`，`/account/* → 404`。
 
-## 填 Supabase 密钥：本棒故意没填（理由）
+## 账号体系：已整条打通（Danny 当面拍板后同一棒补上）
 
-能力探测（§0④ 的 (b)）已交付并让「填 key」这步永久安全。但现在填是**零价值惰性**：后端 404，探测会一直隐藏登录框，填了也不显示。**等 feat-053 + 迁移 0008 上线（后端真提供 /account/*）再填才有意义**——而那要碰 0008 建表地雷，不该为了填 key 去动。这正是 §0④ 自己的结论。
+先交付了能力探测（让填 key 永久安全），随后 Danny 拍板「填了密钥吧，把 feat-053 也上了」，于是同一棒补完：
+
+1. **feat-053 后端上线**（镜像 `zh512acct-20260720-123003`）：迁移 0008 建了 `avery.account_contexts`（只有两个不透明 id、无人员数据、红线不动），`/account/status` 公网 200，Supabase 安全告警 0 条。
+2. **Vercel 填了** `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY`（Production+Preview，用 publishable key），redeploy 后烘进 bundle。
+3. **线上端到端实测**：`accountCapability: "supported"`（探测拿到 200）、`status: "guest"`、顶栏出现「登录」、点开是全中文邮箱/密码表单（零英文），并诚实写着「不登录也能用」——游客路径没被挡。
+
+⚠️ 建表机制：0008 **不在容器启动时**执行，而在**第一次真正访问 registry** 时重放。本棒已主动用一个无害 404 读触发，别让第一个真实客户请求去承担。
 
 ## 留给下一棒的对抗盲区（本棒没跑昂贵的前端发现 campaign，如实列）
 
