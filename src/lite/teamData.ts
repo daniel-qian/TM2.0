@@ -64,11 +64,16 @@ export interface LiteHandoff {
   projectIds: string[]
 }
 
+// 「值得多看一眼」这个计数的形状（后端 registry.py::briefing 的 look_kind）。中文壳靠它决定
+// 敢不敢说「N 个项目」——这个数里可以混着挂不到任何项目上的信号，说明见 src/shared/briefing.ts。
+export type LiteLookKind = 'projects' | 'items' | 'none'
+
 export interface LiteBriefing {
   tone: 'calm' | 'alert'
   headline: string
   subhead: string
   metrics: { label: string; value: string }[]
+  lookKind?: LiteLookKind
 }
 
 export interface LiteTeam {
@@ -195,6 +200,15 @@ export function liteTeamFromPayload(payload: LiveTeamPayload): LiteTeam {
       headline: b.headline,
       subhead: b.subhead,
       metrics: b.metrics ?? [],
+      lookKind: readLookKind(b),
     },
   }
+}
+
+// look_kind 是 fixA 之后才有的键，`LiveBriefingPayload`（src/lite/transport.ts）还没声明它，
+// 所以在这里就地窄化读一次。认不出来的值一律当 undefined——消费方对 undefined 的兜底是**不点名**
+// 那一侧（说「N 处」永远为真，说「N 个项目」可能凭空点名）。与 src/lite2/teamData.ts 同形。
+function readLookKind(briefing: unknown): LiteLookKind | undefined {
+  const raw = (briefing as { look_kind?: unknown } | null)?.look_kind
+  return raw === 'projects' || raw === 'items' || raw === 'none' ? raw : undefined
 }

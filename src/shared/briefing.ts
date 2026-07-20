@@ -28,6 +28,8 @@
 //      这个区分是一道诚实闸，而前端拿不到——payload 的 source_files 只装解析成功的那些，前端复述
 //      任何数字都可能比后端更乐观。UI 在右栏 UploadPanel 里已经把「取材自: <真实文件名>」逐个列
 //      出来了，那比一个计数严格更诚实。所以中文 headline 只说人和项目，出处交给文件名。
+//   4) 「值得多看一眼」的量词认 `briefing.lookKind`——只有确知每一样都是项目才说「个项目」，
+//      否则说不点名的「处」。这个数里可以混着挂不到任何项目上的信号，详见 localizeBriefing。
 //
 // 🔴 红线：简报可以描述**工作量**，永远不描述**某个人的好坏**。不出现任何针对人的评分/等级/
 //    排名/健康度数字。「有多少人」是可以说的。
@@ -43,11 +45,17 @@ export interface BriefingMetric {
   value: string
 }
 
+// 「值得多看一眼」这个计数的**形状**（后端 registry.py::briefing 的 look_kind，经各壳
+// teamData 归一化成 lookKind）。见下面 localizeBriefing 里为什么中文必须认它。
+export type BriefingLookKind = 'projects' | 'items' | 'none'
+
 // 后端 briefing 的最小形状（lite/lite2 的 LiteBriefing 都结构兼容）。
 export interface BriefingLike {
   headline: string
   subhead: string
   metrics: readonly BriefingMetric[]
+  // 可选：老后端（pre-fixA）不发这个键，两张皮的 teamData 读不出来时留 undefined。
+  lookKind?: BriefingLookKind
 }
 
 // 只取计数用的两个数组——刻意不约束元素类型，避免把 lite 的 LitePerson 拖进 shared。
@@ -60,6 +68,7 @@ export interface TeamCountsLike {
 export interface BriefingCopy {
   briefingHeadline: string
   briefingSubheadRisk: string
+  briefingSubheadRiskItems: string
   briefingSubheadCalm: string
   briefingMetricPeople: string
   briefingMetricProjects: string
@@ -107,8 +116,21 @@ export function localizeBriefing(
 
   // 约束 3：headline 只说人和项目，绝不复述文件数（"3 of 5" 的诚实区分前端复现不了）。
   const headline = fill(copy.briefingHeadline, { people: peopleCount, projects: projectCount })
+
+  // 约束 4：量词认 look_kind，**只有确知每一样都是项目时才敢说「个项目」**。
+  //
+  // 这个计数里可以混着挂不到任何项目上的信号（抽取层给每条 doc 信号写死
+  // subjectRef="the project"，谁也挂不上），所以数字随时可能大过项目总数。真机实测过最狠的
+  // 一档：0 个项目 + 2 条信号 →「0 个进行中的项目 … 其中 2 个项目值得多看一眼」，凭空点名两
+  // 个不存在的项目，就印在「没有一处是编的」正下方。后端为此专门发了 look_kind（并配了
+  // 一整个 test_briefing_look_count.py 守着），中文这一侧却一直没接，等于那半边修复是死的。
+  //
+  // undefined（老后端 pre-fixA，或某张皮没解析这个键）→ 走**不点名**的 items 那一侧：
+  // 说「N 处」在三种形状下都为真，说「N 个项目」只在一种形状下为真。宁可少说一个词。
+  const namesProjects = briefing.lookKind === 'projects'
   const subhead = hasRisk
-    ? fill(copy.briefingSubheadRisk, { atRisk: atRiskCount })
+    ? fill(namesProjects ? copy.briefingSubheadRisk : copy.briefingSubheadRiskItems,
+           { atRisk: atRiskCount })
     : copy.briefingSubheadCalm
 
   const metrics = briefing.metrics.map((m) => {
