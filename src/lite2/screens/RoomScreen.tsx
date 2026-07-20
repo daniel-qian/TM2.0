@@ -21,10 +21,17 @@ import type {
 // feat-025 Q3(a)：加一层薄可拖拽/缩放画布（LitePanZoom，lite 自有 wrapper，不碰 story
 // PanZoomCanvas）容纳终端 + 8 字段卡；composer 留在画布外恒定可点（门相位 F2 驱动它）。
 
-const SPEAKER_META: Record<LiteSpeaker, { label: string; className: string }> = {
-  agent: { label: 'AVERY', className: 'is-agent' },
-  tool: { label: 'TOOL', className: 'is-tool' },
-  system: { label: '·', className: 'is-system' },
+// avery-sync zh-purity (open-loop-0720, group b): 'TOOL' used to be a hardcoded literal here —
+// pure display chrome (no code matches on the label text; `is-tool`/`is-manifest` classNames are
+// separate and untouched), so it's cheap and safe to source from the dict instead. Kept as a
+// function of `t` (not a module-level const) since it now depends on locale. v01 twin
+// (src/lite/screens/RoomScreen.tsx) has the same shape.
+function speakerMeta(t: { roomToolLabel: string }): Record<LiteSpeaker, { label: string; className: string }> {
+  return {
+    agent: { label: 'AVERY', className: 'is-agent' },
+    tool: { label: t.roomToolLabel, className: 'is-tool' },
+    system: { label: '·', className: 'is-system' },
+  }
 }
 
 function classNames(parts: Array<string | false | null | undefined>) {
@@ -40,6 +47,7 @@ function fill(template: string, vars: Record<string, string | number>): string {
 function RawStreamLog({ lines, running }: { lines: LiteStreamLine[]; running: boolean }) {
   const logRef = useRef<HTMLDivElement | null>(null)
   const { t } = useDict()
+  const meta = speakerMeta(t.lite2)
   useEffect(() => {
     const log = logRef.current
     if (log) log.scrollTop = log.scrollHeight
@@ -48,9 +56,9 @@ function RawStreamLog({ lines, running }: { lines: LiteStreamLine[]; running: bo
   return (
     <div className="nexus-terminal-log" ref={logRef} data-raw-stream="">
       {lines.map((line) => {
-        const meta = SPEAKER_META[line.speaker]
-        const prefix = line.type === 'manifest' ? 'MANIFEST' : meta.label
-        const prefixClass = line.type === 'manifest' ? 'is-manifest' : meta.className
+        const lineMeta = meta[line.speaker]
+        const prefix = line.type === 'manifest' ? t.lite2.roomManifestLabel : lineMeta.label
+        const prefixClass = line.type === 'manifest' ? 'is-manifest' : lineMeta.className
         return (
           <p key={line.key} className={classNames(['terminal-line', `is-${line.type}`, 'is-new'])}>
             <span className={classNames(['terminal-prefix', prefixClass])}>{prefix}</span>

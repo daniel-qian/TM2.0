@@ -320,10 +320,17 @@ console.log(`\n  pageerror: ${pageErrors.length} 条${pageErrors.length ? ' — 
 console.log(`  议事室对话流空采样: ${empties.length} 处${empties.length ? ' — ' + empties.join(' | ') : '（全部非空 ✓）'}`)
 console.log(`═══ 合计 ${n1 + n2} 处待人工判读（v01 ${n1} · v02 ${n2}）═══`)
 console.log('  已知可接受项：文件格式专名（PDF/Word/Excel/CSV/Markdown）；')
-console.log('  「往哪走」屏的中英混排宣讲词（demo / agent / Skills / tools / onboarding / skill / prompt）——')
+// open-loop-0720 Danny 判词逐词落地：demo / agent / prompt 是行业通用黑话，留着更自然——保留。
+// Skills / tools / onboarding / review / skill 有现成自然中文说法，已翻（技能/工具/入职/复盘），
+// 不再出现在残留列表里；这条注释因此从 7 词收窄成 3 词，别再往回加。
+console.log('  「往哪走」屏的中英混排宣讲词（demo / agent / prompt）——')
 console.log('  那是刻意的产品腔调，不是漏译，改不改归 Danny 判（见 issue 记录）。')
-console.log('  议事室对话流里的 AVERY / TOOL / MANIFEST 前缀与 read_case / cite 等工具名是')
-console.log('  后端标识符，不是文案（SPEAKER_META / formatToolCall），不计漏译。')
+// open-loop-0720：TOOL / MANIFEST 前缀已翻（纯前端展示徽标，零代码按文本匹配，见
+// speakerMeta()/roomToolLabel/roomManifestLabel）。仍留着不翻的只剩 read_case / cite /
+// case_id / source_ref 这几个——它们是后端协议 token（工具名 + 入参 key），逐字透传是
+// 明文设计原则（streamCopy.ts 头部注释），不是文案，翻了会把工程日志误当成产品语言。
+console.log('  议事室对话流里 read_case / cite 等工具名与 case_id / source_ref 等入参 key 是')
+console.log('  后端协议标识符，不是文案（formatToolCall 逐字透传），不计漏译。')
 
 await browser.close()
 if (empties.length) {

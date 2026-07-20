@@ -448,6 +448,20 @@ export const en = {
     playbooksEmptyAria: 'Playbooks — coming soon',
     teamLiveAria: 'Your team — live',
     projectsOpenAria: 'Open {title}',
+
+    // avery-sync zh-purity (open-loop-0720, group b): the room terminal's visible title bar was a
+    // hardcoded English literal in RoomScreen.tsx ('thinking it through') — zh customers running
+    // v01 saw it every time (v01's terminal is always visible, no simplified/raw toggle to hide
+    // behind). Sourced from the dict so it can be localized like v02's `roomFlowTitle` twin.
+    // `roomToolLabel`/`roomManifestLabel`: the two speaker-prefix badges in the SAME terminal
+    // (`SPEAKER_META.tool.label` and the ad hoc 'MANIFEST' prefix) are pure frontend display chrome
+    // — no code matches on their text (only the separate `is-tool`/`is-manifest` className does),
+    // so localizing them carries none of the risk that translating the raw tool-call dump
+    // (read_case/cite/case_id/source_ref — the actual backend protocol tokens, left untouched,
+    // verbatim passthrough) would.
+    terminalTitle: 'How it worked through this',
+    roomToolLabel: 'TOOL',
+    roomManifestLabel: 'MANIFEST',
   },
 
   // ── lite2 shell (feat-035, lite-live-v02: the v02 shell running side-by-side with v01 above.
@@ -916,6 +930,9 @@ export const en = {
     roomFlowRawTitle: 'Raw stream',
     roomFlowShowRaw: 'Show raw stream',
     roomFlowHideRaw: 'Back to the summary',
+    // avery-sync zh-purity (open-loop-0720, group b) — v01 twin above has the full reasoning.
+    roomToolLabel: 'TOOL',
+    roomManifestLabel: 'MANIFEST',
     roomPhaseRead: 'Reading the facts',
     roomPhaseCrosscheck: 'Cross-checking',
     roomPhaseMethod: 'Matching an approach',

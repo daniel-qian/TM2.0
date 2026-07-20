@@ -100,6 +100,19 @@ import type { Dict } from "./index";
 //  （"打开 {title}"）逐字重合——M3 独立译出同一个结果，未手工对齐，视为交叉验证。
 //  33 个键逐字采纳 M3 输出，未手改一字。
 //  ⚠ Draft / 待 Danny 审字。
+// NOTE (open-loop-0720, zh-purity 收尾, 2026-07-20): 两类改动都是本批新增。
+//  ① lite2.visionMockSkillsTitle/Body（Skills/tools/onboarding/review/skill → 技能/工具/入职/
+//  复盘/技能）：Danny 原话「行业通用黑话留着（更自然）、有现成自然中文说法的翻掉」——demo/agent/
+//  prompt 判定为前者，保留原文，未过 M3（这几处是嵌进已锁定长句里的局部替换，整句重跑 M3 会
+//  连累前后已审文字漂移，属于本文件开头反复警告的那类风险，改用人工按词替换）。
+//  ② lite.terminalTitle / lite2.roomToolLabel / lite2.roomManifestLabel 3 个全新键（终端标题
+//  + 两个说话人前缀徽标，此前是硬编码英文字面量）：过了一遍同一份 director 系统提示词的
+//  `mmx text chat`（本 worktree 同样没有 eval-harness/.env，办法同 open-loop-0720/avery-sync
+//  两条老注记）。roomToolLabel/roomManifestLabel 两个 M3 独立译出的结果与人工拟稿逐字重合
+//  （工具/结果），未手改。terminalTitle 人工拟稿是「它是怎么想明白的」——刻意复用 v02 双生键
+//  roomFlowTitle 已经 Danny 审过的原句（同一个终端标题，两壳只是外壳不同），M3 给的替代句
+//  「它是怎么推出来的」语气也通，但为了 v01/v02 措辞一致性没有采纳。
+//  ⚠ Draft / 待 Danny 审字（除 terminalTitle 外两键与 M3 独立交叉验证一致）。
 export const zh: Dict = {
   "mode": {
     "storyLabel": "演示",
@@ -217,8 +230,8 @@ export const zh: Dict = {
     "visionTagMock": "模拟",
     "visionMockFilesTitle": "agent 自己的文件空间",
     "visionMockFilesBody": "Avery 为每家公司保留一个独立的私密文件空间——存放你的文档、它的工作笔记，以及它产出的文件。这样一次解读可以在上一次的基础上继续，而不是每次都从零开始。",
-    "visionMockSkillsTitle": "Skills、tools 与 SOP，皆为你而设",
-    "visionMockSkillsBody": "你那些反复出现的工作——怎么 onboarding、怎么开 review、怎么处理卡住的项目——会变成一个有名字的 skill，每次都以同样的方式跑。可预期是设计出来的，不是靠 prompt 即兴发挥。",
+    "visionMockSkillsTitle": "技能、工具与 SOP，皆为你而设",
+    "visionMockSkillsBody": "你那些反复出现的工作——怎么入职、怎么做复盘、怎么处理卡住的项目——会变成一个有名字的技能，每次都以同样的方式跑。可预期是设计出来的，不是靠 prompt 即兴发挥。",
     "visionMockLoopTitle": "在你离开时也在跑的工作",
     "visionMockLoopBody": "把一批情境交给 Avery，它会在后台按自己的节奏逐个处理。你回来时看的是结果——不是一场需要盯着的实时会话。最稀缺的是你的注意力，所以产品把它留到最后用。",
     "visionMockGateTitle": "红线是闸门，不是愿望",
@@ -347,7 +360,10 @@ export const zh: Dict = {
     "notesEmptyAria": "Avery 的笔记 —— 暂无内容",
     "playbooksEmptyAria": "操作手册 —— 即将上线",
     "teamLiveAria": "你的团队 —— 实时",
-    "projectsOpenAria": "打开 {title}"
+    "projectsOpenAria": "打开 {title}",
+    "terminalTitle": "它是怎么想明白的",
+    "roomToolLabel": "工具",
+    "roomManifestLabel": "结果"
   },
   "lite2": {
     "tabTeam": "你的团队",
@@ -461,8 +477,8 @@ export const zh: Dict = {
     "visionTagMock": "模拟",
     "visionMockFilesTitle": "agent 自己的文件空间",
     "visionMockFilesBody": "Avery 为每家公司保留一个独立的私密文件空间——存放你的文档、它的工作笔记，以及它产出的文件。这样一次解读可以在上一次的基础上继续，而不是每次都从零开始。",
-    "visionMockSkillsTitle": "Skills、tools 与 SOP，皆为你而设",
-    "visionMockSkillsBody": "你那些反复出现的工作——怎么 onboarding、怎么开 review、怎么处理卡住的项目——会变成一个有名字的 skill，每次都以同样的方式跑。可预期是设计出来的，不是靠 prompt 即兴发挥。",
+    "visionMockSkillsTitle": "技能、工具与 SOP，皆为你而设",
+    "visionMockSkillsBody": "你那些反复出现的工作——怎么入职、怎么做复盘、怎么处理卡住的项目——会变成一个有名字的技能，每次都以同样的方式跑。可预期是设计出来的，不是靠 prompt 即兴发挥。",
     "visionMockLoopTitle": "在你离开时也在跑的工作",
     "visionMockLoopBody": "把一批情境交给 Avery，它会在后台按自己的节奏逐个处理。你回来时看的是结果——不是一场需要盯着的实时会话。最稀缺的是你的注意力，所以产品把它留到最后用。",
     "visionMockGateTitle": "红线是闸门，不是愿望",
@@ -635,6 +651,8 @@ export const zh: Dict = {
     "roomFlowRawTitle": "原始流",
     "roomFlowShowRaw": "展开原始流",
     "roomFlowHideRaw": "回到简化视图",
+    "roomToolLabel": "工具",
+    "roomManifestLabel": "结果",
     "roomPhaseRead": "读取事实",
     "roomPhaseCrosscheck": "交叉验证",
     "roomPhaseMethod": "匹配方法",
