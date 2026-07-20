@@ -672,9 +672,16 @@ i18n 零新增（键本就在 shared 的 `t.upload.*`）。
    **影响评估**：这三个是匿名 context，只有 owner_token 能读，而那枚 token 没人留着 ——
    合伙人看不到、也不会串进她的数据。但它们是生产库里的垃圾，且**排在列表最前面**，
    下次有人查「合伙人传了没有」会先撞见它们。另外它们真跑了 LLM 抽取，烧了一点额度。
-   **未删**：删生产数据属人工闸。要清理的话是一条按 3 个 context_id 级联删的 SQL，等 Danny 一句话。
+   **已清理（Danny 当场授权「这次允许你自行删」）**：删前先把 6 份 source_documents 逐行打出来
+   核对，确认全是门的合成夹具、无一真实数据；按 FK 顺序（materials → entities → memory_files →
+   company_notes → account_contexts → source_documents → contexts）在一个 DO 块里级联删除，
+   只按那 3 个 `context_id` 匹配。删后逐表复核，增量与预估**逐个吻合**：
+   contexts 16→13 · source_documents 25→19 · materials 453→441 · entities 195→186 ·
+   memory_files 32→26 · company_notes 1→1（未动）· **schema 仍是 9 张表**。
+   生产 `/health` 与前端复查均 200、`degraded:false`。
    **已做的防复发**：`dist/` 已重打回 localhost；AGENTS.md 陷阱段新增一条
    「跑完门之后 dist 指向哪里是不确定的，跑上传类门前先验 `__AVERY_BUILD__.apiBase`」。
+   ⚠️ 口径提醒：**这是一次一事一授权**，不构成「以后可以自己删生产数据」的常设许可。
 
 5. **凭据轮换建议**：为复用生产 env 跑过一次 `docker inspect avery --format {{.Config.Env}}`，
    三个 LLM key 与 Supabase DSN **在 agent 会话里明文出现过一次**（未外传、未落盘进仓库）。
