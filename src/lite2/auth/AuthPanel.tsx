@@ -218,6 +218,7 @@ if (import.meta.env.DEV && typeof window !== 'undefined') {
 export function AuthPanel() {
   const c = useCopy()
   const status = useAuth((s) => s.status)
+  const accountCapability = useAuth((s) => s.accountCapability)
   const email = useAuth((s) => s.email)
   const userId = useAuth((s) => s.userId)
   const busy = useAuth((s) => s.busy)
@@ -333,6 +334,11 @@ export function AuthPanel() {
   // 未配置这份部署就没有账号能力 —— 不出假入口（点了必然失败的按钮比没有按钮更糟）。
   if (status === 'disabled' || !authConfigured()) return null
   if (status === 'loading') return null
+  // 门缝二（07-20）：key 配了不代表这份后端部署真的挂了账号路由。生产实测过
+  // avery.dannyqian.com 有 key 但 /account/status 404——只看 authConfigured() 会让客户看到一个
+  // 能点、能登进 Supabase、然后处处 403/404 的登录框，比没有入口更糟。'unknown'（探测还没回来）
+  // 和 'unsupported'（探测回来说没有）一样藏起来——绝不先亮出登录框再收回去。
+  if (accountCapability !== 'supported') return null
 
   const authed = status === 'authed'
   const working = busy !== 'idle'

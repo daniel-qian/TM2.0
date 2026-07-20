@@ -14,6 +14,7 @@
 import { create } from 'zustand'
 import type { Session } from '@supabase/supabase-js'
 import { authConfigured, getSupabase } from './supabaseClient'
+import { apiBase } from '../transport'
 
 // disabled  = 这份部署没配 Supabase（游客模式，UI 不出账号入口）
 // loading   = 正在恢复会话（首帧，短暂）
@@ -22,6 +23,20 @@ import { authConfigured, getSupabase } from './supabaseClient'
 export type AuthStatus = 'disabled' | 'loading' | 'guest' | 'authed'
 
 export type AuthBusy = 'idle' | 'signing-in' | 'signing-up' | 'signing-out'
+
+// ── 门缝二（07-20 kickoff）：key 配了 ≠ 后端接得住 ──────────────────────────────────────
+// 07-20 生产实测：avery.dannyqian.com 的 Vercel 环境已经填了 Supabase 两个 key，但
+// `GET /account/status` 是 404——这份部署跑的容器镜像还没挂 feat-053 的账号路由。
+// 若登录入口只看 authConfigured()（本模块前一版的判据），客户会看到一个能点的登录框、
+// 真能登进 Supabase、然后处处 403/404——比压根没有登录框更糟：没有入口时游客路径完整可用，
+// 有一个接不住的入口时，"能不能用" 这件事本身被做成了一次赌博。
+//
+// unknown     = 还没探测完（首帧，短暂）。面板在这一态下也保持隐藏——绝不先亮出登录框、
+//               等探测回来才发现接不住再收回去，那一闪就是给客户看了一次假入口。
+// supported   = `/account/status` 回了 200 —— 这份后端部署确实挂了账号路由。
+// unsupported = 404 / 网络错误 / 超时 / 任何非 200，一律算这一档。失败即降级，
+//               绝不为了"乐观"渲染一个我们不确定后端接得住的登录框。
+export type AccountCapability = 'unknown' | 'supported' | 'unsupported'
 
 interface AuthState {
   status: AuthStatus
@@ -32,6 +47,9 @@ interface AuthState {
   // 注册后 Supabase 若开了邮箱验证，会返回 user 但没有 session——必须诚实告诉用户去收信，
   // 绝不做假的"注册成功已登录"态。
   pendingVerification: boolean
+  // 门缝二：后端是否真挂了账号路由（与 status 正交——status 讲的是"这个人有没有登录"，
+  // 这个字段讲的是"这份部署的后端接不接得住登录"）。AuthPanel 的渲染判据两者都要看。
+  accountCapability: AccountCapability
 
   init: () => void
   signUp: (email: string, password: string) => Promise<void>
@@ -61,6 +79,23 @@ function applySession(session: Session | null): Partial<AuthState> {
     email: session.user?.email ?? null,
     userId: session.user?.id ?? null,
   }
+}
+
+// 门缝二：探测这份部署的后端有没有挂账号路由。只在 `configured` 分支被调用一次
+// （复用 `initialized` 那道模块级闸——init() 本身就只跑一次，探测跟着只发一次请求）。
+// 🔴 超时也算失败：探测绝不允许无限期悬着——那样 accountCapability 会卡在 'unknown'，
+// 面板永远隐藏，效果等同于"探测失败"，但缺了"曾经试过"这个事实（下面 gate 脚本要断言的
+// 正是这件事）。5s 足够覆盖真实网络延迟，又不会让首屏体验被一次慢请求拖住太久
+// ——反正探测结果只影响"要不要出登录入口"这一件事，不挡游客路径。
+const ACCOUNT_STATUS_TIMEOUT_MS = 5000
+
+function probeAccountCapability(): Promise<AccountCapability> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), ACCOUNT_STATUS_TIMEOUT_MS)
+  return fetch(`${apiBase()}/account/status`, { signal: controller.signal })
+    .then((res): AccountCapability => (res.ok ? 'supported' : 'unsupported'))
+    .catch((): AccountCapability => 'unsupported') // 网络错误 / 超时 / CORS —— 一律当无能力
+    .finally(() => clearTimeout(timer))
 }
 
 // Supabase 的报错原文是英文且偏技术（"Invalid login credentials"）。给经理看的是人话。
@@ -101,6 +136,9 @@ export const useAuth = create<AuthState>((set) => ({
   busy: 'idle',
   error: null,
   pendingVerification: false,
+  // 未配置 → 探测压根不必发（登录入口本来就不出）；配了 → 首帧 'unknown'，
+  // 面板照 disabled 的规格隐藏，直到探测给出确切答案。
+  accountCapability: 'unknown',
 
   // 会话恢复：挂载时跑一次（模块级 guard 幂等，同 initNotifications 的先例）。
   // supabase-js 从 localStorage 读回会话并自动续期，我们只是把结果映射进 store。
@@ -112,6 +150,9 @@ export const useAuth = create<AuthState>((set) => ({
       return
     }
     initialized = true
+    // 门缝二：与会话恢复并行发起，互不等待——探测的是"这份后端能不能接账号"，
+    // 跟"这个人有没有会话"是两件独立的事，谁先回来不影响谁。
+    void probeAccountCapability().then((cap) => set({ accountCapability: cap }))
     sb.auth
       .getSession()
       .then(({ data }) => set(applySession(data.session)))
