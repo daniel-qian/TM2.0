@@ -313,6 +313,22 @@ export const en = {
     personCardOpenAria: 'Open {name} — {read}',
     groupOwns: 'Owns {project}',
 
+    // feat-069 · the room's transcript copy (see src/shared/streamCopy.ts). Same class of defect
+    // as the handoff block above, one screen over: these six sentences used to be hardcoded
+    // English inside streamSource.ts applyEvent(), so a ZH customer running a live question
+    // watched English lines scroll past mid-run. They are FRONTEND-authored — the agent's own
+    // think/tool/observe text comes from the backend and is passed through verbatim, never
+    // translated. 🔴 The nudge lines describe the WORK being re-grounded, never a person.
+    streamNudgeRedline: 'Re-checking so nobody gets labelled — describing the work instead.',
+    streamNudgeChain: 'Grounding the answer in the evidence before drafting it.',
+    streamAskDrafted: 'A quick ask is drafted — yours to confirm',
+    streamAdviceReady: 'The read is ready',
+    streamAdviceDone: 'Done',
+    streamFailed: 'Something went wrong reaching the room.',
+    // Shown only when the backend reports an error with no detail attached. The derive layer
+    // records `null` in that case rather than inventing an English sentence.
+    streamErrorUnknown: 'No detail came back about what failed.',
+
     // Upload empty state (the left spine speaks for itself — no scripted placeholders)
     emptyEyebrow: 'Getting started',
     emptyHintRoster: 'A team roster or a few resumes — the people appear as cards.',
@@ -605,6 +621,18 @@ export const en = {
     personReadNone: 'On the team',
     personCardOpenAria: 'Open {name} — {read}',
     groupOwns: 'Owns {project}',
+
+    // feat-069 · the room's transcript copy — identical key names to the `lite` section above,
+    // deliberately: scripts/i18n-zh-lite2-delta.mjs reuses the approved zh.lite translation
+    // verbatim for every key whose name matches, so this block costs zero extra M3 calls.
+    // See src/shared/streamCopy.ts for why the sentences live here and not in streamSource.ts.
+    streamNudgeRedline: 'Re-checking so nobody gets labelled — describing the work instead.',
+    streamNudgeChain: 'Grounding the answer in the evidence before drafting it.',
+    streamAskDrafted: 'A quick ask is drafted — yours to confirm',
+    streamAdviceReady: 'The read is ready',
+    streamAdviceDone: 'Done',
+    streamFailed: 'Something went wrong reaching the room.',
+    streamErrorUnknown: 'No detail came back about what failed.',
 
     // fixA 的分诊卡文案键在集成时**去掉了**——不是丢弃，是被更好的实现取代：
     // feat-068 已经把这四个键放进本 section 上方（用 {project} 占位符），并配了
