@@ -4,6 +4,7 @@ import { useDict } from '../../shared/i18n/useDict'
 import { LiteAdviceCard } from '../LiteAdviceCard'
 import { AskCard } from '../AskCard'
 import { LitePanZoom } from '../LitePanZoom'
+import { localizeStreamLine } from '../../shared/streamCopy'
 import type { LiteStreamLine, LiteSpeaker } from '../streamSource'
 
 // feat-024 · lite 屏 3：The room 薄建——ADR-0022 决策 1。
@@ -25,6 +26,7 @@ function classNames(parts: Array<string | false | null | undefined>) {
 // live 终端：直接吃 LiteStreamLine[]。等待/滚动全走 DOM，不依赖动画帧（headless rAF 坑）。
 function LiteTerminal({ lines, running }: { lines: LiteStreamLine[]; running: boolean }) {
   const logRef = useRef<HTMLDivElement | null>(null)
+  const { t } = useDict()
   useEffect(() => {
     const log = logRef.current
     if (log) log.scrollTop = log.scrollHeight
@@ -48,7 +50,9 @@ function LiteTerminal({ lines, running }: { lines: LiteStreamLine[]; running: bo
           return (
             <p key={line.key} className={classNames(['terminal-line', `is-${line.type}`, 'is-new'])}>
               <span className={classNames(['terminal-prefix', prefixClass])}>{prefix}</span>
-              <span className="terminal-text">{line.text}</span>
+              {/* feat-069：**不要**改回 {line.text}——系统行的 text 是空的，句子在字典里
+                  （见 src/shared/streamCopy.ts）。后端原文行 code 为空，照旧逐字透传。 */}
+              <span className="terminal-text">{localizeStreamLine(line, t.lite)}</span>
             </p>
           )
         })}

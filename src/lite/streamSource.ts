@@ -15,15 +15,22 @@ import type {
   LiveAgentEvent,
   LiveTransport,
 } from './transport'
+import type { LiteLineCode } from '../shared/streamCopy'
 
 // ── lite 终端行（与 story 终端同 CSS chrome，类型独立）───────────────────────
 export type LiteSpeaker = 'agent' | 'tool' | 'system'
 export type LiteLineType = 'thought' | 'tool-call' | 'tool-result' | 'manifest'
 
+// feat-069：一行终端流**要么**是后端原文（text），**要么**是我们自己写的系统提示（code），
+// 不会两者都有。派生层因此不再持有任何一句英文——句子在 shared/streamCopy.ts 按字典出。
+// 渲染方一律走 localizeStreamLine(line, t.lite)，不要直接读 .text（那样会漏掉系统行）。
 export interface LiteStreamLine {
   speaker: LiteSpeaker
   type: LiteLineType
+  // 后端/模型产出的原文，逐字保留。code 非空时恒为空串。
   text: string
+  // 前端自己写的那几行系统提示的稳定标识（不进 DOM，交给文案层翻译）。
+  code?: LiteLineCode
   key: string
 }
 
@@ -92,9 +99,16 @@ export function createLiveAgentSource(transport: LiveTransport): LiveAgentSource
       let seq = 0
       const emit = () => onUpdate({ ...state, lines: [...state.lines] })
 
-      const push = (speaker: LiteSpeaker, type: LiteLineType, text: string) => {
-        if (!text || !text.trim()) return
-        state.lines.push({ speaker, type, text, key: `live-${seq++}` })
+      // code 非空 = 我们自己写的系统行，没有 text 也必须落行（空 text 的判空只对后端原文生效，
+      // 否则每一条系统提示都会被这道守卫静默吃掉）。
+      const push = (
+        speaker: LiteSpeaker,
+        type: LiteLineType,
+        text: string,
+        code?: LiteLineCode,
+      ) => {
+        if (!code && (!text || !text.trim())) return
+        state.lines.push({ speaker, type, text, code, key: `live-${seq++}` })
       }
 
       emit() // 首帧：running 空态（终端立即显"running ▌"）
@@ -125,7 +139,7 @@ export function createLiveAgentSource(transport: LiveTransport): LiveAgentSource
 export function applyEvent(
   state: LiveRunState,
   ev: LiveAgentEvent,
-  push: (speaker: LiteSpeaker, type: LiteLineType, text: string) => void,
+  push: (speaker: LiteSpeaker, type: LiteLineType, text: string, code?: LiteLineCode) => void,
 ): void {
   switch (ev.type) {
     case 'started':
@@ -143,7 +157,7 @@ export function applyEvent(
       break
     case 'nudge':
       // gate 把模型推回——system 行提示（人话，不暴露 rule id）。
-      push('system', 'thought', nudgeText(ev.gate))
+      push('system', 'thought', '', nudgeCode(ev.gate))
       break
     case 'manifest': {
       // feat-034 契约提案：可选判别字段 kind（缺省 = advice，现有路径零破坏）。
@@ -151,7 +165,7 @@ export function applyEvent(
         const draft = coerceAskDraft(ev.ask)
         if (draft) {
           state.askDraft = draft
-          push('system', 'manifest', 'A quick ask is drafted — yours to confirm')
+          push('system', 'manifest', '', 'ask-drafted')
         }
         // ask-draft 帧不判 run 完成——advice 帧（或流自然收尾）才收 status。
         break
@@ -160,14 +174,16 @@ export function applyEvent(
       state.advice = advice
       state.contractOk = ev.contract_ok ?? null
       state.redlinePassed = ev.redline_passed ?? null
-      push('system', 'manifest', advice ? 'The read is ready' : 'Done')
+      push('system', 'manifest', '', advice ? 'advice-ready' : 'advice-done')
       state.status = 'complete'
       break
     }
     case 'error':
       state.status = 'error'
-      state.error = ev.error ?? 'unknown error'
-      push('system', 'thought', 'Something went wrong reaching the room.')
+      // feat-069：后端没给详情就记 null——**不再自己编一句 'unknown error'**。
+      // 详情存在则逐字透传；真没有时由 localizeRunError() 在文案层出一句人话。
+      state.error = ev.error ?? null
+      push('system', 'thought', '', 'stream-failed')
       break
     default:
       break
@@ -185,9 +201,10 @@ function formatToolCall(name: string | undefined, input: Record<string, unknown>
   return arg ? `${name} ${arg}` : name
 }
 
-function nudgeText(gate: 'chain' | 'redline' | undefined): string {
-  if (gate === 'redline') return 'Re-checking so nobody gets labelled — describing the work instead.'
-  return 'Grounding the answer in the evidence before drafting it.'
+// gate → 系统行 code。**只产出 token，不产出句子**——文案在 shared/streamCopy.ts 按字典出。
+// 两条 code 都刻意只描述"在重新找依据"这件事，不暴露 rule id，也不提任何一个人。
+function nudgeCode(gate: 'chain' | 'redline' | undefined): LiteLineCode {
+  return gate === 'redline' ? 'nudge-redline' : 'nudge-chain'
 }
 
 // manifest.advice 可能来自真后端——做防御性形状归一，缺字段补空（终端仍渲染，卡按有的字段显）。
