@@ -76,6 +76,16 @@ import type { Dict } from "./index";
 //  ~/.mmx 凭据，与 eval-harness/.env 无关）得到译文，再按脚本会产出的同一种合并方式手工落盘。
 //  中文纯度门（verify-zh-purity.mjs）已过：6 个值全是纯中文，零拉丁字符。其余键一个字未动。
 //  ⚠ Draft / 待 Danny 审字。
+// NOTE (avery-sync zh-purity, 2026-07-20): lite.advice*/lite2.advice* 两组 29 键是本批新增
+//  （Room advice 结构化卡：LiteAdviceCard.tsx 之前渲染的 ~20 个结构标签 + confidence/escalation
+//  两处后端枚举徽章词，全部零 i18n 硬编码——ZH 是生产默认，中文客户每次真跑一次问答都会在
+//  判读卡上看见英文标签）。这个 worktree 同样没有 eval-harness/.env（MINIMAX_API_KEY 未拷进
+//  来，主检出才有、且本棒禁止碰主检出）——沿用 open-loop-0720 那条注记同一套办法：同一份
+//  director 系统提示词（scripts/i18n-zh.mjs 的 SYS），手动过 `mmx text chat` 拿到译文，
+//  再按脚本会产出的同一种合并方式手工落盘。唯一手动调整：escalation 徽章词 HRBP 那一档，
+//  M3 给的是「人力业务伙伴」，为了和其余徽章词（低/中/高、法务、薪酬、高管层）保持同等长度
+//  的贴角短词，裁成「人力伙伴」——其余 28 个键逐字采纳 M3 输出，未手改一字。
+//  ⚠ Draft / 待 Danny 审字。
 export const zh: Dict = {
   "mode": {
     "storyLabel": "演示",
@@ -278,7 +288,36 @@ export const zh: Dict = {
     "detailBlockers": "值得再看一眼",
     "detailSignals": "文件里提到的",
     "detailSource": "出处：你上传的文件",
-    "detailGone": "这张卡片已不在你上传的文件里。"
+    "detailGone": "这张卡片已不在你上传的文件里。",
+    "adviceCardAria": "它看到了什么 —— 判读",
+    "adviceEyebrow": "它看到了什么",
+    "adviceReadTitle": "判读",
+    "adviceSignOff": "由你拍板",
+    "adviceSummaryAria": "摘要 —— 判读",
+    "adviceSignalsLabel": "捕捉到的信号",
+    "adviceHypothesesLabel": "可能在发生什么 —— 只是判读，不是定论",
+    "adviceMostLikely": "最可能的情况",
+    "adviceAlsoPossible": "也存在这种可能",
+    "adviceBackingLabel": "依据",
+    "adviceEvidenceLabel": "为什么这样说",
+    "adviceConfidenceLabel": "有多确定",
+    "adviceConfidenceWouldChange": "什么会让判读改变",
+    "adviceMoveLabel": "下一步",
+    "adviceActionsLabel": "建议动作",
+    "adviceScriptLabel": "如果你要开 1:1",
+    "adviceWatchLabel": "看什么来判断奏效了",
+    "adviceHrAria": "HR / 谁来把关",
+    "adviceHrLabel": "何时拉上 HR",
+    "adviceEscalationNotYet": "暂时不用",
+    "adviceConfirmsLabel": "谁来把关",
+    "adviceConfidenceLow": "较低",
+    "adviceConfidenceMedium": "中等",
+    "adviceConfidenceHigh": "较高",
+    "adviceEscalationHRBP": "人力伙伴",
+    "adviceEscalationLegal": "法务",
+    "adviceEscalationWellbeing": "员工关怀",
+    "adviceEscalationCompensation": "薪酬",
+    "adviceEscalationExecutive": "高管层"
   },
   "lite2": {
     "tabTeam": "你的团队",
@@ -658,7 +697,36 @@ export const zh: Dict = {
     "homeOverviewProjects": "个项目",
     "homeOverviewFiles": "份文件已读",
     "homeOverviewNotes": "条笔记",
-    "homeOverviewFollowups": "条待跟进"
+    "homeOverviewFollowups": "条待跟进",
+    "adviceCardAria": "它看到了什么 —— 判读",
+    "adviceEyebrow": "它看到了什么",
+    "adviceReadTitle": "判读",
+    "adviceSignOff": "由你拍板",
+    "adviceSummaryAria": "摘要 —— 判读",
+    "adviceSignalsLabel": "捕捉到的信号",
+    "adviceHypothesesLabel": "可能在发生什么 —— 只是判读，不是定论",
+    "adviceMostLikely": "最可能的情况",
+    "adviceAlsoPossible": "也存在这种可能",
+    "adviceBackingLabel": "依据",
+    "adviceEvidenceLabel": "为什么这样说",
+    "adviceConfidenceLabel": "有多确定",
+    "adviceConfidenceWouldChange": "什么会让判读改变",
+    "adviceMoveLabel": "下一步",
+    "adviceActionsLabel": "建议动作",
+    "adviceScriptLabel": "如果你要开 1:1",
+    "adviceWatchLabel": "看什么来判断奏效了",
+    "adviceHrAria": "HR / 谁来把关",
+    "adviceHrLabel": "何时拉上 HR",
+    "adviceEscalationNotYet": "暂时不用",
+    "adviceConfirmsLabel": "谁来把关",
+    "adviceConfidenceLow": "较低",
+    "adviceConfidenceMedium": "中等",
+    "adviceConfidenceHigh": "较高",
+    "adviceEscalationHRBP": "人力伙伴",
+    "adviceEscalationLegal": "法务",
+    "adviceEscalationWellbeing": "员工关怀",
+    "adviceEscalationCompensation": "薪酬",
+    "adviceEscalationExecutive": "高管层"
   },
   "ask": {
     "eyebrow": "快问",

@@ -379,6 +379,49 @@ export const en = {
     detailSignals: 'What the documents say',
     detailSource: 'From your uploads',
     detailGone: 'This card is no longer in your uploads.',
+
+    // ── Room advice card — the 8-field structured card rendered by LiteAdviceCard.tsx
+    // (avery-sync zh-purity slice). These were hardcoded English literals in the component
+    // with zero i18n — invisible on the EN build, but ZH is the production default
+    // (averylite.dannyqian.com), so every Chinese customer who ran a real question in the
+    // room saw English structural labels wrapped around their own Chinese read. This was
+    // the single biggest chunk of the zh-purity gate's Latin-hit count (the gate never
+    // rendered an advice card before, so it never saw them — see the ROOM_SCRIPTS addition
+    // in the gate itself).
+    // adviceConfidence* / adviceEscalation* (all but NotYet) translate the backend's closed
+    // enum badge values (LiteAdvice.confidence.level / .escalation.level, see
+    // src/shared/adviceLevels.ts) — same class of defect as src/shared/projectStatus.ts
+    // (an enum token rendered raw is invisible to both the deploy-line English-sentence
+    // grep and the align-line behavioural gate; only the ZH purity screen-scrape catches it).
+    adviceCardAria: 'What it found — the read',
+    adviceEyebrow: 'What it found',
+    adviceReadTitle: 'The read',
+    adviceSignOff: 'Yours to sign off',
+    adviceSummaryAria: 'Summary — the read',
+    adviceSignalsLabel: 'Signals it picked up',
+    adviceHypothesesLabel: 'What might be going on — a read, not a verdict',
+    adviceMostLikely: 'Most likely',
+    adviceAlsoPossible: 'Also possible',
+    adviceBackingLabel: 'The backing',
+    adviceEvidenceLabel: "Why I'm saying this",
+    adviceConfidenceLabel: 'How sure it is',
+    adviceConfidenceWouldChange: 'What would change it',
+    adviceMoveLabel: 'The move',
+    adviceActionsLabel: 'Recommended actions',
+    adviceScriptLabel: 'If you open the 1:1',
+    adviceWatchLabel: 'What to watch to know it worked',
+    adviceHrAria: 'HR / who confirms',
+    adviceHrLabel: 'When to pull in HR',
+    adviceEscalationNotYet: 'not yet',
+    adviceConfirmsLabel: 'Who confirms',
+    adviceConfidenceLow: 'low',
+    adviceConfidenceMedium: 'medium',
+    adviceConfidenceHigh: 'high',
+    adviceEscalationHRBP: 'HRBP',
+    adviceEscalationLegal: 'legal',
+    adviceEscalationWellbeing: 'wellbeing',
+    adviceEscalationCompensation: 'compensation',
+    adviceEscalationExecutive: 'executive',
   },
 
   // ── lite2 shell (feat-035, lite-live-v02: the v02 shell running side-by-side with v01 above.
@@ -974,6 +1017,40 @@ export const en = {
     homeOverviewFiles: 'files read',
     homeOverviewNotes: 'field notes',
     homeOverviewFollowups: 'open follow-ups',
+
+    // ── Room advice card — mirrors the `lite` section above byte-for-byte (same rationale:
+    // avery-sync zh-purity slice; see the comment on lite.adviceCardAria for the full why).
+    // Kept in its own lite2 namespace per kickoff-dev.md §6 so v01/v02 copy can diverge
+    // independently later, even though today the two cards render identical labels.
+    adviceCardAria: 'What it found — the read',
+    adviceEyebrow: 'What it found',
+    adviceReadTitle: 'The read',
+    adviceSignOff: 'Yours to sign off',
+    adviceSummaryAria: 'Summary — the read',
+    adviceSignalsLabel: 'Signals it picked up',
+    adviceHypothesesLabel: 'What might be going on — a read, not a verdict',
+    adviceMostLikely: 'Most likely',
+    adviceAlsoPossible: 'Also possible',
+    adviceBackingLabel: 'The backing',
+    adviceEvidenceLabel: "Why I'm saying this",
+    adviceConfidenceLabel: 'How sure it is',
+    adviceConfidenceWouldChange: 'What would change it',
+    adviceMoveLabel: 'The move',
+    adviceActionsLabel: 'Recommended actions',
+    adviceScriptLabel: 'If you open the 1:1',
+    adviceWatchLabel: 'What to watch to know it worked',
+    adviceHrAria: 'HR / who confirms',
+    adviceHrLabel: 'When to pull in HR',
+    adviceEscalationNotYet: 'not yet',
+    adviceConfirmsLabel: 'Who confirms',
+    adviceConfidenceLow: 'low',
+    adviceConfidenceMedium: 'medium',
+    adviceConfidenceHigh: 'high',
+    adviceEscalationHRBP: 'HRBP',
+    adviceEscalationLegal: 'legal',
+    adviceEscalationWellbeing: 'wellbeing',
+    adviceEscalationCompensation: 'compensation',
+    adviceEscalationExecutive: 'executive',
   },
 
   // ── Ask / Quick ask (feat-034 stage B — ADR-0023 voice: asks about the WORK, never rates
