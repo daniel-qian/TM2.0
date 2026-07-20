@@ -30,24 +30,34 @@
 上线后：`/account/status` → 200（公网实测）；avery schema 从 8 张表变 9 张，其余 8 张未动；**Supabase 安全告警 0 条**。
 容器 env 新增 `SUPABASE_URL` + `SUPABASE_ANON_KEY`（用 publishable key）。
 
+## 第四次上线（feat-056 决策定级，Danny 批的四条之一）
+子集加 `2672bad`（规则表 + `decision_grading.py` + `CompanyContext.decision_cards()` + `_team_payload` 的 `"decisions"` 键）+ `ae81597`（**中文状态归一化**）→ deploy 分支 `780d441`。
+⚠️ `ae81597` 是**必需的不是可选的**：修复前的 `_norm_status` 是纯 ASCII 正则，中文「阻塞」「有风险」一律返回空 —— 实测同一个「已阻塞」的项目，不带这条会被静默降级成 `needs_confirmation` 而不是 `high_risk`。
+本地验证：决策定级测试 69 passed；全过滤套件 1065 passed（确认状态归一化没伤到别处）。迁移仍停在 0008，**无新建表**。
+上线后生产内实测：`decision_cards` 已挂到 `CompanyContext`，规则判级正确（blocked→高风险 / at-risk→需确认 / on-track→可推进），`ingest_api.py:165` 的 `"decisions"` 键已在 payload 里 —— 首屏那块空白从此有内容。
+**「只许升级不许降级」性质已在代码核实**：`apply_review` 用 `max(规则等级, 提议等级)`，降级一律驳回且连带丢弃措辞，升级必须带理由；有 4 个专门测试守着（含「第二次复核不能把升级走回去」）。
+
 ## 镜像与容器状态（最新）
 ```
-当前镜像 avery-agent:zh512acct-20260720-123003  ← 含 feat-053 账号层，生产在跑，healthy
-上一版   avery-agent:zh512sub2-20260720-102149  (parse-crash 兜底) 未删
-更早     avery-agent:zh512sub-20260720-095401 / avery-agent:zh512  未删
-最新回滚 avery-prev-20260720-123003  → zh512sub2 容器，Exited 完整保留
-更早回滚 avery-prev-20260720-102149 / avery-prev-20260720-095401  均完整保留
+当前镜像 avery-agent:zh512grade-20260720-140955  ← 含决策定级，生产在跑，healthy
+上一版   avery-agent:zh512acct-20260720-123003   ← 含 feat-053 账号层
+更早     avery-agent:zh512sub2-* (parse兜底) / zh512sub-* (编码修复) / zh512 (最初)  均未删
+四级回滚容器（全部 Exited 完整保留，逐级可退）：
+  avery-prev-20260720-140955  → zh512acct（有账号层，无决策定级）
+  avery-prev-20260720-123003  → zh512sub2（无账号层）
+  avery-prev-20260720-102149  → zh512sub （无 parse 兜底）
+  avery-prev-20260720-095401  → zh512    （最初，什么都没有）
 ```
-构建源：`origin/deploy/zh512-subset-0720`（HEAD `e7f8a53`）。服务器 `/home/admin/build-zh` detached 在 `e7f8a53`。
+构建源：`origin/deploy/zh512-subset-0720`（HEAD `780d441`）。服务器 `/home/admin/build-zh` detached 在 `780d441`。
 
-## 一键回滚（回到上一版，即无账号层）
+## 一键回滚（退一级 = 回到有账号层但无决策定级）
 ```bash
 ssh admin@8.211.28.11
 sudo docker rm -f avery
-sudo docker rename avery-prev-20260720-123003 avery   # 回到 zh512sub2（无 feat-053）
+sudo docker rename avery-prev-20260720-140955 avery   # 退一级
 sudo docker start avery
 curl -s http://127.0.0.1:8137/health
-# 更早的版本用 avery-prev-20260720-102149 / -095401
+# 想退更多级，换成上面列表里更早的那个名字即可
 ```
 ⚠️ 回滚容器**不会删掉 `account_contexts` 表**（表留着无害：没有账号层的镜像根本不读它）。真要退表得手动 DROP，本回执不建议。
 换容器脚本 `/tmp/swap.sh` 用的是时间戳命名 + 每条失败路径调 `rollback()`，避开了 kickoff 警告的 `avery-prev` 撞名地雷（那个停着的 `avery-prev` 仍在，没动它）。
