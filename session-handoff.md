@@ -1,4 +1,48 @@
-> # ⟳ 2026-07-20 晚 · 四条 blocker 收盘（★下个 session 从这里接）
+> # ⟳ 2026-07-20 深夜 · UIUX 棒收盘（★下个 session 从这里接）
+>
+> **一句话**：首个专职 UIUX 棒（feat-080）——议事室两个真人用不了的交互（按钮被 HUD 盖死 /
+> 滚轮劫持）、一句同屏自相矛盾的空态文案、两张皮铺满九屏的小字对比度、以及首次 code-splitting
+> 全部修完上线；三道新门先红后绿（红全是对着修复前 dist 真跑出来的）；顺手把门清仓做了一半
+> （data-boundary 复活 37/37、verify-server 重写、verify-p0 首次全量 41/0）。
+>
+> ## 现在线上是什么
+> - **前端** `averylite.dannyqian.com` = 本棒 merge 后的 main（Vercel 自动部署，收工时已用
+>   bundle 内 `__AVERY_BUILD__.commit` 实测确认——具体 SHA 见 git log 本棒最后一个 commit）
+> - **后端** `avery.dannyqian.com` = 镜像 **`avery-agent:main-20260720-211529`** —— **本棒零后端改动**，
+>   容器、生产库（9 张表、迁移停在 0008）、回滚梯七级全部原样
+> - v02 客户首载 gzip **307→231 kB（-25%）**：story 路演资产（183kB）与 v01 逃生门（43kB）
+>   已退出客户路径，首次切壳才拉
+>
+> ## 修了什么（细节别在这展开，看 progress.md「2026-07-20 深夜 · UIUX 棒」+ feat-080 evidence）
+> F1 议事室「展开原始流」被 brief HUD 盖死（shared 的 story 定位残留 transform 未清；真人点不到，
+> Playwright 真实点击超时那条「另案」就是它）· F2 滚轮在结果卡/终端流上被画布缩放劫持（wheel 无
+> excluded）· F4 handoffs 空态在有 N 处风险信号时仍说「一切平稳」（同屏矛盾，两壳双语，zh 走
+> delta 脚本分两趟 + 导演修正词汇）· F6/F7/F8 小字对比度（paper --ink-faint 3.08→4.7、aurora
+> 「需确认」chip 2.77→AA；装饰色一个没动，新增每皮 *-text 深色调；story 冻结面零触碰）·
+> 三壳 React.lazy 拆包。
+> 新门 3 道：verify-{room-usability,handoffs-empty-honesty,contrast-smalltext}（全在
+> eval-harness/tools/）。回归全绿零回归，zh 纯度基线 14 持平。
+>
+> ## 🔴 本棒最该带走的一条：dist 指向陷阱在本地也咬人
+> auth 门跑完把 dist 重打成指向 8291，随后 verify-p0 全线「连不上服务器」——后端明明活着。
+> 上次这个坑往生产库写了测试数据，这次伪装成后端故障骗排查时间。**批量跑门之后，先验一次
+> dist 的 apiBase，再解读任何门的红。**
+>
+> ## ⚖️ 需要 Danny 拍板（原样保留，本棒一个字没替他决定）
+> 1. 裸「风险：」词表要不要加宽 —— **未动**。
+> 2. `origin/p5-04-nexus-safe-zone` 废弃分支怎么处置 —— **没删**。
+> 3. 凭据轮换建议仍然有效（07-20 那次 env 明文暴露）。
+>
+> ## 下一棒该干什么
+> **仍然是反馈优先**：合伙人端到端试用反馈一到就放下一切先处理。反馈没来之前可做（都不需要拍板）：
+> ① EN 皮上「需确认」是中文——修法已写明（枚举映射+原样兜底，照 UploadPanel fileStatus 先例），
+>    生产 zh 不受影响，属打磨；
+> ② withServerDetail 恢复棒（Blockers 4b：合并 3106536 吃掉的 413/422 透传 + fixB-transport 门
+>    一起补——门单独修等于给不存在的功能开绿灯）；
+> ③ 测试盲区三件套（p0 tab 循环封顶 5/9、并发多标签、登出清场）；
+> ④ 打磨簿（progress.md 遗留第 3 条：玻璃 blur 漂移 / mono 栈 / z-index 90 撞车 / 死 @media 规则）。
+
+> # ⟳ 2026-07-20 晚 · 四条 blocker 收盘（上一棒）
 >
 > **一句话**：07-20 收盘列的 Blockers 第 3/4/5/6 条（都不需要 Danny 拍板的那四条）已全部修完、
 > 全部上线、全部带红→绿证据。**每一条的「红」都是用变异真跑出来的，不是推断的。**

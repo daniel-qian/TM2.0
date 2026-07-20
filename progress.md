@@ -693,3 +693,103 @@ i18n 零新增（键本就在 shared 的 `t.upload.*`）。
 
 **下一棒该干什么**：仍然是**先等合伙人端到端试用反馈**——真实用户第一次撞到的东西比我们列的
 清单更有价值。反馈没来之前可做：上面第 4 条的门清仓、第 6 条的测试盲区补齐。
+
+## Update — 2026-07-20 深夜 · UIUX 棒（feat-080）：议事室可用性 / 空态诚实 / 对比度 / 拆包 / 门清仓
+
+> 起点：四条 blocker 收盘后的第一个专职 UIUX 棒（Danny 出门 AFK，kickoff 三轴：审美/合理性/流畅度）。
+> 合伙人试用反馈整棒未到，未被打断。所有修复走「先让门真的红过再修」——三道新门的红
+> 全部是对着**修复前的 dist** 真跑出来的，红的形状逐条留档在下面。
+
+### 修了什么（四类 + 门清仓）
+
+**F1 · 议事室「展开原始流」按钮真人点不到（v01/v02 同病，视口无关）**
+shared/styles/00-base.css:922 给 `.nexus-brief-hud` 定的是 story 场景的
+`position:absolute; z-index:40; transform:translateX(-50%)`；两个 lite 壳的 board 覆盖
+（lite.css:640 / lite2.css:758）只重置了 position/flex，**残留的 translateX(-50%) 把 HUD
+左拖半个身位**压在终端头栏上，z 40>30 抢走全部命中。实测 1280 与 1000 视口一样：
+`.lite-flow-toggle` 中心点 elementFromPoint 返回 `nexus-brief-bar-eyebrow`，Playwright
+真实点击 2.5s 超时——verify-zh-purity:183 那句「真人可能也点不动，已单独记录」的另案就是它，
+门此前只能 DOM 派发绕开。修法：两壳 board 覆盖补 `transform:none; z-index:auto; max-width:100%`；
+HUD 在 lite 壳里是纯状态 pill，顺手去掉了 00-base 带来的 cursor:pointer + hover 抬升（假可点性）。
+
+**F2 · 滚轮在结果卡上是缩放不是滚动（v01/v02 同病）**
+LitePanZoom（两份拷贝）的 wheel 没配 excluded → react-zoom-pan-pinch 对整画布 preventDefault。
+而 8 字段结果卡是 max-height:560 + overflow:auto 的阅读区（实测内容 1770px 高）——经理想往下读
+产品的核心输出，滚轮把画布缩走了（实测 defaultPrevented=true、scale 1→0.88、卡 scrollTop 不动）。
+修法：`wheel.excluded = ['lite-room-card','lite-flow-body','nexus-terminal-log']`（v01 两项）；
+excluded 匹配含后代（`.X *`），空白画布 wheel-zoom 保留（门里有反向护栏盯着别一刀关死）。
+
+**F4 · handoffs 空态在有风险信号时说「一切平稳」（「界面替文档说话」类新实例，两壳双语全中）**
+`handoffsEmpty`（「暂时没有需要你出面的事——文件读起来一切平稳」）只看 handoffs.length，
+无视信号计数；同一屏顶部简报刚说完「其中 9 处值得多看一眼」。修法：新键 `handoffsEmptyButLook`
+（信号>0 时带计数、v02 版指名「多看一眼」tab），计数取新 helper `shared/briefing.ts::
+briefingRiskCount`（与简报同源认后端 'need a look' metric，不前端重推）。zh 走
+i18n-zh-delta.mjs 分两趟；M3 初译「再看一眼」被导演修正为产品既定词「多看一眼」——
+**tab 指名错了是 bug 不是措辞偏好**。零信号时原「平稳」文案保留（门的世界 B 护栏）。
+
+**F6/F7/F8 · 小字对比度（审美轴的主产出）**
+paper 的 `--ink-faint` #918b7f 在 --paper 上 3.08:1，顶着 eyebrow/计数/时间戳/meta 九屏全中；
+aurora 的「需确认」定级 chip（--honey 11.5px）2.77:1。修法：**装饰色一个没动**，每皮新增
+小字专用深色调 `--sage-text/--honey-text/--terracotta-text`（paper 4.5–5.3:1 / aurora 4.8–5.6:1，
+色相不变），小字消费点切过去；`--ink-faint` 只在两个 lite scope 内压深到 #736c5f（4.7:1，
+仍明显浅于 --ink-soft，三级灰阶层次不变）——**shared :root 喂 story 的同名 token 一字未碰**。
+report-card 的规则本体在 shared（story 冻结面），全部用 .lite-shell/.lite2-shell 前缀覆盖。
+
+**性能（kickoff 说这项从来没人量过——先测再改，两头都留了数）**
+· 基线：单 chunk 1005.27kB（gzip 307.37）/ 576 模块 / 零拆分；120 人名册渲染 7.4ms
+  （**名册不是瓶颈**，别再猜它慢）；375px 九屏零横向溢出（tabs 条横滚是设计）。
+· 修法：App.tsx 三壳 React.lazy（main.tsx 的 store seam 保持静态 import——门靠
+  __liteStore/__lite2Store 活着，别动）。产物：entry 523.81(155.26 gz) + Lite2App
+  111.73(27.71) + story 182.73(66.63) + v01 42.82(10.60) + framer 114.45(37.81) +
+  rzpp 28.91(9.14)。**v02 客户首载 gzip 307→231（-25%）**，story 路演资产与 v01 逃生门
+  彻底退出客户路径（首次切换才拉）。Suspense fallback 刻意 null（安静原则，别放 spinner）。
+
+**门清仓（Blockers 第 4 条的六道，处置三道，另三道分类记档）**
+· `verify-data-boundary`：崩（@babel/core，形状逐字复现）→ configFile:false + esbuild jsx +
+  手搬 envPrefix/__AVERY_BUILD__ define → **37/37**（租户边界那批判据回到可用）。
+· `verify-server`：重写（root 从死工作树 D:/avery-wt/gate 指回 process.cwd()、同款去 babel、
+  VERIFY_PORT 可调）。
+· `verify-p0`：被 verify-server 卡死多日，**首次全量跑绿 41 PASS·0 FAIL·0 SKIP**
+  （路由/粘性 query/会话恢复/深链/双 look 全套）。
+· fixB-transport：**不修**——它断言的 withServerDetail 被合并 3106536 整块吃掉（Blockers 4b），
+  恢复功能+门是单独一棒，修门等于给不存在的功能开绿灯。fixB-upload-ui/layout、fixA-live：
+  属「前置服务没起」类不是崩，跑法照旧（8301/8302+5301/5302），fixA-live 内一行断言过时
+  （「未读到状态」→「状态未提及」）待那一棒顺手改。
+
+### 新门（三道，全在 eval-harness/tools/）
+`verify-room-usability`（20 判据：遮挡几何/elementFromPoint/真实点击全链路/滚轮×4/反向护栏×2）·
+`verify-handoffs-empty-honesty`（store 造两个世界，互为护栏）· `verify-contrast-smalltext`
+（全量叶子文本扫描 ≥AA，非点名选择器——点名会漏掉下一个用错 token 的新组件）。
+
+### 回归（全绿，零回归）
+switchers 20/20 · aria-zh 4/4 · status-truth 27/27 · onboarding-returning 15/15 ·
+file-manifest-truth 30/30 · null-owner 24/24 · fixA 37/0 · auth-capability 25/25 ·
+auth-form 57/57 · zh-purity 基线 14 持平（v01 5 · v02 9，零新增）· typecheck/build 绿。
+
+### 🔴 陷阱重演实录（AGENTS 那条「dist 指向不确定」在本地也咬人）
+auth 两道门跑完把 dist 重打成指向 **8291**；随后 verify-p0 的 ingest 全线
+ERR_CONNECTION_REFUSED，看起来像「后端挂了」（后端 8137 好好活着，curl 200）。
+用 requestfailed 探针抓到具体 URL 才破案；重打 dist 回默认后 p0 才绿。
+教训追加：**任何门批量跑完，先验一次 dist 的 apiBase 再解读下一道门的红**——
+上次这个坑写进生产库，这次它伪装成「连不上服务器」。
+
+### 遗留（都不阻塞，按价值排序）
+1. **EN 皮上「需确认」是中文**（后端 grade_label 刻意前端不硬编码，homeDerive.ts:21 有理由）。
+   修法已想好但没动：按 UploadPanel fileStatus 先例做「枚举映射 + 未知值原样兜底」
+   （card.grade 就是机器键）。生产是 zh 不受影响，动它要连 gates 一起看。
+2. EN briefing 透传的 "Ingested 2 file(s)" 工程腔——**wontfix**：字节级透传是 briefing.ts
+   文档化硬约束（携带前端复现不了的诚实细节），en.ts 里备好的 "Read {n} of {m}" 键继续闲置。
+3. 打磨簿（低价值不churn，下次 CSS 手痒再说）：paper 玻璃 blur 12px 硬编码 vs aurora 20px
+   token 化；mono 字体栈三处不一致（lite2.css:273/963/3842）+ --lite2-mono-font 死 token；
+   bell 与 auth 两个 popover 同 z-index 90（同开时叠序由 DOM 顺序定）；lite2.css:457
+   @media 1100px 那条 `.lite-room .lite-room-card{left/top}` 对 static 卡是死规则（pre-board 遗物）。
+4. verify-p0 tab 循环仍封顶 5 个（现有 9 tab）、并发多标签、登出清场——测试盲区三件套原样。
+
+### Files Modified
+- **修复**：`src/App.tsx`（拆包）、`src/lite{,2}/LitePanZoom.tsx`（wheel excluded）、
+  `src/lite{,2}/screens/TeamScreen.tsx` + `src/shared/briefing.ts`（F4）、
+  `src/lite{,2}/UploadPanel.tsx`（状态色 text token）、`src/shared/i18n/{en,zh}.ts`（F4 键）、
+  `src/lite2/styles/{look-paper,look-aurora,lite2}.css`、`src/lite/styles/lite.css`（HUD 残留清理 + 对比度）
+- **门**：新增 `eval-harness/tools/verify-{room-usability,handoffs-empty-honesty,contrast-smalltext}.mjs`；
+  修 `.issues/v02-partner-align-0718/verify-{data-boundary,server}.mjs`
+- **档案**：`feature_list.json`（feat-080）、本文件、根 `session-handoff.md`
