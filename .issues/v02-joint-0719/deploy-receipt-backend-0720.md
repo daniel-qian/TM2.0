@@ -37,28 +37,60 @@
 上线后生产内实测：`decision_cards` 已挂到 `CompanyContext`，规则判级正确（blocked→高风险 / at-risk→需确认 / on-track→可推进），`ingest_api.py:165` 的 `"decisions"` 键已在 payload 里 —— 首屏那块空白从此有内容。
 **「只许升级不许降级」性质已在代码核实**：`apply_review` 用 `max(规则等级, 提议等级)`，降级一律驳回且连带丢弃措辞，升级必须带理由；有 4 个专门测试守着（含「第二次复核不能把升级走回去」）。
 
+## 第五次上线（对抗性复审逼出来的五条中文修复）
+复审发现**最重的问题不在当天写的代码里，在部署方法里**：生产镜像基线一直停在 `512b11d`(7/18)，
+每次子集只带那个功能需要的东西，于是 main 上一整批中文修复从没上线；而当天刚让中文状态词生效，
+恰好把缺口捅大了。deploy 分支 `780d441 → ae46ab9`（5 个提交）。
+
+| # | 改前（生产真实行为） | 改后 |
+|---|---|---|
+| ① | `未按时完成/未能完成/还没有完成/没有完成/无法完成` **全部读成 done**（还顺带静音逾期/低进度告警） | 没有一条是 done；`未能完成/无法完成` 判 at-risk（更准） |
+| ④ | `无重大风险/无明显风险/没有风险` **全部判 at-risk**，卡片写「项目自报状态为『有风险』」 | 全部干净 |
+| ② | 中文 `阻碍项：/风险点：` 标签行**一条都进不去** → 项目判 `can_proceed` | `blockers=['等待法务确认','人手不足']`，等级变 `needs_confirmation` |
+| ③ | `briefing()` 用比 `decisions` 弱的私有规则 → 首页说「需确认」、团队页说「没有风险信号」 | 两边同一套规则表，tone 一致 |
+| ⑤ | 红线不扫 `person.name` → `绩效8分.docx` 能造出一个叫「绩效8分」的人卡并通过校验 | 三条违规拦下；正常人名对照组不受影响 |
+
+⚠️ **缺陷②不是 cherry-pick**：main 的实现寄生在 feat-054 粒度闸新增的 `_project_from_span` 里，
+带它等于带整个 ~500 行粒度闸功能。改为在现有 `_projects_from_doc` 里做独立最小实现，
+**词表与 main 逐字一致**（`阻碍项|阻碍|阻塞|卡点|风险点`，刻意不加宽）—— 这样将来从 main 重拉基线时行为不变，
+不会把一个「只有生产有」的补丁静默回收掉。
+
+**已知未修（main 自己也没盖，需 Danny 定夺）**：裸 `风险：`（无「点」字）仍识别不到；
+「正向状态词命中后，全文风险兜底扫描永不运行」这条控制流 main 同样没改、非独立可修项。
+两条都写在 `c9fcd29` 提交信息和 `tests/test_zh_blocker_risk_label.py` 末尾。
+
+本地验证：全量过滤套件 **1697 passed / 0 failed**。另含决策卡兜底文案修复（`ae46ab9`，新增 R-UNCLASSIFIED 规则）。
+
 ## 镜像与容器状态（最新）
 ```
-当前镜像 avery-agent:zh512grade-20260720-140955  ← 含决策定级，生产在跑，healthy
-上一版   avery-agent:zh512acct-20260720-123003   ← 含 feat-053 账号层
+当前镜像 avery-agent:zh512zh-20260720-164609    ← 含五条中文修复，生产在跑，healthy
+上一版   avery-agent:zh512grade-20260720-140955 ← 含决策定级
+更早     avery-agent:zh512acct-20260720-123003  ← 含 feat-053 账号层
 更早     avery-agent:zh512sub2-* (parse兜底) / zh512sub-* (编码修复) / zh512 (最初)  均未删
-四级回滚容器（全部 Exited 完整保留，逐级可退）：
-  avery-prev-20260720-140955  → zh512acct（有账号层，无决策定级）
-  avery-prev-20260720-123003  → zh512sub2（无账号层）
-  avery-prev-20260720-102149  → zh512sub （无 parse 兜底）
-  avery-prev-20260720-095401  → zh512    （最初，什么都没有）
+五级回滚容器（全部 Exited 完整保留，逐级可退）：
+  avery-prev-20260720-164609  → zh512grade（有决策定级，无五条中文修复）
+  avery-prev-20260720-140955  → zh512acct （有账号层，无决策定级）
+  avery-prev-20260720-123003  → zh512sub2 （无账号层）
+  avery-prev-20260720-102149  → zh512sub  （无 parse 兜底）
+  avery-prev-20260720-095401  → zh512     （最初，什么都没有）
 ```
-构建源：`origin/deploy/zh512-subset-0720`（HEAD `780d441`）。服务器 `/home/admin/build-zh` detached 在 `780d441`。
+构建源：`origin/deploy/zh512-subset-0720`（HEAD `ae46ab9`）。服务器 `/home/admin/build-zh` detached 在 `ae46ab9`。
 
-## 一键回滚（退一级 = 回到有账号层但无决策定级）
+## 一键回滚（退一级）
 ```bash
 ssh admin@8.211.28.11
 sudo docker rm -f avery
-sudo docker rename avery-prev-20260720-140955 avery   # 退一级
+sudo docker rename avery-prev-20260720-164609 avery   # 退一级（回到无中文修复）
 sudo docker start avery
 curl -s http://127.0.0.1:8137/health
 # 想退更多级，换成上面列表里更早的那个名字即可
 ```
+
+## 🔴 下一棒最该做的一件事：把生产基线重新从 main 拉一次
+今天五次上线全部是「在 7/18 旧基线上叠子集」。这个打法救了急，但复审已经证明它会**系统性漏掉
+没人显式指名的修复**——五条中文缺陷就是这么漏了两天。7/25 之后建议重新从 main 拉一次基线，
+别再往旧分支上叠。查生产还缺什么：
+`git diff ae46ab9 main -- eval-harness/avery eval-harness/service eval-harness/db`
 ⚠️ 回滚容器**不会删掉 `account_contexts` 表**（表留着无害：没有账号层的镜像根本不读它）。真要退表得手动 DROP，本回执不建议。
 换容器脚本 `/tmp/swap.sh` 用的是时间戳命名 + 每条失败路径调 `rollback()`，避开了 kickoff 警告的 `avery-prev` 撞名地雷（那个停着的 `avery-prev` 仍在，没动它）。
 
