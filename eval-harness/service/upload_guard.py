@@ -32,6 +32,25 @@ log = logging.getLogger("service.upload_guard")
 _GUARDED: dict[str, str] = {"/ingest": "ingest", "/advise": "advise"}
 
 
+# ── fixB/M2: the limits speak in units a person retypes ──────────────────────────────────────────
+# The frontend used to carry its OWN copy of these numbers ("the server caps 10 files, 10MB each")
+# and BOTH were wrong — the real caps are 15 files at 8 MiB, so the single-file number it printed was
+# LARGER than the truth and a user obeying it retried into the same 413 forever. There is now one
+# source of truth (guards.max_*), it is stated in the server's own 413 body, and the client repeats
+# what the server said instead of remembering a third copy. Keeping the numbers human here is what
+# makes that possible: "8388608-byte per-file limit" is not something anyone can act on.
+
+def human_bytes(n: int) -> str:
+    """A byte count as a person would say it ('8 MB', '32 MB', '900 KB')."""
+    if n < 1024:
+        return f"{n} B"
+    for unit, scale in (("GB", 1024 ** 3), ("MB", 1024 ** 2), ("KB", 1024)):
+        if n >= scale:
+            value = n / scale
+            return f"{value:.0f} {unit}" if abs(value - round(value)) < 0.05 else f"{value:.1f} {unit}"
+    return f"{n} B"
+
+
 def _route_for(path: str) -> str | None:
     """Rate-limit route key for a request path. feat-034 adds the Ask surfaces: every /ask
     manager endpoint shares one bucket ('ask'); the employee H5 (/r/{token} page + answer POST)
@@ -186,8 +205,8 @@ class IngestGuardMiddleware:
                     log.warning("upload Content-Length %s > cap %s -> 413", int(cl), max_total)
                     return await _send_json(send, 413, {
                         "error": "upload too large",
-                        "detail": (f"request body {int(cl)} bytes exceeds the {max_total}-byte "
-                                   f"per-request limit")})
+                        "detail": (f"this upload is {human_bytes(int(cl))} — the limit is "
+                                   f"{human_bytes(max_total)} per upload. Send fewer files at once.")})
             except ValueError:
                 pass
 
@@ -212,7 +231,8 @@ class IngestGuardMiddleware:
                     log.warning("upload streamed body exceeded cap %s -> 413", max_total)
                     await _send_json(send, 413, {
                         "error": "upload too large",
-                        "detail": f"request body exceeded the {max_total}-byte per-request limit"})
+                        "detail": (f"this upload went over the {human_bytes(max_total)} limit for a "
+                                   f"single upload. Send fewer files at once.")})
                     responded["v"] = True
                     return {"type": "http.disconnect"}
             return msg
@@ -245,7 +265,8 @@ async def read_capped(f: UploadFile, display: str, per_file: int) -> bytes:
         if total > per_file:
             raise HTTPException(status_code=413, detail={
                 "error": "file too large",
-                "detail": f"'{display}' exceeds the {per_file}-byte per-file limit",
+                "detail": (f"'{display}' is bigger than the {human_bytes(per_file)} per-file "
+                           f"limit."),
                 "filename": display})
         chunks.append(chunk)
     return b"".join(chunks)
@@ -257,12 +278,56 @@ def enforce_count(n_files: int) -> None:
     if n_files > limit:
         raise HTTPException(status_code=413, detail={
             "error": "too many files",
-            "detail": f"{n_files} files exceeds the per-request limit of {limit}"})
+            "detail": (f"{n_files} files at once — the limit is {limit} per upload. "
+                       f"Send them in smaller batches.")})
+
+
+# ── fixB/m6: an OLE2 file wearing an OOXML extension is not necessarily a liar ───────────────────
+# `guards.check_type` sees a .xlsx that does not start with `PK` and reports "magic-byte mismatch",
+# which the UI renders as an accusation: we are telling a customer they renamed a file to sneak it
+# past us. Two ordinary, honest files land in that branch:
+#
+#   1. A PASSWORD-PROTECTED xlsx/docx. Excel's "Encrypt with Password" does not produce an encrypted
+#      zip — it wraps the whole OOXML package inside an OLE2/CFB container (ECMA-376 agile
+#      encryption). It is a completely valid file that we simply cannot open without the password.
+#      Finance and HR spreadsheets — precisely the files this product asks for — are routinely sent
+#      this way.
+#   2. A LEGACY .xls/.doc that someone renamed. Still the wrong file for us, but the fix we should be
+#      naming is "re-save it as .xlsx", not "stop lying about your file".
+#
+# Both are OLE2 (D0 CF 11 E0 ...). The encrypted case is told apart by the stream names ECMA-376
+# mandates, which the CFB directory stores as UTF-16LE — so a plain substring search identifies it
+# without parsing the container.
+_OLE2_MAGIC = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
+_ENCRYPTED_OOXML_MARKERS: tuple[bytes, ...] = (
+    "EncryptedPackage".encode("utf-16-le"),
+    "EncryptionInfo".encode("utf-16-le"),
+)
+
+
+def office_container_reason(display: str, data: bytes) -> str | None:
+    """A truthful reason to refuse an OLE2 file that claims to be .docx/.xlsx, or None if this is not
+    that case. Says what the file IS and what to do about it — never that the user faked it."""
+    ext = guards.resolve_ext(display)
+    if ext not in guards._ZIP_EXTS or not data.startswith(_OLE2_MAGIC):
+        return None
+    if any(marker in data for marker in _ENCRYPTED_OOXML_MARKERS):
+        return (f"'{display}' is password-protected, so it can't be opened for reading. "
+                f"Save a copy without the password and upload that instead.")
+    legacy = ".xls" if ext == "xlsx" else ".doc"
+    return (f"'{display}' is in the older {legacy} format, which can't be read even though it is "
+            f"named .{ext}. Open it and use Save As to save a real .{ext}, then upload that.")
 
 
 def enforce_type_and_archive(display: str, data: bytes) -> None:
     """Refuse a DISGUISED type (415) or a zip/decompression bomb (413), before parse. An unsupported
     extension is left to the downstream parse-fail path (feat-032 marks it 'failed')."""
+    # fixB/m6: run BEFORE check_type, so the honest explanation wins over the forgery accusation for
+    # the OLE2 cases. Everything else falls through to check_type unchanged.
+    container = office_container_reason(display, data)
+    if container:
+        raise HTTPException(status_code=415, detail={
+            "error": "unsupported upload", "detail": container, "filename": display})
     reason = guards.check_type(display, data)
     if reason:
         raise HTTPException(status_code=415, detail={

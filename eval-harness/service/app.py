@@ -138,8 +138,18 @@ def _run_events(sit: live_input.LiveSituation) -> tuple[Iterator[dict[str, Any]]
     try:
         brain = brain_factory.make_brain(case, kind)
     except RuntimeError as e:
+        # 🔴 `msg` must be bound HERE, not read inside the generator. Python 3 implicitly deletes
+        # the `except ... as e` name when the except block exits, and this generator is lazy — it
+        # first runs when the SSE layer iterates it, which is long after that. Reading `str(e)`
+        # from inside therefore raised `NameError: cannot access free variable 'e'`, so the branch
+        # whose entire job is "surface brain-config errors as a clean error event rather than a
+        # 500" did the exact opposite of its own docstring: the manager got a broken stream.
+        # This fires on the most likely production failure of all — LLM key missing/expired/over
+        # budget — i.e. precisely when a clear message matters most.
+        msg = str(e)
+
         def _err() -> Iterator[dict[str, Any]]:
-            yield {"type": "error", "error": str(e),
+            yield {"type": "error", "error": msg,
                    "hint": "set AVERY_BRAIN + the matching key, or use AVERY_BRAIN=mock."}
         return _err(), case
 
