@@ -1,5 +1,5 @@
 import { useEffect, useRef, type ChangeEvent } from 'react'
-import { useLite } from './store'
+import { loadStoredContextId, useLite } from './store'
 import {
   ONBOARD_STEPS,
   PLAYBOOK_CATALOG,
@@ -34,6 +34,16 @@ import { LiteModal } from './LiteModal'
 
 const ACCEPT = '.pdf,.docx,.doc,.xlsx,.xls,.csv,.md,.markdown,.txt'
 
+// 07-20 · 返回客户判定（Danny 拍板「已经有数据就不弹」）——模块顶层只读一次 localStorage
+// 的 contextId 锚点，不做响应式订阅。同 store.ts 自己的 `restoredContextId` 一个套路：
+// 这个常量在模块求值时（页面这次加载的一瞬间，早于任何一次 React 渲染）就已经定死，
+// 所以 `open` 从第一帧起就已经把它算进去了——不存在"restoreSession 那个网络请求回来
+// 之前先露一下脸、拿到结果才关掉"的窗口。若改成响应式读 useLite 的 contextId，向导
+// 自己的①上传步一成功、contextId 落地，会在全新用户正走②③④步时被这条新规则回头
+// 把向导关掉——用一次性快照就没有这个问题（详见 onboardStore.ts selectWizardOpen 上的
+// 调用方契约注释）。
+const hadContextOnLoad = loadStoredContextId() !== null
+
 function fill(template: string, vars: Record<string, string | number>): string {
   return template.replace(/\{(\w+)\}/g, (_, k: string) => String(vars[k] ?? ''))
 }
@@ -60,8 +70,10 @@ export function OnboardWizard() {
   const step = useOnboard((s) => s.step)
   const status = useOnboard((s) => s.status)
   // 向导是否该露面（原先由 Lite2App 条件挂载判定；feat-052 移进来——组件常驻挂载，
-  // 用 open 开关，出场动画才有机会跑完）。
-  const open = useOnboard(selectWizardOpen)
+  // 用 open 开关，出场动画才有机会跑完）。07-20 起再叠一层：hasStoredContext
+  // （hadContextOnLoad）由这里传给 selectWizardOpen——老客户已经有数据就不自动弹
+  // （Danny 拍板，见 onboardStore.ts 的选择器注释）。
+  const open = useOnboard((s) => selectWizardOpen(s, hadContextOnLoad))
   const begin = useOnboard((s) => s.begin)
   const goStep = useOnboard((s) => s.goStep)
   const pause = useOnboard((s) => s.pause)

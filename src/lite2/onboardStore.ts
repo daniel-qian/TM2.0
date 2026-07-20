@@ -170,6 +170,28 @@ export const useOnboard = create<OnboardState>((set, get) => {
 })
 
 // 向导是否应该在壳里挂载（Lite2App 消费）——首访或续进度中，且本会话没被 × 掉。
-export function selectWizardOpen(s: OnboardState): boolean {
+//
+// 07-20 · Danny 拍板「已经有数据就不弹」，不是「点过一次就不弹」（bug：老客户上周传过
+// 数据，今天重进照样先吃一个"开始上手"挡住自己的数据——begin() 在向导**首次挂载**
+// 时就把 unseen 落成 in-progress 并持久化，此后每次刷新 pausedThisSession 都重置为
+// false，于是 status==='in-progress' && !pausedThisSession 永远为真，跟有没有数据
+// 毫无关系）。
+//
+// hasStoredContext 由调用方（OnboardWizard）传入，不在本文件里直接 import useLite——
+// 本 store 刻意独立于 store.ts（见文件头注释的"减冲突面"切分原则），调用方那边已经在读
+// useLite 了（上传接线那条路径），让它多带一个算好的布尔值过来，比在这儿新开一条跨
+// store 依赖更便宜、冲突面更小。
+//
+// 🔴 调用方契约：hasStoredContext 必须是"这次页面加载一开始"就定下的快照（同 store.ts
+// 自己 restoredContextId 的"只读一次、不订阅"套路），不能是响应式的当前 contextId——
+// 否则向导自己①上传步一成功、contextId 落地，会在用户正走②③④步时被这条新规则回头
+// 把向导关掉（好心办坏事：一个全新用户会被自己刚完成的动作误伤）。
+//
+// 不看 status 是 unseen 还是 in-progress 就直接拦：老客户完全可能从没点开过向导本身
+// （数据是从别的路径——UploadPanel——传的），这种人 persisted status 仍是 unseen；
+// 也可能上周点开过一次又 × 掉，这种人 status 早被 begin() 落成 in-progress。两种人
+// 的共同点只有一个——"已经有数据"——这正是 Danny 拍板要认的那把尺子。
+export function selectWizardOpen(s: OnboardState, hasStoredContext: boolean): boolean {
+  if (hasStoredContext) return false
   return (s.status === 'unseen' || s.status === 'in-progress') && !s.pausedThisSession
 }
