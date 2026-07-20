@@ -169,6 +169,131 @@ def test_owner_token_still_reads_a_claimed_context(client):
     assert res.status_code == 200
 
 
+# ── the ask surface: the same account branch, or "sign in elsewhere" stops at asking ───────────
+#
+# 07-20 生产实测（progress.md Blockers 3）：换设备登录后团队 / 笔记 / 文件全 200，一发问就
+# 「找不到这家公司」。根因是五个 manager 端点只解析 owner_token，压根不收 X-Avery-Account
+# ——而换设备的浏览器手上没有 owner_token（那枚 token 服务端只返一次，留在上传那台机器上）。
+#
+# 🔴 为什么读端点全绿也盖不住这条：`_read_paths` 一个 /ask 都没有。一整条 manager 生命周期
+# （建/改/发/查/撤）此前从未被账号支路的任何一条测试行使过——门看的那一屏，恰好是缺陷不在
+# 的那一屏，与 07-20 纯度门那条同一结构类。
+
+def _draft_body(cid: str) -> dict:
+    """一份干净的 ask 草稿（问的是工作本身，永不给人打分——两层红线门照跑）。"""
+    return {
+        "company_context_id": cid,
+        "questions": [
+            {"kind": "scale",
+             "text": "How confident are you that the pilot launch lands on the current date?"},
+        ],
+        "recipients": [{"id": "p1", "name": "Lena Park"}],
+        "comment_prompt": "Anything to add, in one line?",
+        "thread_hint": "the pilot launch date",
+    }
+
+
+def test_signed_in_account_alone_drives_the_whole_ask_lifecycle(client):
+    """换设备登录后「快问一句」必须能用：账号 header 一个人（**没有 owner_token**）走完
+    建 → 改 → 发 → 查 → 撤。这正是读端点已经做到、而 ask 端点做不到的那件事。"""
+    cid = _ingest(client, _acct(TOKEN_A))["context_id"]
+    acct = _acct(TOKEN_A)
+
+    created = client.post("/ask", json=_draft_body(cid), headers=acct)
+    assert created.status_code == 200, \
+        f"POST /ask with the account header alone -> {created.status_code} {created.text[:200]}"
+    ask_id = created.json()["id"]
+
+    saved = client.post(f"/ask/{ask_id}", json=_draft_body(cid), headers=acct)
+    assert saved.status_code == 200, f"POST /ask/{{id}} -> {saved.status_code} {saved.text[:200]}"
+
+    shared = client.post(f"/ask/{ask_id}/share", headers=acct)
+    assert shared.status_code == 200, f"share -> {shared.status_code} {shared.text[:200]}"
+
+    got = client.get(f"/ask/{ask_id}", headers=acct)
+    assert got.status_code == 200, f"GET /ask/{{id}} -> {got.status_code} {got.text[:200]}"
+
+    revoked = client.post(f"/ask/{ask_id}/revoke", headers=acct)
+    assert revoked.status_code == 200, f"revoke -> {revoked.status_code} {revoked.text[:200]}"
+    assert revoked.json()["status"] == "revoked"
+
+
+def test_another_account_cannot_touch_my_ask_on_any_path(client):
+    """账号支路只许**加宽**到自己名下的公司。B 手持完全有效的会话，对 A 的 ask 每条路径都
+    404（与未知 id 同一个 404，不做存在性预言机）。"""
+    cid_a = _ingest(client, _acct(TOKEN_A))["context_id"]
+    ask_id = client.post("/ask", json=_draft_body(cid_a),
+                         headers=_acct(TOKEN_A)).json()["id"]
+
+    b = _acct(TOKEN_B)
+    assert client.post("/ask", json=_draft_body(cid_a), headers=b).status_code == 404
+    assert client.post(f"/ask/{ask_id}", json=_draft_body(cid_a), headers=b).status_code == 404
+    assert client.post(f"/ask/{ask_id}/share", headers=b).status_code == 404
+    assert client.get(f"/ask/{ask_id}", headers=b).status_code == 404
+    assert client.post(f"/ask/{ask_id}/revoke", headers=b).status_code == 404
+
+
+def test_a_valid_session_does_not_unlock_asks_on_an_anonymous_context(client):
+    """匿名 context 不归任何账号 —— 登录本身不该把它变成你的，ask 面同读面一样。"""
+    payload = _ingest(client)                      # 无账号 header -> 匿名
+    cid, token = payload["context_id"], payload["owner_token"]
+    ask_id = client.post("/ask", json=_draft_body(cid),
+                         headers={"X-Avery-Token": token}).json()["id"]
+
+    assert client.post("/ask", json=_draft_body(cid), headers=_acct(TOKEN_A)).status_code == 404
+    assert client.get(f"/ask/{ask_id}", headers=_acct(TOKEN_A)).status_code == 404
+
+
+def test_owner_token_alone_still_drives_the_ask_lifecycle(client):
+    """游客路径一个字不许动：没有任何账号 header 时，owner_token 照旧走完整条生命周期。
+    这是 `?v=2&mode=live` 直链所有人验的那条路。"""
+    payload = _ingest(client)
+    cid, token = payload["context_id"], payload["owner_token"]
+    tok = {"X-Avery-Token": token}
+
+    ask_id = client.post("/ask", json=_draft_body(cid), headers=tok).json()["id"]
+    assert client.post(f"/ask/{ask_id}", json=_draft_body(cid), headers=tok).status_code == 200
+    assert client.post(f"/ask/{ask_id}/share", headers=tok).status_code == 200
+    assert client.get(f"/ask/{ask_id}", headers=tok).status_code == 200
+    assert client.post(f"/ask/{ask_id}/revoke", headers=tok).status_code == 200
+
+
+def test_the_ask_account_token_in_the_url_does_not_authorize(client):
+    """🔴 凭据只走 header。把 access token 塞进 query 必须一无所获（与 feat-053 读面同一条
+    不变量，此处对 ask 面重申——两处各有一份，删掉任何一处都不该让另一处变绿）。"""
+    cid = _ingest(client, _acct(TOKEN_A))["context_id"]
+    res = client.post(f"/ask?account={TOKEN_A}", json=_draft_body(cid))
+    assert res.status_code == 404
+
+
+def test_every_owner_token_endpoint_also_accepts_the_account_header(client):
+    """结构门：**凡是收 owner_token 的端点，必须同时收 X-Avery-Account。**
+
+    Blockers 3 不是一个端点漏了，是一整族（五个）漏了两天——因为账号支路是逐个端点手写的，
+    而"有没有写"这件事此前只能靠人逐个数。这条用 FastAPI 的路由签名把它变成机器判据：
+    新加第六个 manager 端点时忘了接账号支路，这里当场红，不必等下一个换设备的客户来报。
+
+    判据取 `x_avery_token`（owner_token 的 header 参数名）而不是路径前缀——按 `/ask` 之类的
+    前缀列白名单，正是"列举会漂"那条老账：加一个新前缀，门自己就绕过去了。
+    """
+    import inspect
+    from service.app import app
+
+    missing: list[str] = []
+    for route in app.routes:
+        endpoint = getattr(route, "endpoint", None)
+        if endpoint is None:
+            continue
+        params = inspect.signature(endpoint).parameters
+        if "x_avery_token" not in params:
+            continue        # 不是 owner_token 门后的端点（H5 走 share_token，不在此列）
+        if "x_avery_account" not in params:
+            missing.append(f"{sorted(getattr(route, 'methods', []) or [])} {route.path}")
+    assert not missing, (
+        "这些端点收 owner_token 却不收 X-Avery-Account —— 换设备登录的经理到这里就会 404：\n  "
+        + "\n  ".join(missing))
+
+
 def test_account_layer_is_dormant_when_supabase_is_unconfigured(monkeypatch):
     """Keys absent => the layer switches OFF rather than failing: /account/status says so, account
     headers are ignored, and the guest path is untouched. A deploy with no Supabase project still

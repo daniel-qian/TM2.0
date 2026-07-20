@@ -11,6 +11,11 @@ Two token worlds, STRICTLY apart (stage-C docking contract):
   * owner_token — the MANAGER credential. Header only (X-Avery-Token / Bearer), never a URL.
     Every /ask endpoint requires it; unknown ask id and wrong/missing token raise the SAME 404
     ("unknown ask id: …") so the surface never confirms an ask exists (no enumeration oracle).
+    feat-053 adds a SECOND way to satisfy that same gate: `X-Avery-Account` (a verified Supabase
+    user who OWNS this context). It only ever WIDENS — every failure still lands on the identical
+    404. Without it, "sign in on a new device" reads the team/notes/files fine and then 404s the
+    moment you ask a question: the owner_token is minted once, on the machine that uploaded, so a
+    second device has no way to hold it. (07-20 生产实测；progress.md Blockers 3.)
   * share_token — the EMPLOYEE credential, minted at /ask/{id}/share (secrets.token_urlsafe(32),
     one per recipient — PRD Q4 one-person-one-link). It rides the /r/{token} URL BY DESIGN: the
     only login-free path through an IM webview. It reads/writes exactly ONE recipient's answer.
@@ -42,7 +47,7 @@ from avery.ingest.ask import (
 )
 from avery.ingest.registry import active_registry
 
-from . import brain_factory, llm_budget
+from . import account, brain_factory, llm_budget
 from .ingest_api import authorize_context, extract_owner_token
 
 logger = logging.getLogger(__name__)
@@ -82,16 +87,23 @@ class AskBody(BaseModel):
 
 # ── the manager-side auth seam (owner_token, 404-on-mismatch, no oracle) ────────────────────────
 
-def authorize_ask(reg, ask_id: str, token: str | None) -> Ask:
+def authorize_ask(reg, ask_id: str, token: str | None,
+                  account_user_id: str | None = None) -> Ask:
     """Resolve an ask the caller may operate on, or raise 404. Unknown id AND wrong/missing
     owner_token raise the IDENTICAL 404 (never the context-flavored one — that would confirm the
-    ask exists and leak its context id). Reuses `authorize_context` (constant-time compare)."""
+    ask exists and leak its context id). Reuses `authorize_context` (constant-time compare).
+
+    `account_user_id` is an ALREADY-VERIFIED Supabase user id (verification lives in
+    service/account.py; this function trusts its caller did that) — passed straight through to
+    `authorize_context`, which owns the single decision of "does this user own this context".
+    Ownership is NEVER re-derived here: two places deciding the same thing is how they drift apart.
+    """
     unknown = HTTPException(status_code=404, detail=f"unknown ask id: {ask_id}")
     ask = reg.get_ask(ask_id)
     if ask is None:
         raise unknown
     try:
-        authorize_context(reg, ask.context_id, token)
+        authorize_context(reg, ask.context_id, token, account_user_id)
     except HTTPException:
         raise unknown from None
     return ask
@@ -296,7 +308,8 @@ def _gate_or_422(ask: Ask) -> None:
 @router.post("/ask")
 def create_ask(body: AskBody,
                x_avery_token: str | None = Header(None),
-               authorization: str | None = Header(None)) -> dict:
+               authorization: str | None = Header(None),
+               x_avery_account: str | None = Header(None)) -> dict:
     """Create a quick-ask DRAFT. Auth first (owner_token against the context — 404 on mismatch),
     then questions: manager-provided ones are taken verbatim; an empty body gets 1..3 server-
     generated ones (LLM behind the spend gate, template fallback — generation_mode says which).
@@ -304,7 +317,8 @@ def create_ask(body: AskBody,
     The id is SERVER-minted (a client-suggested id is ignored — no cross-tenant id squatting)."""
     reg = active_registry()
     authorize_context(reg, body.company_context_id,
-                      extract_owner_token(x_avery_token, authorization))
+                      extract_owner_token(x_avery_token, authorization),
+                      account.resolve_account(x_avery_account))
     created = now_iso()
     ask = _build_ask(body, ask_id=new_ask_id(), created_at=created,
                      expires_at=default_expiry(created))
@@ -319,11 +333,13 @@ def create_ask(body: AskBody,
 @router.post("/ask/{ask_id}")
 def save_ask(ask_id: str, body: AskBody,
              x_avery_token: str | None = Header(None),
-             authorization: str | None = Header(None)) -> dict:
+             authorization: str | None = Header(None),
+             x_avery_account: str | None = Header(None)) -> dict:
     """Save an EDIT (re-validated through the same doors). Only a DRAFT is editable — once shared
     the questions are out the door and frozen (409)."""
     reg = active_registry()
-    ask = authorize_ask(reg, ask_id, extract_owner_token(x_avery_token, authorization))
+    ask = authorize_ask(reg, ask_id, extract_owner_token(x_avery_token, authorization),
+                        account.resolve_account(x_avery_account))
     if effective_status(ask) != "draft":
         raise HTTPException(status_code=409, detail={
             "error": "not editable",
@@ -341,13 +357,15 @@ def save_ask(ask_id: str, body: AskBody,
 @router.post("/ask/{ask_id}/share")
 def share_ask(ask_id: str,
               x_avery_token: str | None = Header(None),
-              authorization: str | None = Header(None)) -> dict:
+              authorization: str | None = Header(None),
+              x_avery_account: str | None = Header(None)) -> dict:
     """Mint ONE unguessable share token per recipient (PRD Q4) and return the full links. The
     manager pastes them by hand (share = the human gate). Idempotent on a live shared ask — a
     double click must never invalidate links already pasted into an IM. Revoked/expired/closed
     asks refuse (409)."""
     reg = active_registry()
-    ask = authorize_ask(reg, ask_id, extract_owner_token(x_avery_token, authorization))
+    ask = authorize_ask(reg, ask_id, extract_owner_token(x_avery_token, authorization),
+                        account.resolve_account(x_avery_account))
     eff = effective_status(ask)
     if eff in ("shared", "collecting"):
         return _ask_payload(ask)   # idempotent: same tokens, same links
@@ -364,22 +382,26 @@ def share_ask(ask_id: str,
 @router.get("/ask/{ask_id}")
 def get_ask(ask_id: str,
             x_avery_token: str | None = Header(None),
-            authorization: str | None = Header(None)) -> dict:
+            authorization: str | None = Header(None),
+            x_avery_account: str | None = Header(None)) -> dict:
     """Manager pull-refresh (PRD Q7): status + receipts (+ the qualitative multi-summary once all
     replies are in). Status is the SERVER-effective word — collecting/closed/expired derive here."""
     reg = active_registry()
-    ask = authorize_ask(reg, ask_id, extract_owner_token(x_avery_token, authorization))
+    ask = authorize_ask(reg, ask_id, extract_owner_token(x_avery_token, authorization),
+                        account.resolve_account(x_avery_account))
     return _ask_payload(ask)
 
 
 @router.post("/ask/{ask_id}/revoke")
 def revoke_ask(ask_id: str,
                x_avery_token: str | None = Header(None),
-               authorization: str | None = Header(None)) -> dict:
+               authorization: str | None = Header(None),
+               x_avery_account: str | None = Header(None)) -> dict:
     """Void the ask: every un-answered link flips to the revoked page. Idempotent. A CLOSED ask
     (all evidence in) refuses — a receipt cannot be un-happened (PRD Q8: evidence is stable)."""
     reg = active_registry()
-    ask = authorize_ask(reg, ask_id, extract_owner_token(x_avery_token, authorization))
+    ask = authorize_ask(reg, ask_id, extract_owner_token(x_avery_token, authorization),
+                        account.resolve_account(x_avery_account))
     eff = effective_status(ask)
     if eff == "revoked":
         return _ask_payload(ask)
