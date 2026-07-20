@@ -158,6 +158,14 @@ RULES: tuple[Rule, ...] = (
     Rule("R-NO-EVIDENCE", NEEDS_CONFIRMATION,
          "没读到状态、阻塞、进度、到期日中的任何一项——信息不足，不能当作没风险",
          "（全部字段缺失）"),
+    # 🔴 对抗复审 fixB2：`grade_project()` 真跑到"一条规则都没命中"时的手动兜底（decision_
+    # grading.py 的 else 分支）此前直接借用了上面这条 R-NO-EVIDENCE 的标题——但触发场景往往
+    # 恰恰是「字段没有全缺」（如 progress=80、status 是抽取层没归一的词），于是卡面印着
+    # 「80%」，理由却写「没读到...进度中的任何一项」，自相矛盾。等级判断没错（仍是需确认，
+    # 不是可推进）；这条规则只是把那句话换成不借别人名字的措辞。
+    Rule("R-UNCLASSIFIED", NEEDS_CONFIRMATION,
+         "读到的字段没有落在任何一条现有规则的判据里，无法直接归类，需要人工确认",
+         "（未命中任何规则）"),
 
     # ---- 可推进 ----
     Rule("R-DONE", CAN_PROCEED, "项目自报已完成，且无风险信号", "status"),

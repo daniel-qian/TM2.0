@@ -53,6 +53,7 @@
 | `R-SIGNAL-WATCH` | 关联信号提到延期 / 返工 / 缺人等待办 | signals + blockers |
 | `R-SELF-REPORT-MISMATCH` | 自报「正常」但挂着未解阻塞（自述与信号不一致） | status + blockers |
 | `R-NO-EVIDENCE` | 没读到状态、阻塞、进度、到期日中的任何一项——信息不足，不能当作没风险 | （全部字段缺失） |
+| `R-UNCLASSIFIED` | 读到的字段没有落在任何一条现有规则的判据里，无法直接归类，需要人工确认 | （未命中任何规则） |
 
 ### 可推进
 
