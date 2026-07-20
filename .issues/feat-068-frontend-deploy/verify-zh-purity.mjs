@@ -260,18 +260,28 @@ const pageErrors = []
 //      · openDetail 拿到真实的 project id，返回值看着完全正常；
 //      · 而 innerText 刮的是 v02 的 DOM。
 //    → 退出码 0、报告可信、结论是错的。改这一行时请连同本段注释一起读。
+//
+// ⚠️ 07-20 修门：下面三处实际调用已从 `__AVERY_LITE__` 换成 **`__liteStore`**（同
+//    verify-null-auto/verify-status-truth 的先例）。`__AVERY_LITE__` 是 `import.meta.env.DEV`
+//    门控的，**`vite build` 会把整段剪掉**——即便 `--mode development` 也一样（实测 dist 里
+//    grep 不到这个名字）。而本仓的共享 node_modules 缺 `@babel/*`，`vite dev` 起不来，门只能
+//    跑在 build+preview 上：于是这道门在当前环境里是**崩**（TypeError: Cannot read properties
+//    of undefined），不是失败——一个崩掉的门和一个没写的门，作为质量信号是同一个东西。
+//    `__liteStore`（src/lite/store.ts）与 `__lite2Store` 是无条件挂载的缝，两个环境都在。
+//    上面那段「挂不挂与渲染哪张壳无关」的机制说明**对 `__liteStore` 同样成立**，别因为换了
+//    名字就以为那个陷阱没了：`?v=1` 这个参数仍然是取到 v01 面的唯一办法。
 const p1 = await (await browser.newContext({ viewport: { width: 1280, height: 900 } })).newPage()
 p1.on('pageerror', (e) => pageErrors.push(`v01: ${e.message}`))
 await p1.goto(`${UI}/?v=1&mode=live&lang=zh`, { waitUntil: 'networkidle' })
 await p1.waitForTimeout(600)
 await p1.evaluate(async (t) => {
-  await window.__AVERY_LITE__.getState().uploadFiles([new File([t], 'w29.md', { type: 'text/markdown' })])
+  await window.__liteStore.getState().uploadFiles([new File([t], 'w29.md', { type: 'text/markdown' })])
   await new Promise((r) => setTimeout(r, 2400))
 }, DOC)
 
 const v01 = { 团队屏: latinHits(await p1.evaluate(() => document.body.innerText)) }
 const opened = await p1.evaluate(() => {
-  const st = window.__AVERY_LITE__.getState()
+  const st = window.__liteStore.getState()
   const p = (st.team?.projects ?? [])[0]
   if (!p) return null
   st.openDetail('project', p.id)
@@ -281,7 +291,7 @@ await p1.waitForTimeout(700)
 v01['项目详情浮层'] = latinHits(await p1.evaluate(() => document.body.innerText))
 // feat-069：把 v01 也推进到"跑过一次"的状态再采（v01 的终端恒可见，不需要展开）。
 console.log('\n  ── v01 议事室：真跑三段流 ──')
-const room1 = await sampleRoomTranscript(p1, '__AVERY_LITE__', { expandRaw: false })
+const room1 = await sampleRoomTranscript(p1, '__liteStore', { expandRaw: false })
 Object.assign(v01, room1.surfaces)
 
 const n1 = report(`v01（?v=1 逃生门）· 打开的项目 ${JSON.stringify(opened)}`, v01)
