@@ -49,14 +49,17 @@ gate, and the zip-bomb gate (all feat-039, all thoroughly tested in test_upload_
 do NOT catch any of these — the files here are well under every byte/count cap and pass every
 magic-byte check, because the corruption is *inside* a structurally-valid container.
 
-STATUS: every crash test below is `xfail(strict=True)` — a BORN-RED gate, not a passing assertion.
-`strict=True` means the moment `avery/ingest/parse.py` is fixed to translate these into `ParseError`
-(the natural fix: wrap each parser body, not just its import, and raise `ParseError` from the
-library exception), these tests flip to an UNEXPECTED PASS and the suite goes red until the xfail
-markers are deleted — which is the intended forcing function, not a bug in the test.
+STATUS (2026-07-20): FIXED and now GREEN. These began as `xfail(strict=True)` born-red gates; the
+fix landed in `avery/ingest/parse.py` — each of `_parse_pdf`/`_parse_docx`/`_parse_xlsx`/`_parse_csv`
+now wraps its parser body (not just the library import) and re-raises any library exception as
+`ParseError`, so a structurally-valid-but-internally-corrupt file is contained to a per-file
+`failed` (feat-032) instead of a bare HTTP 500 that also sinks the rest of the batch. `_parse_csv`
+additionally lifts stdlib `csv.field_size_limit()` to the per-file upload cap so a legitimate large
+cell parses. The strict-xfail forcing function did its job (unexpected-pass → markers removed); these
+now stand as plain regression tests that go red again if anyone reintroduces an uncaught parser path.
 
-The two non-xfail tests at the bottom are the safety-net check: even mid-crash, the registry is
-never left holding a half-built context, and the process is not otherwise wedged.
+The two tests at the bottom are the safety-net check: even mid-crash, the registry is never left
+holding a half-built context, and the process is not otherwise wedged.
 """
 from __future__ import annotations
 
@@ -112,12 +115,6 @@ def _registry_size() -> int:
 TRUNCATED_PDF = b"%PDF-1.7\n1 0 obj\n<< garbage not a real pdf object stream at all, no xref, no EOF"
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "avery/ingest/parse.py:_parse_pdf (~line 648) does not wrap PdfReader(...) — a corrupt/"
-    "truncated PDF raises pypdf.errors.PdfStreamError uncaught, past ingest_paths's ParseError-only "
-    "catch and past ingest_api.py's ValueError-only catch, landing on a bare HTTP 500 instead of a "
-    "clean per-file failure. Fix: catch the parser's own exceptions in _parse_pdf and re-raise as "
-    "ParseError, exactly as the 'library not installed' branch already does."))
 def test_truncated_pdf_yields_a_clean_failure_not_a_500(client):
     r = client.post("/ingest", files=[
         ("files", ("weekly.pdf", TRUNCATED_PDF, "application/pdf"))])
@@ -142,12 +139,6 @@ def _zip_with_files(entries: dict[str, str]) -> bytes:
 NOT_AN_OFFICE_DOC = _zip_with_files({"random.txt": "this is not an office document at all"})
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "avery/ingest/parse.py:_parse_xlsx (~line 682) does not wrap load_workbook(...) — a syntactically "
-    "valid zip that is missing the OOXML '[Content_Types].xml' part raises KeyError uncaught, landing "
-    "on a bare HTTP 500. The upload_guard magic-byte gate only checks the FIRST FOUR BYTES (PK\\x03\\x04"
-    "); it has no opinion on whether the archive is actually an xlsx, so this sails past guards.py "
-    "entirely and hits the parser raw."))
 def test_valid_zip_that_is_not_really_an_xlsx_yields_a_clean_failure_not_a_500(client):
     r = client.post("/ingest", files=[
         ("files", ("book.xlsx", NOT_AN_OFFICE_DOC,
@@ -157,10 +148,6 @@ def test_valid_zip_that_is_not_really_an_xlsx_yields_a_clean_failure_not_a_500(c
         f"{r.status_code} {r.text[:200]}")
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "avery/ingest/parse.py:_parse_docx (~line 666) does not wrap docx.Document(...) — the SAME "
-    "underlying KeyError as the xlsx case above (python-docx also looks for '[Content_Types].xml' "
-    "and does not catch its own absence), landing on a bare HTTP 500."))
 def test_valid_zip_that_is_not_really_a_docx_yields_a_clean_failure_not_a_500(client):
     r = client.post("/ingest", files=[
         ("files", ("resume.docx", NOT_AN_OFFICE_DOC,
@@ -180,11 +167,6 @@ CORRUPT_INTERNAL_XML_XLSX = _zip_with_files({
 })
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "Same root cause as the two tests above (parse.py:_parse_xlsx, ~line 682): even when the "
-    "'[Content_Types].xml' part IS present, malformed internal XML makes openpyxl/lxml raise "
-    "lxml.etree.XMLSyntaxError, which is equally uncaught -> bare HTTP 500. A half-repaired or "
-    "partially-corrupted xlsx (a very plausible real-world 7/25 upload) hits this exact path."))
 def test_xlsx_with_malformed_internal_xml_yields_a_clean_failure_not_a_500(client):
     r = client.post("/ingest", files=[
         ("files", ("book2.xlsx", CORRUPT_INTERNAL_XML_XLSX, "application/octet-stream"))])
@@ -203,12 +185,6 @@ def test_xlsx_with_malformed_internal_xml_yields_a_clean_failure_not_a_500(clien
 _BIG_CELL = "A" * 200_000   # > csv.field_size_limit() default (131072); the WHOLE FILE is ~200 KB
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "avery/ingest/parse.py:_parse_csv (~line 700) calls csv.reader(...) unguarded. A single field "
-    "over Python's stdlib csv.field_size_limit() (131072 bytes, unrelated to any AVERY_MAX_* cap) "
-    "raises _csv.Error uncaught -> bare HTTP 500, even though the WHOLE FILE is a ~200 KB upload that "
-    "passes AVERY_MAX_UPLOAD_BYTES (8 MiB default) with enormous headroom. This is a size limit the "
-    "size gate cannot see, because it is per-FIELD, not per-file."))
 def test_oversized_csv_field_yields_a_clean_failure_not_a_500(client):
     csv_body = f"name,note\nAlice,{_BIG_CELL}\n".encode()
     r = client.post("/ingest", files=[("files", ("big.csv", csv_body, "text/csv"))])
@@ -217,9 +193,6 @@ def test_oversized_csv_field_yields_a_clean_failure_not_a_500(client):
         f"{r.status_code} {r.text[:200]}")
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "Same root cause via the TSV branch of _parse_csv (parse.py:715, delimiter='\\t') — the field-"
-    "size guard is missing regardless of delimiter."))
 def test_oversized_tsv_field_yields_a_clean_failure_not_a_500(client):
     tsv_body = f"name\tnote\nAlice\t{_BIG_CELL}\n".encode()
     r = client.post("/ingest", files=[("files", ("big.tsv", tsv_body, "text/tab-separated-values"))])
@@ -239,14 +212,6 @@ GOOD_FILE = (b"Weekly note: the onboarding backlog keeps landing on one squad an
             b"rebalancing across the pod. This line is long enough to chunk cleanly on its own.\n")
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "Collateral damage from the same root cause: _extract_and_ingest() (service/ingest_api.py:279-292) "
-    "runs parse+extract+registry.put() as ONE synchronous unit inside run_in_threadpool. When the "
-    "poison file's parser raises uncaught, the exception aborts that whole unit BEFORE registry.put() "
-    "is ever reached — so the perfectly good file in the same batch is ALSO never registered, and no "
-    "owner_token is minted for the caller to retry with. feat-032's per-file 'failed' isolation "
-    "(pipeline.py:164-168, tested by test_undecodable_file_is_reported_as_failed_not_silently_ingested "
-    "in test_file_truth_encoding.py for the ParseError case) does not extend to this failure class."))
 def test_mixed_batch_poison_file_does_not_destroy_the_good_file(client):
     r = client.post("/ingest", files=[
         ("files", ("good.txt", GOOD_FILE, "text/plain")),
