@@ -645,16 +645,28 @@ def _parse_pdf(data: bytes) -> str:
         from pypdf import PdfReader
     except Exception as e:  # pragma: no cover - env without pypdf
         raise ParseError(f"pypdf not available for PDF parse: {e}")
-    reader = PdfReader(io.BytesIO(data))
-    # feat-039 (readiness §2-D): cap page count before extracting — a pathological PDF with a huge /
-    # cyclic page tree is a CPU/RAM DoS. `len(reader.pages)` reads the (cheap) page tree; refuse over
-    # the cap rather than iterate a hostile document. (A true wall-clock timeout is not portable to
-    # Windows dev; the page cap is the deterministic, cross-platform guard.)
     from . import guards
-    n_pages = len(reader.pages)
-    if n_pages > guards.max_pdf_pages():
-        raise ParseError(f"PDF has {n_pages} pages (limit {guards.max_pdf_pages()}) — refused")
-    return "\n\n".join((page.extract_text() or "") for page in reader.pages)
+    # A file can clear the magic-byte gate (`%PDF-`) and still be truncated or internally corrupt.
+    # pypdf then raises its OWN exception (PdfStreamError/KeyError/...), which is NOT a ParseError, so
+    # it skips past `ingest_paths`'s `except ParseError` and reaches the handler as a bare HTTP 500 —
+    # and because ingest is one synchronous unit, it takes the whole batch (incl. good files) down
+    # with it. Contain every library failure to a per-file ParseError so feat-032 can mark just this
+    # file `failed` and ingest the rest. ParseError we raise ourselves (page cap) must pass through.
+    try:
+        reader = PdfReader(io.BytesIO(data))
+        # feat-039 (readiness §2-D): cap page count before extracting — a pathological PDF with a huge
+        # / cyclic page tree is a CPU/RAM DoS. `len(reader.pages)` reads the (cheap) page tree; refuse
+        # over the cap rather than iterate a hostile document. (A true wall-clock timeout is not
+        # portable to Windows dev; the page cap is the deterministic, cross-platform guard.)
+        n_pages = len(reader.pages)
+        if n_pages > guards.max_pdf_pages():
+            raise ParseError(f"PDF has {n_pages} pages (limit {guards.max_pdf_pages()}) — refused")
+        return "\n\n".join((page.extract_text() or "") for page in reader.pages)
+    except ParseError:
+        raise
+    except Exception as e:
+        raise ParseError(f"could not read this file as a PDF ({type(e).__name__}) — it is most likely "
+                         f"corrupt or truncated. It has NOT been read.")
 
 
 def _parse_docx(data: bytes) -> str:
@@ -663,14 +675,24 @@ def _parse_docx(data: bytes) -> str:
     except Exception as e:  # pragma: no cover - env without python-docx
         raise ParseError(f"python-docx not available for docx parse: {e}")
     _defuse_xml()
-    doc = docx.Document(io.BytesIO(data))
-    parts = [p.text for p in doc.paragraphs]
-    for tbl in doc.tables:
-        for row in tbl.rows:
-            cells = [c.text.strip() for c in row.cells]
-            if any(cells):
-                parts.append(" | ".join(cells))
-    return "\n".join(parts)
+    # A renamed/corrupt/password-protected .docx (a zip missing [Content_Types].xml, malformed XML,
+    # OLE2 wrapper) makes python-docx raise KeyError/PackageNotFoundError/etc. — not a ParseError.
+    # Contain it so the batch survives (see _parse_pdf for the full rationale).
+    try:
+        doc = docx.Document(io.BytesIO(data))
+        parts = [p.text for p in doc.paragraphs]
+        for tbl in doc.tables:
+            for row in tbl.rows:
+                cells = [c.text.strip() for c in row.cells]
+                if any(cells):
+                    parts.append(" | ".join(cells))
+        return "\n".join(parts)
+    except ParseError:
+        raise
+    except Exception as e:
+        raise ParseError(f"could not read this file as a Word document ({type(e).__name__}) — it is "
+                         f"most likely corrupt, password-protected, or not really a .docx. It has NOT "
+                         f"been read.")
 
 
 def _parse_xlsx(data: bytes) -> str:
@@ -679,15 +701,24 @@ def _parse_xlsx(data: bytes) -> str:
     except Exception as e:  # pragma: no cover - env without openpyxl
         raise ParseError(f"openpyxl not available for xlsx parse: {e}")
     _defuse_xml()
-    wb = load_workbook(io.BytesIO(data), read_only=True, data_only=True)
-    out: list[str] = []
-    for ws in wb.worksheets:
-        out.append(f"# sheet: {ws.title}")
-        for row in ws.iter_rows(values_only=True):
-            cells = ["" if v is None else str(v) for v in row]
-            if any(c.strip() for c in cells):
-                out.append(" | ".join(cells))
-    return "\n".join(out)
+    # A zip that clears the magic-byte gate but is missing [Content_Types].xml or has malformed
+    # internal XML makes openpyxl raise KeyError/XMLSyntaxError/InvalidFileException — not a
+    # ParseError. Contain it so the batch survives (see _parse_pdf for the full rationale).
+    try:
+        wb = load_workbook(io.BytesIO(data), read_only=True, data_only=True)
+        out: list[str] = []
+        for ws in wb.worksheets:
+            out.append(f"# sheet: {ws.title}")
+            for row in ws.iter_rows(values_only=True):
+                cells = ["" if v is None else str(v) for v in row]
+                if any(c.strip() for c in cells):
+                    out.append(" | ".join(cells))
+        return "\n".join(out)
+    except ParseError:
+        raise
+    except Exception as e:
+        raise ParseError(f"could not read this file as an Excel workbook ({type(e).__name__}) — it is "
+                         f"most likely corrupt or not really an .xlsx. It has NOT been read.")
 
 
 # The text-family parsers return the detected encoding AND its penalty alongside the text, so
@@ -697,7 +728,23 @@ def _parse_xlsx(data: bytes) -> str:
 
 def _parse_csv(data: bytes, name: str = "", delimiter: str = ",") -> tuple[str, str, float]:
     text, enc, penalty = decode_text(data, name)
-    rows = list(csv.reader(io.StringIO(text), delimiter=delimiter))
+    # stdlib csv defaults to a 131072-byte field cap and raises csv.Error ("field larger than field
+    # limit") past it — a ~200 KB cell (a legitimate long notes column) is well under every
+    # AVERY_MAX_* upload cap yet trips this and, uncontained, becomes an HTTP 500 that also sinks the
+    # rest of the batch. A field can never be larger than the file, and the file is already bounded by
+    # the per-file upload cap, so lift the limit to that cap: legit large cells parse, the real DoS
+    # bound stays the upload guard. Any residual csv.Error (e.g. embedded NUL) is contained to a
+    # per-file ParseError so feat-032 marks just this file `failed` and ingests the rest.
+    from . import guards
+    try:
+        csv.field_size_limit(max(csv.field_size_limit(), guards.max_file_bytes()))
+    except (OverflowError, ValueError):  # pragma: no cover - platform C-long ceiling
+        pass
+    try:
+        rows = list(csv.reader(io.StringIO(text), delimiter=delimiter))
+    except csv.Error as e:
+        raise ParseError(f"could not read this file as a CSV ({type(e).__name__}: {e}) — it has NOT "
+                         f"been read.")
     joined = "\n".join(" | ".join(cell.strip() for cell in row) for row in rows if any(row))
     return joined, enc, penalty
 
