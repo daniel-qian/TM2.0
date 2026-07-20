@@ -26,7 +26,20 @@ function progressBand(progress: number) {
 function statusTone(status: string) {
   if (status === 'blocked') return 'tone-danger'
   if (status === 'at-risk') return 'tone-warning'
+  // 🔴 空串 = 文档没读到状态——绝不能落回默认（无 tone class 时 .status-dot 是
+  // sage/绿，和「真的按计划推进」长得一模一样）。给它自己的中性灰，别让「不知道」
+  // 看起来像「没事」。
+  if (!status) return 'tone-unknown'
   return ''
+}
+
+// edge 左缘只染「需要经理出手」的两档——on-track/done/未知一律不上色（同 lite2 口径）。
+// 与 statusTone 分开算，避免「未知」的 tone-unknown 顺带把 `edge-${status}` 拼成
+// 一个空后缀的垃圾类名。
+function statusEdgeClass(status: string): string | null {
+  if (status === 'blocked') return 'edge-blocked'
+  if (status === 'at-risk') return 'edge-at-risk'
+  return null
 }
 
 function classNames(parts: Array<string | false | null | undefined>) {
@@ -243,7 +256,7 @@ export function TeamScreen() {
                     type="button"
                     className={classNames([
                       'home-project-card',
-                      statusTone(project.status) && `edge-${project.status}`,
+                      statusEdgeClass(project.status),
                     ])}
                     onClick={() => openDetail('project', project.id)}
                     aria-label={fill(t.lite.projectsOpenAria, { title: project.title })}

@@ -40,10 +40,26 @@ function progressBand(progress: number) {
   return 'strip-high'
 }
 
-function statusTone(status: string) {
-  if (status === 'blocked') return 'tone-danger'
-  if (status === 'at-risk') return 'tone-warning'
+// 🔴 判据吃 `statusRaw`（文档自述原值，缺失即 undefined），不吃 `project.status`——
+// 后者是 teamData.ts 里的**渲染文案**（07-19 起缺失时已经是本地化的兜底句，不再是
+// `'on-track'`，但依然不是判据；同一枚字段既装文案又被这里当字面量比对，是这个
+// 文件本来在犯的"一层之下"那个错：文案永远比不出 'blocked'/'at-risk'，于是缺状态
+// 的项目卡拿到的 tone 和真·on-track 一样——都是空串，圆点一样绿）。
+function statusTone(statusRaw: string | undefined) {
+  if (statusRaw === 'blocked') return 'tone-danger'
+  if (statusRaw === 'at-risk') return 'tone-warning'
+  // 空/undefined = 文档没读到状态——给中性灰，别落回默认的 sage/绿（那看起来像「没事」）。
+  if (!statusRaw) return 'tone-unknown'
   return ''
+}
+
+// edge 左缘只染「需要经理出手」的两档——on-track/done/未知一律不上色（同 ProjectsScreen
+// / lite-project-card 那套既有口径）。与 statusTone 分开算，避免 tone-unknown 顺带
+// 把 `edge-${statusRaw}` 拼出一个空后缀的垃圾类名。
+function statusEdgeClass(statusRaw: string | undefined): string | null {
+  if (statusRaw === 'blocked') return 'edge-blocked'
+  if (statusRaw === 'at-risk') return 'edge-at-risk'
+  return null
 }
 
 function classNames(parts: Array<string | false | null | undefined>) {
@@ -410,7 +426,7 @@ export function TeamScreen() {
                     type="button"
                     className={classNames([
                       'home-project-card',
-                      statusTone(project.status) && `edge-${project.status}`,
+                      statusEdgeClass(project.statusRaw),
                     ])}
                     onClick={() => openDetail('project', project.id)}
                     aria-label={fill(t.lite2.projectsOpenAria, { title: project.title })}
@@ -418,8 +434,8 @@ export function TeamScreen() {
                     <span className="home-project-row">
                       <h3>{project.title}</h3>
                       <span className="home-project-status">
-                        <span className={`status-dot ${statusTone(project.status)}`} />
-                        {projectStatusText(project.status, t.lite2)}
+                        <span className={`status-dot ${statusTone(project.statusRaw)}`} />
+                        {projectStatusText(project.statusRaw, t.lite2)}
                       </span>
                     </span>
                     {typeof project.progress === 'number' ? (

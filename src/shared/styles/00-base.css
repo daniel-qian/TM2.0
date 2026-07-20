@@ -592,6 +592,14 @@ h1 {
   background: var(--terracotta);
 }
 
+/* 🔴「文档没读到状态」的圆点色——中性灰，绝不能落回 .status-dot 的默认 sage/绿。
+   sage 是「真的按计划推进」的颜色；「不知道」和「没事」撞色，正是本条要杀的那个假象。
+   （src/lite/screens/TeamScreen.tsx · src/lite2/screens/TeamScreen.tsx ·
+    src/lite2/screens/ProjectsScreen.tsx 三处消费。） */
+.tone-unknown {
+  background: var(--ink-faint);
+}
+
 .progress-track {
   height: 5px;
   margin: 11px 0 10px;

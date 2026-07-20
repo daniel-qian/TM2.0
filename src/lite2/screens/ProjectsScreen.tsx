@@ -47,10 +47,22 @@ function classNames(parts: Array<string | false | null | undefined>) {
 
 // 状态语气色。沿用既有 tone-* / edge-* 语法（与「你的团队」项目卡同一套族色）。
 // 🔴 「文档没写状态」永远是中性的——不给它染成绿色（那是在替文档说"没事"）。
+// unknown 给自己的 tone-unknown（中性灰）：不给 tone class 时 `.status-dot` 落回
+// 默认 sage/绿——那正是 on-track 的颜色，「不知道」绝不能和它撞色。
 function statusTone(statusKey: ProjectStatusKey): string {
   if (statusKey === 'blocked') return 'tone-danger'
   if (statusKey === 'at-risk') return 'tone-warning'
+  if (statusKey === 'unknown') return 'tone-unknown'
   return ''
+}
+
+// edge 左缘只染「需要经理出手」的两档——on-track/done/未知一律不上色。单独算，
+// 不与 statusTone 共用同一个真值判断：unknown 现在也有非空 tone，不能再用
+// `tone && edge-${statusKey}` 这种耦合写法，否则会顺带画出一条 `edge-unknown` 边。
+function statusEdgeClass(statusKey: ProjectStatusKey): string | null {
+  if (statusKey === 'blocked') return 'edge-blocked'
+  if (statusKey === 'at-risk') return 'edge-at-risk'
+  return null
 }
 
 function groupLabel(key: ProjectGroupKey, l: Lite2Dict): string {
@@ -99,7 +111,7 @@ function ProjectCard({ view, onOpen }: { view: ProjectView; onOpen: (id: string)
       type="button"
       className={classNames([
         'lite-project-card',
-        tone && `edge-${view.statusKey}`,
+        statusEdgeClass(view.statusKey),
         view.statusKey === 'unknown' && 'is-status-unknown',
       ])}
       data-project-id={view.id}

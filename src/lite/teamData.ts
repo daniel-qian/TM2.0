@@ -41,6 +41,16 @@ export interface LiteProject {
    * 不收 locale），所以兜底文案归渲染层：屏与浮层各自 `|| t.lite.projectsUnknownValue`。
    */
   ownerName: string
+  /**
+   * 文档自述的状态。**空串 = 文档里没读到状态**（同 `ownerName` 的既有约定）。
+   * 🔴 这里曾经是 `card.status ?? 'on-track'`——后端在 status 缺失时**根本不发这个键**
+   * （"缺就不发"，与 ownerName 同一条口径），而这行替客户的文档补了一句它从没说过的
+   * 结论（「按计划推进」），不是补了一个名字。实测约四分之一的项目命中：一份周报里
+   * 7 个项目只有 3 个写了进展，另外 4 个在屏幕上被画成绿点、正常态，经理扫一眼就放心，
+   * 而这 4 个其实是「不知道」。v01 的派生层是 locale-free 的（同 `ownerName`），兜底文案
+   * 归渲染层：屏与浮层各自 `projectStatusText(project.status, …)`，空串会被它译成
+   * 「状态未提及」——绝不是「按计划推进」。
+   */
   status: string
   progress?: number // 可量化（文档写了就显）——项目可硬
   dueDate?: string
@@ -181,7 +191,8 @@ export function liteTeamFromPayload(payload: LiveTeamPayload): LiteTeam {
       card.ownerName?.trim() ||
       cleanPeople.find((p) => p.id === card.ownerId)?.name?.trim() ||
       '',
-    status: card.status ?? 'on-track',
+    // 空串 = 没读到（空白/纯空格同样不算一个状态词）。绝不兜一个「一切正常」的假结论。
+    status: card.status?.trim() || '',
     progress: card.progress,
     dueDate: card.dueDate,
     summary: card.summary,
