@@ -303,6 +303,10 @@ export const en = {
     briefingMetricNeedLook: 'need a look',
     handoffsTitle: 'Worth your attention today',
     handoffsEmpty: 'Nothing needs you right now — your uploads read steady.',
+    // UIUX 棒 F4 · 同屏诚实：handoffs 清单空 ≠ 一切平稳。简报刚说「{n} 处值得多看一眼」，
+    // 空态就不能再说 read steady——改用这条带计数的变体（计数取 shared/briefing.ts::
+    // briefingRiskCount，与简报同源，不前端重推）。零信号时仍用上面那条原文案。
+    handoffsEmptyButLook: 'Nothing needs you to step in right now — though {count} spots are worth a closer look.',
     handoffOpen: 'Open the project',
     // feat-068 · triage-item copy (see src/shared/handoffCopy.ts). These strings used to be
     // hardcoded English inside teamData.ts liveHandoffs()/liveRead(), so the ZH build showed
@@ -749,6 +753,9 @@ export const en = {
     briefingMetricNeedLook: 'need a look',
     handoffsTitle: 'Worth your attention today',
     handoffsEmpty: 'Nothing needs you right now — your uploads read steady.',
+    // UIUX 棒 F4 · 同款于 lite 段（见上）。v02 多一层去处：那几处信号有自己的 tab，
+    // 文案顺手把路指给客户（“A closer look” 必须与 tabCloserLook 的实际标签一致）。
+    handoffsEmptyButLook: 'Nothing needs you to step in right now — though {count} spots are worth a closer look. They are under “A closer look”.',
     handoffOpen: 'Open the project',
     // feat-068 · triage-item copy — see the identical block in the `lite` section above for why
     // this layer exists (frontend-derived strings; no backend change can reach them).

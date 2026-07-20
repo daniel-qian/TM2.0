@@ -4,7 +4,7 @@ import { useFlow, selectTriagePending, selectTriageHandled, selectTriageSetAside
 import { draftFromHandoff } from '../draftLinks'
 import { useDraft } from '../draftStore'
 import { useDict } from '../../shared/i18n/useDict'
-import { localizeBriefing } from '../../shared/briefing'
+import { localizeBriefing, briefingRiskCount } from '../../shared/briefing'
 import {
   localizeHandoff,
   localizePersonRead,
@@ -317,7 +317,11 @@ export function TeamScreen() {
                   </ol>
                 ) : (
                   <p className="lite-handoffs-empty">
-                    {totalHandoffs > 0 ? t.lite2.triageAllDone : t.lite2.handoffsEmpty}
+                    {totalHandoffs > 0
+                      ? t.lite2.triageAllDone
+                      : briefingRiskCount(team?.briefing) > 0
+                        ? fill(t.lite2.handoffsEmptyButLook, { count: briefingRiskCount(team.briefing) })
+                        : t.lite2.handoffsEmpty}
                   </p>
                 )}
 

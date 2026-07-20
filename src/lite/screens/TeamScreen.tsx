@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useLite } from '../store'
 import { useDict } from '../../shared/i18n/useDict'
-import { localizeBriefing } from '../../shared/briefing'
+import { localizeBriefing, briefingRiskCount } from '../../shared/briefing'
 import { localizeHandoff, localizePersonRead } from '../../shared/handoffCopy'
 import { projectStatusText } from '../../shared/projectStatus'
 import { UploadPanel } from '../UploadPanel'
@@ -204,7 +204,11 @@ export function TeamScreen() {
                     ))}
                   </ol>
                 ) : (
-                  <p className="lite-handoffs-empty">{t.lite.handoffsEmpty}</p>
+                  <p className="lite-handoffs-empty">
+                    {briefingRiskCount(team?.briefing) > 0
+                      ? fill(t.lite.handoffsEmptyButLook, { count: briefingRiskCount(team.briefing) })
+                      : t.lite.handoffsEmpty}
+                  </p>
                 )}
               </>
             ) : (

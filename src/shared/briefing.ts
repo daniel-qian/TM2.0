@@ -97,6 +97,21 @@ const METRIC_PROJECTS = 'active projects'
 const METRIC_NEED_LOOK = 'need a look'
 
 /**
+ * 后端「值得多看一眼」的计数（UIUX 棒 F4）。判据与 localizeBriefing 内部完全同源：只认后端
+ * metrics 里的 'need a look' 条目，不在前端按 project.status 重推（两处各推一次正是它们日后
+ * 长歪的方式）。条目不存在 / 值不是数 → 0。
+ * 用途：handoffs 清单空但风险信号非零时，空态文案不许再说「一切平稳」——同一屏上方的简报
+ * 刚说完「{n} 处值得多看一眼」，下面立刻说「读起来一切平稳」，比撒谎更糟的是让客户怀疑数据。
+ */
+export function briefingRiskCount(briefing: BriefingLike | null | undefined): number {
+  if (!briefing) return 0
+  const m = briefing.metrics.find((x) => x.label === METRIC_NEED_LOOK)
+  if (!m) return 0
+  const n = Number(m.value)
+  return Number.isFinite(n) && n > 0 ? n : 0
+}
+
+/**
  * 把后端简报变成当前语言的简报。
  *
  * en：原样返回（同一个对象引用，零改动）。
