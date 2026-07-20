@@ -347,6 +347,16 @@ def _m_no_evidence(s: _Subject) -> list[str]:
     return []
 
 
+def _m_unclassified(s: _Subject) -> list[str]:
+    """占位匹配器——这条规则从不在这里命中，只登记进 `_MATCHERS` 以满足"规则表与匹配器
+    一一对应"的门（`test_every_rule_has_exactly_one_matcher`）。
+
+    真正的触发条件是"跑过一整张 RULES 表、一条都没命中"（`grade_project` 的 `else` 分支），
+    这件事结构上没法在单条独立匹配器里复现——会变成把整张表在这里再判一遍。永远返回空列表；
+    R-UNCLASSIFIED 唯一的出场方式就是那个手动兜底分支。"""
+    return []
+
+
 def _risk_free(s: _Subject) -> bool:
     """没有任何高风险族 / 待办族信号，也没有阻塞。"""
     if s.blockers:
@@ -378,6 +388,7 @@ _MATCHERS = {
     "R-PROGRESS-LOW": _m_progress_low,
     "R-SELF-REPORT-MISMATCH": _m_self_report_mismatch,
     "R-NO-EVIDENCE": _m_no_evidence,
+    "R-UNCLASSIFIED": _m_unclassified,
     "R-DONE": _m_done,
     "R-CLEAR": _m_clear,
 }
@@ -511,12 +522,18 @@ def grade_project(project: dict, signals: list[dict] | None = None, *,
     else:
         # 兜底：规则表理论上覆盖到底（R-CLEAR / R-NO-EVIDENCE），真掉到这里说明有既非"正常"
         # 也非"全空"的中间态（如 status 是抽取层没归一的词）。🔴 一律给 需确认，不给 可推进。
+        #
+        # 🔴 对抗复审 fixB2：这里以前直接借用 `rule("R-NO-EVIDENCE")` 的标题/依据——但
+        # R-NO-EVIDENCE 说的是"status/blockers/progress/dueDate 全部缺失"，这条分支恰恰
+        # 是**那句话不成立**的情形（比如 progress=80、status 是没被归一的怪词）。真实案例：
+        # 卡面印着「80%」，理由却写「没读到...进度中的任何一项」——等级判对了（需确认，
+        # 不是可推进），但那句话本身是假的。给它自己的规则号/自己的措辞，不再借别人的名字。
         rule_grade = NEEDS_CONFIRMATION
-        hits.append(RuleHit(rule_id="R-NO-EVIDENCE", grade=NEEDS_CONFIRMATION,
+        hits.append(RuleHit(rule_id="R-UNCLASSIFIED", grade=NEEDS_CONFIRMATION,
                             severity=SEVERITY[NEEDS_CONFIRMATION],
-                            title=rule("R-NO-EVIDENCE").title_zh,
-                            basis=rule("R-NO-EVIDENCE").basis,
-                            evidence=("（没有任何规则命中，按信息不足处理）",)))
+                            title=rule("R-UNCLASSIFIED").title_zh,
+                            basis=rule("R-UNCLASSIFIED").basis,
+                            evidence=("（没有任何规则命中，按需确认处理）",)))
 
     hits.sort(key=lambda h: (-h.severity, RULE_ORDER[h.rule_id]))
     frozen = tuple(hits)
