@@ -529,6 +529,58 @@ class PostgresContextRegistry:
                 ("closed" if done >= total else "collecting", ask_id))
         return "ok"
 
+    # --- feat-053: the account seam (Supabase user id <-> context ownership) ----------------------
+    # The Postgres twin of the in-memory map, same duck-typed API so the service layer never asks
+    # which registry it holds. Storage: avery.account_contexts (migration 0008). Ownership is 1:1 by
+    # a UNIQUE index on context_id — the DB, not a service-layer check, is what makes "两个账号数据
+    # 不串" true even under a race between two simultaneous claims.
+
+    def link_account_context(self, user_id: str, context_id: str) -> bool:
+        """Bind a context to an account; False when another account already owns it (or the context
+        does not exist — the FK refuses it). Idempotent for the SAME user: ON CONFLICT DO NOTHING on
+        the primary key, then confirm the owner really is this user before reporting success. That
+        re-read is what distinguishes 'already yours' from 'someone else's' — both hit a conflict."""
+        if not user_id or not context_id:
+            return False
+        self._ensure_schema()
+        try:
+            with self._connect() as conn:
+                conn.execute(
+                    "INSERT INTO avery.account_contexts (user_id, context_id) VALUES (%s, %s) "
+                    "ON CONFLICT DO NOTHING", (user_id, context_id))
+        except self._psycopg.errors.ForeignKeyViolation:
+            return False   # unknown context_id — nothing to claim
+        return self.account_for_context(context_id) == user_id
+
+    def contexts_for_account(self, user_id: str) -> list[str]:
+        """Every context this user owns, newest link first."""
+        if not user_id:
+            return []
+        self._ensure_schema()
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT context_id FROM avery.account_contexts WHERE user_id = %s "
+                "ORDER BY created_at DESC", (user_id,)).fetchall()
+        return [r[0] for r in rows]
+
+    def account_for_context(self, context_id: str) -> str | None:
+        """The account that owns this context, or None when it is still anonymous."""
+        if not context_id:
+            return None
+        self._ensure_schema()
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT user_id FROM avery.account_contexts WHERE context_id = %s",
+                (context_id,)).fetchone()
+        return row[0] if row else None
+
+    def account_owns(self, user_id: str | None, context_id: str) -> bool:
+        """May THIS signed-in user read THIS context? Exact match only — an anonymous (unclaimed)
+        context is never readable through the account path."""
+        if not user_id or not context_id:
+            return False
+        return self.account_for_context(context_id) == user_id
+
     def resolve_memory_dir(self, context_id: str) -> Path | None:
         ctx = self.get(context_id)
         return ctx.memory_dir if ctx else None

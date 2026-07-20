@@ -253,6 +253,8 @@ class ContextRegistry:
         self._notes: dict[str, list[CompanyNote]] = {}   # feat-033: agent-written notes, per context
         self._asks: dict[str, object] = {}               # feat-034: ask_id -> Ask (deep-copied)
         self._ask_tokens: dict[str, tuple[str, int]] = {}  # share_token -> (ask_id, recipient idx)
+        self._account_contexts: dict[str, list[str]] = {}  # feat-053: user_id -> [context_id]
+        self._context_owner: dict[str, str] = {}           # feat-053: context_id -> user_id (1:1)
 
     def put(self, ctx: CompanyContext) -> str:
         self._by_id[ctx.context_id] = ctx
@@ -335,6 +337,45 @@ class ContextRegistry:
             ask.status = "closed" if done >= len(ask.recipients) else "collecting"
         return "ok"
 
+    # --- feat-053: the account seam (Supabase user id <-> context ownership) -------------------
+    # ABOVE feat-038, never instead of it: owner_token stays the lower-layer credential and this map
+    # is a SECOND, durable way to prove ownership of a context you already own. A context with no
+    # entry here is anonymous and behaves exactly as it did pre-053 (the guest path).
+
+    def link_account_context(self, user_id: str, context_id: str) -> bool:
+        """Bind a context to an account. True when it is now bound to THIS user (including a
+        re-link, which is idempotent), False when another account already owns it — one context has
+        at most one owner account, which is the storage-layer half of "两个账号数据不串". The
+        Postgres twin gets the same answer from a UNIQUE index (migration 0008)."""
+        if not user_id or not context_id:
+            return False
+        current = self._context_owner.get(context_id)
+        if current is not None and current != user_id:
+            return False
+        self._context_owner[context_id] = user_id
+        ctxs = self._account_contexts.setdefault(user_id, [])
+        if context_id not in ctxs:
+            ctxs.append(context_id)
+        return True
+
+    def contexts_for_account(self, user_id: str) -> list[str]:
+        """Every context this user owns, newest link first (the order the account picker shows)."""
+        if not user_id:
+            return []
+        return list(reversed(self._account_contexts.get(user_id, [])))
+
+    def account_for_context(self, context_id: str) -> str | None:
+        """The account that owns this context, or None when it is still anonymous."""
+        return self._context_owner.get(context_id)
+
+    def account_owns(self, user_id: str | None, context_id: str) -> bool:
+        """The authorization question: may THIS signed-in user read THIS context? Requires an exact
+        match — an anonymous (unowned) context is never readable via the account path, only via its
+        owner_token, so signing in can never hand you someone else's un-claimed workspace."""
+        if not user_id or not context_id:
+            return False
+        return self._context_owner.get(context_id) == user_id
+
     def get(self, context_id: str) -> CompanyContext | None:
         return self._by_id.get(context_id)
 
@@ -360,6 +401,8 @@ class ContextRegistry:
         self._notes.clear()
         self._asks.clear()
         self._ask_tokens.clear()
+        self._account_contexts.clear()
+        self._context_owner.clear()
 
 
 # Process-wide default registry (the offline in-memory instance).
