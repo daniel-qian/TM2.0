@@ -627,16 +627,55 @@ i18n 零新增（键本就在 shared 的 `t.upload.*`）。
    非独立可修复项。
 
 **新记录的问题（未修，都不阻塞）**
-4. 🔴 **`.issues/v02-partner-align-0718/` 下有 6 道门一跑就崩**（不是断言失败，是抛异常退出）：
-   `verify-data-boundary` / `verify-fixB-transport` / `verify-fixB-upload-ui` /
-   `verify-fixB-upload-layout` / `verify-fixA-live` / `verify-server`。
-   **全部先于本 session 存在**，已取证：例如 `verify-fixB-transport` 用 `ts.transpileModule`
-   单文件转译 transport.ts 后当 data: URL import（**不 bundle**、只 stub 了 `./auth/authStore`），
-   而 **2026-07-19 的提交 `f8dc7bf`** 给 transport.ts 加了 `import … from '../shared/i18n'`，
-   从那天起这道门就解析失败；`verify-data-boundary` 则是自己起 `vite dev`，撞上「共享
-   node_modules 缺 @babel/core」这条已记档的环境限制。
+4. 🔴 **`.issues/v02-partner-align-0718/` 下有 6 道门一跑就崩**（不是断言失败，是抛异常退出）。
+   已做完逐道取证，**零道是本 session 引入的**（三个可疑点全部逐一证伪）：
+
+   | 门 | 分类 | 根因 |
+   |---|---|---|
+   | `verify-data-boundary` | ① 环境 | 自带 `createServer()` 起 dev server → 加载 `vite.config.ts` 的 `react()` → **缺 `@babel/core`**（本仓从没装过），页面白屏、`__lite2Store` undefined |
+   | `verify-server` | ① 环境 | `root` 指向 **已被拆掉的工作树 `D:/avery-wt/gate`**（现在是空壳）+ 端口写死 5173 与 preview 硬撞。且它**根本没有断言**，是 `verify-p0` 的配套启动器，不该当门跑 |
+   | `verify-fixB-transport` | ② 门过时 | **三重**：(a) `ts.transpileModule` 单文件转译当 data: URL import，解析不了 `f8dc7bf`(7/19 00:46) 给 transport.ts 加的 `../shared/i18n`；(b) `httpErrorMessage` 签名已从两参改单参；(c) 断言的 `withServerDetail` **在 main 里根本不存在了**（见下） |
+   | `verify-fixB-upload-ui` | ③ 前置 | 要 8302/5302，没起。选择器逐个 grep 都还在 |
+   | `verify-fixB-upload-layout` | ③ 前置 | 同上，同一套 8302/5302 |
+   | `verify-fixA-live` | ③ 前置 + 一行过时 | 要 8301/5301；另断言「未读到状态」，而卡片自 `69bdeb7`(7/19 12:03) 起显示的是「状态未提及」（比本 session 早 33 小时） |
+
+   修法都已具体到行（dev server 那两道加 `configFile:false` + `esbuild.jsx` + 从 vite.config
+   搬 `envPrefix`/`define` 即可绕开 @babel；transport 那道换 esbuild bundle）。
    **和上面那两条（fixA 长期红着、纯度门一跑就崩）是同一类账**：门的健康度需要被巡检，
    建议下一棒做一次「把 20 道门逐个跑一遍、把跑不起来的分类处置」的清仓。
+
+4b. 🔴 **合并 `3106536` 吃掉的不止 236 行** —— 它在 `src/lite2/transport.ts` 上同样单边取舍，
+   把 **`withServerDetail` 整块吃掉了**（已验证：`6f838f3` 里 3 处，该合并之后 0 处，至今没有）。
+   那是 413 真上限透传 + 422 编码诊断透传——**GBK 用户唯一的自救线索**。
+   AGENTS.md 已记「孤儿文案键是红旗」，现在补一条推论：**查到一次单边吞并，要顺着那个合并
+   再扫一遍**，它很可能吃了不止一块。恢复它值得单独一棒（要连门一起补）。
+
+4c. ⚠️ **一条被证伪的怀疑，记下来免得下一棒重犯**：曾怀疑 `en.ts` 的 `tooLarge`
+   （"up to 10 files, 10MB each"）在撒谎，因为 `guards.py` 默认是 8 MiB / 15 个文件。
+   **实测生产容器 env 覆盖成了 `AVERY_MAX_UPLOAD_BYTES=10485760` / `AVERY_MAX_FILES=10`
+   —— 文案对的是生产，是对的。** 按默认值去"修"反而会真造出一个 bug。
+   **限额是部署期配置，判它一律以运行中容器的 env 为准**（已写进 AGENTS.md 陷阱段）。
+   （唯一残留的小misdirection：`max_total_bytes` 32 MiB 未被覆盖、文案也没提它，10 个 5MB
+   文件会撞总量闸却读到一句自己已经满足的提示。窄，未修。）
+4d. 🔴🔴 **我自己造成的一次生产污染 —— 需要 Danny 拍板是否清理（删生产数据是人工闸，未动）**
+   跑门时 `dist/` 被 `verify-bundle-privacy` 重打成**不带 api base** 的产物（它要造出"构建机"
+   条件），于是落回 `vite.config.ts` 默认值 = **生产域名**。随后一个排查子 agent 对着
+   `127.0.0.1:5173` 的 preview 跑上传类门，请求**全部打到了生产后端**，在生产库里建了
+   **3 个测试 context**（2026-07-20 13:13–13:18 UTC）：
+
+   ```
+   ctx_a4b13f8983be / ctx_bd12811c3180 / ctx_4a0b66e6d01f
+   各含 员工花名册.csv + 坏文件.csv（门的合成夹具，不是任何真实客户数据）
+   合计：contexts 3 · source_documents 6 · materials 12 · entities 9 · memory_files 6
+        company_notes 0 · account_contexts 0（没绑到任何账号，谁也看不见）
+   ```
+   **影响评估**：这三个是匿名 context，只有 owner_token 能读，而那枚 token 没人留着 ——
+   合伙人看不到、也不会串进她的数据。但它们是生产库里的垃圾，且**排在列表最前面**，
+   下次有人查「合伙人传了没有」会先撞见它们。另外它们真跑了 LLM 抽取，烧了一点额度。
+   **未删**：删生产数据属人工闸。要清理的话是一条按 3 个 context_id 级联删的 SQL，等 Danny 一句话。
+   **已做的防复发**：`dist/` 已重打回 localhost；AGENTS.md 陷阱段新增一条
+   「跑完门之后 dist 指向哪里是不确定的，跑上传类门前先验 `__AVERY_BUILD__.apiBase`」。
+
 5. **凭据轮换建议**：为复用生产 env 跑过一次 `docker inspect avery --format {{.Config.Env}}`，
    三个 LLM key 与 Supabase DSN **在 agent 会话里明文出现过一次**（未外传、未落盘进仓库）。
    按凭据卫生该轮换。取 env 的做法已改成「重定向进 600 权限文件、全程不打印」，不会再复现。

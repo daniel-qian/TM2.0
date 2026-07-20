@@ -54,7 +54,11 @@ Before writing code:
 - **显示值和判据值必须分开**（`ownerNameRaw` / `statusRaw` 模式）：把兜底文案直接当判据，结果是"文字修好了、颜色还在撒谎"。7/20 在 v02 状态点上真发生过。
 - **门扫 `innerText` 看不见属性**：`aria-label` / `title` / `alt` 从不进 innerText，要单独扫（见 `eval-harness/tools/verify-aria-zh.mjs`）。一条门全绿不等于那一类值被采过样。
 - **`__AVERY_LITE__` / `__AVERY_LITE2__` 是 `import.meta.env.DEV` 门控的**，`vite build` 会整段剪掉——引用它们的门在 build+preview 下是**崩**不是失败。无条件存在的缝是 `__liteStore` / `__lite2Store` / `__lite2Auth`。
-- **i18n 里的孤儿文案键是红旗**：有键但没有任何组件引用，往往说明某次合并悄悄吃掉了一整个功能。7/19 一个合并提交就这样整边丢弃了 236 行文件状态渲染，只剩键留在原地。
+- **i18n 里的孤儿文案键是红旗**：有键但没有任何组件引用，往往说明某次合并悄悄吃掉了一整个功能。7/19 一个合并提交（`3106536`）就这样整边丢弃了 236 行文件状态渲染，只剩键留在原地。**同一个合并还吃掉了 `transport.ts` 的 `withServerDetail`**（413 真上限 / 422 编码诊断的透传）——一次单边取舍可以吃掉不止一块，查到一处要顺着那个合并再扫一遍。
+
+- **跑完门之后 `dist/` 处于什么状态是不确定的，别假设它还指着 localhost**：好几道门自己会 `vite build`，各自带不同的 `VITE_AVERY_API_BASE`；其中 `verify-bundle-privacy` 为了造出"构建机"条件会**不带任何 api base 重打**，于是 `dist/` 落回 `vite.config.ts` 的默认值 = **生产域名**。此后任何人对着 `vite preview` 跑一道会上传的门，就是**往生产库里写测试数据**（7/20 真发生过：三个 `员工花名册.csv`/`坏文件.csv` 的 context 落进生产）。**跑上传类门之前先验一次 `window.__AVERY_BUILD__.apiBase`**，或显式重打 dist。
+
+- **上传限额是部署期配置，读源码默认值会得出错误结论**：`guards.py` 的默认是 8 MiB/文件、15 个文件，但生产容器用 `AVERY_MAX_UPLOAD_BYTES` / `AVERY_MAX_FILES` 覆盖成了 10 MiB / 10 个——前端文案 `tooLarge`（"up to 10 files, 10MB each"）对的是**生产**。7/20 有过一次"照默认值判定文案在撒谎"的误报，按它改反而会真造出一个 bug。判限额一律以运行中容器的 env 为准。
 
 ## Definition of Done
 
