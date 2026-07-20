@@ -191,7 +191,7 @@ export function TeamScreen() {
   }
 
   return (
-    <section className="scene scene-home is-active" aria-label="Your team — live">
+    <section className="scene scene-home is-active" aria-label={t.lite2.teamLiveAria}>
       <div className="home-scroll">
         <div className="home-frame">
           {/* ── 左脊柱 ─────────────────────────────────────────────── */}
@@ -413,7 +413,7 @@ export function TeamScreen() {
                       statusTone(project.status) && `edge-${project.status}`,
                     ])}
                     onClick={() => openDetail('project', project.id)}
-                    aria-label={`Open ${project.title}`}
+                    aria-label={fill(t.lite2.projectsOpenAria, { title: project.title })}
                   >
                     <span className="home-project-row">
                       <h3>{project.title}</h3>

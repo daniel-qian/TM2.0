@@ -18,6 +18,11 @@ export const en = {
     liveHint: 'Bring your own team in — upload a few files and ask.',
     switchToLive: 'Try it with your team',
     switchToStory: 'Back to the walkthrough',
+    // avery-sync aria-zh: the mode-switch group's aria-label was a hardcoded English literal
+    // in BOTH LiteTopbar twins (v01/v02 share the exact same widget + wording, unlike the
+    // lite.*/lite2.* namespaces above which duplicate on purpose so copy can diverge — this one
+    // never has, so it lives here once like `transport.*` does).
+    switchAria: 'Data mode',
   },
 
   // ── upload panel (live mode Onboarding) ───────────────────────────────────
@@ -422,6 +427,27 @@ export const en = {
     adviceEscalationWellbeing: 'wellbeing',
     adviceEscalationCompensation: 'compensation',
     adviceEscalationExecutive: 'executive',
+
+    // ── avery-sync aria-zh: structural aria-label literals the zh-purity gate's innerText scan
+    // structurally cannot see (attributes, not visible text) — verify-aria-zh.mjs is the new gate
+    // that reads them. Same class of defect as adviceCardAria above, found by grep instead of the
+    // gate. `terminalAria` only exists here (v01's plain LiteTerminal) — v02's richer
+    // LiteThinkingFlow already sourced its equivalent aria-label from roomFlowTitle.
+    topbarAria: 'Avery controls',
+    screenNavAria: 'Screen',
+    composerAskAria: 'Ask about your team',
+    composerRefsAria: 'Composer references',
+    composerRemoveRefAria: 'Remove {label}',
+    composerFilterAria: 'Filter references',
+    roomBoardAria: 'The room — board',
+    terminalAria: "How it's thinking it through",
+    roomAskAria: 'Ask your team',
+    roomLiveQuestionAria: 'Live question',
+    roomEmptyAria: 'Working it through — ask your team',
+    notesEmptyAria: "Avery's notes — nothing yet",
+    playbooksEmptyAria: 'Playbooks — coming soon',
+    teamLiveAria: 'Your team — live',
+    projectsOpenAria: 'Open {title}',
   },
 
   // ── lite2 shell (feat-035, lite-live-v02: the v02 shell running side-by-side with v01 above.
@@ -1051,6 +1077,28 @@ export const en = {
     adviceEscalationWellbeing: 'wellbeing',
     adviceEscalationCompensation: 'compensation',
     adviceEscalationExecutive: 'executive',
+
+    // ── avery-sync aria-zh: same slice as `lite.topbarAria` etc above — the v02 twins of those
+    // structural aria-label literals (LiteComposer/LitePanZoom/LiteTopbar are near-byte-identical
+    // between the two shells; kept in separate lite/lite2 keys per the established convention so
+    // wording can diverge later even though it doesn't today).
+    topbarAria: 'Avery controls',
+    screenNavAria: 'Screen',
+    composerAskAria: 'Ask about your team',
+    composerRefsAria: 'Composer references',
+    composerRemoveRefAria: 'Remove {label}',
+    composerFilterAria: 'Filter references',
+    roomBoardAria: 'The room — board',
+    roomAskAria: 'Ask your team',
+    roomLiveQuestionAria: 'Live question',
+    roomEmptyAria: 'Working it through — ask your team',
+    notesEmptyAria: "Avery's notes — nothing yet",
+    playbooksEmptyAria: 'Playbooks — coming soon',
+    teamLiveAria: 'Your team — live',
+    followupsViewAria: 'Follow-ups view',
+    gapEmptyAria: 'A closer look — nothing pending',
+    projectsEmptyAria: 'Projects — nothing yet',
+    complianceFooterAria: 'How to use what Avery tells you',
   },
 
   // ── Ask / Quick ask (feat-034 stage B — ADR-0023 voice: asks about the WORK, never rates

@@ -6,7 +6,7 @@ import { useDict } from '../shared/i18n/useDict'
 export function Lite2Footer() {
   const { t } = useDict()
   return (
-    <footer className="lite2-compliance-footer" aria-label="How to use what Avery tells you">
+    <footer className="lite2-compliance-footer" aria-label={t.lite2.complianceFooterAria}>
       <p>{t.lite2.footerText}</p>
     </footer>
   )

@@ -19,7 +19,7 @@ export function LitePanZoom({ children }: { children: ReactNode }) {
   const { t } = useDict()
 
   return (
-    <div className="lite-room-canvas" aria-label="The room — board">
+    <div className="lite-room-canvas" aria-label={t.lite2.roomBoardAria}>
       <TransformWrapper
         ref={ref}
         initialScale={1}

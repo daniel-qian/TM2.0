@@ -27,8 +27,8 @@ export function LiteTopbar() {
   }
 
   return (
-    <header className="prototype-topbar" aria-label="Avery controls">
-      <nav className="scene-tabs" aria-label="Screen">
+    <header className="prototype-topbar" aria-label={t.lite.topbarAria}>
+      <nav className="scene-tabs" aria-label={t.lite.screenNavAria}>
         {tabs.map((tab) => (
           <button
             key={tab.screen}
@@ -43,7 +43,7 @@ export function LiteTopbar() {
       {/* feat-034 polish：Story/Live 开关默认不渲染（?modeSwitch=1 显示，shared/mode.ts
           小工具——lite 只 import shared，墙不破）。缺席时整块不出 DOM，布局无空洞。 */}
       {showModeSwitch() ? (
-        <div className="mode-switch" role="group" aria-label="Data mode">
+        <div className="mode-switch" role="group" aria-label={t.mode.switchAria}>
           <button
             type="button"
             className={`mode-switch-btn${mode === 'story' ? ' is-active' : ''}`}

@@ -33,7 +33,7 @@ function LiteTerminal({ lines, running }: { lines: LiteStreamLine[]; running: bo
   }, [lines.length])
 
   return (
-    <section className="nexus-terminal" aria-label="How it's thinking it through">
+    <section className="nexus-terminal" aria-label={t.lite.terminalAria}>
       <header className="nexus-terminal-bar" aria-hidden="true">
         <span className="nexus-terminal-dots">
           <i />
@@ -79,6 +79,7 @@ function LiteAskComposer({
   submitLabel: string
   onAsk: (text: string) => void
 }) {
+  const { t } = useDict()
   const [draft, setDraft] = useState('')
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -88,13 +89,13 @@ function LiteAskComposer({
     setDraft('')
   }
   return (
-    <form className="nexus-followup-composer" aria-label="Ask your team" onSubmit={handleSubmit}>
+    <form className="nexus-followup-composer" aria-label={t.lite.roomAskAria} onSubmit={handleSubmit}>
       <input
         type="text"
         value={draft}
         onChange={(event) => setDraft(event.target.value)}
         placeholder={placeholder}
-        aria-label="Live question"
+        aria-label={t.lite.roomLiveQuestionAria}
       />
       <button type="submit">{submitLabel}</button>
     </form>
@@ -114,7 +115,7 @@ export function RoomScreen() {
   const advice = run.advice
 
   return (
-    <section className="scene scene-nexus is-active lite-room" aria-label="The room">
+    <section className="scene scene-nexus is-active lite-room" aria-label={t.lite.tabRoom}>
       {hasStarted ? (
         <>
           {/* 薄画布：终端 + brief HUD + 8 字段卡随 pan/zoom 移动缩放；composer 留画布外 */}
@@ -164,7 +165,7 @@ export function RoomScreen() {
           />
         </>
       ) : (
-        <section className="nexus-empty" aria-label="Working it through — ask your team">
+        <section className="nexus-empty" aria-label={t.lite.roomEmptyAria}>
           <p className="eyebrow">{t.nexus.liveThinking}</p>
           <h2>{t.lite.roomEmptyTitle}</h2>
           <p>{t.lite.roomEmptyBody}</p>

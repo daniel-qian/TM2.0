@@ -17,6 +17,10 @@ interface LiteReference {
   meta: string
 }
 
+function fill(template: string, vars: Record<string, string | number>): string {
+  return template.replace(/\{(\w+)\}/g, (_, k: string) => String(vars[k] ?? ''))
+}
+
 export function LiteComposer() {
   const { t } = useDict()
   const team = useLite((s) => s.team)
@@ -106,7 +110,7 @@ export function LiteComposer() {
             onClick={() => setComposerOpen(true)}
             onFocus={() => setComposerOpen(true)}
             onChange={(event) => setQuestion(event.currentTarget.value)}
-            aria-label="Ask about your team"
+            aria-label={t.lite.composerAskAria}
           />
           <button type="submit" className="icon-button">
             {t.nexus.ask}
@@ -127,14 +131,14 @@ export function LiteComposer() {
             >
               +
             </button>
-            <div className="composer-reference-chips" aria-label="Composer references">
+            <div className="composer-reference-chips" aria-label={t.lite.composerRefsAria}>
               {references.map((reference) => (
                 <span key={reference.id} className={`composer-reference-chip is-${reference.kind}`}>
                   <span>{reference.label}</span>
                   {reference.kind !== 'project' && <small>{reference.meta}</small>}
                   <button
                     type="button"
-                    aria-label={`Remove ${reference.label}`}
+                    aria-label={fill(t.lite.composerRemoveRefAria, { label: reference.label })}
                     onClick={() => removeReference(reference.id)}
                   >
                     x
@@ -164,7 +168,7 @@ export function LiteComposer() {
               type="search"
               value={referenceQuery}
               placeholder={t.lite.refSearch}
-              aria-label="Filter references"
+              aria-label={t.lite.composerFilterAria}
               onKeyDown={(event) => {
                 if (event.key === 'Enter') event.preventDefault()
               }}

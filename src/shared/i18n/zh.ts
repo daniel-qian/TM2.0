@@ -86,6 +86,20 @@ import type { Dict } from "./index";
 //  M3 给的是「人力业务伙伴」，为了和其余徽章词（低/中/高、法务、薪酬、高管层）保持同等长度
 //  的贴角短词，裁成「人力伙伴」——其余 28 个键逐字采纳 M3 输出，未手改一字。
 //  ⚠ Draft / 待 Danny 审字。
+// NOTE (avery-sync aria-zh, 2026-07-20): mode.switchAria + lite.*/lite2.* 两组共 33 个新键是
+//  本批新增 —— ZH 生产构建里 ~88 处硬编码英文 aria-label/title（顶栏、composer、议事室终端、
+//  空态区块等结构性无障碍属性）的修法，见 en.ts 同批键上的注释。中文纯度门
+//  （verify-zh-purity.mjs）扫的是 innerText，结构上看不见这些属性，这批缺陷是靠
+//  `grep -rn aria-label src/` 人工枚举揪出来的，不是任何现成门抓到的 —— 新增的
+//  verify-aria-zh.mjs 补上这个结构性盲区。这个 worktree 同样没有 eval-harness/.env
+//  （MINIMAX_API_KEY 未拷进来，主检出才有、且本棒禁止碰主检出）——沿用 open-loop-0720/
+//  avery-sync zh-purity 那两条注记同一套办法：同一份 director 系统提示词（改写自
+//  scripts/i18n-zh.mjs 的 SYS，补了一段"这批是 aria-label，屏幕阅读器会整句念出来，必须是
+//  通顺人话"的专项说明 + 术语表锁定），手动过 `mmx text chat` 拿到译文，再按脚本会产出的
+//  同一种合并方式手工落盘。projectsOpenAria 的译文与 lite2 里已经 Danny 审过的同名键
+//  （"打开 {title}"）逐字重合——M3 独立译出同一个结果，未手工对齐，视为交叉验证。
+//  33 个键逐字采纳 M3 输出，未手改一字。
+//  ⚠ Draft / 待 Danny 审字。
 export const zh: Dict = {
   "mode": {
     "storyLabel": "演示",
@@ -93,7 +107,8 @@ export const zh: Dict = {
     "storyHint": "照着脚本走一遍，和现场看到的演示完全一样。",
     "liveHint": "带上你自己的团队——上传几份文件，开口问就行。",
     "switchToLive": "用你的团队试试",
-    "switchToStory": "回到演示"
+    "switchToStory": "回到演示",
+    "switchAria": "数据模式"
   },
   "upload": {
     "title": "把你的团队带进来",
@@ -317,7 +332,22 @@ export const zh: Dict = {
     "adviceEscalationLegal": "法务",
     "adviceEscalationWellbeing": "员工关怀",
     "adviceEscalationCompensation": "薪酬",
-    "adviceEscalationExecutive": "高管层"
+    "adviceEscalationExecutive": "高管层",
+    "topbarAria": "Avery 控制栏",
+    "screenNavAria": "屏幕导航",
+    "composerAskAria": "就你的团队提问",
+    "composerRefsAria": "引用资料",
+    "composerRemoveRefAria": "移除 {label}",
+    "composerFilterAria": "筛选引用资料",
+    "roomBoardAria": "议事室 —— 看板",
+    "terminalAria": "Avery 的推理过程",
+    "roomAskAria": "向你的团队提问",
+    "roomLiveQuestionAria": "当前提问",
+    "roomEmptyAria": "还在梳理中 —— 向你的团队提问",
+    "notesEmptyAria": "Avery 的笔记 —— 暂无内容",
+    "playbooksEmptyAria": "操作手册 —— 即将上线",
+    "teamLiveAria": "你的团队 —— 实时",
+    "projectsOpenAria": "打开 {title}"
   },
   "lite2": {
     "tabTeam": "你的团队",
@@ -726,7 +756,24 @@ export const zh: Dict = {
     "adviceEscalationLegal": "法务",
     "adviceEscalationWellbeing": "员工关怀",
     "adviceEscalationCompensation": "薪酬",
-    "adviceEscalationExecutive": "高管层"
+    "adviceEscalationExecutive": "高管层",
+    "topbarAria": "Avery 控制栏",
+    "screenNavAria": "屏幕导航",
+    "composerAskAria": "就你的团队提问",
+    "composerRefsAria": "引用资料",
+    "composerRemoveRefAria": "移除 {label}",
+    "composerFilterAria": "筛选引用资料",
+    "roomBoardAria": "议事室 —— 看板",
+    "roomAskAria": "向你的团队提问",
+    "roomLiveQuestionAria": "当前提问",
+    "roomEmptyAria": "还在梳理中 —— 向你的团队提问",
+    "notesEmptyAria": "Avery 的笔记 —— 暂无内容",
+    "playbooksEmptyAria": "操作手册 —— 即将上线",
+    "teamLiveAria": "你的团队 —— 实时",
+    "followupsViewAria": "跟进事项视图",
+    "gapEmptyAria": "多看一眼 —— 暂无待办",
+    "projectsEmptyAria": "项目 —— 暂无内容",
+    "complianceFooterAria": "如何使用 Avery 给你的建议"
   },
   "ask": {
     "eyebrow": "快问",

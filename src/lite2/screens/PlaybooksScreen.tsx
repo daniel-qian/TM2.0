@@ -28,8 +28,8 @@ export function PlaybooksScreen() {
   const fallbackSlots = [l.playbooksSlotRoster, l.playbooksSlotIncident, l.playbooksSlotPack]
 
   return (
-    <section className="scene scene-nexus is-active lite-playbooks" aria-label="Playbooks">
-      <section className="nexus-empty lite-playbooks-empty" aria-label="Playbooks — coming soon">
+    <section className="scene scene-nexus is-active lite-playbooks" aria-label={l.tabPlaybooks}>
+      <section className="nexus-empty lite-playbooks-empty" aria-label={l.playbooksEmptyAria}>
         <p className="eyebrow lite-playbooks-eyebrow">{l.playbooksEyebrow}</p>
         <h2>{l.playbooksTitle}</h2>
         <p>{l.playbooksBody}</p>

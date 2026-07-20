@@ -67,7 +67,7 @@ export function CloserLookScreen() {
   }
 
   return (
-    <section className="scene scene-nexus is-active lite-closerlook" aria-label="A closer look">
+    <section className="scene scene-nexus is-active lite-closerlook" aria-label={t.lite2.tabCloserLook}>
       <div className="lite-closerlook-scroll">
         <div className="lite-closerlook-frame">
           <header className="lite-closerlook-header">
@@ -125,7 +125,7 @@ export function CloserLookScreen() {
               ))}
             </ol>
           ) : (
-            <section className="lite-gap-empty" aria-label="A closer look — nothing pending">
+            <section className="lite-gap-empty" aria-label={t.lite2.gapEmptyAria}>
               <h2>{t.lite2.gapEmptyTitle}</h2>
               <p>{t.lite2.gapEmptyBody}</p>
             </section>

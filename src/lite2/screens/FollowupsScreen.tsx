@@ -205,7 +205,7 @@ export function FollowupsScreen() {
   }
 
   return (
-    <section className="scene scene-nexus is-active lite-followups" aria-label="Follow-ups">
+    <section className="scene scene-nexus is-active lite-followups" aria-label={t.lite2.tabFollowups}>
       <div className="lite-followups-scroll">
         <div className="lite-followups-frame">
           <header className="lite-followups-header">
@@ -213,7 +213,7 @@ export function FollowupsScreen() {
             <h1>{t.lite2.followupsTitle}</h1>
           </header>
 
-          <div className="lite-followups-subtabs" role="tablist" aria-label="Follow-ups view">
+          <div className="lite-followups-subtabs" role="tablist" aria-label={t.lite2.followupsViewAria}>
             <button
               type="button"
               className={classNames(['lite-followups-subtab', tab === 'active' && 'is-active'])}

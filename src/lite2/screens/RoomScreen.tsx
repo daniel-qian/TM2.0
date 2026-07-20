@@ -220,6 +220,7 @@ function LiteAskComposer({
   onAsk: (text: string) => void
   initialValue?: string
 }) {
+  const { t } = useDict()
   const [draft, setDraft] = useState(initialValue ?? '')
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -229,13 +230,13 @@ function LiteAskComposer({
     setDraft('')
   }
   return (
-    <form className="nexus-followup-composer" aria-label="Ask your team" onSubmit={handleSubmit}>
+    <form className="nexus-followup-composer" aria-label={t.lite2.roomAskAria} onSubmit={handleSubmit}>
       <input
         type="text"
         value={draft}
         onChange={(event) => setDraft(event.target.value)}
         placeholder={placeholder}
-        aria-label="Live question"
+        aria-label={t.lite2.roomLiveQuestionAria}
       />
       <button type="submit">{submitLabel}</button>
     </form>
@@ -274,7 +275,7 @@ export function RoomScreen() {
   const advice = run.advice
 
   return (
-    <section className="scene scene-nexus is-active lite-room" aria-label="The room">
+    <section className="scene scene-nexus is-active lite-room" aria-label={t.lite2.tabRoom}>
       {hasStarted ? (
         <>
           {/* 薄画布：终端 + brief HUD + 8 字段卡随 pan/zoom 移动缩放；composer 留画布外 */}
@@ -326,7 +327,7 @@ export function RoomScreen() {
           />
         </>
       ) : (
-        <section className="nexus-empty" aria-label="Working it through — ask your team">
+        <section className="nexus-empty" aria-label={t.lite2.roomEmptyAria}>
           <p className="eyebrow">{t.nexus.liveThinking}</p>
           <h2>{t.lite2.roomEmptyTitle}</h2>
           <p>{t.lite2.roomEmptyBody}</p>

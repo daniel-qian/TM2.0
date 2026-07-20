@@ -69,7 +69,7 @@ export function HomeScreen() {
   // 不能把人晾在一屏空摘要上（"去别的 tab 传文件"是让用户替我们找路）。
   if (!team) {
     return (
-      <section className="scene is-active lite-home" aria-label="Today">
+      <section className="scene is-active lite-home" aria-label={t.lite2.tabHome}>
         <div className="lite-home-scroll">
           <div className="lite-home-frame lite-home-frame-empty">
             <header className="lite-home-header">
@@ -108,7 +108,7 @@ export function HomeScreen() {
   }
 
   return (
-    <section className="scene is-active lite-home" aria-label="Today">
+    <section className="scene is-active lite-home" aria-label={t.lite2.tabHome}>
       <div className="lite-home-scroll">
         <div className="lite-home-frame">
           <header className="lite-home-header">

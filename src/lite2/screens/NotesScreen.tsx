@@ -139,7 +139,7 @@ export function NotesScreen() {
   const oldest = notes.length > 0 ? notes[notes.length - 1] : null
 
   return (
-    <section className="scene scene-nexus is-active lite-notes" aria-label="Avery's notes">
+    <section className="scene scene-nexus is-active lite-notes" aria-label={t.lite2.tabNotes}>
       {notes.length > 0 ? (
         <div className="lite-notes-body">
           <header className="lite-notes-head">
@@ -166,7 +166,7 @@ export function NotesScreen() {
         </div>
       ) : (
         /* 空态：复用 .nexus-empty + Playbooks 空态模式；引导指向去 Room 问真问题。 */
-        <section className="nexus-empty lite-notes-empty" aria-label="Avery's notes — nothing yet">
+        <section className="nexus-empty lite-notes-empty" aria-label={t.lite2.notesEmptyAria}>
           <p className="eyebrow lite-notes-eyebrow">{t.lite2.notesEmptyEyebrow}</p>
           <h2>{t.lite2.notesEmptyTitle}</h2>
           <p>{t.lite2.notesEmptyBody}</p>

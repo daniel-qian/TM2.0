@@ -15,8 +15,8 @@ export function PlaybooksScreen() {
   ]
 
   return (
-    <section className="scene scene-nexus is-active lite-playbooks" aria-label="Playbooks">
-      <section className="nexus-empty lite-playbooks-empty" aria-label="Playbooks — coming soon">
+    <section className="scene scene-nexus is-active lite-playbooks" aria-label={t.lite.tabPlaybooks}>
+      <section className="nexus-empty lite-playbooks-empty" aria-label={t.lite.playbooksEmptyAria}>
         <p className="eyebrow lite-playbooks-eyebrow">{t.lite.playbooksEyebrow}</p>
         <h2>{t.lite.playbooksTitle}</h2>
         <p>{t.lite.playbooksBody}</p>

@@ -190,7 +190,7 @@ export function ProjectsScreen() {
     coverage.missingProgress > 0 || coverage.missingDueDate > 0 || coverage.missingStatus > 0
 
   return (
-    <section className="scene scene-nexus is-active lite-projects" aria-label="Projects">
+    <section className="scene scene-nexus is-active lite-projects" aria-label={l.tabProjects}>
       <div className="lite-projects-scroll">
         <div className="lite-projects-frame">
           <header className="lite-projects-header">
@@ -257,7 +257,7 @@ export function ProjectsScreen() {
             ))
           ) : (
             /* 0 个项目的诚实空态：不摆骨架卡、不摆假分组栏。 */
-            <section className="lite-projects-empty" aria-label="Projects — nothing yet">
+            <section className="lite-projects-empty" aria-label={l.projectsEmptyAria}>
               {restoring ? (
                 <p className="lite-projects-restoring" aria-live="polite">
                   {l.restoringLabel}
