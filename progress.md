@@ -793,3 +793,22 @@ ERR_CONNECTION_REFUSED，看起来像「后端挂了」（后端 8137 好好活�
 - **门**：新增 `eval-harness/tools/verify-{room-usability,handoffs-empty-honesty,contrast-smalltext}.mjs`；
   修 `.issues/v02-partner-align-0718/verify-{data-boundary,server}.mjs`
 - **档案**：`feature_list.json`（feat-080）、本文件、根 `session-handoff.md`
+
+## Update — 2026-07-21 · CR 对齐棒 r1（feat-081）：合伙人反馈九拍板落地——指挥室骨架 / 命名 2C / 承诺开关化 / aurora 默认
+
+**输入**：合伙人 0721 反馈（codex 零数据只读实测线上 demo + 「demo=文件解析器 vs command-room=管理指挥室」定位诊断，原文 `C:\Users\86139\Documents\对话0721.txt`）。三人探索队（cr 样板解剖 / avery 锚点映射 / 反馈 triage）+ command-room 真机勘察（junction `D:\cr-live`，dev:3100）→ grill 九问 → Danny 拍板 `1A 2C 3A 4A 5B 6A 7B 8A 9A+`（全录 `.issues/cr-align-0721/decisions.md`）。**探索队总判读改写了优先级**：她测的是零数据世界，有数据首页（feat-057）本来就是指挥室——反馈大半是冷启动问题，不是功能缺失。
+
+**本棒落地（棒 1 of N）**：
+- **4A 无数据首屏=指挥室骨架**：四块（决策/差距/关注/概览）诚实预告（零数字、零装加载、无假链接），上传降右侧入口卡 + emptyHints；登录提示前置（`homeGuestNote`，仅 auth status='guest' 渲染）；示例团队按钮插槽预留注释（3A 下棒接线）。空态 frame 限宽 640→1040（append-only 覆盖）。
+- **B4 决策→待办闭环**：`FollowupSource` + `'decision'`；决策卡「加入跟进」（防重复、走字典模板「决策：{title}」）；首页新增「今日待办」块（today 组未完成前 5 条，打勾就地 completeFollowup）。样板里这闭环是 toast 假的，我们接的是 flowStore 真状态。
+- **2C 命名主+副小字**：指挥室/今天、待办清单/跟进（en+zh）；副小字 aria-hidden、.scene-tab-sub 10px --ink-faint；assertV2Boots 改读 .scene-tab-main + 副名断言；verify-p0 锁定词表按拍板剔除「指挥室」（Nexus/现实差距维持）；ADR-0025 记档部分推翻。
+- **1A 承诺开关化**：`visionProofRedline`×2、`visionMockGateTitle/Body`×2、`notesRedlineNote`×2、`emptyHintPrivacy`×2、`upload.privacyNote`、`ask.redlineNote(+Offline)` 全改「评分=公司握着的开关（默认关、fail-closed、prompt 碰不到）；开=带证据的决策支持；永不单独构成人事依据」。「确定性检查」保留（机制真实存在，scoring_policy.py 只切 enforcement 立场）。Vision 页顶部 3 点速读（A7，visionSummary1-3，与 1A 口径一致）。
+- **7B aurora 默认 + 设置菜单**：resolveLook 缺省→aurora（URL>localStorage>默认 链不变）；语言/观感切换器收进 ⚙ .lite-settings 弹层（内部 .lang-switch/.look-switch 类名原样）；aurora 玻璃分支⑩收编设置菜单。paper 数值零动。
+- **6A 输出标签**：advice 卡标签显式化「事实——/推断——/置信度——/建议——」（两壳同值）。
+- **快改层**：议事室无材料 gate（contextId===null → 诚实空态，composer/chips 收起，CTA 指路首页；store 缝不动）；OnboardWizard ACCEPT 修齐（剔 .doc/.xls 补 .tsv，fixB1 漏网）;多看一眼页尾「连接公司数据后变实时」预告（Danny 的实时分析意图，条件时态）；上传文案重心「长出团队」→「形成管理判断」（B5，upload.caption/team.emptyBody/onboardUploadBody）。
+
+**zh 管线**：50 键 delta（26 旧值删除重译+24 新键）走 i18n-zh-delta 两趟（lite→lite2 --mirror）+ 导演修正 13 处（半角标点、「细看」→锁定词「多看一眼」、「我的团队」→「你的团队」、「按次数排」→「数的是次数不是评价」等）+ 8 行被抹注释还原。
+
+**门（红→绿全记录）**：新门 verify-room-nomaterial（11 判据）/ verify-home-skeleton（17 判据，含闭环真状态断言）+ 改写 verify-switchers（23 判据，⓪次级菜单两态新增）——红的形状：对 stash 掉四个 UI 文件的旧构建真跑，三门全在缺元素处崩红。回归战列 16 道全绿：p0 41/0（锁定词更新后）· contrast 26/0 · room-usability 20/0 · handoffs-honesty 10/0 · aria-zh 4/0 · status-truth 27/0 · file-manifest 30/0 · auth-capability 25/0 · onboarding-returning 15/0 · data-boundary 37/37 · bundle-privacy 7/0 · auth-form 57/0 · zh-purity 基线 14 不变。**dist 指向陷阱又演一遍**：auth-capability 把 dist 重打到 8281 不还原，殃及其后 file-manifest/onboarding 两门（ERR_CONNECTION_REFUSED 假象）——重建默认 dist 复绿；此后战列顺序把重打 dist 的门放队尾+终局重建。auth-form ⑧ 相两处直点切换器改「先开齿轮」，并揪出账号弹层不吃裸 Escape（必须 ensurePanelClosed）。verify-room-nomaterial 首版单字 includes('断') 被「判断」打红——改短语级（门自己也要过判别力关）。
+
+**遗留/下棒**（输入侧三件套，拍板已锁）：3A 示例团队（后端预铸共享 context；seed=三亚脱敏材料 `D:\Boyle\research\sanya-lushan-yiju-hotel\0721-脱敏seed\`，⚠先修后端 issue #10 中文名去重）· 5B 体检卡后端真实版 · 8A onboarding 采集送后端（「不会发到任何地方」文案必须同步改，DoD 显式项）。另：合伙人对外还在讲「不打分不排名」旧口径，Danny 需同步她（ADR-0025 后果节）。

@@ -683,6 +683,14 @@
       ],
       "status": "done",
       "evidence": "2026-07-20/21。三道新门全部先红后绿（红都是对着修复前 dist 真跑出来的，不是推断）：\n· verify-room-usability：红 8 FAIL（HUD/终端头栏重叠 9568px²、elementFromPoint 命中 nexus-brief-bar-eyebrow、Playwright 真实点击 2.5s 超时、滚轮 defaultPrevented=true 且 scale 1→0.88 共 4 处，v01/v02 同病）→ 绿 20/20（含反向护栏：空白画布 wheel-zoom 仍在、HUD 仍可见、点完真切 .is-raw）。\n· verify-handoffs-empty-honesty：红 6 FAIL（两壳世界 A 全中）→ 绿 10/10（世界 B 护栏：零信号时「平稳」原文案保留）。zh 走 i18n-zh-delta.mjs 分两趟（lite/lite2），M3 初译「再看一眼」经导演修正为产品既定词「多看一眼」（lite2 条指名 tab 实名）。\n· verify-contrast-smalltext：红 16 FAIL（paper 九屏全中、v01 五屏、aurora 2 处；全量叶子文本扫描而非点名选择器）→ 绿 26/26（v02·paper/v02·aurora/v01 三面零处低于 AA）。\n· 拆包（App.tsx React.lazy×3）：单 chunk 1005.27kB(gzip 307.37) → entry 523.81(155.26) + Lite2App 111.73(27.71) + story 182.73(66.63) + v01 42.82(10.60) + framer 114.45(37.81) + rzpp 28.91(9.14)；v02 客户首载 gzip 307→231(-25%)，story/v01 彻底退出客户路径。基线实测：120 人名册渲染 7.4ms（名册不是瓶颈）、375px 九屏零横向溢出（tabs 条横滚是设计）。\n· 门清仓：verify-data-boundary 崩(@babel/core)→37/37（configFile:false+esbuild jsx+手搬 envPrefix/__AVERY_BUILD__ define）；verify-server 重写（root 指回仓库/去 babel/端口可调）；verify-p0 首次全量 41 PASS·0 FAIL·0 SKIP。\n· 回归全绿：switchers 20/20 · aria-zh 4/4 · status-truth 27/27 · onboarding-returning 15/15 · file-manifest-truth 30/30 · null-owner 24/24 · fixA 37/0 · auth-capability 25/25 · auth-form 57/57 · zh-purity 基线 14 持平（v01 5 · v02 9）。\n· 陷阱重演实录：auth 门跑完把 dist 重打成指向 8291，随后 p0 全线 ERR_CONNECTION_REFUSED——用 requestfailed 探针抓到 URL 才破案；重打 dist 回默认后 p0 才绿。dist 指向不确定这条 AGENTS 陷阱在本地也咬人，不只生产。"
+    },
+    {
+      "id": "feat-081",
+      "name": "CR 对齐棒 r1：指挥室骨架 / 决策→待办闭环 / 命名 2C / 承诺开关化 / aurora 默认 / 设置菜单",
+      "description": "合伙人 0721 反馈（codex 零数据实测：demo 被读成文件解析器）+ command-room 真机对齐。九项 grill 拍板（1A 2C 3A 4A 5B 6A 7B 8A 9A+，全录 .issues/cr-align-0721/decisions.md）本棒落地六项：①无数据首屏改指挥室骨架（四块诚实预告零数字，上传降侧卡，登录提示前置，示例团队插槽预留）②决策卡「加入跟进」+首页今日待办块（FollowupSource+'decision'，接 flowStore 真状态——样板里是 toast 假闭环）③tab 主+副小字：指挥室/今天、待办清单/跟进（ADR-0025 部分推翻 0718 锁定词表：指挥室解锁，Nexus/现实差距维持）④评分承诺开关化：≥6 处「永不打分/任何指令关不掉」绝对句改「公司握着的开关（默认关 fail-closed）」+Vision 顶部 3 点速读 ⑤aurora 转默认+语言/观感切换器收进 ⚙ 设置菜单 ⑥advice 卡标签显式化事实/推断/建议/置信度。快改层：议事室无材料诚实 gate（不再烧默认语料 LLM/装网络故障）、OnboardWizard ACCEPT 修齐、多看一眼页实时预告、上传文案重心改管理判断。",
+      "evidence": "新门 verify-room-nomaterial 11/0 + verify-home-skeleton 17/0（含闭环真状态断言）+ 改写 verify-switchers 23/0——三门先红过（stash 四 UI 文件的旧构建上崩红）再绿。回归 16 道全绿：p0 41/0、contrast 26/0、room-usability 20/0、handoffs-honesty 10/0、file-manifest 30/0、auth-form 57/0、data-boundary 37/37、zh-purity 基线 14 等。zh 50 键 M3 delta+导演修正 13 处。真机验证：aurora 默认 data-look、指挥室/今天主副名、⚙ 齿轮、切换器出顶栏。",
+      "status": "done",
+      "date": "2026-07-21"
     }
   ]
 }

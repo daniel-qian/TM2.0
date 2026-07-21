@@ -1,4 +1,39 @@
-> # ⟳ 2026-07-20 深夜 · UIUX 棒收盘（★下个 session 从这里接）
+> # ⟳ 2026-07-21 · CR 对齐棒 r1 收盘（★下个 session 从这里接）
+>
+> **一句话**：合伙人反馈到了（零数据实测：demo 被读成「文件解析器」）——三人探索队 + command-room
+> 真机勘察 + grill 九问，Danny 拍板 `1A 2C 3A 4A 5B 6A 7B 8A 9A+`（全录
+> `.issues/cr-align-0721/decisions.md`，**下一棒照抄不重问**）。本棒落地六项 + 快改层，
+> 16 道门全绿（3 道新/改写的先红过），已合 main 部署上线。
+>
+> ## 现在线上是什么
+> - **前端** `averylite.dannyqian.com` = 本棒 main（Vercel 自动部署，收工时用 `__AVERY_BUILD__.commit`
+>   实测确认——SHA 见 git log 本棒 merge）：**aurora 转默认**、无数据首屏=指挥室骨架、tab 主副名
+>   （指挥室/今天 · 待办清单/跟进）、评分承诺开关化文案、⚙ 设置菜单（语言/观感收进去了）、
+>   决策卡「加入跟进」+ 首页今日待办块、议事室无材料诚实空态。
+> - **后端** `avery.dannyqian.com` 零改动（仍 `avery-agent:main-20260720-211529`）。
+>
+> ## 下一棒是什么（输入侧三件套，拍板已锁）
+> 1. **3A 一键示例团队**：后端预铸共享 demo context。seed=真实脱敏材料
+>    `D:\Boyle\research\sanya-lushan-yiju-hotel\0721-脱敏seed\`（1 工作汇报.docx + 5 匿名简历.pdf，
+>    全中文）。⚠ **先修后端 issue #10**（跨文档去重失效 + `_slug` 中文名压缩 u_x），否则 5 个人塌成一张卡。
+>    前端插槽已留好（HomeScreen 空态注释 + verify-home-skeleton 门）。
+> 2. **5B 材料体检卡后端真实版**（Danny 明确不要轻量过渡版）：抽取层输出覆盖度元数据（时间范围/
+>    可用字段/缺失字段/判断等级）→ 前端体检卡。合伙人的三档输入标准+六类误差设计在对话0721.txt 后半，照它做。
+> 3. **8A onboarding 采集公司状况+项目详情送后端**：company_notes 表已有（迁移 0006）；
+>    「仅保存在本浏览器，不会发到任何地方」（en.ts onboardTeamBody）**必须同步改**——DoD 显式项。
+>
+> ## 别再踩的坑（本棒新增证据）
+> - **dist 指向陷阱**：verify-auth-capability 把 dist 重打到 8281 不还原——重打 dist 的门放战列队尾，
+>   跑完终局重建默认 dist（本棒 file-manifest/onboarding 两门被殃及后复绿）。
+> - 切换器在 ⚙ 设置菜单里：门要先点 `.lite-settings-toggle`；账号弹层不吃裸 Escape，要 `ensurePanelClosed`。
+> - 改 tab 主名 = 同 commit 三处联动（en/zh 键 + assertV2Boots + verify-p0 锁定词表），ADR-0025 有全录。
+>
+> ## 站着别动的事
+> - 裸「风险：」词表加宽、`origin/p5-04-nexus-safe-zone` 处置、凭据轮换——仍归 Danny。
+> - 合伙人对外还在讲「不打分不排名」旧口径——Danny 需亲自同步她（ADR-0025 后果节）。
+> - v01 (lite) 本轮冻结于 feat-080 形态（共享文案键的值变了会跟着变，结构零动）。
+
+> # ⟳ 2026-07-20 深夜 · UIUX 棒收盘（上一棒）
 >
 > **一句话**：首个专职 UIUX 棒（feat-080）——议事室两个真人用不了的交互（按钮被 HUD 盖死 /
 > 滚轮劫持）、一句同屏自相矛盾的空态文案、两张皮铺满九屏的小字对比度、以及首次 code-splitting
