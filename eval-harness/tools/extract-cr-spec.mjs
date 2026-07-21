@@ -74,6 +74,33 @@ const PROBE = `(() => {
     return parseFloat(c.borderRadius) >= 999 && txt && txt.length < 8 && el.children.length <= 1
   }).slice(0, 12).map((el) => { const c = getComputedStyle(el)
     return { text: el.innerText.trim(), backgroundColor: c.backgroundColor, color: c.color, fontSize: c.fontSize, fontWeight: c.fontWeight, padding: c.padding } })
+  // 3) 几何采集（「布局与真部件」战役棒A 新增；上面的采集项一条都没删）
+  //    棒0-棒4 的 PROBE 只采色/字/圆角/阴影，一个几何量都没有——要断言栏宽比/网格列数/
+  //    间距就必须先能看见它们。🔴 computed 的 gridTemplateColumns 是**解析后的 px 串**
+  //    （"889.06px 573.94px"），不是作者写的 "1.55fr 1fr"：所以列比只能从子元素 rect 量，
+  //    容器的 gridTemplateColumns 只适合 px 对值。两者都采，让筛选的人自己挑。
+  const GEO_PROPS = ['display','gridTemplateColumns','gridTemplateRows','gap','columnGap','rowGap',
+    'alignItems','width','maxWidth','padding','marginBottom']
+  const rectOf = (el) => { if (!el) return null
+    const r = el.getBoundingClientRect()
+    return { width: +r.width.toFixed(2), height: +r.height.toFixed(2), left: +r.left.toFixed(2), top: +r.top.toFixed(2) } }
+  const geo = (el) => { if (!el) return null; const g = pick(el, GEO_PROPS); if (!g) return null
+    g.rect = rectOf(el); return g }
+  // 元素身份：给人工筛选看的，不入 spec（spec 的 selector 一律写我方的 .lite2-shell 前缀）
+  // 🔴 PROBE 是**模板字符串**：里面的 \\s 必须双写，否则 JS 把 \\s 吃成字面 s，
+  //    /s+/ 会按字母 s 切类名（第一版实测把 "grid-cols-5" 打成 "grid-col.-5"）。
+  const idOf = (el) => { const cls = typeof el.className === 'string' ? el.className.trim() : ''
+    return (el.tagName.toLowerCase() + (cls ? '.' + cls.split(/\\s+/).join('.') : '')).slice(0, 180) }
+  out.probes.geo = {
+    main: geo(main),
+    mainChildren: main ? [...main.children].slice(0, 12).map((el) => ({ sel: idOf(el), ...geo(el) })) : [],
+  }
+  // main 下所有 grid 容器 + 每个的直系子元素 rect（列比的唯一诚实来源）
+  out.probes.grids = main ? [...main.querySelectorAll('*')].filter((el) => {
+    const c = getComputedStyle(el)
+    return (c.display === 'grid' || c.display === 'inline-grid') && el.getBoundingClientRect().width > 0
+  }).slice(0, 24).map((el) => ({ sel: idOf(el), childCount: el.children.length, ...geo(el),
+    children: [...el.children].slice(0, 8).map((ch) => ({ sel: idOf(ch), rect: rectOf(ch) })) })) : []
   return out
 })()`
 
@@ -91,7 +118,7 @@ for (const route of ROUTES) {
   await page.waitForSelector('header a', { timeout: 15000 })
   const data = await page.evaluate(PROBE)
   draft.routes[route] = data
-  console.log(`  ✓ ${route} vars=${Object.keys(data.vars).length} buttons=${data.probes.buttons.length} badges=${data.probes.badges.length}`)
+  console.log(`  ✓ ${route} vars=${Object.keys(data.vars).length} buttons=${data.probes.buttons.length} badges=${data.probes.badges.length} grids=${data.probes.grids.length}`)
 }
 
 await browser.close()

@@ -11,6 +11,11 @@
 // stick>N 的行照跑照报但标 [FUTURE] 不计红——每棒电池带着自己的 SPEC_STICK 跑，
 // 战役收官跑全量。
 //
+// ## 行类型（「布局与真部件」战役棒A 扩容）
+// 缺省行 = 单元素单属性（`prop` 或 `var`）；新增 `probe:'rect'`（配 `axis`，量
+// getBoundingClientRect 的 width/height/left/top）与 `probe:'count'`
+// （querySelectorAll(selector).length）。缺省行的行为一字未改。
+//
 // ## 两种世界
 // 全量跑在棒1 构建上必红（stick 2/3/4 的行全是未来态：topbar top 18≠14、h1 700≠800、
 // 按钮 999px≠9px……），红输出存档即两世界证据；每棒交付后其 stick 行转绿。
@@ -33,10 +38,36 @@ const rec = (n, ok, future, d) => {
   console.log(`  [${tag}] ${n}${d ? ' — ' + d : ''}`)
 }
 
-const SEED_DOC = [
-  '# 望江咨询 · 项目周报 W33', '', '## 项目：客户门户改版', '负责人：陈静', '状态：正常', '',
-  '本周完成登录页联调，下周进入验收。', '',
-].join('\n')
+// 世界搭建（「布局与真部件」战役棒A · E8 扩容）。
+//
+// 原来只灌一份周报，实测世界是「0 人 / 1 项目 / 0 卡点」——主页右栏两块（差距摘要 /
+// 需关注的人）都是空态，没有 DOM。本战役把这两块提到主页黄金位，spec 行的 selector
+// 会直接无匹配 → actual===null → 判红，那是**假红**（码没错，是世界太薄）。
+//
+// 触发条件是实测出来的（.issues/layout-real-0722/panel-firing-truth.md）：
+//   · 差距卡：项目 statusRaw ∈ {on-track, steady} **且** blockers 非空（嘴上说没事、身上挂着卡点）
+//   · 关注成员：某人**名下项目**挂着卡点（signalCount+blockerCount ≥ 1）；人必须先在名册里存在
+// 所以要两份文件：花名册（造人，周报单独喂出来的是 0 人）+ 周报（同一个项目块里
+// 同时写「状态：正常」和「阻塞：…」）。缺任何一半，两块都回到空态。
+const SEED_DOCS = [
+  {
+    name: 'w33-roster.md',
+    text: [
+      '# 望江咨询 · 员工花名册', '',
+      '姓名 | 职位 | 部门 | 司龄 | 负责',
+      '陈静 | 产品经理 | 客户门户组 | 3 年 | 客户门户改版',
+      '周敏 | 交付顾问 | 客户门户组 | 2 年 | 客户门户改版', '',
+    ].join('\n'),
+  },
+  {
+    name: 'w33-weekly.md',
+    text: [
+      '# 望江咨询 · 项目周报 W33', '', '## 项目：客户门户改版', '负责人：陈静', '状态：正常',
+      '阻塞：验收口径未确认，法务尚未回复。', '',
+      '本周完成登录页联调，下周进入验收。', '',
+    ].join('\n'),
+  },
+]
 
 const browser = await chromium.launch({ headless: true })
 const page = await (await browser.newContext({ viewport: { width: 1440, height: 900 } })).newPage()
@@ -45,11 +76,11 @@ if (await page.locator('.lite-onboard').count()) {
   await page.keyboard.press('Escape')
   await page.waitForTimeout(600)
 }
-await page.evaluate(async (doc) => {
+await page.evaluate(async (docs) => {
   const enc = new TextEncoder()
-  const f = new File([enc.encode(doc)], 'w33-weekly.md', { type: 'text/markdown' })
-  await window.__lite2Store.getState().uploadFiles([f])
-}, SEED_DOC)
+  const files = docs.map((d) => new File([enc.encode(d.text)], d.name, { type: 'text/markdown' }))
+  await window.__lite2Store.getState().uploadFiles(files)
+}, SEED_DOCS)
 await page.waitForFunction(
   () => ['ready', 'error'].includes(window.__lite2Store.getState().ingestStatus),
   undefined, { timeout: 30000 },
@@ -70,6 +101,28 @@ await page.evaluate(() => {
   window.__lite2Store.setState({ rawTeam: { ...raw, decisions: [decision] } })
 })
 
+// 世界体检（棒A · E8）：先把两块面板的派生条数打出来，再跑 spec。
+// 数的是 deriveGaps / deriveAttentionPeople 的**结果长度**（界面上的计数徽标就是它们的
+// .length，列表本身只渲染前 3 / 前 4 条）。任何一项是 0，主页右栏该块就是空态，
+// 依赖它的 spec 行会因「选择器无匹配」判红——那是世界的问题，不是码的问题。
+await page.evaluate(() => window.__lite2Store.getState().goScreen('home'))
+await page.waitForTimeout(400)
+const world = await page.evaluate(() => {
+  const st = window.__lite2Store.getState()
+  const badge = (sel) => { const el = document.querySelector(sel); return el ? el.textContent.trim() : '(空态)' }
+  return {
+    people: st.team ? st.team.people.length : null,
+    projects: st.team ? st.team.projects.length : null,
+    blockers: st.team ? st.team.projects.reduce((n, p) => n + (p.blockers ? p.blockers.length : 0), 0) : null,
+    gaps: badge('.lite2-shell .lite-home-gaps .lite-home-count'),
+    gapItems: document.querySelectorAll('.lite2-shell .lite-home-gap-item').length,
+    attention: badge('.lite2-shell .lite-home-attention .lite-home-count'),
+    attentionItems: document.querySelectorAll('.lite2-shell .lite-home-attention-list > li').length,
+  }
+})
+console.log(`  世界：${world.people} 人 / ${world.projects} 项目 / ${world.blockers} 条卡点 · `
+  + `差距 ${world.gaps}（渲染 ${world.gapItems} 条）· 需关注的人 ${world.attention}（渲染 ${world.attentionItems} 行）`)
+
 // 按屏分组跑
 const byScreen = new Map()
 for (const row of spec.rows) {
@@ -81,12 +134,25 @@ for (const [screen, rows] of byScreen) {
   await page.evaluate((s) => window.__lite2Store.getState().goScreen(s), screen)
   await page.waitForTimeout(400)
   for (const row of rows) {
-    const actual = await page.evaluate(({ selector, prop, varName }) => {
+    // 三种取值器（`probe` 缺省=原来的单元素单属性，行为一字不变）：
+    //   · 缺省          getComputedStyle(el)[prop] 或 自定义属性 var
+    //   · probe:'rect'  el.getBoundingClientRect()[axis]，axis ∈ width|height|left|top
+    //   · probe:'count' document.querySelectorAll(selector).length
+    // 布局要断言的是**栏宽比 / 网格列数 / 子元素计数**，单属性够不着：computed 的
+    // gridTemplateColumns 是解析后的 px 串（实测她方双栏 = "835.172px 538.828px"，
+    // 不是作者写的 "1.55fr 1fr"），所以比例只能量两栏的 rect，列数只能数子元素。
+    // 判据仍是既有 tolerance 家族（exact/contains/px1/px2）——rect/count 一律回 string。
+    const actual = await page.evaluate(({ selector, prop, varName, probe, axis }) => {
+      if (probe === 'count') return String(document.querySelectorAll(selector).length)
       const el = document.querySelector(selector)
       if (!el) return null
+      if (probe === 'rect') {
+        const v = el.getBoundingClientRect()[axis || 'width']
+        return typeof v === 'number' ? String(v) : null
+      }
       const cs = getComputedStyle(el)
       return varName ? cs.getPropertyValue(varName).trim() : cs[prop]
-    }, { selector: row.selector, prop: row.prop, varName: row.var })
+    }, { selector: row.selector, prop: row.prop, varName: row.var, probe: row.probe, axis: row.axis })
     let ok = false
     if (actual !== null) {
       if (row.tolerance === 'exact') ok = actual === row.expected
@@ -97,7 +163,10 @@ for (const [screen, rows] of byScreen) {
       }
     }
     const future = row.stick > STICK
-    rec(`[stick${row.stick}] ${row.key} ${row.var || row.prop}=${row.expected}`, ok, future,
+    // 量名：rect/count 行没有 prop/var，打印它们自己的量（不改既有行的输出一个字）
+    const measure = row.var || row.prop
+      || (row.probe === 'rect' ? `rect.${row.axis || 'width'}` : row.probe === 'count' ? 'count' : '?')
+    rec(`[stick${row.stick}] ${row.key} ${measure}=${row.expected}`, ok, future,
       actual === null ? `选择器无匹配 ${row.selector}` : ok ? '' : `实测 ${String(actual).slice(0, 60)}`)
   }
 }
