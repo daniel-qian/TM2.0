@@ -11,3 +11,6 @@ __pycache__/
 .pytest_cache/
 .venv/
 venv/
+
+# 棒A 对抗审查：scratch 探针目录，别被 git add -A 卷进来
+tmp/

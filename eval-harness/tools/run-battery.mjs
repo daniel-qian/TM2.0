@@ -160,7 +160,15 @@ const only = arg('only')
 const from = arg('from')
 const dry = !!arg('dry')
 const noRebuild = !!arg('no-rebuild')
-const stick = process.env.SPEC_STICK || null
+// 🔴 SPEC_STICK 必须有默认值，不能只做透传（棒A 对抗审查逮到的 BLOCKER）。
+// verify-cr-alignment.mjs:30 是 `process.env.SPEC_STICK ? Number(...) : Infinity`
+// —— 不设 = 全量硬断言 = 把「红先行」的未来态规格行全部算成回归红。
+// 于是 `run-battery.mjs --only=A` 这个「最常用跑法」会恒红、exit 1，
+// AFK 自跑自验以 exit code 为准时这是一条永久假红，
+// 且 plan.md 棒H 的收官判据「全电池连续两轮零红」永远达不到。
+// 默认取 CURRENT_STICK（＝当前已交付的最高棒）；跑收官全量断言时显式 SPEC_STICK=99。
+const CURRENT_STICK = '4'
+const stick = process.env.SPEC_STICK || CURRENT_STICK
 
 let plan = ROSTER.slice()
 if (only) {
@@ -215,7 +223,7 @@ for (const g of plan) {
   console.log('─'.repeat(78))
   const t0 = Date.now()
   const env = { ...process.env, VERIFY_BASE: BASE, ...(g.env || {}) }
-  if (stick) env.SPEC_STICK = stick
+  env.SPEC_STICK = stick
   const r = spawnSync(process.execPath, g.cmd, { cwd: ROOT, env, stdio: 'inherit' })
   const ms = Date.now() - t0
   const ok = r.status === 0
