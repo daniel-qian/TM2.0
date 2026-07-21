@@ -28,8 +28,10 @@ export const en = {
   // ── upload panel (live mode Onboarding) ───────────────────────────────────
   upload: {
     title: 'Bring your team in',
+    // 0721 对齐棒（合伙人反馈 B5）：重心从「文件长出团队」改到「文件变成管理判断」——
+    // demo 的第一印象不该是文件解析器。列举的产出全部真实存在（决策卡/项目状态/需关注的人）。
     caption:
-      "Give it what you'd hand a new manager on day one — a few resumes, a project weekly, a roster. It reads them and your team grows below.",
+      "Give it what you'd hand a new manager on day one — a roster, a project weekly, a few resumes. Avery reads them and comes back with working judgments: who's carrying what, where projects stand, what needs your eye today.",
     drop: 'Drop files here, or choose',
     choose: 'Choose files',
     accepted: 'PDF, Word, Excel, CSV, Markdown, or text',
@@ -46,7 +48,8 @@ export const en = {
     errorLabel: "Couldn't read those files",
     retry: 'Try again',
     grownFrom: 'Grown from',
-    privacyNote: 'Nothing is scored about any person — only what they do and own.',
+    // 0721 · 1A：开关化（详见 lite2.visionProofRedline 上方的改写理由注释）。
+    privacyNote: 'Scoring people is off unless your company turns it on — Avery reads what people do and own.',
     empty: 'No files yet. Upload a few to see your team appear.',
     // feat-032 — the per-company file space: a look-back list of what you uploaded (persists).
     filesTitle: 'Your files',
@@ -107,8 +110,10 @@ export const en = {
   team: {
     liveEyebrow: 'From your uploads',
     emptyTitle: 'Your team will appear here',
+    // 0721（B5）：补一句判断产出——空态不只承诺「长出人和项目」，还要说清读完之后
+    // Avery 会给出什么（这才是产品，不是解析器）。
     emptyBody:
-      'Drop a few files on the right and the people and projects grow out of them — nothing to configure.',
+      'Drop a few files on the right — the people and projects grow out of them, and Avery comes back with a working read: what stands out, what deserves a closer look. Nothing to configure.',
   },
 
   // ── Nexus, live ───────────────────────────────────────────────────────────
@@ -210,8 +215,12 @@ export const en = {
     visionProofTitle: 'Three things worth judging today',
     visionProofUiux: 'The interface — how a team and a live read actually feel to move through.',
     visionProofJudgment: "The judgment — whether the room's read of a real situation is one you'd trust.",
+    // 0721 对齐棒 · Danny 拍板 1A：绝对承诺（"永不打分、任何指令关不掉"）已不再为真——
+    // AVERY_ALLOW_PERSON_SCORING 开关存在且由运营方控制（scoring_policy.py：默认关、
+    // fail-closed，开关只决定写入/ingest 缝的红线机制是拒收还是放行，检测器本身未动）。
+    // 文案改为「开关归公司」的条件表述，机制描述贴着真实现写。
     visionProofRedline:
-      'The red line — people are never scored, ranked, or profiled, and no instruction can turn that off.',
+      'The boundary — whether Avery may score people is a switch your company owns, off until someone explicitly turns it on. Off, person-scoring content is refused at the door; on, it arrives as decision support with evidence — never the sole basis for a personnel call.',
 
     // ── Capability-boundary mock (honestly labeled; NOT built — a preview of the boundary) ──
     visionMockEyebrow: 'After your data is wired in',
@@ -240,9 +249,12 @@ export const en = {
       "Point Avery at a batch of situations and it works through them in the background, on its own schedule. You come back to results to check — not a live session to babysit. The scarce thing is your attention, so the product spends it last.",
 
     // Mock 4 — the red line as a deterministic gate (Martin-Dye: prompt is a request, permission is a check)
-    visionMockGateTitle: 'The red line is a gate, not a wish',
+    // 0721 · 1A：同 visionProofRedline 的开关化改写。「确定性检查」的说法保留——它仍然
+    // 为真（redline 检测器 + 写入/ingest 缝的 enforcement 是真实存在的确定性机制），
+    // 变的只是它执行的立场从「永不」变成「公司拍的开关」。
+    visionMockGateTitle: 'The boundary is a gate, not a wish',
     visionMockGateBody:
-      "Reading a team the wrong way costs trust you can't refund. So the no-scoring rule on people isn't a line in a prompt that a clever request could bend — it's a deterministic check every answer passes before it reaches you.",
+      "Reading a team the wrong way costs trust you can't refund. So the scoring stance your company picks isn't a line in a prompt that a clever request could bend — it's enforced by a deterministic check at the doors where observations are saved. Switched off, person-scoring content is refused; switched on, it passes with its evidence attached.",
 
     // A tiny illustrative person chip inside a mock — red line holds: a name and a role, no numbers.
     visionMockPersonName: 'A teammate',
@@ -251,15 +263,18 @@ export const en = {
     visionComingSoon: 'None of the four is live yet. This tab is a preview of the boundary, kept honest on purpose.',
 
     // ── Avery's notes surface (feat-033: write-side, accumulating, user-visible memory) ──
-    // Copy per avery-notes-ux-draft.md §5. The red-line trust note stays on-message with the
-    // existing family (upload.privacyNote / emptyHintPrivacy / visionProofRedline): a DETERMINISTIC
-    // gate, never "we try" — never scored/ranked/profiled, and no instruction can turn that off.
+    // Copy per avery-notes-ux-draft.md §5. The trust note stays on-message with the existing
+    // family (upload.privacyNote / emptyHintPrivacy / visionProofRedline)——0721 · 1A 之后这一族
+    // 的口径是：确定性 gate 仍在，但它执行的是「公司拍的开关」（scoring_policy.py），不再是
+    // 「永不」。写新文案别把绝对句抄回来。
     notesEyebrow: 'Field notes',
     notesTitle: 'What Avery has noticed about your company',
     notesLede:
       'Every time you ask the room a real question, Avery writes down what it observed — in its own words, for you to read. It builds up the longer you work together.',
+    // 0721 · 1A：绝对句改开关句。「prompt 掰不动」仍然为真——开关是进程环境变量，
+    // 不是提示词能碰到的东西。
     notesRedlineNote:
-      'These notes describe work — projects, handoffs, load. They never score, rank, or profile a person, and no instruction can turn that off.',
+      "These notes describe work — projects, handoffs, load. Whether Avery may ever score a person is a switch your company controls — not something a clever prompt can flip — and no note is the sole basis for a personnel decision.",
     notesCountSince: 'observations · since', // "12 observations · since Mar 3"
     notesCountOne: 'observation', // per-day group count (singular)
     notesCountMany: 'observations', // per-day group count (plural)
@@ -347,7 +362,8 @@ export const en = {
     emptyEyebrow: 'Getting started',
     emptyHintRoster: 'A team roster or a few resumes — the people appear as cards.',
     emptyHintProject: 'A project plan or weekly update — the projects line up next to them.',
-    emptyHintPrivacy: 'No one gets scored. Avery only keeps what people do and own.',
+    // 0721 · 1A：开关化（产品默认关、fail-closed 是事实；开不开归公司）。
+    emptyHintPrivacy: 'Scoring people is a switch your company controls — until it is turned on, Avery keeps only what people do and own.',
 
     // Lanes
     peopleLane: 'People',
@@ -412,16 +428,19 @@ export const en = {
     adviceReadTitle: 'The read',
     adviceSignOff: 'Yours to sign off',
     adviceSummaryAria: 'Summary — the read',
-    adviceSignalsLabel: 'Signals it picked up',
-    adviceHypothesesLabel: 'What might be going on — a read, not a verdict',
+    // 0721 对齐棒 · Danny 拍板 6A（合伙人反馈 A4/C5）：结构标签显式携带「事实/推断/建议/
+    // 置信度」词汇族——8 字段卡本来就是这个结构，缺的只是把结构"说出来"。纯文案层，
+    // 后端 contract 一字未动；语气仍走 ADR-0015 的人话（前缀 + 破折号，不是冷冰冰的裸标签）。
+    adviceSignalsLabel: 'Fact — signals it picked up',
+    adviceHypothesesLabel: 'Inference — what might be going on, not a verdict',
     adviceMostLikely: 'Most likely',
     adviceAlsoPossible: 'Also possible',
     adviceBackingLabel: 'The backing',
-    adviceEvidenceLabel: "Why I'm saying this",
-    adviceConfidenceLabel: 'How sure it is',
+    adviceEvidenceLabel: 'Fact — the document lines this leans on',
+    adviceConfidenceLabel: 'Confidence — how sure it is',
     adviceConfidenceWouldChange: 'What would change it',
     adviceMoveLabel: 'The move',
-    adviceActionsLabel: 'Recommended actions',
+    adviceActionsLabel: 'Suggestion — recommended actions',
     adviceScriptLabel: 'If you open the 1:1',
     adviceWatchLabel: 'What to watch to know it worked',
     adviceHrAria: 'HR / who confirms',
@@ -484,7 +503,12 @@ export const en = {
 
     // ── New tabs (feat-035 6-tab skeleton — PRD order: team, room, followups, closerlook,
     // playbooks, vision) ──
-    tabFollowups: 'Follow-ups',
+    // 0721 对齐棒 · Danny 拍板 2C（主+副小字折中）：followups 主名改「待办清单/To-do list」，
+    // 原名降为副小字（tabFollowupsSub）。这是对 ADR-0015 决策 4 canon 的**局部**推翻，
+    // 已拍板记档（见 docs/adr/ 0721 对齐 ADR）；Nexus/现实差距两词维持 0718 锁定不上屏。
+    // ⚠ 主名一动必须同 commit 改 scripts/gates/live-frontend-gate.snippet.js assertV2Boots。
+    tabFollowups: 'To-do list',
+    tabFollowupsSub: 'Follow-ups',
     tabCloserLook: 'A closer look',
     // feat-047: 7th tab, ported from `lite` — same key name/value as `en.lite.tabNotes` so
     // scripts/i18n-zh-lite2-delta.mjs reuses the already-approved zh.lite translation verbatim
@@ -498,6 +522,8 @@ export const en = {
     langSwitchZh: 'Chinese',
     langSwitchEn: 'English',
     lookSwitchAria: 'Look',
+    // 0721 · 7B：切换器收进设置菜单——齿轮按钮的 aria/title。
+    settingsAria: 'Settings',
     lookSwitchPaper: 'Paper',
     lookSwitchAurora: 'Aurora',
 
@@ -566,6 +592,8 @@ export const en = {
     followupsSourceAsk: 'From a quick ask',
     followupsSourceCloserLook: 'From a closer look',
     followupsSourceManual: 'Added by you',
+    // 0721 对齐棒 · B4 闭环：首页决策卡的「加入跟进」来源标签。
+    followupsSourceDecision: 'From a decision',
     followupsAddTitlePlaceholder: 'What needs following up?',
     followupsAddGroupLabel: 'When',
     followupsAddSubmit: 'Add to follow-ups',
@@ -616,19 +644,28 @@ export const en = {
     gapEmptyBody:
       "When a project's own status and its blockers tell different stories, it'll show up here.",
 
+    // 0721 对齐棒 · Danny 拍板 2C：「实时分析」不做 tab 名，改页内条件时态预告。
+    // 🔴 措辞纪律：现在这页读的是已上传文件（gapDerive 离线派生），预告只说「连接之后
+    // 会变成什么」，不装已接线、不写日期——同 Vision 屏 Coming 语法。
+    gapRealtimeTitle: 'What this page becomes',
+    gapRealtimeBody:
+      "Right now it reads from the files you've uploaded. Connect your company's data sources and this turns into a live view — the drift between reports and reality surfaces on its own, without waiting for the next upload.",
+
     // ── Avery's notes surface (feat-047, ported from `lite`'s feat-033 — write-side,
     // accumulating, user-visible memory). Every key name here matches `en.lite.notes*` byte-
     // for-byte so scripts/i18n-zh-lite2-delta.mjs reuses the already-approved zh.lite Chinese
-    // verbatim (no fresh M3 call). Copy per avery-notes-ux-draft.md §5 — the red-line trust note
-    // stays on-message with the existing family (upload.privacyNote / emptyHintPrivacy /
-    // visionProofRedline): a DETERMINISTIC gate, never "we try" — never scored/ranked/profiled,
-    // and no instruction can turn that off. ──
+    // verbatim (no fresh M3 call). Copy per avery-notes-ux-draft.md §5 — the trust note stays
+    // on-message with the existing family (upload.privacyNote / emptyHintPrivacy /
+    // visionProofRedline)——0721 · 1A 之后口径改为「确定性 gate 执行公司拍的开关」
+    // （scoring_policy.py），不再是「永不」；写新文案别把绝对句抄回来。 ──
     notesEyebrow: 'Field notes',
     notesTitle: 'What Avery has noticed about your company',
     notesLede:
       'Every time you ask the room a real question, Avery writes down what it observed — in its own words, for you to read. It builds up the longer you work together.',
+    // 0721 · 1A：绝对句改开关句。「prompt 掰不动」仍然为真——开关是进程环境变量，
+    // 不是提示词能碰到的东西。
     notesRedlineNote:
-      'These notes describe work — projects, handoffs, load. They never score, rank, or profile a person, and no instruction can turn that off.',
+      "These notes describe work — projects, handoffs, load. Whether Avery may ever score a person is a switch your company controls — not something a clever prompt can flip — and no note is the sole basis for a personnel decision.",
     notesCountSince: 'observations · since', // "12 observations · since Mar 3"
     notesCountOne: 'observation', // per-day group count (singular)
     notesCountMany: 'observations', // per-day group count (plural)
@@ -685,8 +722,24 @@ export const en = {
     visionProofTitle: 'Three things worth judging today',
     visionProofUiux: 'The interface — how a team and a live read actually feel to move through.',
     visionProofJudgment: "The judgment — whether the room's read of a real situation is one you'd trust.",
+    // 0721 对齐棒 · Danny 拍板 1A：绝对承诺（"永不打分、任何指令关不掉"）已不再为真——
+    // AVERY_ALLOW_PERSON_SCORING 开关存在且由运营方控制（scoring_policy.py：默认关、
+    // fail-closed，开关只决定写入/ingest 缝的红线机制是拒收还是放行，检测器本身未动）。
+    // 文案改为「开关归公司」的条件表述，机制描述贴着真实现写。
     visionProofRedline:
-      'The red line — people are never scored, ranked, or profiled, and no instruction can turn that off.',
+      'The boundary — whether Avery may score people is a switch your company owns, off until someone explicitly turns it on. Off, person-scoring content is refused at the door; on, it arrives as decision support with evidence — never the sole basis for a personnel call.',
+
+
+    // 0721 对齐棒 · 合伙人反馈 A7：顶部 3 点速读（本页偏长，投资人/客户 30 秒抓重点）。
+    // 三点 = 全页压缩：这是什么 / 今天试的是哪一层 / 边界归谁定。口径与 1A 开关化一致。
+    // 只 lite2 消费（v01 VisionScreen 结构冻结，不加这块）。
+    visionSummaryLabel: 'The short version',
+    visionSummary1:
+      "Avery reads a team's real files into judgments a manager can act on — who's carrying what, where projects stand, what needs your eye.",
+    visionSummary2:
+      'What you are trying today is the demo edge of that: upload, read, decide. The real product is a custom agent wired to your own company data, privately deployed.',
+    visionSummary3:
+      'The boundary stays yours: scoring people is a company-controlled switch, and nothing Avery says is the sole basis for a personnel decision.',
 
     // ── Capability-boundary mock (honestly labeled; NOT built — a preview of the boundary) ──
     visionMockEyebrow: 'After your data is wired in',
@@ -715,9 +768,12 @@ export const en = {
       "Point Avery at a batch of situations and it works through them in the background, on its own schedule. You come back to results to check — not a live session to babysit. The scarce thing is your attention, so the product spends it last.",
 
     // Mock 4 — the red line as a deterministic gate (Martin-Dye: prompt is a request, permission is a check)
-    visionMockGateTitle: 'The red line is a gate, not a wish',
+    // 0721 · 1A：同 visionProofRedline 的开关化改写。「确定性检查」的说法保留——它仍然
+    // 为真（redline 检测器 + 写入/ingest 缝的 enforcement 是真实存在的确定性机制），
+    // 变的只是它执行的立场从「永不」变成「公司拍的开关」。
+    visionMockGateTitle: 'The boundary is a gate, not a wish',
     visionMockGateBody:
-      "Reading a team the wrong way costs trust you can't refund. So the no-scoring rule on people isn't a line in a prompt that a clever request could bend — it's a deterministic check every answer passes before it reaches you.",
+      "Reading a team the wrong way costs trust you can't refund. So the scoring stance your company picks isn't a line in a prompt that a clever request could bend — it's enforced by a deterministic check at the doors where observations are saved. Switched off, person-scoring content is refused; switched on, it passes with its evidence attached.",
 
     // A tiny illustrative person chip inside a mock — red line holds: a name and a role, no numbers.
     visionMockPersonName: 'A teammate',
@@ -820,7 +876,8 @@ export const en = {
     emptyEyebrow: 'Getting started',
     emptyHintRoster: 'A team roster or a few resumes — the people appear as cards.',
     emptyHintProject: 'A project plan or weekly update — the projects line up next to them.',
-    emptyHintPrivacy: 'No one gets scored. Avery only keeps what people do and own.',
+    // 0721 · 1A：开关化（产品默认关、fail-closed 是事实；开不开归公司）。
+    emptyHintPrivacy: 'Scoring people is a switch your company controls — until it is turned on, Avery keeps only what people do and own.',
 
     // Lanes
     peopleLane: 'People',
@@ -830,6 +887,15 @@ export const en = {
     roomEmptyTitle: 'Bring a situation to the room',
     roomEmptyBody:
       'Describe what is on your mind about the team — it thinks it through against your uploads and comes back with a read.',
+
+    // The room — no-material gate (0721 对齐棒 · 合伙人反馈 A2)。零材料时提问要么烧默认
+    // demo 语料的真 LLM、要么断流被呈现成「中途断了」——所以干脆不给注定失败的输入：
+    // composer/chips 收起，只说实话 + 指路。措辞对齐合伙人原话「还没有上传文件，
+    // 无法基于团队事实判断」+ 我们的「不胡编」原则；不承诺示例团队（Q3-A 下棒才接线）。
+    roomNoMaterialTitle: 'Nothing to reason from yet',
+    roomNoMaterialBody:
+      "Avery hasn't read any of your team's files, so there are no facts to ground a judgment in — and it won't invent one. Bring in a roster, a project plan, or a weekly note first.",
+    roomNoMaterialCta: 'Go add materials',
 
     // Composer references (live corpus only)
     refAll: 'All',
@@ -912,8 +978,9 @@ export const en = {
     onboardStepsAria: 'Setup steps',
 
     onboardUploadTitle: 'Start with a few files',
+    // 0721（B5）：同 upload.caption 的重心修正——产出是管理判断，不只是「长出团队」。
     onboardUploadBody:
-      "Hand Avery what you'd hand a new manager on day one — a roster, a project plan, a weekly note. Your team grows out of them. Fine to skip; you can upload later from Your team.",
+      "Hand Avery what you'd hand a new manager on day one — a roster, a project plan, a weekly note. It reads them into a working picture: people, projects, and what needs your eye. Fine to skip; you can upload later from Your team.",
     onboardUploadChoose: 'Choose files',
     onboardUploadReading: 'Reading your files…',
     // feat-068 — 同 upload.ingestingHint 的理由（真等 100–120s）。向导版多一句"可以先进行
@@ -1056,11 +1123,43 @@ export const en = {
     // counted from the live payload by homeDerive.ts; there is no hardcoded statistic here and
     // there must never be one (the partner reference library's greeting line — "scanned 186
     // signals" — is hardcoded; ours are counted or absent). ──
-    tabHome: 'Today',
+    // 0721 对齐棒 · Danny 拍板 2C：home 主名改「指挥室/Command room」，原名「今天/Today」
+    // 降为副小字（tabHomeSub）——「指挥室」一词由 Danny 0721 显式解锁（推翻 0718 锁定词表
+    // 的这一项；Nexus/现实差距维持锁定）。⚠ 同 commit 必须同步 assertV2Boots 期望数组。
+    tabHome: 'Command room',
+    tabHomeSub: 'Today',
     homeEyebrow: 'Today',
     homeTitle: 'What today asks of you',
     homeLede:
       'Four reads off the files you brought in. Each one opens into the screen that holds the rest.',
+
+    // ── 0721 对齐棒 · Danny 拍板 4A：无数据空态 = 指挥室骨架（合伙人反馈 B1「第一眼
+    // 不该是拖文件」）。四块骨架文案全是**预告**：描述的每个产出面都真实存在（决策卡/
+    // 多看一眼/需关注的人/概览计数），零数字、零装加载。 ──
+    homeSkeletonTitle: 'This is your command room',
+    homeSkeletonLede:
+      'It has nothing to work from yet. Every block below fills from files you bring in — and only from them. Nothing here is ever invented.',
+    homeSkeletonDecisions:
+      'The decisions worth your time today will line up here — graded by rules, each carrying the document lines that triggered it.',
+    homeSkeletonGaps:
+      "Where a project's own status and its blockers tell different stories, the mismatch surfaces here.",
+    homeSkeletonAttention:
+      'People your files keep pointing at show up here — counted from mentions, never scored.',
+    homeSkeletonOverview:
+      'People, projects, files, notes, to-dos — every count is something Avery actually read.',
+    // 登录提示前置（合伙人反馈 A6）：AuthPanel 弹层里的 authGuestNote 藏得太深，这句在
+    // 空态首屏常驻（仅 status==='guest' 时渲染——登录按钮真的在顶栏上才说这句话）。
+    homeGuestNote:
+      'No account needed — everything works as a guest. Signing in only keeps your uploads with you across devices.',
+
+    // ── 0721 · B4 闭环：首页今日待办块 + 决策卡「加入跟进」。 ──
+    homeTodayTitle: 'To do today',
+    homeTodayEmpty:
+      'Nothing queued for today. Decisions, the room, and a closer look can all drop items here.',
+    homeTodayDoneAria: 'Mark "{title}" done',
+    homeTodayMore: '+{count} more in the list',
+    homeDecisionAddFollowup: 'Add to to-dos',
+    homeDecisionFollowupTitle: 'Decide: {title}',
 
     // Block 1 — decisions (graded by the backend rules, feat-056; the front end never re-grades
     // and never re-sorts).
@@ -1128,16 +1227,19 @@ export const en = {
     adviceReadTitle: 'The read',
     adviceSignOff: 'Yours to sign off',
     adviceSummaryAria: 'Summary — the read',
-    adviceSignalsLabel: 'Signals it picked up',
-    adviceHypothesesLabel: 'What might be going on — a read, not a verdict',
+    // 0721 对齐棒 · Danny 拍板 6A（合伙人反馈 A4/C5）：结构标签显式携带「事实/推断/建议/
+    // 置信度」词汇族——8 字段卡本来就是这个结构，缺的只是把结构"说出来"。纯文案层，
+    // 后端 contract 一字未动；语气仍走 ADR-0015 的人话（前缀 + 破折号，不是冷冰冰的裸标签）。
+    adviceSignalsLabel: 'Fact — signals it picked up',
+    adviceHypothesesLabel: 'Inference — what might be going on, not a verdict',
     adviceMostLikely: 'Most likely',
     adviceAlsoPossible: 'Also possible',
     adviceBackingLabel: 'The backing',
-    adviceEvidenceLabel: "Why I'm saying this",
-    adviceConfidenceLabel: 'How sure it is',
+    adviceEvidenceLabel: 'Fact — the document lines this leans on',
+    adviceConfidenceLabel: 'Confidence — how sure it is',
     adviceConfidenceWouldChange: 'What would change it',
     adviceMoveLabel: 'The move',
-    adviceActionsLabel: 'Recommended actions',
+    adviceActionsLabel: 'Suggestion — recommended actions',
     adviceScriptLabel: 'If you open the 1:1',
     adviceWatchLabel: 'What to watch to know it worked',
     adviceHrAria: 'HR / who confirms',
@@ -1176,8 +1278,9 @@ export const en = {
     complianceFooterAria: 'How to use what Avery tells you',
   },
 
-  // ── Ask / Quick ask (feat-034 stage B — ADR-0023 voice: asks about the WORK, never rates
-  // a person; answers are the employee's own words, never a person's attribute) ─────────────
+  // ── Ask / Quick ask (feat-034 stage B — ADR-0023 voice: asks about the WORK; whether rating
+  // a person is allowed at all is the company's switch（0721 · 1A，scoring_policy.py）; answers
+  // are the employee's own words) ─────────────
   ask: {
     eyebrow: 'Quick ask',
     draftTitle: 'Worth asking them directly',
@@ -1195,11 +1298,14 @@ export const en = {
     // It IS genuinely conditional though, so the copy is too: the stub transport (`?transport=stub`,
     // the deterministic offline demo) does no text validation and says so via `offlinePreview`.
     // Pick by that flag — never assert the pessimistic case on the path customers actually take.
+    // 0721 · 1A：'never rate a person' 的绝对句在开关开着的世界不成立（/ask 保存时
+    // redline.validate 按 AVERY_ALLOW_PERSON_SCORING 决定 422 拒收还是放行，
+    // test_ask_http.py:195-204 两个世界都有断言）。检查本身仍然每次保存都跑——留住这半句。
     redlineNote:
-      'Questions ask about the work, never rate a person. Every question goes through the red-line check when you save — it runs on the server, on every save.',
+      "Questions ask about the work. Whether rating a person is even allowed is your company's switch — every question still goes through that server-side check, on every save.",
     // Shown INSTEAD of redlineNote on the offline stub channel, where nothing is sent anywhere.
     redlineNoteOffline:
-      'Questions ask about the work, never rate a person. The red-line check runs on the server when you save — this offline preview saves nothing, so it is not running here.',
+      "Questions ask about the work. The server-side check that enforces your company's scoring stance runs when you save — this offline preview saves nothing, so it is not running here.",
     kindScale: '1–5',
     kindYesNo: 'Yes / No',
     questionAria: 'Question text',

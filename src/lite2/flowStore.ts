@@ -24,7 +24,9 @@ const STORAGE_KEY = 'lite2:flow:v1'
 export type TriageMark = 'done' | 'discarded'
 export type GapMark = 'resolved' | 'dismissed'
 
-export type FollowupSource = 'triage' | 'room' | 'ask' | 'closer-look' | 'manual'
+// 0721 对齐棒（合伙人反馈 B4 · 决策→待办闭环）：新增 'decision'——首页决策卡的「加入跟进」。
+// 旧持久化数据没有这个值，读回来照常渲染（sourceLabel 对未知值走 default），零迁移。
+export type FollowupSource = 'triage' | 'room' | 'ask' | 'closer-look' | 'manual' | 'decision'
 export type FollowupDueGroup = 'today' | 'week' | 'later'
 
 export interface FollowupItem {

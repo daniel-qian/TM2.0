@@ -80,6 +80,17 @@ export function VisionScreen() {
             <p className="lite-vision-lede">{t.lite2.visionLede}</p>
           </header>
 
+          {/* 0721 对齐棒 · 合伙人反馈 A7：页偏长，顶部给 3 点速读（投资人/客户 30 秒抓住
+              全页）。只做 lite2（v01 结构冻结）；.lite-vision-beats 的序号与断言选择器不动。 */}
+          <aside className="lite-vision-summary" data-vision-summary="">
+            <p className="eyebrow lite-vision-summary-label">{t.lite2.visionSummaryLabel}</p>
+            <ol className="lite-vision-summary-list">
+              <li>{t.lite2.visionSummary1}</li>
+              <li>{t.lite2.visionSummary2}</li>
+              <li>{t.lite2.visionSummary3}</li>
+            </ol>
+          </aside>
+
           <ol className="lite-vision-beats">
             {beats.map((beat, i) => (
               <li key={beat.key} className={`lite-vision-beat lite-vision-beat-${beat.key}`}>

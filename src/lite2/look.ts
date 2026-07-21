@@ -8,8 +8,8 @@
 // DOM 属性一律不再被识别（回落 paper 缺省），不留兼容别名——URL 还没给出去过，留别名只会延续
 // 这次更名要终结的混淆。
 //
-// 缺省 paper（现有暖纸编辑风，令牌照搬现值——零视觉回归）；`?look=aurora` 挂合伙人库的极光
-// 玻璃风令牌（styles/look-aurora.css）。壳根挂 `data-look` 属性，两张令牌表各自用
+// 缺省 aurora（0721 对齐棒 · Danny 7B——此前缺省 paper 是 feat-035 双皮初建期的零回归锚点，
+// 已完成历史使命）；`?look=paper` 挂暖纸编辑风令牌。壳根挂 `data-look` 属性，两张令牌表各自用
 // `.lite2-shell[data-look="..."]` 选择器覆盖同一批 CSS 自定义属性——组件样式只消费令牌，
 // 令牌覆盖不了的语法差异（如徽章 vs 左边条）允许极少数 `[data-look="aurora"]` 组件级分支
 // （feat-039 精修阶段处理，本波不引入）。
@@ -46,7 +46,8 @@ function warnLegacySkinParam(params: URLSearchParams): void {
   console.warn(
     `[avery] \`?skin=${legacy}\` is no longer recognised — the parameter was renamed to \`?look=\` ` +
       `(feat-068; \`Skin\` now means only ADR-0021's industry theme). ` +
-      `This page is rendering the default \`paper\` look. Use \`?look=${legacy}\` instead.`,
+      `This page is rendering the default \`aurora\` look (0721: default flipped from paper). ` +
+      `Use \`?look=${legacy}\` instead.`,
   )
 }
 
@@ -101,6 +102,9 @@ export function resolveLook(search?: string): LiteLook {
   const fromStorage = readStoredLook()
   if (fromStorage) return fromStorage
 
-  // 3) safe default
-  return 'paper'
+  // 3) 缺省 aurora —— 0721 对齐棒 · Danny 拍板 7B：aurora 转默认（合伙人 command-room
+  // 样板与 aurora 同血缘，对齐棒把 aurora 做浓成指挥室观感；paper 保留可切）。
+  // 此前缺省 paper 的「零视觉回归」锚点是 feat-035 双皮初建期的约束，已完成历史使命。
+  // ⚠ 显式 `?look=paper` 的门（paperUnchanged 基线等）不受影响——链路第 1 级 URL 仍最高优。
+  return 'aurora'
 }

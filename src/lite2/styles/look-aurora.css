@@ -236,3 +236,12 @@
 .lite2-shell[data-look='aurora'] .lite-gap-empty h2 {
   font-weight: 700;
 }
+
+/* ── ⑩ 0721 对齐棒 · 设置菜单（7B——切换器新家）玻璃化：齿轮与弹层并入①的玻璃 chrome
+   语法（背景令牌 + 参考库精确 blur 值）。基础样式在 lite2.css 0721 段（两皮通用，朴素
+   blur(14px)），aurora 升级到 20px+saturate 与顶栏其余 chrome 一致。 */
+.lite2-shell[data-look='aurora'] .lite-settings-toggle,
+.lite2-shell[data-look='aurora'] .lite-settings-pop {
+  background: var(--lite2-glass);
+  backdrop-filter: var(--lite2-glass-blur);
+}

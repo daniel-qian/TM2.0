@@ -1331,15 +1331,24 @@
         await poll(() => ($('.lite2-shell') ? true : null), 8000, '.lite2-shell to mount');
       } catch (e) { /* fall through — assertions below report absence */ }
       const shell = $('.lite2-shell');
-      const tabs = $$('.lite2-shell .scene-tabs .scene-tab').map((b) => (b.textContent || '').trim());
-      const expected = ['Today', 'Your team', 'Projects', 'The room', 'Follow-ups', "Avery's notes", 'A closer look', 'Playbooks', 'Where this goes'];
+      // 0721 对齐棒 · Danny 2C：home/followups 换主名 + 副小字。主名读 .scene-tab-main
+      // （有副小字的 tab 才有这个 span；没有的 tab 整个 button 就是主名），副小字单独断言
+      // ——textContent 直读会把「Command roomToday」连成一坨，这里明确分层。
+      const tabBtns = $$('.lite2-shell .scene-tabs .scene-tab');
+      const tabs = tabBtns.map((b) => ((b.querySelector('.scene-tab-main') || b).textContent || '').trim());
+      const subs = tabBtns.map((b) => { const s = b.querySelector('.scene-tab-sub'); return s ? (s.textContent || '').trim() : null; });
+      const expected = ['Command room', 'Your team', 'Projects', 'The room', 'To-do list', "Avery's notes", 'A closer look', 'Playbooks', 'Where this goes'];
+      const expectedSubs = ['Today', null, null, null, 'Follow-ups', null, null, null, null];
       const out = {
         shellPresent: !!shell,
         dataScene: shell ? shell.getAttribute('data-scene') : null,
         tabCount: tabs.length,
         tabLabels: tabs,
+        tabSubs: subs,
         tabOrderMatches: JSON.stringify(tabs) === JSON.stringify(expected),
-        pass: !!shell && tabs.length === expected.length && JSON.stringify(tabs) === JSON.stringify(expected),
+        tabSubsMatch: JSON.stringify(subs) === JSON.stringify(expectedSubs),
+        pass: !!shell && tabs.length === expected.length && JSON.stringify(tabs) === JSON.stringify(expected) &&
+          JSON.stringify(subs) === JSON.stringify(expectedSubs),
       };
       results.v2Boots = out;
       return out;

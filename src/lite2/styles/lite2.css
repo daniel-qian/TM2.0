@@ -4898,3 +4898,235 @@
 .lite2-shell .lite-vision-tag {
   color: var(--honey-text, var(--honey));
 }
+
+/* ═══════════════════ 0721 对齐棒 · 合伙人反馈快改层（lite2 / v02）═══════════════════
+   APPEND-ONLY：以上任何一条既有规则都没有被改动或重排（zero-cascade-drift 纪律）。
+   换皮纪律：只消费令牌，不写死色值、不加 [data-look] 分支；小字一律 *-text 深色调
+   （feat-080 对比度门 verify-contrast-smalltext 是全量叶子扫描，不点名选择器）。 */
+
+/* 议事室无材料诚实空态（反馈 A2）——CTA 与 .lite-notes-nudge 同视觉族，字号提一档
+   （13px，它是这一屏唯一动作，不是卡片角落的顺手 nudge）。 */
+.lite2-shell .lite-room-nomaterial-cta {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 16px;
+  padding: 7px 16px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 999px;
+  background: rgba(var(--lite2-accent-rgb), 0.08);
+  color: var(--ink);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.lite2-shell .lite-room-nomaterial-cta:hover,
+.lite2-shell .lite-room-nomaterial-cta:focus-visible {
+  background: rgba(var(--lite2-accent-rgb), 0.16);
+}
+
+/* 多看一眼页 · 实时分析预告（Danny 2C：页内预告代替改名）。安静的收尾块——不抢差距卡
+   的注意力；标题走 section-label 语法（uppercase 小字），小字色用 --ink-faint（已压到
+   AA 4.7:1，feat-080）。 */
+.lite2-shell .lite-gap-realtime-note {
+  margin-top: 22px;
+  padding: 14px 16px;
+  border: 1px dashed var(--rule-strong);
+  border-radius: 12px;
+  background: rgba(var(--lite2-surface-rgb), 0.55);
+}
+
+.lite2-shell .lite-gap-realtime-title {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.lite2-shell .lite-gap-realtime-body {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink-soft);
+}
+
+/* Tab 主+副小字（Danny 2C）。副小字 10px 走 --ink-faint（AA 已压达标），主名继承
+   .scene-tab 原字号；竖排两行，不改 .scene-tab 自身的盒模型规则（story 共用 chrome，
+   零级联漂移——只新增子元素规则）。 */
+.lite2-shell .scene-tab .scene-tab-main {
+  display: block;
+  line-height: 1.2;
+}
+
+.lite2-shell .scene-tab .scene-tab-sub {
+  display: block;
+  margin-top: 1px;
+  font-size: 10px;
+  line-height: 1.2;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+
+/* ── 4A · 无数据指挥室骨架 ────────────────────────────────────────────────
+   左骨架四块 / 右上传侧卡。骨架块复用 .lite-home-block 的卡片 chrome（同一间屋子），
+   注记行用 --ink-soft（13px 过 AA）。窄屏（<880px）单列，上传卡走到最前——手机上
+   「先传文件」仍是第一动作，骨架预告在后。 */
+.lite2-shell .lite-home-skeleton-row {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 18px;
+  align-items: start;
+}
+
+@media (max-width: 880px) {
+  .lite2-shell .lite-home-skeleton-row {
+    grid-template-columns: 1fr;
+  }
+  .lite2-shell .lite-home-upload-side {
+    order: -1;
+  }
+}
+
+.lite2-shell .lite-home-skeleton-blocks {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.lite2-shell .lite-home-skeleton-note {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink-soft);
+}
+
+.lite2-shell .lite-home-upload-side {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.lite2-shell .lite-home-guest-note {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-faint);
+}
+
+/* ── B4 · 首页今日待办块 ── */
+.lite2-shell .lite-home-todo-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lite2-shell .lite-home-todo-item {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.lite2-shell .lite-home-todo-check {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid var(--rule-strong);
+  border-radius: 5px;
+  background: transparent;
+  cursor: pointer;
+  align-self: center;
+}
+
+.lite2-shell .lite-home-todo-check:hover,
+.lite2-shell .lite-home-todo-check:focus-visible {
+  border-color: var(--sage-text, var(--sage));
+  background: rgba(var(--lite2-accent-rgb), 0.12);
+}
+
+.lite2-shell .lite-home-todo-title {
+  font-size: 13.5px;
+  color: var(--ink);
+}
+
+.lite2-shell .lite-home-todo-more {
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+
+/* 决策卡「加入跟进」按钮：与同排 toggle/open/room 按钮同族（.lite-home-decision-actions
+   里的按钮样式已有基类，这里只补 disabled 态）。 */
+.lite2-shell .lite-home-decision-followup:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* 4A：空态 frame 原来是单列上传页的 640px 限宽（3534 行）——骨架双栏需要正常画布宽。
+   APPEND-ONLY 覆盖（同 specificity、后写者胜），不动原规则。 */
+.lite2-shell .lite-home-frame-empty {
+  max-width: 1040px;
+}
+
+/* ── 7B · 设置菜单（语言/观感切换器的新家）───────────────────────────────
+   .prototype-topbar 容器 pointer-events:none，子块自己 auto 回来（老规矩）。
+   弹层白玻璃卡 + 两行分组；.lang-switch/.look-switch 原有按钮样式在弹层里继续生效。 */
+.lite2-shell .lite-settings {
+  position: relative;
+  pointer-events: auto;
+}
+
+.lite2-shell .lite-settings-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 999px;
+  background: rgba(var(--lite2-surface-rgb), 0.8);
+  color: var(--ink-soft);
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.lite2-shell .lite-settings-toggle:hover,
+.lite2-shell .lite-settings-toggle:focus-visible,
+.lite2-shell .lite-settings-toggle[aria-expanded='true'] {
+  color: var(--ink);
+  background: rgba(var(--lite2-surface-rgb), 1);
+}
+
+.lite2-shell .lite-settings-pop {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 60;
+  min-width: 220px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 12px;
+  background: var(--lite2-glass);
+  backdrop-filter: blur(14px) saturate(1.05);
+  box-shadow: var(--shadow-soft);
+}
+
+.lite2-shell .lite-settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.lite2-shell .lite-settings-row-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}

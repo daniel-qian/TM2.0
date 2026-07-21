@@ -3,6 +3,7 @@ import { useLite } from '../store'
 import { useFlow, selectGapsActive } from '../flowStore'
 import { useDict } from '../../shared/i18n/useDict'
 import { UploadPanel } from '../UploadPanel'
+import { useAuth } from '../auth/authStore'
 import { deriveAttentionPeople, summarizeDecisions, type AttentionPerson } from '../homeDerive'
 import type { LiveDecisionCard } from '../transport'
 
@@ -57,25 +58,39 @@ export function HomeScreen() {
 
   const gapMarks = useFlow((s) => s.gapMarks)
   const followups = useFlow((s) => s.followups)
+  // 0721 对齐棒 · B4 闭环：决策卡「加入跟进」+ 首页今日待办块。
+  const addFollowup = useFlow((s) => s.addFollowup)
+  const completeFollowup = useFlow((s) => s.completeFollowup)
+  const [followupAddedKeys, setFollowupAddedKeys] = useState<ReadonlySet<string>>(new Set())
 
   const decisions = rawTeam?.decisions
   const decisionSummary = useMemo(() => summarizeDecisions(decisions), [decisions])
   const gaps = useMemo(() => selectGapsActive(team, gapMarks), [team, gapMarks])
   const attention = useMemo(() => deriveAttentionPeople(team, rawTeam), [team, rawTeam])
   const openFollowups = followups.filter((item) => !item.done).length
+  // 今日待办（B4）：flowStore 真数据——dueGroup==='today' 且未完成。首页只列前 5 条，
+  // 细节/编辑仍归待办清单屏（feat-057 拍板：聚合做入口，不承载细节）。
+  const todayFollowups = followups.filter((item) => !item.done && item.dueGroup === 'today')
 
   // ── 空态：还没有团队数据 ──────────────────────────────────────────────────
-  // 首屏是 `/` 的落点，所以首访者第一眼落在这里——空态必须自己带上传入口，
-  // 不能把人晾在一屏空摘要上（"去别的 tab 传文件"是让用户替我们找路）。
+  // 0721 对齐棒 · Danny 拍板 4A（合伙人反馈 B1）：空态第一眼从「整屏上传面板」改为
+  // **指挥室骨架**——四块各自诚实说"还没有材料、进来之后长什么"，上传降为右侧入口卡。
+  // 合伙人零数据实测的结论就是：第一眼是拖文件，产品被读成了文件解析器。
+  // 🔴 骨架四块是**预告不是数据**：不渲染任何数字、不装加载中、块上无链接（后面还没有
+  //    东西，给个「→」等于把人送进四个空屏）。文案全部描述真实存在的产出面。
+  // 🔴 restoring / restoreError 的会话恢复分支原样保留（feat-050）——回访用户第一眼
+  //    还是"正在取回"，不是骨架。
+  // Q3-A（下棒）：「一键加载示例团队」按钮加进 .lite-home-upload-side 顶部，本棒不出假按钮。
+  const authStatus = useAuth((s) => s.status)
   if (!team) {
     return (
       <section className="scene is-active lite-home" aria-label={t.lite2.tabHome}>
         <div className="lite-home-scroll">
-          <div className="lite-home-frame lite-home-frame-empty">
+          <div className="lite-home-frame lite-home-frame-empty" data-home-skeleton="">
             <header className="lite-home-header">
               <p className="eyebrow">{t.lite2.emptyEyebrow}</p>
-              <h1>{t.team.emptyTitle}</h1>
-              <p className="lite-home-lede">{t.team.emptyBody}</p>
+              <h1>{t.lite2.homeSkeletonTitle}</h1>
+              <p className="lite-home-lede">{t.lite2.homeSkeletonLede}</p>
               {restoring ? (
                 <p className="lite-empty-restoring" aria-live="polite">
                   {t.lite2.restoringLabel}
@@ -92,15 +107,54 @@ export function HomeScreen() {
                     {t.lite2.restoreRetry}
                   </button>
                 </div>
-              ) : (
+              ) : null}
+            </header>
+            <div className="lite-home-skeleton-row">
+              <div className="lite-home-skeleton-blocks">
+                {/* 四块与有数据态一一同名同序（homeDecisions/homeGaps/homeAttention/homeOverview）
+                    ——骨架就是产品的形状，不是另一套页面。 */}
+                <section className="lite-home-block lite-home-skeleton" aria-label={t.lite2.homeDecisionsTitle}>
+                  <div className="lite-home-block-head">
+                    <h2>{t.lite2.homeDecisionsTitle}</h2>
+                  </div>
+                  <p className="lite-home-skeleton-note">{t.lite2.homeSkeletonDecisions}</p>
+                </section>
+                <section className="lite-home-block lite-home-skeleton" aria-label={t.lite2.homeGapsTitle}>
+                  <div className="lite-home-block-head">
+                    <h2>{t.lite2.homeGapsTitle}</h2>
+                  </div>
+                  <p className="lite-home-skeleton-note">{t.lite2.homeSkeletonGaps}</p>
+                </section>
+                <section className="lite-home-block lite-home-skeleton" aria-label={t.lite2.homeAttentionTitle}>
+                  <div className="lite-home-block-head">
+                    <h2>{t.lite2.homeAttentionTitle}</h2>
+                  </div>
+                  <p className="lite-home-skeleton-note">{t.lite2.homeSkeletonAttention}</p>
+                </section>
+                <section className="lite-home-block lite-home-skeleton" aria-label={t.lite2.homeOverviewTitle}>
+                  <div className="lite-home-block-head">
+                    <h2>{t.lite2.homeOverviewTitle}</h2>
+                  </div>
+                  <p className="lite-home-skeleton-note">{t.lite2.homeSkeletonOverview}</p>
+                </section>
+              </div>
+              <aside className="lite-home-upload-side">
+                <UploadPanel />
                 <ul className="lite-empty-hints">
                   <li>{t.lite2.emptyHintRoster}</li>
                   <li>{t.lite2.emptyHintProject}</li>
                   <li>{t.lite2.emptyHintPrivacy}</li>
                 </ul>
-              )}
-            </header>
-            <UploadPanel />
+                {/* 登录提示前置（合伙人反馈 A6）：authGuestNote 原来只在账号弹层里可见。
+                    渲染条件 = 登录按钮真的在顶栏上（status==='guest'）——auth 未配置的
+                    构建里没有登录按钮，这句会变成没头没脑的话。 */}
+                {authStatus === 'guest' ? (
+                  <p className="lite-home-guest-note" data-guest-note="">
+                    {t.lite2.homeGuestNote}
+                  </p>
+                ) : null}
+              </aside>
+            </div>
           </div>
         </div>
       </section>
@@ -167,18 +221,79 @@ export function HomeScreen() {
                       可能带着同一个 id 出现两遍。用纯 id 当 key 会撞键、React 复用错节点
                       （展开态串到另一张卡上）。🔴 这里只是让重复**显示得出来**，
                       刻意不在前端去重——那会把后端的 bug 藏起来。 */}
-                  {decisions.map((card, idx) => (
-                    <DecisionCard
-                      key={`${card.subject_type}_${card.subject_id}_${idx}`}
-                      card={card}
-                      onOpenProject={() => openDetail('project', card.subject_id)}
-                      onTakeToRoom={() =>
-                        goScreen('room', { q: `${card.subject_title} — ${card.reason}` })
-                      }
-                    />
-                  ))}
+                  {decisions.map((card, idx) => {
+                    const cardKey = `${card.subject_type}_${card.subject_id}_${idx}`
+                    return (
+                      <DecisionCard
+                        key={cardKey}
+                        card={card}
+                        onOpenProject={() => openDetail('project', card.subject_id)}
+                        onTakeToRoom={() =>
+                          goScreen('room', { q: `${card.subject_title} — ${card.reason}` })
+                        }
+                        followupAdded={followupAddedKeys.has(cardKey)}
+                        onAddFollowup={() => {
+                          // B4 闭环：决策落成待办。标题走字典模板（CloserLook 的英文硬模板
+                          // 是已知历史债，这里不再新增一处）；note 带决策理由溯源。
+                          addFollowup({
+                            title: fill(t.lite2.homeDecisionFollowupTitle, {
+                              title: card.subject_title,
+                            }),
+                            source: 'decision',
+                            dueGroup: 'today',
+                            note: card.reason,
+                          })
+                          setFollowupAddedKeys((prev) => {
+                            const next = new Set(prev)
+                            next.add(cardKey)
+                            return next
+                          })
+                        }}
+                      />
+                    )
+                  })}
                 </ol>
               </>
+            )}
+          </section>
+
+          {/* ── ①½ 今日待办（0721 · B4 闭环）：flowStore 真数据，只列 today 组未完成前 5 条。
+              打勾就地完成（completeFollowup，同待办清单屏一致）；编辑/历史仍归待办清单屏。 */}
+          <section className="lite-home-block lite-home-todos" aria-label={t.lite2.homeTodayTitle}>
+            <div className="lite-home-block-head">
+              <h2>{t.lite2.homeTodayTitle}</h2>
+              {todayFollowups.length > 0 ? (
+                <span className="lite-home-count">{todayFollowups.length}</span>
+              ) : null}
+              <button
+                type="button"
+                className="lite-home-block-link"
+                onClick={() => goScreen('followups')}
+              >
+                {t.lite2.tabFollowups} →
+              </button>
+            </div>
+            {todayFollowups.length === 0 ? (
+              <p className="lite-home-quiet">{t.lite2.homeTodayEmpty}</p>
+            ) : (
+              <ul className="lite-home-todo-list">
+                {todayFollowups.slice(0, 5).map((item) => (
+                  <li key={item.id} className="lite-home-todo-item">
+                    <button
+                      type="button"
+                      className="lite-home-todo-check"
+                      aria-label={fill(t.lite2.homeTodayDoneAria, { title: item.title })}
+                      onClick={() => completeFollowup(item.id)}
+                    />
+                    <span className="lite-home-todo-title">{item.title}</span>
+                  </li>
+                ))}
+                {todayFollowups.length > 5 ? (
+                  <li className="lite-home-todo-more">
+                    {fill(t.lite2.homeTodayMore, { count: todayFollowups.length - 5 })}
+                  </li>
+                ) : null}
+              </ul>
             )}
           </section>
 
@@ -311,10 +426,15 @@ function DecisionCard({
   card,
   onOpenProject,
   onTakeToRoom,
+  onAddFollowup,
+  followupAdded,
 }: {
   card: LiveDecisionCard
   onOpenProject: () => void
   onTakeToRoom: () => void
+  // 0721 · B4 闭环：加入跟进（added 态由父级按卡 key 记，防重复添加）。
+  onAddFollowup: () => void
+  followupAdded: boolean
 }) {
   const { t } = useDict()
   const [open, setOpen] = useState(false)
@@ -394,6 +514,15 @@ function DecisionCard({
             不自动提交——manager 审过再问，同 feat-036/044 的 authorship 原则。 */}
         <button type="button" className="lite-home-decision-room" onClick={onTakeToRoom}>
           {t.lite2.homeDecisionAskRoom} ↗
+        </button>
+        {/* 0721 · B4 闭环：决策落成待办（同 CloserLook 卡的 addFollowup 形态）。 */}
+        <button
+          type="button"
+          className="lite-home-decision-followup"
+          disabled={followupAdded}
+          onClick={onAddFollowup}
+        >
+          {followupAdded ? t.lite2.followupAdded : t.lite2.homeDecisionAddFollowup}
         </button>
       </div>
 

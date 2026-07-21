@@ -32,7 +32,10 @@ import { LiteModal } from './LiteModal'
 // 下次续跑），此前点背景无反应。这是 feat-052 验收要求的"任意两个弹层关闭方式一致"。
 // 开关从 Lite2App 的条件挂载移进本组件（selectWizardOpen），常驻挂载才跑得了出场动画。
 
-const ACCEPT = '.pdf,.docx,.doc,.xlsx,.xls,.csv,.md,.markdown,.txt'
+// 0721 对齐棒：与 UploadPanel.tsx 的 ACCEPT 保持一字不差——fixB1 当时只修了 UploadPanel，
+// 这里仍列 .doc/.xls（后端 415 必拒）且漏 .tsv，首访用户走向导挑中旧格式必然撞墙。
+// 「多列一种格式是撒谎」（UploadPanel fixB1 注释）同样适用于向导。
+const ACCEPT = '.pdf,.docx,.xlsx,.csv,.tsv,.md,.markdown,.txt'
 
 // 07-20 · 返回客户判定（Danny 拍板「已经有数据就不弹」）——模块顶层只读一次 localStorage
 // 的 contextId 锚点，不做响应式订阅。同 store.ts 自己的 `restoredContextId` 一个套路：

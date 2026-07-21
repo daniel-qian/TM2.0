@@ -132,6 +132,14 @@ export function CloserLookScreen() {
             </section>
           )}
 
+          {/* 0721 对齐棒 · Danny 2C 拍板：实时分析不做 tab 名（现功能是离线文档对照，改名
+              = 名字替产品许诺不存在的能力），改在页内用条件时态预告「连接公司数据后变实时」。
+              语法对齐 Vision 屏的诚实 Coming 标注：不写日期、不装已接线。 */}
+          <aside className="lite-gap-realtime-note" data-realtime-note="">
+            <p className="lite-gap-realtime-title">{t.lite2.gapRealtimeTitle}</p>
+            <p className="lite-gap-realtime-body">{t.lite2.gapRealtimeBody}</p>
+          </aside>
+
           {historyCount > 0 ? (
             <section className="lite-gap-history">
               <button

@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { applyModeToUrl, useMode } from '../shared/modeStore'
 import { useDict } from '../shared/i18n/useDict'
 import { useLocaleStore } from '../shared/i18n/localeStore'
@@ -34,24 +35,30 @@ export function LiteTopbar() {
   const setLocale = useLocaleStore((s) => s.setLocale)
   const look = useLook((s) => s.look)
   const setLook = useLook((s) => s.setLook)
+  // 0721 · 7B：语言/观感切换器收进次级设置菜单（Danny：demo 试玩器常驻顶栏不符合常理
+  // UIUX）。本地态即可——菜单不跨屏持久，刷新回到收起是预期行为。
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   // PRD 顺序（6 tab）+ feat-047 第 7 tab：Your team · The room · Follow-ups · Avery's notes ·
   // A closer look · Playbooks · Where this goes。笔记面移植自 src/lite，放在 Follow-ups 之后
   // （本棒的 tab 顺序决定，理由见 progress.md）。
   // feat-057：聚合入口排在最前——它是 `/` 的落点，也是"今天先看哪儿"的那一屏；
   // 排在末尾的入口不叫入口。7 个分屏一个没退休，顺序一个没动，只是前面多了一扇门。
-  const tabs: { label: string; screen: LiteScreen }[] = [
-    { label: t.lite2.tabHome, screen: 'home' },
+  // 0721 对齐棒 · Danny 拍板 2C（主+副小字）：home/followups 换主名（指挥室/待办清单），
+  // 原名降为副小字（sub）。副小字渲染成 .scene-tab-sub（display:block 的 10px 行，样式在
+  // lite2.css 0721 段），门读主名走 .scene-tab-main。其余 7 tab 无 sub，DOM 形状不变。
+  const tabs: { label: string; sub?: string; screen: LiteScreen }[] = [
+    { label: t.lite2.tabHome, sub: t.lite2.tabHomeSub, screen: 'home' },
     { label: t.lite2.tabTeam, screen: 'team' },
     // feat-055（PRD G9）：第 8 个 tab「项目」。放在「你的团队」之后而不是队尾——它和团队屏
     // 是同一份上传长出来的两半（人 / 项目），排到「Where this goes」后面等于把主数据屏
     // 塞进未来叙事之后。
-    // 🔴 这个数组一动（增 / 删 / 重排），必须在**同一个 commit** 里同步
+    // 🔴 这个数组一动（增 / 删 / 重排 / 改主名），必须在**同一个 commit** 里同步
     // `scripts/gates/live-frontend-gate.snippet.js` 的 `assertV2Boots` 期望数组，
     // 否则门的 v2Boots 相位必红。feat-057 加 `home` tab 时同理。
     { label: t.lite2.tabProjects, screen: 'projects' },
     { label: t.lite2.tabRoom, screen: 'room' },
-    { label: t.lite2.tabFollowups, screen: 'followups' },
+    { label: t.lite2.tabFollowups, sub: t.lite2.tabFollowupsSub, screen: 'followups' },
     { label: t.lite2.tabNotes, screen: 'notes' },
     { label: t.lite2.tabCloserLook, screen: 'closerlook' },
     { label: t.lite2.tabPlaybooks, screen: 'playbooks' },
@@ -81,7 +88,18 @@ export function LiteTopbar() {
             className={`scene-tab${screen === tab.screen ? ' is-active' : ''}`}
             onClick={() => goScreen(tab.screen)}
           >
-            {tab.label}
+            {tab.sub ? (
+              <>
+                {/* 主名进 .scene-tab-main（门 assertV2Boots 只读它），副小字 aria-hidden——
+                    读屏只念主名，不念「指挥室 今天」连读。 */}
+                <span className="scene-tab-main">{tab.label}</span>
+                <span className="scene-tab-sub" aria-hidden="true">
+                  {tab.sub}
+                </span>
+              </>
+            ) : (
+              tab.label
+            )}
           </button>
         ))}
       </nav>
@@ -90,47 +108,77 @@ export function LiteTopbar() {
       {/* feat-053：账号入口。同样在 .scene-tabs nav 之外（门相位按 `.scene-tabs .scene-tab`
           数 tab，账号按钮不得混进去）。未配置 Supabase 时整块不渲染 —— 游客路径不受影响。 */}
       <AuthPanel />
-      {/* open-loop-0720：语言开关（中文/英文）。同样在 .scene-tabs nav 之外（门相位按
-          `.scene-tabs .scene-tab` 数 tab，不得混进去）。可见文案 100% 走字典——中文纯度门
-          （verify-zh-purity.mjs）扫的是 zh 下的 innerText，字典里这两个键在 zh.ts 已是纯中文
-          （中文/英文，不是字母 ZH/EN）。 */}
-      <div className="lang-switch" role="group" aria-label={t.lite2.langSwitchAria}>
+      {/* 0721 · 7B（Danny 拍板）：语言/观感切换器从顶栏常驻收进次级设置菜单。
+          菜单**内部**的 .lang-switch/.look-switch 结构与类名一字未动（open-loop-0720 原样
+          搬进来）——verify-switchers/verify-auth-form 两道门只多一步「先点 .lite-settings-toggle」。
+          仍在 .scene-tabs nav 之外（门相位数 tab 不得混进去）；.lite-settings 在 lite2.css 里
+          自己 pointer-events:auto 回来（同 .lang-switch/.look-switch 的老规矩）。
+          可见文案 100% 走字典（齿轮符号 ⚙ 是标点级字形，zh-purity 扫的是字母）。 */}
+      <div className="lite-settings">
         <button
           type="button"
-          className={`lang-switch-btn${locale === 'zh' ? ' is-active' : ''}`}
-          aria-pressed={locale === 'zh'}
-          onClick={() => switchLocale('zh')}
+          className="lite-settings-toggle"
+          aria-haspopup="true"
+          aria-expanded={settingsOpen}
+          aria-label={t.lite2.settingsAria}
+          title={t.lite2.settingsAria}
+          onClick={() => setSettingsOpen((v) => !v)}
         >
-          {t.lite2.langSwitchZh}
+          <span aria-hidden="true">⚙</span>
         </button>
-        <button
-          type="button"
-          className={`lang-switch-btn${locale === 'en' ? ' is-active' : ''}`}
-          aria-pressed={locale === 'en'}
-          onClick={() => switchLocale('en')}
-        >
-          {t.lite2.langSwitchEn}
-        </button>
-      </div>
-      {/* open-loop-0720：观感开关（暖纸/极光）。lite2 专属——v01 没有 Look 概念，
-          resolveLook()/lookStore.ts 只在这棵树里。 */}
-      <div className="look-switch" role="group" aria-label={t.lite2.lookSwitchAria}>
-        <button
-          type="button"
-          className={`look-switch-btn${look === 'paper' ? ' is-active' : ''}`}
-          aria-pressed={look === 'paper'}
-          onClick={() => switchLook('paper')}
-        >
-          {t.lite2.lookSwitchPaper}
-        </button>
-        <button
-          type="button"
-          className={`look-switch-btn${look === 'aurora' ? ' is-active' : ''}`}
-          aria-pressed={look === 'aurora'}
-          onClick={() => switchLook('aurora')}
-        >
-          {t.lite2.lookSwitchAurora}
-        </button>
+        {settingsOpen ? (
+          <div
+            className="lite-settings-pop"
+            role="group"
+            aria-label={t.lite2.settingsAria}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') setSettingsOpen(false)
+            }}
+          >
+            <div className="lite-settings-row">
+              <span className="lite-settings-row-label">{t.lite2.langSwitchAria}</span>
+              <div className="lang-switch" role="group" aria-label={t.lite2.langSwitchAria}>
+                <button
+                  type="button"
+                  className={`lang-switch-btn${locale === 'zh' ? ' is-active' : ''}`}
+                  aria-pressed={locale === 'zh'}
+                  onClick={() => switchLocale('zh')}
+                >
+                  {t.lite2.langSwitchZh}
+                </button>
+                <button
+                  type="button"
+                  className={`lang-switch-btn${locale === 'en' ? ' is-active' : ''}`}
+                  aria-pressed={locale === 'en'}
+                  onClick={() => switchLocale('en')}
+                >
+                  {t.lite2.langSwitchEn}
+                </button>
+              </div>
+            </div>
+            <div className="lite-settings-row">
+              <span className="lite-settings-row-label">{t.lite2.lookSwitchAria}</span>
+              <div className="look-switch" role="group" aria-label={t.lite2.lookSwitchAria}>
+                <button
+                  type="button"
+                  className={`look-switch-btn${look === 'paper' ? ' is-active' : ''}`}
+                  aria-pressed={look === 'paper'}
+                  onClick={() => switchLook('paper')}
+                >
+                  {t.lite2.lookSwitchPaper}
+                </button>
+                <button
+                  type="button"
+                  className={`look-switch-btn${look === 'aurora' ? ' is-active' : ''}`}
+                  aria-pressed={look === 'aurora'}
+                  onClick={() => switchLook('aurora')}
+                >
+                  {t.lite2.lookSwitchAurora}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
       {/* feat-034 polish：Story/Live 开关默认不渲染（?modeSwitch=1 显示，shared/mode.ts
           小工具——lite 只 import shared，墙不破）。缺席时整块不出 DOM，布局无空洞。 */}

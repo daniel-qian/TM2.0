@@ -72,6 +72,9 @@ export function FollowupsScreen() {
         return t.lite2.followupsSourceAsk
       case 'closer-look':
         return t.lite2.followupsSourceCloserLook
+      case 'decision':
+        // 0721 对齐棒：首页决策卡「加入跟进」（B4 闭环）。
+        return t.lite2.followupsSourceDecision
       default:
         return t.lite2.followupsSourceManual
     }

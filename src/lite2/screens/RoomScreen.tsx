@@ -267,6 +267,13 @@ export function RoomScreen() {
   const askLive = useLite((s) => s.askLive)
   const noteJustAdded = useLite((s) => s.noteJustAdded)
   const goScreen = useLite((s) => s.goScreen)
+  // 0721 对齐棒（合伙人反馈 A2）：无材料 gate 的判据。用 contextId 而不用 team——
+  // contextId 在 store 模块求值时就从 localStorage 同步恢复（restoredContextId），
+  // 回访用户第一帧就非空，不会在 restoreSession 网络往返期间闪一下"没材料"空态；
+  // 真正的新访客两者皆空，restore 404 时 store 会把两者一起清掉（store.ts:499-501），
+  // 判据同样成立。🔴 gate 只落在这一层 UI：store.askLive 与 __lite2Store 测试缝保持
+  // 无条件——门的 stub 注入路径不经过这里。
+  const contextId = useLite((s) => s.contextId)
   const { t } = useDict()
 
   // feat-036：分诊"带进议事室"的预填——读一次即消费，之后正常导航不会再带旧草稿回来。
@@ -334,6 +341,25 @@ export function RoomScreen() {
             initialValue={composerDraft ?? undefined}
           />
         </>
+      ) : contextId === null ? (
+        /* 0721 · 无材料诚实空态（合伙人实测：零数据提问被呈现成「中途断了」系统故障样，
+           实际要么烧默认英文 demo 语料的真 LLM、要么 LLM 侧断流——两种都不是网络问题）。
+           没有材料就不给「注定失败的输入」：composer 和建议 chips 一并收起，只留引导。
+           下棒「一键加载示例团队」拍板后（Q3-A）按钮加在 CTA 旁，本棒不出假按钮。 */
+        <section className="nexus-empty lite-room-nomaterial" data-room-nomaterial="" aria-label={t.lite2.roomNoMaterialTitle}>
+          {/* eyebrow 用 tab 名而不是 liveThinking（「正在仔细梳理中」）——此刻并没有任何
+              东西在被梳理，那句在这个状态里是假的。 */}
+          <p className="eyebrow">{t.lite2.tabRoom}</p>
+          <h2>{t.lite2.roomNoMaterialTitle}</h2>
+          <p>{t.lite2.roomNoMaterialBody}</p>
+          <button
+            type="button"
+            className="lite-room-nomaterial-cta"
+            onClick={() => goScreen('home')}
+          >
+            {t.lite2.roomNoMaterialCta} →
+          </button>
+        </section>
       ) : (
         <section className="nexus-empty" aria-label={t.lite2.roomEmptyAria}>
           <p className="eyebrow">{t.nexus.liveThinking}</p>

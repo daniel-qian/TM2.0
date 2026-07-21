@@ -259,8 +259,10 @@ async function run() {
     }
 
     // ── 8 · 锁定词表：用户真正看得见的文字 ──────────────────────────────────────
+    // 0721 对齐棒 · Danny 拍板 2C：「指挥室」从锁定词表**显式解锁**（home tab 主名即它，
+    // 推翻记录见 .issues/cr-align-0721/decisions.md + ADR）。Nexus / 现实差距维持锁定。
     const visibleText = await page.evaluate(() => document.body.innerText)
-    const bad = ['Nexus', 'nexus', '现实差距', '指挥室'].filter((w) => visibleText.includes(w))
+    const bad = ['Nexus', 'nexus', '现实差距'].filter((w) => visibleText.includes(w))
     record(`[${look}] 锁定词不出现在可见文字里`, bad.length === 0, bad.length ? `命中 ${bad.join('/')}` : '零命中')
 
     // ── 9 · console ────────────────────────────────────────────────────────────

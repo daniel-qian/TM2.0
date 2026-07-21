@@ -601,6 +601,9 @@ console.log('\n═══ ⑧ 点语言开关 → 账号面板文案跟着变（�
   await ensurePanelClosed(p)
 
   // 🔴 刻意不 reload：刷新会让这个 bug 自愈，也就测不到它。
+  // 0721 · 7B：语言开关收进了设置菜单——点开关前先开齿轮（菜单不自动关，回程共用这次展开）。
+  await p.locator('.lite-settings-toggle').click()
+  await p.waitForTimeout(200)
   await p.locator('.lang-switch-btn').nth(1).click()   // → English
   await p.waitForTimeout(400)
 
@@ -618,6 +621,10 @@ console.log('\n═══ ⑧ 点语言开关 → 账号面板文案跟着变（�
   await p.keyboard.press('Escape')
 
   // 回程：防「只翻一次就锁死」。
+  // 0721：上一段的账号弹层实测不吃裸 Escape（.lite-auth-head 一直拦截指针）——必须走
+  // ensurePanelClosed 显式关掉，否则它压在设置弹层上，语言按钮永远「可见但点不着」。
+  await ensurePanelClosed(p)
+  await p.waitForTimeout(150)
   await p.locator('.lang-switch-btn').nth(0).click()   // → 中文
   await p.waitForTimeout(400)
   const toggleBack = await p.locator('.lite-auth-toggle').innerText()
@@ -643,9 +650,12 @@ console.log('\n═══ ⑨ 换身份：偏好留下、公司数据清光 ═�
   const { ctx, p, errs } = await openPage()
   await boot(p)
 
-  // 走**真开关**写偏好，而不是 setItem：这样同时证明壳真的在读这个键。
-  await p.locator('.look-switch-btn').nth(1).click()   // → aurora（≠ 默认 paper）
-  await p.waitForTimeout(300)
+  // 0721 · 7B 之后：默认 look 翻成 aurora，切换器也收进了设置菜单（.lite-settings-toggle）。
+  // 这里**不再点开关**，改用语言侧同一个套路：boot() 的 URL 显式带 `?look=paper`，
+  // lookStore 的深链同步已把 'paper' 落进 `lite2:look:v1`——新默认是 aurora，所以
+  // 「偏好丢了 / 还在」两种世界裸链重开长得不同（aurora / paper），判别力保住。
+  // （旧写法点成 aurora，在新默认下正好撞上"存进去的值 == 默认值"的空真陷阱——
+  // 就是下面语言侧注释记的那个反例。）
   // 🔴 语言这一侧**刻意不点开关**：boot() 的 URL 带 `?lang=zh`，localeStore 的深链同步已经
   // 把 'zh' 落进了 `lite2:lang:v1`，而本门的构建**没有**设 VITE_AVERY_LOCALE，构建期默认是
   // 'en'。于是"偏好丢了"与"偏好还在"两种情况下界面语言不同（en / zh），断言才有判别力。
@@ -720,7 +730,7 @@ console.log('\n═══ ⑨ 换身份：偏好留下、公司数据清光 ═�
     toggle: document.querySelector('.lite-auth-toggle')?.innerText?.trim() ?? null,
   }))
   console.log('         裸链重开:', JSON.stringify(reloaded))
-  rec('🔴 重新打开后皮肤还是他选的那个（不是弹回默认 paper）',
+  rec('🔴 重新打开后皮肤还是他选的那个（不是弹回默认 aurora——0721 后默认已翻转）',
     reloaded.domLook === pre.domLook && reloaded.domLook !== null,
     `换人前 ${pre.domLook} → 重开后 ${reloaded.domLook}`)
   rec('🔴 重新打开后语言也还是他选的那个（记住的是 zh，而构建期默认是 en —— 两者不同才验得出）',
