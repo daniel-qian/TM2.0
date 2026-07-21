@@ -39,9 +39,18 @@ visual-baseline 电池中段一次红=dist 被 auth 门中途重建的指向陷�
 **终局 dev 重建后复验 4/4（36 张）绿 + 让位门 22/0 绿**。纪律再确认：dist 重建门收队尾+终局重建复验。
 批处理坑（已记 handoff）：`powershell`(5.1) 读 UTF-8 无 BOM .ps1 中文即 ParserError——pwsh + utf8BOM。
 
-## 生产验证
+## 生产验证（averylite.dannyqian.com · commit 5fb37b6）
 
-（待填：push 后 averylite 真机）
+- **计算值**（Browser pane，带上午的示例工作区 ctx_85261f1a6461）：notes 眉题 84/标题 104、
+  vision 眉题 84/标题 104，均低于顶栏带底 66+8 ✅；「加到待办」computed radius 999px/透明底/
+  rule 边/11.5px（修前 0px+ButtonFace）✅。
+- **像素**（本地 Playwright 直拍生产，新访客→Escape 门→领示例 ctx_0990c2bce1b7→三屏）：
+  Danny 截图里被 nav 削头的两行标题（「Avery 记下的、关于你公司的观察」「你刚才试的是 demo。
+  这背后才是产品。」）完整站在导航下方；决策卡四按钮同族成排。
+  图存 `eval-harness/reports/prod-shots-0721/`（gitignored）。
+- ⚠️ Browser pane 截图 30s×2 超时老毛病复发（历史在案）——取证退到计算值+本地 Playwright
+  直拍生产，双路都到位。
+- 本次验证多领了一个 demo 克隆（ctx_0990c2bce1b7）——观察项台账口径内（限流 6/min）。
 
 ## 记档
 
