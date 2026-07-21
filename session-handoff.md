@@ -7,12 +7,19 @@
 > ## ⚠️ 最重要的事：棒3-棒7 五个 commit 全在本地未推送
 > - Danny AFK 指示「一路干到底、先不推不部署、dev server 验收」——本地 main 领先 origin
 >   5 commit（6764c36 棒3 / 9ea4927 棒4 / 18f1639 棒5 / ae602fd 棒6 / 棒7 见 git log）。
-> - **验收入口 http://localhost:5173/?lang=zh**（vite preview 挂终局构建 + mock 后端 8137 +
+> - **验收入口 http://localhost:5173/?v=2&mode=live&lang=zh**（vite preview 挂终局构建 + mock 后端 8137 +
 >   cr-live 参照 :3100，收工全部保持运行；如果机器重启过：先起 8137（uvicorn 见
 >   .issues/feat-025/session-handoff.md l.49 姿势+mock 三件套 env）再 `node
 >   node_modules/vite/bin/vite.js preview --port 5173`）。
 > - 对照板 eval-harness/reports/align-board/2026-07-21/index.html；demo 门一键看真人卡。
 > - **Danny 点头后：`git push` 一次上产五棒** + 生产计算值取证补进各收据。
+>
+> ## ⚠️ 验收 URL 必须带参（Danny 回来第一问的答案，2026-07-22 已修档）
+> - 本地裸 URL `localhost:5173/?lang=zh` 会进**老 story 演示原型**（英文假数据）——这不是回滚
+>   不是坏档：routes.ts:14 规定 `?v=2&mode=live` 才是 v02 入口；生产裸 URL 等效 v02 是因为
+>   vercel.json build env `VITE_AVERY_MODE=live` 在构建期换了默认。
+> - 本地想复刻生产默认需要 live 构建，但 vite.config.ts 守卫拒绝 live+回环 API base
+>   （feat-068 防「访客机器当后端」，别绕它）——所以本地验收一律用带参 URL，就这一条纪律。
 >
 > ## 战役之后的下一步（按优先级）
 > - 5B 材料体检卡解冻（Danny 拍板③：对齐先行体检卡顺延——现在对齐收官了）。
@@ -33,7 +40,7 @@
 > 电池 23/23 连续第三轮零红；净室扫雷 0/0。收据 receipt-r6-0722.md。
 >
 > ## ⚠️ 棒3-棒6 四棒都未推送（Danny AFK 指示 dev server 验收）
-> - 本地 main 领先 origin 4 commit；**验收入口 http://localhost:5173/?lang=zh**
+> - 本地 main 领先 origin 4 commit；**验收入口 http://localhost:5173/?v=2&mode=live&lang=zh**
 >   （preview+mock 8137+cr-live :3100 全在跑）；对照板 align-board/2026-07-21/index.html；
 >   demo 门一键进示例团队看真人卡头像。
 > - 点头后 `git push` 一次上产四棒 + 生产取证补收据。
@@ -59,7 +66,7 @@
 > 全绿；净室扫雷 0/0。收据 `.issues/cr-align-visual-0721/receipt-r5-0722.md`。
 >
 > ## ⚠️ 棒3+棒4+棒5 都未推送（Danny AFK 指示 dev server 验收）
-> - 本地 main 领先 origin 3 commit；**验收入口 http://localhost:5173/?lang=zh**
+> - 本地 main 领先 origin 3 commit；**验收入口 http://localhost:5173/?v=2&mode=live&lang=zh**
 >   （preview+mock 8137+cr-live :3100 全在跑）；对照板 align-board/2026-07-21/index.html。
 > - 点头后 `git push` 即上产 + 生产取证补收据。
 >
@@ -84,7 +91,7 @@
 > 收据 `.issues/cr-align-visual-0721/receipt-r4-0721.md`。
 >
 > ## ⚠️ 棒3+棒4 都未推送（Danny AFK 指示：一路干、先不推不部署、dev server 验收）
-> - 本地 main 领先 origin 若干 commit；**验收入口 http://localhost:5173/?lang=zh**
+> - 本地 main 领先 origin 若干 commit；**验收入口 http://localhost:5173/?v=2&mode=live&lang=zh**
 >   （vite preview 挂终局 dev 构建 + mock 后端 8137 + cr-live 参照 :3100，收工全部保持运行）。
 > - 对照板：eval-harness/reports/align-board/2026-07-21/index.html（我方终构建 vs 她方逐屏成对）。
 > - Danny 验收点头后：`git push`（=Vercel 自动上产）+ 生产计算值取证补进收据。
@@ -119,7 +126,7 @@
 > 收据 `.issues/cr-align-visual-0721/receipt-r3-0721.md`。
 >
 > ## ⚠️ 本棒未推送（Danny AFK 指示：一路干、先不推不部署、dev server 验收）
-> - 改动停在本地 commit；**验收入口 http://localhost:5173/?lang=zh**（vite preview 挂 dev
+> - 改动停在本地 commit；**验收入口 http://localhost:5173/?v=2&mode=live&lang=zh**（vite preview 挂 dev
 >   构建 + mock 后端 8137，收工保持运行；cr-live 参照 :3100 也在跑，对照板已重拍）。
 > - Danny 验收点头后：`git push`（=Vercel 自动上产）+ 生产计算值取证补进收据。
 >

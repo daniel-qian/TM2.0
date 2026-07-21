@@ -30,5 +30,5 @@
 
 ## 验收方式
 
-dev server：http://localhost:5173/?lang=zh（preview + mock 8137 + cr-live :3100 全在跑）；
+dev server：http://localhost:5173/?v=2&mode=live&lang=zh（preview + mock 8137 + cr-live :3100 全在跑）；
 对照板 eval-harness/reports/align-board/2026-07-21/index.html；demo 门一键进示例团队。

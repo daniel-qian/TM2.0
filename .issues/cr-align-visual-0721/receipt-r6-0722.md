@@ -40,4 +40,4 @@ unknown 都不染色反而形近（恰是该红线要防的混淆）；蓝(正�
 
 ## 验收方式（本棒不推不部署）
 
-同前：本地 commit，dev server 验收 http://localhost:5173/?lang=zh。
+同前：本地 commit，dev server 验收 http://localhost:5173/?v=2&mode=live&lang=zh。

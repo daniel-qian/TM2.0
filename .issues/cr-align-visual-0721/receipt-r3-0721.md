@@ -83,6 +83,6 @@ skin-phases 全部复验 exit 0 = 实质 22/22。contrast-smalltext 在 D2/D3 �
 ## 验收方式（本棒不推不部署）
 
 **Danny 指示：AFK 期间一路干到底、先不 push/部署，回来在 dev server 上验收。**
-本棒改动全部停在本地 commit；验收入口 http://localhost:5173/?lang=zh
+本棒改动全部停在本地 commit；验收入口 http://localhost:5173/?v=2&mode=live&lang=zh
 （vite preview 挂 dev 构建 + mock 后端 8137，收工时保持运行）。
 推送=Vercel 自动上产，等 Danny 验收后一句话即可。

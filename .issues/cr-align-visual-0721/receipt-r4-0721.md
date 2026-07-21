@@ -100,4 +100,4 @@ visual-baseline 在电池内直接绿（序修正的即时回报：dist 调包�
 
 ## 验收方式（本棒不推不部署）
 
-同棒3：改动停在本地 commit，dev server 验收 http://localhost:5173/?lang=zh（收工保持运行）。
+同棒3：改动停在本地 commit，dev server 验收 http://localhost:5173/?v=2&mode=live&lang=zh（收工保持运行）。

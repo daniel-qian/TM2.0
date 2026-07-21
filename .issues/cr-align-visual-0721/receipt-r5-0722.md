@@ -32,4 +32,4 @@
 
 ## 验收方式（本棒不推不部署）
 
-同棒3/棒4：本地 commit，dev server 验收 http://localhost:5173/?lang=zh。
+同棒3/棒4：本地 commit，dev server 验收 http://localhost:5173/?v=2&mode=live&lang=zh。
