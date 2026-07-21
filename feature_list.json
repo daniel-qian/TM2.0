@@ -747,6 +747,14 @@
       "evidence": "重面七门全绿；四项目四状态种子目检四色条全中 + demo 团队真中文首字头像实拍（r6-shots）；电池 23/23 连续第三轮零红；净室扫雷 0 件/0 指纹；paper 逐字节零动。未推送（dev server 验收）。",
       "status": "done",
       "date": "2026-07-22"
+    },
+    {
+      "id": "feat-089",
+      "name": "cr-align 视觉战役棒7：轻屏动效扫尾 + 战役收官",
+      "description": "look-aurora ㉒：lite2-rise 铺到五个轻屏卡/行族（no-preference 隔离，轻屏不 stagger）；playbookTag 守蓝=计划预留的最后一次基线变更按空执行收档。战役棒0-棒7 全落地：规格 22/22+sweep 0/0+电池连续零红=收官判据三项全中。",
+      "evidence": "skin-phases 16/16 原样绿（零探针迁移证明）；button-family/clearance/cr-alignment(s4) 穿越；电池 23/23 连续第四轮零红；净室扫雷 0 件/0 指纹；像素基线 36 张构造性绿。未推送（dev server 验收，五 commit 队列等一次上产）。",
+      "status": "done",
+      "date": "2026-07-22"
     }
   ]
 }

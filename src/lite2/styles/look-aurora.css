@@ -594,3 +594,18 @@
 .lite2-shell[data-look='aurora'] .home-tone-unknown .initial-avatar {
   background: var(--lite2-grad-gray);
 }
+
+/* ═══ cr-align 视觉战役 棒7（2026-07-22）· 屏组三：轻屏动效扫尾 ═══════════════════
+   lite2-rise 铺到轻展示屏的卡/行（她的入场签名全铺；D16 CSS 优先）；轻屏不做 stagger
+   （阶梯只留决策卡/待办行两处主列表，避免满屏此起彼伏）。整段 no-preference 隔离，
+   reduce 用户零动画。playbookTag 守蓝 badge 色=E 组两探针零迁移（计划里预留的「最后一次
+   基线变更」按空执行收档）。 */
+@media (prefers-reduced-motion: no-preference) {
+  .lite2-shell[data-look='aurora'] .lite-gap-card,
+  .lite2-shell[data-look='aurora'] .lite-notes-entry,
+  .lite2-shell[data-look='aurora'] .lite-vision-mock,
+  .lite2-shell[data-look='aurora'] .lite-playbooks-slot,
+  .lite2-shell[data-look='aurora'] .lite-project-card {
+    animation: lite2-rise 0.35s ease both;
+  }
+}

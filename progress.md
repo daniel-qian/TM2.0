@@ -882,3 +882,7 @@ look-aurora ⑱⑲ 纯 CSS append、零 TSX、全 aurora 作用域（paper 分�
 ## Update — 2026-07-22 · cr-align 视觉战役 棒6（feat-088）：屏组二——项目卡渐变条 + 渐变方块头像（未推送）
 
 look-aurora ⑳㉑ 纯 CSS append、零 TSX：⑳ 项目卡她的 6px 顶部渐变条（--lite2-grad-* 第一个消费面），左缘染色语法 aurora 退役，四态判别子全既有——默认=blue/at-risk=orange/blocked=red/**unknown=gray**；⑳ 的红线调停：l.4594 旧红线「normal/unknown 一律不染色」与她的全卡染色相撞，裁决=蓝≠灰显式区分是「别让『文档没写』读成『一切正常』」同一本意的更强实现（今天两者都不染色反而形近），战役计划屏表 Danny 批案口径，status-truth 门 27 判据仲裁绿灯，原注释就地补记；㉑ .initial-avatar 淡渐变墨字→她的浓渐变方块白字 800（home-tone-* 联动，aria-hidden 装饰件不吃 AA 地板；人面零数字零血条不受染）。重面七门（status-truth/skeleton/room×2/aria-zh/skin/button-family）全绿；满世界目检=四项目四状态种子一次验四色 + demo 示例团队真中文首字头像（全 ASCII 盲点修复红利实拍）；电池 23/23 连续第三轮零红；净室扫雷 0/0。留后：团队地图小卡守左缘（尺度）；头像语气渐变若刺眼退法=删 ㉑ 三行变体。
+
+## Update — 2026-07-22 · cr-align 视觉战役 棒7（feat-089）：轻屏动效扫尾 + 战役收官（未推送）
+
+look-aurora ㉒ 纯 CSS：lite2-rise 铺到 gap 卡/notes 行/vision 卡/playbooks 槽/项目卡（no-preference 隔离；轻屏不 stagger——阶梯只留决策卡/待办行，满屏此起彼伏是噪音不是节奏）；playbookTag 守蓝 badge 色，计划预留的「最后一次基线变更」按空执行收档（E 组探针零迁移，skin-phases 原样绿即证明）。电池 23/23 连续第四轮零红；净室扫雷 0/0；像素基线构造性绿（animations:disabled 拍摄口径 rise 不入镜）。**战役收官清点**：棒0-棒7 全落地——规格表 22/22 + sweep 全矩阵 0/0 + 电池连续零红=收官判据三项全中（对照板人审待 Danny 补最后一环）；偏差台账 D1-D18 记档；棒8 死规则清扫可选未做（族强断言层已压住老规则，纯卫生棒等点名）；未推送队列五 commit（棒3-棒7）等 Danny 验收后一次上产。
