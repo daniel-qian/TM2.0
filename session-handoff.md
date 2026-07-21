@@ -1,4 +1,47 @@
-> # ⟳ 2026-07-21 晚 · 输入侧棒 r2 收盘（★下个 session 从这里接）
+> # ⟳ 2026-07-21 深夜 · cr-align 视觉战役 棒0+棒1 收盘（★下个 session 从这里接）
+>
+> **一句话**：Danny 拍板「UIUX/layout/风格**完全对准**合伙人 cr-live 版本 + 系统扫 UI bug + 功能
+> 逻辑不动」。战役总计划已批（`.issues/cr-align-visual-0721/plan.md`，分 8 棒；ADR-0027）。
+> 本棒=棒0+棒1：扫雷/规格 harness 全套落地 + 两个生产 UI bug（顶栏压标题、加到待办裸按钮）
+> 红先行修复上线。四拍板：**paper 跟结构走 / 分棒推进 / 对齐先行 5B 顺延 / 缺件不补建**。
+>
+> ## 下一棒是什么：棒2 壳结构（对齐战役第一个大改动棒）
+> - 悬浮胶囊 nav slab：`.lite2-shell .prototype-topbar` 覆盖 fixed top14 居中 `min(1480,100vw-48)`
+>   radius16 + aurora 玻璃（00-base 一行不改）；**同 commit 换 4 个门字面量**（tabsGlass*/blur/
+>   shadow 探针改指 topbar、activeTabIsNavy→White）。
+> - 让位统一：`--lite2-clear-top:96px` 一变量九消费者（含撤销棒1 的 notes/vision 84px 改回内容
+>   padding）；aurora `::before` 100px 模糊背幕；底部钉死件审计清单在 plan.md 棒2 节。
+> - 照固定环跑：sweep 棒首棒尾 + SPEC_STICK=2 + 对照板给 Danny + 旧构建红证明 + 像素基线人审后更新。
+>
+> ## 本棒新家伙什（下棒直接用）
+> - **扫雷**：`node eval-harness/tools/sweep-ui-defects.mjs`（前置=门电池同款 mock 8137+preview 5173；
+>   `--selftest` 是硬门）。台账 `eval-harness/tools/ui-sweep-triage.json`（tracked）：现挂 open 44 件
+>   = small-target×28 + focus-missing×16，**全部排给棒4 组件族**，别散修。
+> - **规格门**：`SPEC_STICK=<棒号> node eval-harness/tools/verify-cr-alignment.mjs`；规格表
+>   `eval-harness/specs/cr-align-spec.json`（22 行 stick 分期；改门字面量从这里誊，spec→门→码）。
+>   全量跑=战役进度表（棒1 时点 8/22 绿）。
+> - **对照板**：`CR_BASE=http://localhost:3100 node eval-harness/tools/capture-align-board.mjs`
+>   （cr-live dev server 在 D:\cr-live `npm run dev`，node_modules 已装）。
+> - **像素基线**：`node node_modules/playwright/cli.js test -c eval-harness/visual`（36 张，
+>   __snapshots__ gitignored 单机产物；重基线 `--update-snapshots` 只在人审后同 commit）。
+> - **让位门**：verify-topbar-clearance 进常备电池（九屏首标题≥顶栏带底+8，新屏忘让位立刻红）。
+>
+> ## 别再踩的坑（本棒新增证据）
+> - **`powershell`(5.1) 读 UTF-8 无 BOM 的 .ps1 会把中文啃成 ParserError 整文件不跑**——批处理
+>   一律 pwsh + utf8BOM。
+> - **page.evaluate(字符串) 不吃 arg 参数**（字符串按表达式求值）——函数表达式串要
+>   `(${FN})(${JSON.stringify(opts)})` 内联。
+> - dist 重建门（auth-capability 等）中途换 dist 会打红像素基线——重建门收队尾 + 终局 dev 重建
+>   后复验 visual-baseline（本棒实测重演一次）。
+> - cr-live 的 `--shadow-lg` 有值（Tailwind 默认兜底）但非她定义——heavy pop 用我方 `--shadow`。
+>
+> ## 站着别动的事
+> - 裸「风险：」词表、`origin/p5-04-nexus-safe-zone`、凭据轮换——仍归 Danny。
+> - 合伙人对外「不打分不排名」旧口径——Danny 亲自同步。
+> - 已合未删分支（删除闸）；**5B 体检卡顺延**（对齐战役收官后接，Danny 已拍）。
+> - demo 克隆副本累积观察项（过期清扫=删除类动作先问）。
+
+> # ⟳ 2026-07-21 晚 · 输入侧棒 r2 收盘（上一棒）
 >
 > **一句话**：Danny 追加拍板「onboarding 改独立闸门页 + 一键示例团队放进门厅」——已全部落地上线：
 > OnboardWizard→OnboardGate 全屏闸门（LiteModal 底座不换，CSS 承担整页观感；对齐 cr 藏在

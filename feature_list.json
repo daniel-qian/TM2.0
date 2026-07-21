@@ -699,6 +699,14 @@
       "evidence": "后端 pytest 3367/0（新增 test_demo_claim 11 判据先红后绿 + 克隆合约 4 条）。新门 verify-onboard-gate 39/0 五世界（整页形态/一键真拿副本/Escape=pause/8A 延迟送出真送达/路由拦截 404→示例门一个像素不出），红证明=stash src 旧构建 TimeoutError 崩死。迁移 verify-onboarding-returning（doors）+ live-frontend-gate.snippet（walkthrough 过上传门）。回归 16 道全绿（p0 41/0、data-boundary 37/37、auth-form 57/0、zh-purity 基线 14 等）。真机：一键端到端（克隆两中文名不塌卡/预铸笔记继承/落 /home）、8A 全链（无 context 诚实不送→领示例瞬间自动送达后端笔记本）。",
       "status": "done",
       "date": "2026-07-21"
+    },
+    {
+      "id": "feat-083",
+      "name": "cr-align 视觉战役棒0+1：扫雷/规格 harness 全套 + 顶栏压标题与裸按钮两 bug 红先行修复",
+      "description": "Danny 拍板 UIUX/layout/风格完全对准合伙人 cr-live（基准=dev server 真路由 :3100，根 index.html 是过期原型不看）+ 系统扫「还没发现的」UI bug + 功能逻辑不动。四拍板：paper 跟结构走/分棒/对齐先行 5B 顺延/缺件不补建。落地：①扫雷 sweep-ui-defects+ui-detectors（9 屏×2 皮×空满 4 世界态，8 类缺陷检测器；--selftest 注错全响硬门；tracked 台账 ui-sweep-triage.json，fixed 复燃=REGRESSION；毕业机制 SWEEP_GATE_CLASSES）②cr 规格三件套：extract-cr-spec 取 :3100 真路由计算值→人筛 22 行 specs/cr-align-spec.json（stick 分期）→verify-cr-alignment 分期门（SPEC_STICK；spec→门→码方向钉死）③双栏对照板 capture-align-board（供 Danny 每棒过目）④像素基线 eval-harness/visual/ 36 张（stub+reducedMotion，单机不入库）⑤Bug A：notes/vision 28px 老模式让位不足→84px 惯例（根因=让位散在每屏的模式缺陷，新门 verify-topbar-clearance 结构不变量永久看守）⑥Bug B：加到待办按钮没进 l.3809 枚举选择器列表→补同族样式。ADR-0027。",
+      "evidence": "verify-topbar-clearance 修前 5 红（notes/vision×两皮 elementFromPoint 实测被顶栏接住 + followup 按钮 radius 0px/ButtonFace 底）→修后 22/0。sweep 首轮 140 件/78 指纹：已知两 bug 全被机械逮住（fixed-overlap×16+default-control×6 交叉验证），新扫出 small-target×28+focus-missing×16 挂台账排棒4；selftest 8/8。verify-cr-alignment 全量对棒1 构建 8/22 红（=战役差距表），SPEC_STICK=1 电池模式 5/5 绿。像素基线 36 张生成即复验绿。回归电池全绿（含 dist 重建门后终局重建复验）。",
+      "status": "done",
+      "date": "2026-07-21"
     }
   ]
 }

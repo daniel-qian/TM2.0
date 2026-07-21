@@ -28,6 +28,13 @@ public/__gate_verify.js
 public/__evidence_collector.js
 # 跑动产物（uvicorn 日志、Playwright 驱动与结果 JSON）——运行时输出，不入库
 runs/
+# cr-align 战役跑动产物（UI 扫雷 JSON、对照板 PNG）——台账 ui-sweep-triage.json 是 tracked 的，产物不入库
+eval-harness/reports/
+# 像素基线：单机字体渲染产物（11MB+），不入库；换机用 --update-snapshots 重采（同 review-shots 先例）
+eval-harness/visual/__snapshots__/
+eval-harness/visual/test-results/
+# playwright runner 的失败产物目录（落仓库根）
+test-results/
 # 会话复盘存档（transcript-zh 产物）——本地留存，不入库
 transcripts/
 .vite-gate-cache/

@@ -5057,8 +5057,8 @@
   color: var(--ink-faint);
 }
 
-/* 决策卡「加入跟进」按钮：与同排 toggle/open/room 按钮同族（.lite-home-decision-actions
-   里的按钮样式已有基类，这里只补 disabled 态）。 */
+/* 决策卡「加入跟进」按钮 disabled 态。⚠️ 同排 toggle/open/room 是【枚举选择器列表】
+   （l.3809），不是共享基类——本按钮当初没进列表，正常态样式在文件尾部 cr-align 棒1 补齐。 */
 .lite2-shell .lite-home-decision-followup:disabled {
   opacity: 0.6;
   cursor: default;
@@ -5327,4 +5327,46 @@
   .lite-onboard-field-row {
     grid-template-columns: 1fr;
   }
+}
+
+/* ═══ cr-align 视觉战役 棒1（2026-07-21）· 两个生产 UI bug 的最小修复 ═══════════════
+   证据链：verify-topbar-clearance.mjs 红先行（notes/vision 两皮全红，elementFromPoint
+   实测标题被顶栏接住）+ sweep-ui-defects 首轮 fixed-overlap×16 / default-control×6 指纹。
+   根因与全类修法见 .claude/plans 计划与 .issues/cr-align-visual-0721/；
+   这里是 append-only 最小形——棒2 会把让位统一成 --lite2-clear-top 变量（一处定义九处消费）。 */
+
+/* Bug A：notes/vision 是仅剩的「居中 flex + 28px 顶距」老模式屏——顶栏是 fixed 悬浮
+   （00-base l.65，带高 ~66px），28px 顶距让眉题/标题钻进顶栏底下。对齐既有 84px frame 惯例。 */
+.lite2-shell .lite-notes,
+.lite2-shell .lite-vision {
+  padding-top: 84px;
+}
+
+/* 窄屏镜像既有惯例（home 72px@1024 / projects 76px@720——≤860 顶栏转 sticky 进流，
+   留 72px 与 home-frame 同拍，不另发明数值） */
+@media (max-width: 860px) {
+  .lite2-shell .lite-notes,
+  .lite2-shell .lite-vision {
+    padding-top: 72px;
+  }
+}
+
+/* Bug B：「加到待办」按钮当初没进 l.3809 的枚举选择器列表（toggle/open/room），
+   正常态是裸浏览器默认按钮（ButtonFace 底+outset 边，sweep D2 三视口×两皮实测）。
+   补齐同族样式；disabled 态在 l.5062 原有。 */
+.lite2-shell .lite-home-decision-followup {
+  padding: 4px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.lite2-shell .lite-home-decision-followup:hover,
+.lite2-shell .lite-home-decision-followup:focus-visible {
+  border-color: var(--rule-strong);
+  color: var(--ink);
 }

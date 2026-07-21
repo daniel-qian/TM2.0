@@ -1,0 +1,782 @@
+{
+  "7b1302871846a88f": {
+    "status": "open",
+    "cls": "small-target",
+    "screen": "team",
+    "look": "aurora",
+    "viewport": "desktop",
+    "selector": "input",
+    "first_seen": "2026-07-21",
+    "note": ""
+  },
+  "22a2a6e3f267ca2d": {
+    "status": "false-positive",
+    "cls": "text-hidden",
+    "screen": "followups",
+    "look": "aurora",
+    "viewport": "desktop",
+    "selector": "option",
+    "first_seen": "2026-07-21",
+    "note": "<option> 原生渲染恒 0×0，检测器已滤 select 内元素"
+  },
+  "e38bcf724970a1bf": {
+    "status": "open",
+    "cls": "small-target",
+    "screen": "playbooks",
+    "look": "aurora",
+    "viewport": "desktop",
+    "selector": "button.lite-playbooks-reopen-onboarding",
+    "first_seen": "2026-07-21",
+    "note": ""
+  },
+  "175dac30423dee6f": {
+    "status": "fixed",
+    "cls": "fixed-overlap",
+    "screen": "vision",
+    "look": "aurora",
+    "viewport": "desktop",
+    "selector": "p.eyebrow.lite-vision-eyebrow",
+    "first_seen": "2026-07-21",
+    "note": "Bug A 棒1 修复：notes/vision 84px 让位（verify-topbar-clearance 红→绿）"
+  },
+  "0ad9b61c605a0030": {
+    "status": "fixed",
+    "cls": "fixed-overlap",
+    "screen": "vision",
+    "look": "aurora",
+    "viewport": "desktop",
+    "selector": "h2",
+    "first_seen": "2026-07-21",
+    "note": "Bug A 棒1 修复：notes/vision 84px 让位（verify-topbar-clearance 红→绿）"
+  },
+  "322bf020a04579f3": {
+    "status": "false-positive",
+    "cls": "text-hidden",
+    "screen": "vision",
+    "look": "aurora",
+    "viewport": "desktop",
+    "selector": "h2",
+    "first_seen": "2026-07-21",
+    "note": "滚动/平移可达内容误判为截断，检测器已改滚动祖先先断"
+  },
+  "f483c9998b251ede": {
+    "status": "fixed",
+    "cls": "default-control",
+    "screen": "home",
+    "look": "aurora",
+    "viewport": "desktop",
+    "selector": "button.lite-home-decision-followup",
+    "first_seen": "2026-07-21",
+    "note": "Bug B 棒1 修复：followup 按钮补进同族样式（门断言红→绿）"
+  },
+  "2a94bd2c269fd832": {
+    "status": "open",
+    "cls": "small-target",
+    "screen": "home",
+    "look": "aurora",
+    "viewport": "desktop",
+    "selector": "button.lite-home-block-link",
+    "first_seen": "2026-07-21",
+    "note": ""
+  },
+  "f4acb144c9cecce2": {
+    "status": "open",
+    "cls": "focus-missing",
+    "screen": "team",
+    "look": "aurora",
+    "viewport": "desktop",
+    "selector": "input",
+    "first_seen": "2026-07-21",
+    "note": ""
+  },
+  "3dae623c8cdbd50a": {
+    "status": "open",
+    "cls": "focus-missing",
+    "screen": "projects",
+    "look": "aurora",
+    "viewport": "desktop",
+    "selector": "button.lite-project-card",
+    "first_seen": "2026-07-21",
+    "note": ""
+  },
+  "c1ffb017be1f9f95": {
+    "status": "open",
+    "cls": "small-target",
+    "screen": "room",
+    "look": "aurora",
+    "viewport": "desktop",
+    "selector": "button.lite-flow-cites-toggle",
+    "first_seen": "2026-07-21",
+    "note": ""
+  },
+  "646889bb819db27f": {
+    "status": "open",
+    "cls": "focus-missing",
+    "screen": "room",
+    "look": "aurora",
+    "viewport": "desktop",
+    "selector": "button.lite-room-canvas-reset",
+    "first_seen": "2026-07-21",
+    "note": ""
+  },
+  "01d9f5b4b53152c5": {
+    "status": "open",
+    "cls": "focus-missing",
+    "screen": "room",
+    "look": "aurora",
+    "viewport": "desktop",
+    "selector": "button.lite-advice-add-followup",
+    "first_seen": "2026-07-21",
+    "note": ""
+  },
+  "a791335d143bf67a": {
+    "status": "open",
+    "cls": "focus-missing",
+    "screen": "room",
+    "look": "aurora",
+    "viewport": "desktop",
+    "selector": "input",
+    "first_seen": "2026-07-21",
+    "note": ""
+  },
+  "f6d54d250592de48": {
+    "status": "open",
+    "cls": "focus-missing",
+    "screen": "followups",
+    "look": "aurora",
+    "viewport": "desktop",
+    "selector": "button.lite-followups-subtab",
+    "first_seen": "2026-07-21",
+    "note": ""
+  },
+  "b6b95e93de087311": {
+    "status": "open",
+    "cls": "focus-missing",
+    "screen": "followups",
+    "look": "aurora",
+    "viewport": "desktop",
+    "selector": "button.lite-followup-add-submit",
+    "first_seen": "2026-07-21",
+    "note": ""
+  },
+  "233b98201952a2c6": {
+    "status": "fixed",
+    "cls": "fixed-overlap",
+    "screen": "notes",
+    "look": "aurora",
+    "viewport": "desktop",
+    "selector": "p.eyebrow.lite-notes-eyebrow",
+    "first_seen": "2026-07-21",
+    "note": "Bug A 棒1 修复：notes/vision 84px 让位（verify-topbar-clearance 红→绿）"
+  },
+  "2591ebfbd542f7a2": {
+    "status": "fixed",
+    "cls": "fixed-overlap",
+    "screen": "notes",
+    "look": "aurora",
+    "viewport": "desktop",
+    "selector": "h2",
+    "first_seen": "2026-07-21",
+    "note": "Bug A 棒1 修复：notes/vision 84px 让位（verify-topbar-clearance 红→绿）"
+  },
+  "85a99872e157bb35": {
+    "status": "open",
+    "cls": "small-target",
+    "screen": "notes",
+    "look": "aurora",
+    "viewport": "desktop",
+    "selector": "button.lite-notes-entry-source",
+    "first_seen": "2026-07-21",
+    "note": ""
+  },
+  "c6687f3d80230cd3": {
+    "status": "open",
+    "cls": "focus-missing",
+    "screen": "notes",
+    "look": "aurora",
+    "viewport": "desktop",
+    "selector": "button.home-people-group-head.lite-notes-group-head",
+    "first_seen": "2026-07-21",
+    "note": ""
+  },
+  "8330ba9bacd54d83": {
+    "status": "fixed",
+    "cls": "default-control",
+    "screen": "home",
+    "look": "aurora",
+    "viewport": "mid",
+    "selector": "button.lite-home-decision-followup",
+    "first_seen": "2026-07-21",
+    "note": "Bug B 棒1 修复：followup 按钮补进同族样式（门断言红→绿）"
+  },
+  "fcb3a70eed2a8ac6": {
+    "status": "open",
+    "cls": "small-target",
+    "screen": "home",
+    "look": "aurora",
+    "viewport": "mid",
+    "selector": "button.lite-home-block-link",
+    "first_seen": "2026-07-21",
+    "note": ""
+  },
+  "7e69f7d5ef3a464a": {
+    "status": "open",
+    "cls": "small-target",
+    "screen": "team",
+    "look": "aurora",
+    "viewport": "mid",
+    "selector": "input",
+    "first_seen": "2026-07-21",
+    "note": ""
+  },
+  "f61be47d790f7b79": {
+    "status": "open",
+    "cls": "small-target",
+    "screen": "room",
+    "look": "aurora",
+    "viewport": "mid",
+    "selector": "button.lite-flow-cites-toggle",
+    "first_seen": "2026-07-21",
+    "note": ""
+  },
+  "180b0e5f1684a176": {
+    "status": "false-positive",
+    "cls": "text-hidden",
+    "screen": "followups",
+    "look": "aurora",
+    "viewport": "mid",
+    "selector": "option",
+    "first_seen": "2026-07-21",
+    "note": "<option> 原生渲染恒 0×0，检测器已滤 select 内元素"
+  },
+  "38293234d718d7ea": {
+    "status": "fixed",
+    "cls": "fixed-overlap",
+    "screen": "notes",
+    "look": "aurora",
+    "viewport": "mid",
+    "selector": "p.eyebrow.lite-notes-eyebrow",
+    "first_seen": "2026-07-21",
+    "note": "Bug A 棒1 修复：notes/vision 84px 让位（verify-topbar-clearance 红→绿）"
+  },
+  "32038c687fc1042a": {
+    "status": "fixed",
+    "cls": "fixed-overlap",
+    "screen": "notes",
+    "look": "aurora",
+    "viewport": "mid",
+    "selector": "h2",
+    "first_seen": "2026-07-21",
+    "note": "Bug A 棒1 修复：notes/vision 84px 让位（verify-topbar-clearance 红→绿）"
+  },
+  "b8a48a178ce64518": {
+    "status": "open",
+    "cls": "small-target",
+    "screen": "notes",
+    "look": "aurora",
+    "viewport": "mid",
+    "selector": "button.lite-notes-entry-source",
+    "first_seen": "2026-07-21",
+    "note": ""
+  },
+  "f9c488168153856b": {
+    "status": "open",
+    "cls": "small-target",
+    "screen": "playbooks",
+    "look": "aurora",
+    "viewport": "mid",
+    "selector": "button.lite-playbooks-reopen-onboarding",
+    "first_seen": "2026-07-21",
+    "note": ""
+  },
+  "8756c29fc7132c03": {
+    "status": "fixed",
+    "cls": "fixed-overlap",
+    "screen": "vision",
+    "look": "aurora",
+    "viewport": "mid",
+    "selector": "p.eyebrow.lite-vision-eyebrow",
+    "first_seen": "2026-07-21",
+    "note": "Bug A 棒1 修复：notes/vision 84px 让位（verify-topbar-clearance 红→绿）"
+  },
+  "d276f61aa2097c4f": {
+    "status": "fixed",
+    "cls": "fixed-overlap",
+    "screen": "vision",
+    "look": "aurora",
+    "viewport": "mid",
+    "selector": "h2",
+    "first_seen": "2026-07-21",
+    "note": "Bug A 棒1 修复：notes/vision 84px 让位（verify-topbar-clearance 红→绿）"
+  },
+  "4c5acabf734709ff": {
+    "status": "fixed",
+    "cls": "default-control",
+    "screen": "home",
+    "look": "aurora",
+    "viewport": "mobile",
+    "selector": "button.lite-home-decision-followup",
+    "first_seen": "2026-07-21",
+    "note": "Bug B 棒1 修复：followup 按钮补进同族样式（门断言红→绿）"
+  },
+  "62f12a3653304b64": {
+    "status": "open",
+    "cls": "small-target",
+    "screen": "home",
+    "look": "aurora",
+    "viewport": "mobile",
+    "selector": "button.lite-home-block-link",
+    "first_seen": "2026-07-21",
+    "note": ""
+  },
+  "07a7994ef8399b61": {
+    "status": "false-positive",
+    "cls": "text-hidden",
+    "screen": "room",
+    "look": "aurora",
+    "viewport": "mobile",
+    "selector": "span",
+    "first_seen": "2026-07-21",
+    "note": "滚动/平移可达内容误判为截断，检测器已改滚动祖先先断"
+  },
+  "2e406746f79ed24c": {
+    "status": "false-positive",
+    "cls": "text-hidden",
+    "screen": "room",
+    "look": "aurora",
+    "viewport": "mobile",
+    "selector": "button.lite-advice-add-followup",
+    "first_seen": "2026-07-21",
+    "note": "滚动/平移可达内容误判为截断，检测器已改滚动祖先先断"
+  },
+  "e345c45d4b71d56d": {
+    "status": "open",
+    "cls": "small-target",
+    "screen": "room",
+    "look": "aurora",
+    "viewport": "mobile",
+    "selector": "button.lite-flow-cites-toggle",
+    "first_seen": "2026-07-21",
+    "note": ""
+  },
+  "8a8bbb0655ba5325": {
+    "status": "false-positive",
+    "cls": "text-hidden",
+    "screen": "followups",
+    "look": "aurora",
+    "viewport": "mobile",
+    "selector": "option",
+    "first_seen": "2026-07-21",
+    "note": "<option> 原生渲染恒 0×0，检测器已滤 select 内元素"
+  },
+  "539d20ef5cb3e51f": {
+    "status": "open",
+    "cls": "small-target",
+    "screen": "notes",
+    "look": "aurora",
+    "viewport": "mobile",
+    "selector": "button.lite-notes-entry-source",
+    "first_seen": "2026-07-21",
+    "note": ""
+  },
+  "c1ce0a117567f084": {
+    "status": "open",
+    "cls": "small-target",
+    "screen": "playbooks",
+    "look": "aurora",
+    "viewport": "mobile",
+    "selector": "button.lite-playbooks-reopen-onboarding",
+    "first_seen": "2026-07-21",
+    "note": ""
+  },
+  "5e48b0fbcf434d64": {
+    "status": "open",
+    "cls": "small-target",
+    "screen": "team",
+    "look": "paper",
+    "viewport": "desktop",
+    "selector": "input",
+    "first_seen": "2026-07-21",
+    "note": ""
+  },
+  "9ec3f452d117e5c1": {
+    "status": "false-positive",
+    "cls": "text-hidden",
+    "screen": "followups",
+    "look": "paper",
+    "viewport": "desktop",
+    "selector": "option",
+    "first_seen": "2026-07-21",
+    "note": "<option> 原生渲染恒 0×0，检测器已滤 select 内元素"
+  },
+  "1b876f2b4ff9c161": {
+    "status": "open",
+    "cls": "small-target",
+    "screen": "playbooks",
+    "look": "paper",
+    "viewport": "desktop",
+    "selector": "button.lite-playbooks-reopen-onboarding",
+    "first_seen": "2026-07-21",
+    "note": ""
+  },
+  "b4baa2bbc4faad1c": {
+    "status": "fixed",
+    "cls": "fixed-overlap",
+    "screen": "vision",
+    "look": "paper",
+    "viewport": "desktop",
+    "selector": "p.eyebrow.lite-vision-eyebrow",
+    "first_seen": "2026-07-21",
+    "note": "Bug A 棒1 修复：notes/vision 84px 让位（verify-topbar-clearance 红→绿）"
+  },
+  "d36738cae7f0296a": {
+    "status": "fixed",
+    "cls": "fixed-overlap",
+    "screen": "vision",
+    "look": "paper",
+    "viewport": "desktop",
+    "selector": "h2",
+    "first_seen": "2026-07-21",
+    "note": "Bug A 棒1 修复：notes/vision 84px 让位（verify-topbar-clearance 红→绿）"
+  },
+  "9347981425c9692f": {
+    "status": "false-positive",
+    "cls": "text-hidden",
+    "screen": "vision",
+    "look": "paper",
+    "viewport": "desktop",
+    "selector": "p.eyebrow.lite-vision-mocks-eyebrow",
+    "first_seen": "2026-07-21",
+    "note": "滚动/平移可达内容误判为截断，检测器已改滚动祖先先断"
+  },
+  "47cba28f20ece4e2": {
+    "status": "fixed",
+    "cls": "default-control",
+    "screen": "home",
+    "look": "paper",
+    "viewport": "desktop",
+    "selector": "button.lite-home-decision-followup",
+    "first_seen": "2026-07-21",
+    "note": "Bug B 棒1 修复：followup 按钮补进同族样式（门断言红→绿）"
+  },
+  "d16b8283669001ff": {
+    "status": "open",
+    "cls": "small-target",
+    "screen": "home",
+    "look": "paper",
+    "viewport": "desktop",
+    "selector": "button.lite-home-block-link",
+    "first_seen": "2026-07-21",
+    "note": ""
+  },
+  "9275c298974c2914": {
+    "status": "open",
+    "cls": "focus-missing",
+    "screen": "team",
+    "look": "paper",
+    "viewport": "desktop",
+    "selector": "input",
+    "first_seen": "2026-07-21",
+    "note": ""
+  },
+  "b29e8238ccf9ae23": {
+    "status": "open",
+    "cls": "focus-missing",
+    "screen": "projects",
+    "look": "paper",
+    "viewport": "desktop",
+    "selector": "button.lite-project-card",
+    "first_seen": "2026-07-21",
+    "note": ""
+  },
+  "1412ef530d9d526d": {
+    "status": "open",
+    "cls": "small-target",
+    "screen": "room",
+    "look": "paper",
+    "viewport": "desktop",
+    "selector": "button.lite-flow-cites-toggle",
+    "first_seen": "2026-07-21",
+    "note": ""
+  },
+  "2a1b69d150e2c623": {
+    "status": "open",
+    "cls": "focus-missing",
+    "screen": "room",
+    "look": "paper",
+    "viewport": "desktop",
+    "selector": "button.lite-room-canvas-reset",
+    "first_seen": "2026-07-21",
+    "note": ""
+  },
+  "9c85c1d64188dd08": {
+    "status": "open",
+    "cls": "focus-missing",
+    "screen": "room",
+    "look": "paper",
+    "viewport": "desktop",
+    "selector": "button.lite-advice-add-followup",
+    "first_seen": "2026-07-21",
+    "note": ""
+  },
+  "f79b52a2c562b05c": {
+    "status": "open",
+    "cls": "focus-missing",
+    "screen": "room",
+    "look": "paper",
+    "viewport": "desktop",
+    "selector": "input",
+    "first_seen": "2026-07-21",
+    "note": ""
+  },
+  "49e358d359d7b8bd": {
+    "status": "open",
+    "cls": "focus-missing",
+    "screen": "followups",
+    "look": "paper",
+    "viewport": "desktop",
+    "selector": "button.lite-followups-subtab",
+    "first_seen": "2026-07-21",
+    "note": ""
+  },
+  "e0542628d4185bae": {
+    "status": "open",
+    "cls": "focus-missing",
+    "screen": "followups",
+    "look": "paper",
+    "viewport": "desktop",
+    "selector": "button.lite-followup-add-submit",
+    "first_seen": "2026-07-21",
+    "note": ""
+  },
+  "45333b098b0c82a5": {
+    "status": "fixed",
+    "cls": "fixed-overlap",
+    "screen": "notes",
+    "look": "paper",
+    "viewport": "desktop",
+    "selector": "p.eyebrow.lite-notes-eyebrow",
+    "first_seen": "2026-07-21",
+    "note": "Bug A 棒1 修复：notes/vision 84px 让位（verify-topbar-clearance 红→绿）"
+  },
+  "b56a791cd85c9ec8": {
+    "status": "fixed",
+    "cls": "fixed-overlap",
+    "screen": "notes",
+    "look": "paper",
+    "viewport": "desktop",
+    "selector": "h2",
+    "first_seen": "2026-07-21",
+    "note": "Bug A 棒1 修复：notes/vision 84px 让位（verify-topbar-clearance 红→绿）"
+  },
+  "173fb0ba43ef903d": {
+    "status": "open",
+    "cls": "small-target",
+    "screen": "notes",
+    "look": "paper",
+    "viewport": "desktop",
+    "selector": "button.lite-notes-entry-source",
+    "first_seen": "2026-07-21",
+    "note": ""
+  },
+  "cec405936bd2f64e": {
+    "status": "open",
+    "cls": "focus-missing",
+    "screen": "notes",
+    "look": "paper",
+    "viewport": "desktop",
+    "selector": "button.home-people-group-head.lite-notes-group-head",
+    "first_seen": "2026-07-21",
+    "note": ""
+  },
+  "2937ea5fcac85097": {
+    "status": "fixed",
+    "cls": "default-control",
+    "screen": "home",
+    "look": "paper",
+    "viewport": "mid",
+    "selector": "button.lite-home-decision-followup",
+    "first_seen": "2026-07-21",
+    "note": "Bug B 棒1 修复：followup 按钮补进同族样式（门断言红→绿）"
+  },
+  "be071abbc8028c22": {
+    "status": "open",
+    "cls": "small-target",
+    "screen": "home",
+    "look": "paper",
+    "viewport": "mid",
+    "selector": "button.lite-home-block-link",
+    "first_seen": "2026-07-21",
+    "note": ""
+  },
+  "f96e691fdc9b9101": {
+    "status": "open",
+    "cls": "small-target",
+    "screen": "team",
+    "look": "paper",
+    "viewport": "mid",
+    "selector": "input",
+    "first_seen": "2026-07-21",
+    "note": ""
+  },
+  "6f1a5793cc768ad9": {
+    "status": "open",
+    "cls": "small-target",
+    "screen": "room",
+    "look": "paper",
+    "viewport": "mid",
+    "selector": "button.lite-flow-cites-toggle",
+    "first_seen": "2026-07-21",
+    "note": ""
+  },
+  "b3839fbfa1a3348c": {
+    "status": "false-positive",
+    "cls": "text-hidden",
+    "screen": "followups",
+    "look": "paper",
+    "viewport": "mid",
+    "selector": "option",
+    "first_seen": "2026-07-21",
+    "note": "<option> 原生渲染恒 0×0，检测器已滤 select 内元素"
+  },
+  "59b1f1a75eca5040": {
+    "status": "fixed",
+    "cls": "fixed-overlap",
+    "screen": "notes",
+    "look": "paper",
+    "viewport": "mid",
+    "selector": "p.eyebrow.lite-notes-eyebrow",
+    "first_seen": "2026-07-21",
+    "note": "Bug A 棒1 修复：notes/vision 84px 让位（verify-topbar-clearance 红→绿）"
+  },
+  "fbb2cd7462241a61": {
+    "status": "fixed",
+    "cls": "fixed-overlap",
+    "screen": "notes",
+    "look": "paper",
+    "viewport": "mid",
+    "selector": "h2",
+    "first_seen": "2026-07-21",
+    "note": "Bug A 棒1 修复：notes/vision 84px 让位（verify-topbar-clearance 红→绿）"
+  },
+  "1cb13aaee376e0e7": {
+    "status": "open",
+    "cls": "small-target",
+    "screen": "notes",
+    "look": "paper",
+    "viewport": "mid",
+    "selector": "button.lite-notes-entry-source",
+    "first_seen": "2026-07-21",
+    "note": ""
+  },
+  "fbb280387be787c3": {
+    "status": "open",
+    "cls": "small-target",
+    "screen": "playbooks",
+    "look": "paper",
+    "viewport": "mid",
+    "selector": "button.lite-playbooks-reopen-onboarding",
+    "first_seen": "2026-07-21",
+    "note": ""
+  },
+  "1961b3830f3843cc": {
+    "status": "fixed",
+    "cls": "fixed-overlap",
+    "screen": "vision",
+    "look": "paper",
+    "viewport": "mid",
+    "selector": "p.eyebrow.lite-vision-eyebrow",
+    "first_seen": "2026-07-21",
+    "note": "Bug A 棒1 修复：notes/vision 84px 让位（verify-topbar-clearance 红→绿）"
+  },
+  "6c4f159b212f3526": {
+    "status": "fixed",
+    "cls": "fixed-overlap",
+    "screen": "vision",
+    "look": "paper",
+    "viewport": "mid",
+    "selector": "h2",
+    "first_seen": "2026-07-21",
+    "note": "Bug A 棒1 修复：notes/vision 84px 让位（verify-topbar-clearance 红→绿）"
+  },
+  "005a2fe985e496a4": {
+    "status": "fixed",
+    "cls": "default-control",
+    "screen": "home",
+    "look": "paper",
+    "viewport": "mobile",
+    "selector": "button.lite-home-decision-followup",
+    "first_seen": "2026-07-21",
+    "note": "Bug B 棒1 修复：followup 按钮补进同族样式（门断言红→绿）"
+  },
+  "31cc9d0143893976": {
+    "status": "open",
+    "cls": "small-target",
+    "screen": "home",
+    "look": "paper",
+    "viewport": "mobile",
+    "selector": "button.lite-home-block-link",
+    "first_seen": "2026-07-21",
+    "note": ""
+  },
+  "92d9ee1b9313eb46": {
+    "status": "false-positive",
+    "cls": "text-hidden",
+    "screen": "room",
+    "look": "paper",
+    "viewport": "mobile",
+    "selector": "span",
+    "first_seen": "2026-07-21",
+    "note": "滚动/平移可达内容误判为截断，检测器已改滚动祖先先断"
+  },
+  "75843a8cac8a870f": {
+    "status": "false-positive",
+    "cls": "text-hidden",
+    "screen": "room",
+    "look": "paper",
+    "viewport": "mobile",
+    "selector": "button.lite-advice-add-followup",
+    "first_seen": "2026-07-21",
+    "note": "滚动/平移可达内容误判为截断，检测器已改滚动祖先先断"
+  },
+  "6b3227c7f1dd7826": {
+    "status": "open",
+    "cls": "small-target",
+    "screen": "room",
+    "look": "paper",
+    "viewport": "mobile",
+    "selector": "button.lite-flow-cites-toggle",
+    "first_seen": "2026-07-21",
+    "note": ""
+  },
+  "bed13e4c2474c04f": {
+    "status": "false-positive",
+    "cls": "text-hidden",
+    "screen": "followups",
+    "look": "paper",
+    "viewport": "mobile",
+    "selector": "option",
+    "first_seen": "2026-07-21",
+    "note": "<option> 原生渲染恒 0×0，检测器已滤 select 内元素"
+  },
+  "33c1c8cfc5e1a345": {
+    "status": "open",
+    "cls": "small-target",
+    "screen": "notes",
+    "look": "paper",
+    "viewport": "mobile",
+    "selector": "button.lite-notes-entry-source",
+    "first_seen": "2026-07-21",
+    "note": ""
+  },
+  "88353fa6f581a7e8": {
+    "status": "open",
+    "cls": "small-target",
+    "screen": "playbooks",
+    "look": "paper",
+    "viewport": "mobile",
+    "selector": "button.lite-playbooks-reopen-onboarding",
+    "first_seen": "2026-07-21",
+    "note": ""
+  }
+}
