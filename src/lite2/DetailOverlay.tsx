@@ -80,7 +80,7 @@ export function DetailOverlay() {
       backdropLabel={t.lite2.detailClose}
       panelClassName="lite-detail-card"
     >
-      <button type="button" className="lite-detail-close" onClick={closeDetail}>
+      <button type="button" className="lite-btn lite-btn--ghost lite-detail-close" onClick={closeDetail}>
         {t.lite2.detailClose}
       </button>
 

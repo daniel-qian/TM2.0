@@ -193,7 +193,7 @@ export function UploadPanel() {
         <p className="upload-drop-label">{t.upload.drop}</p>
         <button
           type="button"
-          className={classNames(['upload-choose', busy && 'is-busy'])}
+          className={classNames(['lite-btn', 'lite-btn--primary', 'upload-choose', busy && 'is-busy'])}
           disabled={busy}
           onClick={(e) => {
             e.stopPropagation()
@@ -257,7 +257,7 @@ export function UploadPanel() {
           <div className="upload-error">
             <p className="upload-error-label">{t.upload.errorLabel}</p>
             {error ? <p className="upload-error-detail">{error}</p> : null}
-            <button type="button" className="upload-retry" onClick={() => inputRef.current?.click()}>
+            <button type="button" className="lite-btn lite-btn--ghost upload-retry" onClick={() => inputRef.current?.click()}>
               {t.upload.retry}
             </button>
           </div>

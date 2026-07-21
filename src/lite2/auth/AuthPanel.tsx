@@ -376,7 +376,7 @@ export function AuthPanel() {
                   <p className="lite-auth-note">{c.authClaimTitle}</p>
                   <button
                     type="button"
-                    className="lite-auth-submit"
+                    className="lite-btn lite-btn--primary lite-auth-submit"
                     onClick={() => void doClaim()}
                     disabled={claim === 'claiming'}
                   >
@@ -401,7 +401,7 @@ export function AuthPanel() {
                       （in-flight 时直接 bail），最坏结果是用户多点一下。 */}
                   <button
                     type="button"
-                    className="lite-auth-secondary"
+                    className="lite-btn lite-btn--ghost lite-auth-secondary"
                     onClick={() => setRestoreAttempt((n) => n + 1)}
                   >
                     {c.authRetry}
@@ -413,7 +413,7 @@ export function AuthPanel() {
                   还挂着「重试」按钮，按类计数分不清谁是谁；按文案定位又会被 i18n 改动绊住。 */}
               <button
                 type="button"
-                className="lite-auth-secondary"
+                className="lite-btn lite-btn--ghost lite-auth-secondary"
                 data-role="sign-out"
                 onClick={() => void signOut()}
                 disabled={working}
@@ -448,13 +448,13 @@ export function AuthPanel() {
                 ) : null}
               </label>
 
-              <button type="submit" className="lite-auth-submit" disabled={working}>
+              <button type="submit" className="lite-btn lite-btn--primary lite-auth-submit" disabled={working}>
                 {working ? c.authWorking : mode === 'signup' ? c.authDoSignUp : c.authDoSignIn}
               </button>
 
               <button
                 type="button"
-                className="lite-auth-switch"
+                className="lite-btn lite-btn--ghost lite-auth-switch"
                 onClick={() => {
                   setMode((m) => (m === 'signin' ? 'signup' : 'signin'))
                   clearError()

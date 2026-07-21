@@ -261,6 +261,7 @@ export function TeamScreen() {
                               读成"喊话"，所以中文构建下关掉大写、收紧字距。 */}
                           <span
                             className={classNames([
+                              'lite-badge',
                               'home-handoff-tone',
                               locale === 'zh' && 'is-cjk',
                             ])}
@@ -279,14 +280,14 @@ export function TeamScreen() {
                             </button>
                             <button
                               type="button"
-                              className="lite-triage-room"
+                              className="lite-btn lite-btn--ghost lite-triage-room"
                               onClick={() => handleTakeToRoom(handoff)}
                             >
                               {t.lite2.triageTakeToRoomLabel} ↗
                             </button>
                             <button
                               type="button"
-                              className="lite-triage-addfollowup"
+                              className="lite-btn lite-btn--soft lite-triage-addfollowup"
                               disabled={addedFollowupIds.has(handoff.id)}
                               onClick={() => handleAddFollowup(handoff)}
                             >
@@ -298,14 +299,14 @@ export function TeamScreen() {
                                 邮件客户端，草稿正文根本没露过面）。现在开应用内草稿框。 */}
                             <button
                               type="button"
-                              className="lite-triage-draftmail"
+                              className="lite-btn lite-btn--ghost lite-triage-draftmail"
                               onClick={() => openDraft(draftFromHandoff(handoff, team))}
                             >
                               {t.lite2.triageDraftMailLabel}
                             </button>
                             <button
                               type="button"
-                              className="home-discard"
+                              className="lite-btn lite-btn--ghost home-discard"
                               onClick={() => discardTriage(handoff.id)}
                             >
                               {t.lite2.triageDiscardLabel}
@@ -342,7 +343,7 @@ export function TeamScreen() {
                         {handled.map((handoff) => (
                           <li key={handoff.id}>
                             <span className="home-drawer-item">{handoff.action}</span>
-                            <button type="button" onClick={() => restoreTriage(handoff.id)}>
+                            <button type="button" className="lite-btn lite-btn--ghost" onClick={() => restoreTriage(handoff.id)}>
                               {t.lite2.triageRestoreLabel}
                             </button>
                           </li>
@@ -350,7 +351,7 @@ export function TeamScreen() {
                         {setAside.map((handoff) => (
                           <li key={handoff.id} className="is-set-aside">
                             <span className="home-drawer-item">{handoff.action}</span>
-                            <button type="button" onClick={() => restoreTriage(handoff.id)}>
+                            <button type="button" className="lite-btn lite-btn--ghost" onClick={() => restoreTriage(handoff.id)}>
                               {t.lite2.triageRestoreLabel}
                             </button>
                           </li>
@@ -379,7 +380,7 @@ export function TeamScreen() {
                     <p className="lite-empty-restore-detail">{restoreError}</p>
                     <button
                       type="button"
-                      className="lite-empty-restore-retry"
+                      className="lite-btn lite-btn--ghost lite-empty-restore-retry"
                       onClick={() => void restoreSession()}
                     >
                       {t.lite2.restoreRetry}

@@ -128,7 +128,7 @@ export function VisionScreen() {
                 <header className="lite-vision-mock-top">
                   <h3>{mock.title}</h3>
                   {/* 诚实标注：绝不冒充已实现（gate 相位 J 断言每张 mock 必带此 tag）。 */}
-                  <span className="lite-vision-tag">{mock.tag}</span>
+                  <span className="lite-badge lite-vision-tag">{mock.tag}</span>
                 </header>
                 <p className="lite-vision-mock-body">{mock.body}</p>
                 {'person' in mock && mock.person ? (

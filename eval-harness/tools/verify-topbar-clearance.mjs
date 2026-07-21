@@ -170,13 +170,17 @@ await driveLook('paper')
     const el = document.querySelector('.lite-home-decision-followup')
     if (!el) return null
     const cs = getComputedStyle(el)
-    return { radius: cs.borderRadius, fontSize: cs.fontSize, bg: cs.backgroundColor }
+    return { radius: cs.borderRadius, fontSize: cs.fontSize, bg: cs.backgroundColor, family: el.classList.contains('lite-btn') }
   })
   rec('「加到待办」按钮在场', btn !== null)
+  // cr-align 棒4（2026-07-21）字面量重导出——来源 cr-align-spec.json stick-4
+  // btn.followupRadius/btn.followupFont（spec→门→码）：棒1 的 999px 止血形毕业成
+  // .lite-btn 族形（aurora 默认皮 r9px + 13px）。旧构建红证明：改后本断言对棒3 构建跑
+  // 必红（还是 999px/11.5px、未挂族类）。
   rec(
-    '「加到待办」按钮有自己的胶囊样式（border-radius=999px，同兄弟按钮配方）',
-    btn !== null && btn.radius === '999px',
-    btn ? `radius=${btn.radius} fontSize=${btn.fontSize} bg=${btn.bg}` : '',
+    '「加到待办」按钮挂 .lite-btn 族且吃 aurora 族度量（r9px + 13px，spec stick-4）',
+    btn !== null && btn.family && btn.radius === '9px' && btn.fontSize === '13px',
+    btn ? `family=${btn.family} radius=${btn.radius} fontSize=${btn.fontSize} bg=${btn.bg}` : '',
   )
   await ctx.close()
 }

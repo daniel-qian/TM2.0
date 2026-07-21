@@ -115,7 +115,7 @@ export function AskCard() {
           </h2>
         </div>
         {!isDraft ? (
-          <span className="ask-status-chip">
+          <span className="lite-badge ask-status-chip">
             {isClosed
               ? t.ask.closedChip
               : isRevoked
@@ -151,7 +151,7 @@ export function AskCard() {
                 />
                 <button
                   type="button"
-                  className="ask-q-remove"
+                  className="lite-btn lite-btn--ghost ask-q-remove"
                   disabled={ask.questions.length <= 1}
                   aria-label={t.ask.removeQuestion}
                   onClick={() => removeAskQuestion(q.id)}
@@ -163,7 +163,7 @@ export function AskCard() {
             <div className="ask-q-actions">
               <button
                 type="button"
-                className="ask-q-add"
+                className="lite-btn lite-btn--soft ask-q-add"
                 data-kind="scale"
                 disabled={ask.questions.length >= 3}
                 onClick={() => addAskQuestion('scale')}
@@ -172,7 +172,7 @@ export function AskCard() {
               </button>
               <button
                 type="button"
-                className="ask-q-add"
+                className="lite-btn lite-btn--soft ask-q-add"
                 data-kind="yesno"
                 disabled={ask.questions.length >= 3}
                 onClick={() => addAskQuestion('yesno')}
@@ -213,7 +213,7 @@ export function AskCard() {
           <footer className="ask-footer">
             <button
               type="button"
-              className="ask-confirm"
+              className="lite-btn lite-btn--primary ask-confirm"
               disabled={!canConfirm}
               onClick={() => void confirmAsk()}
             >
@@ -233,7 +233,7 @@ export function AskCard() {
                 <code className="ask-link-url">{r.link ?? ''}</code>
                 <button
                   type="button"
-                  className="ask-copy-btn"
+                  className="lite-btn lite-btn--ghost ask-copy-btn"
                   onClick={() => void copyLink(r.link ?? '', r.id)}
                 >
                   {copiedId === r.id ? t.ask.copied : t.ask.copy}
@@ -244,7 +244,7 @@ export function AskCard() {
           <footer className="ask-footer">
             <button
               type="button"
-              className="ask-refresh"
+              className="lite-btn lite-btn--ghost ask-refresh"
               disabled={askBusy !== 'idle'}
               onClick={() => void refreshAsk()}
             >

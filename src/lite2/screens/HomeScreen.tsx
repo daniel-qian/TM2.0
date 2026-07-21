@@ -112,7 +112,7 @@ export function HomeScreen() {
                   <p className="lite-empty-restore-detail">{restoreError}</p>
                   <button
                     type="button"
-                    className="lite-empty-restore-retry"
+                    className="lite-btn lite-btn--ghost lite-empty-restore-retry"
                     onClick={() => void restoreSession()}
                   >
                     {t.lite2.restoreRetry}
@@ -154,7 +154,7 @@ export function HomeScreen() {
                   <div className="lite-home-demo" data-home-demo="">
                     <button
                       type="button"
-                      className="lite-home-demo-btn"
+                      className="lite-btn lite-btn--primary lite-home-demo-btn"
                       disabled={demoClaiming}
                       aria-busy={demoClaiming}
                       onClick={() => void claimDemoTeam()}
@@ -482,7 +482,7 @@ function DecisionCard({
 
   return (
     <li
-      className={classNames(['lite-home-decision', `home-tone-${gradeTone(card.grade)}`])}
+      className={classNames(['lite-card', 'lite-home-decision', `home-tone-${gradeTone(card.grade)}`])}
       data-decision-grade={card.grade}
       data-decision-severity={card.severity}
     >
@@ -532,25 +532,25 @@ function DecisionCard({
       <div className="lite-home-decision-actions">
         <button
           type="button"
-          className="lite-home-decision-toggle"
+          className="lite-btn lite-btn--ghost lite-home-decision-toggle"
           aria-expanded={open}
           onClick={() => setOpen((v) => !v)}
         >
           {t.lite2.homeDecisionRulesToggle} · {card.matched_rules.length}
           <span aria-hidden="true">{open ? ' ▴' : ' ▾'}</span>
         </button>
-        <button type="button" className="lite-home-decision-open" onClick={onOpenProject}>
+        <button type="button" className="lite-btn lite-btn--ghost lite-home-decision-open" onClick={onOpenProject}>
           {t.lite2.homeDecisionOpenProject} →
         </button>
         {/* 带着这条决策的问题进议事室（feat-051 已接好 `?q=` 接力参数）。
             不自动提交——manager 审过再问，同 feat-036/044 的 authorship 原则。 */}
-        <button type="button" className="lite-home-decision-room" onClick={onTakeToRoom}>
+        <button type="button" className="lite-btn lite-btn--ghost lite-home-decision-room" onClick={onTakeToRoom}>
           {t.lite2.homeDecisionAskRoom} ↗
         </button>
         {/* 0721 · B4 闭环：决策落成待办（同 CloserLook 卡的 addFollowup 形态）。 */}
         <button
           type="button"
-          className="lite-home-decision-followup"
+          className="lite-btn lite-btn--soft lite-home-decision-followup"
           disabled={followupAdded}
           onClick={onAddFollowup}
         >

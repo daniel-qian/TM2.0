@@ -140,6 +140,7 @@ export function LiteComposer() {
                   {reference.kind !== 'project' && <small>{reference.meta}</small>}
                   <button
                     type="button"
+                    className="lite-composer-remove"
                     aria-label={fill(t.lite2.composerRemoveRefAria, { label: reference.label })}
                     onClick={() => removeReference(reference.id)}
                   >
@@ -158,7 +159,7 @@ export function LiteComposer() {
                 <button
                   key={filter.id}
                   type="button"
-                  className={filter.id === referenceFilter ? 'is-active' : ''}
+                  className={filter.id === referenceFilter ? 'lite-composer-filter is-active' : 'lite-composer-filter'}
                   aria-pressed={filter.id === referenceFilter}
                   onClick={() => setReferenceFilter(filter.id)}
                 >
@@ -179,7 +180,7 @@ export function LiteComposer() {
             <div className="reference-picker-list">
               {referenceOptions.length > 0 ? (
                 referenceOptions.map((option) => (
-                  <button key={option.id} type="button" onClick={() => addReference(option)}>
+                  <button key={option.id} type="button" className="lite-composer-option" onClick={() => addReference(option)}>
                     <span>{option.label}</span>
                     <small>{option.meta}</small>
                   </button>

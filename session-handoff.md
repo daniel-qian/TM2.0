@@ -1,4 +1,39 @@
-> # ⟳ 2026-07-21 深夜③ · cr-align 视觉战役 棒3 收盘（★下个 session 从这里接）
+> # ⟳ 2026-07-22 凌晨 · cr-align 视觉战役 棒4 收盘（★下个 session 从这里接）
+>
+> **一句话**：共享组件族落地——.lite-btn 四变体（17 文件 69 处双类迁移）+ .lite-badge +
+> .lite-card + lite2-rise 入场 + 族强断言层。**规格表全量 22/22 绿（战役对齐指标收满）**；
+> **sweep 44 件 open 台账一棒清零**（净室 0 件/0 指纹）；**电池 23/23 全绿零红（项目首次）**。
+> 收据 `.issues/cr-align-visual-0721/receipt-r4-0721.md`。
+>
+> ## ⚠️ 棒3+棒4 都未推送（Danny AFK 指示：一路干、先不推不部署、dev server 验收）
+> - 本地 main 领先 origin 若干 commit；**验收入口 http://localhost:5173/?lang=zh**
+>   （vite preview 挂终局 dev 构建 + mock 后端 8137 + cr-live 参照 :3100，收工全部保持运行）。
+> - 对照板：eval-harness/reports/align-board/2026-07-21/index.html（我方终构建 vs 她方逐屏成对）。
+> - Danny 验收点头后：`git push`（=Vercel 自动上产）+ 生产计算值取证补进收据。
+>
+> ## 下一棒是什么：棒5 屏组一——指挥室 + 待办清单（M）
+> - 决策卡→.lite-card 已上（棒4）；剩：4px 色左边条（现 3px ::before 竖条对齐她的语法）、
+>   spring 折叠、操作行细节；骨架块走 token；Followups 按她 to-do 配方（行 hover
+>   --lite2-surface-soft、divide-y、复选框 20px）。
+> - 红线：home-skeleton/status-truth 门须保持绿（双类已保护）；骨架四块零数字。
+> - 之后棒6（团队+议事室+项目）、棒7（轻屏+动效扫尾——lite2-rise 逐屏铺开在这，
+>   playbookTag 迁 .lite-badge 色时 aurora 探针红先行重基线）、可选棒8（死规则清扫——
+>   老散按钮规则/老 :hover 已被族强断言层压住但仍在文件里，清扫时机到了）。
+>
+> ## 棒4 新知识（别再踩）
+> - **CSS 注释里永远别写「星号斜杠」字面**（tone-* 后跟 / 就是）——提前终结注释，残尾垃圾
+>   让浏览器错误恢复吞掉下一条规则：「产物里有、CSSOM 里没有」。诊断法：styleSheets 遍历
+>   vs fetch 文本对照。
+> - **双类迁移的「后位同权重接管」只覆盖 base 态**——老散规则的 :hover/:focus 在
+>   (0,3,0)/(0,4,0)，半套属性各自胜出会拼成墨字压墨底。上族必须配「族强断言层」
+>   （.lite-btn 双写收权全态全属性）。
+> - **媒体查询不加特异性**：reduce 兜底块 (0,2,0) 压不住皮层 (0,3,0) 的动画——动效应用面
+>   直接包进 no-preference 才是媒体级根治。
+> - **电池序**：dist 调包者（auth 门在内）必须殿后——吃 preview 的门全排它们前面；
+>   电池与 agent 工作流并发=假红（撞 CPU 超时），电池必须独占跑。
+> - WCAG 的 disabled 豁免不覆盖「点击后永久驻留当状态展示」的按钮文本（已加入待办 ✓）。
+
+> # ⟳ 2026-07-21 深夜③ · cr-align 视觉战役 棒3 收盘（上一棒）
 >
 > **一句话**：token 加深落地——h1 26px/800、eyebrow 13px/750（色 #4d5568）、副题 14px、
 > 卡面 .97、--rule-strong 实色、七条渐变 token；AA 台账 D2/D3 落地 + 对抗审查追加 D17/D18。

@@ -393,3 +393,65 @@
   font-weight: 700;
   letter-spacing: 0.04em;
 }
+
+/* ═══ cr-align 视觉战役 棒4（2026-07-21）· 组件族 aurora 侧 ═══════════════════════════
+   基类在 lite2.css 棒4 段（两皮共享）；这里只有观感差异。 */
+
+/* ── ⑮ 按钮族 aurora 度量：r9px（她的 rounded-[9px]；paper 守基类 pill 999px——
+   spec stick-4 btn.followupRadius 的门字面量同 commit 从 999px 换 9px，旧构建红证明在案）。 */
+.lite2-shell[data-look='aurora'] .lite-btn {
+  border-radius: 9px;
+}
+
+/* ── ⑯ 入场动效应用面（D16 CSS 优先）：决策卡/待办行 lite2-rise 阶梯入场，
+   stagger .06s 封顶第 8 个（她的 framer stagger 签名的 CSS 翻译）。
+   🔴 整段包在 no-preference 媒体里——lite2.css 的 reduce 兜底块是 (0,2,0)，压不住本段
+   (0,3,0)+（媒体查询不加特异性，对抗审查 blocker）；媒体级隔离让 reduce 用户根本不进入
+   本段，特异性大战无从发生。 */
+@media (prefers-reduced-motion: no-preference) {
+  .lite2-shell[data-look='aurora'] .lite-home-decision,
+  .lite2-shell[data-look='aurora'] .lite-followup-item {
+    animation: lite2-rise 0.35s ease both;
+  }
+
+  .lite2-shell[data-look='aurora'] .lite-home-decision:nth-child(2),
+  .lite2-shell[data-look='aurora'] .lite-followup-item:nth-child(2) {
+    animation-delay: 0.06s;
+  }
+  .lite2-shell[data-look='aurora'] .lite-home-decision:nth-child(3),
+  .lite2-shell[data-look='aurora'] .lite-followup-item:nth-child(3) {
+    animation-delay: 0.12s;
+  }
+  .lite2-shell[data-look='aurora'] .lite-home-decision:nth-child(4),
+  .lite2-shell[data-look='aurora'] .lite-followup-item:nth-child(4) {
+    animation-delay: 0.18s;
+  }
+  .lite2-shell[data-look='aurora'] .lite-home-decision:nth-child(5),
+  .lite2-shell[data-look='aurora'] .lite-followup-item:nth-child(5) {
+    animation-delay: 0.24s;
+  }
+  .lite2-shell[data-look='aurora'] .lite-home-decision:nth-child(6),
+  .lite2-shell[data-look='aurora'] .lite-followup-item:nth-child(6) {
+    animation-delay: 0.3s;
+  }
+  .lite2-shell[data-look='aurora'] .lite-home-decision:nth-child(7),
+  .lite2-shell[data-look='aurora'] .lite-followup-item:nth-child(7) {
+    animation-delay: 0.36s;
+  }
+  .lite2-shell[data-look='aurora'] .lite-home-decision:nth-child(n + 8),
+  .lite2-shell[data-look='aurora'] .lite-followup-item:nth-child(n + 8) {
+    animation-delay: 0.42s;
+  }
+}
+
+/* ── ⑰ 徽章 pill 几何（aurora 侧）：共享 .lite-badge 只归一字阶（lite2.css 棒4 段），
+   pill 形（inline-flex/padding/全圆角）只在 aurora 生效——paper 的无底色标签守自己的
+   既有几何（透明底吃 padding=幽灵缩进，对抗审查逮出）。本条在 ②-⑧ 之后，同特异性
+   后写统一它们各自的 padding（2px 9px/8px → 2px 10px）。 */
+.lite2-shell[data-look='aurora'] .lite-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  border-radius: 999px;
+}

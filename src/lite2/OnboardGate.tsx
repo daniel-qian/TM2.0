@@ -158,7 +158,7 @@ export function OnboardGate() {
             与 Escape 完全一致：进度保留、下次续跑。 */}
         <button
           type="button"
-          className="lite-gate-browse"
+          className="lite-btn lite-btn--ghost lite-gate-browse"
           title={l.onboardCloseAria}
           onClick={pause}
         >
@@ -182,7 +182,7 @@ export function OnboardGate() {
 
       <footer className="lite-onboard-nav">
         {step !== 'done' ? (
-          <button type="button" className="lite-onboard-skip" onClick={skip}>
+          <button type="button" className="lite-btn lite-btn--ghost lite-onboard-skip" onClick={skip}>
             {l.onboardSkip}
           </button>
         ) : (
@@ -192,16 +192,16 @@ export function OnboardGate() {
         {step !== 'doors' ? (
           <div className="lite-onboard-nav-main">
             {stepIndex > 0 ? (
-              <button type="button" className="lite-onboard-back" onClick={goBack}>
+              <button type="button" className="lite-btn lite-btn--ghost lite-onboard-back" onClick={goBack}>
                 {l.onboardBack}
               </button>
             ) : null}
             {step !== 'done' ? (
-              <button type="button" className="lite-onboard-next" onClick={goNext}>
+              <button type="button" className="lite-btn lite-btn--primary lite-onboard-next" onClick={goNext}>
                 {l.onboardNext}
               </button>
             ) : (
-              <button type="button" className="lite-onboard-finish" onClick={onFinish}>
+              <button type="button" className="lite-btn lite-btn--primary lite-onboard-finish" onClick={onFinish}>
                 {l.onboardFinish}
               </button>
             )}
@@ -337,7 +337,7 @@ function StepUpload() {
       />
       <button
         type="button"
-        className={`lite-onboard-upload-choose${busy ? ' is-busy' : ''}`}
+        className={`lite-btn lite-btn--primary lite-onboard-upload-choose${busy ? ' is-busy' : ''}`}
         disabled={busy}
         aria-busy={busy}
         onClick={openPicker}

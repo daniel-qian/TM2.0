@@ -172,7 +172,7 @@ export function NotesScreen() {
           <p>{t.lite2.notesEmptyBody}</p>
           {/* 红线信任说明在空态也常驻——上传前后口径一致。 */}
           <p className="upload-privacy-note lite-notes-redline-note">{t.lite2.notesRedlineNote}</p>
-          <button type="button" className="upload-choose lite-notes-empty-cta" onClick={() => goScreen('room')}>
+          <button type="button" className="lite-btn lite-btn--primary upload-choose lite-notes-empty-cta" onClick={() => goScreen('room')}>
             {t.lite2.notesEmptyCta} →
           </button>
         </section>

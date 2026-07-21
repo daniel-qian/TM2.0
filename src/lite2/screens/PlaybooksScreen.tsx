@@ -47,7 +47,7 @@ export function PlaybooksScreen() {
             <ul className="lite-playbooks-slot-list">
               {chosen.map((entry) => (
                 <li key={entry.id} className="lite-playbooks-slot" data-playbook-id={entry.id}>
-                  <span className="lite-playbooks-slot-tag" aria-hidden="true">
+                  <span className="lite-badge lite-playbooks-slot-tag" aria-hidden="true">
                     {l.playbooksChosenTag}
                   </span>
                   <span className="lite-playbooks-slot-text">
@@ -66,7 +66,7 @@ export function PlaybooksScreen() {
             <ul className="lite-playbooks-slot-list">
               {fallbackSlots.map((slot) => (
                 <li key={slot} className="lite-playbooks-slot">
-                  <span className="lite-playbooks-slot-tag" aria-hidden="true">
+                  <span className="lite-badge lite-playbooks-slot-tag" aria-hidden="true">
                     {l.playbooksEmptyTag}
                   </span>
                   <span className="lite-playbooks-slot-text">{slot}</span>
@@ -85,7 +85,7 @@ export function PlaybooksScreen() {
             （见 onboardStore.ts forceOpen 的调用方契约注释）。 */}
         <button
           type="button"
-          className="lite-playbooks-reopen-onboarding"
+          className="lite-btn lite-btn--ghost lite-playbooks-reopen-onboarding"
           onClick={() => reopenOnboarding()}
         >
           {l.playbooksReopenOnboarding} →

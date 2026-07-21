@@ -82,11 +82,11 @@ export function CloserLookScreen() {
                 <li key={gap.id} className="lite-gap-card" data-gap-id={gap.id}>
                   <div className="lite-gap-compare">
                     <div className="lite-gap-pane lite-gap-pane-claim">
-                      <p className="lite-gap-pane-label">{t.lite2.gapCardClaimLabel}</p>
+                      <p className="lite-badge lite-gap-pane-label">{t.lite2.gapCardClaimLabel}</p>
                       <p className="lite-gap-pane-text">{gap.claim}</p>
                     </div>
                     <div className="lite-gap-pane lite-gap-pane-evidence">
-                      <p className="lite-gap-pane-label">{t.lite2.gapCardEvidenceLabel}</p>
+                      <p className="lite-badge lite-gap-pane-label">{t.lite2.gapCardEvidenceLabel}</p>
                       <p className="lite-gap-pane-text">{gap.evidence}</p>
                     </div>
                   </div>
@@ -104,18 +104,18 @@ export function CloserLookScreen() {
                     </span>
                   </div>
                   <div className="lite-gap-actions">
-                    <button type="button" className="lite-gap-resolve" onClick={() => resolveGap(gap.id)}>
+                    <button type="button" className="lite-btn lite-btn--primary lite-gap-resolve" onClick={() => resolveGap(gap.id)}>
                       {t.lite2.gapResolveLabel}
                     </button>
-                    <button type="button" className="lite-gap-dismiss" onClick={() => dismissGap(gap.id)}>
+                    <button type="button" className="lite-btn lite-btn--ghost lite-gap-dismiss" onClick={() => dismissGap(gap.id)}>
                       {t.lite2.gapDismissLabel}
                     </button>
-                    <button type="button" className="lite-gap-ask" onClick={() => handleAsk(gap)}>
+                    <button type="button" className="lite-btn lite-btn--ghost lite-gap-ask" onClick={() => handleAsk(gap)}>
                       {t.lite2.gapAskLabel} ↗
                     </button>
                     <button
                       type="button"
-                      className="lite-gap-addfollowup"
+                      className="lite-btn lite-btn--soft lite-gap-addfollowup"
                       disabled={addedIds.has(gap.id)}
                       onClick={() => handleAddFollowup(gap)}
                     >
@@ -161,10 +161,10 @@ export function CloserLookScreen() {
                       data-gap-status="resolved"
                     >
                       <span className="lite-gap-history-title">{gap.projectTitle}</span>
-                      <span className={classNames(['lite-gap-history-badge', 'is-resolved'])}>
+                      <span className={classNames(['lite-badge', 'lite-gap-history-badge', 'is-resolved'])}>
                         {t.lite2.gapResolvedBadge}
                       </span>
-                      <button type="button" className="lite-gap-restore" onClick={() => restoreGap(gap.id)}>
+                      <button type="button" className="lite-btn lite-btn--ghost lite-gap-restore" onClick={() => restoreGap(gap.id)}>
                         {t.lite2.gapRestoreLabel}
                       </button>
                     </li>
@@ -177,10 +177,10 @@ export function CloserLookScreen() {
                       data-gap-status="dismissed"
                     >
                       <span className="lite-gap-history-title">{gap.projectTitle}</span>
-                      <span className={classNames(['lite-gap-history-badge', 'is-dismissed'])}>
+                      <span className={classNames(['lite-badge', 'lite-gap-history-badge', 'is-dismissed'])}>
                         {t.lite2.gapDismissedBadge}
                       </span>
-                      <button type="button" className="lite-gap-restore" onClick={() => restoreGap(gap.id)}>
+                      <button type="button" className="lite-btn lite-btn--ghost lite-gap-restore" onClick={() => restoreGap(gap.id)}>
                         {t.lite2.gapRestoreLabel}
                       </button>
                     </li>

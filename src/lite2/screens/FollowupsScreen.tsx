@@ -132,10 +132,10 @@ export function FollowupsScreen() {
                 </option>
               ))}
             </select>
-            <button type="button" className="lite-followup-save" onClick={saveEdit}>
+            <button type="button" className="lite-btn lite-btn--primary lite-followup-save" onClick={saveEdit}>
               {t.lite2.followupsSave}
             </button>
-            <button type="button" className="lite-followup-cancel" onClick={() => setEditingId(null)}>
+            <button type="button" className="lite-btn lite-btn--ghost lite-followup-cancel" onClick={() => setEditingId(null)}>
               {t.lite2.followupsCancel}
             </button>
           </div>
@@ -157,7 +157,7 @@ export function FollowupsScreen() {
               <div className="lite-followup-body">
                 <p className="lite-followup-title">{item.title}</p>
                 {item.note ? <p className="lite-followup-note">{item.note}</p> : null}
-                <span className="lite-followup-source">{sourceLabel(item.source)}</span>
+                <span className="lite-badge lite-followup-source">{sourceLabel(item.source)}</span>
                 {item.doneAt ? (
                   <span className="lite-followup-donedate">
                     {t.lite2.followupsCompletedAt} {item.doneAt.slice(0, 16).replace('T', ' ')}
@@ -170,7 +170,7 @@ export function FollowupsScreen() {
                   应用 / 邮件 / 完成）。 */}
               <button
                 type="button"
-                className="lite-followup-mail"
+                className="lite-btn lite-btn--ghost lite-followup-mail"
                 onClick={() => openDraft(draftFromFollowup(item))}
               >
                 {t.lite2.followupsDraftMail}
@@ -178,7 +178,7 @@ export function FollowupsScreen() {
               {!item.done ? (
                 <button
                   type="button"
-                  className="lite-followup-edit-btn"
+                  className="lite-btn lite-btn--ghost lite-followup-edit-btn"
                   onClick={() => startEdit(item)}
                 >
                   {t.lite2.followupsEdit}
@@ -187,7 +187,7 @@ export function FollowupsScreen() {
               {opts.showRestore ? (
                 <button
                   type="button"
-                  className="lite-followup-restore"
+                  className="lite-btn lite-btn--ghost lite-followup-restore"
                   onClick={() => reopenFollowup(item.id)}
                 >
                   {t.lite2.followupsRestore}
@@ -195,7 +195,7 @@ export function FollowupsScreen() {
               ) : null}
               <button
                 type="button"
-                className="lite-followup-delete"
+                className="lite-btn lite-btn--danger lite-followup-delete"
                 onClick={() => deleteFollowup(item.id)}
               >
                 {t.lite2.followupsDelete}
@@ -261,7 +261,7 @@ export function FollowupsScreen() {
                     </option>
                   ))}
                 </select>
-                <button type="submit" className="lite-followup-add-submit">
+                <button type="submit" className="lite-btn lite-btn--primary lite-followup-add-submit">
                   {t.lite2.followupsAddSubmit}
                 </button>
               </form>

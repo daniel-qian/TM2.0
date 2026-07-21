@@ -136,7 +136,7 @@ export function DraftComposer() {
       panelClassName="lite-draft-card"
       panelData={{ 'data-draft-id': draft?.id, 'data-draft-status': status }}
     >
-      <button type="button" className="lite-draft-close" onClick={closeDraft}>
+      <button type="button" className="lite-btn lite-btn--ghost lite-draft-close" onClick={closeDraft}>
         {t.lite2.draftClose}
       </button>
 
@@ -208,7 +208,7 @@ export function DraftComposer() {
         {/* 主出口。 */}
         <button
           type="button"
-          className="lite-draft-copy"
+          className="lite-btn lite-btn--soft lite-draft-copy"
           disabled={isEmpty}
           onClick={() => void handleCopy()}
         >
@@ -232,7 +232,7 @@ export function DraftComposer() {
         {completionMode !== 'none' ? (
           <button
             type="button"
-            className="lite-draft-done"
+            className="lite-btn lite-btn--primary lite-draft-done"
             disabled={isEmpty || wroteToQueue}
             onClick={handleDone}
           >
@@ -241,7 +241,7 @@ export function DraftComposer() {
         ) : null}
 
         {wroteToQueue ? (
-          <button type="button" className="lite-draft-goqueue" onClick={handleGoFollowups}>
+          <button type="button" className="lite-btn lite-btn--ghost lite-draft-goqueue" onClick={handleGoFollowups}>
             {t.lite2.draftGoFollowups}
           </button>
         ) : null}

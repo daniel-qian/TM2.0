@@ -81,7 +81,7 @@ export function LiteBell() {
           <header className="lite-bell-head">
             <span className="lite-bell-title">{l.bellTitle}</span>
             {items.length > 0 ? (
-              <button type="button" className="lite-bell-markall" onClick={markAllRead}>
+              <button type="button" className="lite-btn lite-btn--ghost lite-bell-markall" onClick={markAllRead}>
                 {l.bellMarkAll}
               </button>
             ) : null}

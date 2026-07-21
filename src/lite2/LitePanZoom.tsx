@@ -39,7 +39,7 @@ export function LitePanZoom({ children }: { children: ReactNode }) {
           <span className="lite-room-canvas-hint">{t.lite2.roomCanvasHint}</span>
           <button
             type="button"
-            className="lite-room-canvas-reset"
+            className="lite-btn lite-btn--ghost lite-room-canvas-reset"
             onClick={() => ref.current?.resetTransform()}
           >
             {t.lite2.roomCanvasReset}

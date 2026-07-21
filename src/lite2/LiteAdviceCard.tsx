@@ -135,7 +135,7 @@ export function LiteAdviceCard({ advice }: { advice: LiteAdvice }) {
                 <span>{item}</span>
                 <button
                   type="button"
-                  className="lite-advice-add-followup"
+                  className="lite-btn lite-btn--soft lite-advice-add-followup"
                   disabled={added.has(item)}
                   onClick={() => handleAdd(item)}
                 >

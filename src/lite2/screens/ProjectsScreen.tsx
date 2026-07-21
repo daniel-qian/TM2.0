@@ -278,7 +278,7 @@ export function ProjectsScreen() {
                 <div className="lite-projects-restore-failed" aria-live="polite">
                   <p>{l.restoreFailed}</p>
                   <p className="lite-projects-restore-detail">{restoreError}</p>
-                  <button type="button" onClick={() => void restoreSession()}>
+                  <button type="button" className="lite-btn lite-btn--ghost" onClick={() => void restoreSession()}>
                     {l.restoreRetry}
                   </button>
                 </div>
@@ -289,7 +289,7 @@ export function ProjectsScreen() {
                   {/* 上传入口住在「你的团队」——这里不复制一个上传面板，只把人送过去。 */}
                   <button
                     type="button"
-                    className="lite-projects-empty-cta"
+                    className="lite-btn lite-btn--primary lite-projects-empty-cta"
                     onClick={() => goScreen('team')}
                   >
                     {l.projectsEmptyCta} →

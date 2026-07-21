@@ -5444,3 +5444,269 @@
     margin-right: auto;
   }
 }
+
+/* ═══ cr-align 视觉战役 棒4（2026-07-21）· 共享组件族 ═══════════════════════════════
+   规格 specs/cr-align-spec.json stick-4；作战地图 .issues/cr-align-visual-0721/r4-recon-map.md。
+   挂法=双类迁移：TSX 只加 .lite-btn/.lite-badge/.lite-card 类，旧类留 DOM（27 道类选择器门
+   零迁移）；旧散规则（l.3809 枚举三选择器、l.5358 followup 等）被本段后位同权重规则接管，
+   死规则清扫归可选棒8。基类只消费两皮都声明的 token（RGB 三元组/ink/rule/shadow——paper
+   没有 tone-* 与 surface-soft，那些只准出现在 look-aurora 分支）。⚠️ CSS 注释里永远别写
+   「星号斜杠」字面（tone-* 后跟 / 就是它）——会提前终结注释，残尾垃圾让浏览器错误恢复吞掉
+   下一条规则（本棒实测：.lite-btn 基规则整条被吞，字号断言莫名不中）。
+   守门：verify-button-family.mjs。 */
+
+/* ── .lite-btn 基类：结构位（pill 是 paper 形，aurora 在 look-aurora ⑮ 覆到 9px）。
+   min-height 26px 顺手垫底小热区（sweep small-target 台账的按钮族病根之一）。 */
+.lite2-shell .lite-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 26px;
+  padding: 4px 12px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
+  cursor: pointer;
+  transition: background var(--fast) ease, border-color var(--fast) ease,
+    color var(--fast) ease, box-shadow var(--fast) ease;
+}
+
+.lite2-shell .lite-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* 统一焦点环（sweep focus-missing 台账 button 族的一次性治法）：sky 三元组两皮都有声明。 */
+.lite2-shell .lite-btn:focus-visible {
+  outline: 2px solid rgba(var(--lite2-sky-rgb), 0.9);
+  outline-offset: 2px;
+}
+
+/* primary：ink 实底白字（她的 navy 主按钮语法；paper 下= 墨底暖白，同构）。 */
+.lite2-shell .lite-btn--primary {
+  background: var(--ink);
+  color: var(--paper-strong);
+}
+
+.lite2-shell .lite-btn--primary:hover:not(:disabled) {
+  background: var(--lite2-ink-hover);
+}
+
+/* ghost：白底描边（她的 secondary 语法）。 */
+.lite2-shell .lite-btn--ghost {
+  border-color: var(--rule);
+  background: rgba(var(--lite2-surface-rgb), 0.9);
+}
+
+.lite2-shell .lite-btn--ghost:hover:not(:disabled),
+.lite2-shell .lite-btn--ghost:focus-visible {
+  border-color: var(--rule-strong);
+  color: var(--ink);
+}
+
+/* soft：紫浅底（「加到待办」目标样——spec stick-4 btn.followup*）。
+   violet-deep 两皮都有（aurora #4b3ca8 / paper #4a4197），.12 软底实算 aurora 7.1 / paper 6.6。 */
+.lite2-shell .lite-btn--soft {
+  background: rgba(var(--lite2-violet-rgb), 0.12);
+  color: var(--lite2-violet-deep);
+}
+
+.lite2-shell .lite-btn--soft:hover:not(:disabled) {
+  background: rgba(var(--lite2-violet-rgb), 0.18);
+}
+
+/* danger：红浅底（删除类动作专用）。静止实算 aurora 5.9 / paper 4.69（贴地但过线）；
+   hover 加深只到 .15——.18 会把 paper 压到 4.35 破 AA（对抗审查实算逮出）。 */
+.lite2-shell .lite-btn--danger {
+  background: rgba(var(--lite2-danger-rgb), 0.12);
+  color: rgb(var(--lite2-danger-deep-rgb));
+}
+
+.lite2-shell .lite-btn--danger:hover:not(:disabled) {
+  background: rgba(var(--lite2-danger-rgb), 0.15);
+}
+
+/* ── .lite-badge 基度量：共享层只归一**字阶**（11.5px/700），色零碰。pill 几何
+   （padding/圆角/inline-flex）在 look-aurora ⑰——paper 侧三个无底色标签
+   （handoff-tone/followup-source/gap-pane-label）若吃共享 padding 会变透明底幽灵缩进
+   （对抗审查逮出），paper 各徽章守自己的既有几何。 */
+.lite2-shell .lite-badge {
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+/* ── .lite-card 基类 + 可交互卡 hover（她的 card-base/card-hover 语法；
+   背景走 --lite2-surface（aurora .97=spec stick-4 card.decisionBg，paper 原值），
+   圆角走 --radius（aurora 10/paper 8），影走 shadow-soft——全 token，两皮自动换皮）。 */
+.lite2-shell .lite-card {
+  background: var(--lite2-surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-soft);
+}
+
+.lite2-shell .lite-card-hover {
+  transition: transform var(--fast) ease, box-shadow var(--fast) ease,
+    border-color var(--fast) ease;
+}
+
+.lite2-shell .lite-card-hover:hover {
+  transform: translateY(-2px);
+  border-color: var(--rule-strong);
+  box-shadow: var(--shadow);
+}
+
+/* ── 小热区治理（sweep small-target 台账 4 个文字链/开关族 + 2 个原生输入框）：
+   min-height 24px + inline-flex 垂直居中扩热区，不动字号不套变体色。 */
+.lite2-shell .lite-home-block-link,
+.lite2-shell .lite-flow-cites-toggle,
+.lite2-shell .lite-notes-entry-source,
+.lite2-shell .lite-playbooks-reopen-onboarding {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+}
+
+.lite2-shell input[type='text'],
+.lite2-shell input[type='search'],
+.lite2-shell input:not([type]) {
+  min-height: 26px;
+}
+
+/* ── 焦点治理（sweep focus-missing 台账的白名单族——它们不挂 .lite-btn，各补统一环）：
+   project-card 既有规则在 :focus-visible 上写了 outline:none（l.4586），本条后写反杀。 */
+.lite2-shell .lite-project-card:focus-visible,
+.lite2-shell .lite-followups-subtab:focus-visible,
+.lite2-shell .home-people-group-head:focus-visible,
+.lite2-shell input[type='text']:focus-visible,
+.lite2-shell input[type='search']:focus-visible,
+.lite2-shell input:not([type]):focus-visible {
+  outline: 2px solid rgba(var(--lite2-sky-rgb), 0.9);
+  outline-offset: 2px;
+}
+
+/* ── 入场动效（D16 CSS 优先——门跑 defuseAnimations 只关得掉 CSS，JS spring 在 headless
+   会卡 rAF）：lite2-rise 共享 keyframe，应用面在 look-aurora ⑯（aurora 作用域），
+   keyframe 本体放这里供两皮将来共用。命名带 lite2 前缀避让 v01。 */
+@keyframes lite2-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ── reduced-motion 兜底（新开独立块，不动 l.4058 的既有块——那块曾因未闭合闷掉整片样式，
+   见 l.4075 注释；本块自带配平）：新家族动效全停 + 顺手补上 project-card/gate-door 两张
+   存量上浮卡在 reduce 下的 transform 漏兜（作战地图 4C 逮出的洞）。 */
+@media (prefers-reduced-motion: reduce) {
+  .lite2-shell .lite-btn,
+  .lite2-shell .lite-card,
+  .lite2-shell .lite-card-hover,
+  .lite2-shell .lite-home-decision,
+  .lite2-shell .lite-followup-item {
+    animation: none;
+    transition: none;
+  }
+
+  .lite2-shell .lite-card-hover:hover,
+  .lite2-shell .lite-project-card:hover,
+  .lite2-shell .lite-project-card:focus-visible,
+  .lite2-shell .lite-gate-door:hover,
+  .lite2-shell .lite-gate-door:focus-visible {
+    transform: none;
+    transition: none;
+  }
+}
+
+/* ── 族强断言层（对抗审查 blocker 修正）───────────────────────────────────────────
+   双类迁移的「后位同权重接管」前提在**交互态**塌了：老散规则的 :hover/:focus-visible 在
+   (0,3,0)/(0,4,0)，各自只被变体同名属性反压，未同名属性各胜出后拼成坏组合——五处按钮
+   hover 成墨字压墨底（gap-resolve/gap-ask/canvas-reset/draft-done/followup-save）、
+   两处焦点环被老 outline:none 灭掉（auth-submit/draft-copy）、soft 族 hover 紫字翻墨。
+   修法：.lite-btn 双写把变体的 base/hover/focus/disabled **全态全属性**收权到 (0,4,0)+，
+   靠后写胜过全部老交互规则；老规则留 DOM 不删（清扫归棒8）。 */
+.lite2-shell .lite-btn.lite-btn:focus-visible {
+  outline: 2px solid rgba(var(--lite2-sky-rgb), 0.9);
+  outline-offset: 2px;
+}
+
+.lite2-shell .lite-btn.lite-btn--primary,
+.lite2-shell .lite-btn.lite-btn--primary:disabled,
+.lite2-shell .lite-btn.lite-btn--primary:disabled:hover {
+  border-color: transparent;
+  background: var(--ink);
+  color: var(--paper-strong);
+}
+
+.lite2-shell .lite-btn.lite-btn--primary:hover:not(:disabled),
+.lite2-shell .lite-btn.lite-btn--primary:focus-visible:not(:disabled) {
+  border-color: transparent;
+  background: var(--lite2-ink-hover);
+  color: var(--paper-strong);
+}
+
+.lite2-shell .lite-btn.lite-btn--ghost,
+.lite2-shell .lite-btn.lite-btn--ghost:disabled,
+.lite2-shell .lite-btn.lite-btn--ghost:disabled:hover {
+  border-color: var(--rule);
+  background: rgba(var(--lite2-surface-rgb), 0.9);
+  color: var(--ink-soft);
+}
+
+.lite2-shell .lite-btn.lite-btn--ghost:hover:not(:disabled),
+.lite2-shell .lite-btn.lite-btn--ghost:focus-visible:not(:disabled) {
+  border-color: var(--rule-strong);
+  background: rgba(var(--lite2-surface-rgb), 0.9);
+  color: var(--ink);
+}
+
+/* soft 的 :disabled 是「已加入待办 ✓」锁存态（点击后永久驻留、文案必须可读）——WCAG 的
+   disabled 豁免不覆盖当持久状态用的文本；opacity 收回 1（对抗审查实算：.55 叠老 accent
+   字色只剩 1.6-1.8:1），状态由文案本身表达，violet-deep 字 6.6-7.1:1 达标。 */
+.lite2-shell .lite-btn.lite-btn--soft,
+.lite2-shell .lite-btn.lite-btn--soft:disabled,
+.lite2-shell .lite-btn.lite-btn--soft:disabled:hover {
+  border-color: transparent;
+  background: rgba(var(--lite2-violet-rgb), 0.12);
+  color: var(--lite2-violet-deep);
+  opacity: 1;
+}
+
+.lite2-shell .lite-btn.lite-btn--soft:hover:not(:disabled),
+.lite2-shell .lite-btn.lite-btn--soft:focus-visible:not(:disabled) {
+  border-color: transparent;
+  background: rgba(var(--lite2-violet-rgb), 0.18);
+  color: var(--lite2-violet-deep);
+}
+
+.lite2-shell .lite-btn.lite-btn--danger,
+.lite2-shell .lite-btn.lite-btn--danger:disabled,
+.lite2-shell .lite-btn.lite-btn--danger:disabled:hover {
+  border-color: transparent;
+  background: rgba(var(--lite2-danger-rgb), 0.12);
+  color: rgb(var(--lite2-danger-deep-rgb));
+}
+
+.lite2-shell .lite-btn.lite-btn--danger:hover:not(:disabled),
+.lite2-shell .lite-btn.lite-btn--danger:focus-visible:not(:disabled) {
+  border-color: transparent;
+  background: rgba(var(--lite2-danger-rgb), 0.15);
+  color: rgb(var(--lite2-danger-deep-rgb));
+}
+
+/* ask-q-remove 是 26×26 圆钮（l.1475 定宽高）——基类 padding 4px 12px 会把 border-box
+   内容盒压成 0 宽（× 靠溢出显示，对抗审查逮出）；圆钮归零 padding。 */
+.lite2-shell .lite-btn.ask-q-remove {
+  padding: 0;
+}

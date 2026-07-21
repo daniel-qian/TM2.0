@@ -246,7 +246,7 @@ function LiteAskComposer({
         placeholder={placeholder}
         aria-label={t.lite2.roomLiveQuestionAria}
       />
-      <button type="submit">{submitLabel}</button>
+      <button type="submit" className="lite-btn lite-btn--primary">{submitLabel}</button>
     </form>
   )
 }
@@ -318,7 +318,7 @@ export function RoomScreen() {
                   {noteJustAdded ? (
                     <button
                       type="button"
-                      className="lite-notes-nudge"
+                      className="lite-btn lite-btn--ghost lite-notes-nudge"
                       onClick={() => goScreen('notes')}
                     >
                       {t.lite2.notesNudge} →
@@ -354,7 +354,7 @@ export function RoomScreen() {
           <p>{t.lite2.roomNoMaterialBody}</p>
           <button
             type="button"
-            className="lite-room-nomaterial-cta"
+            className="lite-btn lite-btn--primary lite-room-nomaterial-cta"
             onClick={() => goScreen('home')}
           >
             {t.lite2.roomNoMaterialCta} →
