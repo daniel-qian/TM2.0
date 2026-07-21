@@ -5336,7 +5336,8 @@
    这里是 append-only 最小形——棒2 会把让位统一成 --lite2-clear-top 变量（一处定义九处消费）。 */
 
 /* Bug A：notes/vision 是仅剩的「居中 flex + 28px 顶距」老模式屏——顶栏是 fixed 悬浮
-   （00-base l.65，带高 ~66px），28px 顶距让眉题/标题钻进顶栏底下。对齐既有 84px frame 惯例。 */
+   （00-base l.65，带高 ~66px），28px 顶距让眉题/标题钻进顶栏底下。对齐既有 84px frame 惯例。
+   ⚠️ superseded by 棒2（文件尾）：顶距已统一为 var(--lite2-clear-top)，本块被后写覆盖。 */
 .lite2-shell .lite-notes,
 .lite2-shell .lite-vision {
   padding-top: 84px;
@@ -5369,4 +5370,77 @@
 .lite2-shell .lite-home-decision-followup:focus-visible {
   border-color: var(--rule-strong);
   color: var(--ink);
+}
+
+/* ═══ cr-align 视觉战役 棒2（2026-07-21）· 壳结构：胶囊顶栏 + 全局让位统一 + 宽度体系 ═══
+   规格来源 eval-harness/specs/cr-align-spec.json stick-2 行（cr :3100 实测值）；
+   计划 .issues/cr-align-visual-0721/plan.md 棒2 节。
+   🔴 00-base.css 一行未动（assertSkinNoLeak 盯着 v01/story）——以下全部 .lite2-shell 作用域。 */
+
+/* 让位统一：一变量九消费者。顶栏 fixed 悬浮（00-base l.65），让位责任从「每屏自留 84px」
+   收拢到这一个变量——「新屏忘让位」的世界由 verify-topbar-clearance 门永久看守。
+   ≤860 顶栏转 sticky 进流（00-base l.1121），让位降 72px（沿 home@720 的旧惯例值）。 */
+.lite2-shell {
+  --lite2-clear-top: 96px;
+  --lite2-frame-w: min(1480px, calc(100vw - 48px));
+}
+
+@media (max-width: 860px) {
+  .lite2-shell {
+    --lite2-clear-top: 72px;
+  }
+}
+
+/* 九消费者：各源块（closerlook l.1732 / followups l.2132 / notes l.3202 / home l.3523 /
+   projects l.4356 / vision l.1152 / 棒1 追加块 / 各自的窄屏媒体块）的顶距全部让位给变量；
+   side/bottom 维持各源块原值——本块在文件尾，同权重后写者胜。
+   .home-frame 是 shared/70-home-cards.css 的类（Team 屏）——.lite2-shell 前缀把覆盖锁在 v02。 */
+.lite2-shell .home-frame,
+.lite2-shell .lite-home-frame,
+.lite2-shell .lite-projects-frame,
+.lite2-shell .lite-followups-frame,
+.lite2-shell .lite-closerlook-frame,
+.lite2-shell .lite-notes,
+.lite2-shell .lite-vision {
+  padding-top: var(--lite2-clear-top);
+}
+
+/* 议事室画布：inset 简写（l.714，68px 20px 92px）里的 top 让位给变量——右 20/底 92
+   composer 带维持原值（棒2 审计清单：底部钉死件不动）。 */
+.lite2-shell .lite-room-canvas {
+  top: var(--lite2-clear-top);
+}
+
+/* 锚点跳转/聚焦滚动不钻顶栏（我们的滚动全在内滚容器，不在 html——她的
+   html{scroll-padding-top:120px} 翻译到内滚层）。 */
+.lite2-shell .lite-home-scroll,
+.lite2-shell .lite-projects-scroll,
+.lite2-shell .lite-followups-scroll,
+.lite2-shell .lite-closerlook-scroll,
+.lite2-shell .lite-notes-body,
+.lite2-shell .lite-vision-scroll {
+  scroll-padding-top: 120px;
+}
+
+/* 胶囊顶栏几何（两皮共享——「paper 跟结构走守自己配色」，Danny 拍板①）：
+   fixed top14 居中、宽度=她的外夹 min(1480,100vw-48)、r16（值走 --lite2-radius-lg，
+   aurora 令牌 16px，paper 无声明走 fallback 16——paper 容器透明，圆角不可见）。
+   🔴 只在 ≥861 生效：≤860 的 sticky 竖排模式（00-base l.1121）一字不碰。 */
+@media (min-width: 861px) {
+  .lite2-shell .prototype-topbar {
+    top: 14px;
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    width: var(--lite2-frame-w);
+    justify-content: flex-start;
+    gap: 12px;
+    padding: 8px 14px;
+    border-radius: var(--lite2-radius-lg, 16px);
+  }
+
+  /* tabs 靠左、铃/登录/齿轮推右（DOM 序本来就是 tabs→bell→auth→settings，零 TSX 改动）。 */
+  .lite2-shell .scene-tabs {
+    margin-right: auto;
+  }
 }

@@ -2413,6 +2413,14 @@
       out.tabsBackgroundColor = tabs ? cs(tabs).backgroundColor : null;
       out.tabsBackdropFilter = tabs ? (cs(tabs).backdropFilter || cs(tabs).webkitBackdropFilter) : null;
       out.tabsBoxShadow = tabs ? cs(tabs).boxShadow : null;
+      // cr-align 棒2：aurora 的玻璃 chrome 从 .scene-tabs pill 上移到整条 .prototype-topbar
+      // slab——aurora 相位改读 topbar 四值（paper 相位不读这些：PAPER_BASELINE 无此四键，
+      // paper 的 .scene-tabs 探针字段原样保留、基线一字未动）。
+      const bar = $('.prototype-topbar');
+      out.topbarBackgroundColor = bar ? cs(bar).backgroundColor : null;
+      out.topbarBackdropFilter = bar ? (cs(bar).backdropFilter || cs(bar).webkitBackdropFilter) : null;
+      out.topbarBoxShadow = bar ? cs(bar).boxShadow : null;
+      out.topbarBorderRadius = bar ? cs(bar).borderRadius : null;
       const activeTab = $('.scene-tab.is-active');
       out.activeTabBackgroundColor = activeTab ? cs(activeTab).backgroundColor : null;
 
@@ -2447,10 +2455,16 @@
         skinAttrIsAurora: p.skinAttr === 'aurora',
         bgHasAuroraVioletStop: str(p.shellBackgroundImage) && p.shellBackgroundImage.includes('168, 139, 255'),
         bgHasAuroraCyanStop: str(p.shellBackgroundImage) && p.shellBackgroundImage.includes('51, 199, 232'),
-        tabsGlassIsWhiteTinted: str(p.tabsBackgroundColor) && /rgba?\(255,\s*255,\s*255/.test(p.tabsBackgroundColor),
-        tabsBlurIsStrong: str(p.tabsBackdropFilter) && p.tabsBackdropFilter.includes('20px') && p.tabsBackdropFilter.includes('saturate'),
-        tabsShadowIsViolet: str(p.tabsBoxShadow) && p.tabsBoxShadow.includes('36, 32, 95'),
-        activeTabIsNavy: str(p.activeTabBackgroundColor) && /rgba?\(16,\s*34,\s*61/.test(p.activeTabBackgroundColor),
+        // cr-align 棒2（2026-07-21）字面量重导出——来源 eval-harness/specs/cr-align-spec.json
+        // stick-2 行（spec→门→码，不从构建反抄）：玻璃 chrome 上移到 .prototype-topbar slab
+        // （tabsGlass*/tabsBlur/tabsShadow 三探针改读 topbar 四值）；活动 tab 按她的 nav pill
+        // 语法转白底（activeTabIsNavy→White）。旧构建红证明：改后本组对棒1 构建跑必红
+        // （topbar 无玻璃、活动 tab 还是 navy）。
+        topbarGlassIsWhiteTinted: str(p.topbarBackgroundColor) && /rgba?\(255,\s*255,\s*255/.test(p.topbarBackgroundColor),
+        topbarBlurIsStrong: str(p.topbarBackdropFilter) && p.topbarBackdropFilter.includes('20px') && p.topbarBackdropFilter.includes('saturate'),
+        topbarShadowIsViolet: str(p.topbarBoxShadow) && p.topbarBoxShadow.includes('36, 32, 95'),
+        topbarRadiusIsSlab: p.topbarBorderRadius === '16px',
+        activeTabIsWhite: str(p.activeTabBackgroundColor) && /^rgb\(255, 255, 255\)$/.test(p.activeTabBackgroundColor),
         footerGlassIsWhiteTinted: str(p.footerBackgroundColor) && /rgba?\(255,\s*255,\s*255/.test(p.footerBackgroundColor),
         densityIsCompact: p.shellFontSize === '15px',
         radiusIsBumped: p.uploadPanelBorderRadius === '10px',
@@ -2478,7 +2492,11 @@
       activeTabBackgroundColor: 'rgb(29, 27, 23)',
       uploadPanelBorderRadius: '8px',
       playbookTagBackgroundColor: 'rgba(29, 27, 23, 0.06)',
-      playbookTagColor: 'rgb(145, 139, 127)',
+      // cr-align 棒2（2026-07-21）补采：UIUX 棒（feat-068，2026-07-20）把 paper --ink-faint
+      // #918b7f→#736c5f 修小字 AA（look-paper.css 注释在案），tag 字色随 token 合法移动——
+      // E 组相位自 feat-046 后没人跑过，基线陈旧到今天才被 verify-skin-phases 逮住。
+      // 旧值 rgb(145, 139, 127)；重采值来自棒1 构建实测（非本棒改动，本棒 paper 数值零动）。
+      playbookTagColor: 'rgb(115, 108, 95)',
     },
 
     assertPaperUnchanged(probe) {

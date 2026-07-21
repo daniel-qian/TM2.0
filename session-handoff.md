@@ -1,4 +1,37 @@
-> # ⟳ 2026-07-21 深夜 · cr-align 视觉战役 棒0+棒1 收盘（★下个 session 从这里接）
+> # ⟳ 2026-07-21 深夜② · cr-align 视觉战役 棒2 收盘（★下个 session 从这里接）
+>
+> **一句话**：壳结构对齐上线——悬浮胶囊玻璃 slab 顶栏（tabs 左/铃齿轮右/白色活动 pill）+
+> 让位统一 `--lite2-clear-top` 一变量九消费者 + aurora 100px 模糊背幕。零 TSX，纯 CSS+门。
+> **规格进度 15/22 绿**（棒1 时 8/22）。paper 跟结构走实拍成立。收据
+> `.issues/cr-align-visual-0721/receipt-r2-0721.md`。
+>
+> ## 下一棒是什么：棒3 token 加深（S–M）
+> - look-aurora.css：H1 26px/800 平值（撤 clamp，aurora 覆盖）、eyebrow 13px/750/0.02em
+>   （`.lite2-shell[data-look='aurora'] .eyebrow`——.eyebrow 与 story 共享必须带前缀）、
+>   `--lite2-surface` .86→.97、`--rule-strong`→#8fa1b8、`--lite2-surface-soft #eef3fa`、
+>   tone 渐变七条 `--lite2-grad-*`（誊值自她 data.ts）、副题 14px。
+> - AA 台账 D2/D3 落地：gray 徽章字→#5b6577、gold→#75591f（spec 已内化）。
+> - 本棒是指定的 aurora 基线变更事件之一：h1/eyebrow 探针若在 assertAuroraApplied 里（暂无）
+>   不涉；SPEC_STICK=3 红→绿（今天全量剩 7 红里的 5 行：type.h1/h1weight/eyebrow/
+>   eyebrowWeight/token.surface + card.decisionBg 在棒4）。
+> - 固定环照跑：sweep 棒首尾 + 电池（cr-alignment 换 SPEC_STICK=3）+ 对照板 + 旧构建红证明 +
+>   像素基线人审后重定。
+>
+> ## 棒2 新增的门与工具
+> - **verify-skin-phases.mjs**（新，进电池）：E 组皮相位固化成可跑门（此前手册协议）——
+>   第一跑就逮到 feat-068 遗留的 PAPER_BASELINE 陈旧漂移（playbookTagColor，已溯源补采）。
+> - assertAuroraApplied 现在读 **topbar 四值探针**（slab 化）+ activeTabIsWhite；
+>   字面量来源=cr-align-spec.json（spec→门→码，别从构建反抄）。
+> - 电池清单 22 门：…+ topbar-clearance + cr-alignment(SPEC_STICK=N) + skin-phases + sweep-selftest。
+>
+> ## 别再踩的坑（棒2 新增）
+> - 壳几何覆盖必须 `@media (min-width:861px)` 作用域——00-base 在 ≤860 把顶栏转 sticky 竖排，
+>   裸覆盖 left/transform 会把移动端砸烂。
+> - `.scene-tabs` 的玻璃在 aurora 移到了 topbar slab（branch ⑫ 后写覆盖 branch ①，仅 ≥861）；
+>   移动端仍是 branch ① 的玻璃 pill + 00-base 暖纸底（历史小怪，观察项）。
+> - 页脚没并入夹宽体系（全宽条硬套会半生不熟）——归 footer 整体重塑棒。
+
+> # ⟳ 2026-07-21 深夜 · cr-align 视觉战役 棒0+棒1 收盘（上一棒）
 >
 > **一句话**：Danny 拍板「UIUX/layout/风格**完全对准**合伙人 cr-live 版本 + 系统扫 UI bug + 功能
 > 逻辑不动」。战役总计划已批（`.issues/cr-align-visual-0721/plan.md`，分 8 棒；ADR-0027）。

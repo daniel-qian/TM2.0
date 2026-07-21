@@ -266,3 +266,70 @@
   background: var(--lite2-glass);
   backdrop-filter: var(--lite2-glass-blur);
 }
+
+/* ═══ cr-align 视觉战役 棒2（2026-07-21）· 壳结构 aurora 侧 ═══════════════════════════
+   几何在 lite2.css 棒2 段（两皮共享），这里只有观感：slab 玻璃、白色活动 pill、模糊背幕。
+   规格 eval-harness/specs/cr-align-spec.json stick-2；门字面量同 commit 换（snippet E 组）。 */
+.lite2-shell[data-look='aurora'] {
+  --lite2-glass-border: rgba(143, 161, 184, 0.28);
+  --lite2-radius-lg: 16px;
+}
+
+/* ── ⑫ 顶栏 slab：整条玻璃承担 chrome；.scene-tabs 从「自带玻璃 pill」降为透明内容
+   （branch ① 曾给 .scene-tabs 上玻璃——本条后写覆盖，仅 ≥861；≤860 sticky 模式维持现状）。
+   slab 是不透明 chrome，pointer-events 收回 auto——00-base 的 none 是给透明容器设计的，
+   玻璃下滚过的内容不该被隔着毛玻璃点到。 */
+@media (min-width: 861px) {
+  .lite2-shell[data-look='aurora'] .prototype-topbar {
+    pointer-events: auto;
+    background: var(--lite2-glass);
+    backdrop-filter: var(--lite2-glass-blur);
+    -webkit-backdrop-filter: var(--lite2-glass-blur);
+    border: 1px solid var(--lite2-glass-border);
+    box-shadow: var(--shadow-soft);
+  }
+
+  .lite2-shell[data-look='aurora'] .scene-tabs {
+    background: transparent;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    border-color: transparent;
+    box-shadow: none;
+    padding: 0;
+  }
+
+  /* 她的 nav pill 语法：tab 圆角 9px；活动=白 pill+ink 字+软影；hover=surface-soft。 */
+  .lite2-shell[data-look='aurora'] .scene-tab {
+    border-radius: 9px;
+  }
+
+  .lite2-shell[data-look='aurora'] .scene-tab:hover,
+  .lite2-shell[data-look='aurora'] .scene-tab:focus-visible {
+    background: #eef3fa;
+    color: var(--ink);
+  }
+
+  .lite2-shell[data-look='aurora'] .scene-tab.is-active {
+    background: #ffffff;
+    color: var(--ink);
+    box-shadow: var(--shadow-soft);
+  }
+}
+
+/* ── ⑬ 100px 模糊背幕：滚动内容在悬浮 slab 下渐隐成毛玻璃，不硬边掠过（她 layout.tsx 的
+   z-40 遮罩层配方）。零新 DOM——shell 的 ::before（已核实 shell 此前无 ::before）；
+   z 序：footer 30 < 背幕 40 < 顶栏 50。 */
+.lite2-shell[data-look='aurora']::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 100px;
+  z-index: 40;
+  pointer-events: none;
+  backdrop-filter: blur(24px) saturate(1.2);
+  -webkit-backdrop-filter: blur(24px) saturate(1.2);
+  mask-image: linear-gradient(to bottom, black 60%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, black 60%, transparent 100%);
+}

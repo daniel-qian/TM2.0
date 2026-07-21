@@ -707,6 +707,14 @@
       "evidence": "verify-topbar-clearance 修前 5 红（notes/vision×两皮 elementFromPoint 实测被顶栏接住 + followup 按钮 radius 0px/ButtonFace 底）→修后 22/0。sweep 首轮 140 件/78 指纹：已知两 bug 全被机械逮住（fixed-overlap×16+default-control×6 交叉验证），新扫出 small-target×28+focus-missing×16 挂台账排棒4；selftest 8/8。verify-cr-alignment 全量对棒1 构建 8/22 红（=战役差距表），SPEC_STICK=1 电池模式 5/5 绿。像素基线 36 张生成即复验绿。回归电池全绿（含 dist 重建门后终局重建复验）。",
       "status": "done",
       "date": "2026-07-21"
+    },
+    {
+      "id": "feat-084",
+      "name": "cr-align 视觉战役棒2：壳结构——胶囊玻璃 slab 顶栏 + 让位统一 + 模糊背幕",
+      "description": "对齐 cr-live 壳配方（规格 specs/cr-align-spec.json stick-2，:3100 实测值）：①让位统一 --lite2-clear-top:96px（≤860 降 72）一变量九消费者（六 frame+Team shared .home-frame+Room canvas top），棒1 写死块标 superseded；内滚容器 scroll-padding-top:120px。②胶囊几何两皮共享（拍板① paper 跟结构走）：≥861 fixed top14 居中 min(1480,100vw-48) r16，tabs 左/铃齿轮右（DOM 序本来就对，零 TSX）；≤860 sticky 一字不碰。③aurora slab：整条玻璃 chrome（pointer-events 收回 auto）+.scene-tabs 去 pill 化+tab r9/活动白 pill+::before 100px 模糊背幕（mask 渐隐零新 DOM）。④门字面量同 commit 从 spec 誊换 5 项（topbar 四值探针+activeTabIsNavy→White）；verify-skin-phases.mjs 把 E 组皮相位从手册协议固化成可跑门进电池。00-base 一行未动（skinNoLeak 构造性绿）。",
+      "evidence": "旧构建红证明：改后门对棒1 构建 aurora 组 5 红→棒2 构建 16/16 绿。固化工具第一跑逮到陈旧基线漂移（paper playbookTagColor，溯源 feat-068 AA 加深 --ink-faint 合法连带，补采记档）。verify-topbar-clearance 穿越几何巨变 22/0；verify-cr-alignment SPEC_STICK=2 硬断言 13/13，全量进度 8/22→15/22；switchers 23/0；sweep 全矩阵 NEW 0/REGRESSION 0；像素基线有意 diff 目检后重定 36 张复验绿；回归电池 22 门全绿。",
+      "status": "done",
+      "date": "2026-07-21"
     }
   ]
 }
