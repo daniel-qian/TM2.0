@@ -2020,6 +2020,14 @@
       out.sawWizard = true;
       out.startStep = this._wizardStep();
 
+      // ── step 0: doors（input-side-0721 闸门页新增三扇门步）——走「上传自己的材料」那扇门。
+      // 示例团队门归 verify-onboard-gate.mjs 专门验，这里的走查沿上传主线。
+      if (this._wizardStep() === 'doors') {
+        const doorUpload = $('.lite-gate-door-upload');
+        if (doorUpload) doorUpload.click();
+        try { await poll(() => (this._wizardStep() === 'upload' ? true : null), 5000, 'doors to advance to upload step'); } catch (e) { return out; }
+      }
+
       // ── step: upload (real ingest through the wizard) ──
       const upInput = $('.lite-onboard-upload-input');
       if (upInput) {
@@ -2117,10 +2125,12 @@
       };
       try { await poll(() => (this._wizard() ? true : null), 10000, 'wizard to mount for escape run'); } catch (e) { results.onboardEscape = out; return out; }
       out.sawWizard = true;
-      const next = $('.lite-onboard-next');
-      if (next) next.click();
+      // input-side-0721：清态首访落在 doors 步（没有 Next 键——门就是导航）。"先走一步再 Escape"
+      // 的推进动作改成过上传门：doors → upload 就是真实的一步，persisted step 必须停在 upload。
+      const doorUpload = $('.lite-gate-door-upload');
+      if (doorUpload) doorUpload.click();
       try {
-        await poll(() => (this._wizardStep() === 'team' ? true : null), 5000, 'wizard to advance before escape');
+        await poll(() => (this._wizardStep() === 'upload' ? true : null), 5000, 'wizard to advance before escape');
         out.advanced = true;
       } catch (e) { /* stays false — stepBefore below records whatever it is */ }
       out.stepBefore = this._wizardStep();

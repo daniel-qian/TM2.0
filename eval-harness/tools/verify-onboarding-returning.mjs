@@ -92,7 +92,8 @@ rec('全新访客：向导自动弹出（.lite-onboard 在 DOM 里）', freshOpe
 const freshStep = await pageFresh
   .evaluate(() => document.querySelector('.lite-onboard')?.getAttribute('data-onboard-step'))
   .catch(() => null)
-rec('全新访客：向导落在第①步（upload）', freshStep === 'upload', `data-onboard-step="${freshStep}"`)
+// input-side-0721：闸门页新增第 0 步「三扇门」（doors）——首访第一眼是门厅，不再直接是上传。
+rec('全新访客：闸门落在第 0 步（doors 三扇门）', freshStep === 'doors', `data-onboard-step="${freshStep}"`)
 rec('全新访客场景全程无 pageerror', freshErrors.length === 0, freshErrors.slice(0, 3).join(' | ') || '0 条')
 await ctxFresh.close()
 
@@ -200,7 +201,8 @@ rec('点了之后向导真的打开了（.lite-onboard 在 DOM 里）', reopened
 const reopenedStep = await page
   .evaluate(() => document.querySelector('.lite-onboard')?.getAttribute('data-onboard-step'))
   .catch(() => null)
-rec('重新打开落在第①步（upload）——"重看"是完整再走一遍，不是接着旧进度', reopenedStep === 'upload', `data-onboard-step="${reopenedStep}"`)
+// input-side-0721：重看也从三扇门起——重看的人里恰有想试示例团队的老客户（onboardStore.reopen）。
+rec('重新打开落在第 0 步（doors）——"重看"是完整再走一遍，不是接着旧进度', reopenedStep === 'doors', `data-onboard-step="${reopenedStep}"`)
 
 rec('点开之后 store 里团队数据仍在（重看没把已加载的数据冲掉）',
   (await page.evaluate(() => window.__lite2Store.getState().team !== null)))

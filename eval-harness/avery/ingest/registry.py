@@ -20,7 +20,7 @@ from __future__ import annotations
 import os
 import tempfile
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -538,6 +538,40 @@ class ContextRegistry:
         if ctx is None or idx < 0 or idx >= len(ctx.source_documents):
             return None
         return ctx.source_documents[idx].content
+
+    # --- input-side-0721 · 3A: clone (the one-click sample-team seam) --------------------------
+
+    def clone_context(self, src_context_id: str, *, new_context_id: str,
+                      new_owner_token: str) -> bool:
+        """Copy one context WHOLE into a new id with a NEW owner_token — the demo-claim seam.
+
+        Why clone instead of sharing the demo master: /advise appends company notes and /ask lands
+        rows, so a shared token means visitors dirty each other's sample workspace; and a read-only
+        special case would have to be sprinkled into every write endpoint (and every FUTURE one).
+        A clone gives each visitor a private twin behind the unchanged feat-038 token gate.
+
+        No red-line re-scan here ON PURPOSE: every copied row already passed the storage-door gate
+        on its way in (put()/append_note), and a byte-copy cannot manufacture new content. Notes are
+        copied with FRESH ids (the pg twin's company_notes.id is globally unique) but keep their
+        created_at — the pre-cast「实时数据缺位」story keeps its chronology. False = unknown source
+        (the same clean no both registries give)."""
+        import copy
+        src = self._by_id.get(src_context_id)
+        if src is None:
+            return False
+        extraction = copy.deepcopy(src.extraction)
+        store = KeywordStore()
+        store.add(extraction.materials)
+        mem_dir = materialize_memory(extraction, data_root() / new_context_id)
+        twin = CompanyContext(
+            context_id=new_context_id, extraction=extraction, store=store, memory_dir=mem_dir,
+            name=src.name, source_files=list(src.source_files),
+            source_documents=copy.deepcopy(src.source_documents),
+            owner_token=new_owner_token)
+        self._by_id[new_context_id] = twin
+        self._notes[new_context_id] = [replace(n, id=new_note_id())
+                                       for n in self._notes.get(src_context_id, [])]
+        return True
 
     def __contains__(self, context_id: str) -> bool:
         return context_id in self._by_id

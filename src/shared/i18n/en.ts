@@ -966,9 +966,10 @@ export const en = {
     projectsUnknownValue: 'The documents did not say',
     projectsOpenAria: 'Open {title}',
 
-    // ── Onboarding wizard (feat-045, PRD F7 — first-visit overlay; skippable; × pauses and
-    // resumes next visit. NO fake connect-tools step, NO fake create-account step — every step
-    // is real wiring: upload really ingests, picks really persist.) ──
+    // ── Onboarding gate (feat-045, PRD F7; input-side-0721 — a full-screen gate page now, not
+    // a floating dialog. Escape / "look around" pauses and resumes next visit. NO fake
+    // connect-tools step, NO fake create-account step — every step is real wiring: upload
+    // really ingests, the sample-team door really claims a backend clone, picks really persist.) ──
     onboardEyebrow: 'Getting set up',
     onboardCloseAria: 'Close — it picks up where you left off next time',
     onboardSkip: 'Skip the setup',
@@ -976,6 +977,25 @@ export const en = {
     onboardNext: 'Next',
     onboardFinish: 'Step in',
     onboardStepsAria: 'Setup steps',
+    onboardStepOf: 'step {n} of {total}',
+    // The gate's visible way out (same pause semantics as Escape: progress kept, resumes next
+    // visit). A full-page gate has no × — a gate is not a popup you swat away.
+    onboardBrowse: 'Just look around first',
+
+    // ── Step 0 · the doors (input-side-0721 — Danny: the one-click sample team lives here) ──
+    onboardDoorsTitle: 'How do you want to start?',
+    onboardDoorsBody:
+      'Two ways in. The sample team is the fastest look; your own files make it yours.',
+    // 🔴 The demo door renders ONLY when the backend really has a sample team (capability
+    // probe) — no fake buttons. Copy states what the sample is: real, anonymized material.
+    onboardDoorDemoTitle: 'Look around a sample team',
+    onboardDoorDemoBody:
+      'A real marketing team, anonymized — five résumés and one work report, already read in. One click, nothing to upload.',
+    onboardDoorDemoBusy: 'Setting up your own copy of the sample…',
+    onboardDoorDemoErrorLead: "Couldn't fetch the sample team —",
+    onboardDoorUploadTitle: 'Start with your own files',
+    onboardDoorUploadBody:
+      "Hand Avery a roster, a plan, a weekly note — it reads them into a working picture. About three steps.",
 
     onboardUploadTitle: 'Start with a few files',
     // 0721（B5）：同 upload.caption 的重心修正——产出是管理判断，不只是「长出团队」。
@@ -993,14 +1013,38 @@ export const en = {
     onboardUploadIdle: 'Nothing uploaded yet — this step is fine to skip.',
 
     onboardTeamTitle: 'A little about you',
+    // input-side-0721 · 8A — the honesty line moved from "nothing is sent anywhere" (no longer
+    // true: the company-situation box below IS sent) to a per-field boundary: name fields stay
+    // local, the note goes to Avery. 🔴 Do not copy the old absolute back; the per-field hints
+    // below are the single source of "what goes where".
     onboardTeamBody:
-      'Used for greetings around the product. It stays in this browser — nothing is sent anywhere.',
+      'The fields here are for greetings around the product and stay in this browser — except the last box, which goes to Avery so its readings start from your reality.',
     onboardCompanyLabel: 'Company',
     onboardCompanyPlaceholder: 'e.g. Harbor & Co.',
     onboardDeptLabel: 'Team or department',
     onboardDeptPlaceholder: 'e.g. Operations',
     onboardNameLabel: 'What should Avery call you?',
     onboardNamePlaceholder: 'e.g. Alex',
+    // input-side-0721 · 8A — aligned with the partner build's team-info step (size / role);
+    // still local greeting config, NOT sent.
+    onboardTeamCountLabel: 'Team size',
+    onboardTeamCountPlaceholder: 'e.g. 20',
+    onboardRoleLabel: 'Your role',
+    onboardRolePlaceholder: 'e.g. Marketing director',
+    // The one field that IS sent (→ the team notebook, via the same red-line write gate).
+    // Two hints, both true, picked by real state: a workspace exists now / will exist later.
+    onboardCompanyNoteLabel: 'What should Avery know about the company right now?',
+    onboardCompanyNotePlaceholder:
+      'e.g. Resort-property marketing; the peak season starts in October; collections have been slower than last year…',
+    onboardCompanyNoteHint:
+      "This box goes to Avery — it lands in your team's notebook, where you can read it any time.",
+    onboardCompanyNoteHintLater:
+      'This box goes to Avery together with your files — it is sent once your workspace exists.',
+    // What actually gets written into the notebook (the note text template + its source tag).
+    onboardNoteText: 'From setup — what you told Avery about the company: {note}',
+    onboardNoteSource: 'Setup · about the company',
+    // The skeleton home's second-chance demo slot (primary entry is the gate's doors step).
+    homeDemoNote: 'Real anonymized material, read in already — your own private copy, one click.',
 
     onboardPlaybooksTitle: 'Pick the plays that fit how you run things',
     onboardPlaybooksBody:

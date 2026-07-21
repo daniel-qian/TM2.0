@@ -655,3 +655,63 @@ def test_pg_schema_reserves_the_next_seams(pg, tmp_path):
     assert ("contexts", "owner_token", "text") in cols, "feat-038 seam missing: contexts.owner_token"
     assert ("materials", "embedding", "vector") in cols, "feat-031 seam missing: materials.embedding"
     assert emb_filled == 0, "feat-030 must NOT fill embeddings (that is feat-031's job)"
+
+
+# ==============================================================================================
+# CLONE CONTRACT — input-side-0721 · 3A 一键示例团队的底座（memory + postgres 同一张合约）
+# ==============================================================================================
+# 为什么是克隆：demo 母本是共享的，而 /advise 落笔记、/ask 落行——发同一个 owner_token 给所有
+# 访客等于让他们互相写脏。clone_context 把母本整体复制成一个新 id + 新 token 的私有副本。
+# pg 侧必须是 SQL 级 INSERT..SELECT：get()+put() 重组会 ① 重新烧一遍 embedding（纯花钱）、
+# ② 丢 source_documents 的 bytea（get() 刻意不拉字节），两条都是这张合约要钉死的行为。
+
+
+def test_clone_makes_a_readable_twin_with_its_own_credentials(impl, tmp_path):
+    reg, cid, _ = _ingest(impl, tmp_path / "mem", source_documents=_sample_source_docs(),
+                          owner_token="token-master")
+    new_cid = impl.track(_new_cid())
+    ok = reg.clone_context(cid, new_context_id=new_cid, new_owner_token="token-clone")
+    assert ok is True, "母本存在时克隆必须成功"
+    twin = reg.get(new_cid)
+    assert twin is not None, "克隆出来的副本读不回来"
+    assert twin.owner_token == "token-clone", "副本必须持有自己的 owner_token"
+    master = reg.get(cid)
+    assert master.owner_token == "token-master", "克隆不许动母本的凭据"
+    assert [p.name for p in twin.extraction.people] == [p.name for p in master.extraction.people]
+    assert [m.text for m in twin.extraction.materials] == [m.text for m in master.extraction.materials]
+    assert twin.source_files == master.source_files
+
+
+def test_clone_copies_source_document_bytes(impl, tmp_path):
+    """file space 不缩水：副本的「你的文件」必须能下载到和母本一字不差的原始字节。
+    （pg 陷阱：get() 刻意不拉 bytea——克隆若走 get()+put() 重组，这里就会拿到 None。）"""
+    reg, cid, _ = _ingest(impl, tmp_path / "mem", source_documents=_sample_source_docs(),
+                          owner_token="token-master")
+    new_cid = impl.track(_new_cid())
+    assert reg.clone_context(cid, new_context_id=new_cid, new_owner_token="token-clone")
+    for idx in (0, 1):
+        want = reg.source_document_bytes(cid, idx)
+        got = reg.source_document_bytes(new_cid, idx)
+        assert want, "合约前提：母本自己有字节"
+        assert got == want, f"副本第 {idx} 份文件的字节丢了或变了"
+
+
+def test_clone_copies_notes_then_isolates_them(impl, tmp_path):
+    """预铸母本的「实时数据缺位」笔记要跟着副本走；克隆之后两边各写各的，互不可见。"""
+    reg, cid, _ = _ingest(impl, tmp_path / "mem", owner_token="token-master")
+    reg.append_note(cid, "示例工作区：实时数据还没接入。", "初始设置")
+    new_cid = impl.track(_new_cid())
+    assert reg.clone_context(cid, new_context_id=new_cid, new_owner_token="token-clone")
+    twin_notes = reg.list_notes(new_cid)
+    assert len(twin_notes) == 1 and "实时数据" in twin_notes[0].text, "预铸笔记没跟上副本"
+    assert twin_notes[0].id != reg.list_notes(cid)[0].id, "副本笔记必须换新 id（company_notes.id 全局唯一）"
+    reg.append_note(new_cid, "副本自己的新观察。", "")
+    assert len(reg.list_notes(cid)) == 1, "副本的写入渗进了母本（克隆隔离失守）"
+    reg.append_note(cid, "母本这边的新观察。", "")
+    assert len(reg.list_notes(new_cid)) == 2, "母本的后续写入不该再影响已克隆的副本"
+
+
+def test_clone_of_a_missing_context_is_a_clean_no(impl, tmp_path):
+    reg = impl.fresh()
+    assert reg.clone_context("ctx_never_existed", new_context_id=impl.track(_new_cid()),
+                             new_owner_token="t") is False

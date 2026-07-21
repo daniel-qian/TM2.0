@@ -272,6 +272,11 @@ interface LiteState {
   // 直接干净回上传态，不该冲用户报错。
   restoreError: string | null
 
+  // input-side-0721 · 3A：一键示例团队的领取态。claiming = 门上按钮要置灰（双击 = 两份克隆，
+  // 后端不介意但用户会拿到两个工作区糊一脸）；error = 领取失败的人话（诚实报错，不伪装成功）。
+  demoClaiming: boolean
+  demoClaimError: string | null
+
   // fixD/B1：这台浏览器传过的每一份（新→旧，含当前这份）。上传入口据此告诉用户
   // "再传一次会新建一份，当前这份不会合并进去"，并列出回得去的入口。
   knownContexts: KnownContext[]
@@ -301,6 +306,9 @@ interface LiteState {
   closeDetail: () => void
   setTransport: (transport: LiveTransport) => void // AFK 门注入确定性 stub
   uploadFiles: (files: File[]) => Promise<void>
+  // input-side-0721 · 3A：领一份示例团队（后端克隆预铸母本 → 本访客私有副本）。
+  // 落地路径与 uploadFiles 完全同构（adoptContext 收口 → 团队入 state → 名册 → files/notes）。
+  claimDemoTeam: () => Promise<void>
   // feat-050：按 localStorage 里的 contextId 把上次会话拉回来。挂载时调一次；失败可重试。
   // 🔴 不是"唯一入口"——feat-053（账号体系）落地后 contextId 由服务端按账号返回，那条线
   // 直接调 `adoptContext()` 覆盖即可，本条退化为无账号时的兜底（已有 team 时本函数自己让路）。
@@ -358,6 +366,8 @@ export const useLite = create<LiteState>((set, get) => ({
   // 有锚点才算"正在恢复"——没有锚点是干净首访，直接进上传引导，不该转圈。
   restoring: restoredContextId !== null,
   restoreError: null,
+  demoClaiming: false,
+  demoClaimError: null,
   knownContexts: loadKnownContexts(),
   switchError: null,
   switchPending: null,
@@ -433,6 +443,52 @@ export const useLite = create<LiteState>((set, get) => ({
       set({
         ingestStatus: 'error',
         ingestError: err instanceof Error ? err.message : String(err),
+      })
+    }
+  },
+
+  // input-side-0721 · 3A：领一份示例团队。与 uploadFiles 同构——同一个 adoptContext 收口、
+  // 同一份 team/rawTeam 落法、同一条名册/files/notes 收尾；差别只有：① 数据来自
+  // POST /demo/claim（后端克隆预铸母本，秒级）而非分钟级 ingest，所以走独立的 demoClaiming
+  // 态、不碰 ingest 的秒表/通知链（notifyStore 只认 ingesting→ready 那一跳，这里 idle→ready
+  // 不会触发"你的团队已就绪"假通知）；② transport 没实现 demoClaim（stub/老后端）时按钮
+  // 本就不该显示（demoStore 探测），这里再兜一层诚实报错。
+  claimDemoTeam: async () => {
+    const { transport, demoClaiming } = get()
+    if (demoClaiming) return
+    const claim = transport.demoClaim
+    if (!claim) {
+      set({ demoClaimError: 'demo claim is not available on this transport' })
+      return
+    }
+    set({ demoClaiming: true, demoClaimError: null })
+    try {
+      const payload = await claim.call(transport)
+      get().adoptContext(payload.context_id, payload.owner_token ?? null)
+      set({
+        demoClaiming: false,
+        ingestStatus: 'ready',
+        team: liteTeamFromPayload(payload),
+        rawTeam: payload,
+        restoring: false,
+        restoreError: null,
+        switchError: null,
+      })
+      if (!stubSelected) {
+        set({
+          knownContexts: rememberKnownContext({
+            id: payload.context_id,
+            files: payload.source_files ?? [],
+            at: new Date().toISOString(),
+          }),
+        })
+      }
+      void get().refreshFiles()
+      void get().refreshNotes()
+    } catch (err) {
+      set({
+        demoClaiming: false,
+        demoClaimError: err instanceof Error ? err.message : String(err),
       })
     }
   },

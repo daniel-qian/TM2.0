@@ -35,6 +35,7 @@ from urllib.parse import quote
 from fastapi import APIRouter, Header, HTTPException, UploadFile
 from fastapi import File
 from fastapi import Response
+from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
 from avery.ingest import guards, ingest_paths
@@ -377,6 +378,40 @@ def team_notes(context_id: str,
     authorize_context(reg, context_id, extract_owner_token(x_avery_token, authorization),
                       account.resolve_account(x_avery_account))
     return {"context_id": context_id, "notes": [asdict(n) for n in reg.list_notes(context_id)]}
+
+
+class NoteIn(BaseModel):
+    """input-side-0721 · 8A：onboarding 闸门页采集的「公司现状」口述。上限收紧（4000 字）——
+    这是一段自我介绍，不是文件上传通道；大材料走 /ingest。"""
+    text: str = Field(..., min_length=1, max_length=4000)
+    source_excerpt: str = Field("", max_length=200)
+
+
+@router.post("/team/{context_id}/notes")
+def team_notes_append(context_id: str, body: NoteIn,
+                      x_avery_token: str | None = Header(None),
+                      authorization: str | None = Header(None),
+                      x_avery_account: str | None = Header(None)) -> dict:
+    """input-side-0721 · 8A —— 经理在 onboarding 里口述的公司状况，落进同一本 company_notes。
+
+    语义：这条不是 Avery 的观察，是「你告诉 Avery 的话」——前端发来的 text 自带这个框架
+    （「初始设置：……」），source_excerpt 是来源标记（notes 面用它显示出处）。为什么进同一本
+    笔记本而不是新表：它就是公司上下文的一部分，advise 的 recall 面和 notes 面都该看到它；
+    表已有（migration 0006），面已有（GET /team/{id}/notes），少一张表就少一个漂移点。
+
+    门与读路径同一张：owner_token（或持有账号）——否则 404，无存在性 oracle。
+    写侧红线原样生效（append_note 内的 gate_note_red_line，EN+ZH）：评分/排名/画像内容
+    在开关默认关时进不来，ValueError → 422（与 /ingest 的 422 姿态一致）。"""
+    reg = active_registry()
+    authorize_context(reg, context_id, extract_owner_token(x_avery_token, authorization),
+                      account.resolve_account(x_avery_account))
+    try:
+        note = reg.append_note(context_id, body.text.strip(),
+                               (body.source_excerpt or "").strip())
+    except ValueError as e:
+        raise HTTPException(status_code=422,
+                            detail={"error": "note rejected", "reason": str(e)})
+    return {"context_id": context_id, "note": asdict(note)}
 
 
 @router.get("/team/{context_id}/files")

@@ -245,3 +245,24 @@
   background: var(--lite2-glass);
   backdrop-filter: var(--lite2-glass-blur);
 }
+
+/* ── input-side-0721 ⑪ · 闸门页（OnboardGate）aurora 观感 ────────────────────────────
+   背景整幅用壳同款 --lite2-bg-gradient（cr 血缘的三束径向光——cr 的 /companyinput layout
+   用的就是这组），卡片与门走玻璃拟物（同 ⑩ 设置菜单的口径）。paper 皮零动。 */
+/* 🔴 选择器带 .lite2-shell 前缀是特异性需要：lite2.css 的
+   `.lite2-shell .lite-gate-layer .lite-modal-backdrop`（0,3,0）在打包序里排在本皮之后，
+   裸 [data-look] 同权重会输给它——升到 (0,4,0) 才轮到皮说话。 */
+.lite2-shell[data-look='aurora'] .lite-gate-layer .lite-modal-backdrop {
+  background: var(--lite2-bg-gradient);
+}
+
+.lite2-shell[data-look='aurora'] .lite-gate-layer .lite-onboard {
+  background: var(--lite2-glass);
+  backdrop-filter: var(--lite2-glass-blur);
+}
+
+.lite2-shell[data-look='aurora'] .lite-gate-door,
+.lite2-shell[data-look='aurora'] .lite-home-demo {
+  background: var(--lite2-glass);
+  backdrop-filter: var(--lite2-glass-blur);
+}

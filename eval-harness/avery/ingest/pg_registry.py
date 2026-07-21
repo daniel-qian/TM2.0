@@ -367,6 +367,61 @@ class PostgresContextRegistry:
             name=name, source_files=list(source_files), source_documents=source_documents,
             owner_token=owner_token or "")   # feat-038: NULL -> "" (a tokenless, pre-038 context)
 
+    # --- input-side-0721 · 3A: clone (the one-click sample-team seam) --------------------------
+
+    def clone_context(self, src_context_id: str, *, new_context_id: str,
+                      new_owner_token: str) -> bool:
+        """The Postgres twin of ContextRegistry.clone_context — one transaction of SQL-level
+        INSERT..SELECT row copies. Deliberately NOT get()+put() recomposition, which would
+        ① re-embed the whole corpus (a second billable DashScope pass for identical vectors —
+        the embedding column is copied verbatim instead) and ② silently DROP the raw upload
+        bytes (get() never pulls bytea; the clone's file space would list files it cannot serve).
+        Notes get FRESH ids (company_notes.id is globally unique) but keep created_at.
+        No red-line re-scan: every copied row passed the storage door on its way in, and a
+        byte-copy cannot manufacture new content. False = unknown source context."""
+        self._ensure_schema()
+        with self._connect() as conn, conn.transaction():
+            row = conn.execute(
+                "INSERT INTO avery.contexts (context_id, name, source_files, owner_token) "
+                "SELECT %s, name, source_files, %s FROM avery.contexts WHERE context_id = %s "
+                "RETURNING context_id",
+                (new_context_id, new_owner_token or None, src_context_id)).fetchone()
+            if row is None:
+                return False
+            conn.execute(
+                "INSERT INTO avery.entities (context_id, kind, idx, payload) "
+                "SELECT %s, kind, idx, payload FROM avery.entities WHERE context_id = %s",
+                (new_context_id, src_context_id))
+            conn.execute(
+                "INSERT INTO avery.materials "
+                "(context_id, idx, chunk_id, text, source, doc_kind, embedding) "
+                "SELECT %s, idx, chunk_id, text, source, doc_kind, embedding "
+                "FROM avery.materials WHERE context_id = %s",
+                (new_context_id, src_context_id))
+            conn.execute(
+                "INSERT INTO avery.memory_files (context_id, filename, content) "
+                "SELECT %s, filename, content FROM avery.memory_files WHERE context_id = %s",
+                (new_context_id, src_context_id))
+            conn.execute(
+                "INSERT INTO avery.source_documents "
+                "(context_id, idx, filename, source_key, mime, size_bytes, doc_kind, status, "
+                " content, storage_ref, uploaded_at) "
+                "SELECT %s, idx, filename, source_key, mime, size_bytes, doc_kind, status, "
+                " content, storage_ref, uploaded_at "
+                "FROM avery.source_documents WHERE context_id = %s",
+                (new_context_id, src_context_id))
+            notes = conn.execute(
+                "SELECT text, source_excerpt, created_at FROM avery.company_notes "
+                "WHERE context_id = %s ORDER BY seq", (src_context_id,)).fetchall()
+            if notes:
+                with conn.cursor() as cur:
+                    cur.executemany(
+                        "INSERT INTO avery.company_notes "
+                        "(id, context_id, text, source_excerpt, created_at) "
+                        "VALUES (%s, %s, %s, %s, %s)",
+                        [(new_note_id(), new_context_id, t, se, ca) for t, se, ca in notes])
+        return True
+
     def source_document_bytes(self, context_id: str, idx: int) -> bytes | None:
         """feat-032 download seam: the raw bytea of one uploaded file, pulled on demand (never in
         get()). None for an unknown context / idx or a NULL content. Short-lived connection, same

@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useLite } from '../store'
 import { useFlow, selectGapsActive } from '../flowStore'
 import { useDict } from '../../shared/i18n/useDict'
 import { UploadPanel } from '../UploadPanel'
 import { useAuth } from '../auth/authStore'
+import { useDemo } from '../demoStore'
 import { deriveAttentionPeople, summarizeDecisions, type AttentionPerson } from '../homeDerive'
 import type { LiveDecisionCard } from '../transport'
 
@@ -80,8 +81,18 @@ export function HomeScreen() {
   //    东西，给个「→」等于把人送进四个空屏）。文案全部描述真实存在的产出面。
   // 🔴 restoring / restoreError 的会话恢复分支原样保留（feat-050）——回访用户第一眼
   //    还是"正在取回"，不是骨架。
-  // Q3-A（下棒）：「一键加载示例团队」按钮加进 .lite-home-upload-side 顶部，本棒不出假按钮。
+  // Q3-A（input-side-0721 兑现）：「一键示例团队」真按钮——只在后端能力探测说有时出现
+  //（探不到就一个像素都不出，仍然不出假按钮）。主入口在 onboarding 闸门页的三扇门；
+  // 这里是给跳过了闸门（先自己逛逛）的人留的第二次机会。
   const authStatus = useAuth((s) => s.status)
+  const demoAvailability = useDemo((s) => s.availability)
+  const probeDemo = useDemo((s) => s.probe)
+  const demoClaiming = useLite((s) => s.demoClaiming)
+  const demoClaimError = useLite((s) => s.demoClaimError)
+  const claimDemoTeam = useLite((s) => s.claimDemoTeam)
+  useEffect(() => {
+    if (!team) probeDemo()
+  }, [team, probeDemo])
   if (!team) {
     return (
       <section className="scene is-active lite-home" aria-label={t.lite2.tabHome}>
@@ -139,6 +150,27 @@ export function HomeScreen() {
                 </section>
               </div>
               <aside className="lite-home-upload-side">
+                {demoAvailability === 'yes' ? (
+                  <div className="lite-home-demo" data-home-demo="">
+                    <button
+                      type="button"
+                      className="lite-home-demo-btn"
+                      disabled={demoClaiming}
+                      aria-busy={demoClaiming}
+                      onClick={() => void claimDemoTeam()}
+                    >
+                      {demoClaiming
+                        ? t.lite2.onboardDoorDemoBusy
+                        : t.lite2.onboardDoorDemoTitle}
+                    </button>
+                    <p className="lite-home-demo-note">{t.lite2.homeDemoNote}</p>
+                    {demoClaimError ? (
+                      <p className="lite-home-demo-error" role="alert">
+                        {t.lite2.onboardDoorDemoErrorLead} {demoClaimError}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
                 <UploadPanel />
                 <ul className="lite-empty-hints">
                   <li>{t.lite2.emptyHintRoster}</li>

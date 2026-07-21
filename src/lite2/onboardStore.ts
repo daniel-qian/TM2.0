@@ -1,24 +1,30 @@
 import { create } from 'zustand'
 import type { Dict } from '../shared/i18n'
 
-// feat-045 · lite2 onboarding 向导状态（PRD F7）。独立于 store.ts / flowStore.ts（同 feat-036
-// 的"减冲突面"切分原则）——这里只管三件事：
-//   ① 向导生命周期：unseen（首访，自动弹出）→ in-progress（走到哪步记到哪步，中途 × 关闭
+// feat-045 · lite2 onboarding 状态（PRD F7；input-side-0721 起承载全屏闸门页 OnboardGate）。
+// 独立于 store.ts / flowStore.ts（同 feat-036 的"减冲突面"切分原则）——这里只管四件事：
+//   ① 生命周期：unseen（首访，自动掀开闸门）→ in-progress（走到哪步记到哪步，Escape/先逛逛
 //      下次续进度）→ skipped（明确跳过，永不再骚扰）/ done（走完）。
-//   ② 团队信息本地配置（公司/部门/称呼——供问候语用；只存本机 localStorage，不出网）。
-//   ③ playbook 勾选（8 项候选，默认勾 3；持久化，Playbooks tab 槽位按所选呈现）。
+//   ② 团队信息本地配置（公司/部门/称呼/人数/职位——供问候语用；只存本机 localStorage）。
+//   ③ 8A「公司现状」口述（companyNote——**这一格会送后端** company_notes，送出机制在
+//      onboardNote.ts，幂等账本 companyNoteSentTo）。
+//   ④ playbook 勾选（8 项候选，默认勾 3；持久化，Playbooks tab 槽位按所选呈现）。
 // 持久化走 localStorage（lite2 前缀 key），手写同步 load/save——与 flowStore.ts 同一模式、
 // 同一理由（zustand persist 中间件的异步 hydrate 首帧闪空态；这里 store 创建时即最终态）。
 //
 // 🔴 红线（PRD F7 明令）：不做假"连接工具"步（假 OAuth 不诚实）、不做假"创建账号"步
-// （无账号体系）。向导四步全部真接线：上传步真调 store.uploadFiles；勾选步真写本配置。
+// （账号有真的，在 AuthPanel——闸门不抢它的活）。步子全部真接线：上传步真调
+// store.uploadFiles；示例团队门真打 /demo/claim；勾选步真写本配置。
 
 const STORAGE_KEY = 'lite2:onboard:v1'
 
 export type OnboardStatus = 'unseen' | 'in-progress' | 'skipped' | 'done'
-export type OnboardStep = 'upload' | 'team' | 'playbooks' | 'done'
+// input-side-0721（Danny 拍板：onboarding 从浮层改全屏闸门页）：新增第 0 步 'doors'——
+// 三扇门（一键示例团队 / 上传自己的材料 / 先自己逛逛）。老用户 localStorage 里存的
+// 'upload'/'team'/... 仍是合法值（isStep 放行），中途关闭的续进度不受影响。
+export type OnboardStep = 'doors' | 'upload' | 'team' | 'playbooks' | 'done'
 
-export const ONBOARD_STEPS: OnboardStep[] = ['upload', 'team', 'playbooks', 'done']
+export const ONBOARD_STEPS: OnboardStep[] = ['doors', 'upload', 'team', 'playbooks', 'done']
 
 // ── playbook 候选目录（PRD F7：8 项，参考合伙人版语义、文案全部重写——备忘录腔，
 // 每项 = 标题 + 一句人话说明；EN 定稿在 en.ts lite2.playbook*，此处只持有稳定 id 与
@@ -49,15 +55,28 @@ interface PersistedOnboard {
   company: string
   dept: string
   yourName: string
+  // input-side-0721 · 8A：闸门页团队信息步扩展。teamCount/yourRole 与上面三个同性质
+  // （问候语/本机配置）；companyNote 是**要送后端**的那段「公司现状」口述（见 onboardNote.ts
+  // 的送出机制与 companyNoteSentTo 的幂等账本）。
+  teamCount: string
+  yourRole: string
+  companyNote: string
+  // companyNote 已送达过的 context id 清单（幂等账本：同一个 context 只送一次；
+  // 新 context ——新上传/新示例副本——各送一次，因为每个 context 是独立的工作区）。
+  companyNoteSentTo: string[]
   playbooks: string[]
 }
 
 const EMPTY_PERSISTED: PersistedOnboard = {
   status: 'unseen',
-  step: 'upload',
+  step: 'doors',
   company: '',
   dept: '',
   yourName: '',
+  teamCount: '',
+  yourRole: '',
+  companyNote: '',
+  companyNoteSentTo: [],
   playbooks: [...DEFAULT_PLAYBOOKS],
 }
 
@@ -66,7 +85,7 @@ function isStatus(v: unknown): v is OnboardStatus {
 }
 
 function isStep(v: unknown): v is OnboardStep {
-  return v === 'upload' || v === 'team' || v === 'playbooks' || v === 'done'
+  return v === 'doors' || v === 'upload' || v === 'team' || v === 'playbooks' || v === 'done'
 }
 
 function loadPersisted(): PersistedOnboard {
@@ -77,10 +96,16 @@ function loadPersisted(): PersistedOnboard {
     const parsed = JSON.parse(raw) as Partial<PersistedOnboard>
     return {
       status: isStatus(parsed.status) ? parsed.status : 'unseen',
-      step: isStep(parsed.step) ? parsed.step : 'upload',
+      step: isStep(parsed.step) ? parsed.step : 'doors',
       company: typeof parsed.company === 'string' ? parsed.company : '',
       dept: typeof parsed.dept === 'string' ? parsed.dept : '',
       yourName: typeof parsed.yourName === 'string' ? parsed.yourName : '',
+      teamCount: typeof parsed.teamCount === 'string' ? parsed.teamCount : '',
+      yourRole: typeof parsed.yourRole === 'string' ? parsed.yourRole : '',
+      companyNote: typeof parsed.companyNote === 'string' ? parsed.companyNote : '',
+      companyNoteSentTo: Array.isArray(parsed.companyNoteSentTo)
+        ? parsed.companyNoteSentTo.filter((c): c is string => typeof c === 'string')
+        : [],
       playbooks: Array.isArray(parsed.playbooks)
         ? parsed.playbooks.filter((p): p is string => typeof p === 'string')
         : [...DEFAULT_PLAYBOOKS],
@@ -102,6 +127,10 @@ function savePersisted(state: PersistedOnboard) {
         company: state.company,
         dept: state.dept,
         yourName: state.yourName,
+        teamCount: state.teamCount,
+        yourRole: state.yourRole,
+        companyNote: state.companyNote,
+        companyNoteSentTo: state.companyNoteSentTo,
         playbooks: state.playbooks,
       }),
     )
@@ -124,13 +153,18 @@ interface OnboardState extends PersistedOnboard {
   // done/skipped 的老客户是空操作；② 就算 status 变回来了，selectWizardOpen 第一行
   // `if (hasStoredContext) return false` 会把它按回去——hadContextOnLoad 对老客户恒真，
   // 这条线直接杀死"已有数据"的返回客户，而这批人恰恰是「重看」这个入口要服务的对象。
-  // 所以 forceOpen 必须是独立于 hasStoredContext 的第二条门（OnboardWizard 里 `||` 合并），
+  // 所以 forceOpen 必须是独立于 hasStoredContext 的第二条门（OnboardGate 里 `||` 合并），
   // 手动点开就无视"有没有数据"这条自动弹出的规矩——用户自己要看，不是产品硬塞。
   forceOpen: boolean
 
   begin: () => void // unseen → in-progress（向导首次挂载时调）
   goStep: (step: OnboardStep) => void
-  setField: (field: 'company' | 'dept' | 'yourName', value: string) => void
+  setField: (
+    field: 'company' | 'dept' | 'yourName' | 'teamCount' | 'yourRole' | 'companyNote',
+    value: string,
+  ) => void
+  // 8A 幂等账本：companyNote 已送达某 context 后记一笔（onboardNote.ts 是唯一写方）。
+  markCompanyNoteSent: (contextId: string) => void
   togglePlaybook: (id: string) => void
   pause: () => void // × 关闭（session-only）
   skip: () => void // 明确跳过 → 永不再骚扰
@@ -143,8 +177,12 @@ export const useOnboard = create<OnboardState>((set, get) => {
   const initial = loadPersisted()
 
   function persist() {
-    const { status, step, company, dept, yourName, playbooks } = get()
-    savePersisted({ status, step, company, dept, yourName, playbooks })
+    // 🔴 新增持久字段必须同时进这里的解构——漏一个，那个字段就"看起来能存、刷新即蒸发"
+    // （savePersisted 读到 undefined，JSON 里键直接消失，load 回来落默认值）。
+    const { status, step, company, dept, yourName, teamCount, yourRole, companyNote,
+            companyNoteSentTo, playbooks } = get()
+    savePersisted({ status, step, company, dept, yourName, teamCount, yourRole, companyNote,
+                    companyNoteSentTo, playbooks })
   }
 
   return {
@@ -163,6 +201,11 @@ export const useOnboard = create<OnboardState>((set, get) => {
     },
     setField: (field, value) => {
       set({ [field]: value } as Partial<OnboardState>)
+      persist()
+    },
+    markCompanyNoteSent: (contextId) => {
+      if (!contextId || get().companyNoteSentTo.includes(contextId)) return
+      set((s) => ({ companyNoteSentTo: [...s.companyNoteSentTo, contextId] }))
       persist()
     },
     togglePlaybook: (id) => {
@@ -184,7 +227,9 @@ export const useOnboard = create<OnboardState>((set, get) => {
       set({ status: 'done', forceOpen: false })
       persist()
     },
-    reopen: () => set({ forceOpen: true, pausedThisSession: false, step: 'upload' }),
+    // input-side-0721：重看从三扇门起（'doors' 取代 'upload'）——重看的人里恰有"想试试示例
+    // 团队"的老客户，把最有用的那扇门放在他重看的第一眼。
+    reopen: () => set({ forceOpen: true, pausedThisSession: false, step: 'doors' }),
   }
 })
 
@@ -196,7 +241,7 @@ export const useOnboard = create<OnboardState>((set, get) => {
 // false，于是 status==='in-progress' && !pausedThisSession 永远为真，跟有没有数据
 // 毫无关系）。
 //
-// hasStoredContext 由调用方（OnboardWizard）传入，不在本文件里直接 import useLite——
+// hasStoredContext 由调用方（OnboardGate）传入，不在本文件里直接 import useLite——
 // 本 store 刻意独立于 store.ts（见文件头注释的"减冲突面"切分原则），调用方那边已经在读
 // useLite 了（上传接线那条路径），让它多带一个算好的布尔值过来，比在这儿新开一条跨
 // store 依赖更便宜、冲突面更小。

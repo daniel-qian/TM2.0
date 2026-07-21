@@ -29,7 +29,9 @@ from . import mem_sentinel
 log = logging.getLogger("service.upload_guard")
 
 # Guarded write paths -> the rate-limit "route" key (separate buckets/limits per route).
-_GUARDED: dict[str, str] = {"/ingest": "ingest", "/advise": "advise"}
+# input-side-0721: /demo/claim 也是无鉴权写面（每次 claim 都往库里落一份克隆）——给它自己的
+# 表盘（AVERY_RATE_DEMO_PER_MIN，默认关，ECS runbook 调）。
+_GUARDED: dict[str, str] = {"/ingest": "ingest", "/advise": "advise", "/demo/claim": "demo"}
 
 
 # ── fixB/M2: the limits speak in units a person retypes ──────────────────────────────────────────
@@ -82,6 +84,9 @@ def _rate_config(route: str) -> tuple[int, int]:
     elif route == "share":     # feat-034: the PUBLIC employee H5 (/r/{token} page + answer)
         rpm = guards._int_env("AVERY_RATE_SHARE_PER_MIN", 0)
         burst = guards._int_env("AVERY_RATE_SHARE_BURST", rpm or 1)
+    elif route == "demo":      # input-side-0721: 一键示例团队（无鉴权、每 claim 落一份克隆）
+        rpm = guards._int_env("AVERY_RATE_DEMO_PER_MIN", 0)
+        burst = guards._int_env("AVERY_RATE_DEMO_BURST", rpm or 1)
     else:
         rpm = guards._int_env("AVERY_RATE_ADVISE_PER_MIN", 0)
         burst = guards._int_env("AVERY_RATE_ADVISE_BURST", rpm or 1)

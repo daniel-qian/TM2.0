@@ -5130,3 +5130,201 @@
   text-transform: uppercase;
   color: var(--ink-faint);
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════════════════
+   input-side-0721 · 输入侧棒 r2（APPEND-ONLY 纪律：只加不改上面任何一行）
+   ① onboarding 闸门页（OnboardGate）：同一个 LiteModal 底座，layerClassName=lite-gate-layer
+      把观感从"浮窗压暗"换成"整页闸门"——遮罩变整幅不透明底，面板变页面居中卡片。
+      参照 cr /companyinput 的 layout（fixed inset-0 全屏盖 + 居中 640px 卡）。
+   ② 三扇门 / 8A 团队信息扩展字段 / 首页骨架示例团队插槽。
+   ═══════════════════════════════════════════════════════════════════════════════════════ */
+
+/* ── 闸门层：整页底，不再是压暗玻璃 ──────────────────────────────────────────────── */
+.lite2-shell .lite-modal-layer.lite-gate-layer {
+  /* 整页世界允许纵向滚动（小屏上卡片比视口高；cr 的 layout 同款 overflowY:auto）。 */
+  overflow-y: auto;
+  align-items: flex-start;
+  padding: clamp(20px, 6vh, 56px) 20px 64px;
+}
+
+.lite2-shell .lite-gate-layer .lite-modal-backdrop {
+  /* 背景即页面：整幅**全不透明**底（rgb 三元组直取，甩掉 --lite2-surface 自带的 0.86 α——
+     那是浮窗玻璃的参数，整页闸门下面若透出骨架鬼影就穿帮了）。aurora 皮在 look-aurora.css
+     覆盖成渐变。closeOnBackdrop=false —— 点它什么都不发生，cursor 保持默认。 */
+  background: rgb(var(--lite2-surface-rgb));
+  backdrop-filter: none;
+}
+
+/* ── 闸门卡片：占满整页的居中卡（覆盖浮窗时代的高度上限） ─────────────────────────── */
+.lite2-shell .lite-gate-layer .lite-onboard {
+  width: min(680px, 100%);
+  max-height: none;
+  margin: 0 auto;
+}
+
+.lite-gate-step-count {
+  color: var(--ink-faint);
+  letter-spacing: 0.04em;
+}
+
+/* 右上「先自己逛逛 →」：闸门的可见退路（pause 语义），字色收灰、悬停亮起。 */
+.lite-gate-browse {
+  border: 0;
+  background: none;
+  padding: 4px 6px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink-faint);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.lite-gate-browse:hover,
+.lite-gate-browse:focus-visible {
+  color: var(--ink);
+}
+
+/* ── ⓪ 三扇门 ─────────────────────────────────────────────────────────────────────── */
+.lite-gate-door-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+/* 只剩一扇门（后端没配示例团队）时占满整行——不留一半空椅子。 */
+.lite-gate-door-grid > .lite-gate-door:only-child {
+  grid-column: 1 / -1;
+}
+
+.lite-gate-door {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 18px 18px 16px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 14px;
+  background: var(--lite2-surface);
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.lite-gate-door:hover:not(:disabled),
+.lite-gate-door:focus-visible {
+  border-color: var(--accent, var(--ink));
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-soft, var(--shadow));
+}
+
+.lite-gate-door:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+
+.lite-gate-door-title {
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.lite-gate-door-body {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink-soft, var(--ink-faint));
+}
+
+/* 示例团队门是主推路径：描边用强调色系，视觉分量略高于上传门。 */
+.lite-gate-door-demo {
+  border-color: color-mix(in srgb, var(--accent, currentColor) 45%, var(--rule-strong));
+}
+
+.lite-gate-door-error {
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--tone-terracotta-ink, #a04533);
+}
+
+/* ── ② 团队信息扩展（8A）───────────────────────────────────────────────────────────── */
+.lite-onboard-field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.lite-onboard-companynote {
+  width: 100%;
+  resize: vertical;
+  min-height: 74px;
+  padding: 9px 12px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 10px;
+  background: var(--lite2-surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.lite-onboard-field-hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-faint);
+}
+
+/* 「会送给 Avery」的提示比"只存本机"的字段多一分可见度——去向不同，视觉权重也不同。 */
+.lite-onboard-field-hint[data-note-hint] {
+  color: var(--ink-soft, var(--ink-faint));
+}
+
+/* ── 首页骨架 · 示例团队插槽（Q3-A 兑现；主入口在闸门三扇门，这是第二次机会位）────── */
+.lite-home-demo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--accent, currentColor) 40%, var(--rule-strong));
+  border-radius: 12px;
+  background: var(--lite2-surface);
+}
+
+.lite-home-demo-btn {
+  align-self: flex-start;
+  padding: 8px 16px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--lite2-surface);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.lite-home-demo-btn:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+
+.lite-home-demo-note {
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--ink-faint);
+}
+
+.lite-home-demo-error {
+  font-size: 12.5px;
+  color: var(--tone-terracotta-ink, #a04533);
+}
+
+/* ── 窄屏：门与字段行落单列 ────────────────────────────────────────────────────────── */
+@media (max-width: 620px) {
+  .lite-gate-door-grid,
+  .lite-onboard-field-row {
+    grid-template-columns: 1fr;
+  }
+}

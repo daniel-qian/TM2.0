@@ -43,6 +43,7 @@ from . import brain_factory, embedding_factory, extractor_factory, live_input, l
 from .ask_api import maybe_ask_draft_frame  # feat-034: the ask-draft frame (service-layer, not engine)
 from .ask_api import router as ask_router   # feat-034: /ask manager endpoints + /r/{token} employee H5
 from .auth_api import router as auth_router  # feat-053: /account/status|contexts|claim
+from .demo import router as demo_router  # input-side-0721: /demo/status|claim（一键示例团队）
 from .engine import stream_advice
 from .ingest_api import router as ingest_router  # feat-018: /ingest + /team/{id} (compose over feat-016)
 from .ingest_api import authorize_context, extract_owner_token  # feat-038: reuse the read-path gate
@@ -106,6 +107,11 @@ app.include_router(ask_router)
 # /ingest and every read path keep working exactly as they did, which is what keeps the
 # `?v=2&mode=live&skin=paper&lang=zh` guest link alive.
 app.include_router(auth_router)
+
+# input-side-0721 · 3A 一键示例团队：GET /demo/status（能力探测）+ POST /demo/claim（克隆母本
+# 成访客私有副本）。未配置 AVERY_DEMO_SEED_DIR 时整个面 404/false —— 与 auth 层同一"不配置
+# 即不存在"姿态。机制与合约见 service/demo.py 模块注释。
+app.include_router(demo_router)
 
 
 class AdviseRequest(BaseModel):

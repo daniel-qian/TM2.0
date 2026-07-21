@@ -22,7 +22,7 @@ import { HomeScreen } from './screens/HomeScreen'
 import { DetailOverlay } from './DetailOverlay'
 import { DraftComposer } from './DraftComposer'
 import { Lite2Footer } from './Lite2Footer'
-import { OnboardWizard } from './OnboardWizard'
+import { OnboardGate } from './OnboardGate'
 import { initNotifications } from './notifyStore'
 import { useLook } from './lookStore'
 import {
@@ -146,7 +146,10 @@ function Lite2Shell() {
       {/* feat-052：弹层一律常驻挂载，开关在各自组件里（LiteModal 的 open）——父层条件挂载
           会把组件直接摘掉，出场动画没机会跑。 */}
       <DetailOverlay />
-      <OnboardWizard />
+      {/* input-side-0721：onboarding 从浮层向导改为全屏闸门页（OnboardGate，原 OnboardWizard）。
+          挂载位不变——它仍是常驻弹层家族的一员（出场动画 + Escape/焦点圈由 LiteModal 底座管），
+          "整页"是 layerClassName 的 CSS 观感，不是路由（深链/门脚本的 URL 语义零变化）。 */}
+      <OnboardGate />
       {/* feat-058 · 应用内草稿框。挂在壳层而不是各屏内部：开框的入口在「你的团队」的分诊卡
           和「跟进」的队列条目上，跨两棵子树；且弹层必须盖在整壳之上（同 DetailOverlay）。 */}
       <DraftComposer />

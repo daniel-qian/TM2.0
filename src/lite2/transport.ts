@@ -87,6 +87,16 @@ export interface LiveTeamPayload {
   // 未登录上传时后端根本不发这个键（不是 false，是缺席）。/team/{id} 刷新帧同样没有。
   // UI 据此判断"这份数据到底归没归到账号名下"，别对着已绑好的数据说"还没绑"。
   account_linked?: boolean
+  // input-side-0721 · 3A：POST /demo/claim 的首帧自报"这是示例团队的克隆副本"。
+  // /team/{id} 刷新帧不发（demo 身份只在领取那一刻有叙事意义；副本此后就是一份普通工作区）。
+  demo?: boolean
+}
+
+// input-side-0721 · 3A：GET /demo/status 的能力探测契约（无鉴权、无副作用）。
+// available=false ⇒ 这台后端没配示例团队 —— 前端**不出那扇门**（4A 拍板的"不出假按钮"纪律）。
+export interface DemoStatusPayload {
+  available: boolean
+  ready: boolean
 }
 
 // 人卡：定性 ONLY。🔴 红线：moodPct/capacityPct 等血条字段 live 永不出现——
@@ -321,6 +331,18 @@ export interface LiveTransport {
   fetchAccountContexts?: () => Promise<AccountContextsPayload>
   // 把匿名 context 认领进本账号（凭 owner_token 证明所有权）。
   claimContext?: (contextId: string, ownerToken: string) => Promise<void>
+
+  // ── 示例团队（input-side-0721 · 3A）。同为可选：联网后端能力，stub 天然没有 ─────────────
+  // 探测这台后端有没有示例团队可领（闸门页/首页骨架据此决定那扇门露不露面）。
+  demoStatus?: () => Promise<DemoStatusPayload>
+  // 领一份：后端把预铸母本克隆成本访客私有副本（新 context_id + 新 owner_token），
+  // 响应与 /ingest 同形 —— 调用方走与上传完全相同的落地路径。
+  demoClaim?: () => Promise<LiveTeamPayload>
+
+  // ── onboarding 采集（input-side-0721 · 8A）。可选：stub 无处可送，调用方判空降级 ────────
+  // 把经理在初始设置里口述的公司情况追加进本公司的 company_notes（owner_token 门后）。
+  // 🔴 服务端写侧红线原样把关（评分/排名文本 422）——这条通道不绕任何闸。
+  appendNote?: (contextId: string, text: string, sourceExcerpt: string) => Promise<void>
 }
 
 // ── 账号契约（feat-053；后端 service/auth_api.py）────────────────────────────────────────
@@ -661,6 +683,34 @@ export function createHttpTransport(base: string = apiBase()): LiveTransport {
       })
       if (!res.ok) throw transportError('team', res)
       return (await res.json()) as LiveTeamPayload
+    },
+
+    // ── 示例团队（input-side-0721 · 3A；后端 service/demo.py）─────────────────────────────
+    async demoStatus() {
+      const res = await send('demo', `${base}/demo/status`)
+      if (!res.ok) throw transportError('demo', res)
+      return (await res.json()) as DemoStatusPayload
+    },
+
+    async demoClaim() {
+      // 与 ingest 同款收尾：记 token、回同形 payload —— store 侧走同一条落地路径。
+      // 已登录时带账号 header 没有额外语义（后端 claim 不做绑定；示例副本是随手可弃的
+      // 演示工作区，绑到账号反而把垃圾留在账号名下）。这里刻意**不带**。
+      const res = await send('demo', `${base}/demo/claim`, { method: 'POST' })
+      if (!res.ok) throw transportError('demo', res)
+      const payload = (await res.json()) as LiveTeamPayload
+      rememberToken(payload.context_id, payload.owner_token)
+      return payload
+    },
+
+    // ── onboarding 采集（input-side-0721 · 8A；POST /team/{id}/notes）─────────────────────
+    async appendNote(contextId, text, sourceExcerpt) {
+      const res = await send('notes', `${base}/team/${encodeURIComponent(contextId)}/notes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeader(contextId) },
+        body: JSON.stringify({ text, source_excerpt: sourceExcerpt }),
+      })
+      if (!res.ok) throw transportError('notes', res)
     },
 
     // ── Ask（feat-034；阶段 C 端点已落地）────────────────────────────────────────────────

@@ -104,10 +104,16 @@ function resetLite2MemoryStores(): void {
   useNotify.setState({ items: [], seenGapIds: [], seenAskIds: [], open: false })
   useOnboard.setState({
     status: 'unseen',
-    step: 'upload',
+    step: 'doors', // input-side-0721：闸门页第 0 步（三扇门）
     company: '',
     dept: '',
     yourName: '',
+    // input-side-0721 · 8A：新增采集字段同属公司数据，换账号必须一并复位（companyNote 是
+    // 上一家公司的现状口述，串给下一个账号看正是这个函数存在的理由）。
+    teamCount: '',
+    yourRole: '',
+    companyNote: '',
+    companyNoteSentTo: [],
     playbooks: [...DEFAULT_PLAYBOOKS],
     pausedThisSession: false,
   })
