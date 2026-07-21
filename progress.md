@@ -878,3 +878,7 @@ ERR_CONNECTION_REFUSED，看起来像「后端挂了」（后端 8137 好好活�
 ## Update — 2026-07-22 · cr-align 视觉战役 棒5（feat-087）：屏组一——指挥室决策卡 + 待办清单她的屏级配方（未推送）
 
 look-aurora ⑱⑲ 纯 CSS append、零 TSX、全 aurora 作用域（paper 分卡列表一字未动）：⑱ 决策卡藏 paper 内嵌竖条换她的 border-left 4px tone 硬边（ink-faint/terracotta/honey/sage）+ 规则清单挂载 rise（包 no-preference）；⑲ 待办整列一张卡（token 全喂）+ divide-y 行 + hover 半强度 surface-soft（rgba(238,243,250,.5)）+ 复选 20px/2px + history 共享类同吃。红线门 home-skeleton/status-truth 穿越绿；快门组（skin/button-family/s4）全绿；满世界目检（决策三档边条/待办三行走真表单链路添加）；像素基线 0 diff（基线世界=空态，改的是满世界形态）；电池 23/23 全绿零红（连续第二轮）；净室扫雷 0/0；真折叠 spring 需 DOM 常驻改造超「只加类名」纪律，挂载动画近似记刻意不做。
+
+## Update — 2026-07-22 · cr-align 视觉战役 棒6（feat-088）：屏组二——项目卡渐变条 + 渐变方块头像（未推送）
+
+look-aurora ⑳㉑ 纯 CSS append、零 TSX：⑳ 项目卡她的 6px 顶部渐变条（--lite2-grad-* 第一个消费面），左缘染色语法 aurora 退役，四态判别子全既有——默认=blue/at-risk=orange/blocked=red/**unknown=gray**；⑳ 的红线调停：l.4594 旧红线「normal/unknown 一律不染色」与她的全卡染色相撞，裁决=蓝≠灰显式区分是「别让『文档没写』读成『一切正常』」同一本意的更强实现（今天两者都不染色反而形近），战役计划屏表 Danny 批案口径，status-truth 门 27 判据仲裁绿灯，原注释就地补记；㉑ .initial-avatar 淡渐变墨字→她的浓渐变方块白字 800（home-tone-* 联动，aria-hidden 装饰件不吃 AA 地板；人面零数字零血条不受染）。重面七门（status-truth/skeleton/room×2/aria-zh/skin/button-family）全绿；满世界目检=四项目四状态种子一次验四色 + demo 示例团队真中文首字头像（全 ASCII 盲点修复红利实拍）；电池 23/23 连续第三轮零红；净室扫雷 0/0。留后：团队地图小卡守左缘（尺度）；头像语气渐变若刺眼退法=删 ㉑ 三行变体。

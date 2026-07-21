@@ -4591,7 +4591,10 @@
 }
 
 /* 状态左缘：与「你的团队」项目卡同一套族色。🔴 on-track / done / 状态未知一律不染色 ——
-   只有需要经理出手的两档才上色，避免把「文档没写」读成「一切正常」。 */
+   只有需要经理出手的两档才上色，避免把「文档没写」读成「一切正常」。
+   （cr-align 棒6：aurora 皮改走她的四色顶部渐变条语法（look-aurora ⑳），normal=blue 与
+   unknown=gray 显式区分——同一本意的更强实现，Danny 批的战役计划屏表口径；本段左缘语法
+   继续管 paper。） */
 .lite2-shell .lite-project-card.edge-at-risk {
   border-left-color: rgba(var(--lite2-warn-rgb), 0.6);
 }

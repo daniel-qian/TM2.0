@@ -739,6 +739,14 @@
       "evidence": "红线门 home-skeleton/status-truth 绿；skin-phases/button-family/cr-alignment(s4) 穿越绿；满世界目检（r5-shots：三档 tone 边条+规则展开、待办三行真表单链路添加+hover 半染实拍）；像素基线 0 diff 36 绿；电池 23/23 全绿零红（连续第二轮）；净室扫雷 0 件/0 指纹。未推送（dev server 验收）。",
       "status": "done",
       "date": "2026-07-22"
+    },
+    {
+      "id": "feat-088",
+      "name": "cr-align 视觉战役棒6：项目卡 6px 顶部渐变条 + 渐变方块头像",
+      "description": "look-aurora ⑳㉑：项目卡她的 6px 顶部渐变条（七条 --lite2-grad-* 第一个消费面，四态四色含 unknown=灰——旧「不染色」红线的更强实现，status-truth 门仲裁绿灯，注释就地补记）；.initial-avatar 升浓渐变方块白字 800（home-tone-* 联动，aria-hidden 装饰件）。零 TSX 全 aurora 作用域。",
+      "evidence": "重面七门全绿；四项目四状态种子目检四色条全中 + demo 团队真中文首字头像实拍（r6-shots）；电池 23/23 连续第三轮零红；净室扫雷 0 件/0 指纹；paper 逐字节零动。未推送（dev server 验收）。",
+      "status": "done",
+      "date": "2026-07-22"
     }
   ]
 }

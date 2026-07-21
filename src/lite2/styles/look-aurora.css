@@ -525,3 +525,72 @@
   height: 20px;
   border-width: 2px;
 }
+
+/* ═══ cr-align 视觉战役 棒6（2026-07-22）· 屏组二：项目 + 团队 aurora 侧 ═══════════ */
+
+/* ── ⑳ 项目卡：她的 6px 顶部渐变条（--lite2-grad-* 第一个消费面），左缘染色语法整体
+   退役（border-left 收回 1px 均匀框）。四态四色：默认(on-track/done)=blue、at-risk=orange、
+   blocked=red、**unknown=gray**——lite2.css l.4594 的旧红线「normal/unknown 一律不染色」
+   本意是别让『文档没写』读成『一切正常』；今天 normal 与 unknown 都不染色反而形近，
+   蓝≠灰的显式区分更强实现同一本意（战役计划屏表『tone-unknown 灰必须活』，Danny 批案）。
+   零 TSX：四态判别子全部既有（edge-at-risk/edge-blocked/is-status-unknown/默认）。 */
+.lite2-shell[data-look='aurora'] .lite-project-card {
+  position: relative;
+  overflow: hidden;
+  border-left: 1px solid var(--rule);
+  padding-top: 18px;
+}
+
+.lite2-shell[data-look='aurora'] .lite-project-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 6px;
+  background: var(--lite2-grad-blue);
+}
+
+.lite2-shell[data-look='aurora'] .lite-project-card.edge-at-risk {
+  border-left: 1px solid var(--rule);
+}
+
+.lite2-shell[data-look='aurora'] .lite-project-card.edge-at-risk::before {
+  background: var(--lite2-grad-orange);
+}
+
+.lite2-shell[data-look='aurora'] .lite-project-card.edge-blocked {
+  border-left: 1px solid var(--rule);
+}
+
+.lite2-shell[data-look='aurora'] .lite-project-card.edge-blocked::before {
+  background: var(--lite2-grad-red);
+}
+
+.lite2-shell[data-look='aurora'] .lite-project-card.is-status-unknown::before {
+  background: var(--lite2-grad-gray);
+}
+
+/* ── ㉑ 首字母头像：她的浓渐变方块（r10 走 --radius 既有值）+ 白字 800——替代淡渐变+墨字。
+   语气联动走人卡既有 home-tone-* 族（sage=blue 默认/honey=orange/terracotta=red），
+   无语气祖先（弹层等）落默认 blue。initials 是 aria-hidden 装饰件（人名就在旁边），
+   白字压渐变不吃 AA 文本地板（与她的实现同口径）。人面零数字零血条红线不受染
+   （渐变头像=身份色语气，非计量）。 */
+.lite2-shell[data-look='aurora'] .initial-avatar {
+  border: none;
+  background: var(--lite2-grad-blue);
+  color: #ffffff;
+  font-weight: 800;
+}
+
+.lite2-shell[data-look='aurora'] .home-tone-honey .initial-avatar {
+  background: var(--lite2-grad-orange);
+}
+
+.lite2-shell[data-look='aurora'] .home-tone-terracotta .initial-avatar {
+  background: var(--lite2-grad-red);
+}
+
+.lite2-shell[data-look='aurora'] .home-tone-unknown .initial-avatar {
+  background: var(--lite2-grad-gray);
+}

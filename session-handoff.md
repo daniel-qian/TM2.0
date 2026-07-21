@@ -1,4 +1,30 @@
-> # ⟳ 2026-07-22 凌晨② · cr-align 视觉战役 棒5 收盘（★下个 session 从这里接）
+> # ⟳ 2026-07-22 凌晨③ · cr-align 视觉战役 棒6 收盘（★下个 session 从这里接）
+>
+> **一句话**：屏组二——项目卡她的 6px 顶部渐变条（渐变 token 第一个消费面，四态四色含
+> unknown=灰，status-truth 仲裁绿灯）+ 首字母头像浓渐变方块白字。零 TSX。
+> 电池 23/23 连续第三轮零红；净室扫雷 0/0。收据 receipt-r6-0722.md。
+>
+> ## ⚠️ 棒3-棒6 四棒都未推送（Danny AFK 指示 dev server 验收）
+> - 本地 main 领先 origin 4 commit；**验收入口 http://localhost:5173/?lang=zh**
+>   （preview+mock 8137+cr-live :3100 全在跑）；对照板 align-board/2026-07-21/index.html；
+>   demo 门一键进示例团队看真人卡头像。
+> - 点头后 `git push` 一次上产四棒 + 生产取证补收据。
+>
+> ## 下一棒是什么：棒7 屏组三——轻屏 + 动效扫尾（S–M）
+> - notes/vision/closerlook/playbooks 轻展示屏上族补漏；lite2-rise 逐屏铺开
+>   （gap 卡列/notes 行/vision 卡，全部包 no-preference）；
+> - **playbookTag 迁 .lite-badge 色**：aurora 探针 playbookTagIsBlueBadge* 两字面量红先行
+>   重基线（计划内最后一次基线变更，spec→门→码）——如果保持蓝 badge 色不变则零迁移。
+> - 之后可选棒8 死规则清扫（老散按钮/hover 规则已被族强断言层压住，清扫条件成熟）。
+> - 5B 材料体检卡在战役收官后解冻（Danny 拍板③）。
+>
+> ## 棒6 备忘
+> - 旧「normal/unknown 不染色」红线已调停成「蓝≠灰显式区分」（lite2.css l.4594 注释在案），
+>   paper 仍走左缘语法；团队地图小卡守左缘（尺度小）。
+> - 头像语气渐变（terracotta 人=红头像）若 Danny 觉得刺眼：删 look-aurora ㉑ 三行变体即回
+>   全蓝，一处改。
+
+> # ⟳ 2026-07-22 凌晨② · cr-align 视觉战役 棒5 收盘（上一棒）
 >
 > **一句话**：屏组一配方誊抄——决策卡 4px tone 左边条 + 待办清单她的 checklist 形
 > （整卡 divide-y+hover 半染+20px 复选）。零 TSX 全 aurora 作用域。电池 23/23 连续第二轮
