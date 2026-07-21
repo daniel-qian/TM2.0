@@ -5713,3 +5713,75 @@
 .lite2-shell .lite-btn.ask-q-remove {
   padding: 0;
 }
+
+/* ═══ 布局与真部件战役 棒B（2026-07-22）· 主页外夹满宽 + 双栏 1.55fr/1fr ═══════════
+   规格来源 eval-harness/specs/cr-align-spec.json stick-5 的 layout.home 行（cr :3100 实测值）；
+   配方 .issues/layout-real-0722/stick-bc-recipe.md 棒B 节；拍板依据 plan.md D-1。
+   🔴 00-base.css 一行未动——以下全部 .lite2-shell 作用域；老规则（l.3523 / l.3926 / l.3937）
+   原地保留，本段在文件尾同权重后写者胜（沿革可查，与棒2 / 4A 的追加法同构）。
+
+   为什么外夹写 width 不写 max-width：--lite2-frame-w（l.5388）本身就是 min() 表达式，
+   顶栏（l.5438）已是唯一消费者；让 .lite-home-frame 成为第二个消费者 = 内容栏与顶栏
+   共基准线（battle-map §3.1 点名的「顶栏左右各多出约 310px」那条差距）。
+   写裸 max-width:1480px + 横向内边距的那条路，在 ≥1528px 视口下内容会比顶栏窄 48px，
+   而门只跑 1440 查不到——见配方「修正一」。
+
+   为什么横向内边距必须归零：spec 的 layout.homeFrameWidth（量 .lite-home-frame）与
+   layout.homeContentWidth（量 .lite-home-row）期望值都是 1392，两行同时绿 等价于 横向
+   内边距为 0。窄屏的左右沟不再靠内边距，靠外夹自己：--lite2-frame-w 在窄屏是
+   100vw - 48px，配 margin:0 auto 天然给出左右各 24px 的沟（与顶栏同源，与老值 20px 同量级）。 */
+.lite2-shell .lite-home-frame {
+  max-width: none;
+  width: var(--lite2-frame-w);
+  padding-left: 0;
+  padding-right: 0;
+}
+
+/* 空态骨架冻结：4A（l.5072）为骨架双栏把空态 frame 定在 1040，那是它自己的决定，
+   本棒不动它。上面那条 max-width:none 会顺手把 1040 也卸掉，所以在这里原值重申；
+   横向内边距同样按原值（84px 36px 90px 里的 36）钉回去，空态几何逐像素不变——
+   本棒的 spec 行只量有数据态，改空态是白白让骨架像素基线漂移。 */
+.lite2-shell .lite-home-frame-empty {
+  max-width: 1040px;
+  width: auto;
+  padding-left: 36px;
+  padding-right: 36px;
+}
+
+/* 双栏：她的 grid-cols-[1.55fr_1fr] + items-start（右栏两块不被左栏拉高）。
+   gap 18px 是老规则（l.3929）的原值，本段不重复声明——spec 的 layout.homeRowGap 是护栏。 */
+.lite2-shell .lite-home-row {
+  grid-template-columns: 1.55fr 1fr;
+  align-items: start;
+}
+
+/* 断点从 720 上移到 880（复用 .lite-home-skeleton-row 的既有值 l.4985，全屏同构，
+   battle-map §3.8「别再发明新断点」）。取值算术：右栏 = (W - 18) x 0.392，要放得下
+   头像行 + 两行文字（约 330px）需 W 不小于 860 —— 880 正好在其上。
+   🔴 不能取 1080：外夹 min(1480, 100vw - 48px) 在 1080 视口下只有 1032 < 1080，双栏永不生效。
+   老的 @720 单列规则（l.3938）在本段之前，被上面的 1.55fr 覆盖掉了，所以这个块是必需的
+   而不是补充；880 覆盖 720 的全部区间。 */
+@media (max-width: 880px) {
+  .lite2-shell .lite-home-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 窄屏内边距自洽：老 @720 块（l.3942）的 `padding: 72px 20px 80px` 简写会把横向内边距
+   改回 20px。本段在其后已经接管，这里再显式钉一次，免得将来有人往两块之间插规则时
+   静默回归。纵向不碰：padding-top 归 --lite2-clear-top 体系（l.5401）管，bottom 维持老值。 */
+@media (max-width: 880px) {
+  .lite2-shell .lite-home-frame {
+    padding-left: 0;
+    padding-right: 0;
+  }
+}
+
+/* 空态窄屏同样冻结在原值：老 @720 的简写给空态的是 20px，断点也维持 720（不是 880）——
+   721-880 这一带空态本来就是 36px，跟着上面的 880 走会把它一起改掉。 */
+@media (max-width: 720px) {
+  .lite2-shell .lite-home-frame-empty {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+}
