@@ -40,6 +40,14 @@ paper：暖纸配色原样骑新几何（暖白 tabs 胶囊靠左、墨色活动
 - ≤860 sticky 竖排模式一字未碰（含 aurora 移动端顶栏暖纸底的历史小怪——非本棒引入，记观察）。
 - 铃/登录/齿轮在 slab 上仍是玻璃小钮（glass-on-glass）——她的是裸图标钮，归组件族棒微调。
 
-## 回归电池 / 生产验证
+## 回归电池（22 门）
 
-（电池 22 门跑批中，汇总与 push 后真机证据见下方补记）
+21 绿 + visual-baseline 电池中段一次红（dist 被 auth 门中途调包的既知模式，第三次实证）——
+终局 dev 重建后 visual 4/4（36 张）+ clearance 22/0 + skin-phases 16/16 复验绿 = 实质 22/22。
+
+## 生产验证（averylite.dannyqian.com · commit 0853e12）
+
+本地 Playwright 直拍生产（新访客→Escape 门→首页）：玻璃 slab 顶栏上线（tabs 左、白色活动
+pill「指挥室/今天」、铃+登录+齿轮右簇）；计算值四联全中——top **14px** / radius **16px** /
+width **1392px**（=min(1480,1440-48)）/ backdrop **blur(20px) saturate(1.1)** / 首页让位
+**96px**。滚动背幕渐隐实拍在 `eval-harness/reports/prod-shots-0721-r2/`（gitignored）。
