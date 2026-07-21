@@ -122,8 +122,11 @@ export function HomeScreen() {
             </header>
             <div className="lite-home-skeleton-row">
               <div className="lite-home-skeleton-blocks">
-                {/* 四块与有数据态一一同名同序（homeDecisions/homeGaps/homeAttention/homeOverview）
-                    ——骨架就是产品的形状，不是另一套页面。 */}
+                {/* 四块与有数据态一一同名（homeDecisions/homeGaps/homeAttention/homeOverview）
+                    ——骨架就是产品的形状，不是另一套页面。
+                    ⚠️ 顺序自棒C 起不再一致：有数据态把 ④ 概览提到了第二段（KPI 条），骨架这边
+                    仍是 决策→差距→关注→概览。棒B 已把空态几何逐像素冻结（lite2.css 尾段），
+                    骨架顺序留到骨架自身重排那一棒再同步——只为对齐注释去动空态会白白漂移像素基线。 */}
                 <section className="lite-home-block lite-home-skeleton" aria-label={t.lite2.homeDecisionsTitle}>
                   <div className="lite-home-block-head">
                     <h2>{t.lite2.homeDecisionsTitle}</h2>
@@ -202,6 +205,45 @@ export function HomeScreen() {
             <h1>{t.lite2.homeTitle}</h1>
             <p className="lite-home-lede">{t.lite2.homeLede}</p>
           </header>
+
+          {/* ── ④ 团队概览计数（每个数各自点进对应屏）───────────────────── */}
+          {/* 位置：棒C（布局与真部件战役 2026-07-22）把这一块从页面最底提到标题块之后作
+              第二段——她的主页纵序是 标题块 → KPI 条 → 双栏（battle-map §3.1）。
+              区块编号沿用 ④ 不改：CSS 里的 `── ④ Avery 手上有什么` 段、空态骨架的四块
+              同名注释都按这个编号索引，重编号只会让沿革断线。**只挪位置，数据来源一个字未动**。 */}
+          <section className="lite-home-block lite-home-overview" aria-label={t.lite2.homeOverviewTitle}>
+            <div className="lite-home-block-head">
+              <h2>{t.lite2.homeOverviewTitle}</h2>
+            </div>
+            {/* 每个数都是真数组的 length —— people/projects 来自 ingestion 回包，
+                files/notes 来自各自的持久化端点，跟进来自 flowStore 的未完成条目。 */}
+            <div className="lite-home-counts">
+              <button type="button" className="lite-home-count-cell" onClick={() => goScreen('team')}>
+                <strong>{team.people.length}</strong>
+                <span>{t.lite2.homeOverviewPeople}</span>
+              </button>
+              <button type="button" className="lite-home-count-cell" onClick={() => goScreen('team')}>
+                <strong>{team.projects.length}</strong>
+                <span>{t.lite2.homeOverviewProjects}</span>
+              </button>
+              <button type="button" className="lite-home-count-cell" onClick={() => goScreen('team')}>
+                <strong>{files.length}</strong>
+                <span>{t.lite2.homeOverviewFiles}</span>
+              </button>
+              <button type="button" className="lite-home-count-cell" onClick={() => goScreen('notes')}>
+                <strong>{notes.length}</strong>
+                <span>{t.lite2.homeOverviewNotes}</span>
+              </button>
+              <button
+                type="button"
+                className="lite-home-count-cell"
+                onClick={() => goScreen('followups')}
+              >
+                <strong>{openFollowups}</strong>
+                <span>{t.lite2.homeOverviewFollowups}</span>
+              </button>
+            </div>
+          </section>
 
           {/* ── ① 今天要决策的 ─────────────────────────────────────────── */}
           <section className="lite-home-block lite-home-decisions" aria-label={t.lite2.homeDecisionsTitle}>
@@ -410,41 +452,6 @@ export function HomeScreen() {
               )}
             </section>
           </div>
-
-          {/* ── ④ 团队概览计数（每个数各自点进对应屏）───────────────────── */}
-          <section className="lite-home-block lite-home-overview" aria-label={t.lite2.homeOverviewTitle}>
-            <div className="lite-home-block-head">
-              <h2>{t.lite2.homeOverviewTitle}</h2>
-            </div>
-            {/* 每个数都是真数组的 length —— people/projects 来自 ingestion 回包，
-                files/notes 来自各自的持久化端点，跟进来自 flowStore 的未完成条目。 */}
-            <div className="lite-home-counts">
-              <button type="button" className="lite-home-count-cell" onClick={() => goScreen('team')}>
-                <strong>{team.people.length}</strong>
-                <span>{t.lite2.homeOverviewPeople}</span>
-              </button>
-              <button type="button" className="lite-home-count-cell" onClick={() => goScreen('team')}>
-                <strong>{team.projects.length}</strong>
-                <span>{t.lite2.homeOverviewProjects}</span>
-              </button>
-              <button type="button" className="lite-home-count-cell" onClick={() => goScreen('team')}>
-                <strong>{files.length}</strong>
-                <span>{t.lite2.homeOverviewFiles}</span>
-              </button>
-              <button type="button" className="lite-home-count-cell" onClick={() => goScreen('notes')}>
-                <strong>{notes.length}</strong>
-                <span>{t.lite2.homeOverviewNotes}</span>
-              </button>
-              <button
-                type="button"
-                className="lite-home-count-cell"
-                onClick={() => goScreen('followups')}
-              >
-                <strong>{openFollowups}</strong>
-                <span>{t.lite2.homeOverviewFollowups}</span>
-              </button>
-            </div>
-          </section>
         </div>
       </div>
     </section>

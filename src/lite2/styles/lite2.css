@@ -5785,3 +5785,83 @@
     padding-right: 20px;
   }
 }
+
+/* ═══ 布局与真部件战役 棒C（2026-07-22）· KPI 条上提 + 真数卡配皮 ═══════════════
+   规格来源 eval-harness/specs/cr-align-spec.json stick-5 的 layout.homeKpi* 三行
+   （cr :3100 @1440 实测 267.188 / 5 格 / columnGap 14px）；配方
+   .issues/layout-real-0722/stick-bc-recipe.md 棒C 节；拍板依据 plan.md D-6。
+   🔴 00-base.css 一行未动；老规则（l.4018 / l.4024 / l.4044 / l.4053）原地保留，
+   本段在文件尾同权重后写者胜（与棒2 / 4A / 棒B 的追加法同构）。
+
+   五个数一个没换、没增、没减（人 / 项目 / 文件已读 / 笔记 / 未完成待办，全是真数组的
+   length）。她那五张率值卡（营收完成率 / 转化率 / 投诉率 / 团队负载 / 未解决差距）一张
+   不做，卡底进度条不做，同比增量行不做 —— 无数据基础＝编数，团队负载还额外撞「人面
+   零数字」红线（plan.md D-6）。本段只借形态。 */
+
+/* 概览块脱壳：她的 KPI 条是 main 的直系子，卡片自己就是卡，外面没有第二层卡壳。
+   🔴 这是 spec layout.homeKpiFirstCellWidth=267.19 的必要条件：267.19 = (1392 - 4x14) / 5，
+   隐含 KPI 条与双栏同宽 1392。.lite-home-block 的 `padding:16px 18px` + 1px 边框会把
+   内容盒吃掉 38px（1392 - 38 = 1354，五格各 262.8 —— 正是棒B 收工时那 4.4px 的红）。
+   特异性 (0,3,0) 压 .lite-home-block 的 (0,2,0)，不动老规则。 */
+.lite2-shell .lite-home-block.lite-home-overview {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+
+/* 五列定宽 + gap 14（她 grid-cols-5 gap-3.5）。老的 auto-fit minmax(104px,1fr) 会随内容盒
+   变宽自己加轨（棒B 把内容盒推到 1354 之后实排 5 轨、宽 262.8，但那是算出来的巧合不是约束），
+   写死 5 列才是把「五格」这件事钉在样式层。 */
+.lite2-shell .lite-home-counts {
+  grid-template-columns: repeat(5, 1fr);
+  column-gap: 14px;
+  row-gap: 14px;
+}
+
+/* 断点复用棒B 的 880（= 她的 max-lg:grid-cols-2），不发明新断点（battle-map §3.8）。 */
+@media (max-width: 880px) {
+  .lite2-shell .lite-home-counts {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* 卡壳：她 p-4 + border + rounded-[12px] + bg-white/.97 + shadow-sm。
+   底色走 --lite2-surface-rgb 的 .97（两皮都声明该 token，paper 不会落 initial —— 坑档 §5.10），
+   与棒4 已对齐的决策卡 card.decisionBg 同一档，卡族口径统一。
+   老规则给的是 --radius(8/10px) + ink 0.025 的浅井底，那是「一格数字」不是「一张卡」。
+   12px 写字面量：仓里没有 --radius-card 这个 token（配方里那个名字是她方 Tailwind 的写法），
+   现造一个只为一处消费的 token 反而多一层间接。 */
+.lite2-shell .lite-home-count-cell {
+  gap: 4px;
+  padding: 16px;
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  background: rgba(var(--lite2-surface-rgb), 0.97);
+  box-shadow: 0 1px 2px rgba(var(--lite2-ink-rgb), 0.06);
+}
+
+.lite2-shell .lite-home-count-cell:hover,
+.lite2-shell .lite-home-count-cell:focus-visible {
+  border-color: var(--rule-strong);
+  background: rgba(var(--lite2-surface-rgb), 0.97);
+}
+
+/* 数值 25px extrabold tracking-tight tabular（她的 KPI 数值行）。老值 20px/600。 */
+.lite2-shell .lite-home-count-cell strong {
+  font-size: 25px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+/* 标签 11.5px semibold uppercase tracking-wider muted（她的 KPI 标签行）。
+   🔴 颜色仍取 --ink-soft（我方 AA 补偿档，paper #5e5a51 / aurora #263850），
+   不取她的原始灰 —— 11.5px 小字踩 AA 4.5 硬地板，verify-contrast-smalltext 全量实算。
+   uppercase 对中文标签是空操作，只对 en 生效（她也是这么写的）；tracking 两语都吃。 */
+.lite2-shell .lite-home-count-cell span {
+  color: var(--ink-soft);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
