@@ -1,5 +1,18 @@
 # 验收手册 · 批次① （棒A–棒C：主页骨架成形）
 
+> **状态：验收就绪。** dev server 三口全挂着，改动全在本地 commit（未 push）。
+>
+> | 口 | 地址 | 状态 |
+> |---|---|---|
+> | 我方（验收对象） | `http://localhost:5173/?v=2&mode=live&lang=zh` | ✅ 挂着 |
+> | 她方（对照） | `http://localhost:3100/` | ✅ 挂着 |
+> | mock 后端 | `http://127.0.0.1:8137` | ✅ 挂着（`/health` 200） |
+>
+> **机器判据（本批次收官三项）**
+> - `SPEC_STICK=5` cr 对齐规格：**硬断言 35/35 绿**，未来行 0 红（其中 13 行是本战役新增的布局断言）
+> - A 区电池：**19/19 绿 exit 0**
+> - 扫雷全矩阵（9 屏 × 2 皮 × 4 世界）：**0 件 / 0 指纹 · REGRESSION 0**
+
 > 🔴 **本批次没有 push。** 改动全在本地 commit。你在 dev server 上人测点头之后我才推（push = Vercel 自动上产）。
 >
 > **验收 URL（必须带参）**：`http://localhost:5173/?v=2&mode=live&lang=zh`
@@ -170,7 +183,9 @@ KPI 条和双栏**根本不进 DOM**。所以「visual 四张全绿」对本批�
 ## 3. 与她的对照怎么看
 
 - 她的主页：`http://localhost:3100/`
-- 对照板（我方终构建 vs 她方逐屏成对）：`eval-harness/reports/align-board/<日期>/index.html`
+- 对照板（我方终构建 vs 她方逐屏成对，**本批次已重拍**）：
+  `D:very\eval-harnesseportslign-board6-07-21\index.html`
+  （目录名是工具的日期戳，内容是本批次终构建；desktop + mobile 两套）
 
 **刻意不同的地方（不是没做完，是红线）**：
 
