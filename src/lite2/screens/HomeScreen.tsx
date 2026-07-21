@@ -245,6 +245,22 @@ export function HomeScreen() {
             </div>
           </section>
 
+          {/* ── 主次双栏（棒B' · 布局与真部件战役 2026-07-22）────────────────────────
+              她的主页双栏是 grid-cols-[1.55fr_1fr]：**左柱装 DecisionQueue，右轨纵向堆
+              GapRail + PeopleRail**（battle-map §3.1）。棒B 只把既有的 .lite-home-row 改成
+              1.55fr/1fr 就收工了，但那根柱子里装的一直是 ②差距 + ③关注人 —— ①决策 / ①½待办
+              从来没进过双栏，仍是 frame 的全宽直系子。
+              后果（对抗审查 blast 视角实测）：外夹放宽到 1392 之后，决策卡读宽变成 **1354px**，
+              比 D15「内容栏守 760-1040」的上限超出 314px —— 而 plan.md D-1 批准 1480 外夹的
+              整条论证前提正是「左栏 835.17 落在 D15 带内」。前提没兑现，D15 就是实打实破着的。
+              更隐蔽的是：spec 的 homeRowLeftWidth=835.17 **量的是差距块**，所以 SPEC_STICK=5
+              十行全绿，却是绿在错的结构上（假绿）。
+              → 这里把 ①①½ 收进左柱、②③ 收进右轨，柱子与内容才配对上。
+              新增的 layout.homeDecisionsColWidth / homeRailBlocks 两行规格钉死这个结构，
+              防止以后再出现「宽度对了但装错东西」的假绿。 */}
+          <div className="lite-home-row">
+            {/* 左柱 1.55fr —— 她的 DecisionQueue 位 */}
+            <div className="lite-home-main">
           {/* ── ① 今天要决策的 ─────────────────────────────────────────── */}
           <section className="lite-home-block lite-home-decisions" aria-label={t.lite2.homeDecisionsTitle}>
             <div className="lite-home-block-head">
@@ -371,7 +387,10 @@ export function HomeScreen() {
             )}
           </section>
 
-          <div className="lite-home-row">
+            </div>
+
+            {/* 右轨 1fr —— 她的 GapRail + PeopleRail 纵向堆叠位 */}
+            <div className="lite-home-rail">
             {/* ── ② 差距摘要 → 多看一眼 ───────────────────────────────── */}
             <section className="lite-home-block lite-home-gaps" aria-label={t.lite2.homeGapsTitle}>
               <div className="lite-home-block-head">
@@ -451,6 +470,7 @@ export function HomeScreen() {
                 </ul>
               )}
             </section>
+            </div>
           </div>
         </div>
       </div>

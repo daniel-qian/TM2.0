@@ -326,6 +326,37 @@
       "expected": "14px",
       "tolerance": "exact",
       "note": "【棒C】她 gap-3.5=14px（KPI 条实测 columnGap 14px，比双栏的 18px 紧一档——battle-map §3.7 规则3 的 14/16/18 三档）。我方现值 10px"
+    },
+    {
+      "key": "layout.homeDecisionsColWidth",
+      "stick": 5,
+      "screen": "home",
+      "selector": ".lite2-shell .lite-home-decisions",
+      "probe": "rect",
+      "axis": "width",
+      "expected": "835.17",
+      "tolerance": "px2",
+      "note": "【棒B'·结构闸】她的 1.55fr 左柱装的是 DecisionQueue（cr-live/src/app/page.tsx:22 起）。本行断言我方决策块也住在那根柱子里、而不是当 frame 的全宽直系子。🔴 它同时是 D15（内容栏守 760-1040）的守卫：棒B 交付态下决策块是 1392 全宽、决策卡读宽 1354，超 D15 上限 314px。而 homeRowLeftWidth=835.17 量的是**差距块**，所以那一版 SPEC_STICK=5 十行全绿是**绿在错的结构上**（对抗审查 blast 视角实测）。没有这一行，『宽度对了但装错东西』这种假绿没有任何门拦得住。"
+    },
+    {
+      "key": "layout.homeRailBlocks",
+      "stick": 5,
+      "screen": "home",
+      "selector": ".lite2-shell .lite-home-row > *:last-child > section",
+      "probe": "count",
+      "expected": "2",
+      "tolerance": "exact",
+      "note": "【棒B'·结构闸】她的右轨 1fr 是 flex flex-col gap-4.5 纵向堆两块：GapRail（报告 VS. 现实）+ PeopleRail（需要关注的成员）。我方对应 ②差距摘要 + ③需关注的人。断言右轨里恰好两块、且是纵向堆叠而不是并排——棒B 交付态下这两块是并排的（835 | 539），与她的『主柱 + 侧轨』完全不是同一个信息结构。"
+    },
+    {
+      "key": "layout.homeMainBlocks",
+      "stick": 5,
+      "screen": "home",
+      "selector": ".lite2-shell .lite-home-row > *:first-child > section",
+      "probe": "count",
+      "expected": "2",
+      "tolerance": "exact",
+      "note": "【棒B'·结构闸】左柱装 ①今天要决策的 + ①½今日待办两块（她左柱是 section-label + 决策卡流）。与 homeDecisionsColWidth 配对：一个管『装对了东西』，一个管『柱宽对』。"
     }
   ]
 }

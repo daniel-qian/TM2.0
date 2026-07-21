@@ -5771,14 +5771,26 @@
    改回 20px。本段在其后已经接管，这里再显式钉一次，免得将来有人往两块之间插规则时
    静默回归。纵向不碰：padding-top 归 --lite2-clear-top 体系（l.5401）管，bottom 维持老值。 */
 @media (max-width: 880px) {
-  .lite2-shell .lite-home-frame {
+  .lite2-shell .lite-home-frame:not(.lite-home-frame-empty) {
     padding-left: 0;
     padding-right: 0;
   }
 }
 
-/* 空态窄屏同样冻结在原值：老 @720 的简写给空态的是 20px，断点也维持 720（不是 880）——
-   721-880 这一带空态本来就是 36px，跟着上面的 880 走会把它一起改掉。 */
+/* 🔴 上面那条为什么带 :not(.lite-home-frame-empty)（棒B/C 对抗审查三个视角独立命中的回归）：
+   空态那个 div 同时挂两个类（HomeScreen.tsx:100 className="lite-home-frame lite-home-frame-empty"），
+   所以不带 :not() 时这条 @880 通用块会一并命中空态。它与上面 .lite-home-frame-empty 的
+   36px 同为 (0,2,0)，媒体查询不提特异性，而它写在后面 —— 后写者胜，空态在 721-880 这一带
+   横向内边距被清零，骨架卡 1px 边框逐像素贴死视口边（实测 vp=800：padL/padR=0、frame 宽 800、
+   骨架卡 left=0；vp=881 是 36px，vp=720 被下面的 @720 空态块救回 20px，漏的正好是 721-880）。
+   这一带含 iPad 竖屏 768，而空态是新访客打开 / 的第一屏。
+   门查不到：spec 的 layout 行只量 1440 有数据态，verify-home-skeleton 跑 1280，881 以上。
+   ⚠️ 下面那条 @720 空态块的注释原本声称「721-880 这一带空态本来就是 36px」——
+   作者识别出了风险、写下了防范意图，却被自己上面 8 行的通用块反手做掉。
+   注释与实际行为相反比 bug 本身更危险，所以这里把因果写死。 */
+
+/* 空态窄屏同样冻结在原值：老 @720 的简写给空态的是 20px。断点维持 720（不是 880）——
+   721-880 这一带空态是 36px，由上面那条 :not() 保住。 */
 @media (max-width: 720px) {
   .lite2-shell .lite-home-frame-empty {
     padding-left: 20px;
@@ -5864,4 +5876,51 @@
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+}
+
+/* 🔴 滚动条沟对称化 —— 棒B「顶栏与内容栏共基准线」在真机上的最后一环
+   （棒B/C 对抗审查 regression 视角实测发现；headless 下看不见，人测一眼就看见）。
+
+   几何：顶栏是 position:fixed + left:50% + translateX(-50%)，按**真视口**居中；
+   .lite-home-frame 是 margin:0 auto，按 .lite-home-scroll 的**内容盒**居中。
+   经典滚动条（Windows Chrome/Edge 默认）吃掉右侧 15px 后两个基准就不是同一个宽度了：
+     headless(overlay 滚动条 0px)  vp1440 → frame left 24   · topbar left 24   ✅
+     headed(经典滚动条 15px)       vp1440 → frame left 16.5 · topbar left 24   ❌ 差 7.5px
+   1600 视口同样差 7.5px（52.5 vs 60）。
+
+   为什么以前看不见：改前 frame 是 max-width:860，比顶栏窄一大截，7.5px 的偏心没人看得出来。
+   棒B 让两者应当齐平之后，这 7.5px 就变成了肉眼可见的错位——正好把本棒的目标抵消掉。
+
+   both-edges 而不是 stable：stable 只在右侧留沟，内容盒仍然偏左 7.5px；both-edges 两侧各留
+   7.5px，内容盒重新与视口同心，frame 中心 == 视口中心 == 顶栏中心。
+   实测 vp1440 headed：frame left 由 16.5 回到 24，与顶栏逐像素相等。
+
+   ⚠️ 这条无门可查：verify-cr-alignment 只量 rect.width（两种滚动条下都是 1392，永远绿）、
+   不量 left，且跑在 headless 下。所以它靠这段注释和人测守着。 */
+.lite2-shell .lite-home-scroll {
+  scrollbar-gutter: stable both-edges;
+}
+
+/* ═══ 布局与真部件战役 棒B'（2026-07-22）· 双栏装对内容 ═══════════════════════════
+   棒B 把 .lite-home-row 改成 1.55fr/1fr 就收工了，但那根柱子里装的一直是 ②差距 + ③关注人；
+   ①决策 / ①½待办从来没进过双栏。对抗审查 blast 视角实测：外夹放宽后决策卡读宽 1354px，
+   超 D15（内容栏守 760-1040）上限 314px —— 而 plan.md D-1 批准 1480 外夹的论证前提正是
+   「左栏 835.17 在 D15 带内」。前提没兑现，D15 实打实破着。
+   TSX 侧已把 ①①½ 收进 .lite-home-main、②③ 收进 .lite-home-rail，这里给两个柱子内部的堆叠。
+
+   两栏内间距取她的原值：左柱 flex flex-col gap-3.5 = 14px，右轨 flex flex-col gap-4.5 = 18px
+   （她刻意让主柱比侧轨紧一档，battle-map §3.7 的 14/16/18 三档）。 */
+.lite2-shell .lite-home-main,
+.lite2-shell .lite-home-rail {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.lite2-shell .lite-home-main {
+  gap: 14px;
+}
+
+.lite2-shell .lite-home-rail {
+  gap: 18px;
 }
