@@ -1,4 +1,45 @@
-> # ⟳ 2026-07-22 凌晨④ · cr-align 视觉战役 棒7 收盘=战役收官（★下个 session 从这里接）
+> # ⟳ 2026-07-22 · cr-align 战役已上产收官 → 下一战役「布局与真部件」kickoff（★下个 session 从这里接）
+>
+> **状态**：cr-align 棒0-棒7 全部上产（bundle 5b04ada，真机四联验证在案，receipt-r7 终章）。
+> Danny 验收后拍板下一战役路线（推荐案通过）。本地 preview/mock/cr-live 服务已关，
+> 新 session 按老姿势起环境。
+>
+> ## 下一战役：布局与真部件（Danny 已拍板的四件套）
+> 1. **指挥室双栏满宽仪表盘**——照她的骨架：左=决策流（现有决策卡），右栏=「报告 VS 现实」
+>    面板（数据源=我们的多看一眼差距，现成）+「需要关注的成员」面板（首页关注列表现成）。
+>    宽度体系从 D15 的窄栏解禁到她的满宽双栏（这是上一战役刻意没做的层，现在做）。
+> 2. **快问悬浮入口**——她的 Nexus 球概念，接我们**真提问流**（Room 的 askLive）；
+>    🔴 词汇红线不变：叫「快问」，「Nexus」锁词永不入我们文案。
+> 3. **真搜索**——顶栏搜索框接后端关键词检索（成员/项目），无结果态诚实。
+> 4. **KPI 卡位只放真数**——计数族（人/项目/文件/待办，首页已有数据源）升她的指标卡语法；
+>    **编造型指标（营收完成率/负载百分比类）明确不做**（无数据基础=撞「绝不凭空编造」底线，
+>    且负载百分比撞人面零数字红线）。
+>
+> ## 打法（沿用 cr-align 全套纪律，都验证过了）
+> - 规格驱动：先 extract-cr-spec 补提她首页的布局/部件规格行（:3100 真路由，index.html 是
+>   过期代码别碰）→ 人筛入 cr-align-spec.json 新 stick 段 → verify-cr-alignment 红先行。
+> - 固定环：sweep 棒首尾 + 23 门电池（**dist 调包者殿后+独占跑**）+ 像素基线人审后重冻 +
+>   对照板 + 旧构建红证明 + 对抗审查工作流（红线/级联/AA/波及面四视角——上战役逮了
+>   4 blocker，必开）。
+> - 分棒建议：棒A 规格补提+双栏骨架；棒B 右栏两面板（真数据接线）；棒C 快问悬浮+真搜索
+>   （这俩有 TSX/store 改动，比纯 CSS 棒重）；棒D KPI 真数卡+收官。
+> - 🔴 红线全套照旧：00-base 一行不改、v01/story 冻结、en.ts 唯一文案源（本战役会有新文案
+>   ——快问入口/搜索占位/无结果态，走 en.ts+zh delta 老流程）、AA 4.5 硬地板、人面零数字、
+>   absent≠none、不搬她源码（CSS 值+概念可）。
+> - ⚠️ 本战役与上战役的最大不同：**有真功能新增**（搜索/悬浮入口），不再是纯视觉——
+>   TSX 改动量会超「只加类名」，store/transport 若要动，先查 ADR-0002/0021 边界。
+>
+> ## 环境起步（新 session 照抄）
+> - mock 后端：`cd eval-harness && AVERY_BRAIN=mock AVERY_EXTRACTOR=heuristic
+>   AVERY_EMBEDDINGS=keyword AVERY_DEMO_SEED_DIR=tests/fixtures/demo-seed
+>   /c/Python313/python -m uvicorn service.app:app --host 127.0.0.1 --port 8137 --app-dir .`
+> - 构建/预览：`node node_modules/typescript/bin/tsc -b && node node_modules/vite/bin/vite.js
+>   build --mode development`；`node node_modules/vite/bin/vite.js preview --port 5173`
+> - 她的参照：`cd D:\cr-live && npm run dev`（:3100）
+> - 🔴 v02 本地入口带参：`http://localhost:5173/?v=2&mode=live&lang=zh`（裸 URL=story 演示）
+> - 实施在 **D:very 主检出**（worktree 只有部署产物）；电池脚本姿势见各棒收据。
+
+> # ⟳ 2026-07-22 凌晨④ · cr-align 视觉战役 棒7 收盘=战役收官（上一段）
 >
 > **一句话**：棒0-棒7 全部落地。规格表 22/22 全绿 + sweep 全矩阵 0/0（44 件台账清零）+
 > 电池 23/23 连续四轮零红 = 收官判据三项全中；对照板人审=Danny 回来补最后一环。

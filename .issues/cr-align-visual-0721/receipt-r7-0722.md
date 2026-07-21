@@ -32,3 +32,11 @@
 
 dev server：http://localhost:5173/?v=2&mode=live&lang=zh（preview + mock 8137 + cr-live :3100 全在跑）；
 对照板 eval-harness/reports/align-board/2026-07-21/index.html；demo 门一键进示例团队。
+
+## 生产验证（averylite.dannyqian.com · commit 5b04ada · 2026-07-22）
+
+六 commit（棒3-棒7+URL 修档）经 Danny 验收后上产（origin push 后 Vercel 自动部署）。
+真机计算值抽验四联全中：h1 **26px/800** · .lite-btn 族 **r9px/13px** · eyebrow
+**13px/750/#4d5568** · --lite2-surface **.97**。截图 eval-harness/reports/prod-shots-0722-final/。
+战役收官判据第四环（对照板人审）由 Danny 完成——反馈的布局密度/真部件差距已立项为下一战役
+（见 session-handoff「布局与真部件战役」kickoff）。
