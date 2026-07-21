@@ -455,3 +455,73 @@
   padding: 2px 10px;
   border-radius: 999px;
 }
+
+/* ═══ cr-align 视觉战役 棒5（2026-07-22）· 屏组一：指挥室 + 待办清单 aurora 侧 ═══════
+   规格表已 22/22 收满，本棒是屏级配方誊抄（她的决策卡/checklist 语法），零 TSX。 */
+
+/* ── ⑱ 决策卡：她的 4px 左边条语法（border-left 直上卡框）替代 paper 的内嵌竖条
+   （::before top/bottom 10px 悬浮条是 paper 的手写温度，aurora 收纳成她的硬边语法）；
+   规则清单（凭什么这么判 ▾ 展开的 ul）挂载 rise 入场——真「折叠 spring」需要 DOM 常驻
+   改造（条件渲染→常驻+grid-rows 过渡），超本战役「TSX 只加类名」纪律，挂载动画近似，
+   记刻意不做。 */
+.lite2-shell[data-look='aurora'] .lite-home-decision::before {
+  display: none;
+}
+
+.lite2-shell[data-look='aurora'] .lite-home-decision {
+  border-left: 4px solid var(--ink-faint);
+}
+
+.lite2-shell[data-look='aurora'] .lite-home-decision.home-tone-terracotta {
+  border-left-color: var(--terracotta);
+}
+
+.lite2-shell[data-look='aurora'] .lite-home-decision.home-tone-honey {
+  border-left-color: var(--honey);
+}
+
+.lite2-shell[data-look='aurora'] .lite-home-decision.home-tone-sage {
+  border-left-color: var(--sage);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .lite2-shell[data-look='aurora'] .lite-home-rule-list {
+    animation: lite2-rise 0.25s ease both;
+  }
+}
+
+/* ── ⑲ 待办清单：她的 checklist 配方——整列一张卡（surface+rule+radius+软影），
+   行降级为 divide-y（border-bottom last:none）、hover 半透明 surface-soft
+   （她的 rgba(238,243,250,.5)=--lite2-surface-soft 半强度）、复选框 20px/2px 边。
+   paper 守自己的分卡列表（本段全 aurora 作用域）。history 列表共享 .lite-followups-list
+   同吃本配方。 */
+.lite2-shell[data-look='aurora'] .lite-followups-list {
+  gap: 0;
+  padding: 2px 16px;
+  background: var(--lite2-surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-soft);
+}
+
+.lite2-shell[data-look='aurora'] .lite-followup-item {
+  border: none;
+  border-bottom: 1px solid var(--rule);
+  border-radius: 0;
+  background: transparent;
+  padding: 12px 2px;
+}
+
+.lite2-shell[data-look='aurora'] .lite-followup-item:last-child {
+  border-bottom: none;
+}
+
+.lite2-shell[data-look='aurora'] .lite-followup-item:hover {
+  background: rgba(238, 243, 250, 0.5);
+}
+
+.lite2-shell[data-look='aurora'] .lite-followup-check {
+  width: 20px;
+  height: 20px;
+  border-width: 2px;
+}

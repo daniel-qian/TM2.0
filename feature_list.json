@@ -731,6 +731,14 @@
       "evidence": "旧构建红证明三连（button-family 11 FAIL/SPEC_STICK=4 三红/clearance 微断言红）→规格全量 22/22 绿·未来行 0 红（战役进度表收满）；sweep 44 件 open 一棒清零（净室 0 件/0 指纹·NEW 0·REGRESSION 0）；对抗审查 3 blocker+6 should-fix 全数即棒修复（族强断言层四态真机探针取证绿）；电池 23/23 全绿零红（项目首次，visual 在电池内直接绿）；paper 逐字节+像素基线目检后重冻复验 4/4。本棒未推送（Danny AFK 指示 dev server 验收）。",
       "status": "done",
       "date": "2026-07-21"
+    },
+    {
+      "id": "feat-087",
+      "name": "cr-align 视觉战役棒5：屏组一——指挥室决策卡 + 待办清单屏级配方",
+      "description": "look-aurora ⑱⑲：决策卡 4px tone 左边条（她的硬边语法，paper 守内嵌竖条）+ 规则清单挂载 lite2-rise；待办清单整列一张卡+divide-y 行+hover 半强度 surface-soft+复选 20px/2px。零 TSX、全 aurora 作用域；真折叠 spring 记刻意不做（需 DOM 常驻改造）。",
+      "evidence": "红线门 home-skeleton/status-truth 绿；skin-phases/button-family/cr-alignment(s4) 穿越绿；满世界目检（r5-shots：三档 tone 边条+规则展开、待办三行真表单链路添加+hover 半染实拍）；像素基线 0 diff 36 绿；电池 23/23 全绿零红（连续第二轮）；净室扫雷 0 件/0 指纹。未推送（dev server 验收）。",
+      "status": "done",
+      "date": "2026-07-22"
     }
   ]
 }

@@ -874,3 +874,7 @@ ERR_CONNECTION_REFUSED，看起来像「后端挂了」（后端 8137 好好活�
 **对抗审查（四视角）3 blocker+6 should-fix 全数即棒修复**：①「后位同权重接管」前提在交互态塌——老 :hover/:focus (0,3,0)/(0,4,0) 半套胜出拼成墨字压墨底五处/焦点环被灭两处/soft hover 紫翻墨→**族强断言层**（.lite-btn 双写收权全态全属性），真机探针四态取证绿；②reduce 兜底被 aurora ⑯ 特异性反杀（媒体查询不加特异性）→⑯ 包 no-preference 媒体级隔离；③「已加入待办」锁存 disabled 叠 .55 只剩 1.6:1（WCAG disabled 豁免不覆盖持久状态文本）→soft:disabled opacity 1+字色收权；paper 透明徽章幽灵缩进→pill 几何挪 aurora ⑰；danger paper hover .18=4.35 破 AA→.15（4.56）；ask-q-remove 26px 圆钮内容盒压零→padding 0。**CSS 注释「星号斜杠」惨案**（新坑档）：banner 里写 tone-*/ 字面提前终结注释，残尾垃圾让浏览器吞掉紧随的 .lite-btn 基规则整条——「产物里有、CSSOM 里没有」，用 styleSheets 遍历 vs fetch 文本对照钉死。
 
 **电池序病根治**：auth 两门本身是 dist 调包者却排 12-13 位——其后吃 preview 的门全在 auth 构建上跑（visual 中段必红四次实证的真相）；移入殿后区后**电池 23/23 全绿零红**（项目首次），净室扫雷 0/0 定档。另证：电池与 agent 工作流并发=假红（撞 CPU 超时），电池必须独占跑。paper 决策卡 bg .55→.86+软影=拍板①「跟结构走」的有意随行（token 零动，PAPER_BASELINE 绿）。
+
+## Update — 2026-07-22 · cr-align 视觉战役 棒5（feat-087）：屏组一——指挥室决策卡 + 待办清单她的屏级配方（未推送）
+
+look-aurora ⑱⑲ 纯 CSS append、零 TSX、全 aurora 作用域（paper 分卡列表一字未动）：⑱ 决策卡藏 paper 内嵌竖条换她的 border-left 4px tone 硬边（ink-faint/terracotta/honey/sage）+ 规则清单挂载 rise（包 no-preference）；⑲ 待办整列一张卡（token 全喂）+ divide-y 行 + hover 半强度 surface-soft（rgba(238,243,250,.5)）+ 复选 20px/2px + history 共享类同吃。红线门 home-skeleton/status-truth 穿越绿；快门组（skin/button-family/s4）全绿；满世界目检（决策三档边条/待办三行走真表单链路添加）；像素基线 0 diff（基线世界=空态，改的是满世界形态）；电池 23/23 全绿零红（连续第二轮）；净室扫雷 0/0；真折叠 spring 需 DOM 常驻改造超「只加类名」纪律，挂载动画近似记刻意不做。

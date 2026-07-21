@@ -1,4 +1,28 @@
-> # ⟳ 2026-07-22 凌晨 · cr-align 视觉战役 棒4 收盘（★下个 session 从这里接）
+> # ⟳ 2026-07-22 凌晨② · cr-align 视觉战役 棒5 收盘（★下个 session 从这里接）
+>
+> **一句话**：屏组一配方誊抄——决策卡 4px tone 左边条 + 待办清单她的 checklist 形
+> （整卡 divide-y+hover 半染+20px 复选）。零 TSX 全 aurora 作用域。电池 23/23 连续第二轮
+> 全绿；净室扫雷 0/0。收据 `.issues/cr-align-visual-0721/receipt-r5-0722.md`。
+>
+> ## ⚠️ 棒3+棒4+棒5 都未推送（Danny AFK 指示 dev server 验收）
+> - 本地 main 领先 origin 3 commit；**验收入口 http://localhost:5173/?lang=zh**
+>   （preview+mock 8137+cr-live :3100 全在跑）；对照板 align-board/2026-07-21/index.html。
+> - 点头后 `git push` 即上产 + 生产取证补收据。
+>
+> ## 下一棒是什么：棒6 屏组二——你的团队 + 议事室 + 项目（M）
+> - 人卡/徽章上族（🔴 人卡两皮零数字零血条红线高于她的 PeopleRail 设计 D14）；Room 聊天面
+>   +composer 玻璃已有基础（①玻璃 chrome）；项目卡 6px 顶部渐变条（--lite2-grad-* 首个
+>   消费面！tone-unknown 灰渐变保「未知≠平静」）。
+> - 门最重面：person-card/group 类选择器门 + room-usability/nomaterial + aria-zh 复跑。
+> - 之后棒7（轻屏+动效扫尾+playbookTag 迁色红先行重基线）、可选棒8（死规则清扫——
+>   老散按钮规则已被族强断言层压住，清扫时机成熟）。
+>
+> ## 棒5 备忘
+> - flowStore（followups/triage/gap 标记）没有 window 缝——测试注入走真表单链路
+>   （fill+submit），顺带验闭环。
+> - 真折叠 spring 需条件渲染→常驻 DOM 改造（超「只加类名」），归战役后小棒。
+
+> # ⟳ 2026-07-22 凌晨 · cr-align 视觉战役 棒4 收盘（上一棒）
 >
 > **一句话**：共享组件族落地——.lite-btn 四变体（17 文件 69 处双类迁移）+ .lite-badge +
 > .lite-card + lite2-rise 入场 + 族强断言层。**规格表全量 22/22 绿（战役对齐指标收满）**；
