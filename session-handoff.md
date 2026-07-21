@@ -1,4 +1,45 @@
-> # ⟳ 2026-07-21 · CR 对齐棒 r1 收盘（★下个 session 从这里接）
+> # ⟳ 2026-07-21 晚 · 输入侧棒 r2 收盘（★下个 session 从这里接）
+>
+> **一句话**：Danny 追加拍板「onboarding 改独立闸门页 + 一键示例团队放进门厅」——已全部落地上线：
+> OnboardWizard→OnboardGate 全屏闸门（LiteModal 底座不换，CSS 承担整页观感；对齐 cr 藏在
+> /companyinput 的独立页）、后端 /demo/status+/demo/claim（seed 自铸母本一次 + 每访客**克隆**私有
+> 副本——不共享不只读，理由与合约见 ADR-0026）、8A「公司现状」采集送 company_notes
+>（「不会发到任何地方」承诺同棒改口，en+zh）。后端 pytest 3367/0，新门 verify-onboard-gate 39/0
+>（五世界，红证明过），回归 16 道全绿。
+>
+> ## 现在线上是什么
+> - **前端** `averylite.dannyqian.com` = 本棒 main（Vercel 自动部署，收工 stamp 验证见本棒 merge
+>   SHA）：新访客第一眼=全屏闸门三扇门（示例团队门在后端探测到 demo 时出现）；Escape/「先随便
+>   看看」= pause 续进度；跳过者的首页骨架有示例团队第二机会位。
+> - **后端** `avery.dannyqian.com` = 本棒新镜像（demo 面 + POST /team/{id}/notes；构建/换容器
+>   照 deploy-receipt-backend-0720.md 的 main 构建纪律，回执在 .issues/input-side-0721/）。
+>   容器 env 新增 `AVERY_DEMO_SEED_DIR`（三亚脱敏 seed 六份已放服务器）+ `AVERY_RATE_DEMO_PER_MIN`。
+>   demo 母本已暖场（真 LLM 铸过一次），一键领取秒回。
+>
+> ## 下一棒是什么
+> 1. **5B 材料体检卡后端真实版**（Danny 明确不要轻量过渡版）：抽取层输出覆盖度元数据（时间范围/
+>    可用字段/缺失字段/判断等级）→ 前端体检卡。合伙人的三档输入标准+六类误差设计在对话0721.txt
+>    后半，照它做。这是输入侧三件套最后一件（3A/8A 本棒已清）。
+> 2. 观察项：demo 克隆副本会在生产库累积（每份 ~几百 KB 含 bytea）——有限流表盘；将来加过期
+>    清扫属**删除类动作，先问 Danny**。
+>
+> ## 别再踩的坑（本棒新增证据）
+> - **D:\avery 的 node_modules 缺 .bin shim 与 @babel/core**：`npm run build`/`vite dev` 都起不来——
+>   build 用 `node node_modules/typescript/bin/tsc -b && node node_modules/vite/bin/vite.js build`，
+>   预览用 `vite.js preview`（launch.json 已改）。`vite build` 在 tsc 红时照样出绿包——**白屏
+>   `fill(undefined)` 十有八九是 dist 陈旧**（zh 缺键），先 tsc 再 build。
+> - **zh delta 只补缺键不改旧键**：改了既有 en 键的语义（如 onboardTeamBody 承诺改口），zh 旧译文
+>   会原样留着继续撒谎——必须手改或删键重译（本棒真机验证时逮住一次）。
+> - aurora 皮的追加规则要带 `.lite2-shell` 前缀升特异性（lite2.css 打包在皮之后，同权重会输）。
+> - Playwright 直连 `127.0.0.1:5173` 会 ECONNREFUSED（Node 24 preview 绑的是 localhost/::1）——
+>   VERIFY_BASE 用 `http://localhost:5173`。
+>
+> ## 站着别动的事
+> - 裸「风险：」词表加宽、`origin/p5-04-nexus-safe-zone` 处置、凭据轮换——仍归 Danny。
+> - 合伙人对外还在讲「不打分不排名」旧口径——Danny 需亲自同步她（ADR-0025 后果节）。
+> - 分支 `claude/cr-align-r1-0721`、`claude/input-side-r2-0721` 已合入未删（删除闸）。
+
+> # ⟳ 2026-07-21 · CR 对齐棒 r1 收盘（上一棒）
 >
 > **一句话**：合伙人反馈到了（零数据实测：demo 被读成「文件解析器」）——三人探索队 + command-room
 > 真机勘察 + grill 九问，Danny 拍板 `1A 2C 3A 4A 5B 6A 7B 8A 9A+`（全录

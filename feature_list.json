@@ -691,6 +691,14 @@
       "evidence": "新门 verify-room-nomaterial 11/0 + verify-home-skeleton 17/0（含闭环真状态断言）+ 改写 verify-switchers 23/0——三门先红过（stash 四 UI 文件的旧构建上崩红）再绿。回归 16 道全绿：p0 41/0、contrast 26/0、room-usability 20/0、handoffs-honesty 10/0、file-manifest 30/0、auth-form 57/0、data-boundary 37/37、zh-purity 基线 14 等。zh 50 键 M3 delta+导演修正 13 处。真机验证：aurora 默认 data-look、指挥室/今天主副名、⚙ 齿轮、切换器出顶栏。",
       "status": "done",
       "date": "2026-07-21"
+    },
+    {
+      "id": "feat-082",
+      "name": "输入侧棒 r2：onboarding 全屏闸门页 + 克隆制一键示例团队 + 8A 公司现状采集",
+      "description": "Danny 0721 追加拍板：onboarding 不做浮层、做独立闸门页（对齐合伙人 command-room 藏在 /companyinput 的全屏 onboarding），一键示例团队放进前置门厅。落地：①OnboardWizard→OnboardGate（LiteModal 底座不换，layerClassName CSS 承担整页观感；Escape/滚动锁/焦点圈/生命周期语义零变化；点背景关闭停用；步骤 4→5 新增第 0 步三扇门）②后端 demo 面：GET /demo/status 能力探测 + POST /demo/claim（seed 目录自铸母本一次+每访客克隆私有副本——registry.clone_context 内存 deepcopy / pg SQL 级 INSERT..SELECT，embedding 与 bytea 原样抄；母本 token 铸完即弃；预铸「实时数据缺位」笔记；内容寻址 id；AVERY_RATE_DEMO_PER_MIN 限流表盘）③8A：团队信息步扩展（人数/职位本机）+「公司现状」口述唯一送后端（POST /team/{id}/notes 写侧红线原样→422；onboardNote.ts 订阅 contextId「落地即送」+幂等账本）+「不会发到任何地方」承诺同棒改成逐字段分界（en+zh）④首页骨架示例团队第二机会位兑现（探测到才出）。前提修正：issue #10 已在 0b6f5c2 修复且生产容器已带（decisions.md 的「先修」判定过时）。ADR-0026 记档。",
+      "evidence": "后端 pytest 3367/0（新增 test_demo_claim 11 判据先红后绿 + 克隆合约 4 条）。新门 verify-onboard-gate 39/0 五世界（整页形态/一键真拿副本/Escape=pause/8A 延迟送出真送达/路由拦截 404→示例门一个像素不出），红证明=stash src 旧构建 TimeoutError 崩死。迁移 verify-onboarding-returning（doors）+ live-frontend-gate.snippet（walkthrough 过上传门）。回归 16 道全绿（p0 41/0、data-boundary 37/37、auth-form 57/0、zh-purity 基线 14 等）。真机：一键端到端（克隆两中文名不塌卡/预铸笔记继承/落 /home）、8A 全链（无 context 诚实不送→领示例瞬间自动送达后端笔记本）。",
+      "status": "done",
+      "date": "2026-07-21"
     }
   ]
 }

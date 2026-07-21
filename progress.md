@@ -812,3 +812,27 @@ ERR_CONNECTION_REFUSED，看起来像「后端挂了」（后端 8137 好好活�
 **门（红→绿全记录）**：新门 verify-room-nomaterial（11 判据）/ verify-home-skeleton（17 判据，含闭环真状态断言）+ 改写 verify-switchers（23 判据，⓪次级菜单两态新增）——红的形状：对 stash 掉四个 UI 文件的旧构建真跑，三门全在缺元素处崩红。回归战列 16 道全绿：p0 41/0（锁定词更新后）· contrast 26/0 · room-usability 20/0 · handoffs-honesty 10/0 · aria-zh 4/0 · status-truth 27/0 · file-manifest 30/0 · auth-capability 25/0 · onboarding-returning 15/0 · data-boundary 37/37 · bundle-privacy 7/0 · auth-form 57/0 · zh-purity 基线 14 不变。**dist 指向陷阱又演一遍**：auth-capability 把 dist 重打到 8281 不还原，殃及其后 file-manifest/onboarding 两门（ERR_CONNECTION_REFUSED 假象）——重建默认 dist 复绿；此后战列顺序把重打 dist 的门放队尾+终局重建。auth-form ⑧ 相两处直点切换器改「先开齿轮」，并揪出账号弹层不吃裸 Escape（必须 ensurePanelClosed）。verify-room-nomaterial 首版单字 includes('断') 被「判断」打红——改短语级（门自己也要过判别力关）。
 
 **遗留/下棒**（输入侧三件套，拍板已锁）：3A 示例团队（后端预铸共享 context；seed=三亚脱敏材料 `D:\Boyle\research\sanya-lushan-yiju-hotel\0721-脱敏seed\`，⚠先修后端 issue #10 中文名去重）· 5B 体检卡后端真实版 · 8A onboarding 采集送后端（「不会发到任何地方」文案必须同步改，DoD 显式项）。另：合伙人对外还在讲「不打分不排名」旧口径，Danny 需同步她（ADR-0025 后果节）。
+
+## Update — 2026-07-21 · 输入侧棒 r2（feat-082）：onboarding 全屏闸门页 + 克隆制一键示例团队 + 8A 采集落地
+
+**输入**：Danny 0721 追加拍板——「onboarding 不要浮层，单独一个页面作为闸门；一键示例团队放进前置 onboarding；参照 command-room 藏起来的独立 onboarding 页」。勘察证实 cr 的页在 `/companyinput`（无导航入口，layout=fixed inset-0 全屏盖，5 步卡片）——她本来就把它设计成闸门。方案与理由全录 ADR-0026 + `.issues/input-side-0721/plan.md`。
+
+**前提被推翻的部分**：decisions.md 里「先修后端 issue #10」已过时——探索队证实 #10 两个子 bug（`_slug` 中文压缩 u_x + 跨文档去重）0b6f5c2（07-18）已修，CJK 测试三件套零 xfail，且生产容器 `main-20260720-211529` 已带修复（容器内 grep 实证）。任务改判为验证 + demo 车道回归断言。
+
+**后端（demo 面 + 8A 端点，pytest 3367/0）**：
+- `registry.clone_context`（内存 deepcopy + 重物化 / pg **SQL 级 INSERT..SELECT**——embedding 列原样抄不烧第二遍 DashScope、source_documents bytea 原样抄；get()+put() 重组两条都会翻车，合约钉死在 test_registry_contract.py 克隆四联）。notes 换新 id 保 created_at。
+- `service/demo.py`：GET /demo/status（能力探测，无鉴权无泄露）+ POST /demo/claim（首 claim 自铸母本——离线 heuristic 秒出 / 生产 LLM 一次，`_BUILD_LOCK` 防双铸；此后克隆；母本 token 铸完即弃；内容寻址 id `ctx_demo_<sha1>`；预铸「实时数据缺位」zh 笔记）。限流表盘 AVERY_RATE_DEMO_PER_MIN（upload_guard 新 route，默认关）。
+- 8A：`POST /team/{id}/notes`（NoteIn ≤4000 字，owner_token 门后，gate_note_red_line 原样→422）。
+- 测试先红后绿：test_demo_claim.py 11 判据（含克隆隔离、中文名不塌、预铸笔记、红线 422）+ 克隆合约 4 条（memory 绿 / pg @needs_db 惯例 skip）。红的形状：路由 404 / AttributeError 全崩。
+
+**前端（feat-082 主体）**：
+- OnboardWizard → **OnboardGate**（git mv 保历史）：LiteModal 底座不换，`layerClassName="lite-gate-layer"` CSS 承担整页观感（遮罩→整幅不透明底/aurora 全屏渐变 `--lite2-bg-gradient`（cr 血缘那组径向光）+ 玻璃卡）。closeOnBackdrop=false；×→右上「先随便看看」（同 pause）；skip-forever 留页脚。步骤 4→5：新第 0 步**三扇门**（示例团队门·探测到才渲染 / 上传门 / 逛逛）。生命周期语义零变化。
+- onboardStore：OnboardStep + 'doors'；8A 字段 teamCount/yourRole/companyNote + 幂等账本 companyNoteSentTo（**persist() 解构漏新字段的自伤 bug 当场逮住**——漏一个就"看着能存、刷新即蒸发"）；reopen→doors。AuthPanel 账号切换重置面同步补新字段（data-boundary 红线）。
+- store.ts：demoClaiming/demoClaimError + claimDemoTeam（与 uploadFiles 同构过 adoptContext 收口；idle→ready 不触发假"团队已就绪"通知）。transport：LiveTeamPayload.demo? + demoStatus/demoClaim/appendNote 三个可选 seam 方法（stub 天然没有→门不显示）。
+- demoStore（能力探测，探不到/失败=不出门）+ onboardNote.ts（8A 延迟送出：订阅 contextId 变化，「context 落地即送」——先跳过上传几天后才传文件的人也不丢；失败不标记、console.warn、下次再试）。
+- HomeScreen 骨架：4A 预留的示例团队插槽兑现（探测到才出，主入口在闸门，这是跳过者的第二次机会位）。
+- **承诺文案同棒改口**（8A DoD）：onboardTeamBody「不会发到任何地方」→ 逐字段分界（称呼本机/现状送 Avery），en 改后 zh 旧译文还挂着旧承诺——**delta 脚本只补缺键不改旧键**，真机验证时逮住，手改 zh 定稿。21 新键 M3 delta + 导演修正 5 处（「你的角色」→「你的职位」、全角冒号、demo 门文案打磨）+ 8 行被抹注释还原。
+
+**真机验证（离线后端带 demo seed + vite preview）**：一键门端到端（克隆落地/两中文名各自成卡/demo:true/预铸笔记继承/落 /home/status=done）；Escape=pause（step 保留、骨架+第二机会位在场、滚动锁释放）；8A 全链（finish 无 context 诚实不送→骨架领示例→订阅线自动送达后端笔记本、幂等账本记账）；paper 背景 0.86α 鬼影修成实底（rgb 三元组直取）；aurora 特异性撞级修复（.lite2-shell 前缀升 0,4,0）。**环境坑**：D:\avery 的 node_modules 缺 .bin shim 与 @babel/core——`vite dev` 起不来，launch.json 改走 `node vite.js preview`（build+preview，门电池本来的姿态）；zh 键没进 dist 前 vite build 照样绿（tsc 才红）——白屏 `fill(undefined)` 是 dist 陈旧不是代码错。
+
+**门**：新 verify-onboard-gate.mjs **39 判据五世界**（A 整页形态+旧承诺绝迹 / B 一键真拿副本 / C Escape=pause / D 8A 延迟送出真送达 / E 路由拦截 404→示例门一个像素不出——能力探测护栏），红证明=stash src 旧构建 TimeoutError 崩死；门自伤一处（先截断再找「实时」）当场修。迁移两处：verify-onboarding-returning（首步/重开 upload→doors）、live-frontend-gate.snippet（walkthrough+escape 先过上传门）。回归全绿：nomaterial 11/0 · skeleton 17/0 · switchers 23/0 · contrast 26/0 · aria-zh 4/0 · usability 20/0 · handoffs 10/0 · status-truth 27/0 · file-manifest 30/0 · returning 15/0 · p0 41/0 · data-boundary 37/37 · zh-purity 基线 14 不变 · bundle-privacy 7/0 · auth-capability 25/0 · auth-form 57/0（dist 重建门收队尾+终局重建，无 8281 残留）。
