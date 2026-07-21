@@ -24,7 +24,9 @@
   --ink-soft: #263850;
   --ink-faint: #667085;
   --rule: rgba(16, 34, 61, 0.12);
-  --rule-strong: rgba(16, 34, 61, 0.24);
+  /* cr-align 棒3（2026-07-21）：她的强分隔线实值 #8fa1b8（globals.css --rule-strong），
+     替换初版的半透明近似——非文本装饰线，不吃 AA 文本地板。 */
+  --rule-strong: #8fa1b8;
   /* 语气温度令牌复用既有变量名（--sage/--honey/--terracotta/--iris/--sky）承载 aurora 配色，
      组件代码零改动即可自动换皮：sage(安稳/主色)→blue、honey(警示)→orange、
      terracotta(阻塞/危险)→red、iris(次强调)→purple、sky→与 sage 同色（原粗调版本 honey/
@@ -51,7 +53,8 @@
      显式声明维持 16px（见 look-paper.css），两值都不依赖浏览器默认，可稳定断言。 */
   font-size: 15px;
 
-  --lite2-surface: rgba(255, 255, 255, 0.86);
+  /* cr-align 棒3：卡面 .86→.97（她的卡片底实值；spec stick-3 token.surface）。 */
+  --lite2-surface: rgba(255, 255, 255, 0.97);
   --lite2-glass: rgba(255, 255, 255, 0.82);
   --lite2-glass-blur: blur(20px) saturate(1.1);
   --lite2-bg-gradient:
@@ -101,9 +104,11 @@
   --lite2-tone-red-bg: #feeceb;
   --lite2-tone-red-fg: #a5322f;
   --lite2-tone-gold-bg: #f5ecd8;
-  --lite2-tone-gold-fg: #8a6a29;
+  /* cr-align 棒3 · AA 台账 D3/D2：她的 gold fg #8a6a29 在 soft 底上 4.28:1、gray fg #667085
+     只有 4.46:1，徽章小字号双双贴地——加深到 #75591f（≥5.5:1）/#5b6577（5.3:1），色相不动只压明度。 */
+  --lite2-tone-gold-fg: #75591f;
   --lite2-tone-gray-bg: #eef3fa;
-  --lite2-tone-gray-fg: #667085;
+  --lite2-tone-gray-fg: #5b6577;
 }
 
 /* ═══ [data-look="aurora"] 组件级分支（逐条记录，kickoff §feat-046 要求"控制在少数"）═══
@@ -305,7 +310,8 @@
 
   .lite2-shell[data-look='aurora'] .scene-tab:hover,
   .lite2-shell[data-look='aurora'] .scene-tab:focus-visible {
-    background: #eef3fa;
+    /* 棒3 起消费 --lite2-surface-soft（原 #eef3fa 字面量，值不变）。 */
+    background: var(--lite2-surface-soft);
     color: var(--ink);
   }
 
@@ -332,4 +338,58 @@
   -webkit-backdrop-filter: blur(24px) saturate(1.2);
   mask-image: linear-gradient(to bottom, black 60%, transparent 100%);
   -webkit-mask-image: linear-gradient(to bottom, black 60%, transparent 100%);
+}
+
+/* ═══ cr-align 视觉战役 棒3（2026-07-21）· token 加深 ═══════════════════════════════
+   规格 eval-harness/specs/cr-align-spec.json stick-3；渐变值誊自 cr-live src/lib/data.ts
+   l.11-17（只誊 CSS 数值，零源码零假数据——decisions.md 明文许可范围）。本棒零 snippet
+   字面量迁移（E 组 13 项断言均不探本棒改动值）；paper 侧一字不动（下列全部 aurora 作用域，
+   在位改的四个 token 也仅 aurora 块声明）。 */
+.lite2-shell[data-look='aurora'] {
+  /* 行 hover/证据行/轨道底的软表面（她的 surface-soft #eef3fa）——⑫ 的 tab hover 改为消费本 token。 */
+  --lite2-surface-soft: #eef3fa;
+  /* 七条语气渐变（头像方块/图标 chip 底）；消费面在棒4/6 组件族，本棒只立 token。 */
+  --lite2-grad-red: linear-gradient(135deg, #e06b6b, #c23b3b);
+  --lite2-grad-orange: linear-gradient(135deg, #e6a24d, #c67815);
+  --lite2-grad-green: linear-gradient(135deg, #48b483, #227a4f);
+  --lite2-grad-blue: linear-gradient(135deg, #5b82ea, #3350c0);
+  --lite2-grad-purple: linear-gradient(135deg, #7d6ce0, #5544b8);
+  --lite2-grad-gold: linear-gradient(135deg, #d6b775, #a9822f);
+  --lite2-grad-gray: linear-gradient(135deg, #aab4c2, #7c8798);
+}
+
+/* ── ⑭ 字阶（spec stick-3）：页面 h1 拍平 26px/800（撤 clamp 的视口依赖——她的页题是定值；
+   lite2 全部七处 h1 均为页面级标题、无弹层 h1，一揽子安全）；副题 14px；
+   eyebrow 13px/750/0.02em（🔴 .eyebrow 与 story 共享（00-base.css:85），前缀不可拆）。
+   h1 条与分支 ⑨ 的 700 同特异性 (0,3,1)，本条后写覆盖到 800；h2/h3 不受染。
+   注：750/800 依赖可变字重——本仓与她的库同样都不装载 Inter（D6），实渲同落 Segoe UI 族，
+   与参考的真实渲染对等；规格断言的是 computed 值。 */
+.lite2-shell[data-look='aurora'] .scene-stage h1 {
+  font-size: 26px;
+  font-weight: 800;
+}
+
+/* 副题只动字号不动色（对抗审查 blocker 修正，AA 台账 D17）：她的「副题退灰」#667085 在壳渐变
+   裸底的紫斑区（circle at 8% -2%，恰是 greeting 所在的左上角）合成底 ≈#d6c9ff 实算仅 3.24:1——
+   14px 正文击穿 AA 4.5 硬地板；守 --ink-soft（同位 >10:1），层级退让由字号承担。 */
+.lite2-shell[data-look='aurora'] .home-greeting-sub {
+  font-size: 14px;
+}
+
+/* eyebrow 色不取 --ink-faint（#667085 在上述紫斑裸底 3.2–4.2:1——存量病，随本棒接管字阶顺手修，
+   AA 台账 D18）：#4d5568 实算紫斑最差处 4.85:1、#eee9ff 上 5.8:1、白底 7.5:1，全位达标。 */
+.lite2-shell[data-look='aurora'] .eyebrow {
+  color: #4d5568;
+  font-size: 13px;
+  font-weight: 750;
+  letter-spacing: 0.02em;
+}
+
+/* 团队屏分组小注（.eyebrow.home-people-group-caption 双类，lite2.css l.629 的刻意小字）——
+   上条一揽子 13px/750 会把它抬得比头顶 14px/700 的分组标题还重（层级反转，对抗审查逮出）；
+   同特异性后写恢复原度量，色随 eyebrow 深值走。 */
+.lite2-shell[data-look='aurora'] .home-people-group-caption {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
 }

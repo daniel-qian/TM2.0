@@ -854,3 +854,13 @@ ERR_CONNECTION_REFUSED，看起来像「后端挂了」（后端 8137 好好活�
 **门（spec→门→码 + 旧构建红证明）**：assertAuroraApplied 换 5 字面量（tabsGlass*/Blur/Shadow→topbar 四值探针 + topbarRadiusIsSlab + activeTabIsNavy→White，字面量誊自 cr-align-spec.json stick-2）；改后门对棒1 旧构建跑 aurora 组 5 红=两世界证据 → 棒2 构建 16/16 绿。**verify-skin-phases.mjs 新工具**：E 组皮相位从手册协议固化成可跑门（aurora 13 断言+paper 逐字节+v01/story 零泄漏）——**第一跑就逮到陈旧基线漂移**：paper playbookTagColor 偏离 PAPER_BASELINE，溯源=feat-068 修 AA 加深 --ink-faint 的合法连带（look-paper.css 注释在案），基线补采记档。verify-topbar-clearance 穿越几何巨变 22/0（门管类的设计回报）；verify-cr-alignment SPEC_STICK=2 硬断言 13/13，**全量进度 8/22→15/22**（剩 7 行=棒3/棒4）；switchers 23/0；sweep 全矩阵 NEW 0/REGRESSION 0（壳大改零新伤）；像素基线有意 diff 复核后重定 36 张复验绿。
 
 **刻意不做**：页脚全宽条不硬套夹宽（归 footer 整体重塑）；≤860 模式不碰（aurora 移动端顶栏暖纸底历史小怪记观察）；铃/齿轮 glass-on-glass 归组件族棒微调。
+
+## Update — 2026-07-21 · cr-align 视觉战役 棒3（feat-085）：token 加深——字阶/表面/渐变/AA 调停（本棒未推送，dev server 待验收）
+
+**改动面（纯 CSS + spec 一行，零 TSX）**：look-aurora.css 在位改 4 token（--rule-strong→#8fa1b8 她的实值 / --lite2-surface .86→.97 她卡底 / AA D2 gray-fg→#5b6577 / AA D3 gold-fg→#75591f，全在 aurora 根块内，paper 构造性零动）+ 棒3 追加段（--lite2-surface-soft #eef3fa（⑫ tab hover 改消费它）+ 七条 --lite2-grad-* 誊值她 data.ts l.11-17 只立不消费 + 分支⑭ 字阶：.scene-stage h1 26px/800 撤 clamp（七处 h1 均页面级无弹层 h1）、副题 14px、eyebrow 13px/750/0.02em+色 #4d5568、分组小注恢复条）。spec token.surface 期望串 0.97→.97——**构建压缩去 custom property 前导 0**，contains 断言吃不上（新知识）。
+
+**红→绿**：旧构建（棒2 dist）SPEC_STICK=3 四红（h1weight 500/surface .86/eyebrow 11px/700；h1 尺寸 27px 靠 ±1 容差擦边）→ 棒3 构建 **硬断言 18/18 绿，全量 15/22→19/22**（剩 3 行全棒4 组件行）。**零 snippet 字面量迁移**（棒前逐项核对 E 组 13 断言无一探本棒值——token 供给制的架构回报）；skin-phases 16/16 直接穿越，paper 双证零动（逐字节 + 像素基线 paper 两套原样通过未重定）。
+
+**对抗审查（四视角工作流：红线/级联/AA/波及面）逮出 1 blocker+2 should-fix 即棒修复**：①blocker——副题降色 --ink-faint 的「垫 .97 卡面」前提不成立，greeting 压壳渐变裸底、紫斑区（circle at 8% -2% 恰在 greeting 左上角）合成底 ≈#d6c9ff 实算 3.24:1 击穿 4.5 硬地板→副题只动字号不动色（D17）；②.eyebrow 一揽子 13px/750 把团队屏分组小注（lite2.css:629 刻意 11px）抬得比头顶 14px/700 分组标题还重=层级反转→同特异性后写恢复（11px/700/0.04em）；③eyebrow 存量色 #667085 同裸底 3.2-4.2:1（非本棒引入但本棒接管了字阶顺手修）→aurora 色 #4d5568（D18，紫斑最差处 4.85:1 全位达标）。波及面判 clean：--rule-strong 63 消费点全发丝线/焦点环零文字零深底；demo 按钮白字 13→15:1 纯改善；gold-fg 零消费点惰性落地；surface .97 不杀毛玻璃（玻璃走独立 --lite2-glass）。note 记档：38 处 rgba(surface-rgb,X) 字面 alpha 未随 token（归棒5-7 按屏处置）；750/800 两库同不装 Inter 实渲同落 Segoe UI（与她真实渲染对等，D6 口径）；.lite-draft-field>.eyebrow 同特异性后写今天只有 margin（watch）。
+
+**验证链**：sweep 修复前后各一轮全矩阵 NEW 0/REGRESSION 0（44 known-open 原样归棒4）；电池 21/22+visual 中段 dist 调包老陷阱**第四次实证**→终局重建后 alignment(s3)/skin/contrast/clearance/visual 4/4 全复验绿=实质 22/22；像素基线两次重冻（棒3 主体一次、审查修复后一次）均目检后复验绿；对照板重拍 align-board/2026-07-21。**棒4 作战地图预制**：.issues/cr-align-visual-0721/r4-recon-map.md（按钮全量清点+归类、triage 44 件族分布、paper token 可用面、决策卡/动效现状+reduced-motion 陷阱）——棒3 电池间隙 Explore agent 并行侦察产出，棒4 免重侦察。

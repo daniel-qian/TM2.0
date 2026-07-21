@@ -1,4 +1,39 @@
-> # ⟳ 2026-07-21 深夜② · cr-align 视觉战役 棒2 收盘（★下个 session 从这里接）
+> # ⟳ 2026-07-21 深夜③ · cr-align 视觉战役 棒3 收盘（★下个 session 从这里接）
+>
+> **一句话**：token 加深落地——h1 26px/800、eyebrow 13px/750（色 #4d5568）、副题 14px、
+> 卡面 .97、--rule-strong 实色、七条渐变 token；AA 台账 D2/D3 落地 + 对抗审查追加 D17/D18。
+> **规格进度 19/22 绿**（棒2 时 15/22，剩 3 行全是棒4 组件行）。零 snippet 字面量迁移。
+> 收据 `.issues/cr-align-visual-0721/receipt-r3-0721.md`。
+>
+> ## ⚠️ 本棒未推送（Danny AFK 指示：一路干、先不推不部署、dev server 验收）
+> - 改动停在本地 commit；**验收入口 http://localhost:5173/?lang=zh**（vite preview 挂 dev
+>   构建 + mock 后端 8137，收工保持运行；cr-live 参照 :3100 也在跑，对照板已重拍）。
+> - Danny 验收点头后：`git push`（=Vercel 自动上产）+ 生产计算值取证补进收据。
+>
+> ## 下一棒是什么：棒4 组件族（M–L）
+> - **作战地图已预制**：`.issues/cr-align-visual-0721/r4-recon-map.md`（按钮全量清点+变体
+>   归类+白名单锚点、triage 44 件族分布、paper token 可用面、决策卡/动效现状）——免重侦察。
+> - .lite-btn 四变体（primary/ghost/soft/danger；基类 pill 结构位，aurora 覆盖 r9px/13px）；
+>   **共享基类只消费两皮都声明的 RGB 三元组 token**（paper 没有 tone-*/surface-soft）；
+>   双类迁移 TSX 只加类名（27 道类选择器门零迁移）；无类名按钮四处顺手补。
+> - .lite-badge 归一（②-⑧ 七处度量）+ .lite-card base/hover + 决策卡上 card-base
+>   （spec stick-4 decisionBg .97）+ lite2-rise CSS 入场（D16 CSS 优先；新 transform 必须
+>   纳入 reduced-motion 兜底——existing project-card/gate-door 的上浮今天就没兜底，顺手补）。
+> - 新门 verify-button-family.mjs 红先行（.lite2-shell 下每个 button 挂 .lite-btn 或进白名单）；
+>   SPEC_STICK=4 红→绿（followupRadius 9px/followupFont 13px/decisionBg .97）→ 全 22 行绿。
+> - 44 件 known-open 在此棒治愈（small-target 5 族=扩热区不套色；focus-missing 8 族=统一
+>   :focus-visible；两个原生 input 单独治）。
+> - ⚠️ reduced-motion @media（lite2.css l.4058）曾未闭合闷掉整片样式——块内新增必查 {} 配平。
+>
+> ## 棒3 新知识（别再踩）
+> - **构建压缩去 custom property 的前导 0**（0.97→.97）——spec contains 期望串写压缩后形。
+> - 她的「副题退灰 #667085」在壳渐变紫斑裸底实算 3.24:1——凡浅灰小字上渐变裸底必先实算
+>   合成底（紫斑 ≈#d6c9ff），别拿白底数字糊弄；#4d5568 是全位达标的 aurora 灰。
+> - .eyebrow 一揽子改字阶会误伤双类小注（home-people-group-caption）——一揽子规则落地前
+>   grep 该类的所有双类组合。
+> - dist 调包打红 visual-baseline 第四次实证（auth 门中途重建）——终局重建+五门复验照旧。
+
+> # ⟳ 2026-07-21 深夜② · cr-align 视觉战役 棒2 收盘（上一棒）
 >
 > **一句话**：壳结构对齐上线——悬浮胶囊玻璃 slab 顶栏（tabs 左/铃齿轮右/白色活动 pill）+
 > 让位统一 `--lite2-clear-top` 一变量九消费者 + aurora 100px 模糊背幕。零 TSX，纯 CSS+门。

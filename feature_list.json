@@ -715,6 +715,14 @@
       "evidence": "旧构建红证明：改后门对棒1 构建 aurora 组 5 红→棒2 构建 16/16 绿。固化工具第一跑逮到陈旧基线漂移（paper playbookTagColor，溯源 feat-068 AA 加深 --ink-faint 合法连带，补采记档）。verify-topbar-clearance 穿越几何巨变 22/0；verify-cr-alignment SPEC_STICK=2 硬断言 13/13，全量进度 8/22→15/22；switchers 23/0；sweep 全矩阵 NEW 0/REGRESSION 0；像素基线有意 diff 目检后重定 36 张复验绿；回归电池 22 门全绿。",
       "status": "done",
       "date": "2026-07-21"
+    },
+    {
+      "id": "feat-085",
+      "name": "cr-align 视觉战役棒3：token 加深——字阶/表面/渐变/AA 调停",
+      "description": "对齐 cr-live 令牌层（spec stick-3）：h1 26px/800 拍平撤 clamp、eyebrow 13px/750/0.02em（前缀锁 aurora，story 共享类不裸改）、副题 14px、--lite2-surface .86→.97、--rule-strong→#8fa1b8、--lite2-surface-soft、七条 --lite2-grad-* 誊值她 data.ts（只立 token 消费面归棒4/6）；AA 台账 D2/D3 落地（gray-fg #5b6577/gold-fg #75591f）+ 对抗审查追加 D17（副题守 --ink-soft——她的退灰值在壳渐变紫斑裸底 3.24:1 击穿硬地板）/D18（eyebrow 色 #4d5568 全位达标）。零 TSX；paper 构造性零动（全部 aurora 作用域）；零 snippet 字面量迁移（E 组 13 断言无一探本棒值）。",
+      "evidence": "旧构建红证明：棒2 dist 上 SPEC_STICK=3 四红（h1weight 500/surface .86/eyebrow 11px/700）→棒3 构建硬断言 18/18 绿，全量 15/22→19/22。四视角对抗审查工作流逮出 1 blocker+2 should-fix 即棒修复（AA 实算紫斑合成底）。sweep 修复前后两轮全矩阵 NEW 0/REGRESSION 0；电池 21/22+dist 调包第四次实证→终局重建五门复验全绿=实质 22/22；paper 双证零动（逐字节+像素基线未重定原样过）；像素基线目检后重冻复验 4/4。本棒未推送（Danny AFK 指示 dev server 验收）。",
+      "status": "done",
+      "date": "2026-07-21"
     }
   ]
 }

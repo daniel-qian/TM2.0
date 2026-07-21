@@ -20,7 +20,7 @@
     { "key": "type.h1weight", "stick": 3, "screen": "home", "selector": ".lite2-shell .scene-stage h1", "prop": "fontWeight", "expected": "800", "tolerance": "exact", "note": "她 extrabold（aurora 现 700）" },
     { "key": "type.eyebrow", "stick": 3, "screen": "notes", "selector": ".lite2-shell .eyebrow", "prop": "fontSize", "expected": "13px", "tolerance": "px1", "note": "她 section-label 13px/750（aurora 现 11px）" },
     { "key": "type.eyebrowWeight", "stick": 3, "screen": "notes", "selector": ".lite2-shell .eyebrow", "prop": "fontWeight", "expected": "750", "tolerance": "exact", "note": "她 font-weight 750" },
-    { "key": "token.surface", "stick": 3, "screen": "home", "selector": ".lite2-shell", "var": "--lite2-surface", "expected": "0.97", "tolerance": "contains", "note": "她卡底 rgba(255,255,255,.97)（aurora 现 .86）" },
+    { "key": "token.surface", "stick": 3, "screen": "home", "selector": ".lite2-shell", "var": "--lite2-surface", "expected": ".97", "tolerance": "contains", "note": "她卡底 rgba(255,255,255,.97)（aurora 原 .86）；期望串写 .97 不写 0.97——构建压缩会去掉前导 0（棒3 实测），语义不变" },
 
     { "key": "btn.followupRadius", "stick": 4, "screen": "home", "selector": ".lite2-shell .lite-home-decision-followup", "prop": "borderRadius", "expected": "9px", "tolerance": "px1", "note": "她按钮 rounded-[9px]（棒1 先 999px 止血，棒4 上 .lite-btn 族转 9px）" },
     { "key": "btn.followupFont", "stick": 4, "screen": "home", "selector": ".lite2-shell .lite-home-decision-followup", "prop": "fontSize", "expected": "13px", "tolerance": "px1", "note": "她按钮 13px semibold（现 11.5px）" },
