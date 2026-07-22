@@ -31,9 +31,19 @@
 > HEAD 一度 detached（并发 gate 所致），已 symbolic-ref 重挂回分支，无丢失。
 > 分支 claude/layout-real-components-27b594 领先 origin 若干 commit，全未推。
 >
+> ## 🔴 进度实况（Danny 问过：/room 为什么还跟她有出入）
+> **九屏里只有「指挥室」布局做完。** 其余 8 屏布局未动——RoomScreen 本战役零改动，
+> 所以 /room 还是老样子，不是坏了，是排在最后一批。全局部件（顶栏搜索/悬浮问Avery）已全站生效。
+> 战役大致走了一半：最难的全局骨架 + 四件真部件搭完，剩下是照定好的语法逐屏刷布局 + 补动效。
+>
 > ## 下一批（验收批次③）
-> 棒G1-G3 其余屏骨架收敛：followups/notes 列表化 → closerlook 对照双列+projects 材料点组
-> → playbooks 两列渐变卡/vision/room 通用语法。逐屏对照 :3100 清点真部件。
+> 棒G1-G3 其余 8 屏布局收敛：G1 followups/notes 列表化（divide-y 行流）→ G2 closerlook 对照双列
+> + projects 材料点组 → G3 playbooks 两列渐变卡 / vision / room 通用语法 + **动效 pass**。
+> 逐屏对照 :3100 清点新的真部件候选（有数据基础才做，假按钮仍不建）。
+>
+> ## 🔴 动效债（Danny 07-22 点名「不能漏」）—— 见 `.issues/layout-real-0722/polish-checklist.md`
+> 头条：**「问 Avery」悬浮入口一条动画都没有**（lite2.css:6197 起零 transition/animation，
+> 点胶囊硬切成输入框）。她是平滑展开。批次③ 棒G3 动效 pass 补。逐屏发现的其它细节往清单里加。
 
 > # ⟳ 2026-07-22 · 布局与真部件战役 · **验收批次① 就绪，停等 Danny 人测**（★下个 session 从这里接）
 >

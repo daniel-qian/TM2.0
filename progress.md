@@ -890,3 +890,23 @@ look-aurora ㉒ 纯 CSS：lite2-rise 铺到 gap 卡/notes 行/vision 卡/playboo
 ## Update — 2026-07-22 · cr-align 战役上产终章 + 下一战役立项（布局与真部件）
 
 六 commit 上产（Vercel 自动部署，bundle 5b04ada），真机四联全中（h1 26/800、族按钮 9px/13px、eyebrow 13px/750/#4d5568、surface .97）。Danny 验收反馈=对照她的库仍差三层：①拍板④刻意不建的假部件（搜索/Nexus 球/KPI 卡/用户 chip）②她的「满」一半是 data.ts 手写常量画出的理想态（186 信号/58%/72% 等全是假数）③屏级布局骨架（双栏满宽仪表盘）当时刻意不在 22 行规格内（D15）。评估过「搬进她的库接逻辑」路线：护栏资产全作废+她的原型自带违红线内容（人载荷百分比/编造指标）+空错载态全缺，判高风险低赚头，Danny 采纳推荐路线=**在我们库里打「布局与真部件战役」**：①指挥室双栏满宽仪表盘（右栏=真差距+真关注成员，数据现成）②快问悬浮入口接真提问流（避「Nexus」锁词）③真搜索（关键词检索基础已有）④KPI 卡位只放敢背书的真数（计数族），编造型指标（营收完成率类）明确不做。换新 session 执行，kickoff 在 session-handoff。
+
+## Update — 2026-07-22 · 布局与真部件战役 · 验收批次①②就绪（未推送，停等 Danny 人测）
+
+**做完的（19 本地 commit，全未推）**：
+- **批次①（棒A-C）** 主页「指挥室」骨架对齐她：外夹与顶栏共基准线 1480（@1440=1392）、双栏 1.55fr/1fr（主柱装决策、侧轨堆两块）、KPI 五格真数卡上提。工具链先行（棒A）：extract-cr-spec 采几何量、verify-cr-alignment 加 probe:rect/count、`eval-harness/tools/run-battery.mjs` 电池 runner 落 tracked（清账=**实际 25 道非 23**，A19/B3/C3，A→B→C 序，dist 调包者殿后独占跑）。
+- **批次②（棒D-F）** 首批四件真部件：①差距面板（自报vs观察对照+三态chip）②关注成员面板（首字头像+口径句+原文，**无百分比无血条**）③顶栏搜索（searchTeam 公共 selector，≥1366 断点）④悬浮「问 Avery」（goScreen 中继预填不自动发，无材料/team/room 屏收起）。**B-2 bug 修**：差距卡「自报」列加结构行闸，标题行不再冒充自述（「项目：X」→「按计划推进」）。全零 transport 改动。
+- **命名拍板**：悬浮入口=「问 Avery」（feat-034 Ask 保留「快问」，Danny 07-22 定）。
+
+**收官判据**：cr 规格 SPEC_STICK=5 **35/35 硬断言全绿**（13 布局+3 结构闸）· A 区 **19/19 绿** · 全矩阵扫雷 **0/0 REGRESSION 0** · 对照板重拍 align-board/2026-07-22。
+
+**两批对抗审查（四视角）各逮真问题即修**：
+- 批次①：`layout.homeFrameMaxWidth` 量 maxWidth 永远绿不了（她用 width:min()，computed maxWidth=none）→改量 rect；run-battery 默认无 SPEC_STICK 恒假红→加默认 4；**双栏装错内容的假绿**——棒B 改了栏宽比但柱子里还是差距块、决策卡 1354px 破 D15 上限 314px 而 spec 十行全绿→棒B' 把决策收进主柱、加 3 行结构闸；headless 看不见滚动条→scrollbar-gutter 补 7.5px 偏移。
+- 批次②：button-family **假绿**（差距 chip 是裸 button，门种子无差距卡故从不审计它）→chip 进白名单；**EN 顶栏 tab 被裁**（预算只量了中文 770px，英文 978px）→搜索 200px+断点 1366；悬浮钮撞 team 屏输入框→team 屏也收起。
+
+**⚠️ 待 Danny**：①8 个新中文标签手写未走 M3（delta 会抹 feat-057 红线注释）待审字，清单见 acceptance-2.md §3；②push 待人测点头。
+
+**🔴 进度实况 & 下一批**：九屏**只有「指挥室」布局做完**。其余 8 屏布局未动（RoomScreen 本战役零改动——所以 /room 还是老样子，不是坏了）。下一批=**批次③ 棒G1-G3** 逐屏布局收敛（G1 followups+notes 列表化 / G2 closerlook 对照双列+projects 材料点组 / G3 playbooks 两列渐变卡+vision+room 通用语法）。
+**🔴 动效债（Danny 07-22 点名「不能漏」）**：`.lite-ask-avery` 一条 transition/animation 都没有——点胶囊「啪」地硬切成输入框、hover 变色也硬切。她是平滑展开。归入批次③ 棒G3 动效 pass，另见 polish-checklist.md。
+
+验收手册 `.issues/layout-real-0722/acceptance-1.md`（+.html 渲染副本）+ `acceptance-2.md`；总计划 plan.md；作战地图 battle-map.md。
