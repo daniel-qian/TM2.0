@@ -1,4 +1,28 @@
-# ⟳ 2026-07-22 · 布局与真部件战役 · **批次③ 收官（棒G–H）· 三批全干完，等 Danny HITL**（★最新，从这里接）
+# ⟳ 2026-07-22 晚 · **满态对齐战役（rich-align-0722）已立项：PRD+11 片 issues 就绪，等夜跑**（★最新，从这里接）
+
+**背景**：Danny 实况看完皮对齐三批后判定「离对齐仍远」——盘问（grill-with-docs）达成共识：
+真目标是**满态对齐**（并排两 app 观感一样丰富）。9 项拍板 + 2 条 ADR 落盘，旧红线两处改口径。
+
+**拍板要点**（全文见 `.issues/rich-align-0722/prd.md`）：富字段（进度/里程碑/风险）走真管道
+（ADR-0029，禁 demo 注入）；人面数字跟 `AVERY_ALLOW_PERSON_SCORING` 开关（CONTEXT.md Voice ①
+已改开关口径）；真 CRUD 项目+人员、手编赢+逐字段出处（ADR-0028）；team 屏状态切换目录化；
+三亚原创语料（小王/小张代号，成稿免审）一键满态；重新开始入口；登录隔离演示。
+
+**产物**（全部 tracked，本分支）：
+- `.issues/rich-align-0722/`：prd.md · runbook.md（环境/25 门电池/像素统一口径/AFK 门离线跑法/陷阱）·
+  issues/01-11+README（垂直切片，串行 01→11）· review-fixes.md（20 条对抗校验修复台账，20/20 复核过）
+- `docs/adr/0028`（手编赢+出处）· `docs/adr/0029`（真管道不注入）· CONTEXT.md 两处口径修正
+- ⚠️ 电池唯一权威=`run-battery.mjs`（25 门，A19/B3/C3）；像素口径已统一（片内存证重冻+晨审签认）
+
+**上一场（布局与真部件·皮对齐）**：三批全绿全未推，验收表单 `.issues/layout-real-0722/acceptance-3.md`
+仍等 Danny HITL；本战役收官会重出对照板+验收，一起交。
+
+**夜跑指令**：读 `.issues/rich-align-0722/issues/README.md` 照 01→11 串行执行；每片先读 runbook。
+push=人工闸不动。
+
+---
+
+# ⟳ 2026-07-22 · 布局与真部件战役 · **批次③ 收官（棒G–H）· 三批全干完，等 Danny HITL**（历史·上一段）
 
 **状态**：批次①②③ **全部本地 commit、未推**（push=Vercel 自动上产=对外人工闸，等 Danny 点头）。
 分支 `claude/layout-real-components-27b594`。dev 三口仍挂（5173 dev dist / 3100 cr / 8137 mock）。
