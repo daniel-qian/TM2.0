@@ -35,8 +35,11 @@
 > 不是 main 的 kickoff 稿；动任何一屏前先确认 cr-align 是否已做过。**
 >
 > ## 批次③ 下一步（按优先级）
-> 1. 开对照板锁定「单列 vs 她多列」结构缺口（people/projects/playbooks 优先）→ 逐屏补多列网格（避 trap：
->    people 无 load%/健康度/CRUD、projects 无 milestone/成员栈/CRUD——见 plan §4 DO-NOT-BUILD）。
+> 1. 开对照板锁定真缺口，**别假设「单列缺口」**：实测我方 `.lite-projects-grid`（auto-fill minmax288）、
+>    `.lite-vision-mock-grid`（auto-fit minmax300）**已是响应式多列**，projects/vision 不缺列。
+>    people/playbooks 屏的网格还没核（team/people 与 playbooks-screen 的 grid 规则本 session 未查）——
+>    先看对照板确认是「结构差（列数/密度）」还是只是「细节差（间距/卡内）」，多半是后者。避 trap：
+>    people 无 load%/健康度/CRUD、projects 无 milestone/成员栈/CRUD——见 plan §4 DO-NOT-BUILD。
 > 2. 补剩余动效（搜索浮层淡入 / 差距 chip 过渡）。
 > 3. closerlook 对照双列已是她语法（cr-align 做过？核对照板）；room 通用语法 + 真引用差异点保住。
 > 4. 批次③ 收尾（棒H）：全 23 门电池两轮零红 + 像素基线人审重冻 + 对抗审查四视角 + `acceptance-3.md`，停等 Danny。
