@@ -42,8 +42,8 @@ log = logging.getLogger("avery.ingest.llm_extract")
 
 from .extract import (
     ExtractionResult, Extractor, HeuristicExtractor, PersonEntity, ProjectEntity,
-    SignalEntity, _INDEX_TOKEN_RE, _NOT_NAME, _norm_status, _norm_team, _person_key,
-    _project_key, _slug,
+    ProjectRisk, SignalEntity, _INDEX_TOKEN_RE, _NOT_NAME, _norm_status, _norm_team,
+    _person_key, _project_key, _slug, norm_risk_level,
 )
 from .parse import ParsedDoc
 from .redline_extract import (
@@ -87,7 +87,7 @@ _INSTRUCTIONS = """Return exactly this JSON shape:
   ],
   "projects": [
     {"title": "", "ownerName": "", "status": "", "progress": null, "dueDate": "", "summary": "",
-     "blockers": [""], "line": 0}
+     "blockers": [""], "risk": {"level": "high|medium|low", "reason": ""}, "line": 0}
   ],
   "signals": [
     {"subjectType": "person|project", "subjectRef": "", "summary": "", "tag": "", "line": 0}
@@ -118,6 +118,10 @@ Field rules:
   title must be a meaningful name from the content — NEVER the source filename, and never a
   milestone's name. status only from: on-track|at-risk|blocked|done|"".
   progress: integer 0-100 ONLY if the doc states a completion number for that project, else null.
+  risk: ONLY if the doc states a PROJECT-level risk with a severity —
+  {"level": one of high|medium|low, "reason": short phrase copied from the doc}. This is a project
+  risk (schedule / scope / resource / dependency), NEVER a person's 离职/流失/flight risk. Omit the
+  key (or null) when no project risk is stated.
 - signals: notable, doc-stated situation signals (blockers, unresolved feedback, workload spikes).
   For a person-directed signal, summary describes the SITUATION they are carrying — never a
   judgment or label about the person.
@@ -183,6 +187,17 @@ def _line_ref(doc: ParsedDoc, v, default: int = 1) -> str:
         n = default
     n = max(1, min(n, max(1, len(doc.lines))))
     return f"{doc.name}:{n}"
+
+
+def _llm_risk(v) -> ProjectRisk | None:
+    """rich-align-0722/01: LLM projects[].risk → ProjectRisk. 词表外 level → None（整行不抽），
+    与 heuristic 的 parse_risk_value 同口径（两路抽出形状一致，合约由 ProjectEntity 收口）。"""
+    if not isinstance(v, dict):
+        return None
+    level = norm_risk_level(_s(v.get("level"), 12))
+    if not level:
+        return None
+    return ProjectRisk(level=level, reason=_s(v.get("reason"), 180))
 
 
 # Label/header cells that are obviously not a human — belt to the model's suspenders (_SYSTEM
@@ -367,7 +382,10 @@ class LLMExtractor:
             if isinstance(progress, bool) or not isinstance(progress, (int, float)):
                 progress = None
             else:
-                progress = max(0, min(100, int(progress)))
+                # rich-align-0722/01: 超界拒收，不 clamp（与 heuristic + 前端 progressOf 同口径）。
+                progress = int(progress)
+                if not (0 <= progress <= 100):
+                    progress = None
             res.projects.append(ProjectEntity(
                 id=_slug(title, "p"), title=title,
                 ownerName=_s(raw.get("ownerName"), 80),
@@ -375,6 +393,7 @@ class LLMExtractor:
                 dueDate=_s(raw.get("dueDate"), 60),
                 summary=_s(raw.get("summary"), 240),
                 blockers=_slist(raw.get("blockers"), 6, 180),
+                risk=_llm_risk(raw.get("risk")),
                 source=_line_ref(doc, raw.get("line"))))
 
         for raw in data.get("signals", [])[:12]:

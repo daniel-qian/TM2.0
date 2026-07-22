@@ -5,6 +5,7 @@ import {
   buildProjectViews,
   groupProjects,
   projectCoverage,
+  projectRiskLabel,
   projectStatusLabel,
   type ProjectGroupKey,
   type ProjectStatusKey,
@@ -125,6 +126,18 @@ function ProjectCard({ view, onOpen }: { view: ProjectView; onOpen: (id: string)
           {projectStatusLabel(view, l)}
         </span>
       </span>
+
+      {/* 🔴 风险徽章：有 riskLevel 才画（absent≠none）。文档没写风险 = 整个徽章收起，
+          绝不渲染「无风险 / low」。等级 → 她的软底深字令牌（high 红/medium 橙/low 绿）。 */}
+      {view.riskLevel ? (
+        <span className={classNames(['lite-project-risk', `risk-${view.riskLevel}`])}>
+          <span className="lite-project-risk-dot" aria-hidden="true" />
+          <span className="lite-project-risk-level">{projectRiskLabel(view.riskLevel, l)}</span>
+          {view.riskReason ? (
+            <span className="lite-project-risk-reason">{view.riskReason}</span>
+          ) : null}
+        </span>
+      ) : null}
 
       {view.summary ? <p className="lite-project-summary">{view.summary}</p> : null}
 

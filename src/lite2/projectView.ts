@@ -37,6 +37,9 @@ export type ProjectGroupKey = 'needsYou' | 'moving' | 'done' | 'other' | 'unknow
  * `blockers` 用空数组而不是 null —— 后端只在 `pr.blockers` 非空时才发这个键，缺席与空列表
  * 无法区分，所以这里统一按「没有列出卡点」呈现，不谎称「文档没写」。
  */
+/** 项目级风险等级（PRD A1，rich-align-0722/01）。词表外由后端整行不抽，这里只认三档。 */
+export type RiskLevelKey = 'high' | 'medium' | 'low'
+
 export interface ProjectView {
   id: string
   title: string
@@ -48,6 +51,10 @@ export interface ProjectView {
   progress: number | null
   dueDate: string | null
   blockers: string[]
+  /** 🔴 null = 文档未提及风险 = 整个风险徽章收起（absent≠none）。绝不渲染成「无风险 / low」。 */
+  riskLevel: RiskLevelKey | null
+  /** 风险原因原文（文档原句，原样回显）；null = 文档没给原因（等级仍可单独显示）。 */
+  riskReason: string | null
 }
 
 const KNOWN_STATUS = new Set(['blocked', 'at-risk', 'on-track', 'done'])
@@ -73,6 +80,17 @@ function progressOf(raw: number | undefined): number | null {
 function trimmedOrNull(raw: string | undefined): string | null {
   const value = (raw ?? '').trim()
   return value ? value : null
+}
+
+const KNOWN_RISK = new Set<RiskLevelKey>(['high', 'medium', 'low'])
+
+/**
+ * 风险等级：只认 high/medium/low（后端已按 A2 词表归一并对词表外整行不抽）。
+ * 拿到别的值宁可当「文档未提及」也不画一个骗人的徽章——与 progressOf 同哲学。
+ */
+function riskLevelOf(raw: string | undefined): RiskLevelKey | null {
+  const value = (raw ?? '').trim().toLowerCase()
+  return KNOWN_RISK.has(value as RiskLevelKey) ? (value as RiskLevelKey) : null
 }
 
 /**
@@ -101,7 +119,22 @@ export function buildProjectViews(
     progress: progressOf(card.progress),
     dueDate: trimmedOrNull(card.dueDate),
     blockers: (card.blockers ?? []).map((b) => b.trim()).filter(Boolean),
+    // 🔴 缺席=文档未提及=徽章收起：只有 card.risk 存在且 level 在词表内才给 riskLevel，禁 ?? 默认。
+    riskLevel: riskLevelOf(card.risk?.level),
+    riskReason: trimmedOrNull(card.risk?.reason),
   }))
+}
+
+/** 风险等级 → 人话标签。项目屏卡面与详情浮层共用一份口径。 */
+export function projectRiskLabel(level: RiskLevelKey, l: Dict['lite2']): string {
+  switch (level) {
+    case 'high':
+      return l.projectsRiskHigh
+    case 'medium':
+      return l.projectsRiskMedium
+    case 'low':
+      return l.projectsRiskLow
+  }
 }
 
 /**

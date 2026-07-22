@@ -981,6 +981,11 @@ export const en = {
     projectsBlockersMany: '{count} things in the way',
     projectsUnknownValue: 'The documents did not say',
     projectsOpenAria: 'Open {title}',
+    // rich-align-0722/01 · 项目级风险徽章（PRD A1）。等级来自文档 A2 语法；缺席=不出徽章。
+    projectsRiskLabel: 'Risk',
+    projectsRiskHigh: 'High risk',
+    projectsRiskMedium: 'Medium risk',
+    projectsRiskLow: 'Low risk',
 
     // ── Onboarding gate (feat-045, PRD F7; input-side-0721 — a full-screen gate page now, not
     // a floating dialog. Escape / "look around" pauses and resumes next visit. NO fake

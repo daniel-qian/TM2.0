@@ -38,6 +38,22 @@
 需人眼：
 - [ ] 与她方并排（对照板局部重拍）看徽章/进度条/环形观感当量；projects 4 张像素基线按 runbook §1 统一口径处理（片内目检 diff→存证 pixel-evidence/01/→备份旧基线→重冻→像素门复绿；Danny 晨审签认）。
 
+## 落地回填（F18 · 2026-07-22 实现后实测接受面）
+
+字段表定稿后，heuristic 实际正则接受面（`eval-harness/avery/ingest/extract.py::_project_from_span`
++ `parse_risk_value`/`norm_risk_level`），供 07 语料照写：
+
+| 字段 | 标签接受面（行首锚定，strip_decoration 后） | 值/归一 |
+|---|---|---|
+| 进度 | `进度｜完成度｜完成率`（全/半角冒号可选可省）；英文 `progress`（`\b`，大小写不敏感，冒号/连字符可省） | `\d{1,3}%`，0–100 收（0 合法），**超界（>100）拒收留 None**（不 clamp） |
+| 风险 | `风险｜风险等级｜风险级别｜risk`（全/半角冒号，大小写不敏感） | 等级 `高｜中｜低｜high｜medium｜low`（med 亦收，大小写不敏感）；等级与原因分隔符 `/ ｜ ／ ｜ —— ｜ —`；原因可省、≤180 字；**词表外等级整行不抽（None）** |
+| 风险点 | `阻碍项｜阻碍｜阻塞｜卡点｜风险点`（未变） | → blockers（长标签优先，`风险：` 与 `风险点：` 结构性互斥，实测无串扰） |
+
+- risk 落 `ProjectEntity.risk = ProjectRisk{level, reason}`；投影 `registry.project_cards` 缺就不发键、
+  reason 空则不发 reason 键。LLM 路径 `llm_extract._llm_risk` 同口径归一（形状由 ProjectEntity 收口，parity by construction）。
+- 🔴 红线复核：`risk`/`离职风险`/`流失风险` 仍在 person 禁键表、只对**人**执法；project.risk 合法、
+  不过 person 红线门（recon 实证 `validate_extraction` 只扫 people + person signals）。
+
 ## 波及面与红线
 
 既有门波及（门影响面摸底 C 节）：verify-status-truth（absent 分支）、verify-p0（0% 断言+console）、cr-align-spec（stick 6 起号）、verify-contrast-smalltext（projects 在九屏清单）、像素基线 projects 4 张。

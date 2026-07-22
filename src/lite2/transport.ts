@@ -113,16 +113,25 @@ export interface LivePersonCard {
   collaboration?: string[]
 }
 
+// rich-align-0722 · issue 01：项目级风险（PRD A1）。这是**项目**属性（进度/范围/资源风险），
+// 不是人身分数——`离职风险/流失风险` 仍在 person 禁键表里、只对人执法。缺席不发键（后端
+// registry.project_cards 只在 pr.risk 时才发；reason 省略时连 reason 键都不发）。
+export interface LiveProjectRisk {
+  level: 'high' | 'medium' | 'low'
+  reason?: string // 文档原句，原样回显；缺席=文档没给原因
+}
+
 export interface LiveProjectCard {
   id: string
   title: string
   ownerId?: string
   ownerName?: string
   status?: string
-  progress?: number // 可量化（文档写了就抽）；risk 4 维/reportedStatus 缺信号 → 不出现
+  progress?: number // 可量化（文档写了就抽）；reportedStatus 缺信号 → 不出现
   dueDate?: string
   summary?: string
   blockers?: string[]
+  risk?: LiveProjectRisk // rich-align-0722/01：文档写了才有；absent≠none（缺席=文档未提及）
 }
 
 // feat-056 决策定级契约。口径真源在后端 `eval-harness/avery/decision_rules.py`，

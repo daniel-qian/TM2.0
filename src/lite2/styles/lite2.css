@@ -4844,10 +4844,12 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* rich-align-0722/01：6px 圆角轨道，几何对齐她方（h-[6px] rounded-full）；
+   颜色仍走皮层令牌（paper 跟结构不跟色）。 */
 .lite2-shell .lite-project-progress-track {
   display: block;
-  height: 4px;
-  border-radius: 2px;
+  height: 6px;
+  border-radius: 999px;
   background: rgba(var(--lite2-ink-rgb), 0.08);
   overflow: hidden;
 }
@@ -4855,8 +4857,106 @@
 .lite2-shell .lite-project-progress-fill {
   display: block;
   height: 100%;
-  border-radius: 2px;
+  border-radius: 999px;
   background: rgba(var(--lite2-accent-rgb), 0.72);
+}
+
+/* ── rich-align-0722/01：项目级风险徽章 ──────────────────────────────────────
+   结构 + 数值令牌对齐她方 badge（软底 + 深字 pill，text-[11.5px] font-bold px-2.5 py-0.5
+   rounded-full，dot 7px 实心）。🔴 三档语义色是固定的（不随皮变——风险高就是红），
+   与「paper 跟结构不跟色」不冲突：这是语义标签色，不是壳装饰色。全部深字上浅底，
+   由 verify-contrast-smalltext 在 projects 屏两皮各自实算 AA 4.5。 */
+.lite2-shell .lite-project-risk {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  max-width: 100%;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.lite2-shell .lite-project-risk-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.lite2-shell .lite-project-risk-level {
+  flex: none;
+}
+
+.lite2-shell .lite-project-risk-reason {
+  min-width: 0;
+  font-weight: 600;
+  opacity: 0.82;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 三档：软底 + 深字（她方 badge soft/text 令牌）。color 同时喂 dot 的 currentColor。 */
+.lite2-shell .lite-project-risk.risk-high {
+  background: #feeceb;
+  color: #a5322f;
+}
+.lite2-shell .lite-project-risk.risk-medium {
+  background: #fff2df;
+  color: #9a5a12;
+}
+.lite2-shell .lite-project-risk.risk-low {
+  background: #e7f5ef;
+  color: #1c6a45;
+}
+
+/* ── rich-align-0722/01：详情浮层环形进度（SVG 56 / stroke 5）────────────────── */
+.lite2-shell .lite-detail-progress-section .lite-project-ring {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+}
+
+.lite2-shell .lite-project-ring svg {
+  transform: rotate(-90deg); /* 从 12 点方向起画 */
+}
+
+.lite2-shell .lite-project-ring-track {
+  stroke: rgba(var(--lite2-ink-rgb), 0.1);
+}
+
+.lite2-shell .lite-project-ring-fill {
+  stroke: rgba(var(--lite2-accent-rgb), 0.85);
+}
+
+.lite2-shell .lite-project-ring-value {
+  position: absolute;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.lite2-shell .lite-detail-risk-reason {
+  margin-top: 6px;
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* 环形入场过渡：媒体级隔离（进度条/环形入场动画必包 no-preference，reduced-motion 下直接
+   落到终值，不做 dashoffset 补间）。 */
+@media (prefers-reduced-motion: no-preference) {
+  .lite2-shell .lite-project-ring-fill {
+    transition: stroke-dashoffset 0.7s ease;
+  }
 }
 
 /* ── 卡点 ─────────────────────────────────────────────────────────────────── */

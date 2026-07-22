@@ -4,7 +4,7 @@ import { useRouteDetail } from './routes'
 import { useDict } from '../shared/i18n/useDict'
 import { InitialAvatar } from './InitialAvatar'
 import { LiteModal } from './LiteModal'
-import { buildProjectViews, projectStatusLabel } from './projectView'
+import { buildProjectViews, projectRiskLabel, projectStatusLabel } from './projectView'
 import type { LiteDetail } from './store'
 import type { LiteTeam } from './teamData'
 import type { LiveTeamPayload } from './transport'
@@ -169,15 +169,33 @@ export function DetailOverlay() {
           ) : null}
 
           {/* 🔴 进度未知时也要出这一节，写明「文档未提及」——以前是整节不渲染，于是
-              「文档没写进度」和「这个项目没有进度这回事」在屏幕上完全一样。 */}
-          <section className="lite-detail-section">
+              「文档没写进度」和「这个项目没有进度这回事」在屏幕上完全一样。
+              rich-align-0722/01：有值时画环形进度（结构量级对齐她方 SVG 56 / stroke 5）。 */}
+          <section className="lite-detail-section lite-detail-progress-section">
             <p className="eyebrow">{t.lite2.detailProgress}</p>
-            <p className={project.progress === null ? 'is-unknown' : undefined}>
-              {project.progress === null
-                ? t.lite2.projectsUnknownValue
-                : `${project.progress}%`}
-            </p>
+            {project.progress === null ? (
+              <p className="is-unknown">{t.lite2.projectsUnknownValue}</p>
+            ) : (
+              <ProjectProgressRing value={project.progress} />
+            )}
           </section>
+
+          {/* rich-align-0722/01：项目级风险行。🔴 缺席=整节收起（absent≠none）——文档没写风险
+              就不出这一节，绝不显示「无风险 / low」。 */}
+          {project.riskLevel ? (
+            <section className="lite-detail-section">
+              <p className="eyebrow">{t.lite2.projectsRiskLabel}</p>
+              <span className={`lite-project-risk risk-${project.riskLevel}`}>
+                <span className="lite-project-risk-dot" aria-hidden="true" />
+                <span className="lite-project-risk-level">
+                  {projectRiskLabel(project.riskLevel, t.lite2)}
+                </span>
+              </span>
+              {project.riskReason ? (
+                <p className="lite-detail-risk-reason">{project.riskReason}</p>
+              ) : null}
+            </section>
+          ) : null}
 
           {project.blockers.length > 0 ? (
             <section className="lite-detail-section">
@@ -223,5 +241,46 @@ export function DetailOverlay() {
         </section>
       ) : null}
     </LiteModal>
+  )
+}
+
+// rich-align-0722/01：详情浮层环形进度。结构量级对齐她方（SVG 56 / stroke 5 / r 25.5 /
+// 周长 ≈160.22）；颜色走皮层令牌（track 皮自适应淡底、fill 走 accent），入场过渡在 CSS 里
+// 用 @media (prefers-reduced-motion: no-preference) 隔离。中心显示原始数字（不带 %，随她方）。
+// value 已经过 projectView.progressOf 校验（0..100 有限数），这里只做防御性 clamp。
+function ProjectProgressRing({ value }: { value: number }) {
+  const size = 56
+  const stroke = 5
+  const r = (size - stroke) / 2
+  const circ = 2 * Math.PI * r
+  const pct = Math.max(0, Math.min(100, value))
+  const offset = circ * (1 - pct / 100)
+  return (
+    <span className="lite-project-ring" role="img" aria-label={`${value}%`}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
+        <circle
+          className="lite-project-ring-track"
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          strokeWidth={stroke}
+          fill="none"
+        />
+        <circle
+          className="lite-project-ring-fill"
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          strokeWidth={stroke}
+          fill="none"
+          strokeLinecap="round"
+          strokeDasharray={circ}
+          strokeDashoffset={offset}
+        />
+      </svg>
+      <span className="lite-project-ring-value" aria-hidden="true">
+        {value}
+      </span>
+    </span>
   )
 }

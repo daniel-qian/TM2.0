@@ -44,12 +44,17 @@ const R = []
 const rec = (n, ok, d) => { R.push({ n, ok }); console.log(`  [${ok ? 'PASS' : 'FAIL'}] ${n}${d ? ' — ' + d : ''}`) }
 
 // 一份中文周报：两个真写了状态的项目（on-track 对照 + blocked 对照），供颜色/文案回归比对。
+// rich-align-0722/01：on-track 对照项目补 进度 + 项目级风险，让「真值卡照常渲染进度条 + 风险
+// 徽章」有正例；克隆件（injectStatuslessProject）把这两个键连同 status 一起删掉 → absent 分支
+// 断言「无依据卡不渲染进度条与风险徽章」。
 const DOC = [
   '# 星澜置业 · 周报 W31',
   '',
   '## 项目：一期交付验收',
   '负责人：李明',
   '状态：正常',
+  '进度：72%',
+  '风险：中/工期偏紧',
   '',
   '## 项目：二期市政配套对接',
   '负责人：王芳',
@@ -78,6 +83,9 @@ async function injectStatuslessProject(route) {
   const src = body.projects.find((p) => p && p.status) ?? body.projects[0]
   const clone = { ...src }
   delete clone.status // 生产上后端是「缺就不发这个键」，不是发 '' 或 null
+  // rich-align-0722/01：同款「缺就不发键」——把 progress / risk 也整个删掉，测富字段 absent 分支。
+  delete clone.progress
+  delete clone.risk
   clone.id = `${clone.id}__nostatus`
   clone.title = CLONE_TITLE
   body.projects = [...body.projects, clone]
@@ -240,6 +248,29 @@ for (const [q, seam, label] of [
       info.dotClass.includes('tone-unknown'), info.dotClass)
     rec(`[${label}] 被告卡不挂 edge-* 告警边`,
       !info.cardClass.includes('edge-blocked') && !info.cardClass.includes('edge-at-risk'), info.cardClass)
+
+    // rich-align-0722/01：富字段 absent 分支 —— 无 progress/risk 键的被告卡不画进度条/风险徽章。
+    const richAbsent = await subjectCard.evaluate((el) => ({
+      riskBadges: el.querySelectorAll('.lite-project-risk').length,
+      progressFills: el.querySelectorAll('.lite-project-progress-fill').length,
+      text: el.innerText,
+    }))
+    rec(`[${label}] 🔴 缺 risk 键的被告卡不渲染风险徽章（absent≠none）`,
+      richAbsent.riskBadges === 0, `徽章 ${richAbsent.riskBadges} 个`)
+    rec(`[${label}] 🔴 缺 progress 键的被告卡不画进度条，改说「文档未提及」`,
+      richAbsent.progressFills === 0 && richAbsent.text.includes('文档未提及'),
+      `进度条 ${richAbsent.progressFills} 条`)
+  }
+
+  // rich-align-0722/01：真值对照卡（一期，写了 进度72% + 风险中）必须照常渲染进度条 + 风险徽章。
+  const controlCard = p.locator('.lite-project-card', { hasText: ONTRACK_TITLE }).first()
+  if (await controlCard.count()) {
+    const ctrl = await controlCard.evaluate((el) => ({
+      riskMed: el.querySelector('.lite-project-risk.risk-medium') ? 1 : 0,
+      progressFills: el.querySelectorAll('.lite-project-progress-fill').length,
+    }))
+    rec(`[${label}] 对照真值卡照常渲染风险徽章（risk-medium）+ 进度条`,
+      ctrl.riskMed === 1 && ctrl.progressFills === 1, JSON.stringify(ctrl))
   }
   rec(`[${label}] 无 pageerror`, errs.length === 0, errs.slice(0, 2).join(' | ') || '0 条')
   await ctx.close()

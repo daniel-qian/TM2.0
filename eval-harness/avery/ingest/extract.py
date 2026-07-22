@@ -102,6 +102,43 @@ class PersonEntity:
         return out
 
 
+# rich-align-0722 · issue 01 — project-level risk (PRD A1/A2). This is a PROJECT attribute
+# (schedule / scope / resource), NEVER a person score: `risk`/`离职风险`/`流失风险` stay in the
+# person 禁键表 (FORBIDDEN_PERSON_KEYS*) and are gated on people only. A project may carry risk the
+# same way it may carry progress — R2: quantify work, never a person.
+_RISK_LEVEL_MAP = {
+    "高": "high", "中": "medium", "低": "low",
+    "high": "high", "medium": "medium", "med": "medium", "low": "low",
+}
+
+
+def norm_risk_level(raw: str | None) -> str:
+    """A2 词表: 高|中|低 + high|medium|low → high/medium/low. 词表外 → '' (整行不抽)."""
+    return _RISK_LEVEL_MAP.get((raw or "").strip().lower(), "")
+
+
+@dataclass
+class ProjectRisk:
+    """PRD A1: {level: high|medium|low, reason?}. reason 省略时为空串（投影层缺席不发）。"""
+    level: str
+    reason: str = ""
+
+
+def parse_risk_value(text: str) -> "ProjectRisk | None":
+    """A2 语法: `高/雨季无备选场地`（等级 + 可选原因，`/` 或 `——` 分隔）。词表外 → None（整行不抽）。"""
+    body = (text or "").strip()
+    # 等级与原因以 / ／ —— — 分隔；原因可省。非贪婪取第一个分隔符。
+    m = re.match(r"^(.*?)\s*(?:[/／]|——|—)\s*(.+)$", body)
+    if m:
+        level_raw, reason = m.group(1), m.group(2)
+    else:
+        level_raw, reason = body, ""
+    level = norm_risk_level(level_raw)
+    if not level:
+        return None
+    return ProjectRisk(level=level, reason=reason.strip()[:180])
+
+
 @dataclass
 class ProjectEntity:
     """A project card. Work MAY be quantified (progress %) — that is not a person score."""
@@ -115,6 +152,7 @@ class ProjectEntity:
     summary: str = ""
     blockers: list[str] = field(default_factory=list)
     dependsOn: list[str] = field(default_factory=list)
+    risk: ProjectRisk | None = None             # rich-align-0722/01: {level, reason?} if stated, else None
     source: str = ""
 
     def as_facts_lines(self) -> list[str]:
@@ -126,6 +164,9 @@ class ProjectEntity:
         out = [f"{head}:{st}{pr}.".replace(": .", ".")]
         if self.summary:
             out.append(f"{self.title}: {self.summary}")
+        if self.risk:
+            rk = f"{self.title} — risk {self.risk.level}"
+            out.append(f"{rk}: {self.risk.reason}" if self.risk.reason else rk)
         for b in self.blockers:
             out.append(f"{self.title} — blocker: {b}")
         return out
@@ -1070,6 +1111,7 @@ class HeuristicExtractor:
         summary = ""
         due = ""
         blockers: list[str] = []
+        risk: ProjectRisk | None = None
         for i in range(lo, min(hi, len(doc.lines))):
             raw = doc.lines[i].strip()
             # FIELD LABELS ARE READ WITHOUT THEIR MARKDOWN MARKUP (see granularity.strip_decoration).
@@ -1123,12 +1165,19 @@ class HeuristicExtractor:
             m = re.match(r"^(?:自报状态|当前状态|项目状态|状态|进展)\s*[:：]\s*(.+)$", s)
             if m:
                 status = _norm_status(m.group(1)) or status
+            # rich-align-0722/01: 超界拒收，不 clamp 成假值（PRD A2「仅收 0–100 有限数，0 合法」）。
+            # \d{1,3} 能匹配到 999；>100 一律不落值（progress 留 None = 文档没给可用进度），
+            # 与前端 projectView.progressOf 的 0..100 校验同口径（曾经 max/min clamp 会把 150 谎报成 100%）。
             m = re.search(r"\bprogress\s*[:\-]?\s*(\d{1,3})\s*%", s, re.I)
             if m:
-                progress = max(0, min(100, int(m.group(1))))
+                _p = int(m.group(1))
+                if 0 <= _p <= 100:
+                    progress = _p
             m = re.match(r"^(?:进度|完成度|完成率)\s*[:：]?\s*(\d{1,3})\s*%", s)
             if m:
-                progress = max(0, min(100, int(m.group(1))))
+                _p = int(m.group(1))
+                if 0 <= _p <= 100:
+                    progress = _p
             m = re.match(r"^(due|deadline|ship(?:s|ping)?)\s*[:\-]?\s*(.+)$", s, re.I)
             if m:
                 due = m.group(2).strip()
@@ -1145,6 +1194,16 @@ class HeuristicExtractor:
             m = re.match(r"^(?:阻碍项|阻碍|阻塞|卡点|风险点)\s*[：:]\s*(.+)$", s)
             if m:
                 blockers.append(m.group(1).strip()[:180])
+                continue
+            # rich-align-0722/01: 项目级「风险：等级/原因」。长标签优先——`风险点：` 已在上面被
+            # blockers 消费并 continue，永不到这；`^风险[：:]` 也匹配不到 `风险点：`（点隔在中间）。
+            # 🔴 一旦是 `风险：` 行就 continue：哪怕等级词表外（parse 返回 None，整行不抽为 risk），
+            # 也不能让下面的英文 blocker 嗅探把「风险：高/waiting on 供应商」误当卡点收走。
+            m = re.match(r"^(?:风险|风险等级|风险级别|risk)\s*[：:]\s*(.+)$", s, re.I)
+            if m:
+                parsed = parse_risk_value(m.group(1))
+                if parsed:
+                    risk = parsed
                 continue
             if re.search(r"\b(blocker|blocked|waiting on|stuck|unresolved|no sign-?off|"
                          r"acceptance (?:not|un)|not defined)\b", s, re.I):
@@ -1168,7 +1227,8 @@ class HeuristicExtractor:
             summary = first[:200]
         return ProjectEntity(
             id=_slug(title, "p"), title=title, ownerName=owner, status=status, progress=progress,
-            dueDate=due, summary=summary, blockers=blockers[:6], source=f"{doc.name}:{lo + 1}")
+            dueDate=due, summary=summary, blockers=blockers[:6], risk=risk,
+            source=f"{doc.name}:{lo + 1}")
 
     def _signals_from_doc(self, doc: ParsedDoc) -> ExtractionResult:
         """Doc-derived R1 signals: '12 unresolved comments', 'acceptance not set', 'reworked N days
@@ -1377,6 +1437,8 @@ def _dedupe_entities(res: ExtractionResult) -> None:
         cur.source = cur.source or pr.source
         if cur.progress is None:
             cur.progress = pr.progress
+        if cur.risk is None:                      # rich-align-0722/01: keep-first risk across docs
+            cur.risk = pr.risk
         cur.blockers = (cur.blockers + [b for b in pr.blockers if b and b not in cur.blockers])[:6]
         cur.dependsOn = (
             cur.dependsOn + [d for d in pr.dependsOn if d and d not in cur.dependsOn]

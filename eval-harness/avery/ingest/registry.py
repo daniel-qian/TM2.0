@@ -177,6 +177,13 @@ class CompanyContext:
                 card["summary"] = pr.summary
             if pr.blockers:
                 card["blockers"] = pr.blockers
+            # rich-align-0722/01: 项目级风险徽章数据。缺就不发键（absent≠none 全链纪律）；
+            # reason 省略时也不发（前端派生 riskReason 缺席=文档未给原因）。
+            if pr.risk:
+                risk_card = {"level": pr.risk.level}
+                if pr.risk.reason:
+                    risk_card["reason"] = pr.risk.reason
+                card["risk"] = risk_card
             cards.append(card)
         return cards
 
