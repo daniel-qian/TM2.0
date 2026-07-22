@@ -4,12 +4,15 @@
 > **验收 URL（必须带参）**：`http://localhost:5173/?v=2&mode=live&lang=zh`
 > 批次① 手册见 `acceptance-1.md`（主页骨架）；本批在其上叠三件真部件。
 
-## 机器判据（本批次收官）
+## 机器判据（本批次收官 · 三处修复后重跑）
 
-- `SPEC_STICK=5` cr 对齐规格：硬断言全绿（含批次① 的 13 行布局断言 + 三结构闸）
-- A 区电池：19/19 绿 exit 0
-- 全矩阵扫雷（9 屏 × 2 皮 × 4 世界）：0 件 / 0 指纹 · REGRESSION 0
+- `SPEC_STICK=5` cr 对齐规格：硬断言 **35/35 绿**（含批次① 的 13 行布局断言 + 三结构闸）
+- A 区电池：**19/19 绿 exit 0**
+- 全矩阵扫雷（9 屏 × 2 皮 × 4 世界）：**0 件 / 0 指纹 · REGRESSION 0**
 - 四视角对抗审查逮到三处、已全部修掉并复验（见 §4）
+- 对照板（本批已重拍）：`eval-harness/reports/align-board/2026-07-22/index.html`（desktop + mobile）
+
+**dev server 三口挂着**：我方 `http://localhost:5173/?v=2&mode=live&lang=zh` · 她方 `http://localhost:3100/` · mock 后端 8137。
 
 ---
 

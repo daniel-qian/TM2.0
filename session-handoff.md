@@ -1,3 +1,40 @@
+> # ⟳ 2026-07-22 · 布局与真部件战役 · **验收批次①+② 双双就绪，停等 Danny 人测**（★下个 session 从这里接）
+>
+> **状态**：批次①（棒A-C 主页骨架）+ 批次②（棒D-F 三件真部件）全部落地，**本地 commit 全未推**。
+> 手册 `.issues/layout-real-0722/acceptance-1.md`（骨架）+ `acceptance-2.md`（真部件）。
+> 打不开 .md 就开 `acceptance-1.html`（pandoc 渲染副本）。dev server 三口挂着：5173 / 3100 / 8137。
+>
+> ## 验收入口
+> `http://localhost:5173/?v=2&mode=live&lang=zh`（**必须带参**）· 对照板 `align-board/2026-07-22/index.html`
+>
+> ## 批次② 收官判据（三处对抗审查修复后重跑）
+> - cr 对齐规格 `SPEC_STICK=5` **35/35 硬断言全绿**（13 布局 + 3 结构闸）
+> - A 区电池 **19/19 绿 exit 0** · 全矩阵扫雷 **0 件 / 0 指纹 · REGRESSION 0**
+>
+> ## 批次② 三件真部件（全零 transport 改动）
+> ① 差距面板（自报vs观察对照 + 三态筛选，含 B-2 claim 闸修复：标题行不再冒充自述）
+> ② 关注成员面板（首字母头像+口径句+原文，**无百分比无血条** D14）
+> ③ 顶栏搜索（searchTeam 公共 selector，≥1366 断点，aria-label）
+> ④ 悬浮「问 Avery」（goScreen 中继预填不自动发，无材料/team/room 屏收起）
+>
+> ## 🔴 等 Danny 的两件
+> 1. **8 个新中文标签是手写的**（没走 M3——delta 脚本会抹掉 feat-057 红线注释）。都短无歧义，
+>    清单见 acceptance-2.md §3，请审字。要走 M3 重译我补上注释保护再跑。
+> 2. push 待人测点头（对外动作）。
+>
+> ## 本批对抗审查逮到并已修的三处（四视角，三棒全绿之下）
+> 1. button-family 假绿——差距 chip 是裸 button，门种子无差距卡故从不审计它；chip 进白名单。
+> 2. EN 顶栏 tab 被裁——预算只量了中文 tab(770px)，英文 978px，1280 EN 裁末 tab；搜索 200px+断点 1366。
+> 3. 悬浮钮撞 team 屏输入框（872 宽）——team 屏也收起。
+>
+> ## git 状态
+> HEAD 一度 detached（并发 gate 所致），已 symbolic-ref 重挂回分支，无丢失。
+> 分支 claude/layout-real-components-27b594 领先 origin 若干 commit，全未推。
+>
+> ## 下一批（验收批次③）
+> 棒G1-G3 其余屏骨架收敛：followups/notes 列表化 → closerlook 对照双列+projects 材料点组
+> → playbooks 两列渐变卡/vision/room 通用语法。逐屏对照 :3100 清点真部件。
+
 > # ⟳ 2026-07-22 · 布局与真部件战役 · **验收批次① 就绪，停等 Danny 人测**（★下个 session 从这里接）
 >
 > **状态**：棒A（工具链）+ 棒B/B'/C（主页骨架）落地，**7 个本地 commit 全未推**。
