@@ -121,6 +121,13 @@ export interface LiveProjectRisk {
   reason?: string // 文档原句，原样回显；缺席=文档没给原因
 }
 
+// rich-align-0722 · issue 02：里程碑（PRD A1）。status 归一四态 + 词表外 other（statusRaw 回显原词）。
+export interface LiveProjectMilestone {
+  name: string
+  status: 'done' | 'active' | 'blocked' | 'upcoming' | 'other'
+  statusRaw?: string // 仅 other 时发：文档原状态词，原样回显不改写
+}
+
 export interface LiveProjectCard {
   id: string
   title: string
@@ -132,6 +139,7 @@ export interface LiveProjectCard {
   summary?: string
   blockers?: string[]
   risk?: LiveProjectRisk // rich-align-0722/01：文档写了才有；absent≠none（缺席=文档未提及）
+  milestones?: LiveProjectMilestone[] // rich-align-0722/02：文档写了才有；缺席=空/不发键
 }
 
 // feat-056 决策定级契约。口径真源在后端 `eval-harness/avery/decision_rules.py`，

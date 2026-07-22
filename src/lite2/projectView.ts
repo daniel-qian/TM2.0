@@ -40,6 +40,16 @@ export type ProjectGroupKey = 'needsYou' | 'moving' | 'done' | 'other' | 'unknow
 /** 项目级风险等级（PRD A1，rich-align-0722/01）。词表外由后端整行不抽，这里只认三档。 */
 export type RiskLevelKey = 'high' | 'medium' | 'low'
 
+/** 里程碑状态（PRD A1，rich-align-0722/02）。四态 + other（词表外，statusRaw 回显原词）。 */
+export type MilestoneStatusKey = 'done' | 'active' | 'blocked' | 'upcoming' | 'other'
+
+export interface MilestoneView {
+  name: string
+  status: MilestoneStatusKey
+  /** 仅 status==='other' 时非空：文档原状态词，原样回显。 */
+  statusRaw: string | null
+}
+
 export interface ProjectView {
   id: string
   title: string
@@ -55,6 +65,8 @@ export interface ProjectView {
   riskLevel: RiskLevelKey | null
   /** 风险原因原文（文档原句，原样回显）；null = 文档没给原因（等级仍可单独显示）。 */
   riskReason: string | null
+  /** 🔴 空数组 = 文档没写里程碑 = chips 行与详情段整体收起（absent≠none）。 */
+  milestones: MilestoneView[]
 }
 
 const KNOWN_STATUS = new Set(['blocked', 'at-risk', 'on-track', 'done'])
@@ -93,6 +105,30 @@ function riskLevelOf(raw: string | undefined): RiskLevelKey | null {
   return KNOWN_RISK.has(value as RiskLevelKey) ? (value as RiskLevelKey) : null
 }
 
+const KNOWN_MILESTONE = new Set<MilestoneStatusKey>(['done', 'active', 'blocked', 'upcoming', 'other'])
+
+/** 里程碑状态归一：后端已归一到五键，前端只校验；未知一律 other（不猜四态，不改写文档词）。 */
+function milestoneStatusKeyOf(raw: string | undefined): MilestoneStatusKey {
+  const value = (raw ?? '').trim().toLowerCase()
+  return KNOWN_MILESTONE.has(value as MilestoneStatusKey) ? (value as MilestoneStatusKey) : 'other'
+}
+
+function milestoneViewsOf(
+  raw: readonly { name: string; status: string; statusRaw?: string }[] | undefined,
+): MilestoneView[] {
+  return (raw ?? [])
+    .map((m) => {
+      const status = milestoneStatusKeyOf(m.status)
+      return {
+        name: (m.name ?? '').trim(),
+        status,
+        // statusRaw 只在 other 时有意义（回显文档原词）；四态里带了也丢掉。
+        statusRaw: status === 'other' ? trimmedOrNull(m.statusRaw) : null,
+      }
+    })
+    .filter((m) => m.name)
+}
+
 /**
  * 原始项目卡 → UI 事实。`people` 只用来把 `ownerId` 翻成人名（与 teamData 同口径），
  * 查不到就是 null（「文档没说是谁」），绝不写「未分配」这种听起来像管理判断的词。
@@ -122,7 +158,24 @@ export function buildProjectViews(
     // 🔴 缺席=文档未提及=徽章收起：只有 card.risk 存在且 level 在词表内才给 riskLevel，禁 ?? 默认。
     riskLevel: riskLevelOf(card.risk?.level),
     riskReason: trimmedOrNull(card.risk?.reason),
+    milestones: milestoneViewsOf(card.milestones),
   }))
+}
+
+/** 里程碑状态 → 人话标签。other 回显文档原词（不改写）。卡面 chips 与详情清单共用一份口径。 */
+export function milestoneStatusLabel(m: MilestoneView, l: Dict['lite2']): string {
+  switch (m.status) {
+    case 'done':
+      return l.projectsMilestoneDone
+    case 'active':
+      return l.projectsMilestoneActive
+    case 'blocked':
+      return l.projectsMilestoneBlocked
+    case 'upcoming':
+      return l.projectsMilestoneUpcoming
+    default:
+      return m.statusRaw ?? l.projectsMilestoneOther
+  }
 }
 
 /** 风险等级 → 人话标签。项目屏卡面与详情浮层共用一份口径。 */

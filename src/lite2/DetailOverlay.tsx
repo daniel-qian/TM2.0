@@ -4,7 +4,7 @@ import { useRouteDetail } from './routes'
 import { useDict } from '../shared/i18n/useDict'
 import { InitialAvatar } from './InitialAvatar'
 import { LiteModal } from './LiteModal'
-import { buildProjectViews, projectRiskLabel, projectStatusLabel } from './projectView'
+import { buildProjectViews, milestoneStatusLabel, projectRiskLabel, projectStatusLabel } from './projectView'
 import type { LiteDetail } from './store'
 import type { LiteTeam } from './teamData'
 import type { LiveTeamPayload } from './transport'
@@ -194,6 +194,29 @@ export function DetailOverlay() {
               {project.riskReason ? (
                 <p className="lite-detail-risk-reason">{project.riskReason}</p>
               ) : null}
+            </section>
+          ) : null}
+
+          {/* rich-align-0722/02：里程碑清单 + 分段总览条。🔴 缺席=整节收起（absent≠none）。 */}
+          {project.milestones.length > 0 ? (
+            <section className="lite-detail-section">
+              <p className="eyebrow">{t.lite2.projectsMilestonesLabel}</p>
+              <span className="lite-detail-milestone-bar" aria-hidden="true">
+                {project.milestones.map((m, idx) => (
+                  <span key={idx} className={`lite-detail-milestone-seg ms-${m.status}`} />
+                ))}
+              </span>
+              <ul className="lite-detail-milestone-list">
+                {project.milestones.map((m, idx) => (
+                  <li key={`${m.name}-${idx}`} className={`ms-${m.status}`}>
+                    <span className="lite-detail-milestone-dot" aria-hidden="true" />
+                    <span className="lite-detail-milestone-name">{m.name}</span>
+                    <span className="lite-detail-milestone-status">
+                      {milestoneStatusLabel(m, t.lite2)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
             </section>
           ) : null}
 

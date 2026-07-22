@@ -184,6 +184,13 @@ class CompanyContext:
                 if pr.risk.reason:
                     risk_card["reason"] = pr.risk.reason
                 card["risk"] = risk_card
+            # rich-align-0722/02: 里程碑列表。缺就不发键；statusRaw 只在 other（词表外）时发（回显原词）。
+            if pr.milestones:
+                card["milestones"] = [
+                    {"name": m.name, "status": m.status,
+                     **({"statusRaw": m.statusRaw} if m.statusRaw else {})}
+                    for m in pr.milestones
+                ]
             cards.append(card)
         return cards
 

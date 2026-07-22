@@ -139,6 +139,22 @@ function ProjectCard({ view, onOpen }: { view: ProjectView; onOpen: (id: string)
         </span>
       ) : null}
 
+      {/* 🔴 里程碑圆点串：有里程碑才画（absent≠none）。点色随状态（done绿/active蓝/blocked红/
+          upcoming线灰/other 独立空心点）；名称小字。文档没写 = 整行收起。 */}
+      {view.milestones.length > 0 ? (
+        <span className="lite-project-milestones">
+          {view.milestones.map((m, idx) => (
+            <span
+              key={`${m.name}-${idx}`}
+              className={classNames(['lite-project-milestone', `ms-${m.status}`])}
+            >
+              <span className="lite-project-milestone-dot" aria-hidden="true" />
+              <span className="lite-project-milestone-name">{m.name}</span>
+            </span>
+          ))}
+        </span>
+      ) : null}
+
       {view.summary ? <p className="lite-project-summary">{view.summary}</p> : null}
 
       <span className="lite-project-facts">

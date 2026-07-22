@@ -139,6 +139,66 @@ def parse_risk_value(text: str) -> "ProjectRisk | None":
     return ProjectRisk(level=level, reason=reason.strip()[:180])
 
 
+# rich-align-0722 · issue 02 — 里程碑（PRD A1/A2 第 3 行）。项目实体的一个列表字段，不是独立项目。
+_MILESTONE_STATUS_MAP = {
+    "已完成": "done", "完成": "done", "done": "done", "complete": "done", "completed": "done",
+    "进行中": "active", "进行": "active", "active": "active", "in progress": "active", "ongoing": "active",
+    "受阻": "blocked", "阻塞": "blocked", "blocked": "blocked", "stuck": "blocked",
+    "未开始": "upcoming", "待开始": "upcoming", "upcoming": "upcoming", "planned": "upcoming",
+    "not started": "upcoming",
+}
+# 会终结里程碑列表收集的字段标签（撞到下一标签即止，别把后续字段吞进列表）。
+_FIELD_LABEL_STOP = re.compile(
+    r"^(?:里程碑|milestones?|负责人|主负责人|项目负责人|责任人|牵头人|负责|状态|自报状态|当前状态|"
+    r"项目状态|进展|进度|完成度|完成率|风险|风险等级|风险级别|risk|截止|到期|交付|阻塞|阻碍项|阻碍|"
+    r"卡点|风险点|概述|摘要|目标|简述|进展摘要|owner|lead|dri|status|due|deadline|summary|overview)"
+    r"\s*[：:]", re.I)
+
+
+def norm_milestone_status(raw: str | None) -> str:
+    """A2 词表: 已完成/进行中/受阻/未开始(+英文) → done/active/blocked/upcoming。词表外 → '' → 走 other。"""
+    return _MILESTONE_STATUS_MAP.get((raw or "").strip().lower(), "")
+
+
+@dataclass
+class ProjectMilestone:
+    """PRD A1: {name, status}. status ∈ done|active|blocked|upcoming|other；other 时 statusRaw 保留文档原词。"""
+    name: str
+    status: str
+    statusRaw: str = ""
+
+
+def milestones_from_lines(lines: list[str]) -> "list[ProjectMilestone]":
+    """A2 语法多行解析：`里程碑：` 标签行后连续 `- 名称（状态）` 列表行；空行/下一标签行/非列表行即止。
+    词表外状态 → status='other' + statusRaw 原样回显（不替客户改写措辞，与 status 的 other 同哲学）。"""
+    out: list[ProjectMilestone] = []
+    i, n = 0, len(lines)
+    while i < n:
+        s = strip_decoration(lines[i].strip())
+        if re.match(r"^(?:里程碑|milestones?)\s*[：:]", s, re.I):
+            j = i + 1
+            while j < n:
+                item = strip_decoration(lines[j].strip())
+                if not item:
+                    break
+                if _FIELD_LABEL_STOP.match(item):
+                    break
+                body = item.lstrip("-*•・ ").strip()
+                mm = re.match(r"^(.+?)\s*[（(]\s*([^）)]+?)\s*[）)]\s*$", body)
+                if not mm:
+                    break
+                name = mm.group(1).strip()[:80]
+                status_raw = mm.group(2).strip()
+                status = norm_milestone_status(status_raw)
+                out.append(ProjectMilestone(name=name, status=status or "other",
+                                            statusRaw="" if status else status_raw[:40]))
+                j += 1
+            i = j
+            continue
+        i += 1
+    return out[:12]
+
+
 @dataclass
 class ProjectEntity:
     """A project card. Work MAY be quantified (progress %) — that is not a person score."""
@@ -153,6 +213,7 @@ class ProjectEntity:
     blockers: list[str] = field(default_factory=list)
     dependsOn: list[str] = field(default_factory=list)
     risk: ProjectRisk | None = None             # rich-align-0722/01: {level, reason?} if stated, else None
+    milestones: list[ProjectMilestone] = field(default_factory=list)  # rich-align-0722/02: 缺席=空列表
     source: str = ""
 
     def as_facts_lines(self) -> list[str]:
@@ -167,6 +228,9 @@ class ProjectEntity:
         if self.risk:
             rk = f"{self.title} — risk {self.risk.level}"
             out.append(f"{rk}: {self.risk.reason}" if self.risk.reason else rk)
+        for ms in self.milestones:
+            label = ms.statusRaw or ms.status
+            out.append(f"{self.title} — milestone: {ms.name} ({label})")
         for b in self.blockers:
             out.append(f"{self.title} — blocker: {b}")
         return out
@@ -1112,6 +1176,9 @@ class HeuristicExtractor:
         due = ""
         blockers: list[str] = []
         risk: ProjectRisk | None = None
+        # rich-align-0722/02: 里程碑是「标签行 + 连续列表行」多行结构，单独扫这段 span（主循环
+        # 的逐行匹配够不着多行）。列表项行不会撞任何单行字段（无字段冒号），不干扰主循环。
+        milestones = milestones_from_lines(doc.lines[lo:min(hi, len(doc.lines))])
         for i in range(lo, min(hi, len(doc.lines))):
             raw = doc.lines[i].strip()
             # FIELD LABELS ARE READ WITHOUT THEIR MARKDOWN MARKUP (see granularity.strip_decoration).
@@ -1227,7 +1294,7 @@ class HeuristicExtractor:
             summary = first[:200]
         return ProjectEntity(
             id=_slug(title, "p"), title=title, ownerName=owner, status=status, progress=progress,
-            dueDate=due, summary=summary, blockers=blockers[:6], risk=risk,
+            dueDate=due, summary=summary, blockers=blockers[:6], risk=risk, milestones=milestones,
             source=f"{doc.name}:{lo + 1}")
 
     def _signals_from_doc(self, doc: ParsedDoc) -> ExtractionResult:
@@ -1439,6 +1506,8 @@ def _dedupe_entities(res: ExtractionResult) -> None:
             cur.progress = pr.progress
         if cur.risk is None:                      # rich-align-0722/01: keep-first risk across docs
             cur.risk = pr.risk
+        if not cur.milestones:                    # rich-align-0722/02: keep-first milestones across docs
+            cur.milestones = pr.milestones
         cur.blockers = (cur.blockers + [b for b in pr.blockers if b and b not in cur.blockers])[:6]
         cur.dependsOn = (
             cur.dependsOn + [d for d in pr.dependsOn if d and d not in cur.dependsOn]

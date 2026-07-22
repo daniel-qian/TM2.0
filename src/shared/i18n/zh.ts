@@ -29,10 +29,11 @@ import type { Dict } from "./index";
 // NOTE (lite-live-v02 sync, integrate/v02-main-sync): the lite2.* section below was generated via
 //  scripts/i18n-zh-lite2-delta.mjs (v02's own generator) and is independent of the notes above,
 //  which describe the shared lite.*/ask.* sections only.
-// ⚠ HAND-WRITTEN, NOT YET M3 (rich-align-0722/01): lite2.projectsRisk{Label,High,Medium,Low}
-//  (风险/高风险/中风险/低风险) were typed in by hand — an AFK offline campaign pass, trivial fixed
-//  copy, no directed M3 run made. Source keys live in en.ts. Fold into the next DIRECTED zh pass;
-//  Danny 审字 pending.
+// ⚠ HAND-WRITTEN, NOT YET M3 (rich-align-0722/01-02): lite2.projectsRisk{Label,High,Medium,Low}
+//  (风险/高风险/中风险/低风险) + lite2.projectsMilestone{sLabel,Done,Active,Blocked,Upcoming,Other}
+//  (里程碑/已完成/进行中/受阻/未开始/其他) were typed in by hand — an AFK offline campaign pass,
+//  trivial fixed copy, no directed M3 run made. Source keys live in en.ts. Fold into the next
+//  DIRECTED zh pass; Danny 审字 pending.
 // NOTE (feat-047): lite2.tabNotes + the 14-key lite2.notes* block are NEW in this run — 0 fresh
 //  M3 calls (script reused zh.lite's already-approved translation verbatim since the key names
 //  match byte-for-byte; see scripts/i18n-zh-lite2-delta.mjs's sharedKeys logic). Danny 审字
@@ -706,6 +707,12 @@ export const zh: Dict = {
     "projectsRiskHigh": "高风险",
     "projectsRiskMedium": "中风险",
     "projectsRiskLow": "低风险",
+    "projectsMilestonesLabel": "里程碑",
+    "projectsMilestoneDone": "已完成",
+    "projectsMilestoneActive": "进行中",
+    "projectsMilestoneBlocked": "受阻",
+    "projectsMilestoneUpcoming": "未开始",
+    "projectsMilestoneOther": "其他",
     "onboardEyebrow": "开始上手",
     "onboardCloseAria": "关闭 —— 下次会从上次停下的地方继续",
     "onboardSkip": "跳过设置",

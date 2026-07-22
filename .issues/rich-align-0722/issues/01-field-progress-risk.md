@@ -48,6 +48,7 @@
 | 进度 | `进度｜完成度｜完成率`（全/半角冒号可选可省）；英文 `progress`（`\b`，大小写不敏感，冒号/连字符可省） | `\d{1,3}%`，0–100 收（0 合法），**超界（>100）拒收留 None**（不 clamp） |
 | 风险 | `风险｜风险等级｜风险级别｜risk`（全/半角冒号，大小写不敏感） | 等级 `高｜中｜低｜high｜medium｜low`（med 亦收，大小写不敏感）；等级与原因分隔符 `/ ｜ ／ ｜ —— ｜ —`；原因可省、≤180 字；**词表外等级整行不抽（None）** |
 | 风险点 | `阻碍项｜阻碍｜阻塞｜卡点｜风险点`（未变） | → blockers（长标签优先，`风险：` 与 `风险点：` 结构性互斥，实测无串扰） |
+| 里程碑（02 落地） | 标签行 `里程碑｜Milestones?：`；列表行 `[-*•・]? 名称（状态）`（全/半角括号），空行/下一字段标签处止 | 状态 `已完成/完成/done/complete`→done、`进行中/active/in progress/ongoing`→active、`受阻/阻塞/blocked/stuck`→blocked、`未开始/待开始/upcoming/planned/not started`→upcoming；**词表外→other + statusRaw 原样回显**（不落 upcoming 灰） |
 
 - risk 落 `ProjectEntity.risk = ProjectRisk{level, reason}`；投影 `registry.project_cards` 缺就不发键、
   reason 空则不发 reason 键。LLM 路径 `llm_extract._llm_risk` 同口径归一（形状由 ProjectEntity 收口，parity by construction）。

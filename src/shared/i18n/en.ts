@@ -986,6 +986,13 @@ export const en = {
     projectsRiskHigh: 'High risk',
     projectsRiskMedium: 'Medium risk',
     projectsRiskLow: 'Low risk',
+    // rich-align-0722/02 · 里程碑（PRD A1）。四态标签；other 回显文档原词，此键仅兜底。
+    projectsMilestonesLabel: 'Milestones',
+    projectsMilestoneDone: 'Done',
+    projectsMilestoneActive: 'In progress',
+    projectsMilestoneBlocked: 'Blocked',
+    projectsMilestoneUpcoming: 'Upcoming',
+    projectsMilestoneOther: 'Other',
 
     // ── Onboarding gate (feat-045, PRD F7; input-side-0721 — a full-screen gate page now, not
     // a floating dialog. Escape / "look around" pauses and resumes next visit. NO fake

@@ -42,8 +42,8 @@ log = logging.getLogger("avery.ingest.llm_extract")
 
 from .extract import (
     ExtractionResult, Extractor, HeuristicExtractor, PersonEntity, ProjectEntity,
-    ProjectRisk, SignalEntity, _INDEX_TOKEN_RE, _NOT_NAME, _norm_status, _norm_team,
-    _person_key, _project_key, _slug, norm_risk_level,
+    ProjectMilestone, ProjectRisk, SignalEntity, _INDEX_TOKEN_RE, _NOT_NAME, _norm_status,
+    _norm_team, _person_key, _project_key, _slug, norm_milestone_status, norm_risk_level,
 )
 from .parse import ParsedDoc
 from .redline_extract import (
@@ -87,7 +87,8 @@ _INSTRUCTIONS = """Return exactly this JSON shape:
   ],
   "projects": [
     {"title": "", "ownerName": "", "status": "", "progress": null, "dueDate": "", "summary": "",
-     "blockers": [""], "risk": {"level": "high|medium|low", "reason": ""}, "line": 0}
+     "blockers": [""], "risk": {"level": "high|medium|low", "reason": ""},
+     "milestones": [{"name": "", "status": "done|active|blocked|upcoming"}], "line": 0}
   ],
   "signals": [
     {"subjectType": "person|project", "subjectRef": "", "summary": "", "tag": "", "line": 0}
@@ -111,10 +112,12 @@ Field rules:
   owns = up to 6 short phrases of what they own / are responsible for, from the doc.
 - projects: one entry per project THE DOCUMENT TRACKS IN ITS OWN RIGHT — it gives that project its
   own owner, status, progress or deadline. A MILESTONE, phase, checkpoint or task INSIDE a project
-  is NOT a project: do not emit it. Concretely, a row under a 「里程碑：」/"Milestones:" list
-  (「预算缺口确认 — 受阻」, "Budget sign-off — done") belongs to the project above it and must be
-  left out. If the document says how many projects it covers (「本期周报覆盖 6 个在跟进项目」),
-  that is the number of entries to return.
+  is NOT a separate project: do not emit it as its own entry. Instead, a row under a
+  「里程碑：」/"Milestones:" list (「软装采购下单（已完成）」, "Budget sign-off (done)") belongs to
+  the project above it and goes in THAT project's `milestones` array — {"name": the checkpoint,
+  "status": one of done|active|blocked|upcoming from 已完成/进行中/受阻/未开始 or the English word}.
+  If the document says how many projects it covers (「本期周报覆盖 6 个在跟进项目」), that is the
+  number of project entries to return (milestones do not add to that count).
   title must be a meaningful name from the content — NEVER the source filename, and never a
   milestone's name. status only from: on-track|at-risk|blocked|done|"".
   progress: integer 0-100 ONLY if the doc states a completion number for that project, else null.
@@ -198,6 +201,25 @@ def _llm_risk(v) -> ProjectRisk | None:
     if not level:
         return None
     return ProjectRisk(level=level, reason=_s(v.get("reason"), 180))
+
+
+def _llm_milestones(v) -> list[ProjectMilestone]:
+    """rich-align-0722/02: LLM projects[].milestones → list[ProjectMilestone]. 词表外 status → other
+    + statusRaw 原样回显，与 heuristic 的 milestones_from_lines 同口径。"""
+    if not isinstance(v, list):
+        return []
+    out: list[ProjectMilestone] = []
+    for it in v[:12]:
+        if not isinstance(it, dict):
+            continue
+        name = _s(it.get("name"), 80)
+        if not name:
+            continue
+        raw_status = _s(it.get("status"), 40)
+        status = norm_milestone_status(raw_status)
+        out.append(ProjectMilestone(name=name, status=status or "other",
+                                    statusRaw="" if status else raw_status))
+    return out
 
 
 # Label/header cells that are obviously not a human — belt to the model's suspenders (_SYSTEM
@@ -394,6 +416,7 @@ class LLMExtractor:
                 summary=_s(raw.get("summary"), 240),
                 blockers=_slist(raw.get("blockers"), 6, 180),
                 risk=_llm_risk(raw.get("risk")),
+                milestones=_llm_milestones(raw.get("milestones")),
                 source=_line_ref(doc, raw.get("line"))))
 
         for raw in data.get("signals", [])[:12]:

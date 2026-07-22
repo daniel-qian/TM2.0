@@ -408,6 +408,37 @@
       "expected": "6",
       "tolerance": "px1",
       "note": "【rich-align/01·真部件闸】进度条轨道几何对齐她方 h-[6px]（此前是 4px）。rect.height 量真实渲染高。"
+    },
+    {
+      "key": "projects.milestoneCount",
+      "stick": 7,
+      "screen": "projects",
+      "selector": ".lite2-shell .lite-project-card .lite-project-milestone",
+      "probe": "count",
+      "expected": "3",
+      "tolerance": "exact",
+      "note": "【rich-align/02·真部件闸】seed 周报里程碑块写了 3 项，projects 卡渲染 3 个圆点串 chip。数量护栏——文档没写里程碑的卡绝不冒 chips 行（absent≠none）。"
+    },
+    {
+      "key": "projects.milestoneDoneDotColor",
+      "stick": 7,
+      "screen": "projects",
+      "selector": ".lite2-shell .lite-project-milestone.ms-done .lite-project-milestone-dot",
+      "prop": "backgroundColor",
+      "expected": "rgb(47, 159, 107)",
+      "tolerance": "exact",
+      "note": "【rich-align/02·真部件闸】已完成里程碑点色 = 她方 green 令牌 #2f9f6b = rgb(47,159,107)。状态语义色，两皮固定。"
+    },
+    {
+      "key": "projects.milestoneDotSize",
+      "stick": 7,
+      "screen": "projects",
+      "selector": ".lite2-shell .lite-project-card .lite-project-milestone-dot",
+      "probe": "rect",
+      "axis": "width",
+      "expected": "8",
+      "tolerance": "px1",
+      "note": "【rich-align/02·真部件闸】里程碑点几何对齐她方 w-2（8px）。rect.width 量真实渲染宽。"
     }
   ]
 }
