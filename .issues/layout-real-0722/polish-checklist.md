@@ -6,12 +6,18 @@
 
 ## 动效 / 过渡
 
-- [ ] **「问 Avery」悬浮入口展开动画**（Danny 07-22 亲口点名）
-  现状：`.lite-ask-avery` 一条 `transition`/`animation` 都没有（lite2.css:6197 起）——
-  点胶囊直接「啪」换成输入框，连 `:hover` 变色（6228）也是硬切。
+- [x] **「问 Avery」悬浮入口展开动画**（Danny 07-22 亲口点名）✅ 2026-07-22 棒G3 动效头条
+  现状（已修）：`.lite-ask-avery` 原先一条 `transition`/`animation` 都没有——硬切。
   她：平滑展开（胶囊 → 输入框有过渡）。
-  修法方向：给胶囊↔表单加宽度/透明度过渡；hover 加 `transition: background`；
-  遵守 `@media (prefers-reduced-motion: no-preference)` 隔离（战役坑档：reduce 兜底纪律）。
+  **已落地**：① 胶囊 hover 加 `transition: background var(--fast)`（胶囊本身是 .lite-btn，
+  reduce 兜底块 l.5740 已把它 transition 归零，无需再包）；② form 入场 `@keyframes
+  lite-ask-avery-expand`（scale .92→1 + 淡入 + translateY，transform-origin bottom center，
+  从胶囊位「长出来」），**包进 `@media (prefers-reduced-motion: no-preference)`**（form 非
+  .lite-btn 不吃 5740 兜底，必须自包；媒体级隔离不提特异性——棒4 坑档）。
+  留档：pill↔form 是条件渲染硬换 DOM，纯 CSS 做不了可逆 morph，故用入场动画近似她的展开；
+  收起(form→pill)仍是硬回（未名点名项，且给 pill 入场动画会连首屏加载都 pop，故不做）。
+  实测：keyframe 在册、form 计算 animationName=lite-ask-avery-expand/0.22s、no-preference 命中、
+  reduce 不命中；spec 35/35、扫雷 0/0 零回归。
 - [ ] **顶栏搜索结果浮层入场**：现状检查——`.lite-search-pop` 是否有淡入/下滑过渡，还是硬弹。
 - [ ] **差距三态 chip 切换**：点 chip 换筛选时列表是硬换还是有过渡。
 - [ ] **通用**：她全站的卡片 hover 上浮 / 阴影过渡，逐屏对照时留意我方是否跟上

@@ -6223,6 +6223,9 @@
   background: rgba(var(--lite2-ink-rgb), 0.9);
   backdrop-filter: blur(10px);
   box-shadow: var(--shadow);
+  /* 布局与真部件棒G3 动效：hover 变色平滑（Danny 07-22 点名「硬切」）。
+     胶囊本身是 .lite-btn，reduce-motion 兜底块(l.5740) 已把它的 transition 归零，故此处无需再包。 */
+  transition: background var(--fast) ease;
 }
 
 .lite2-shell .lite-ask-avery-pill:hover {
@@ -6274,4 +6277,28 @@
   border-radius: 50%;
   font-size: 16px;
   line-height: 1;
+}
+
+/* 布局与真部件棒G3 动效：展开态平滑生长（Danny 07-22 亲口点名「点胶囊硬切成输入框」，
+   她那版是平滑展开）。pill↔form 是条件渲染硬换 DOM，纯 CSS 做不了可逆 morph；改用入场动画
+   让 form 从胶囊位「长出来」：自 bottom center 缩放 + 淡入。🔴 form 非 .lite-btn，不吃 l.5740
+   reduce 兜底，必须自己包进 no-preference（媒体级隔离，不提特异性——棒4 坑档）。
+   🔴 form 的 transform 是它自身（scale），与容器 .lite-ask-avery 的 translateX(-50%) 各在各元素上，
+   互不干扰；容器的 transform 已给 fixed 后代建包含块，但 form 无 fixed 后代，安全。 */
+@keyframes lite-ask-avery-expand {
+  from {
+    opacity: 0;
+    transform: scale(0.92) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .lite2-shell .lite-ask-avery-form {
+    transform-origin: bottom center;
+    animation: lite-ask-avery-expand 0.22s ease both;
+  }
 }

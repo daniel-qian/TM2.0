@@ -1,4 +1,53 @@
-> # ⟳ 2026-07-22 · 布局与真部件战役 · **验收批次①+② 双双就绪，停等 Danny 人测**（★下个 session 从这里接）
+> # ⟳ 2026-07-22 · 布局与真部件战役 · **批次③ 起步：notes 列表化 + 问 Avery 动效落地**（★下个 session 从这里接）
+>
+> **状态**：批次①②（主页骨架+三真部件）仍全绿全未推（见下一段）。本 session 在其上起了批次③，
+> 落地两件并验证，均 commit 未 push；dev server 三口仍挂（5173/3100/8137）。验收入口不变
+> `http://localhost:5173/?v=2&mode=live&lang=zh`。
+>
+> ## 🔴 本 session 最重要的一条修正（下个 session 照此规划批次③，别再走弯路）
+> **cr-align 上一战役（棒5/6/7）已经把 aurora 皮九屏全做了视觉重塑**——followups 已是她的
+> checklist divide-y 整卡（look-aurora.css §⑲ l.498-527）、projects 6px 顶部渐变条（§⑳）、
+> people 卡、notes/vision/closerlook/playbooks 入场动效（l.603-611）。所以**批次③「其余 8 屏布局收敛」
+> 剩下的不是重新上皮，而是三类**：
+> 1. **cr-align 没做的结构/布局缺口**：她的多列卡网格（people 3 列 / projects 3 列 / playbooks 2 列）
+>    ——若我方这几屏仍是单列，那才是真缺口。**下个 session 第一步：开对照板
+>    `reports/align-board/2026-07-22/index.html` 逐屏核我方 aurora vs 她，锁定哪些屏是「单列 vs 她多列」
+>    的结构差**（不是看色，色 cr-align 做完了）。别凭空重做已完成的皮。
+> 2. **notes 列表化**——✅ 本 session 已做。
+> 3. **动效 pass**——问 Avery 展开 ✅ 本 session 已做；剩搜索结果浮层淡入 / 差距三态 chip 切换过渡
+>    （见 `polish-checklist.md`）。
+>
+> ## 本 session 落地（两件，均验证零回归）
+> 1. **notes 列表化**（`look-aurora.css` 新增，aurora 作用域）：一天一组=整 card-base 卡、笔记=divide-y 行，
+>    照抄 followups §⑲ 同款 `padding:2px 16px` 内缩（不用 overflow:hidden，免裁 lite2-rise 起点）；
+>    只读故不加行 hover。paper 守自己分卡（同 cr-align followups 纪律）。实测：组体 white.97/r10/shadow、
+>    行 radius0+底分隔线、末行无线、is-new 行染色；扫雷 0/0、spec 35/35。
+> 2. **问 Avery 悬浮入口展开动效**（`lite2.css` ask-avery 段；Danny 07-22 亲口点名的动效债头条）：
+>    胶囊 hover `transition:background`（.lite-btn 自动吃 reduce 兜底）+ form 入场 `@keyframes
+>    lite-ask-avery-expand`（scale+淡入，bottom-center 生长），**包进 no-preference**（form 非 .lite-btn
+>    须自包）。实测 animationName/duration/no-preference 命中、reduce 不命中。详见 `polish-checklist.md` ✅。
+>
+> ## ⚠️ 本 session 走过的弯路（避免重蹈）
+> 我起步时误读了「主 main 上的 session-handoff.md」（那是**战役 kickoff 旧稿**，不反映本分支进度）——
+> 以为是全新战役，重跑了一遍 kickoff 侦察、还动手重做 followups 列表化（cr-align 棒5 早做完了）。
+> **发现本分支 `claude/layout-real-components-27b594` 才是真进度后已全部回退纠偏**（followups 两文件
+> `git checkout` 复原，只留 notes 这一真缺口）。教训：**批次③ 的真相源是本分支的 handoff + 对照板，
+> 不是 main 的 kickoff 稿；动任何一屏前先确认 cr-align 是否已做过。**
+>
+> ## 批次③ 下一步（按优先级）
+> 1. 开对照板锁定「单列 vs 她多列」结构缺口（people/projects/playbooks 优先）→ 逐屏补多列网格（避 trap：
+>    people 无 load%/健康度/CRUD、projects 无 milestone/成员栈/CRUD——见 plan §4 DO-NOT-BUILD）。
+> 2. 补剩余动效（搜索浮层淡入 / 差距 chip 过渡）。
+> 3. closerlook 对照双列已是她语法（cr-align 做过？核对照板）；room 通用语法 + 真引用差异点保住。
+> 4. 批次③ 收尾（棒H）：全 23 门电池两轮零红 + 像素基线人审重冻 + 对抗审查四视角 + `acceptance-3.md`，停等 Danny。
+>
+> ## 可选 polish（本 session 评估后**未做**，留 Danny/下个 session 定）
+> - followups 段控（active/history）仍是 pill，她 /checklist 是「分段开关」形（cr-align 没顺手做）；
+>   每组缺「计数 Badge」。做它会动 paper（若走 base）或只 aurora。低值，未动免过度。
+>
+> ---
+>
+> > # ⟳ 2026-07-22 · 布局与真部件战役 · **验收批次①+② 双双就绪，停等 Danny 人测**（上一段）
 >
 > **状态**：批次①（棒A-C 主页骨架）+ 批次②（棒D-F 三件真部件）全部落地，**本地 commit 全未推**。
 > 手册 `.issues/layout-real-0722/acceptance-1.md`（骨架）+ `acceptance-2.md`（真部件）。

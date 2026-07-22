@@ -526,6 +526,39 @@
   border-width: 2px;
 }
 
+/* ── 布局与真部件战役 棒G1（2026-07-22）· 笔记列表化：补齐 followups 的姊妹屏 ─────────
+   cr-align 棒5 已把待办做成她的 checklist 卡（整列一卡 + divide-y 行）；notes 当时只补了
+   入场动效（本文件 l.605），条目仍是一条一卡。本棒把 notes 也收进同一配方：一天一组=整卡，
+   笔记=divide-y 行。用 followups 同款 `padding:2px 16px` 内缩（不用 overflow:hidden，
+   否则 lite2-rise 的 translateY 起点会被圆角裁掉）。笔记只读（非 button），故不加行 hover 半染。
+   paper 守自己的分卡列表（本段全 aurora 作用域，同 followups §⑲）。 */
+.lite2-shell[data-look='aurora'] .lite-notes-group-body {
+  gap: 0;
+  margin-top: 8px;
+  padding: 2px 16px;
+  background: var(--lite2-surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-soft);
+}
+
+.lite2-shell[data-look='aurora'] .lite-notes-entry {
+  border: none;
+  border-bottom: 1px solid var(--rule);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 14px 2px;
+}
+
+.lite2-shell[data-look='aurora'] .lite-notes-entry:last-child {
+  border-bottom: none;
+}
+
+.lite2-shell[data-look='aurora'] .lite-notes-entry.is-new {
+  background: rgba(var(--lite2-accent-rgb), 0.06);
+}
+
 /* ═══ cr-align 视觉战役 棒6（2026-07-22）· 屏组二：项目 + 团队 aurora 侧 ═══════════ */
 
 /* ── ⑳ 项目卡：她的 6px 顶部渐变条（--lite2-grad-* 第一个消费面），左缘染色语法整体
