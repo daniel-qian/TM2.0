@@ -1,6 +1,7 @@
 import { useMemo, useState, type FormEvent, type MouseEvent } from 'react'
 import { useLite } from './store'
 import { useDict } from '../shared/i18n/useDict'
+import { searchTeam } from './searchDerive'
 
 // feat-024 · lite composer——ADR-0022 决策 2。确诊渗漏第二现场的正版替身：
 // story 的 TeamComposer 预填 HERO_QUESTION、@ 引用 fixtures、提交进 story 剧本机
@@ -41,31 +42,22 @@ export function LiteComposer() {
   ]
 
   // 引用语料 = live payload（上传长出来的人/项目），零 fixtures。
-  const referenceOptions = useMemo(() => {
-    if (!team) return []
-    const query = referenceQuery.trim().toLowerCase()
-    const all: LiteReference[] = [
-      ...team.people.map((p) => ({
-        id: `person-${p.id}`,
-        kind: 'person' as const,
-        label: p.name,
-        meta: p.role,
+  // 棒E：改成消费公共 selector `searchTeam`（顶栏搜索同源）——同一个词在引用菜单与顶栏
+  // 给同一个结果，两处不再各写一套 `includes` 漂移。id 加 `${kind}-` 前缀是本组件的去重口径
+  //（跨人/项目撞 id 时不误判为同一条），searchTeam 返回的是**原始实体 id**。
+  // `t` 已退出 deps：meta 现在是原值（locale-free），缺失兜底移到渲染层的 <small>——
+  // 切语言时那半句随渲染层重算，不再停在旧语言（正是原注释担心的 blocker 形状，现已从
+  // 结构上消除：派生不焊 locale）。
+  const referenceOptions = useMemo<LiteReference[]>(
+    () =>
+      searchTeam(team, referenceQuery, referenceFilter).map((r) => ({
+        id: `${r.kind}-${r.id}`,
+        kind: r.kind,
+        label: r.label,
+        meta: r.meta,
       })),
-      ...team.projects.map((p) => ({
-        id: `project-${p.id}`,
-        kind: 'project' as const,
-        label: p.title,
-        // 兜底在渲染层（Blockers 5c）：派生层只给原值或空串。`t` 因此进了下面的 deps——
-        // 少了它，切语言后这份引用清单会停在旧语言（正是本条 blocker 的形状）。
-        meta: p.ownerName || t.lite2.projectsUnknownValue,
-      })),
-    ]
-    return all.filter((option) => {
-      if (referenceFilter !== 'all' && option.kind !== referenceFilter) return false
-      if (!query) return true
-      return `${option.label} ${option.meta}`.toLowerCase().includes(query)
-    })
-  }, [team, referenceFilter, referenceQuery, t])
+    [team, referenceFilter, referenceQuery],
+  )
 
   const isExpanded = composerOpen || referenceMenuOpen || references.length > 0
 
@@ -182,7 +174,10 @@ export function LiteComposer() {
                 referenceOptions.map((option) => (
                   <button key={option.id} type="button" className="lite-composer-option" onClick={() => addReference(option)}>
                     <span>{option.label}</span>
-                    <small>{option.meta}</small>
+                    {/* 缺负责人的项目在渲染层兜底（派生层给的是原值空串），不焊 locale。 */}
+                    <small>
+                      {option.meta || (option.kind === 'project' ? t.lite2.projectsUnknownValue : '')}
+                    </small>
                   </button>
                 ))
               ) : (

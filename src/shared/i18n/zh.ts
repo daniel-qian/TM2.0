@@ -54,6 +54,11 @@ import type { Dict } from "./index";
 //  为两个短标签冒抹掉红线注释的风险不划算。源键在 en.ts（唯一源）。其余复用既有键：Settled /
 //  Set aside chip = gapResolvedBadge/gapDismissedBadge（与「多看一眼」历史徽章一字不差），
 //  证据来源签 = handoffEvidenceTag。Danny 审字 pending（与 feat-057 同批人话口径）。
+// ⚠ HAND-WRITTEN, act-first (棒E · 布局与真部件战役 2026-07-22): lite2.searchPlaceholder「搜索成员、
+//  项目…」+ lite2.searchAria「搜索成员与项目」+ lite2.searchEmpty「没有匹配的成员或项目。」——
+//  顶栏真搜索的三个新词。同 棒D 之由：对象体里的 8 行 feat-057 红线注释挡着 delta，为三个极短
+//  无歧义的词不冒抹掉红线注释的风险。结果分组标签复用既有 refPeople/refProjects（人员/项目）。
+//  🔴 searchEmpty=零匹配，与 refEmpty=零数据 是两回事，措辞刻意分开。源键在 en.ts。Danny 审字 pending。
 // ⚠ ZH DRAFT, PENDING M3 (feat-068 · ZH-02): the 11 NEW triage keys duplicated into BOTH lite.*
 //  and lite2.* (handoffToneLabel / handoffAction / handoffEvidenceFallback / handoffEvidenceTag /
 //  handoffStatus{AtRisk,Blocked} / personRead{Owns,ListSeparator,None} / personCardOpenAria /
@@ -634,6 +639,9 @@ export const zh: Dict = {
     "refAdd": "添加参考",
     "refSearch": "引用一位成员或一个项目",
     "refEmpty": "先上传几份文件——成员和项目会出现在这里。",
+    "searchPlaceholder": "搜索成员、项目…",
+    "searchAria": "搜索成员与项目",
+    "searchEmpty": "没有匹配的成员或项目。",
     "detailAria": "详情",
     "detailClose": "关闭",
     "detailPersonEyebrow": "团队成员",

@@ -6049,3 +6049,130 @@
 .lite2-shell .lite-home-rail {
   gap: 18px;
 }
+
+/* ═══ 布局与真部件战役 棒E（2026-07-22）· 顶栏真搜索 ══════════════════════════════════
+   组件 src/lite2/LiteSearch.tsx，挂在 LiteTopbar 的 nav 之后、铃铛之前（门相位按
+   `.scene-tabs .scene-tab` 数 tab，搜索块在 .scene-tabs 之外——不进 tab 计数）。
+   token 全部沿用 .lite-bell / .lite-settings 的两皮安全子集（--rule/--rule-strong/
+   --lite2-glass/--lite2-surface/--shadow/--ink*）——那两块在 paper/aurora 都已验，搜索照抄
+   不会在 paper 静默失效。
+   🔴 .prototype-topbar 容器是 pointer-events:none（00-base l.65），子块各自 auto 回来
+   （同 .scene-tabs/.lite-bell/.lite-settings 的老规矩，不动 shared/00-base.css）。 */
+
+/* 断点 1280（她 hidden xl:block；预算见 .issues/layout-real-0722/topbar-budget.md：
+   zh 9 tab 自然 770px，1280 视口剩 336px，定宽 220px 两语言都安全）。
+   媒体级隔离：base 与 @media 同特异性 (0,2,0)，媒体命中 + 源序定胜负，不提特异性
+   （棒4 坑：媒体查询加特异性会和 look-aurora 打架）。<1280 整块 display:none。 */
+.lite2-shell .lite-search {
+  display: none;
+  position: relative;
+  flex: 0 0 auto;
+  pointer-events: auto;
+}
+
+@media (min-width: 1280px) {
+  .lite2-shell .lite-search {
+    display: block;
+  }
+}
+
+.lite2-shell .lite-search-input {
+  width: 220px;
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--lite2-glass);
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 32px;
+  outline: none;
+}
+
+.lite2-shell .lite-search-input::placeholder {
+  color: var(--ink-faint);
+}
+
+.lite2-shell .lite-search-input:hover,
+.lite2-shell .lite-search-input:focus-visible {
+  border-color: var(--rule-strong);
+}
+
+/* 检索面板：锚在搜索框左缘下方；z 同铃铛弹层 90（顶栏 z50 内部堆叠，弹层压住其余顶栏件）。 */
+.lite2-shell .lite-search-pop {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 90;
+  width: min(320px, 86vw);
+  max-height: 360px;
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 14px;
+  background: var(--lite2-surface);
+  box-shadow: var(--shadow);
+}
+
+.lite2-shell .lite-search-empty {
+  margin: 0;
+  padding: 12px 10px;
+  color: var(--ink-faint);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.lite2-shell .lite-search-group + .lite-search-group {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--rule);
+}
+
+.lite2-shell .lite-search-group-label {
+  margin: 0;
+  padding: 6px 10px 2px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.lite2-shell .lite-search-option {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.lite2-shell .lite-search-option:hover,
+.lite2-shell .lite-search-option:focus-visible {
+  background: var(--lite2-glass);
+  outline: none;
+}
+
+.lite2-shell .lite-search-option-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.lite2-shell .lite-search-option-meta {
+  margin-left: auto;
+  max-width: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  color: var(--ink-soft);
+}

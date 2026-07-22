@@ -905,6 +905,13 @@ export const en = {
     refSearch: 'Reference a person or project',
     refEmpty: 'Upload a few files first — people and projects appear here.',
 
+    // 棒E · Topbar search (pure in-memory retrieval; ≥1280 only). searchEmpty is ZERO MATCHES —
+    // deliberately distinct from refEmpty (ZERO DATA). Group headings reuse refPeople/refProjects.
+    // 🔴 aria-label is mandatory: placeholder is invisible to both zh-purity and aria-zh gates.
+    searchPlaceholder: 'Search people, projects…',
+    searchAria: 'Search people and projects',
+    searchEmpty: 'No matching people or projects.',
+
     // Thin read-only detail overlay (pure live payload)
     detailAria: 'Detail',
     detailClose: 'Close',

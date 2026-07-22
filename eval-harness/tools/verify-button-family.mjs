@@ -42,6 +42,7 @@ const WHITELIST = [
   '.lite-modal-backdrop', '.lite-gate-door', '.lite-onboard-playbook',
   '.ask-recipient-chip', '.icon-button', '.composer-add-button',
   '.lite-composer-filter', '.lite-composer-option', '.lite-composer-remove',
+  '.lite-search-option',
   '.lite-home-block-link', '.lite-home-todo-check', '.lite-home-gap-title',
   '.lite-home-count-cell', '.lite-home-attention-name',
   '.home-person-card', '.home-people-group-head', '.home-check', '.home-map-card-link',

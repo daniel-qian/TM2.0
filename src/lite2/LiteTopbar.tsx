@@ -9,6 +9,7 @@ import { showModeSwitch, type AveryMode } from '../shared/mode'
 import { useLook } from './lookStore'
 import type { LiteLook } from './look'
 import { LiteBell } from './LiteBell'
+import { LiteSearch } from './LiteSearch'
 import { AuthPanel } from './auth/AuthPanel'
 
 // feat-035 · lite2 壳的顶栏：6 tab + mode 开关。复用 story 顶栏的 CSS chrome
@@ -103,6 +104,10 @@ export function LiteTopbar() {
           </button>
         ))}
       </nav>
+      {/* 棒E：顶栏真搜索（布局与真部件战役）——nav 之外（门相位按 `.scene-tabs .scene-tab`
+          数 tab，搜索块不得混进 .scene-tabs）。纯客户端内存检索，零 transport。断点 1280
+          （<1280 CSS 里 hidden，见 lite2.css 棒E 段）；无材料时组件自身返回 null。 */}
+      <LiteSearch />
       {/* feat-045：通知铃铛——真事件驱动（notifyStore），nav 之外、mode 开关之前。 */}
       <LiteBell />
       {/* feat-053：账号入口。同样在 .scene-tabs nav 之外（门相位按 `.scene-tabs .scene-tab`
