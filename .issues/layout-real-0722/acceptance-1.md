@@ -184,7 +184,7 @@ KPI 条和双栏**根本不进 DOM**。所以「visual 四张全绿」对本批�
 
 - 她的主页：`http://localhost:3100/`
 - 对照板（我方终构建 vs 她方逐屏成对，**本批次已重拍**）：
-  `D:very\eval-harnesseportslign-board6-07-21\index.html`
+  `eval-harness/reports/align-board/2026-07-21/index.html`（相对 avery 仓库根）
   （目录名是工具的日期戳，内容是本批次终构建；desktop + mobile 两套）
 
 **刻意不同的地方（不是没做完，是红线）**：

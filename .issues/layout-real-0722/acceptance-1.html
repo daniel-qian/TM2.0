@@ -1,0 +1,348 @@
+<style>
+:root{
+  --bg:#f7f6f3; --surface:#fffdfb; --ink:#1b2230; --ink-soft:#465063; --ink-faint:#7a8496;
+  --rule:#e4e0d8; --rule-strong:#cfcabd; --accent:#3a5bd0; --accent-soft:#eef2fd;
+  --danger:#c0392b; --danger-soft:#fceeec; --code-bg:#f2efe9; --mono:"Cascadia Code","Consolas","SFMono-Regular",ui-monospace,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root{ --bg:#14171d; --surface:#1b1f27; --ink:#e7eaf0; --ink-soft:#b3bccb;
+    --ink-faint:#828d9e; --rule:#2c313b; --rule-strong:#3c434f; --accent:#8aa4ff; --accent-soft:#212838;
+    --danger:#ff8a7a; --danger-soft:#2c2020; --code-bg:#232833; }
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:"PingFang SC","Microsoft YaHei","Segoe UI",-apple-system,system-ui,"Hiragino Sans GB",sans-serif;
+  font-size:16px; line-height:1.75; letter-spacing:.01em;
+}
+.wrap{max-width:860px; margin:0 auto; padding:56px 28px 120px}
+article{background:var(--surface); border:1px solid var(--rule); border-radius:14px; padding:44px 48px 56px; box-shadow:0 1px 3px rgba(20,25,35,.04)}
+@media(max-width:640px){ article{padding:28px 20px 36px} .wrap{padding:24px 12px 80px} }
+h1{font-size:29px; line-height:1.3; font-weight:800; letter-spacing:-.01em; margin:0 0 8px; text-wrap:balance}
+h2{font-size:22px; font-weight:750; margin:44px 0 14px; padding-top:22px; border-top:1px solid var(--rule); letter-spacing:-.005em; text-wrap:balance}
+h2:first-of-type{border-top:none; padding-top:0; margin-top:26px}
+h3{font-size:17px; font-weight:700; margin:26px 0 8px; color:var(--ink)}
+h4{font-size:15px; font-weight:700; margin:20px 0 6px; color:var(--ink-soft)}
+p{margin:12px 0}
+a{color:var(--accent); text-decoration:none; border-bottom:1px solid transparent}
+a:hover{border-bottom-color:currentColor}
+strong{font-weight:700; color:var(--ink)}
+hr{border:none; border-top:1px solid var(--rule); margin:34px 0}
+ul,ol{margin:12px 0; padding-left:1.4em}
+li{margin:5px 0}
+li::marker{color:var(--ink-faint)}
+code{font-family:var(--mono); font-size:.86em; background:var(--code-bg); padding:.12em .4em; border-radius:5px; color:var(--ink); word-break:break-word}
+pre{background:var(--code-bg); border:1px solid var(--rule); border-radius:10px; padding:16px 18px; overflow-x:auto; margin:16px 0; line-height:1.6}
+pre code{background:none; padding:0; font-size:13px; white-space:pre}
+blockquote{margin:18px 0; padding:14px 20px; background:var(--accent-soft); border-left:3px solid var(--accent); border-radius:0 10px 10px 0; color:var(--ink-soft)}
+blockquote p{margin:6px 0}
+blockquote strong{color:var(--ink)}
+/* 🔴 / ⚠️ callout blockquotes read as warnings */
+blockquote:has(strong):first-line{}
+.tablewrap,.table-scroll{overflow-x:auto; margin:18px 0}
+table{border-collapse:collapse; width:100%; font-size:14px; line-height:1.55}
+th,td{border:1px solid var(--rule); padding:9px 13px; text-align:left; vertical-align:top}
+th{background:var(--accent-soft); font-weight:700; color:var(--ink); white-space:nowrap}
+tr:nth-child(even) td{background:color-mix(in srgb,var(--surface) 60%,var(--bg))}
+td code{white-space:nowrap}
+h1+blockquote{background:var(--danger-soft); border-left-color:var(--danger)}
+:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+.meta{font-size:12.5px; color:var(--ink-faint); margin:0 0 30px; font-family:var(--mono)}
+</style>
+<div class="wrap"><article>
+<p class="meta">D:\avery\.issues\layout-real-0722\acceptance-1.md · 本地渲染副本</p>
+<h1 id="验收手册--批次①-棒a棒c主页骨架成形">验收手册 · 批次① （棒A–棒C：主页骨架成形）</h1>
+<blockquote>
+<p><strong>状态：验收就绪。</strong> dev server 三口全挂着，改动全在本地 commit（未 push）。</p>
+<table>
+<thead>
+<tr>
+<th>口</th>
+<th>地址</th>
+<th>状态</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>我方（验收对象）</td>
+<td><code>http://localhost:5173/?v=2&amp;mode=live&amp;lang=zh</code></td>
+<td>✅ 挂着</td>
+</tr>
+<tr>
+<td>她方（对照）</td>
+<td><code>http://localhost:3100/</code></td>
+<td>✅ 挂着</td>
+</tr>
+<tr>
+<td>mock 后端</td>
+<td><code>http://127.0.0.1:8137</code></td>
+<td>✅ 挂着（<code>/health</code> 200）</td>
+</tr>
+</tbody>
+</table>
+<p><strong>机器判据（本批次收官三项）</strong></p>
+<ul>
+<li><code>SPEC_STICK=5</code> cr 对齐规格：<strong>硬断言 35/35 绿</strong>，未来行 0 红（其中 13 行是本战役新增的布局断言）</li>
+<li>A 区电池：<strong>19/19 绿 exit 0</strong></li>
+<li>扫雷全矩阵（9 屏 × 2 皮 × 4 世界）：<strong>0 件 / 0 指纹 · REGRESSION 0</strong></li>
+</ul>
+</blockquote>
+<blockquote>
+<p>🔴 <strong>本批次没有 push。</strong> 改动全在本地 commit。你在 dev server 上人测点头之后我才推（push = Vercel 自动上产）。</p>
+<p><strong>验收 URL（必须带参）</strong>：<code>http://localhost:5173/?v=2&amp;mode=live&amp;lang=zh</code> 裸 URL <code>localhost:5173/?lang=zh</code> 会进<strong>老 story 演示原型</strong>（英文假数据）——这不是回滚不是坏档， <code>routes.ts:14</code> 规定 <code>?v=2&amp;mode=live</code> 才是 v02 入口。生产裸 URL 等效 v02 是因为构建期 env 换了默认。</p>
+</blockquote>
+<hr />
+<h2 id="0-先看这三条不看会误判">0. 先看这三条（不看会误判）</h2>
+<h3 id="①-快问这个名字和现有功能撞了--需要你定">① 「快问」这个名字和现有功能撞了 —— <strong>需要你定</strong></h3>
+<p>你 kickoff 写「悬浮入口……叫「快问」」。但「快问」<strong>已经是 feat-034 Ask 的正式名字</strong>： ADR-0023 把 surface 定死（EN "Quick ask" / ZH「快问」），en/zh 里 9+ 个键在用 （<code>ask.eyebrow</code>、通知「一条快问已拟好」、待办来源「来自快问」…），且这条锁在 M3 生成器的铁律里。</p>
+<p>两个「快问」是两件不同的事：</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>feat-034 快问（已上线）</th>
+<th>你要的悬浮入口</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>把什么发给谁</td>
+<td>把<strong>链接发给员工</strong>，员工自述 1–5 / 是否</td>
+<td>把<strong>问题发给 Avery</strong>（LLM）</td>
+</tr>
+<tr>
+<td>结果在哪</td>
+<td>回执收在 Ask 卡上</td>
+<td>议事室的分析流</td>
+</tr>
+<tr>
+<td>谁管着</td>
+<td>ADR-0023 三条红线</td>
+<td>无材料 gate</td>
+</tr>
+</tbody>
+</table>
+<p>同屏两个「快问」，用户分不清自己在问谁。 <strong>我的处置</strong>：悬浮入口先按不冲突的命名做（走既有「去议事室」族 <code>homeDecisionAskRoom</code> / <code>notesEmptyCta</code>）。改一个 label 是一行——你说了算，这是最便宜的反悔点。 （无论如何不能叫 Nexus：<code>verify-p0.mjs:265</code> 有硬闸扫 <code>Nexus/nexus/现实差距</code>。）</p>
+<h3 id="②-差距卡的自报列会显示不是自报的文本--真-bug我已定位棒d-修">② 差距卡的「自报」列会显示<strong>不是自报的文本</strong> —— 真 bug，我已定位，棒D 修</h3>
+<p>跑真抽取器实测：语料里明明写着</p>
+<blockquote>
+<p>进度：本周完成常见问题分类与话术初稿，销售组已试用两天。</p>
+</blockquote>
+<p>抽出来的 <code>summary</code> 却是<strong>标题行</strong>「项目：销售 FAQ 梳理」。于是差距卡渲染成：</p>
+<blockquote>
+<p><strong>自报情况</strong>：「项目：销售 FAQ 梳理」 ← 一句标题 <strong>观察到的</strong>：退改签口径未确认，法务尚未回复，涉及的 11 条问答暂时留空。</p>
+</blockquote>
+<p><code>gapDerive.ts:24-31</code> 的注释<strong>自称修好过这个 bug</strong>——它只修了「status 被前端捏造」那一半， 「summary 不是自述句」这另一半还开着，只是此前没有语料同时满足触发条件，没人看见过。 本战役正要把这个面板搬到主页右栏黄金位，bug 从藏着变成一眼可见。 <strong>棒D 会加闸</strong>（summary 像结构行就退回机械读出「自报状态：正常推进」）。 本批次你看到的还是带 bug 的形态——<strong>看到了不是你眼花，是已知的</strong>。</p>
+<h3 id="③-现有语料喂不出差距卡所以我建了一份人测语料">③ 现有语料喂不出差距卡，所以我建了一份人测语料</h3>
+<p>差距的判据是「<strong>嘴上说没事、身上挂着卡点</strong>」——已自报「有风险」的项目<strong>故意不算差距</strong>（判据是对的）。 实测：demo-seed 出 0 张，cjk/Sanya 三件也出 0 张。 所以我写了 <code>.issues/layout-real-0722/acceptance-corpus/本周项目周报.md</code>（沿用 cjk 花名册同一批人名）。 它<strong>走上传路径</strong>，和你自己拖一份公司文件进去完全等价——不是产品假数据，不进 demo-seed，不进门的判别语料。</p>
+<hr />
+<h2 id="1-端到端人测流程step-by-step">1. 端到端人测流程（step-by-step）</h2>
+<h3 id="起环境如果机器重启过">起环境（如果机器重启过）</h3>
+<div class="sourceCode" id="cb1"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ① mock 后端（三个 env 缺一就真出网烧钱）</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> /d/avery/eval-harness <span class="kw">&amp;&amp;</span> <span class="va">AVERY_BRAIN</span><span class="op">=</span>mock <span class="va">AVERY_EXTRACTOR</span><span class="op">=</span>heuristic <span class="va">AVERY_EMBEDDINGS</span><span class="op">=</span>keyword <span class="dt">\</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>  <span class="va">AVERY_DEMO_SEED_DIR</span><span class="op">=</span>tests/fixtures/demo-seed <span class="dt">\</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  <span class="ex">/c/Python313/python</span> <span class="at">-m</span> uvicorn service.app:app <span class="at">--host</span> 127.0.0.1 <span class="at">--port</span> 8137 <span class="at">--app-dir</span> .</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="co"># ② 前端（本仓 vite dev 起不来，一律 build+preview）</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> /d/avery <span class="kw">&amp;&amp;</span> <span class="ex">node</span> node_modules/typescript/bin/tsc <span class="at">-b</span> <span class="dt">\</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>  <span class="kw">&amp;&amp;</span> <span class="ex">node</span> node_modules/vite/bin/vite.js build <span class="at">--mode</span> development <span class="dt">\</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>  <span class="kw">&amp;&amp;</span> <span class="ex">node</span> node_modules/vite/bin/vite.js preview <span class="at">--port</span> 5173</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="co"># ③ 她方参照（对照用）</span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> /d/cr-live <span class="kw">&amp;&amp;</span> <span class="ex">npm</span> run dev        <span class="co"># :3100</span></span></code></pre></div>
+<p>🔴 <strong>上传前先确认后端指向本地</strong>：浏览器 devtools 敲 <code>window.__AVERY_BUILD__.apiBase</code>， 必须是 <code>(local default 127.0.0.1:8137)</code>。若显示生产域名 → dist 被某道门重打过，重跑上面的 ② 再上传。 （07-20 真事故：三个「员工花名册.csv」就这么落进了生产库。）</p>
+<h3 id="第一段--空态验收走-demo-门">第一段 · 空态验收（走 demo 门）</h3>
+<ol type="1">
+<li>开 <code>http://localhost:5173/?v=2&amp;mode=live&amp;lang=zh</code> （若之前验收过，先在 devtools → Application → Local Storage 清掉 <code>lite2:</code> 开头的键，才回到新访客态）</li>
+<li>闸门页 → 点「<strong>用一份示例团队先看看</strong>」</li>
+<li>落在<strong>指挥室</strong>屏</li>
+</ol>
+<p><strong>这一段要看的</strong>：</p>
+<ul>
+<li>骨架在<strong>空数据下</strong>是否仍然成立——右侧两块显示诚实空态（「现在没有自相矛盾的地方」/ 「现在文件没有特别指向某个人」），而不是塌掉或留一个白洞。</li>
+<li>KPI 五格在小数字（2 人 / 1 项目 / 2 份文件已读 / 1 条笔记 / <strong>0</strong> 条待跟进）下好不好看。</li>
+<li><strong><code>0 条待跟进</code> 必须老实显示 0</strong>，不许藏起来。</li>
+</ul>
+<h3 id="第二段--满态验收走上传路径">第二段 · 满态验收（走上传路径）</h3>
+<p>在<strong>同一个会话</strong>里继续上传两份文件（拖进上传区，或点「选择文件」）：</p>
+<ol type="1">
+<li><code>D:\avery\eval-harness\tests\fixtures\cjk\Sanya_Team_Roster_ZH.md</code>（花名册，7 人）</li>
+<li><code>D:\avery\.issues\layout-real-0722\acceptance-corpus\本周项目周报.md</code>（3 个项目）</li>
+</ol>
+<p><strong>预期（实测值，不是估计）</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>位置</th>
+<th>预期</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>KPI 计数</td>
+<td><strong>7 人 / 3 个项目 / 文件数 +2</strong></td>
+</tr>
+<tr>
+<td>「文件自己对不上的地方」</td>
+<td><strong>2 张</strong>（销售 FAQ 梳理 · 客房夜床服务复核）</td>
+</tr>
+<tr>
+<td>「文件里反复提到的人」</td>
+<td><strong>3 行</strong>（孙浩 / 赵倩 / 陈思雨，各卡点 1）</td>
+</tr>
+<tr>
+<td>「宴会动线优化」</td>
+<td><strong>不出现在差距里</strong>——它自报「有风险」，与卡点一致，<strong>不算矛盾</strong>。这是判据正确，不是漏了。</td>
+</tr>
+</tbody>
+</table>
+<h3 id="空态--错态怎么触发">空态 / 错态怎么触发</h3>
+<table>
+<thead>
+<tr>
+<th>态</th>
+<th>怎么触发</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>全空（新访客）</td>
+<td>清 localStorage 的 <code>lite2:*</code> 键后刷新，闸门页选「先随便看看 →」</td>
+</tr>
+<tr>
+<td>差距空 / 关注成员空</td>
+<td>只走 demo 门不上传（示例团队 2 人 1 项目，两块都空）</td>
+</tr>
+<tr>
+<td>差距有内容但关注成员为空</td>
+<td>只传 <code>本周项目周报.md</code><strong>不传花名册</strong> —— 项目有卡点但 owner 挂不到人</td>
+</tr>
+<tr>
+<td>上传错误态</td>
+<td>传一个 <code>.doc</code>（旧版）或 <code>.zip</code> —— 应给出明确拒绝理由，不是静默失败</td>
+</tr>
+<tr>
+<td>后端断开</td>
+<td>Ctrl-C 掉 8137 再刷新 —— 应显示可读的错误，不是空白页或假装成功</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="2-逐屏看点本批次只动了指挥室">2. 逐屏看点（本批次只动了指挥室）</h2>
+<blockquote>
+<p>棒A 一个像素都没改（纯工具链）；棒B/B'/棒C 只动指挥室。其余八屏本批次<strong>应当零变化</strong>—— 如果你发现别的屏也变了，那是回归，请指出来。</p>
+</blockquote>
+<h3 id="指挥室新纵序对着-localhost3100-看">指挥室新纵序（对着 <code>localhost:3100/</code> 看）</h3>
+<pre><code>标题块
+KPI 条（五格满宽）                    ← 从页面最底提上来
+┌─────────────────────────┬──────────────┐
+│ 主柱 835.2px            │ 侧轨 538.8px │
+│  ① 今天要决策的          │  ② 文件自己  │
+│  ①½ 今日待办            │     对不上   │
+│                         │  ③ 文件里反  │
+│                         │     复提到的人│
+└─────────────────────────┴──────────────┘</code></pre>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>看点</th>
+<th>该长什么样</th>
+<th>对照她的哪一屏</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><strong>外夹与顶栏齐平</strong></td>
+<td>内容左右边缘与顶栏胶囊的左右边缘<strong>逐像素对齐</strong>。@1440 两者都是 1392 宽、left 24；@1600 都是 1480 宽、left 60</td>
+<td>她的 <code>main</code> 与 <code>header</code> 同为 <code>w-[min(1480px,calc(100vw-48px))]</code></td>
+</tr>
+<tr>
+<td>2</td>
+<td><strong>双栏比例</strong></td>
+<td>主柱 : 侧轨 = 1.55 : 1（@1440 是 835.2 : 538.8），栏间沟 18px，两栏<strong>各自顶对齐</strong>（侧轨不被主柱拉高）</td>
+<td><code>grid-cols-[1.55fr_1fr] gap-4.5 items-start</code></td>
+</tr>
+<tr>
+<td>3</td>
+<td><strong>主柱装决策、侧轨堆两块</strong></td>
+<td>决策卡和今日待办在<strong>左边宽柱</strong>；差距面板和关注成员在<strong>右边窄轨、上下堆叠</strong>（不是并排）</td>
+<td>她左柱 = DecisionQueue，右轨 = 报告VS现实 + 需要关注的成员</td>
+</tr>
+<tr>
+<td>4</td>
+<td><strong>KPI 五卡</strong></td>
+<td>一行五张等宽卡（@1440 每张 267.2px，卡间 14px），卡内：小号大写标签 + 大号粗体数字</td>
+<td><code>grid-cols-5 gap-3.5</code>，标签 11.5px uppercase、数值 25px extrabold</td>
+</tr>
+<tr>
+<td>5</td>
+<td><strong>窄屏塌单栏</strong></td>
+<td>拖窄到 880px 以下，双栏应塌成单栏，不横向滚</td>
+<td><code>max-lg:grid-cols-1</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="warning-这一批没有像素基线保护请你多看两眼">⚠️ 这一批<strong>没有</strong>像素基线保护，请你多看两眼</h3>
+<p>像素基线（36 张）跑的是 <code>?transport=stub</code> 的世界，而那个世界主页是<strong>空态</strong>—— KPI 条和双栏<strong>根本不进 DOM</strong>。所以「visual 四张全绿」对本批次是<strong>空的绿</strong>： 棒B/B'/C 改的东西一个像素都没被拍到。 本批次的机器保障来自 spec 表（13 行布局断言）+ A 区 19 道门，<strong>截图覆盖率是 0</strong>。 （要补的话是给基线加一个 seeded 世界，那是独立的一棒，本批次没做。）</p>
+<h3 id="我自己逮到并修掉的两处说明我怎么验的你不用重复验">我自己逮到并修掉的两处（说明我怎么验的，你不用重复验）</h3>
+<ol type="1">
+<li><strong>空态在 721–880px 宽（含 iPad 竖屏 768）左右内边距被清零</strong>，骨架卡贴死屏幕边。 是棒B 一条「防御性」媒体查询误伤空态（空态那个 div 同时挂两个类）。 讽刺的是它自己的注释白纸黑字写着要防这件事，然后被上面 8 行的规则反手做掉。 已修（选择器加 <code>:not(.lite-home-frame-empty)</code>），实测 721/768/800/880 全部回到 36px。</li>
+<li><strong>「与顶栏逐像素齐平」在真浏览器上原本是假的</strong>：headless 用的是覆盖式滚动条（0px）， 而 Windows Chrome 是经典滚动条（15px），内容盒偏左 7.5px，顶栏按真视口居中 → 差 7.5px。 已修（<code>scrollbar-gutter: stable both-edges</code> 让内容盒重新与视口同心）， <strong>headed 和 headless 两种模式下 1600/1440/900 三个视口都验过，逐像素相等</strong>。</li>
+</ol>
+<hr />
+<h2 id="3-与她的对照怎么看">3. 与她的对照怎么看</h2>
+<ul>
+<li>她的主页：<code>http://localhost:3100/</code></li>
+<li>对照板（我方终构建 vs 她方逐屏成对，<strong>本批次已重拍</strong>）： <code>eval-harness/reports/align-board/2026-07-21/index.html</code>（相对 avery 仓库根） （目录名是工具的日期戳，内容是本批次终构建；desktop + mobile 两套）</li>
+</ul>
+<p><strong>刻意不同的地方（不是没做完，是红线）</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>她有</th>
+<th>我方</th>
+<th>为什么</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>关注成员每行带 91% / 88% / 84% / 82%</td>
+<td><strong>没有百分比</strong></td>
+<td>D14 人面零数字零血条；<code>LitePerson</code> 类型层就没有数字槽位</td>
+</tr>
+<tr>
+<td>KPI：营收完成率 58% / 转化率 66% / 投诉率 4.2% / 团队负载 72%</td>
+<td><strong>四张全不做</strong></td>
+<td>无数据基础＝编数；负载还额外撞 D14</td>
+</tr>
+<tr>
+<td>KPI 卡底进度条</td>
+<td><strong>不做</strong></td>
+<td>她那 5 条是硬编码指标串，我们没有对应基数</td>
+</tr>
+<tr>
+<td>KPI「▲ 上月 3.1%」同比行</td>
+<td><strong>不做</strong></td>
+<td>没有历史快照，编不出同比</td>
+</tr>
+<tr>
+<td>项目卡进度 58% + 进度条</td>
+<td><strong>不做</strong></td>
+<td><code>progress</code> 只有 6/17 有值，聚合口径不可解释</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="4-已知留后项">4. 已知留后项</h2>
+<ul>
+<li><strong>B-1</strong>：悬浮入口命名待你定（见 §0①）。</li>
+<li><strong>B-2</strong>：差距卡「自报」列显示标题行（见 §0②）——棒D 修。</li>
+<li>抽取层让 <code>summary</code> 优先取自述句（<code>进度：</code>/<code>状态：</code>）而不是块首行 —— 波及面大于本战役，<strong>记债</strong>。</li>
+<li><code>upload.switch*</code> 12 个孤儿 i18n 键（描述「本浏览器上传过的公司列表 + 切换 + 移除」UI）。 删是删除类动作要你点头；若后续做右栏「历史工作区」面板，这批键直接就位。</li>
+<li>像素基线 PNG 是 <strong>untracked</strong>（11.3MB），换机器 = 36 张全部重采。</li>
+</ul>
+
+</article></div>
