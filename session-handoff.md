@@ -1,4 +1,23 @@
-> # ⟳ 2026-07-22 · 布局与真部件战役 · **批次③ 起步：notes 列表化 + 问 Avery 动效落地**（★下个 session 从这里接）
+# ⟳ 2026-07-22 · 布局与真部件战役 · **批次③ 收官（棒G–H）· 三批全干完，等 Danny HITL**（★最新，从这里接）
+
+**状态**：批次①②③ **全部本地 commit、未推**（push=Vercel 自动上产=对外人工闸，等 Danny 点头）。
+分支 `claude/layout-real-components-27b594`。dev 三口仍挂（5173 dev dist / 3100 cr / 8137 mock）。
+
+**批次③ 收官做了**（commit 4f1d98a，接 e3e053a 的 notes+问Avery）：
+- 动效 pass 全落：搜索浮层入场 `lite-search-pop-in` · 三态 chip 列表切换 `lite-home-gap-list-in`(ul key=gapFilter) · 搜索框聚焦 border-color 过渡。全包 `reduced-motion:no-preference`，探针实测 reduce 归零。
+- 修 `capture-align-board`：**`transport=stub` 已不灌数据**（contextId 恒 null、六屏空态，板子是假对照）→ 改走真 uploadFiles 抽取路径。对照板现在照的是「有数据的形状」。
+- **验收表单 = `.issues/layout-real-0722/acceptance-3.md`**（HITL 端到端）。全 23 门电池两轮零红 + 扫雷 0/0 + 规格 all-stick 35/35 + 桌面像素 9屏×2皮全绿。
+
+**🅰🅱 两处刻意不同 · 留 Danny 拍板**（对照板真数据复核后确认零骨架缺口零破图，只这两处）：
+- 🅰 **playbooks**：她 6 卡双列方法库；我方诚实空态（**无真 playbook 数据，造网格墙=编造/空卡剧场**，踩 absent≠none）。要那面墙先得有真数据源。
+- 🅱 **team**：她通讯录目录（筛选chip+3列）；我方 upload-first 架构（贯穿 projects/team/closerlook 的产品语法）。改她原型=架构级、非批次③范围，**不 AFK 擅改**。
+
+**下一步 = Danny HITL**：按 acceptance-3.md §1 走一遍 → §2 两处决策 → 点头才 push。
+**仍欠 Danny**：批次② 手写 8 条中文标签审字（acceptance-2.md §3，本批零新增文案）· 像素 home-mobile 先天漂移重冻（人审对照板后才 `--update-snapshots`）。
+
+---
+
+> # ⟳ 2026-07-22 · 布局与真部件战役 · **批次③ 起步：notes 列表化 + 问 Avery 动效落地**（历史·上一段）
 >
 > **状态**：批次①②（主页骨架+三真部件）仍全绿全未推（见下一段）。本 session 在其上起了批次③，
 > 落地两件并验证，均 commit 未 push；dev server 三口仍挂（5173/3100/8137）。验收入口不变
