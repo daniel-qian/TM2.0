@@ -1,4 +1,5 @@
 import type { LiteTeam } from './teamData'
+import { projectStatusText, type ProjectStatusCopy } from '../shared/projectStatus'
 
 // feat-044 · lite2 "A closer look" comparison-card derivation (PRD F4 / decisions.md 拍板#4).
 // Pure function: LiteTeam -> GapCard[]. Only project-level fields — never touches LitePerson
@@ -28,16 +29,52 @@ import type { LiteTeam } from './teamData'
 // (e.g.「负责人：李娜」, not a status statement at all) opposite「实际信号」as if the customer had
 // claimed everything was fine. `statusRaw` is absent exactly when nothing was read, so this
 // function can no longer manufacture a self-report to contradict.
+//
+// 🔴 B-2 (棒D, 2026-07-22): the 2026-07-18 fix above closed only HALF of that door. It stopped the
+// FRONT END inventing a status, but the `summary` half stayed open — the extractor fills `summary`
+// with the project block's FIRST line, which for real corpora is a metadata line
+// (「项目：销售 FAQ 梳理」= a title, or「负责人：李娜」= an owner), not a self-report sentence. No
+// corpus had ever satisfied BOTH gap triggers (steady status + a blocker) at once, so nobody saw
+// it — until this battle promoted the panel to the home rail's golden slot (panel-firing-truth.md
+// reproduced it: a title line sitting in 「文件里的说法」opposite the observed blocker). Fix (下限
+// only): before trusting `summary` as the claim, run it past `isStructuralLine`; a metadata line
+// falls back to the mechanical status readout (localized at the render layer via `gapClaimText`,
+// same as everywhere else — the pure layer stays i18n-free and deterministic). The UPPER fix
+// (make the extractor prefer the self-report sentence over the block's first line) is out of scope
+// (blast radius > this battle) and left as debt. Same discipline as always: 显示值与判据值分开.
 const STEADY_STATUSES = new Set(['on-track', 'steady'])
+
+// 「像不像自述」闸（B-2）：summary 若是**元信息行**（标题 / 负责人 / 名称这类结构行，而非陈述
+// 句），返回 true → claim 退回机械状态读出，绝不让一句标题冒充「文件里的说法」。锚定行首的
+// 字段名 + 冒号（中英双写、大小写不敏感），只认结构行、不误伤真陈述句（「本周完成…」不匹配）。
+const STRUCTURAL_LINE = /^\s*(项目|Project|负责人|Owner|标题|Title|名称|Name)\s*[:：]/i
+function isStructuralLine(text: string): boolean {
+  return STRUCTURAL_LINE.test(text)
+}
 
 export interface GapCard {
   id: string
   projectId: string
   projectTitle: string
   ownerName: string
-  claim: string // "What the files say" — the project's own self-report (verbatim summary)
+  // "What the files say" — the project's own self-report (verbatim summary). Empty string when the
+  // summary was absent or a structural/metadata line (B-2): the render layer then localizes a
+  // mechanical status readout from `claimStatusRaw` via gapClaimText(). 🔴 Never bake a display
+  // string here — the pure layer has no dictionary, and an English literal would surface raw on
+  // the ZH home rail (verify-zh-purity).
+  claim: string
+  // The self-reported status enum (statusRaw) behind this gap — the render-layer fallback for the
+  // claim column when `claim` is empty. Machine key; localized at render.
+  claimStatusRaw: string
   evidence: string // "What the signals show" — the blocker line that contradicts it (verbatim)
-  evidenceTag: string
+}
+
+// Render-layer helper: the claim column's display text. Genuine self-report → verbatim summary;
+// otherwise → a localized, mechanical readout of the self-reported status (B-2 fallback). Kept out
+// of deriveGaps so the derivation stays i18n-free; `copy` = t.lite / t.lite2 (both satisfy
+// ProjectStatusCopy). Used by CloserLookScreen (/gaps) and the home gap rail alike.
+export function gapClaimText(gap: GapCard, copy: ProjectStatusCopy): string {
+  return gap.claim || projectStatusText(gap.claimStatusRaw, copy)
 }
 
 export function deriveGaps(team: LiteTeam | null): GapCard[] {
@@ -49,11 +86,13 @@ export function deriveGaps(team: LiteTeam | null): GapCard[] {
     if (!selfReported || !STEADY_STATUSES.has(selfReported)) continue
     const blockers = project.blockers ?? []
     if (blockers.length === 0) continue
-    // claim 兜底（summary 为空时）：机械状态读出式，引号原样引 statusRaw 字段值——不自拟叙事句
-    // （"X is reported fine." 读起来像语料里有人这么说过，但语料里没这句话；机械读出保证
-    // 兜底文本也 100% 可溯源到字段本身。对抗验证 redline 路要求，2026-07-14）。
-    // 引号里的值现在必然来自文档（上面那道闸），所以这句"可溯源"才第一次真正成立。
-    const claim = project.summary?.trim() || `Reported status: "${selfReported}"`
+    // claim（「文件里的说法」列）：只有当 summary 是**真自述句**时才逐字引用它。summary 为空、
+    // 或是元信息结构行（B-2：标题「项目：X」/ 负责人行 —— 抽取层拿项目块首行当 summary 的产物），
+    // 就退回机械状态读出。这里存的是**判据/原文**，不存显示串：claim 留空时由 gapClaimText() 在
+    // 渲染层按当前字典把 claimStatusRaw 本地化成状态词（「按计划推进」）。绝不在纯函数里写英文
+    // 兜底串——那会在中文主页右轨裸奔（verify-zh-purity）。同一条纪律：显示值与判据值分开。
+    const summary = project.summary?.trim() ?? ''
+    const claim = summary && !isStructuralLine(summary) ? summary : ''
     blockers.forEach((blocker, idx) => {
       // Stable id derived from project id + blocker index (kickoff-dev.md §feat-044) — changes
       // only if the underlying corpus text changes, which is the intended "reappears if the
@@ -64,8 +103,8 @@ export function deriveGaps(team: LiteTeam | null): GapCard[] {
         projectTitle: project.title,
         ownerName: project.ownerName,
         claim,
+        claimStatusRaw: selfReported,
         evidence: blocker,
-        evidenceTag: 'From your uploads',
       })
     })
   }

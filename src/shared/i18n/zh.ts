@@ -47,6 +47,13 @@ import type { Dict } from "./index";
 //  Run them through the directed generator (`node scripts/i18n-zh.mjs transport`) before 07-25 —
 //  source keys live in en.ts. Do NOT full-regen: that re-translates the locked story-shared
 //  sections (drift + token risk the kickoff warns against).
+// ⚠ HAND-WRITTEN, act-first (棒D · 布局与真部件战役 2026-07-22): lite2.homeGapFilterActive「活跃」
+//  + lite2.homeGapsFilterEmpty「这个状态下暂时没有。」——差距面板三态筛选 chip 的两个新词。
+//  故意没跑 i18n-zh-delta.mjs：本文件对象体里有 8 行 feat-057 红线注释（homeDecisions 段），
+//  delta 的 JSON.stringify 写法会连它们一起抹掉，只能靠 --allow-comment-loss 再手工贴回——
+//  为两个短标签冒抹掉红线注释的风险不划算。源键在 en.ts（唯一源）。其余复用既有键：Settled /
+//  Set aside chip = gapResolvedBadge/gapDismissedBadge（与「多看一眼」历史徽章一字不差），
+//  证据来源签 = handoffEvidenceTag。Danny 审字 pending（与 feat-057 同批人话口径）。
 // ⚠ ZH DRAFT, PENDING M3 (feat-068 · ZH-02): the 11 NEW triage keys duplicated into BOTH lite.*
 //  and lite2.* (handoffToneLabel / handoffAction / handoffEvidenceFallback / handoffEvidenceTag /
 //  handoffStatus{AtRisk,Blocked} / personRead{Owns,ListSeparator,None} / personCardOpenAria /
@@ -850,6 +857,8 @@ export const zh: Dict = {
     "homeGapsTitle": "文件自己对不上的地方",
     "homeGapsCount": "{count} 处待看",
     "homeGapsEmpty": "现在没有自相矛盾的地方。",
+    "homeGapsFilterEmpty": "这个状态下暂时没有。",
+    "homeGapFilterActive": "活跃",
     "homeGapsLink": "多看一眼",
     "homeAttentionTitle": "文件里反复提到的人",
     "homeAttentionCaption": "数的是文件里提到的次数，不是对任何人的评价。",

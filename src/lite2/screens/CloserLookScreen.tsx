@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useLite } from '../store'
 import { useFlow, selectGapsActive, selectGapsResolved, selectGapsDismissed } from '../flowStore'
 import { useDict } from '../../shared/i18n/useDict'
-import type { GapCard } from '../gapDerive'
+import { gapClaimText, type GapCard } from '../gapDerive'
 
 // feat-044 · lite2 屏 4：A closer look — 矛盾点独立页（PRD F4 / decisions.md 拍板#4）。
 // 替换 feat-035 立的空态占位屏。对照卡（左"文件里的说法" claim / 右"实际信号" evidence，
@@ -48,7 +48,7 @@ export function CloserLookScreen() {
     // 分隔符用 " — " 而非换行：composer 是 <input type="text">，换行被剥掉后三段文字会
     // 连成一坨不可读（对抗验证 redline 路发现，2026-07-14；TeamScreen 的 take-to-room
     // 预填是同根问题，已一并修）。
-    setComposerDraft(`${gap.projectTitle} — ${gap.claim} — ${gap.evidence}`)
+    setComposerDraft(`${gap.projectTitle} — ${gapClaimText(gap, t.lite2)} — ${gap.evidence}`)
     goScreen('room')
   }
 
@@ -83,7 +83,7 @@ export function CloserLookScreen() {
                   <div className="lite-gap-compare">
                     <div className="lite-gap-pane lite-gap-pane-claim">
                       <p className="lite-badge lite-gap-pane-label">{t.lite2.gapCardClaimLabel}</p>
-                      <p className="lite-gap-pane-text">{gap.claim}</p>
+                      <p className="lite-gap-pane-text">{gapClaimText(gap, t.lite2)}</p>
                     </div>
                     <div className="lite-gap-pane lite-gap-pane-evidence">
                       <p className="lite-badge lite-gap-pane-label">{t.lite2.gapCardEvidenceLabel}</p>

@@ -3999,8 +3999,8 @@
   line-height: 1.55;
 }
 
-/* 原文证据（verbatim）。差距那边引 gapDerive 已有的 blocker 原句，人这边引信号原句。 */
-.lite2-shell .lite-home-gap-evidence,
+/* 关注成员的原文证据（verbatim，信号/卡点原句）。棒D 起最多两条，每条一段。
+   差距那边的 observed 原文改走 .lite-home-gap-side-text（对照双栏语法，见下 棒D 段）。 */
 .lite2-shell .lite-home-attention-evidence {
   margin: 5px 0 0;
   padding: 6px 10px;
@@ -4010,6 +4010,131 @@
   color: var(--ink-soft);
   font-size: 12px;
   line-height: 1.6;
+}
+
+.lite2-shell .lite-home-attention-evidence + .lite-home-attention-evidence {
+  margin-top: 6px;
+}
+
+/* ═══ 布局与真部件战役 棒D（2026-07-22）· 右轨两面板真部件 ═══════════════════════
+   ② 差距面板对齐她 /gaps 的「自报 vs 观察」对照语法（摘要位窄 → 竖排两块 boxed pane，
+   不整卡照搬）+ 三态筛选 chip；③ 关注成员面板照搬她的行结构（首字母头像 + 姓名 + 角色 +
+   verbatim 原文），🔴 删掉她的百分比列（D14 人面零数字零血条），口径句 + 原文两个诚实性前置
+   缺一即触红线。全部零 transport、零新派生——只是把既真、藏得深的两块做成她的形态。 */
+
+/* ── ② 差距：三态筛选 chip（活跃/已厘清/已搁置 + 每态计数，纯前端分桶）── */
+.lite2-shell .lite-home-gap-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.lite2-shell .lite-home-gap-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: none;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 11.5px;
+  line-height: 1.5;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.lite2-shell .lite-home-gap-chip:hover {
+  border-color: var(--rule-strong);
+}
+
+.lite2-shell .lite-home-gap-chip:focus-visible {
+  outline: 2px solid var(--sage);
+  outline-offset: 1px;
+}
+
+/* 选中态 = 她的 bg-navy text-white（--ink 深底 + --paper-strong 白字，白字压深底远超 AA）。 */
+.lite2-shell .lite-home-gap-chip[aria-pressed='true'] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper-strong);
+}
+
+.lite2-shell .lite-home-gap-chip-count {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+/* ── ② 差距条目：项目归属 + 自报/观察对照双块 ── */
+.lite2-shell .lite-home-gap-item {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+/* 两侧 boxed pane：claim = sage 语气（读稳）· observed = terracotta 语气（矛盾处）。
+   用语气温度左缘区分，不用红绿评判色——同 .lite-gap-pane-claim/evidence 的口径。 */
+.lite2-shell .lite-home-gap-side {
+  padding: 6px 10px;
+  border-left: 3px solid var(--rule);
+  border-radius: 0 6px 6px 0;
+  background: rgba(var(--lite2-ink-rgb), 0.03);
+}
+
+.lite2-shell .lite-home-gap-side-claim {
+  border-left-color: rgba(var(--lite2-accent-rgb), 0.6);
+}
+
+.lite2-shell .lite-home-gap-side-observed {
+  border-left-color: rgba(var(--lite2-danger-rgb), 0.62);
+}
+
+.lite2-shell .lite-home-gap-side-label {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--ink-faint);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.lite2-shell .lite-home-gap-side-text {
+  margin: 0;
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+/* 证据来源签（来自你上传的文件）——最不起眼的一行，faint 但仍 AA（*-shell 内 --ink-faint 已压深）。 */
+.lite2-shell .lite-home-gap-source {
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: 10.5px;
+}
+
+/* ── ③ 关注成员：首字母头像 + 主体（她的行结构，零数字零血条）── */
+.lite2-shell .lite-home-attention-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border-radius: 8px;
+  transition: background-color 120ms ease;
+}
+
+.lite2-shell .lite-home-attention-item:hover {
+  background: rgba(var(--lite2-ink-rgb), 0.03);
+}
+
+.lite2-shell .lite-home-attention-avatar {
+  margin-top: 1px;
+}
+
+.lite2-shell .lite-home-attention-body {
+  flex: 1;
+  min-width: 0;
 }
 
 /* ── ④ Avery 手上有什么 ──────────────────────────────────────────────────── */

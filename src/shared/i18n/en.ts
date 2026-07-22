@@ -1239,10 +1239,15 @@ export const en = {
     homeFieldProgress: 'Progress',
     homeFieldDueDate: 'Due date',
 
-    // Block 2 — closer-look summary.
+    // Block 2 — closer-look summary. 棒D: three-state filter chips + her claim/observed grammar.
+    // The "Active" chip label is the only new word — Settled / Set aside reuse gapResolvedBadge /
+    // gapDismissedBadge so the same state reads identically here and on the closer-look history.
+    // The evidence-source tag reuses handoffEvidenceTag ("From your uploads").
     homeGapsTitle: 'Where the files disagree with themselves',
     homeGapsCount: '{count} open',
     homeGapsEmpty: 'Nothing is contradicting itself right now.',
+    homeGapsFilterEmpty: 'Nothing in this state right now.',
+    homeGapFilterActive: 'Active',
     homeGapsLink: 'A closer look',
 
     // Block 3 — people worth a look. 🔴 The count says how many times the FILES mention them.

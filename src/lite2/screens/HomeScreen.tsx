@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useLite } from '../store'
-import { useFlow, selectGapsActive } from '../flowStore'
+import { useFlow, selectGapsActive, selectGapsResolved, selectGapsDismissed } from '../flowStore'
 import { useDict } from '../../shared/i18n/useDict'
 import { UploadPanel } from '../UploadPanel'
+import { InitialAvatar } from '../InitialAvatar'
 import { useAuth } from '../auth/authStore'
 import { useDemo } from '../demoStore'
 import { deriveAttentionPeople, summarizeDecisions, type AttentionPerson } from '../homeDerive'
+import { gapClaimText, type GapCard } from '../gapDerive'
 import type { LiveDecisionCard } from '../transport'
 
 // feat-057（PRD G4 / decisions.md Q2「两个都极端 → 结合」）· 聚合首屏。
@@ -26,6 +28,9 @@ import type { LiveDecisionCard } from '../transport'
 // 🔴 「文档未提及」(unknown_fields) 与「读不准」(unparsed_fields) 是两件事，措辞永不混用：
 // 后者必须把**文档原文**摆出来。客户手上就有原件，把他写过的字说成"没写"，
 // 这份读数的全部说服力当场归零（decision_grading_rules.md §缺数据怎么判）。
+
+// 差距面板的三态筛选口径（棒D）。'active' = 未标记；resolved/dismissed 与 gapMarks 同名。
+type GapFilter = 'active' | 'resolved' | 'dismissed'
 
 function fill(template: string, vars: Record<string, string | number>): string {
   return template.replace(/\{(\w+)\}/g, (_, k: string) => String(vars[k] ?? ''))
@@ -66,7 +71,15 @@ export function HomeScreen() {
 
   const decisions = rawTeam?.decisions
   const decisionSummary = useMemo(() => summarizeDecisions(decisions), [decisions])
-  const gaps = useMemo(() => selectGapsActive(team, gapMarks), [team, gapMarks])
+  // 差距三态（棒D · 布局与真部件战役）：gapMarks 已有 resolved/dismissed 两桶，active = 未标记。
+  // 三态筛选 chip 是纯前端——只按同一份 deriveGaps 结果分桶，零 transport、零新派生。
+  const gapsActive = useMemo(() => selectGapsActive(team, gapMarks), [team, gapMarks])
+  const gapsResolved = useMemo(() => selectGapsResolved(team, gapMarks), [team, gapMarks])
+  const gapsDismissed = useMemo(() => selectGapsDismissed(team, gapMarks), [team, gapMarks])
+  const [gapFilter, setGapFilter] = useState<GapFilter>('active')
+  const gapsShown =
+    gapFilter === 'resolved' ? gapsResolved : gapFilter === 'dismissed' ? gapsDismissed : gapsActive
+  const gapsTotal = gapsActive.length + gapsResolved.length + gapsDismissed.length
   const attention = useMemo(() => deriveAttentionPeople(team, rawTeam), [team, rawTeam])
   const openFollowups = followups.filter((item) => !item.done).length
   // 今日待办（B4）：flowStore 真数据——dueGroup==='today' 且未完成。首页只列前 5 条，
@@ -391,13 +404,18 @@ export function HomeScreen() {
 
             {/* 右轨 1fr —— 她的 GapRail + PeopleRail 纵向堆叠位 */}
             <div className="lite-home-rail">
-            {/* ── ② 差距摘要 → 多看一眼 ───────────────────────────────── */}
+            {/* ── ② 差距摘要 → 多看一眼（棒D · 布局与真部件战役 2026-07-22）──────────
+                她的 /gaps 差距卡把「自报 vs 观察」做成对照双列——这是这个概念的视觉语法。主页右轨
+                是摘要位（空间窄），不整卡照搬，但对齐她的语法：section-label 小标题 + 每条
+                「自报 / 观察」两侧带标签的证据 + 项目归属。
+                🔴 claim 走 gapClaimText（B-2 修复）：summary 是真自述句才引原文，是标题/负责人这类
+                元信息结构行就退回本地化的机械状态读出，绝不让一句标题冒充「文件里的说法」。 */}
             <section className="lite-home-block lite-home-gaps" aria-label={t.lite2.homeGapsTitle}>
               <div className="lite-home-block-head">
                 <h2>{t.lite2.homeGapsTitle}</h2>
-                {gaps.length > 0 ? (
+                {gapsActive.length > 0 ? (
                   <span className="lite-home-count">
-                    {fill(t.lite2.homeGapsCount, { count: gaps.length })}
+                    {fill(t.lite2.homeGapsCount, { count: gapsActive.length })}
                   </span>
                 ) : null}
                 <button
@@ -408,28 +426,77 @@ export function HomeScreen() {
                   {t.lite2.homeGapsLink} →
                 </button>
               </div>
-              {gaps.length === 0 ? (
+              {gapsTotal === 0 ? (
                 <p className="lite-home-quiet">{t.lite2.homeGapsEmpty}</p>
               ) : (
-                <ul className="lite-home-gap-list">
-                  {/* 摘要只列前三条并写明还剩多少，细节在「多看一眼」屏。引用的是
-                      gapDerive.ts 已有的原文 evidence（verbatim），不转述。 */}
-                  {/* key 带下标：跨文档重复的项目会产出同 id 的 gap（后端 issue #10 —— 人名/项目
-                      去重在 LLM 抽取路径上失效），裸 gap.id 会撞键。本屏另外两个列表已经这么做了，
-                      这里是漏的第三处。🔴 不在前端去重：那会把后端的 bug 藏起来。 */}
-                  {gaps.slice(0, 3).map((gap, idx) => (
-                    <li key={`${gap.id}_${idx}`} className="lite-home-gap-item">
-                      <button
-                        type="button"
-                        className="lite-home-gap-title"
-                        onClick={() => openDetail('project', gap.projectId)}
-                      >
-                        {gap.projectTitle}
-                      </button>
-                      <p className="lite-home-gap-evidence">{gap.evidence}</p>
-                    </li>
-                  ))}
-                </ul>
+                <>
+                  {/* 三态筛选 chip + 每态计数（纯前端分桶）。chip 是带 aria-pressed 的按钮，
+                      可见中文即标签——不加 aria-label（够不着的门反而是它，且无需拉丁串）。
+                      resolved/dismissed 的词复用 gapResolvedBadge/gapDismissedBadge，与「多看
+                      一眼」屏历史徽章一字不差，避免同一状态两处两个说法。 */}
+                  <div className="lite-home-gap-filter">
+                    <button
+                      type="button"
+                      className="lite-home-gap-chip"
+                      aria-pressed={gapFilter === 'active'}
+                      onClick={() => setGapFilter('active')}
+                    >
+                      {t.lite2.homeGapFilterActive}
+                      <span className="lite-home-gap-chip-count">{gapsActive.length}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="lite-home-gap-chip"
+                      aria-pressed={gapFilter === 'resolved'}
+                      onClick={() => setGapFilter('resolved')}
+                    >
+                      {t.lite2.gapResolvedBadge}
+                      <span className="lite-home-gap-chip-count">{gapsResolved.length}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="lite-home-gap-chip"
+                      aria-pressed={gapFilter === 'dismissed'}
+                      onClick={() => setGapFilter('dismissed')}
+                    >
+                      {t.lite2.gapDismissedBadge}
+                      <span className="lite-home-gap-chip-count">{gapsDismissed.length}</span>
+                    </button>
+                  </div>
+                  {gapsShown.length === 0 ? (
+                    <p className="lite-home-quiet">{t.lite2.homeGapsFilterEmpty}</p>
+                  ) : (
+                    <ul className="lite-home-gap-list">
+                      {/* 摘要只列前三条，细节在「多看一眼」屏。 */}
+                      {/* key 带下标：跨文档重复的项目会产出同 id 的 gap（后端 issue #10 —— 人名/项目
+                          去重在 LLM 抽取路径上失效），裸 gap.id 会撞键。本屏另外两个列表已经这么做了。
+                          🔴 不在前端去重：那会把后端的 bug 藏起来。 */}
+                      {gapsShown.slice(0, 3).map((gap, idx) => (
+                        <li key={`${gap.id}_${idx}`} className="lite-home-gap-item">
+                          <button
+                            type="button"
+                            className="lite-home-gap-title"
+                            onClick={() => openDetail('project', gap.projectId)}
+                          >
+                            {gap.projectTitle}
+                          </button>
+                          <div className="lite-home-gap-side lite-home-gap-side-claim">
+                            <span className="lite-home-gap-side-label">{t.lite2.gapCardClaimLabel}</span>
+                            <p className="lite-home-gap-side-text">{gapClaimText(gap, t.lite2)}</p>
+                          </div>
+                          <div className="lite-home-gap-side lite-home-gap-side-observed">
+                            <span className="lite-home-gap-side-label">
+                              {t.lite2.gapCardEvidenceLabel}
+                            </span>
+                            {/* verbatim blocker 原文——gapDerive.ts 逐字透传，不转述。 */}
+                            <p className="lite-home-gap-side-text">{gap.evidence}</p>
+                          </div>
+                          <p className="lite-home-gap-source">{t.lite2.handoffEvidenceTag}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </>
               )}
             </section>
 
@@ -616,10 +683,16 @@ function DecisionCard({
   )
 }
 
-// ── 需关注的人的一行 ────────────────────────────────────────────────────────
-// 🔴 红线：这不是人卡（刻意不复用 .home-person-card），更不是打分。显示的两个数分别是
-// 「几条信号提到她」和「她名下项目挂着几条卡点」——都是文件里的事的条数，且旁边永远
-// 跟着原文，让经理自己判断。永不出现 %、评分、排名位次。
+// ── 需关注的人的一行（棒D · 布局与真部件战役 2026-07-22）──────────────────────
+// 她的行结构：首字母头像 + 姓名 + 状态标签 + 角色，行内 py-3 分隔线。我方照搬**行结构 /
+// 间距 / 头像**，但：
+// 🔴 D14 人面零数字零血条：她每行右侧的 91%/88%/84% 百分比列**整列删掉**。LitePerson 类型层
+//    本就没有数字槽位、stripPersonNumbers 运行时还会丢弃任何 number 键——想撞也撞不上。
+// 🔴 两个诚实性前置（homeDerive.ts §需关注的人，缺一即触红线）：
+//    ① 口径写在脸上：「因为出现在 N 条信号里 / 名下挂着 N 条卡点」（why 行 + panel caption）。
+//    ② 同屏摆 verbatim 原文：AttentionPerson.evidence[≤2]，原样不转述——名单可解释才敢给人看。
+// 这不是人卡（刻意不复用 .home-person-card），更不是打分。signalCount/blockerCount 数的是
+// **文件里的事的条数**，不是对人的评价。永不出现 %、评分、排名位次。
 function AttentionRow({ person, onOpen }: { person: AttentionPerson; onOpen: () => void }) {
   const { t } = useDict()
   const why: string[] = []
@@ -631,14 +704,20 @@ function AttentionRow({ person, onOpen }: { person: AttentionPerson; onOpen: () 
   }
   return (
     <li className="lite-home-attention-item">
-      <button type="button" className="lite-home-attention-name" onClick={onOpen}>
-        {person.name}
-        {person.role ? <span className="lite-home-attention-role">{person.role}</span> : null}
-      </button>
-      <p className="lite-home-attention-why">{why.join(' · ')}</p>
-      {person.evidence.length > 0 ? (
-        <p className="lite-home-attention-evidence">{person.evidence[0]}</p>
-      ) : null}
+      <InitialAvatar name={person.name} size={36} className="lite-home-attention-avatar" />
+      <div className="lite-home-attention-body">
+        <button type="button" className="lite-home-attention-name" onClick={onOpen}>
+          {person.name}
+          {person.role ? <span className="lite-home-attention-role">{person.role}</span> : null}
+        </button>
+        <p className="lite-home-attention-why">{why.join(' · ')}</p>
+        {/* verbatim 原文，最多两条（homeDerive 已 slice(0,2)）。原样摆出来，不转述、不改写。 */}
+        {person.evidence.map((line, i) => (
+          <p key={i} className="lite-home-attention-evidence">
+            {line}
+          </p>
+        ))}
+      </div>
     </li>
   )
 }
