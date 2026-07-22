@@ -466,8 +466,9 @@ export function HomeScreen() {
                   {gapsShown.length === 0 ? (
                     <p className="lite-home-quiet">{t.lite2.homeGapsFilterEmpty}</p>
                   ) : (
-                    <ul className="lite-home-gap-list">
+                    <ul className="lite-home-gap-list" key={gapFilter}>
                       {/* 摘要只列前三条，细节在「多看一眼」屏。 */}
+                      {/* key=gapFilter：换态即重挂，重放 lite-home-gap-list-in 淡入（动效债·三态切换）。 */}
                       {/* key 带下标：跨文档重复的项目会产出同 id 的 gap（后端 issue #10 —— 人名/项目
                           去重在 LLM 抽取路径上失效），裸 gap.id 会撞键。本屏另外两个列表已经这么做了。
                           🔴 不在前端去重：那会把后端的 bug 藏起来。 */}

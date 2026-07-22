@@ -18,8 +18,17 @@
   收起(form→pill)仍是硬回（未名点名项，且给 pill 入场动画会连首屏加载都 pop，故不做）。
   实测：keyframe 在册、form 计算 animationName=lite-ask-avery-expand/0.22s、no-preference 命中、
   reduce 不命中；spec 35/35、扫雷 0/0 零回归。
-- [ ] **顶栏搜索结果浮层入场**：现状检查——`.lite-search-pop` 是否有淡入/下滑过渡，还是硬弹。
-- [ ] **差距三态 chip 切换**：点 chip 换筛选时列表是硬换还是有过渡。
+- [x] **顶栏搜索结果浮层入场** ✅ 2026-07-22 批次③收官
+  现状（已修）：`.lite-search-pop` 原先无过渡硬弹。她：平滑弹出。
+  **已落地**：`@keyframes lite-search-pop-in`（opacity + translateY(-6px)→0，transform-origin top center），
+  包 `@media (prefers-reduced-motion: no-preference)`；showPanel 条件挂载每次展开重放。
+  顺手把搜索框聚焦/悬停边框由硬切改 `transition: border-color var(--fast)`（色相非位移，同 gap-chip 无需 reduce 兜）。
+  实测：no-preference 命中 animationName=lite-search-pop-in、reduce 归零 none。
+- [x] **差距三态 chip 切换** ✅ 2026-07-22 批次③收官
+  现状（已修）：chip 本身早有 120ms 色相过渡；**列表**换筛选是硬换。她：换态平滑。
+  **已落地**：`<ul key={gapFilter}>` 换态即重挂 → 重放 `@keyframes lite-home-gap-list-in`（opacity-only，
+  避与 block 的 lite2-rise 叠加），包 `@media (prefers-reduced-motion: no-preference)`。
+  实测：no-preference 命中 lite-home-gap-list-in、reduce 归零 none。
 - [ ] **通用**：她全站的卡片 hover 上浮 / 阴影过渡，逐屏对照时留意我方是否跟上
   （lite2-rise 入场已在，但 hover 态过渡要逐屏核）。
 

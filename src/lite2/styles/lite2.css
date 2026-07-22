@@ -3954,6 +3954,23 @@
   list-style: none;
 }
 
+/* 三态 chip 切换列表：<ul key={gapFilter}> 换筛选即重挂 → 重放淡入（她：换态平滑，非硬换）。
+   opacity-only 避与 block 的 lite2-rise 入场叠加冲突；媒体级隔离，reduce 下直接出现。 */
+@keyframes lite-home-gap-list-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .lite2-shell .lite-home-gap-list {
+    animation: lite-home-gap-list-in 0.18s ease both;
+  }
+}
+
 .lite2-shell .lite-home-gap-item + .lite-home-gap-item,
 .lite2-shell .lite-home-attention-item + .lite-home-attention-item {
   padding-top: 10px;
@@ -6092,6 +6109,8 @@
   font-size: 13px;
   line-height: 32px;
   outline: none;
+  /* 聚焦/悬停边框由硬切改渐变（她的输入框质感）；色相过渡非位移，reduce 无需兜（同 gap-chip）。 */
+  transition: border-color var(--fast) ease;
 }
 
 .lite2-shell .lite-search-input::placeholder {
@@ -6117,6 +6136,26 @@
   border-radius: 14px;
   background: var(--lite2-surface);
   box-shadow: var(--shadow);
+}
+
+/* 检索浮层入场：从搜索框下缘淡入下滑（她：平滑弹出，非硬现）。showPanel 条件挂载，
+   每次展开重放。媒体级隔离——reduce 下不套用，浮层直接出现（棒4 坑：不提特异性）。 */
+@keyframes lite-search-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .lite2-shell .lite-search-pop {
+    transform-origin: top center;
+    animation: lite-search-pop-in 0.16s ease both;
+  }
 }
 
 .lite2-shell .lite-search-empty {
