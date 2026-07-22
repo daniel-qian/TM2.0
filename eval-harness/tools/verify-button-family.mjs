@@ -45,6 +45,11 @@ const WHITELIST = [
   '.lite-search-option',
   '.lite-home-block-link', '.lite-home-todo-check', '.lite-home-gap-title',
   '.lite-home-count-cell', '.lite-home-attention-name',
+  // 棒D 差距面板三态筛选 chip（活跃/已厘清/已搁置）。与 .lite-room-chip / .ask-recipient-chip /
+  // .lite-composer-filter 同属"筛选/切换 chip"白名单类目。🔴 对抗审查逮到：门的种子语料
+  // 零阻塞行 → deriveGaps 出 0 张卡 → chip 整块不渲染 → 从不进审计（假绿）。加载真验收语料
+  // （.issues/layout-real-0722/acceptance-corpus/）后 chip 才渲染，此白名单条目才真正生效。
+  '.lite-home-gap-chip',
   '.home-person-card', '.home-people-group-head', '.home-check', '.home-map-card-link',
   '.home-drawer-toggle', '.home-project-card',
   '.lite-project-card', '.lite-followup-check', '.lite-followups-subtab',

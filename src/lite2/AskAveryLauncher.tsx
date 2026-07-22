@@ -70,8 +70,12 @@ export function AskAveryLauncher() {
 
   // 无材料：整块不出（复用 Room gate 的 contextId 判据）。
   if (contextId === null) return null
-  // 议事室屏本身已有常驻 composer——此入口在 room 收起（见文件头）。
-  if (screen === 'room') return null
+  // 🔴 已有常驻提问框的屏，悬浮入口收起——否则两个底部居中输入框叠在一起。
+  //   · room：AskCard/常驻 composer（文件头原判）。
+  //   · team：LiteComposer（TeamScreen 底部的"就你的团队提问"）——对抗审查 blast 视角实测：
+  //     872 宽屏下胶囊盖住该输入框、点它正中会点到胶囊（elementFromPoint 命中胶囊）。
+  //     那个屏本就有提问入口，悬浮钮在此纯冗余 + 撞位，收起。
+  if (screen === 'room' || screen === 'team') return null
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()

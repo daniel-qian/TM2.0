@@ -6059,10 +6059,15 @@
    🔴 .prototype-topbar 容器是 pointer-events:none（00-base l.65），子块各自 auto 回来
    （同 .scene-tabs/.lite-bell/.lite-settings 的老规矩，不动 shared/00-base.css）。 */
 
-/* 断点 1280（她 hidden xl:block；预算见 .issues/layout-real-0722/topbar-budget.md：
-   zh 9 tab 自然 770px，1280 视口剩 336px，定宽 220px 两语言都安全）。
+/* 断点 1366（不是 1280）。🔴 对抗审查逮到：topbar-budget.md 只量了 zh 的 9 tab(770px)，
+   但 EN 的 9 tab 实测 978px（"Where this goes" 等更长）。在 1280 EN 下搜索框抢走 220px →
+   末 tab 被裁到 overflow-x 里（1366×768 是最常见笔记本 + EN 是默认语种，真实可复现）。
+   真预算：可用内宽 = vw − 48(外夹) − 28(topbar padding) ；须容纳
+   tabs(EN 978) + 搜索(200) + 铃(32) + 设置(30) + 3 道 gap(36) = 1276。
+   → 1366 视口内宽 1290 ≥ 1276（14px 余量，EN 不裁）；zh 更宽松。搜索框收窄到 200px 配合。
+   <1366 整块隐藏（搜索是渐进增强，宁可窄屏不给，也不裁掉主语言的导航 tab）。
    媒体级隔离：base 与 @media 同特异性 (0,2,0)，媒体命中 + 源序定胜负，不提特异性
-   （棒4 坑：媒体查询加特异性会和 look-aurora 打架）。<1280 整块 display:none。 */
+   （棒4 坑：媒体查询加特异性会和 look-aurora 打架）。 */
 .lite2-shell .lite-search {
   display: none;
   position: relative;
@@ -6070,14 +6075,14 @@
   pointer-events: auto;
 }
 
-@media (min-width: 1280px) {
+@media (min-width: 1366px) {
   .lite2-shell .lite-search {
     display: block;
   }
 }
 
 .lite2-shell .lite-search-input {
-  width: 220px;
+  width: 200px;
   height: 32px;
   padding: 0 14px;
   border: 1px solid var(--rule);
