@@ -1,4 +1,48 @@
-# ⟳ 2026-07-22 晚 · **满态对齐战役（rich-align-0722）已立项：PRD+11 片 issues 就绪，等夜跑**（★最新，从这里接）
+# ⟳ 2026-07-22 夜跑 · **满态对齐战役 批次①（issue 01+02 富项目字段）已交付全绿，等 Danny 验收**（★最新，从这里接）
+
+**一句话**：AFK 夜跑跑完 issue 01（进度/风险）+ 02（里程碑），端到端真管道 + absent≠none 全通，
+**全量 A 区电池 19/19 绿（exit 0，零跨门回归）**。commit 攒本分支未推（push=人工闸，等 Danny 点头）。
+issue 03–11 未动（03 是最重的门改造，机理已摸底见下）。
+
+## 现在分支上是什么（`claude/layout-real-components-27b594`，未推 origin）
+- 皮对齐三批（layout-real 批次①②③）—— 上一战役产物，仍等 Danny HITL（原样）。
+- **rich-align 批次①**：`d58f3d5`（issue 01 进度/风险）+ `99bb20d`（issue 02 里程碑）。
+  - 富字段真管道：文档→heuristic 抽取→ProjectEntity(risk/milestones)→payload 缺就不发键→
+    projects 卡（风险徽章 + 6px 进度条 + 里程碑圆点串）+ 详情浮层（环形进度 + 风险行 + 里程碑清单/分段条）。
+  - 🔴 红线守住：`risk/离职风险` 仍在 person 禁键表只对**人**执法，project.risk/milestones 合法（recon
+    实证 validate_extraction 只扫 people+person signals）；absent≠none 全链（缺席不发键、前端 null 收起无 `??`）。
+  - 门：cr-align-spec stick6/7 八行（43/43）· 新 e2e `verify-rich-fields-01.mjs`（14/0，两世界）·
+    status-truth +absent 分支（31/0）· 新 pytest 18 例（红先行有据）· run-battery CURRENT_STICK→7。
+  - zh 10 键手写 draft（待审字，zh.ts 头已标）。
+
+## 验收就绪（Danny 回来做这个）
+- **验收手册**：`.issues/rich-align-0722/acceptance-1.md`（入口 URL 带参 + 逐屏 HITL 路径 A/B/C +
+  pixel-evidence 索引 + 拍板复核项①-④ 签认位[均属 03/06/09，本批次不涉]）。
+- dev server 挂着：preview 5173 + mock 8137（收工不杀）；她方参照 `cd D:\cr-live && npm run dev`(:3100)。
+- **Danny 人测点头 → `git push`（=Vercel 自动上产，本批次两 commit）+ 生产取证补收据**。
+
+## 下一步：issue 03（人员负载/情绪·开关口径——最重的门改造）
+机理已摸底（省下次侦察）：
+- 抽取：`avery/ingest/extract.py` PersonEntity(75) 加 `self_report{load,mood}`（caliber+source 必填）；
+  周报「人员动态」段 `- 小王｜负载自述：85%｜情绪自述：吃紧` 需**新写 person 自述行解析**（现无）。
+- 红线：`avery/ingest/redline_extract.py` validate_person_dict 需白名单放行 self_report 槽（散落数字键仍全禁）；
+  `avery/scoring_policy.py::person_scoring_allowed()`（读 AVERY_ALLOW_PERSON_SCORING，默认关，已存）。
+- 投影：`registry.py::team_cards()`(142) 按开关——关=不投 self_report；开=投 + 顶层 `scoring_enabled:true`。
+- 前端：`transport.ts` LivePersonCard 加 self_report?；**第③层运行时剥离在 `teamData.ts`**（现把 person 数字键全丢）
+  改两世界（关=全丢；开=放行 self_report 白名单 + 渲染带 `data-metric-source` 锚点）；人卡渲染在
+  `HomeScreen.tsx`/`TeamScreen.tsx`（`.home-person-card`，DOM 类名锚点保留，目录形态归 04）。
+- **AFK 门两世界执法**：`scripts/gates/live-frontend-gate.snippet.js` 的 `BLOOD_BAR_RE`（定义 :393）
+  **8 个使用位点**（:497/795/1072/1246/2585 等，grep 为准）+ K6「人卡任意数字即红」逐个改两世界；
+  score-table/leaderboard/横向对比结构两世界无条件禁（筛选 chip 不在禁列）；跑法照 **runbook §1b**
+  （mock 三件套 + verify-skin-phases 注入模式，两世界=两次后端重启，🔴 绝不碰 AVERY_BRAIN=minimax）。
+- verify-p0 的「0%」正则收窄到项目进度元素（防负载恰 0% 的人误伤）。spec 如需=stick 8。CURRENT_STICK→8。
+
+## issue 04–11（未动，序见 issues/README.md）
+04 team 目录化 · 05/06 真 CRUD 项目/人员（写端点先例，C 区调包门会上场）· 07 三亚富语料 pack（16人/6项目/SOP，
+换 tests/fixtures/demo-seed 同 commit 改 test_demo_claim+verify-onboard-gate 期望）· 08 playbooks · 09 重新开始 ·
+10 登录隔离(Supabase MCP 取值) · 11 收官（全电池两轮 + 对照板 + 像素全量 + acceptance 汇总 + handoff）。
+
+
 
 **背景**：Danny 实况看完皮对齐三批后判定「离对齐仍远」——盘问（grill-with-docs）达成共识：
 真目标是**满态对齐**（并排两 app 观感一样丰富）。9 项拍板 + 2 条 ADR 落盘，旧红线两处改口径。
