@@ -59,6 +59,11 @@ import type { Dict } from "./index";
 //  顶栏真搜索的三个新词。同 棒D 之由：对象体里的 8 行 feat-057 红线注释挡着 delta，为三个极短
 //  无歧义的词不冒抹掉红线注释的风险。结果分组标签复用既有 refPeople/refProjects（人员/项目）。
 //  🔴 searchEmpty=零匹配，与 refEmpty=零数据 是两回事，措辞刻意分开。源键在 en.ts。Danny 审字 pending。
+// ⚠ HAND-WRITTEN, act-first (棒F · 布局与真部件战役 2026-07-22): lite2.askAveryLabel「问 Avery」
+//  + lite2.askAveryAria「向 Avery 提问」+ lite2.askAveryPlaceholder「向 Avery 问一句关于团队的事…」——
+//  悬浮「问 Avery」入口的三个新词。同 棒D/棒E 之由：对象体里的 8 行 feat-057 红线注释挡着 delta，
+//  为三个极短词不冒抹掉红线注释的风险。🔴 品牌 Avery 不译，label 正好是「问 Avery」（Danny 拍板）——
+//  与 feat-034 Ask 的「快问」两名不撞、绝不叫 Nexus。源键在 en.ts。Danny 审字 pending。
 // ⚠ ZH DRAFT, PENDING M3 (feat-068 · ZH-02): the 11 NEW triage keys duplicated into BOTH lite.*
 //  and lite2.* (handoffToneLabel / handoffAction / handoffEvidenceFallback / handoffEvidenceTag /
 //  handoffStatus{AtRisk,Blocked} / personRead{Owns,ListSeparator,None} / personCardOpenAria /
@@ -642,6 +647,9 @@ export const zh: Dict = {
     "searchPlaceholder": "搜索成员、项目…",
     "searchAria": "搜索成员与项目",
     "searchEmpty": "没有匹配的成员或项目。",
+    "askAveryLabel": "问 Avery",
+    "askAveryAria": "向 Avery 提问",
+    "askAveryPlaceholder": "向 Avery 问一句关于团队的事…",
     "detailAria": "详情",
     "detailClose": "关闭",
     "detailPersonEyebrow": "团队成员",

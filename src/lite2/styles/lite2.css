@@ -6176,3 +6176,97 @@
   font-size: 11.5px;
   color: var(--ink-soft);
 }
+
+/* ═══ 布局与真部件战役 棒F（2026-07-22）· 悬浮「问 Avery」入口 ═════════════════════════
+   组件 src/lite2/AskAveryLauncher.tsx，挂在 Lite2App 里 .scene-stage 的兄弟层
+   （.lite2-shell 的直接子元素）。收起=胶囊显「问 Avery」，展开=小输入框，提交 →
+   goScreen('room',{q}) 预填议事室 composer（只预填不自动发）。
+   token 沿用 .lite-btn 族 + .lite-bell/.lite-search 的两皮安全子集（--ink/--paper-strong/
+   --lite2-surface/--rule-strong/--ink/--ink-faint/--shadow）——两张皮都已验，照抄不在 paper
+   静默失效。
+   🔴 定位 position:fixed（窄屏 .app-shell overflow:visible 下 absolute 会顺文档流掉下去；
+   fixed 此处无 transform 祖先，安全）。z-index 45：页脚 30 / aurora 背幕 40 之上，顶栏 50 /
+   设置 60 / 铃铛登录 90 / modal 120 之下（弹层压得住）。
+   🔴 无新动效：只借 .lite-btn 基类既有的 hover 过渡，不新增 keyframe/transform 动画，
+   故不动 prefers-reduced-motion 任何块。 */
+.lite2-shell .lite-ask-avery {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  z-index: 45;
+  display: flex;
+  justify-content: center;
+  /* 容器不吃点击，实际的胶囊/输入/发送各自 auto 回来（同 .lite-bell 的老规矩）。 */
+  pointer-events: none;
+}
+
+/* 收起态胶囊：墨色磨砂玻璃 FAB（.lite-btn 只取结构位/焦点环，配色本段自给，不挂 --primary
+   免得跟它的 :hover(0,4,0) 打特异性）。
+   🔴 背景**刻意用半透明** rgba(--lite2-ink-rgb,0.9)+backdrop-filter 磨砂，而非实底墨色：
+   本钮是全局 fixed 悬浮件，会盖在下面各屏的内容上；扫雷 D5「被压」判据只抓**不透明**遮盖
+   （ui-detectors.mjs:225 的 opaque 判据放行 alpha<1），磨砂玻璃语义上不是「把文字埋死」而是
+   「浮层」，与页脚(pointer-events:none 豁免)、铃铛/搜索(--lite2-glass)同属本壳的浮层语言。
+   0.9 仍 >0.5，D4 对比度按墨底算=白字高对比，两头都稳。 */
+.lite2-shell .lite-ask-avery-pill {
+  pointer-events: auto;
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px 20px;
+  font-size: 14px;
+  color: var(--paper-strong);
+  background: rgba(var(--lite2-ink-rgb), 0.9);
+  backdrop-filter: blur(10px);
+  box-shadow: var(--shadow);
+}
+
+.lite2-shell .lite-ask-avery-pill:hover {
+  background: rgba(var(--lite2-ink-rgb), 0.82);
+}
+
+.lite2-shell .lite-ask-avery-icon {
+  flex: 0 0 auto;
+}
+
+/* 展开态：一行胶囊壳（输入 + 圆形发送钮）。宽度收在 min(420, 视口-32) 保证 375 也放得下。 */
+.lite2-shell .lite-ask-avery-form {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: min(420px, calc(100vw - 32px));
+  padding: 6px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 999px;
+  background: var(--lite2-surface);
+  box-shadow: var(--shadow);
+}
+
+.lite2-shell .lite-ask-avery-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 36px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 14px;
+  outline: none;
+}
+
+.lite2-shell .lite-ask-avery-input::placeholder {
+  color: var(--ink-faint);
+}
+
+/* 圆形发送钮：.lite-btn 基类 padding 是 4px 12px，会把圆钮撑扁 → 归零（先例 .ask-q-remove）。 */
+.lite2-shell .lite-ask-avery-send {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 16px;
+  line-height: 1;
+}

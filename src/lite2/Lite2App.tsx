@@ -21,6 +21,7 @@ import { ProjectsScreen } from './screens/ProjectsScreen'
 import { HomeScreen } from './screens/HomeScreen'
 import { DetailOverlay } from './DetailOverlay'
 import { DraftComposer } from './DraftComposer'
+import { AskAveryLauncher } from './AskAveryLauncher'
 import { Lite2Footer } from './Lite2Footer'
 import { OnboardGate } from './OnboardGate'
 import { initNotifications } from './notifyStore'
@@ -153,6 +154,10 @@ function Lite2Shell() {
       {/* feat-058 · 应用内草稿框。挂在壳层而不是各屏内部：开框的入口在「你的团队」的分诊卡
           和「跟进」的队列条目上，跨两棵子树；且弹层必须盖在整壳之上（同 DetailOverlay）。 */}
       <DraftComposer />
+      {/* 棒F · 悬浮「问 Avery」入口。挂在 .scene-stage 的兄弟层（.lite2-shell 直接子元素），
+          绝不进屏组件内部：.scene.is-active 的 transform 会给 fixed 后代建包含块、.scene
+          overflow:hidden 会裁掉它。position:fixed + z45（见组件头与 lite2.css 棒F 段）。 */}
+      <AskAveryLauncher />
       <Lite2Footer />
     </div>
   )

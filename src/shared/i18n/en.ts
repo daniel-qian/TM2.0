@@ -912,6 +912,15 @@ export const en = {
     searchAria: 'Search people and projects',
     searchEmpty: 'No matching people or projects.',
 
+    // 棒F · Floating "Ask Avery" launcher (Danny named it 2026-07-22). Collapsed = pill; expand =
+    // small input; Enter/submit → goScreen('room',{q}) prefills the room composer (NOT auto-sent).
+    // 🔴 Distinct from feat-034 Ask ("Quick ask" / 「快问」) and never "Nexus" (locked word).
+    // Brand Avery is not translated → ZH label must render exactly「问 Avery」.
+    // aria-label is mandatory (placeholder is invisible to both zh-purity and aria-zh gates).
+    askAveryLabel: 'Ask Avery',
+    askAveryAria: 'Ask Avery about your team',
+    askAveryPlaceholder: 'Ask Avery about your team…',
+
     // Thin read-only detail overlay (pure live payload)
     detailAria: 'Detail',
     detailClose: 'Close',
