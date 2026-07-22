@@ -91,8 +91,9 @@ en/zh 里 9+ 个键在用（`ask.eyebrow` / `zh.ts:914` / 通知「一条快问�
 - 本战役悬浮入口 = 把问题发给 **Avery**（LLM），结果落议事室
 
 同屏出现两个「快问」会让用户分不清「我在问谁」。
-**我的处置**：先按不冲突的命名实现（走既有 `homeDecisionAskRoom:'Take it to the room'` / `notesEmptyCta:'Ask the room'` 族），
-在验收手册首条把这个冲突和证据摆出来请他定。改一个 label 是一行，最便宜的反悔点。
+**Danny 已拍板（2026-07-22）**：悬浮入口叫 **「问 Avery」**（EN "Ask Avery"），feat-034 Ask 保留「快问」。
+两个名字从此不再撞：「问 Avery」= 把问题发给 Avery（LLM，落议事室）；「快问」= 把链接发给员工自述。
+→ 新文案键走 en.ts + i18n-zh-delta.mjs；zh 侧确保输出正好是「问 Avery」（品牌 Avery 不译）。
 
 ### 🔴 B-2 · 差距卡的「自报」列会显示**不是自报的文本**（真 bug，本战役会把它推到黄金位）
 
