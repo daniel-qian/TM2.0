@@ -572,6 +572,51 @@ def test_pg_schema_refuses_a_scoring_person_row(pg, tmp_path):
             (cid, Jsonb({"id": "u_ok", "name": "Ok Person", "role": "Engineer",
                          "team": "Eng", "tenure": "2 years", "owns": ["the flow"],
                          "collaboration": ["Design"], "source": "roster:2"})))
+    # rich-align-0722/03+06 REGRESSION: pg_registry.put() writes asdict(PersonEntity), which ALWAYS
+    # emits self_report/archived/provenance (even at defaults). The hand-built minimal dict above
+    # never exercised that — so the stale 0002 allowlist rejected every REAL campaign-code person
+    # write in prod while this DB test stayed green. Insert a FULL PersonEntity, self_report
+    # populated (the 03 sanctioned slot), and REQUIRE acceptance (allowlist realigned in 0009).
+    from dataclasses import asdict
+    from avery.ingest.extract import PersonEntity, PersonSelfReport, SelfReportLoad
+    rich = asdict(PersonEntity(
+        id="u_full", name="Rich Person", role="Lead", team="Sales", tenure="3y",
+        owns=["banquet ops"], collaboration=["Ops"], source="roster:3",
+        self_report=PersonSelfReport(load=SelfReportLoad(value=70)),
+        archived=False, provenance={"role": {"origin": "manual", "source": "手动编辑"}}))
+    with psycopg.connect(_db_url()) as conn, conn.transaction():
+        conn.execute(
+            "INSERT INTO avery.entities (context_id, kind, idx, payload) "
+            "VALUES (%s, 'person', 9997, %s)", (cid, Jsonb(rich)))
+
+
+def test_person_keys_allowlist_covers_exactly_person_fields():
+    """OFFLINE regression guard (no DB — runs in the standard `not needs_db` suite) for the class of
+    bug that shipped in rich-align-0722: the DB person-keys ALLOWLIST must enumerate EXACTLY
+    PersonEntity's own fields. pg_registry.put() writes asdict(PersonEntity), which ALWAYS emits
+    every field, so any field added to PersonEntity WITHOUT extending the allowlist makes the DB
+    CHECK reject every person write to real Postgres — invisible offline, fatal in prod (03's
+    self_report + 06's archived/provenance did exactly this; caught only by the prod demo cast).
+    A static parse of the migration files closes that gap at commit time, no live DB required."""
+    import dataclasses
+    from avery.ingest.extract import PersonEntity
+
+    migrations = sorted((HERE / "db" / "migrations").glob("*.sql"))
+    allow: set[str] | None = None   # each migration is DROP IF EXISTS + ADD; last definition wins
+    for path in migrations:
+        for m in re.finditer(
+            r"ADD\s+CONSTRAINT\s+entities_person_keys_allowlist\b.*?payload\s*-\s*ARRAY\s*\[(.*?)\]",
+            path.read_text(encoding="utf-8"), re.S | re.I):
+            allow = set(re.findall(r"'([^']+)'", m.group(1)))
+    assert allow is not None, "no migration defines entities_person_keys_allowlist"
+
+    person_fields = {f.name for f in dataclasses.fields(PersonEntity)}
+    assert allow == person_fields, (
+        "DB person-keys allowlist is out of sync with PersonEntity. pg_registry writes "
+        "asdict(PersonEntity), so a mismatch REJECTS every person write to real Postgres.\n"
+        f"  in PersonEntity but NOT allowed by the DB: {sorted(person_fields - allow)}\n"
+        f"  allowed by the DB but NOT in PersonEntity:  {sorted(allow - person_fields)}\n"
+        "Add a migration that re-ADDs entities_person_keys_allowlist covering exactly these fields.")
 
 
 @needs_db
