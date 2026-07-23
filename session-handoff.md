@@ -1,4 +1,39 @@
-# ⟳ 2026-07-22 夜跑 · **满态对齐战役 批次①（issue 01+02 富项目字段）已交付全绿，等 Danny 验收**（★最新，从这里接）
+# ⟳ 2026-07-23 夜跑 · **满态对齐战役 批次②：issue 04 目录化全绿 + 05a 写端点先例（后端半）全绿，等 Danny 验收**（★最新，从这里接）
+
+**一句话**：AFK 夜跑先纠账实（kickoff 说「01–04 已交付」是错的——git 只有 01/02/03，**issue 04 没做**、
+`05-split-decision.md` 不存在），补做 issue 04（team 目录化）到全绿，再落 05a 的**后端写端点先例**到全绿。
+两 commit 攒本分支未推（push=人工闸）。**验收表单 = `.issues/rich-align-0722/acceptance-2.md`**（抬头有账实修正的 loud 记录 + Danny 可否决位）。
+
+## 本 session 交付（两 commit，本分支未推）
+- **`62b1464` issue 04 · team 目录化**：team 屏有数据分支从 feat-025 分组视图换成她方通讯录目录形态——
+  组别筛选 chip 行（恒在，count 徽章）+ 3 列成员卡网格 + 上传部件降位不卸载；情绪 chip 行仅开关开渲染，
+  挂系统自证式口径角标「按本人自述筛选」，🔴 情绪 chip 无 count 徽章（裁决 C 节禁）。新件 `src/lite2/teamDirectory.ts`
+  （纯 locale-free facet 派生）。门：新 e2e `verify-team-directory-04.mjs` 18/18（两形态+两世界）· cr-align stick9 四行
+  47/47 · status-truth 31/0 · button-family 12/0 · aria-zh 4/0 · home-skeleton 17/0 · skin-phases 16/0 ·
+  selfreport-switch-03 关世界 8/0 · 扫雷 NEW 0+selftest 8。像素净影响 0（stub team 屏空态，目录只在有数据分支）。CURRENT_STICK→9。
+- **`f1ca46d` issue 05a · 项目手编 CRUD 写端点先例（后端半）**：ProjectEntity +archived（软删可逆）+provenance
+  （字段级出处 side-car，ADR-0028，additive 不破 01/02 抽取）；写端点 POST/PATCH/archive/restore（照 notes 先例：
+  owner_token/账号鉴权、同体 404、Pydantic、KeyError→404、ValueError→422、PATCH exclude_unset 保 absent≠none、
+  🔴 无物理删除路由）；registry 双实现 ProjectWriteMixin 一套 get→mutate→put。门：新 `test_project_crud_05a.py` 8/8 +
+  **全量离线套 3398 passed/0 failed**（additive 零回归）。**这是 06 人员 CRUD 直接复用的先例。**
+
+## 🔴 下一步 = 05a 前端半（最高优先，写端点已就绪，接线即可）
+`transport.ts` 加 `archived_projects?`/`provenance?` 类型 + 4 个写 API → store CRUD action → ProjectsScreen 页头
+primary「添加项目」内联表单 → DetailOverlay 页脚编辑态（字段变输入框，保存/取消）+ 归档折叠区 + 逐字段「手动编辑」出处角标
+（读 `card.provenance[field].origin==='manual'`）→ i18n+CSS+新 e2e+cr-align **stick 10**（添加按钮 primary）+门+像素。
+**交付后 CURRENT_STICK→10。** 后端契约已定，详见 acceptance-2.md §5。之后 05b（重传手编赢+冲突）→ 06（人员 CRUD，复用
+Mixin，人身禁键→422）→ 07 三亚语料 → 08–11。序与依赖见 `issues/README.md` + `issues/05-split-decision.md`。
+
+## 验收就绪（Danny 回来做这个）
+- **验收手册**：`.issues/rich-align-0722/acceptance-2.md`（🔴 抬头先看账实修正 + 04 否决位；§1 机器自验表；
+  §2 team 目录两形态 HITL；§3 pixel-evidence 索引；§4 ①-④ 签认；§5 未做清单=下个 session 的接力棒）。
+- dev server 挂着：preview 5173（挂 04 构建）+ mock 8137（🔴 是 05a 后端改动**之前**的进程——04 HITL 不受影响；
+  要 HITL 05a 写端点先杀 8137 重起到新代码）。
+- **Danny 人测点头 → `git push`（=Vercel 自动上产）**。push=人工闸不动。
+
+---
+
+# ⟳ 2026-07-22 夜跑 · **满态对齐战役 批次①（issue 01+02 富项目字段）已交付全绿，等 Danny 验收**（历史·上一段）
 
 **一句话**：AFK 夜跑跑完 issue 01（进度/风险）+ 02（里程碑），端到端真管道 + absent≠none 全通，
 **全量 A 区电池 19/19 绿（exit 0，零跨门回归）**。commit 攒本分支未推（push=人工闸，等 Danny 点头）。
