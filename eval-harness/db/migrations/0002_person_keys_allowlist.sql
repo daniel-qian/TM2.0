@@ -1,26 +1,22 @@
--- feat-030 P1 (adversarial validation) — tighten the person-entity red line from a DENYLIST of
--- known scoring keys to an ALLOWLIST of PersonEntity's own qualitative fields.
+-- feat-030 P1 (adversarial validation) — retire the DENYLIST of known scoring keys
+-- (`entities_person_no_scoring_keys`, declared inline in 0001) in favour of an ALLOWLIST of
+-- PersonEntity's own qualitative fields. The denylist by construction missed Chinese keys
+-- (绩效评分/排名/离职风险) and compound English keys (zscore/stack_rank/nine_box); the allowlist is
+-- "the moat as a type" — any key outside PersonEntity's own fields is refused, no wordlist to keep.
 --
--- The 0001 CHECK (`entities_person_no_scoring_keys`) enumerated English scoring keys — a denylist,
--- which by construction misses Chinese keys (绩效评分/排名/离职风险) and compound English keys
--- (zscore/stack_rank/attrition_risk/nine_box). This replaces it with an allowlist: a person payload
--- may carry ONLY the keys PersonEntity actually has (id/name/role/team/tenure/owns/collaboration/
--- source). Any other key — in any language, in any spelling — is refused by the database itself.
--- This is the structural form of "the moat as a type": no wordlist to keep current, no hole to open.
+-- ⚠️ REPLAY-SAFETY (learned the hard way, rich-align-0722): pg_registry._ensure_schema replays EVERY
+-- migration file on every bootstrap, and `ALTER TABLE ... ADD CONSTRAINT` re-VALIDATES all existing
+-- rows each time. A person-keys allowlist ADD frozen at a PAST field set becomes a strict subset once
+-- later rows carry newer keys (03's self_report, 06's archived/provenance) and then ABORTS the whole
+-- bootstrap ("violated by some row"). So the allowlist is defined in exactly ONE place, kept in
+-- lockstep with PersonEntity's CURRENT fields — the LATEST person-keys migration, 0009 — and asserted
+-- by tests/test_registry_contract.py::test_person_keys_allowlist_covers_exactly_person_fields.
 --
--- Idempotent: DROP IF EXISTS both the old and the new constraint name, then ADD — safe to re-run
--- (the migration runner replays every *.sql file on each bootstrap). No data migration needed: the
--- `avery` schema carries zero rows outside disposable tests, so ADD CONSTRAINT never rejects an
--- existing row.
+-- THIS migration therefore only DROPS the retired denylist; it must NOT (re-)add a point-in-time
+-- allowlist. To change the allowlist, edit 0009 IN PLACE — never add a superseding migration.
+--
+-- Idempotent: DROP IF EXISTS, safe to re-run.
 
 SET search_path = avery, public, extensions;
 
 ALTER TABLE avery.entities DROP CONSTRAINT IF EXISTS entities_person_no_scoring_keys;
-ALTER TABLE avery.entities DROP CONSTRAINT IF EXISTS entities_person_keys_allowlist;
-
-ALTER TABLE avery.entities ADD CONSTRAINT entities_person_keys_allowlist CHECK (
-    kind <> 'person'
-    OR (payload - ARRAY[
-        'id', 'name', 'role', 'team', 'tenure', 'owns', 'collaboration', 'source'
-    ]::text[]) = '{}'::jsonb
-);

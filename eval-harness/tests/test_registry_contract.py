@@ -592,58 +592,66 @@ def test_pg_schema_refuses_a_scoring_person_row(pg, tmp_path):
 
 def test_person_keys_allowlist_covers_exactly_person_fields():
     """OFFLINE regression guard (no DB — runs in the standard `not needs_db` suite) for the class of
-    bug that shipped in rich-align-0722: the DB person-keys ALLOWLIST must enumerate EXACTLY
-    PersonEntity's own fields. pg_registry.put() writes asdict(PersonEntity), which ALWAYS emits
-    every field, so any field added to PersonEntity WITHOUT extending the allowlist makes the DB
-    CHECK reject every person write to real Postgres — invisible offline, fatal in prod (03's
-    self_report + 06's archived/provenance did exactly this; caught only by the prod demo cast).
-    A static parse of the migration files closes that gap at commit time, no live DB required."""
+    bug that shipped in rich-align-0722. Two failure modes, both invisible offline (the in-memory
+    registry never hits a real CHECK) and fatal in prod:
+      (1) drift — pg_registry.put() writes asdict(PersonEntity), which ALWAYS emits every field, so a
+          field added to PersonEntity without extending the allowlist REJECTS every person write;
+      (2) replay-safety — _ensure_schema replays every migration and each ADD re-validates all rows,
+          so a STALE allowlist ADD (a strict subset of the current fields) aborts the WHOLE bootstrap
+          once any row carries a newer key (0002's pre-03 8-key ADD did exactly this after the demo's
+          self_report rows existed).
+    So EVERY ALTER-ADD of the allowlist — not just the last — must equal PersonEntity's fields. A
+    static parse of the migrations closes both gaps at commit time, no live DB required."""
     import dataclasses
     from avery.ingest.extract import PersonEntity
+    person_fields = {f.name for f in dataclasses.fields(PersonEntity)}
 
     migrations = sorted((HERE / "db" / "migrations").glob("*.sql"))
-    allow: set[str] | None = None   # each migration is DROP IF EXISTS + ADD; last definition wins
+    adds = []   # (migration, allowed set) for EVERY ALTER-ADD of the allowlist (all are re-validated)
     for path in migrations:
-        sql = re.sub(r"--[^\n]*", "", path.read_text(encoding="utf-8"))  # strip comments (hold DDL prose)
+        sql = re.sub(r"--[^\n]*", "", path.read_text(encoding="utf-8"))   # strip comments (hold DDL prose)
         for m in re.finditer(
             r"ADD\s+CONSTRAINT\s+entities_person_keys_allowlist\b.*?payload\s*-\s*ARRAY\s*\[(.*?)\]",
             sql, re.S | re.I):
-            allow = set(re.findall(r"'([^']+)'", m.group(1)))
-    assert allow is not None, "no migration defines entities_person_keys_allowlist"
+            adds.append((path.name, set(re.findall(r"'([^']+)'", m.group(1)))))
+    assert adds, "no migration ADDs entities_person_keys_allowlist"
 
-    person_fields = {f.name for f in dataclasses.fields(PersonEntity)}
-    assert allow == person_fields, (
-        "DB person-keys allowlist is out of sync with PersonEntity. pg_registry writes "
-        "asdict(PersonEntity), so a mismatch REJECTS every person write to real Postgres.\n"
-        f"  in PersonEntity but NOT allowed by the DB: {sorted(person_fields - allow)}\n"
-        f"  allowed by the DB but NOT in PersonEntity:  {sorted(allow - person_fields)}\n"
-        "Add a migration that re-ADDs entities_person_keys_allowlist covering exactly these fields.")
+    bad = {name: sorted(s ^ person_fields) for name, s in adds if s != person_fields}
+    assert not bad, (
+        "A person-keys allowlist ADD is out of sync with PersonEntity. pg_registry writes "
+        "asdict(PersonEntity) and _ensure_schema re-validates every ADD on each bootstrap, so a "
+        "mismatch either rejects person writes or aborts bootstrap.\n"
+        f"  PersonEntity fields: {sorted(person_fields)}\n"
+        f"  out-of-sync ADDs (migration -> symmetric diff vs PersonEntity): {bad}\n"
+        "Edit 0009's allowlist IN PLACE to match PersonEntity (never add a superseding migration).")
 
 
 def test_entities_kind_check_covers_written_kinds():
-    """OFFLINE regression guard (no DB) — sibling to the person-keys guard. The DB entities_kind_check
-    must allow EXACTLY the entity kinds pg_registry.put() writes (_ENTITY_KINDS). Slice 08 added the
-    "playbook" kind to the writer but not to the CHECK, so real Postgres rejected the demo master cast
-    with `violates check constraint "entities_kind_check"` — invisible to `not needs_db`. A static
-    parse of the migrations catches any writer/CHECK drift at commit time, no live DB required."""
+    """OFFLINE regression guard (no DB) — sibling to the person-keys guard, same two failure modes
+    (drift + replay-safety). entities_kind_check must allow EXACTLY the entity kinds pg_registry.put()
+    writes (_ENTITY_KINDS); 08 added the "playbook" kind to the writer but not the CHECK, so real
+    Postgres rejected the demo cast. Every ALTER-ADD of the CHECK is re-validated on each _ensure_schema
+    replay, so all must equal _ENTITY_KINDS. (0001's inline CREATE-TABLE CHECK is exempt — CREATE TABLE
+    IF NOT EXISTS is a no-op on replay and never re-validates — so this inspects only `ADD CONSTRAINT`.)"""
     from avery.ingest.pg_registry import _ENTITY_KINDS
+    kinds = set(_ENTITY_KINDS)
 
     migrations = sorted((HERE / "db" / "migrations").glob("*.sql"))
-    allow: set[str] | None = None   # last migration to (re)define the kind CHECK wins
+    adds = []   # (migration, allowed set) for every ALTER-ADD of entities_kind_check
     for path in migrations:
-        sql = re.sub(r"--[^\n]*", "", path.read_text(encoding="utf-8"))  # strip comments (hold DDL prose)
-        candidates = re.findall(r"ARRAY\s*\[([^\]]*)\]", sql)            # kind = ANY (ARRAY[...]) form
-        candidates += re.findall(r"kind\s+IN\s*\(([^)]*)\)", sql, re.I)  # inline CHECK (kind IN (...))
-        for c in candidates:
-            toks = set(re.findall(r"'([^']+)'", c))
-            if {"person", "project", "signal"} <= toks:   # the kind list, not the key allowlist ARRAY
-                allow = toks
-    assert allow is not None, "no migration defines the entities kind CHECK"
-    assert allow == set(_ENTITY_KINDS), (
-        "DB entities_kind_check is out of sync with the kinds pg_registry.put() writes.\n"
-        f"  written (_ENTITY_KINDS) but NOT allowed by the DB: {sorted(set(_ENTITY_KINDS) - allow)}\n"
-        f"  allowed by the DB but NOT written:                 {sorted(allow - set(_ENTITY_KINDS))}\n"
-        "Add a migration that re-ADDs entities_kind_check covering exactly these kinds.")
+        sql = re.sub(r"--[^\n]*", "", path.read_text(encoding="utf-8"))
+        for m in re.finditer(
+            r"ADD\s+CONSTRAINT\s+entities_kind_check\b.*?ARRAY\s*\[([^\]]*)\]", sql, re.S | re.I):
+            adds.append((path.name, set(re.findall(r"'([^']+)'", m.group(1)))))
+    assert adds, "no migration ADDs entities_kind_check"
+
+    bad = {name: sorted(s ^ kinds) for name, s in adds if s != kinds}
+    assert not bad, (
+        "An entities_kind_check ADD is out of sync with the kinds pg_registry.put() writes "
+        "(_ENTITY_KINDS); _ensure_schema re-validates every ADD on each bootstrap.\n"
+        f"  _ENTITY_KINDS: {sorted(kinds)}\n"
+        f"  out-of-sync ADDs (migration -> symmetric diff): {bad}\n"
+        "Edit the kind-check migration IN PLACE to match _ENTITY_KINDS.")
 
 
 def test_entity_pg_roundtrip_coerces_nested_dataclasses():

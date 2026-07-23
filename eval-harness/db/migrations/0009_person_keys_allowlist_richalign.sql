@@ -1,8 +1,14 @@
--- rich-align-0722/03 + /06 — realign the person-entity ALLOWLIST to PersonEntity's ACTUAL fields.
+-- rich-align-0722/03 + /06 — the person-entity ALLOWLIST, the SOLE + CURRENT definition.
 --
--- 0002 froze the allowlist at PersonEntity's PRE-03 field set
--- (id/name/role/team/tenure/owns/collaboration/source). Since then PersonEntity gained three own
--- fields:
+-- 🔴 THIS is the one place the person-keys allowlist is defined (0002 was reduced to dropping the old
+-- denylist — see its header for why). pg_registry._ensure_schema replays this file on every bootstrap
+-- and its ADD re-VALIDATES every existing row, so the list below MUST equal PersonEntity's CURRENT
+-- fields. When PersonEntity gains a field, EDIT THE ARRAY BELOW IN PLACE — do NOT add a superseding
+-- migration: that would leave this ADD a stale strict subset that aborts bootstrap the moment a row
+-- carries the newer key. Guarded by test_person_keys_allowlist_covers_exactly_person_fields.
+--
+-- Beyond 0002's pre-03 set (id/name/role/team/tenure/owns/collaboration/source) PersonEntity carries
+-- three more own fields:
 --   * self_report  (rich-align-0722/03) — the ONE sanctioned numeric slot (typed PersonSelfReport;
 --                    projection-gated by AVERY_ALLOW_PERSON_SCORING — 复核项②③). By approved design
 --                    the DB恒存自述数据 and the red line executes at the PROJECTION layer, not storage,
