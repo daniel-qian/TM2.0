@@ -346,12 +346,30 @@ class MaterialChunk:
     doc_kind: str = "company"
 
 
+# rich-align-0722/08 · playbooks 方法卡（PRD D）. SOP 文档的 `## 方法：<标题>` 小节 → 只读方法卡。
+# 与 materials 并列的确定性结构轴，不含任何人身评分（不进 validate_extraction 的 person/signal 面）。
+_METHOD_HEADER_RE = re.compile(r"^方法\s*[：:]\s*(.+)$")
+_APPLIES_LABEL_RE = re.compile(r"^(?:适用范围|适用|applies\s*to|applies)\s*[：:]\s*(.+)$", re.I)
+_TAGS_LABEL_RE = re.compile(r"^(?:标签|tags?)\s*[：:]\s*(.+)$", re.I)
+
+
+@dataclass
+class MethodCard:
+    """PRD D: {title, description, tags}. 从 SOP `## 方法：` 小节抽取——适用行=description、
+    标签行=tags（、分隔，复用 _OWNS_SPLIT_RE）；要点列表卡内不展开（留将来详情态）。只读产物，无 CRUD。"""
+    title: str
+    description: str = ""
+    tags: list[str] = field(default_factory=list)
+    source: str = ""
+
+
 @dataclass
 class ExtractionResult:
     people: list[PersonEntity] = field(default_factory=list)
     projects: list[ProjectEntity] = field(default_factory=list)
     signals: list[SignalEntity] = field(default_factory=list)
     materials: list[MaterialChunk] = field(default_factory=list)
+    playbooks: list[MethodCard] = field(default_factory=list)  # rich-align-0722/08: SOP 方法卡（缺席=空）
     # feat-054 — the granularity gate's audit trail: one Ruling per project candidate, kept AND
     # demoted, each citing the rule and document line behind the call. Populated by extract_docs;
     # an extractor's own per-doc result leaves it empty. NOT merged (see merge below).
@@ -364,6 +382,7 @@ class ExtractionResult:
         self.projects += other.projects
         self.signals += other.signals
         self.materials += other.materials
+        self.playbooks += other.playbooks
         return self
 
 
@@ -1116,8 +1135,49 @@ class HeuristicExtractor:
             res.merge(self._signals_from_doc(doc))
             # rich-align-0722/03: a weekly's 人员动态 self-report lines → person self_report slot.
             res.merge(self._selfreport_from_lines(doc))
+        # rich-align-0722/08: SOP `## 方法：` 小节 → 方法卡. UNCONDITIONAL (like _materials): the SOP
+        # fixture sniffs doc_kind='unknown', so gating this behind a kind branch would drop every card.
+        res.merge(self._playbooks_from_doc(doc))
         # Every doc contributes material chunks to the RAG (including company handbooks).
         res.merge(self._materials(doc))
+        return res
+
+    # playbooks ------------------------------------------------------------
+
+    def _playbooks_from_doc(self, doc: ParsedDoc) -> ExtractionResult:
+        """SOP 方法库：每个 `## 方法：<标题>` 小节 → 一张 MethodCard。适用行=description、
+        标签行=tags；小节边界止于下一个 `##`（含 `## 说明` 免责段，故不被误抽成卡）。
+        要点列表卡内不展开（留将来详情态）。零人身评分——method 面不进红线人闸。"""
+        res = ExtractionResult()
+        lines = doc.lines
+        n = len(lines)
+        i = 0
+        while i < n:
+            head = _METHOD_HEADER_RE.match(strip_decoration(lines[i].strip()))
+            if not head:
+                i += 1
+                continue
+            title = head.group(1).strip()[:80]
+            description = ""
+            tags: list[str] = []
+            j = i + 1
+            while j < n:
+                raw = lines[j].strip()
+                if raw.startswith("##"):        # 下一小节（方法/说明/其它）——本卡到此为止
+                    break
+                s = strip_decoration(raw)
+                am = _APPLIES_LABEL_RE.match(s)
+                if am and not description:
+                    description = am.group(1).strip()[:200]
+                else:
+                    tm = _TAGS_LABEL_RE.match(s)
+                    if tm:
+                        tags = [t.strip() for t in _OWNS_SPLIT_RE.split(tm.group(1)) if t.strip()][:8]
+                j += 1
+            if title:
+                res.playbooks.append(MethodCard(
+                    title=title, description=description, tags=tags, source=doc.name))
+            i = j
         return res
 
     # people ---------------------------------------------------------------

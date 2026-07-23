@@ -490,6 +490,9 @@ class LLMExtractor:
         # deterministic, line-addressable RAG corpus — same path as the heuristic (cite gate
         # resolves against these lines; the model never rewrites them)
         res.materials = self._chunker._materials(doc).materials
+        # rich-align-0722/08: SOP 方法卡也走确定性 heuristic 路径（同 materials），与模型是否读到
+        # 结构化实体无关——生产暖场（LLM 铸母本）时方法库照样长出来，不靠模型碰运气。
+        res.playbooks = self._chunker._playbooks_from_doc(doc).playbooks
         return res
 
 

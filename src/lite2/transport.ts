@@ -101,6 +101,10 @@ export interface LiveTeamPayload {
   // rich-align-0722 · issue 06：停用（软删）的成员卡，投给团队目录页尾折叠区（灰化 + 恢复文字键）。
   // 同 archived_projects 的 absent≠none 语义（空即缺席）。
   archived_people?: LivePersonCard[]
+  // rich-align-0722 · issue 08：SOP 方法卡（只读方法库，无 CRUD）。后端从文档 `## 方法：` 小节抽取。
+  // 🔴 缺席 = 没有 SOP 方法（absent≠none：playbook_cards() 为空时整键不发）。前端 playbooks 屏
+  // `?? []` 收敛——缺席维持 coming-soon 诚实空态，绝不为凑网格造空卡墙（踩 absent≠none）。
+  playbooks?: LivePlaybookCard[]
 }
 
 // input-side-0721 · 3A：GET /demo/status 的能力探测契约（无鉴权、无副作用）。
@@ -164,6 +168,15 @@ export interface LiveProjectMilestone {
   name: string
   status: 'done' | 'active' | 'blocked' | 'upcoming' | 'other'
   statusRaw?: string // 仅 other 时发：文档原状态词，原样回显不改写
+}
+
+// rich-align-0722 · issue 08：SOP 方法卡（PRD D）。文档 `## 方法：<标题>` 小节抽出的只读方法卡。
+// description 取自「适用：」行、tags 取自「标签：」行（、分隔）；缺席的子字段整键不发（absent≠none）。
+// 🔴 非交互（渲染成 article/div，不渲染 button）——将来加详情展开再升 button。
+export interface LivePlaybookCard {
+  title: string
+  description?: string // 「适用：」行；缺席=文档没写适用范围
+  tags?: string[] // 「标签：」行；缺席=文档没写标签
 }
 
 // rich-align-0722 · issue 05a：字段级出处（ADR-0028）。后端 side-car，缺就不发键（absent≠none）。

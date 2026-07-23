@@ -1,25 +1,71 @@
 import { useDict } from '../../shared/i18n/useDict'
+import { useLite } from '../store'
 import { PLAYBOOK_CATALOG, useOnboard } from '../onboardStore'
 
-// feat-025 · lite 屏 4：Playbooks（空态屏）——Danny 2026-07-09 拍板 Q1(a)。
-// 当前无数据 → 干净空态。文案锚「未来 custom-agent 能力」（接入你的 SOP/playbook 后长出来），
-// 诚实标 coming-soon；为将来接真 pack（feat-019 酒店包）留数据槽。
-// 不移植 story 的 scripted case 复盘（story 的 playbook = 脚本化 case 卡，与 lite 真数据定位不同）。
-//
-// feat-045（PRD F7）：onboarding 勾选结果写进槽位——向导走完且有所选时，槽位区按所选
-// playbook 呈现"将来这里会长出什么"的说明行（标题+一句人话，每行带稳定 data-playbook-id，
-// 门相位 onboardPersist 按具体 id 断言）；沿用既有 Coming 诚实语法（每行带 slot-tag，
-// coming-soon 落款不动）。没走向导/没勾选 → 回落 feat-025 的三条通用槽位，行为零变化。
-// 🔴 红线：本屏零人卡、零数字/评分——纯叙事空态。墙不打洞（不 import src/story/**）。
+// feat-025 · lite 屏 4：Playbooks——Danny 2026-07-09 拍板 Q1(a)。
+// rich-align-0722/08：从「空态屏」升级成「有真数据就长出方法库」：
+//   · 满态（payload.playbooks 有卡，来自 SOP 文档 `## 方法：` 小节抽取）→ 2 列方法卡网格
+//     （非交互 article，不渲染 button——将来加详情展开再升 button）。
+//   · 空态（非 demo / 无 SOP 文档）→ 维持 feat-025/045 的 coming-soon 诚实标 + onboarding 勾选槽位/
+//     回落槽位 + 回看向导入口，行为零变化。🔴 绝不为凑网格造空卡墙（踩 absent≠none）。
+// 🔴 红线：本屏零人卡、零数字/评分——方法卡是 SOP 面（含「升级红线」「新人爬坡」等提到员工的卡），
+//   但纯规范文本、零人身分数。墙不打洞（不 import src/story/**）。
 export function PlaybooksScreen() {
   const { t } = useDict()
   const l = t.lite2
+
+  const rawTeam = useLite((s) => s.rawTeam)
+  const playbooks = rawTeam?.playbooks ?? []
 
   const onboardStatus = useOnboard((s) => s.status)
   const picks = useOnboard((s) => s.playbooks)
   const company = useOnboard((s) => s.company)
   const reopenOnboarding = useOnboard((s) => s.reopen)
 
+  // ── 满态：SOP 抽出的真方法卡 → 2 列方法库网格 ────────────────────────────────────────────
+  if (playbooks.length > 0) {
+    return (
+      <section className="scene scene-nexus is-active lite-playbooks" aria-label={l.tabPlaybooks}>
+        {/* 满态用「滚动壳 + 顶让位夹层」而非空态的 .nexus-empty 居中卡——否则卡多了页头被
+            浮动顶栏盖住（同 projects 屏 .lite-projects-scroll/frame 语法）。 */}
+        <div className="lite-playbooks-scroll">
+          <section className="lite-playbooks-library" aria-label={l.playbooksLibraryAria}>
+            <p className="eyebrow lite-playbooks-eyebrow">{l.playbooksLibraryEyebrow}</p>
+            <h2>{l.playbooksLibraryTitle}</h2>
+            <p className="lite-playbooks-library-sub">{l.playbooksLibrarySub}</p>
+            <div className="lite-playbooks-grid">
+              {playbooks.map((card, i) => (
+              <article key={`${card.title}-${i}`} className="lite-playbooks-card">
+                <span
+                  className="lite-playbooks-card-icon"
+                  aria-hidden="true"
+                  data-tone={i % 4}
+                />
+                <div className="lite-playbooks-card-body">
+                  <h3 className="lite-playbooks-card-title">{card.title}</h3>
+                  {card.description ? (
+                    <p className="lite-playbooks-card-desc">{card.description}</p>
+                  ) : null}
+                  {(card.tags ?? []).length > 0 ? (
+                    <ul className="lite-playbooks-card-tags" aria-label={l.playbooksCardTagsAria}>
+                      {(card.tags ?? []).map((tag) => (
+                        <li key={tag} className="lite-badge lite-playbooks-card-tag">
+                          {tag}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </div>
+              </article>
+              ))}
+            </div>
+          </section>
+        </div>
+      </section>
+    )
+  }
+
+  // ── 空态（非 demo / 无 SOP 文档）：coming-soon 诚实标 + 勾选/回落槽位 + 回看向导入口 ──────────
   // 只有真正走完向导的勾选才改变槽位（skipped/中途关闭不算"选过"——不替用户做主）。
   const chosen =
     onboardStatus === 'done' && picks.length > 0

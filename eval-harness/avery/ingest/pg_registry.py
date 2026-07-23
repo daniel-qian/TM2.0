@@ -48,7 +48,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 from .extract import (
-    ExtractionResult, MaterialChunk, PersonEntity, ProjectEntity, SignalEntity,
+    ExtractionResult, MaterialChunk, MethodCard, PersonEntity, ProjectEntity, SignalEntity,
 )
 from .redline_extract import validate_extraction
 from .registry import (
@@ -75,6 +75,7 @@ def _embed_dim() -> int:
 _PERSON_FIELDS = {f.name for f in dataclasses.fields(PersonEntity)}
 _PROJECT_FIELDS = {f.name for f in dataclasses.fields(ProjectEntity)}
 _SIGNAL_FIELDS = {f.name for f in dataclasses.fields(SignalEntity)}
+_PLAYBOOK_FIELDS = {f.name for f in dataclasses.fields(MethodCard)}  # rich-align-0722/08
 
 
 def _entity(cls, fields: set[str], payload: dict):
@@ -230,6 +231,7 @@ class PostgresContextRegistry(ProjectWriteMixin):
         people = [asdict(p) for p in ctx.extraction.people]
         projects = [asdict(p) for p in ctx.extraction.projects]
         signals = [asdict(s) for s in ctx.extraction.signals]
+        playbooks = [asdict(p) for p in getattr(ctx.extraction, "playbooks", [])]  # rich-align-0722/08
 
         # The materialized memory FULL TEXT is what a restart re-materializes from. If the caller
         # somehow hands a context whose files are not on disk yet, materialize first — the DB row
@@ -267,7 +269,7 @@ class PostgresContextRegistry(ProjectWriteMixin):
                     "VALUES (%s, %s, %s, %s)",
                     [(ctx.context_id, kind, i, Jsonb(payload))
                      for kind, rows in (("person", people), ("project", projects),
-                                        ("signal", signals))
+                                        ("signal", signals), ("playbook", playbooks))
                      for i, payload in enumerate(rows)])
                 cur.executemany(
                     "INSERT INTO avery.materials "
@@ -330,6 +332,8 @@ class PostgresContextRegistry(ProjectWriteMixin):
             people=[_entity(PersonEntity, _PERSON_FIELDS, pl) for k, pl in ents if k == "person"],
             projects=[_entity(ProjectEntity, _PROJECT_FIELDS, pl) for k, pl in ents if k == "project"],
             signals=[_entity(SignalEntity, _SIGNAL_FIELDS, pl) for k, pl in ents if k == "signal"],
+            # rich-align-0722/08: SOP 方法卡随 context 往返（否则 pg-backed 生产 demo get() 会丢卡）。
+            playbooks=[_entity(MethodCard, _PLAYBOOK_FIELDS, pl) for k, pl in ents if k == "playbook"],
             materials=[MaterialChunk(id=cid, text=text, source=src, doc_kind=dk)
                        for cid, text, src, dk in mats])
 

@@ -206,11 +206,11 @@
       "key": "badge.playbookTagWeight",
       "stick": 4,
       "screen": "playbooks",
-      "selector": ".lite2-shell .lite-playbooks-slot-tag",
+      "selector": ".lite2-shell .lite-playbooks-card-tag",
       "prop": "fontWeight",
       "expected": "700",
       "tolerance": "exact",
-      "note": "她徽章 bold；色值 #eef2ff/#2f4bb0 由门钉着不动"
+      "note": "她徽章 bold（值 700 不变）。🔴 rich-align/08 改选择器 slot-tag → card-tag：cr-alignment 种子已加 SOP 文档，playbooks 屏渲染满态方法库网格（非空态槽位），故 tag 量的是方法卡标签徽章 .lite-playbooks-card-tag。空态槽位 .lite-playbooks-slot-tag 仍保 font-weight:700（AFK assertOnboardPersist 只查其在场），不再是本行量点。"
     },
     {
       "key": "card.decisionBg",
@@ -519,6 +519,47 @@
       "expected": "1",
       "tolerance": "exact",
       "note": "【rich-align/06·人员 CRUD 闸】「添加成员」挂 primary 家族类恰 1（主 CTA 语义）。spec→门→码：先定「必须是 primary」，非反向抄她像素；rect/半径由 button-family 族强断言 + 像素证据守。"
+    },
+    {
+      "key": "playbooks.gridPresent",
+      "stick": 12,
+      "screen": "playbooks",
+      "selector": ".lite2-shell .lite-playbooks-grid",
+      "probe": "count",
+      "expected": "1",
+      "tolerance": "exact",
+      "note": "【rich-align/08·方法库满态闸】有 SOP 方法卡的世界（demo 三亚 / 种子含 SOP 文档）→ 2 列方法卡网格容器恒 1。结构护栏；非 demo/无 SOP 世界该容器不在（维持 coming-soon 诚实空态），故本行只在满态世界成立——verify-cr-alignment 的 SEED_DOCS 已内联一份 5 卡 SOP 文档喂出满态。"
+    },
+    {
+      "key": "playbooks.cardCount",
+      "stick": 12,
+      "screen": "playbooks",
+      "selector": ".lite2-shell .lite-playbooks-card",
+      "probe": "count",
+      "expected": "5",
+      "tolerance": "exact",
+      "note": "【rich-align/08·方法库满态闸】SOP 文档（管理规范与升级红线.md）恰 5 个 `## 方法：` 小节 → 5 张方法卡。数量护栏配 absent≠none（`## 说明` 免责段不成卡；文档没写方法的世界零卡）。SEED_DOCS 内联同 5 卡 SOP。"
+    },
+    {
+      "key": "playbooks.gridDisplay",
+      "stick": 12,
+      "screen": "playbooks",
+      "selector": ".lite2-shell .lite-playbooks-grid",
+      "prop": "display",
+      "expected": "grid",
+      "tolerance": "exact",
+      "note": "【rich-align/08·方法库满态闸】方法卡网格是 CSS grid（对齐她方 /playbooks 双列方法库同构）。2 列几何走 e2e 关系断言（verify-playbooks-08：前 2 卡同顶、第 3 卡换行且回到首列）+ 像素证据裁决，不入 spec 反向抄构建像素（同 team.directoryGridDisplay 纪律）。"
+    },
+    {
+      "key": "playbooks.cardIconSquare",
+      "stick": 12,
+      "screen": "playbooks",
+      "selector": ".lite2-shell .lite-playbooks-card-icon",
+      "probe": "rect",
+      "axis": "width",
+      "expected": "40",
+      "tolerance": "px1",
+      "note": "【rich-align/08·卡结构闸】方法卡方形渐变图标 40×40（前向设计值 spec→码：先定 40 再写 CSS，CSS 漂移即红——非反向抄构建值也非抄她像素，图标是我方新件）。方形由 CSS aspect-ratio:1 保证，本行量 width 守图标在场+尺寸不塌。"
     }
   ]
 }

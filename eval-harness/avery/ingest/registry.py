@@ -415,6 +415,23 @@ class CompanyContext:
         return [self._one_project_card(pr) for pr in self.extraction.projects
                 if getattr(pr, "archived", False)]
 
+    @staticmethod
+    def _one_playbook_card(pb) -> dict:
+        """rich-align-0722/08: project ONE MethodCard onto the LivePlaybookCard shape (absent≠none:
+        no description/tags key when empty). title always present (a card without a title is dropped
+        upstream in the extractor)."""
+        card = {"title": pb.title}
+        if pb.description:
+            card["description"] = pb.description
+        if pb.tags:
+            card["tags"] = list(pb.tags)
+        return card
+
+    def playbook_cards(self) -> list[dict]:
+        """rich-align-0722/08: SOP `## 方法：` 小节抽出的只读方法卡（无 CRUD）——{title, description, tags}.
+        缺席=没有 SOP 方法卡（payload 顶层键在空时省略，absent≠none）。纯 SOP 面，零人身评分。"""
+        return [self._one_playbook_card(pb) for pb in getattr(self.extraction, "playbooks", [])]
+
     # --- rich-align-0722/05a · 项目手编 CRUD 的实体级 mutation（provenance side-car）--------------
     def _find_project(self, project_id: str) -> ProjectEntity:
         for pr in self.extraction.projects:

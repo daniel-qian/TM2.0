@@ -43,6 +43,8 @@ def _stub_report():
         archived_project_cards=lambda: [],
         # rich-align-0722/06: …and the archived (soft-deleted) people drawer.
         archived_people_cards=lambda: [],
+        # rich-align-0722/08: …and the SOP method-card (playbooks) projection.
+        playbook_cards=lambda: [],
     )
     return SimpleNamespace(ok=True, context=ctx, violations=[], parse_errors=[])
 

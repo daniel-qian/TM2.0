@@ -638,7 +638,35 @@
   .lite2-shell[data-look='aurora'] .lite-notes-entry,
   .lite2-shell[data-look='aurora'] .lite-vision-mock,
   .lite2-shell[data-look='aurora'] .lite-playbooks-slot,
+  .lite2-shell[data-look='aurora'] .lite-playbooks-card,
   .lite2-shell[data-look='aurora'] .lite-project-card {
     animation: lite2-rise 0.35s ease both;
   }
+}
+
+/* ── rich-align-0722/08 · Playbooks 满态方法库（aurora 皮）─────────────────────────
+   方法卡上白.97 卡面 + 圆角；方形渐变图标按 data-tone 四色轮换（誊自 tone 渐变 token）；
+   标签徽章走蓝色软底（同 ⑤ slot-tag 语法）。paper 皮值见 lite2.css，此处 aurora 覆盖。 */
+.lite2-shell[data-look='aurora'] .lite-playbooks-card {
+  border-color: var(--rule);
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: var(--shadow);
+}
+
+.lite2-shell[data-look='aurora'] .lite-playbooks-card-icon[data-tone='0'] {
+  background: var(--lite2-grad-blue);
+}
+.lite2-shell[data-look='aurora'] .lite-playbooks-card-icon[data-tone='1'] {
+  background: var(--lite2-grad-green);
+}
+.lite2-shell[data-look='aurora'] .lite-playbooks-card-icon[data-tone='2'] {
+  background: var(--lite2-grad-purple);
+}
+.lite2-shell[data-look='aurora'] .lite-playbooks-card-icon[data-tone='3'] {
+  background: var(--lite2-grad-orange);
+}
+
+.lite2-shell[data-look='aurora'] .lite-playbooks-card-tag {
+  color: var(--lite2-tone-blue-fg);
+  background: var(--lite2-tone-blue-bg);
 }

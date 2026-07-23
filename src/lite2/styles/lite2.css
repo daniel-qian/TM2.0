@@ -1235,6 +1235,110 @@
   text-decoration: underline;
 }
 
+/* ── rich-align-0722/08 · Playbooks 满态方法库（2 列方法卡网格）───────────────────
+   有真 SOP 方法卡（payload.playbooks）时长出的方法库；空态仍走上面的 .lite-playbooks-empty。
+   网格镜像 .lite-onboard-playbook-grid（repeat(2,minmax(0,1fr)) + 窄屏塌 1 列）；
+   方法卡=非交互 article（不渲染 button，天然不进 button-family 门）。paper 皮值；aurora 覆盖见 look-aurora.css。 */
+.lite2-shell .lite-playbooks-scroll {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.lite2-shell .lite-playbooks-library {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 84px 36px 90px;    /* 顶让位 84 清浮动顶栏（同 .lite-projects-frame）*/
+  text-align: left;
+}
+
+.lite2-shell .lite-playbooks-library h2 {
+  margin-bottom: 6px;
+  font-size: clamp(22px, 2.6vw, 28px);
+  line-height: 1.28;
+}
+
+.lite2-shell .lite-playbooks-library-sub {
+  margin-bottom: 20px;
+  color: var(--ink-soft);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+.lite2-shell .lite-playbooks-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.lite2-shell .lite-playbooks-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--rule);
+  border-radius: 14px;
+  background: rgba(var(--lite2-ink-rgb), 0.02);
+}
+
+.lite2-shell .lite-playbooks-card-icon {
+  flex: none;
+  width: 40px;
+  aspect-ratio: 1;                 /* 方形——cr-align stick 12 cardIconSquare 量 width=40 */
+  border-radius: 11px;
+  background: linear-gradient(135deg, rgba(var(--lite2-ink-rgb), 0.16), rgba(var(--lite2-ink-rgb), 0.05));
+}
+
+.lite2-shell .lite-playbooks-card-body {
+  min-width: 0;                    /* 允许长标题/描述换行，不撑破网格轨 */
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.lite2-shell .lite-playbooks-card-title {
+  margin: 0;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.lite2-shell .lite-playbooks-card-desc {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.lite2-shell .lite-playbooks-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lite2-shell .lite-playbooks-card-tag {
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: rgba(var(--lite2-ink-rgb), 0.06);
+  color: var(--ink-faint);
+  font-size: 10.5px;
+  font-weight: 700;                /* cr-align stick 4 badge.playbookTagWeight=700（本行为量点）*/
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+/* 窄屏塌成 1 列（同 .lite-onboard-playbook-grid 的窄屏塌法）。 */
+@media (max-width: 720px) {
+  .lite2-shell .lite-playbooks-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ── feat-026 · Vision 定位叙事页 + 能力边界 mock ─────────────────────────────
    独立 tab（不打断试玩流）。取色只用既有 token；一屏两段（叙事三拍 + mock 网格），
    整屏纵向滚动。全部 .lite2-shell 作用域——story 壳物理够不到。 */

@@ -40,6 +40,8 @@ import type { Dict } from "./index";
 //  AFK offline pass, no directed M3; Danny 审字 pending (verified as 复核项 in 03 acceptance).
 // ⚠ HAND-WRITTEN, NOT YET M3 (rich-align-0722/04): lite2.directory* (11 keys — team 目录形态的组别/
 //  情绪筛选 chip 文案 + 口径角标「按本人自述筛选」+ 空筛选态). Draft; Danny 审字 pending.
+// ⚠ HAND-WRITTEN, NOT YET M3 (rich-align-0722/08): lite2.playbooksLibrary* + playbooksCardTagsAria
+//  (5 keys — 满态方法库网格屏头). Draft; Danny 审字 pending.
 // NOTE (feat-047): lite2.tabNotes + the 14-key lite2.notes* block are NEW in this run — 0 fresh
 //  M3 calls (script reused zh.lite's already-approved translation verbatim since the key names
 //  match byte-for-byte; see scripts/i18n-zh-lite2-delta.mjs's sharedKeys logic). Danny 审字
@@ -557,6 +559,12 @@ export const zh: Dict = {
     "playbooksSlotLabel": "这里会有什么",
     "playbooksComingSoon": "暂未接入——这里是 Avery 接下来会落地的方向预览。",
     "playbooksEmptyTag": "暂无操作手册",
+    // rich-align-0722/08 · 满态方法库——以下 5 键手写 draft，待 Danny 审字（同 01-06 手写键口径）。
+    "playbooksLibraryEyebrow": "操作手册",
+    "playbooksLibraryTitle": "从你团队 SOP 里长出的操作手册",
+    "playbooksLibrarySub": "Avery 读了你们的标准作业流程（SOP），把它们提炼成一张张方法卡——会议室早已在跑的那些打法。",
+    "playbooksLibraryAria": "操作手册——方法库",
+    "playbooksCardTagsAria": "标签",
     "playbooksReopenOnboarding": "重看上手引导",
     "visionEyebrow": "未来方向",
     "visionTitle": "你刚才试的是 demo。这背后才是产品。",

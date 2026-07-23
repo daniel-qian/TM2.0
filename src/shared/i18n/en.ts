@@ -690,6 +690,14 @@ export const en = {
     playbooksSlotLabel: 'What will live here',
     playbooksComingSoon: 'Not connected yet — this is a preview of where Avery is headed.',
     playbooksEmptyTag: 'No playbooks yet',
+    // rich-align-0722/08: full-state method library — the header shown when payload.playbooks
+    // carries real method cards distilled from the team's SOP docs (2-column card grid).
+    playbooksLibraryEyebrow: 'Playbooks',
+    playbooksLibraryTitle: "Playbooks from your team's SOPs",
+    playbooksLibrarySub:
+      'Avery read your standard operating procedures and distilled them into method cards — the plays your room already runs.',
+    playbooksLibraryAria: 'Playbooks — method library',
+    playbooksCardTagsAria: 'Tags',
     // open-loop-0720: Danny approved "don't auto-open once there's data" for the onboarding
     // wizard, on the option that explicitly said the dialog stays reachable from the menu any
     // time — but that reopen affordance never existed, so returning customers could never see

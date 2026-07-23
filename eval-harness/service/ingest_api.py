@@ -208,6 +208,11 @@ def _team_payload(ctx: CompanyContext) -> dict:
     from avery.scoring_policy import person_scoring_allowed
     if person_scoring_allowed():
         payload["scoring_enabled"] = True
+    # rich-align-0722/08 · SOP 方法卡（只读，无 CRUD）。空即缺席（absent≠none）——非 demo/无 SOP 的
+    # context 不发 playbooks 键，前端判空降级维持 coming-soon 诚实标。
+    playbooks = ctx.playbook_cards()
+    if playbooks:
+        payload["playbooks"] = playbooks
     # rich-align-0722/05a · softly-deleted projects for the archived collapse drawer. Key OMITTED when
     # nothing is archived (absent≠none, mirrors the decisions/scoring_enabled additive-key style).
     archived = ctx.archived_project_cards()
