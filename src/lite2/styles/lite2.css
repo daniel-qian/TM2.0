@@ -6853,3 +6853,35 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ═══ rich-align-0722 · issue 06 — 人员手编 CRUD（复用 05a 的表单/编辑态/折叠区样式族；下面只补
+   团队目录页头行 + 停用人卡的行内布局）。APPEND-ONLY。 ═══ */
+/* 目录页头行：「人员」eyebrow 左 / 「添加成员」primary 右。 */
+.lite2-shell .lite-team-head-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.lite2-shell .lite-people-add {
+  flex: none;
+  white-space: nowrap;
+}
+/* 停用人卡：.home-person-card 不带 .lite-project-card，故 05a 的 is-archived 规则不命中——这里
+   单独给灰化 + 行内布局（头像 / 姓名职位 / 恢复键）。 */
+.lite2-shell .lite-people-archived-card {
+  opacity: 0.62;
+  filter: saturate(0.7);
+  cursor: default;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+}
+.lite2-shell .lite-people-archived-card .home-person-body {
+  flex: 1;
+  min-width: 0;
+}
+.lite2-shell .lite-people-archived-card .lite-project-restore {
+  align-self: center;
+}

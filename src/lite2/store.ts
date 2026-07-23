@@ -6,6 +6,8 @@ import type {
   LiveNoteEntry,
   LiveTeamPayload,
   LiveTransport,
+  PersonAddInput,
+  PersonPatchInput,
   ProjectAddInput,
   ProjectPatchInput,
 } from './transport'
@@ -343,6 +345,13 @@ interface LiteState {
   patchProject: (projectId: string, patch: ProjectPatchInput) => Promise<boolean>
   archiveProject: (projectId: string) => Promise<boolean>
   restoreProject: (projectId: string) => Promise<boolean>
+  // rich-align-0722/06 · 人员手编 CRUD（复用同一 runProjectWrite 骨架 + projectWrite 忙/错态——
+  // 团队屏与项目屏 CRUD 从不同时活，共用一对写态无碍）。🔴 写侧红线（人身数字→422）在后端；
+  // 前端 addPerson 只发定性字段（PersonAddInput 无人身数字位），红线报错走 projectWriteError 诚实上屏。
+  addPerson: (input: PersonAddInput) => Promise<boolean>
+  patchPerson: (personId: string, patch: PersonPatchInput) => Promise<boolean>
+  archivePerson: (personId: string) => Promise<boolean>
+  restorePerson: (personId: string) => Promise<boolean>
   // 清写态（打开表单 / 进编辑态 / 关浮层时调，别把上一次的报错挂到下一次操作上）。
   resetProjectWrite: () => void
   askLive: (req: AdviseRequest) => void
@@ -759,6 +768,14 @@ export const useLite = create<LiteState>((set, get) => ({
     runProjectWrite(get, set, (cid, t) => t.archiveProject?.(cid, projectId)),
   restoreProject: (projectId) =>
     runProjectWrite(get, set, (cid, t) => t.restoreProject?.(cid, projectId)),
+  // rich-align-0722/06 · 人员 CRUD——同骨架，只换 transport 端点。
+  addPerson: (input) => runProjectWrite(get, set, (cid, t) => t.addPerson?.(cid, input)),
+  patchPerson: (personId, patch) =>
+    runProjectWrite(get, set, (cid, t) => t.patchPerson?.(cid, personId, patch)),
+  archivePerson: (personId) =>
+    runProjectWrite(get, set, (cid, t) => t.archivePerson?.(cid, personId)),
+  restorePerson: (personId) =>
+    runProjectWrite(get, set, (cid, t) => t.restorePerson?.(cid, personId)),
   resetProjectWrite: () => set({ projectWriteBusy: false, projectWriteError: null }),
 
   askLive: (req) => {

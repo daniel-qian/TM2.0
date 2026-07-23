@@ -148,6 +148,15 @@ class PersonEntity:
     # DELIBERATELY out of as_facts_lines(): self-report never enters facts.md / the advisor's recall
     # path (the frozen engine stays byte-identical); it reaches the UI only via team_cards projection.
     self_report: "PersonSelfReport | None" = None
+    # rich-align-0722/06 · 人员手编 CRUD（ADR-0028）. Additive, mirror ProjectEntity: both default to the
+    # pre-06 shape so every extraction path stays byte-identical until a MANUAL write touches them.
+    #   archived — 停用标记（软删可逆，绝不物理删除）；team_cards() 跳过 archived=True，archived_people_cards()
+    #     单独投给页尾折叠区。
+    #   provenance — 字段级出处 side-car：{field:{origin:'doc'|'manual', source, updated_at}}. 手编字段置
+    #     origin='manual'/source='手动编辑'. 🔴 self_report **绝不**经手编通道产生（人身数字只能来自文档
+    #     自述通道，写端点禁键→422），故 provenance 只覆定性字段（name/role/team/tenure/owns/collaboration）。
+    archived: bool = False
+    provenance: dict = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         # Coerce a dict (pg_registry asdict round-trip) into the dataclass; see PersonSelfReport.

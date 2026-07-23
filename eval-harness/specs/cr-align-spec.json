@@ -499,6 +499,26 @@
       "expected": "1",
       "tolerance": "exact",
       "note": "【rich-align/05a·项目 CRUD 闸】「添加项目」挂 primary 家族类恰 1（主 CTA 语义）。spec→门→码：先定「必须是 primary」，非反向抄她像素；rect/半径由 button-family 族强断言 + 像素证据守。"
+    },
+    {
+      "key": "people.addBtnPresent",
+      "stick": 11,
+      "screen": "team",
+      "selector": ".lite2-shell .lite-people-add",
+      "probe": "count",
+      "expected": "1",
+      "tolerance": "exact",
+      "note": "【rich-align/06·人员 CRUD 闸】团队目录页头右端「添加成员」入口恒 1（有 context 的团队屏）。结构护栏（seed 无关）；她方无此件，无可对齐的构建值——只断在/是 primary。"
+    },
+    {
+      "key": "people.addBtnPrimary",
+      "stick": 11,
+      "screen": "team",
+      "selector": ".lite2-shell .lite-people-add.lite-btn--primary",
+      "probe": "count",
+      "expected": "1",
+      "tolerance": "exact",
+      "note": "【rich-align/06·人员 CRUD 闸】「添加成员」挂 primary 家族类恰 1（主 CTA 语义）。spec→门→码：先定「必须是 primary」，非反向抄她像素；rect/半径由 button-family 族强断言 + 像素证据守。"
     }
   ]
 }

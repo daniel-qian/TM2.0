@@ -13,8 +13,8 @@ import {
   type ProjectView,
 } from './projectView'
 import type { LiteDetail } from './store'
-import type { LiteTeam } from './teamData'
-import type { LiveTeamPayload, ProjectPatchInput } from './transport'
+import type { LitePerson, LiteTeam } from './teamData'
+import type { LiveTeamPayload, PersonPatchInput, ProjectPatchInput } from './transport'
 
 // feat-024 · 薄只读详情浮层——ADR-0022 决策 2（v1 范围拍板）。
 // 点人卡/项目卡开 ~百行纯 live payload 浮层：名字/角色/owns/来源文件——零 fixtures，
@@ -63,8 +63,14 @@ export function DetailOverlay() {
   )
   const sourceFiles = team?.sourceFiles ?? []
 
+  // rich-align-0722/06：人查找并入停用列表（同项目并入归档），停用瞬间不闪 detailGone + 深链可开。
   const person =
-    detail?.kind === 'person' && team ? team.people.find((p) => p.id === detail.id) ?? null : null
+    detail?.kind === 'person' && team
+      ? team.people.find((p) => p.id === detail.id) ??
+        team.archivedPeople.find((p) => p.id === detail.id) ??
+        null
+      : null
+  const personArchived = !!(person && team?.archivedPeople.some((p) => p.id === person.id))
 
   // feat-055：项目详情改吃**原始 payload**（rawTeam），不再吃 team.projects。
   // 理由与项目屏同一条：teamData 当时的 `status ?? 'on-track'` / `ownerName ?? 'Unassigned'`
@@ -107,47 +113,7 @@ export function DetailOverlay() {
       </button>
 
       {person ? (
-        <>
-          <header className="lite-detail-head">
-            <InitialAvatar name={person.name} size={52} className="lite-detail-avatar" />
-            <div>
-              <p className="eyebrow">{t.lite2.detailPersonEyebrow}</p>
-              <h2>{person.name}</h2>
-              <p className="lite-detail-subtitle">
-                {[person.role, person.team].filter(Boolean).join(' · ')}
-              </p>
-            </div>
-          </header>
-
-          {person.tenure ? (
-            <section className="lite-detail-section">
-              <p className="eyebrow">{t.lite2.detailTenure}</p>
-              <p>{person.tenure}</p>
-            </section>
-          ) : null}
-
-          {person.owns && person.owns.length > 0 ? (
-            <section className="lite-detail-section">
-              <p className="eyebrow">{t.lite2.detailOwns}</p>
-              <ul>
-                {person.owns.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
-
-          {person.collaboration && person.collaboration.length > 0 ? (
-            <section className="lite-detail-section">
-              <p className="eyebrow">{t.lite2.detailCollab}</p>
-              <ul>
-                {person.collaboration.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
-        </>
+        <PersonDetailBody key={person.id} person={person} open={open} archived={personArchived} />
       ) : null}
 
       {project ? (
@@ -518,6 +484,247 @@ function ProjectDetailBody({
               disabled={busy}
             >
               {l.detailArchive}
+            </button>
+          </>
+        )}
+      </div>
+      {error ? (
+        <p className="lite-project-form-error" aria-live="polite">
+          {l.projectsWriteFailed}
+          {'：'}
+          {error}
+        </p>
+      ) : null}
+    </>
+  )
+}
+
+// rich-align-0722/06：详情浮层人员体——读态（逐字段「手动编辑」出处角标）/ 编辑态（**定性字段**原地
+// 变输入框：姓名/职位/组别/司龄/负责，🔴 无人身数字位）/ 页脚操作（编辑 · 停用 / 或恢复）。
+// 🔴 停用=软删可逆：停用成功即 closeDetail（卡去团队目录页尾折叠区）；停用态（深链/过渡）页脚给恢复。
+// 🔴 两世界零数字：手编人无 self_report（禁经手编通道），故本体无任何自述数字面——开关开也 absent。
+function PersonDetailBody({
+  person,
+  open,
+  archived,
+}: {
+  person: LitePerson
+  open: boolean
+  archived: boolean
+}) {
+  const { t } = useDict()
+  const l = t.lite2
+  const patchPerson = useLite((s) => s.patchPerson)
+  const archivePerson = useLite((s) => s.archivePerson)
+  const restorePerson = useLite((s) => s.restorePerson)
+  const closeDetail = useLite((s) => s.closeDetail)
+  const busy = useLite((s) => s.projectWriteBusy)
+  const error = useLite((s) => s.projectWriteError)
+  const resetProjectWrite = useLite((s) => s.resetProjectWrite)
+
+  const [editing, setEditing] = useState(false)
+  const [dName, setDName] = useState(person.name)
+  const [dRole, setDRole] = useState(person.role)
+  const [dTeam, setDTeam] = useState(person.team ?? '')
+  const [dTenure, setDTenure] = useState(person.tenure ?? '')
+  const [dOwns, setDOwns] = useState((person.owns ?? []).join('、'))
+
+  useEffect(() => {
+    if (!open) setEditing(false)
+  }, [open])
+
+  const startEdit = () => {
+    resetProjectWrite()
+    setDName(person.name)
+    setDRole(person.role)
+    setDTeam(person.team ?? '')
+    setDTenure(person.tenure ?? '')
+    setDOwns((person.owns ?? []).join('、'))
+    setEditing(true)
+  }
+
+  const cancelEdit = () => {
+    resetProjectWrite()
+    setEditing(false)
+  }
+
+  const save = async (e: FormEvent) => {
+    e.preventDefault()
+    if (busy) return
+    const patch: PersonPatchInput = {}
+    const nn = dName.trim()
+    if (nn && nn !== person.name) patch.name = nn
+    const diff = (draft: string, orig: string | null | undefined): string | null | undefined => {
+      const d = draft.trim()
+      const o = orig ?? ''
+      if (d === o) return undefined
+      return d === '' ? null : d
+    }
+    const role = diff(dRole, person.role)
+    if (role !== undefined) patch.role = role
+    const team = diff(dTeam, person.team)
+    if (team !== undefined) patch.team = team
+    const tenure = diff(dTenure, person.tenure)
+    if (tenure !== undefined) patch.tenure = tenure
+    // owns：顺序敏感的 list 比较；清空→null（absent）。
+    const ownsList = dOwns.split(/[,，、]/).map((s) => s.trim()).filter(Boolean)
+    const origOwns = (person.owns ?? []).map((s) => s.trim()).filter(Boolean)
+    if (JSON.stringify(ownsList) !== JSON.stringify(origOwns)) {
+      patch.owns = ownsList.length ? ownsList : null
+    }
+    if (Object.keys(patch).length === 0) {
+      setEditing(false)
+      return
+    }
+    const ok = await patchPerson(person.id, patch)
+    if (ok) setEditing(false)
+  }
+
+  const deactivate = async () => {
+    if (busy) return
+    const ok = await archivePerson(person.id)
+    if (ok) closeDetail()
+  }
+
+  const restore = async () => {
+    if (busy) return
+    await restorePerson(person.id)
+  }
+
+  const canSave = dName.trim().length > 0 && !busy
+  const isEditing = editing && open && !archived
+
+  const manual = (field: string) =>
+    person.provenance?.[field]?.origin === 'manual' ? (
+      <span className="lite-detail-provenance">{l.projectsManualBadge}</span>
+    ) : null
+
+  if (isEditing) {
+    return (
+      <form className="lite-detail-edit" onSubmit={save} aria-label={l.peopleEditFormAria}>
+        <header className="lite-detail-head">
+          <InitialAvatar name={dName || person.name} size={52} className="lite-detail-avatar" />
+          <div>
+            <p className="eyebrow">{l.detailPersonEyebrow}</p>
+            <label className="lite-detail-edit-field">
+              <span className="lite-detail-edit-label">{l.peopleFieldName}</span>
+              <input
+                className="lite-detail-edit-input"
+                value={dName}
+                onChange={(e) => setDName(e.target.value)}
+                maxLength={80}
+                aria-label={l.peopleFieldName}
+                autoFocus
+                required
+              />
+            </label>
+          </div>
+        </header>
+        <div className="lite-detail-edit-grid">
+          <label className="lite-detail-edit-field">
+            <span className="lite-detail-edit-label">{l.peopleFieldRole}</span>
+            <input className="lite-detail-edit-input" value={dRole} onChange={(e) => setDRole(e.target.value)} maxLength={120} aria-label={l.peopleFieldRole} />
+          </label>
+          <label className="lite-detail-edit-field">
+            <span className="lite-detail-edit-label">{l.peopleFieldTeam}</span>
+            <input className="lite-detail-edit-input" value={dTeam} onChange={(e) => setDTeam(e.target.value)} maxLength={120} aria-label={l.peopleFieldTeam} />
+          </label>
+          <label className="lite-detail-edit-field">
+            <span className="lite-detail-edit-label">{l.detailTenure}</span>
+            <input className="lite-detail-edit-input" value={dTenure} onChange={(e) => setDTenure(e.target.value)} maxLength={120} aria-label={l.detailTenure} />
+          </label>
+          <label className="lite-detail-edit-field lite-detail-edit-field--wide">
+            <span className="lite-detail-edit-label">{l.detailOwns}</span>
+            <input className="lite-detail-edit-input" value={dOwns} onChange={(e) => setDOwns(e.target.value)} maxLength={400} placeholder={l.peopleOwnsHint} aria-label={l.detailOwns} />
+          </label>
+        </div>
+        {error ? (
+          <p className="lite-project-form-error" aria-live="polite">
+            {l.projectsWriteFailed}
+            {'：'}
+            {error}
+          </p>
+        ) : null}
+        <div className="lite-detail-actions">
+          <button type="submit" className="lite-btn lite-btn--primary" disabled={!canSave}>
+            {l.detailSave}
+          </button>
+          <button type="button" className="lite-btn lite-btn--ghost" onClick={cancelEdit} disabled={busy}>
+            {l.detailCancel}
+          </button>
+        </div>
+      </form>
+    )
+  }
+
+  // ── 读态 ──
+  return (
+    <>
+      <header className="lite-detail-head">
+        <InitialAvatar name={person.name} size={52} className="lite-detail-avatar" />
+        <div>
+          <p className="eyebrow">{l.detailPersonEyebrow}</p>
+          <h2>
+            {person.name}
+            {manual('name')}
+          </h2>
+          <p className="lite-detail-subtitle">
+            {[person.role, person.team].filter(Boolean).join(' · ')}
+            {manual('role')}
+            {manual('team')}
+          </p>
+          {archived ? <p className="lite-detail-archived-note">{l.peopleArchivedNote}</p> : null}
+        </div>
+      </header>
+
+      {person.tenure ? (
+        <section className="lite-detail-section">
+          <p className="eyebrow">
+            {l.detailTenure}
+            {manual('tenure')}
+          </p>
+          <p>{person.tenure}</p>
+        </section>
+      ) : null}
+
+      {person.owns && person.owns.length > 0 ? (
+        <section className="lite-detail-section">
+          <p className="eyebrow">
+            {l.detailOwns}
+            {manual('owns')}
+          </p>
+          <ul>
+            {person.owns.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {person.collaboration && person.collaboration.length > 0 ? (
+        <section className="lite-detail-section">
+          <p className="eyebrow">{l.detailCollab}</p>
+          <ul>
+            {person.collaboration.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {/* rich-align-0722/06：页脚操作区。活动成员→编辑·停用（软删可逆）；停用成员→恢复回目录。 */}
+      <div className="lite-detail-actions lite-detail-actions--footer">
+        {archived ? (
+          <button type="button" className="lite-btn lite-btn--soft lite-detail-restore" onClick={restore} disabled={busy}>
+            {l.projectsArchivedRestore}
+          </button>
+        ) : (
+          <>
+            <button type="button" className="lite-btn lite-btn--soft" onClick={startEdit} disabled={busy}>
+              {l.detailEdit}
+            </button>
+            <button type="button" className="lite-btn lite-btn--ghost lite-detail-archive" onClick={deactivate} disabled={busy}>
+              {l.peopleDeactivate}
             </button>
           </>
         )}

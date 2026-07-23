@@ -8,6 +8,7 @@
 //   ③ 聚合数字 R2：真算或不显示，绝不编——briefing.metrics 直接来自 ingestion（人数/项目数真数）。
 
 import type {
+  LiveFieldProvenance,
   LivePersonCard,
   LivePersonSelfReport,
   LiveProjectCard,
@@ -37,6 +38,9 @@ export interface LitePerson {
   // rich-align-0722/03 · 本人自述负载/情绪。**只在开关开且文档报了才有**（缺席=文档未提及，不编 0）。
   // 渲染层凭 caliber/source 出「《X》记录的本人自述」口径角标（data-metric-source），数字只在角标里出现。
   selfReport?: LivePersonSelfReport
+  // rich-align-0722/06 · 字段级出处 side-car（同项目）。用于人详情浮层逐字段「手动编辑」角标。
+  // 🔴 与人身数字开关无关（是「谁改的」不是「打了多少分」），两世界都保留。
+  provenance?: Record<string, LiveFieldProvenance>
 }
 
 export interface LiteProject {
@@ -130,6 +134,9 @@ export interface LiteTeam {
   // rich-align-0722/03 · 人身自述投影开关（后端 scoring_enabled）的壳内镜像。壳根据此挂
   // data-scoring-enabled 标记，AFK 门「读壳上开关标记」据此在两世界跑不同断言。缺席即 false。
   scoringEnabled: boolean
+  // rich-align-0722/06 · 停用（软删）的成员，投给团队目录页尾折叠区（灰化 + 恢复文字键）。
+  // 空即 []（后端 archived_people 缺键=没人停用）。同样过 stripPersonNumbers（灰化卡也守零数字红线）。
+  archivedPeople: LitePerson[]
 }
 
 // 🔴 红线运行时兜底：即便后端某天错吐了 moodPct/capacityPct/score/rank/rating/tier，
@@ -189,6 +196,27 @@ function liveRead(card: LivePersonCard): { read: string; ownsRead: string[]; ton
   return { read: '', ownsRead: [], tone: 'sage' }
 }
 
+// 一张（已过 stripPersonNumbers 的）人卡 → LitePerson。活动成员与停用成员共用一份映射（rich-align/06）。
+// 🔴 provenance 原样透传（stripPersonNumbers 放行本键）——人详情浮层逐字段「手动编辑」角标据此渲染。
+function toLitePerson(card: LivePersonCard): LitePerson {
+  const { read, ownsRead, tone } = liveRead(card)
+  return {
+    id: card.id,
+    name: card.name,
+    role: card.role ?? '',
+    team: card.team,
+    read,
+    ownsRead,
+    tone,
+    tenure: card.tenure,
+    owns: card.owns,
+    collaboration: card.collaboration,
+    // 剥离后仍在 = 开关开且文档报了。缺席即 undefined（渲染层据此整段收起，不显任何 0/空数字）。
+    selfReport: card.self_report,
+    provenance: card.provenance,
+  }
+}
+
 // 与 lite/lite2 各组件里同名 helper 同形（本仓一贯写法）。
 function fill(template: string, vars: Record<string, string>): string {
   return template.replace(/\{(\w+)\}/g, (_, k: string) => vars[k] ?? '')
@@ -229,25 +257,10 @@ function liveHandoffs(payload: LiveTeamPayload): LiteHandoff[] {
 export function liteTeamFromPayload(payload: LiveTeamPayload): LiteTeam {
   // rich-align-0722/03 · 双世界执法从这里起：开关态是 payload 顶层的 scoring_enabled（缺席即 false）。
   const scoringEnabled = payload.scoring_enabled === true
-  const cleanPeople = payload.people.map((c) => stripPersonNumbers(c, scoringEnabled))
-
-  const people: LitePerson[] = cleanPeople.map((card) => {
-    const { read, ownsRead, tone } = liveRead(card)
-    return {
-      id: card.id,
-      name: card.name,
-      role: card.role ?? '',
-      team: card.team,
-      read,
-      ownsRead,
-      tone,
-      tenure: card.tenure,
-      owns: card.owns,
-      collaboration: card.collaboration,
-      // 剥离后仍在 = 开关开且文档报了。缺席即 undefined（渲染层据此整段收起，不显任何 0/空数字）。
-      selfReport: card.self_report,
-    }
-  })
+  // 活动 + 停用成员共用「剥离→映射」链（两世界剥离一致；停用卡也守零数字红线）。
+  const toPerson = (c: LivePersonCard) => toLitePerson(stripPersonNumbers(c, scoringEnabled))
+  const people: LitePerson[] = payload.people.map(toPerson)
+  const archivedPeople: LitePerson[] = (payload.archived_people ?? []).map(toPerson)
 
   const projects: LiteProject[] = payload.projects.map((card: LiveProjectCard) => {
     // 🔴 「我没读到」和「客户说没有」是两件事。空串也算没读到（后端只在有值时才发这个键，
@@ -257,7 +270,7 @@ export function liteTeamFromPayload(payload: LiveTeamPayload): LiteTeam {
     // 认领顺序与 projectView.ts 同口径：文档写的名字 → ownerId 反查到的人 → 都没有就是没读到。
     const ownerNameRaw =
       card.ownerName?.trim() ||
-      cleanPeople.find((p) => p.id === card.ownerId)?.name?.trim() ||
+      people.find((p) => p.id === card.ownerId)?.name?.trim() ||
       undefined
     return {
       id: card.id,
@@ -290,6 +303,7 @@ export function liteTeamFromPayload(payload: LiveTeamPayload): LiteTeam {
       lookKind: readLookKind(b),
     },
     scoringEnabled,
+    archivedPeople,
   }
 }
 

@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type FormEvent } from 'react'
 import { useLite } from '../store'
+import type { PersonAddInput } from '../transport'
 import { useFlow, selectTriagePending, selectTriageHandled, selectTriageSetAside } from '../flowStore'
 import { draftFromHandoff } from '../draftLinks'
 import { useDraft } from '../draftStore'
@@ -323,6 +324,10 @@ export function TeamScreen() {
   const restoring = useLite((s) => s.restoring)
   const restoreError = useLite((s) => s.restoreError)
   const restoreSession = useLite((s) => s.restoreSession)
+  // rich-align-0722/06 · 人员手编 CRUD：有 context 才出「添加成员」入口（无 context=首访没上传→不出假按钮）。
+  const contextId = useLite((s) => s.contextId)
+  const resetProjectWrite = useLite((s) => s.resetProjectWrite)
+  const [showAddPerson, setShowAddPerson] = useState(false)
 
   const triageMarks = useFlow((s) => s.triageMarks)
   const markTriageDone = useFlow((s) => s.markTriageDone)
@@ -577,9 +582,27 @@ export function TeamScreen() {
           {team ? (
             <div className="home-lanes">
               <UploadPanel />
-              <div className="home-lanes-head">
+              <div className="home-lanes-head lite-team-head-row">
                 <p className="eyebrow">{t.lite2.peopleLane}</p>
+                {/* rich-align-0722/06：目录页头右端 primary「添加成员」→ 内联表单。只在有 context 时出。 */}
+                {contextId ? (
+                  <button
+                    type="button"
+                    className="lite-btn lite-btn--primary lite-people-add"
+                    onClick={() => {
+                      resetProjectWrite()
+                      setShowAddPerson((v) => !v)
+                    }}
+                    aria-expanded={showAddPerson}
+                  >
+                    {t.lite2.peopleAddCta}
+                  </button>
+                ) : null}
               </div>
+              {/* 内联添加成员表单（定性字段；🔴 无人身数字位——人身数字禁经手编通道，后端 422）。 */}
+              {showAddPerson && contextId ? (
+                <AddPersonForm onDone={() => setShowAddPerson(false)} />
+              ) : null}
               {/* rich-align-0722/04：目录形态（筛选 chip 行 + 3 列成员卡网格）取代原 feat-025 分组视图。
                   人卡 .home-person-card 零改（门相位 C/E 不受影响）；网格保留 .home-lane-people 类。 */}
               <TeamDirectory
@@ -587,6 +610,11 @@ export function TeamScreen() {
                 scoringEnabled={team.scoringEnabled}
                 onOpen={(id) => openDetail('person', id)}
               />
+
+              {/* rich-align-0722/06：停用（软删）折叠区——目录网格之后。有停用成员才出；灰化卡 + 恢复键。 */}
+              {team.archivedPeople.length > 0 ? (
+                <ArchivedPeopleDrawer people={team.archivedPeople} />
+              ) : null}
 
               <p className="eyebrow home-lane-label">{t.lite2.projectLane}</p>
               <div className="home-lane home-lane-projects" aria-label={t.lite2.projectLane}>
@@ -637,6 +665,124 @@ export function TeamScreen() {
       </div>
 
       <LiteComposer />
+    </section>
+  )
+}
+
+// rich-align-0722/06 · 目录页头内联「添加成员」表单。**只有定性字段**（姓名/职位/组别/司龄/负责）——
+// 🔴 人身数字（负载/情绪/自述）无输入位，后端 PersonIn extra=forbid + 值扫描双守（手填即 422）。
+// 复用项目表单的 .lite-project-form 样式族。姓名必填，其余不填即不发键（absent≠none）。
+function AddPersonForm({ onDone }: { onDone: () => void }) {
+  const { t } = useDict()
+  const l = t.lite2
+  const addPerson = useLite((s) => s.addPerson)
+  const busy = useLite((s) => s.projectWriteBusy)
+  const error = useLite((s) => s.projectWriteError)
+
+  const [name, setName] = useState('')
+  const [role, setRole] = useState('')
+  const [teamName, setTeamName] = useState('')
+  const [tenure, setTenure] = useState('')
+  const [owns, setOwns] = useState('')
+
+  const canSubmit = name.trim().length > 0 && !busy
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!canSubmit) return
+    const input: PersonAddInput = { name: name.trim() }
+    if (role.trim()) input.role = role.trim()
+    if (teamName.trim()) input.team = teamName.trim()
+    if (tenure.trim()) input.tenure = tenure.trim()
+    const ownsList = owns.split(/[,，、]/).map((s) => s.trim()).filter(Boolean)
+    if (ownsList.length) input.owns = ownsList
+    const ok = await addPerson(input)
+    if (ok) onDone()
+  }
+
+  return (
+    <form className="lite-project-form lite-people-form" onSubmit={submit} aria-label={l.peopleAddFormAria}>
+      <div className="lite-project-form-grid">
+        <label className="lite-project-form-field">
+          <span className="lite-project-form-label">{l.peopleFieldName}</span>
+          <input className="lite-project-form-input" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} aria-label={l.peopleFieldName} required />
+        </label>
+        <label className="lite-project-form-field">
+          <span className="lite-project-form-label">{l.peopleFieldRole}</span>
+          <input className="lite-project-form-input" value={role} onChange={(e) => setRole(e.target.value)} maxLength={120} aria-label={l.peopleFieldRole} />
+        </label>
+        <label className="lite-project-form-field">
+          <span className="lite-project-form-label">{l.peopleFieldTeam}</span>
+          <input className="lite-project-form-input" value={teamName} onChange={(e) => setTeamName(e.target.value)} maxLength={120} aria-label={l.peopleFieldTeam} />
+        </label>
+        <label className="lite-project-form-field">
+          <span className="lite-project-form-label">{l.detailTenure}</span>
+          <input className="lite-project-form-input" value={tenure} onChange={(e) => setTenure(e.target.value)} maxLength={120} aria-label={l.detailTenure} />
+        </label>
+        <label className="lite-project-form-field lite-project-form-field--wide">
+          <span className="lite-project-form-label">{l.detailOwns}</span>
+          <input className="lite-project-form-input" value={owns} onChange={(e) => setOwns(e.target.value)} maxLength={400} placeholder={l.peopleOwnsHint} aria-label={l.detailOwns} />
+        </label>
+      </div>
+      {error ? (
+        <p className="lite-project-form-error" aria-live="polite">
+          {l.projectsWriteFailed}
+          {'：'}
+          {error}
+        </p>
+      ) : null}
+      <div className="lite-project-form-actions">
+        <button type="submit" className="lite-btn lite-btn--primary" disabled={!canSubmit}>
+          {l.peopleAddSubmit}
+        </button>
+        <button type="button" className="lite-btn lite-btn--ghost" onClick={onDone} disabled={busy}>
+          {l.detailCancel}
+        </button>
+      </div>
+    </form>
+  )
+}
+
+// rich-align-0722/06 · 停用（软删）折叠区。默认折起（「已停用 N」按钮），展开见灰化人卡 + 恢复文字键。
+// 🔴 灰化卡是 div（不开详情浮层）——避免嵌套交互；恢复走卡内独立 ghost 文字键。零数字（灰化卡也守红线）。
+function ArchivedPeopleDrawer({ people }: { people: LitePerson[] }) {
+  const { t } = useDict()
+  const l = t.lite2
+  const restorePerson = useLite((s) => s.restorePerson)
+  const busy = useLite((s) => s.projectWriteBusy)
+  const [open, setOpen] = useState(false)
+
+  return (
+    <section className="lite-projects-archived lite-people-archived" aria-label={l.peopleArchivedAria}>
+      <button
+        type="button"
+        className="lite-btn lite-btn--ghost lite-projects-archived-toggle"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+      >
+        {fill(l.peopleArchivedTitle, { count: people.length })}
+      </button>
+      {open ? (
+        <div className="lite-projects-archived-grid lite-people-archived-grid">
+          {people.map((person) => (
+            <div key={person.id} className="home-person-card is-archived lite-people-archived-card" data-person-id={person.id}>
+              <InitialAvatar name={person.name} size={40} className="home-person-avatar" />
+              <span className="home-person-body">
+                <h3>{person.name}</h3>
+                {person.role ? <p className="home-person-role">{person.role}</p> : null}
+              </span>
+              <button
+                type="button"
+                className="lite-btn lite-btn--ghost lite-project-restore"
+                onClick={() => void restorePerson(person.id)}
+                disabled={busy}
+              >
+                {l.projectsArchivedRestore}
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : null}
     </section>
   )
 }

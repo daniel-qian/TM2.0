@@ -98,6 +98,9 @@ export interface LiveTeamPayload {
   // 🔴 缺席 = 没有归档项目（absent≠none：后端 archived_project_cards 为空时整键不发，仿
   // decisions/scoring_enabled 的 additive-key 语义）。前端 `?? []` 收敛，绝不把缺席当成异常。
   archived_projects?: LiveProjectCard[]
+  // rich-align-0722 · issue 06：停用（软删）的成员卡，投给团队目录页尾折叠区（灰化 + 恢复文字键）。
+  // 同 archived_projects 的 absent≠none 语义（空即缺席）。
+  archived_people?: LivePersonCard[]
 }
 
 // input-side-0721 · 3A：GET /demo/status 的能力探测契约（无鉴权、无副作用）。
@@ -142,6 +145,10 @@ export interface LivePersonCard {
   // rich-align-0722/03：本人自述负载/情绪。**仅当 payload.scoring_enabled===true 时**后端才投影它；
   // 运行时剥离在开关关时会连它一并丢弃（双世界执法）。
   self_report?: LivePersonSelfReport
+  // rich-align-0722/06：字段级出处 side-car（同项目卡）。key=定性字段名（name/role/team/tenure/owns/
+  // collaboration），value=出处。缺席=纯文档抽取卡。🔴 self_report **不在** provenance 里（禁经手编通道）。
+  // stripPersonNumbers 放行本键（是对象非裸数字、非血条键），两世界都留——出处角标与人身数字开关无关。
+  provenance?: Record<string, LiveFieldProvenance>
 }
 
 // rich-align-0722 · issue 01：项目级风险（PRD A1）。这是**项目**属性（进度/范围/资源风险），
@@ -227,6 +234,31 @@ export type ProjectPatchInput = {
 export interface ProjectWriteResult {
   context_id: string
   project: LiveProjectCard
+}
+
+// ── rich-align-0722 · issue 06：人员手编 CRUD 写端点契约（复用 05a 骨架；🔴 写侧红线 B3）──────────────
+// 端点：POST /team/{ctx}/people · PATCH …/{id} · POST …/{id}/archive · POST …/{id}/restore。
+// 🔴 只发**定性**字段——后端 PersonIn extra='forbid' 把 load/mood/self_report/score/负载/情绪…任何人身
+// 数字键挡成 422（人身数字只能来自文档自述通道，经理手填=替人打分）。前端类型层也只留定性字段位。
+export interface PersonAddInput {
+  name: string
+  role?: string
+  team?: string
+  tenure?: string
+  owns?: string[]
+  collaboration?: string[]
+}
+export type PersonPatchInput = {
+  name?: string | null
+  role?: string | null
+  team?: string | null
+  tenure?: string | null
+  owns?: string[] | null
+  collaboration?: string[] | null
+}
+export interface PersonWriteResult {
+  context_id: string
+  person: LivePersonCard
 }
 
 // feat-056 决策定级契约。口径真源在后端 `eval-harness/avery/decision_rules.py`，
@@ -459,6 +491,16 @@ export interface LiveTransport {
   ) => Promise<ProjectWriteResult>
   archiveProject?: (contextId: string, projectId: string) => Promise<ProjectWriteResult>
   restoreProject?: (contextId: string, projectId: string) => Promise<ProjectWriteResult>
+
+  // ── 人员手编 CRUD（rich-align-0722 · issue 06）。同为可选（stub 无）；store 判空降级。 ────────
+  addPerson?: (contextId: string, input: PersonAddInput) => Promise<PersonWriteResult>
+  patchPerson?: (
+    contextId: string,
+    personId: string,
+    patch: PersonPatchInput,
+  ) => Promise<PersonWriteResult>
+  archivePerson?: (contextId: string, personId: string) => Promise<PersonWriteResult>
+  restorePerson?: (contextId: string, personId: string) => Promise<PersonWriteResult>
 }
 
 // ── 账号契约（feat-053；后端 service/auth_api.py）────────────────────────────────────────
@@ -878,6 +920,55 @@ export function createHttpTransport(base: string = apiBase()): LiveTransport {
       )
       if (!res.ok) throw transportError('project restore', res)
       return (await res.json()) as ProjectWriteResult
+    },
+
+    // ── 人员手编 CRUD（rich-align-0722 · issue 06；service/ingest_api.py people 写端点）──────────
+    async addPerson(contextId, input) {
+      const res = await send(
+        'person add',
+        `${base}/team/${encodeURIComponent(contextId)}/people`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...authHeader(contextId) },
+          body: JSON.stringify(input),
+        },
+      )
+      if (!res.ok) throw transportError('person add', res)
+      return (await res.json()) as PersonWriteResult
+    },
+
+    async patchPerson(contextId, personId, patch) {
+      const res = await send(
+        'person patch',
+        `${base}/team/${encodeURIComponent(contextId)}/people/${encodeURIComponent(personId)}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', ...authHeader(contextId) },
+          body: JSON.stringify(patch),
+        },
+      )
+      if (!res.ok) throw transportError('person patch', res)
+      return (await res.json()) as PersonWriteResult
+    },
+
+    async archivePerson(contextId, personId) {
+      const res = await send(
+        'person archive',
+        `${base}/team/${encodeURIComponent(contextId)}/people/${encodeURIComponent(personId)}/archive`,
+        { method: 'POST', headers: authHeader(contextId) },
+      )
+      if (!res.ok) throw transportError('person archive', res)
+      return (await res.json()) as PersonWriteResult
+    },
+
+    async restorePerson(contextId, personId) {
+      const res = await send(
+        'person restore',
+        `${base}/team/${encodeURIComponent(contextId)}/people/${encodeURIComponent(personId)}/restore`,
+        { method: 'POST', headers: authHeader(contextId) },
+      )
+      if (!res.ok) throw transportError('person restore', res)
+      return (await res.json()) as PersonWriteResult
     },
 
     // ── Ask（feat-034；阶段 C 端点已落地）────────────────────────────────────────────────

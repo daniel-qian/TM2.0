@@ -213,6 +213,10 @@ def _team_payload(ctx: CompanyContext) -> dict:
     archived = ctx.archived_project_cards()
     if archived:
         payload["archived_projects"] = archived
+    # rich-align-0722/06 · 停用（软删）的成员，投给团队目录页尾折叠区。空即缺席（absent≠none）。
+    archived_ppl = ctx.archived_people_cards()
+    if archived_ppl:
+        payload["archived_people"] = archived_ppl
     return payload
 
 
@@ -540,6 +544,113 @@ def team_project_restore(context_id: str, project_id: str,
     except KeyError:
         raise _project_write_404()
     return {"context_id": context_id, "project": CompanyContext._one_project_card(pr)}
+
+
+# ── rich-align-0722/06 · 真 CRUD·人员（手编赢 + 逐字段出处 ADR-0028；写侧红线 B3）─────────────────────
+# 端点/鉴权/404/422/软删语义同 05a 项目（复用 ProjectWriteMixin 的 person 孪生方法）。
+# 🔴 model 只有**定性**字段 + extra='forbid'：POST/PATCH 带 load/mood/self_report/score/负载/情绪…任何
+# 结构外键 → Pydantic 直接 422（人身数字只能来自文档自述通道，经理手填=替人打分）。夹带进定性字段的
+# 评分文本（role='绩效9分'）由 registry._redline_person_write 值扫描再补一道→ValueError→422。
+# self_report 结构上不可经此通道产生：模型无该字段，add/patch 只碰定性字段，投影层照旧随开关。
+class PersonIn(BaseModel):
+    """POST body — 手动添加的成员，**定性字段**。name 必填；其余可选（absent≠none）。"""
+    model_config = {"extra": "forbid"}
+    name: str = Field(..., min_length=1, max_length=80)
+    role: str = Field("", max_length=120)
+    team: str = Field("", max_length=120)
+    tenure: str = Field("", max_length=120)
+    owns: list[str] = Field(default_factory=list)
+    collaboration: list[str] = Field(default_factory=list)
+
+
+class PersonPatch(BaseModel):
+    """PATCH body — 全字段可选（发来的键才动，含显式 null=清空→absent）。extra='forbid' 守人身禁键。"""
+    model_config = {"extra": "forbid"}
+    name: str | None = Field(None, max_length=80)
+    role: str | None = Field(None, max_length=120)
+    team: str | None = Field(None, max_length=120)
+    tenure: str | None = Field(None, max_length=120)
+    owns: list[str] | None = None
+    collaboration: list[str] | None = None
+
+
+def _person_write_404() -> HTTPException:
+    # 同 authorize_context 姿态：授权 context 内的未知 person 也只回同体 404（无枚举 oracle）。
+    return HTTPException(status_code=404, detail="unknown person")
+
+
+def _one_person_card_now(p) -> dict:
+    # 写回执卡随开关投 self_report（手编人零 self_report，故实际恒定性）；provenance 照发。
+    from avery.scoring_policy import person_scoring_allowed
+    return CompanyContext._one_person_card(p, person_scoring_allowed())
+
+
+@router.post("/team/{context_id}/people")
+def team_person_add(context_id: str, body: PersonIn,
+                    x_avery_token: str | None = Header(None),
+                    authorization: str | None = Header(None),
+                    x_avery_account: str | None = Header(None)) -> dict:
+    """手动添加一名成员（定性）→ 卡即时入目录网格，逐字段出处标注「手动编辑」。"""
+    reg = active_registry()
+    authorize_context(reg, context_id, extract_owner_token(x_avery_token, authorization),
+                      account.resolve_account(x_avery_account))
+    try:
+        p = reg.add_person(context_id, body.model_dump())
+    except KeyError:
+        raise _person_write_404()
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail={"error": "person rejected", "reason": str(e)})
+    return {"context_id": context_id, "person": _one_person_card_now(p)}
+
+
+@router.patch("/team/{context_id}/people/{person_id}")
+def team_person_patch(context_id: str, person_id: str, body: PersonPatch,
+                      x_avery_token: str | None = Header(None),
+                      authorization: str | None = Header(None),
+                      x_avery_account: str | None = Header(None)) -> dict:
+    """编辑既有成员的定性字段（手编赢，origin=manual）。只应用发来的键（exclude_unset）。"""
+    reg = active_registry()
+    authorize_context(reg, context_id, extract_owner_token(x_avery_token, authorization),
+                      account.resolve_account(x_avery_account))
+    try:
+        p = reg.patch_person(context_id, person_id, body.model_dump(exclude_unset=True))
+    except KeyError:
+        raise _person_write_404()
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail={"error": "person rejected", "reason": str(e)})
+    return {"context_id": context_id, "person": _one_person_card_now(p)}
+
+
+@router.post("/team/{context_id}/people/{person_id}/archive")
+def team_person_archive(context_id: str, person_id: str,
+                        x_avery_token: str | None = Header(None),
+                        authorization: str | None = Header(None),
+                        x_avery_account: str | None = Header(None)) -> dict:
+    """停用 = 软删标记（可逆，绝不物理删除）→ 卡入页尾折叠区。"""
+    reg = active_registry()
+    authorize_context(reg, context_id, extract_owner_token(x_avery_token, authorization),
+                      account.resolve_account(x_avery_account))
+    try:
+        p = reg.archive_person(context_id, person_id)
+    except KeyError:
+        raise _person_write_404()
+    return {"context_id": context_id, "person": _one_person_card_now(p)}
+
+
+@router.post("/team/{context_id}/people/{person_id}/restore")
+def team_person_restore(context_id: str, person_id: str,
+                        x_avery_token: str | None = Header(None),
+                        authorization: str | None = Header(None),
+                        x_avery_account: str | None = Header(None)) -> dict:
+    """恢复 = 撤销停用标记 → 卡回目录网格。"""
+    reg = active_registry()
+    authorize_context(reg, context_id, extract_owner_token(x_avery_token, authorization),
+                      account.resolve_account(x_avery_account))
+    try:
+        p = reg.restore_person(context_id, person_id)
+    except KeyError:
+        raise _person_write_404()
+    return {"context_id": context_id, "person": _one_person_card_now(p)}
 
 
 @router.get("/team/{context_id}/files")

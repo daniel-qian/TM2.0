@@ -1012,6 +1012,19 @@ export const en = {
     detailSave: 'Save',
     detailCancel: 'Cancel',
     detailArchive: 'Archive',
+    // rich-align-0722/06 · 人员手编 CRUD（add/edit/deactivate/restore + 逐字段出处；🔴 人身数字禁键）。
+    peopleAddCta: 'Add a teammate',
+    peopleAddSubmit: 'Add',
+    peopleAddFormAria: 'Add a teammate',
+    peopleEditFormAria: 'Edit teammate',
+    peopleFieldName: 'Name',
+    peopleFieldRole: 'Role',
+    peopleFieldTeam: 'Team',
+    peopleOwnsHint: 'comma-separated',
+    peopleDeactivate: 'Deactivate',
+    peopleArchivedTitle: 'Deactivated ({count})',
+    peopleArchivedAria: 'Deactivated teammates',
+    peopleArchivedNote: 'This teammate is deactivated.',
     // rich-align-0722/03 · 人员自述负载/情绪（人身数字开关口径）。ONLY rendered when the operator
     // has unblocked person scoring; each metric carries a system-self-attesting provenance caption
     // (never a bare assertion of authorship). Mood labels ARE the four-word vocabulary the gate scans.

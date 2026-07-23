@@ -26,6 +26,7 @@ from pathlib import Path
 
 from .extract import (
     ExtractionResult,
+    PersonEntity,
     ProjectEntity,
     ProjectMilestone,
     ProjectRisk,
@@ -90,6 +91,9 @@ def new_note_id() -> str:
 # provenance side-car source 对手编字段一律这句系统自证式短语（值本身仍活在实体字段，不双存）。
 MANUAL_SOURCE = "手动编辑"
 _PROJECT_STR_FIELDS = ("title", "ownerName", "status", "dueDate", "summary")
+# rich-align-0722/06 · 人员手编 CRUD。🔴 只有**定性**字段可编辑——人身数字（负载/情绪/自述槽）
+# 结构上不在这里，写侧红线（_redline_person_write + PersonIn extra=forbid）把带禁键的写请求挡在门外。
+_PERSON_STR_FIELDS = ("name", "role", "team", "tenure")
 
 
 def _apply_project_fields(pr: ProjectEntity, fields: dict) -> set:
@@ -133,10 +137,41 @@ def _apply_project_fields(pr: ProjectEntity, fields: dict) -> set:
     return applied
 
 
-def _mark_manual(pr: ProjectEntity, field_names) -> None:
+def _mark_manual(pr, field_names) -> None:
+    # 通用出处戳（ProjectEntity / PersonEntity 皆有 .provenance dict）——手编字段一律
+    # origin='manual' + 系统自证式 source（'手动编辑'）。
     now = _now_iso()
     for k in field_names:
         pr.provenance[k] = {"origin": "manual", "source": MANUAL_SOURCE, "updated_at": now}
+
+
+def _apply_person_fields(p, fields: dict) -> set:
+    """把已 Pydantic 校验的**定性**字段 dict 应用到 PersonEntity；返回出现过的字段名集合（供置 manual 出处）。
+    absent≠none：显式传 None 的字段=清空（str→''/list→空）。🔴 不碰 self_report——人身数字禁经手编通道，
+    写侧红线（_redline_person_write + PersonIn extra=forbid）另守。"""
+    applied: set = set()
+    for k in _PERSON_STR_FIELDS:
+        if k in fields:
+            v = fields[k]
+            setattr(p, k, v.strip() if isinstance(v, str) else ("" if v is None else str(v)))
+            applied.add(k)
+    for k in ("owns", "collaboration"):
+        if k in fields:
+            setattr(p, k, [str(x).strip() for x in (fields[k] or []) if str(x).strip()])
+            applied.add(k)
+    return applied
+
+
+def _redline_person_write(p) -> None:
+    """🔴 写侧红线（06·B3）：定性字段里夹带评分/排名/人身数字（role='绩效9分'、tenure='KPI 95'…）
+    → ValueError → 端点 422。复用抽取红线的**值扫描**（redline_extract._scan_person_value，EN+ZH），
+    不新增/削弱任何红线机制。人身禁键（负载/情绪/自述槽）由 PersonIn(extra='forbid') 结构上挡在门外；
+    这里守的是「把数字藏进定性字段」。🔴 **不看开关**——经理手填他人分数=替人打分，恒禁（开关只管
+    文档自述通道的投影，不解禁手填）。"""
+    from . import redline_extract
+    violations = redline_extract._scan_person_value(p)
+    if violations:
+        raise ValueError("；".join(v.detail for v in violations))
 
 
 class ProjectWriteMixin:
@@ -175,6 +210,33 @@ class ProjectWriteMixin:
         pr = ctx.set_project_archived(project_id, False)
         self.put(ctx)
         return pr
+
+    # rich-align-0722/06 · 人员手编 CRUD——同一 get→mutate→put 骨架（05a 先例直接复用）。
+    # 未知 context_id → KeyError；未知 person_id → CompanyContext 抛 KeyError；写侧红线 ValueError
+    # （夹带人身数字）——端点分别转 404 / 422。停用=软删可逆，本 mixin 无物理删除路径。
+    def add_person(self, context_id: str, fields: dict):
+        ctx = self._require_ctx(context_id)
+        p = ctx.add_manual_person(fields)
+        self.put(ctx)
+        return p
+
+    def patch_person(self, context_id: str, person_id: str, fields: dict):
+        ctx = self._require_ctx(context_id)
+        p = ctx.patch_manual_person(person_id, fields)
+        self.put(ctx)
+        return p
+
+    def archive_person(self, context_id: str, person_id: str):
+        ctx = self._require_ctx(context_id)
+        p = ctx.set_person_archived(person_id, True)
+        self.put(ctx)
+        return p
+
+    def restore_person(self, context_id: str, person_id: str):
+        ctx = self._require_ctx(context_id)
+        p = ctx.set_person_archived(person_id, False)
+        self.put(ctx)
+        return p
 
 
 def gate_note_red_line(text: str, source_excerpt: str = "") -> None:
@@ -250,36 +312,55 @@ class CompanyContext:
         DELIBERATELY still absent in BOTH worlds: moodPct/capacityPct/score/rank/tier as free keys."""
         from avery.scoring_policy import person_scoring_allowed
         allow_scoring = person_scoring_allowed()
-        cards = []
-        for p in self.extraction.people:
-            card = {"id": p.id, "name": p.name, "role": p.role}
-            if p.team:
-                card["team"] = p.team
-            if p.tenure:
-                card["tenure"] = p.tenure
-            if p.owns:
-                card["owns"] = p.owns
-            if p.collaboration:
-                card["collaboration"] = p.collaboration
-            # rich-align-0722/03 — self-reported load/mood, ONLY when the switch is on; caliber+source
-            # travel with each metric so the render is forced to carry provenance (data-metric-source).
-            if allow_scoring and p.self_report:
-                sr = {}
-                if p.self_report.load:
-                    sr["load"] = {"value": p.self_report.load.value,
-                                  "caliber": p.self_report.load.caliber,
-                                  "source": p.self_report.load.source}
-                if p.self_report.mood:
-                    mood = {"value": p.self_report.mood.value,
-                            "caliber": p.self_report.mood.caliber,
-                            "source": p.self_report.mood.source}
-                    if p.self_report.mood.valueRaw:      # out-of-vocab: echo the doc's own word
-                        mood["valueRaw"] = p.self_report.mood.valueRaw
-                    sr["mood"] = mood
-                if sr:
-                    card["self_report"] = sr
-            cards.append(card)
-        return cards
+        # rich-align-0722/06: 停用（软删）的人 EXCLUDED here — 走 archived_people_cards() 投给页尾折叠区。
+        return [self._one_person_card(p, allow_scoring) for p in self.extraction.people
+                if not getattr(p, "archived", False)]
+
+    @staticmethod
+    def _one_person_card(p, allow_scoring: bool) -> dict:
+        """Project ONE PersonEntity onto the LivePersonCard shape — QUALITATIVE by default.
+        rich-align-0722/03: self_report projected ONLY when allow_scoring (caliber+source travel with it).
+        rich-align-0722/06: provenance side-car passed through (缺就不发键；手编字段带 origin='manual')."""
+        card = {"id": p.id, "name": p.name, "role": p.role}
+        if p.team:
+            card["team"] = p.team
+        if p.tenure:
+            card["tenure"] = p.tenure
+        if p.owns:
+            card["owns"] = p.owns
+        if p.collaboration:
+            card["collaboration"] = p.collaboration
+        # rich-align-0722/03 — self-reported load/mood, ONLY when the switch is on; caliber+source
+        # travel with each metric so the render is forced to carry provenance (data-metric-source).
+        # 🔴 A manually-added person carries NO self_report (禁经手编通道) → this block is inert for them.
+        if allow_scoring and p.self_report:
+            sr = {}
+            if p.self_report.load:
+                sr["load"] = {"value": p.self_report.load.value,
+                              "caliber": p.self_report.load.caliber,
+                              "source": p.self_report.load.source}
+            if p.self_report.mood:
+                mood = {"value": p.self_report.mood.value,
+                        "caliber": p.self_report.mood.caliber,
+                        "source": p.self_report.mood.source}
+                if p.self_report.mood.valueRaw:      # out-of-vocab: echo the doc's own word
+                    mood["valueRaw"] = p.self_report.mood.valueRaw
+                sr["mood"] = mood
+            if sr:
+                card["self_report"] = sr
+        # rich-align-0722/06: 字段级出处（ADR-0028）。缺就不发键（absent≠none）；手编字段带
+        # origin='manual'/source='手动编辑'，前端据此渲染逐字段「手动编辑」出处角标。
+        if getattr(p, "provenance", None):
+            card["provenance"] = dict(p.provenance)
+        return card
+
+    def archived_people_cards(self) -> list[dict]:
+        """rich-align-0722/06: 停用（软删）的人员卡，投给页尾折叠区（可恢复）。同卡形；前端灰化 + 恢复
+        文字键。缺席=没人停用（payload 键在空时省略，absent≠none）。self_report 仍随开关（停用不改这条）。"""
+        from avery.scoring_policy import person_scoring_allowed
+        allow_scoring = person_scoring_allowed()
+        return [self._one_person_card(p, allow_scoring) for p in self.extraction.people
+                if getattr(p, "archived", False)]
 
     @staticmethod
     def _one_project_card(pr) -> dict:
@@ -362,6 +443,43 @@ class CompanyContext:
         pr = self._find_project(project_id)
         pr.archived = bool(archived)
         return pr
+
+    # --- rich-align-0722/06 · 人员手编 CRUD 的实体级 mutation（provenance side-car + 写侧红线）--------
+    def _find_person(self, person_id: str) -> "PersonEntity":
+        for p in self.extraction.people:
+            if p.id == person_id:
+                return p
+        raise KeyError(person_id)
+
+    def add_manual_person(self, fields: dict) -> "PersonEntity":
+        """手动添加一名成员：新建**定性**实体 + 每个提供字段置 origin='manual'（name 恒 manual，手加卡）。
+        🔴 写侧红线：定性字段夹带评分/人身数字 → ValueError → 422（手填即打分，恒禁）。"""
+        pid = "um-" + uuid.uuid4().hex[:8]
+        p = PersonEntity(id=pid, name="")
+        applied = _apply_person_fields(p, fields)
+        _redline_person_write(p)
+        _mark_manual(p, applied | {"name"})
+        self.extraction.people.append(p)
+        return p
+
+    def patch_manual_person(self, person_id: str, fields: dict) -> "PersonEntity":
+        """编辑既有成员的定性字段（手编赢，origin='manual'）。未知 id → KeyError；夹带人身数字 → ValueError。
+        🔴 先在**副本**上试应用 + 红线，通过后才落到真实体——内存 registry 是活引用，直接改再红线失败
+        会把实体留在半改（已污染）状态，等于坏值落了库。"""
+        import copy
+        p = self._find_person(person_id)
+        trial = copy.deepcopy(p)
+        applied = _apply_person_fields(trial, fields)
+        _redline_person_write(trial)   # 夹带评分/人身数字 → ValueError（此刻真实体一字未动）
+        _apply_person_fields(p, fields)  # 红线通过 → 落真实体（同一批字段）
+        _mark_manual(p, applied)
+        return p
+
+    def set_person_archived(self, person_id: str, archived: bool) -> "PersonEntity":
+        """停用 / 恢复（可逆，绝不物理删除）。未知 id → KeyError。"""
+        p = self._find_person(person_id)
+        p.archived = bool(archived)
+        return p
 
     def signal_cards(self) -> list[dict]:
         """Doc-derived signals. Person-directed ones stay at situation (gated upstream)."""
