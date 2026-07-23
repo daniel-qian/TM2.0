@@ -52,8 +52,8 @@ from .extract import (
 )
 from .redline_extract import validate_extraction
 from .registry import (
-    CompanyContext, CompanyNote, SourceDocument, data_root, gate_note_red_line, materialize_memory,
-    new_note_id,
+    CompanyContext, CompanyNote, ProjectWriteMixin, SourceDocument, data_root, gate_note_red_line,
+    materialize_memory, new_note_id,
 )
 from .store import Embedder, KeywordStore, PgVectorStore, VectorStore, _vec_literal
 
@@ -83,7 +83,7 @@ def _entity(cls, fields: set[str], payload: dict):
     return cls(**{k: v for k, v in payload.items() if k in fields})
 
 
-class PostgresContextRegistry:
+class PostgresContextRegistry(ProjectWriteMixin):
     """id -> CompanyContext, persisted in Postgres. Company data survives restarts/redeploys."""
 
     # feat-031 cost gate: this registry PERSISTS material embeddings and get() rebuilds a pgvector

@@ -39,6 +39,8 @@ def _stub_report():
         # feat-056: _team_payload now also projects the decision grades. This gate is about the
         # event loop, not payload shape — the fake just has to satisfy the same surface.
         decision_cards=lambda: [],
+        # rich-align-0722/05a: _team_payload also projects the archived (soft-deleted) drawer.
+        archived_project_cards=lambda: [],
     )
     return SimpleNamespace(ok=True, context=ctx, violations=[], parse_errors=[])
 

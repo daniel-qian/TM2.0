@@ -24,7 +24,14 @@ from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .extract import ExtractionResult
+from .extract import (
+    ExtractionResult,
+    ProjectEntity,
+    ProjectMilestone,
+    ProjectRisk,
+    norm_milestone_status,
+    norm_risk_level,
+)
 from .store import RetrievalStore, RetrievalHit, KeywordStore
 
 
@@ -77,6 +84,97 @@ class CompanyNote:
 
 def new_note_id() -> str:
     return "note_" + uuid.uuid4().hex[:16]
+
+
+# rich-align-0722/05a · 真 CRUD 项目（手编赢 + 逐字段出处，ADR-0028）.
+# provenance side-car source 对手编字段一律这句系统自证式短语（值本身仍活在实体字段，不双存）。
+MANUAL_SOURCE = "手动编辑"
+_PROJECT_STR_FIELDS = ("title", "ownerName", "status", "dueDate", "summary")
+
+
+def _apply_project_fields(pr: ProjectEntity, fields: dict) -> set:
+    """把一份已 Pydantic 校验的字段 dict 应用到 ProjectEntity；返回**出现过**的字段名集合（供置
+    manual 出处）。absent≠none 纪律：显式传 None 的字段 = 清空（progress→None / risk→None /
+    milestones/blockers→空），绝不折算成 0/默认。项目字段全量可编辑——人身数字与项目无关，
+    人身禁键在 06 侧执法（本函数不碰 person）。"""
+    applied: set = set()
+    for k in _PROJECT_STR_FIELDS:
+        if k in fields:
+            v = fields[k]
+            setattr(pr, k, v.strip() if isinstance(v, str) else ("" if v is None else str(v)))
+            applied.add(k)
+    if "progress" in fields:
+        v = fields["progress"]
+        pr.progress = None if v is None else int(v)
+        applied.add("progress")
+    if "blockers" in fields:
+        pr.blockers = [str(b).strip() for b in (fields["blockers"] or []) if str(b).strip()]
+        applied.add("blockers")
+    if "risk" in fields:
+        v = fields["risk"]
+        if v is None:
+            pr.risk = None
+        else:
+            level = norm_risk_level(v.get("level")) or (v.get("level") or "")
+            pr.risk = ProjectRisk(level=level, reason=(v.get("reason") or "").strip())
+        applied.add("risk")
+    if "milestones" in fields:
+        out = []
+        for m in (fields["milestones"] or []):
+            name = (m.get("name") or "").strip()
+            if not name:
+                continue
+            st_raw = (m.get("status") or "").strip()
+            st = norm_milestone_status(st_raw)
+            out.append(ProjectMilestone(name=name[:80], status=st or "other",
+                                        statusRaw="" if st else st_raw[:40]))
+        pr.milestones = out
+        applied.add("milestones")
+    return applied
+
+
+def _mark_manual(pr: ProjectEntity, field_names) -> None:
+    now = _now_iso()
+    for k in field_names:
+        pr.provenance[k] = {"origin": "manual", "source": MANUAL_SOURCE, "updated_at": now}
+
+
+class ProjectWriteMixin:
+    """rich-align-0722/05a · 项目手编 CRUD 的 duck-typed 写侧（内存 / pg 共用一套）。每个方法
+    get→mutate→put：内存 put 存同一 ref（幂等），pg put 整体 JSON 重存——行为对齐（合约测试同扩）。
+    未知 context_id → get 返 None → KeyError；未知 project_id → CompanyContext 抛 KeyError。
+    端点把 KeyError 一律转**同体 404**（无存在性 oracle，同 authorize_context 姿态）。
+    🔴 归档=软删标记可逆，本 mixin **不含任何物理删除路径**（销毁类人工闸哲学延伸到产品语义）。"""
+
+    def _require_ctx(self, context_id: str) -> CompanyContext:
+        ctx = self.get(context_id)
+        if ctx is None:
+            raise KeyError(context_id)
+        return ctx
+
+    def add_project(self, context_id: str, fields: dict) -> ProjectEntity:
+        ctx = self._require_ctx(context_id)
+        pr = ctx.add_manual_project(fields)
+        self.put(ctx)
+        return pr
+
+    def patch_project(self, context_id: str, project_id: str, fields: dict) -> ProjectEntity:
+        ctx = self._require_ctx(context_id)
+        pr = ctx.patch_manual_project(project_id, fields)
+        self.put(ctx)
+        return pr
+
+    def archive_project(self, context_id: str, project_id: str) -> ProjectEntity:
+        ctx = self._require_ctx(context_id)
+        pr = ctx.set_project_archived(project_id, True)
+        self.put(ctx)
+        return pr
+
+    def restore_project(self, context_id: str, project_id: str) -> ProjectEntity:
+        ctx = self._require_ctx(context_id)
+        pr = ctx.set_project_archived(project_id, False)
+        self.put(ctx)
+        return pr
 
 
 def gate_note_red_line(text: str, source_excerpt: str = "") -> None:
@@ -183,42 +281,87 @@ class CompanyContext:
             cards.append(card)
         return cards
 
+    @staticmethod
+    def _one_project_card(pr) -> dict:
+        """Project ONE ProjectEntity onto the LiveProjectCard shape (absent≠none: no key when absent)."""
+        card = {"id": pr.id, "title": pr.title}
+        if pr.ownerId:
+            card["ownerId"] = pr.ownerId
+        if pr.ownerName:
+            card["ownerName"] = pr.ownerName
+        if pr.status:
+            card["status"] = pr.status
+        if pr.progress is not None:
+            card["progress"] = pr.progress
+        if pr.dueDate:
+            card["dueDate"] = pr.dueDate
+        if pr.summary:
+            card["summary"] = pr.summary
+        if pr.blockers:
+            card["blockers"] = pr.blockers
+        # rich-align-0722/01: 项目级风险徽章数据。缺就不发键（absent≠none 全链纪律）；
+        # reason 省略时也不发（前端派生 riskReason 缺席=文档未给原因）。
+        if pr.risk:
+            risk_card = {"level": pr.risk.level}
+            if pr.risk.reason:
+                risk_card["reason"] = pr.risk.reason
+            card["risk"] = risk_card
+        # rich-align-0722/02: 里程碑列表。缺就不发键；statusRaw 只在 other（词表外）时发（回显原词）。
+        if pr.milestones:
+            card["milestones"] = [
+                {"name": m.name, "status": m.status,
+                 **({"statusRaw": m.statusRaw} if m.statusRaw else {})}
+                for m in pr.milestones
+            ]
+        # rich-align-0722/05a: 字段级出处（ADR-0028）。缺就不发键（沿用 absent≠none）；手编字段
+        # 带 origin='manual'/source='手动编辑'，前端据此渲染「手动编辑」出处角标。
+        if getattr(pr, "provenance", None):
+            card["provenance"] = dict(pr.provenance)
+        return card
+
     def project_cards(self) -> list[dict]:
-        """Project cards for 'Your team'. Work may be quantified (progress) when the doc stated it;
-        risk 4-dims / reportedStatus are left absent (lite lacks the signal — R2 don't invent)."""
-        cards = []
+        """Active (non-archived) project cards for 'Your team'. Work may be quantified (progress)
+        when the doc stated it; risk 4-dims / reportedStatus are left absent (R2 don't invent).
+        rich-align-0722/05a: archived (soft-deleted) projects are EXCLUDED here — they go to the
+        collapse drawer via archived_project_cards()."""
+        return [self._one_project_card(pr) for pr in self.extraction.projects
+                if not getattr(pr, "archived", False)]
+
+    def archived_project_cards(self) -> list[dict]:
+        """rich-align-0722/05a: soft-deleted projects for the 'archived' collapse drawer (restorable).
+        Same card shape as active; the frontend greys them + offers restore. Absent list = nothing
+        archived (payload key omitted when empty, per absent≠none)."""
+        return [self._one_project_card(pr) for pr in self.extraction.projects
+                if getattr(pr, "archived", False)]
+
+    # --- rich-align-0722/05a · 项目手编 CRUD 的实体级 mutation（provenance side-car）--------------
+    def _find_project(self, project_id: str) -> ProjectEntity:
         for pr in self.extraction.projects:
-            card = {"id": pr.id, "title": pr.title}
-            if pr.ownerId:
-                card["ownerId"] = pr.ownerId
-            if pr.ownerName:
-                card["ownerName"] = pr.ownerName
-            if pr.status:
-                card["status"] = pr.status
-            if pr.progress is not None:
-                card["progress"] = pr.progress
-            if pr.dueDate:
-                card["dueDate"] = pr.dueDate
-            if pr.summary:
-                card["summary"] = pr.summary
-            if pr.blockers:
-                card["blockers"] = pr.blockers
-            # rich-align-0722/01: 项目级风险徽章数据。缺就不发键（absent≠none 全链纪律）；
-            # reason 省略时也不发（前端派生 riskReason 缺席=文档未给原因）。
-            if pr.risk:
-                risk_card = {"level": pr.risk.level}
-                if pr.risk.reason:
-                    risk_card["reason"] = pr.risk.reason
-                card["risk"] = risk_card
-            # rich-align-0722/02: 里程碑列表。缺就不发键；statusRaw 只在 other（词表外）时发（回显原词）。
-            if pr.milestones:
-                card["milestones"] = [
-                    {"name": m.name, "status": m.status,
-                     **({"statusRaw": m.statusRaw} if m.statusRaw else {})}
-                    for m in pr.milestones
-                ]
-            cards.append(card)
-        return cards
+            if pr.id == project_id:
+                return pr
+        raise KeyError(project_id)
+
+    def add_manual_project(self, fields: dict) -> ProjectEntity:
+        """手动添加一个项目：新建实体 + 每个提供的字段置 origin='manual'（title 恒 manual，手加卡）。"""
+        pid = "pm-" + uuid.uuid4().hex[:8]
+        pr = ProjectEntity(id=pid, title="")
+        applied = _apply_project_fields(pr, fields)
+        _mark_manual(pr, applied | {"title"})
+        self.extraction.projects.append(pr)
+        return pr
+
+    def patch_manual_project(self, project_id: str, fields: dict) -> ProjectEntity:
+        """编辑既有项目：手编字段覆盖并置 origin='manual'（手编赢）。未知 id → KeyError。"""
+        pr = self._find_project(project_id)
+        applied = _apply_project_fields(pr, fields)
+        _mark_manual(pr, applied)
+        return pr
+
+    def set_project_archived(self, project_id: str, archived: bool) -> ProjectEntity:
+        """软删 / 恢复（可逆，绝不物理删除）。未知 id → KeyError。"""
+        pr = self._find_project(project_id)
+        pr.archived = bool(archived)
+        return pr
 
     def signal_cards(self) -> list[dict]:
         """Doc-derived signals. Person-directed ones stay at situation (gated upstream)."""
@@ -424,7 +567,7 @@ class CompanyContext:
                 for i, sd in enumerate(self.source_documents)]
 
 
-class ContextRegistry:
+class ContextRegistry(ProjectWriteMixin):
     """In-memory id -> CompanyContext map. Process-local — the OFFLINE default (no external service,
     what the AFK suite runs). feat-030 delivered the promised DB-backed twin behind the same get/put
     API (`pg_registry.PostgresContextRegistry`); `active_registry()` picks between them by env."""

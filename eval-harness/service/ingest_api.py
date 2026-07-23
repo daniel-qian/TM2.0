@@ -208,6 +208,11 @@ def _team_payload(ctx: CompanyContext) -> dict:
     from avery.scoring_policy import person_scoring_allowed
     if person_scoring_allowed():
         payload["scoring_enabled"] = True
+    # rich-align-0722/05a · softly-deleted projects for the archived collapse drawer. Key OMITTED when
+    # nothing is archived (absent≠none, mirrors the decisions/scoring_enabled additive-key style).
+    archived = ctx.archived_project_cards()
+    if archived:
+        payload["archived_projects"] = archived
     return payload
 
 
@@ -420,6 +425,121 @@ def team_notes_append(context_id: str, body: NoteIn,
         raise HTTPException(status_code=422,
                             detail={"error": "note rejected", "reason": str(e)})
     return {"context_id": context_id, "note": asdict(note)}
+
+
+# ── rich-align-0722/05a · 真 CRUD·项目（手编赢 + 逐字段出处，ADR-0028）──────────────────────────
+# 端点形状照 notes 写端点先例：owner_token 或账号二选一鉴权、失败一律同体 404 无枚举、Pydantic 校验、
+# ValueError→422、软删可逆（archive/restore，**无物理删除路径**）。项目字段全量可编辑——人身数字与项目
+# 无关，人身禁键在 06（人员 CRUD）侧执法。
+class MilestoneIn(BaseModel):
+    name: str = Field(..., min_length=1, max_length=80)
+    status: str = Field("", max_length=40)
+
+
+class RiskIn(BaseModel):
+    level: str = Field(..., min_length=1, max_length=20)
+    reason: str = Field("", max_length=400)
+
+
+class ProjectIn(BaseModel):
+    """POST body — 手动添加的项目。title 必填；其余可选（absent≠none：不传即不设，绝不折 0/默认）。"""
+    title: str = Field(..., min_length=1, max_length=200)
+    ownerName: str = Field("", max_length=120)
+    status: str = Field("", max_length=40)
+    progress: int | None = Field(None, ge=0, le=100)
+    dueDate: str = Field("", max_length=60)
+    summary: str = Field("", max_length=2000)
+    blockers: list[str] = Field(default_factory=list)
+    risk: RiskIn | None = None
+    milestones: list[MilestoneIn] = Field(default_factory=list)
+
+
+class ProjectPatch(BaseModel):
+    """PATCH body — 全字段可选。**发来的键**才动（含显式 null=清空→渲染 absent），**没发的键**不动。
+    靠 model_dump(exclude_unset=True) 区分「没传」与「传了 null」，absent≠none 才活得下来。"""
+    title: str | None = Field(None, max_length=200)
+    ownerName: str | None = Field(None, max_length=120)
+    status: str | None = Field(None, max_length=40)
+    progress: int | None = Field(None, ge=0, le=100)
+    dueDate: str | None = Field(None, max_length=60)
+    summary: str | None = Field(None, max_length=2000)
+    blockers: list[str] | None = None
+    risk: RiskIn | None = None
+    milestones: list[MilestoneIn] | None = None
+
+
+def _project_write_404() -> HTTPException:
+    # Same opaque 404 the read path uses — an unknown project inside an authorized context reveals
+    # nothing more than "not here" (no enumeration oracle), consistent with authorize_context.
+    return HTTPException(status_code=404, detail="unknown project")
+
+
+@router.post("/team/{context_id}/projects")
+def team_project_add(context_id: str, body: ProjectIn,
+                     x_avery_token: str | None = Header(None),
+                     authorization: str | None = Header(None),
+                     x_avery_account: str | None = Header(None)) -> dict:
+    """手动添加一个项目 → 写端点 → 卡即时入网格，逐字段出处标注「手动编辑」。"""
+    reg = active_registry()
+    authorize_context(reg, context_id, extract_owner_token(x_avery_token, authorization),
+                      account.resolve_account(x_avery_account))
+    try:
+        pr = reg.add_project(context_id, body.model_dump())
+    except KeyError:
+        raise _project_write_404()
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail={"error": "project rejected", "reason": str(e)})
+    return {"context_id": context_id, "project": CompanyContext._one_project_card(pr)}
+
+
+@router.patch("/team/{context_id}/projects/{project_id}")
+def team_project_patch(context_id: str, project_id: str, body: ProjectPatch,
+                       x_avery_token: str | None = Header(None),
+                       authorization: str | None = Header(None),
+                       x_avery_account: str | None = Header(None)) -> dict:
+    """编辑既有项目字段（手编赢，origin=manual）。只应用**发来的键**（exclude_unset）。"""
+    reg = active_registry()
+    authorize_context(reg, context_id, extract_owner_token(x_avery_token, authorization),
+                      account.resolve_account(x_avery_account))
+    try:
+        pr = reg.patch_project(context_id, project_id, body.model_dump(exclude_unset=True))
+    except KeyError:
+        raise _project_write_404()
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail={"error": "project rejected", "reason": str(e)})
+    return {"context_id": context_id, "project": CompanyContext._one_project_card(pr)}
+
+
+@router.post("/team/{context_id}/projects/{project_id}/archive")
+def team_project_archive(context_id: str, project_id: str,
+                         x_avery_token: str | None = Header(None),
+                         authorization: str | None = Header(None),
+                         x_avery_account: str | None = Header(None)) -> dict:
+    """归档 = 软删标记（可逆，绝不物理删除）→ 卡入折叠区。"""
+    reg = active_registry()
+    authorize_context(reg, context_id, extract_owner_token(x_avery_token, authorization),
+                      account.resolve_account(x_avery_account))
+    try:
+        pr = reg.archive_project(context_id, project_id)
+    except KeyError:
+        raise _project_write_404()
+    return {"context_id": context_id, "project": CompanyContext._one_project_card(pr)}
+
+
+@router.post("/team/{context_id}/projects/{project_id}/restore")
+def team_project_restore(context_id: str, project_id: str,
+                         x_avery_token: str | None = Header(None),
+                         authorization: str | None = Header(None),
+                         x_avery_account: str | None = Header(None)) -> dict:
+    """恢复 = 撤销软删标记 → 卡回主网格。"""
+    reg = active_registry()
+    authorize_context(reg, context_id, extract_owner_token(x_avery_token, authorization),
+                      account.resolve_account(x_avery_account))
+    try:
+        pr = reg.restore_project(context_id, project_id)
+    except KeyError:
+        raise _project_write_404()
+    return {"context_id": context_id, "project": CompanyContext._one_project_card(pr)}
 
 
 @router.get("/team/{context_id}/files")

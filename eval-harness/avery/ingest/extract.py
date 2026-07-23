@@ -282,6 +282,15 @@ class ProjectEntity:
     risk: ProjectRisk | None = None             # rich-align-0722/01: {level, reason?} if stated, else None
     milestones: list[ProjectMilestone] = field(default_factory=list)  # rich-align-0722/02: 缺席=空列表
     source: str = ""
+    # rich-align-0722/05a · 真 CRUD（ADR-0028）. Additive, both default to the pre-05a shape so every
+    # extraction path (01/02, heuristic + LLM) is byte-identical until a MANUAL write touches them.
+    #   archived — 软删标记（可逆，绝不物理删除）；project_cards() 投影时跳过 archived=True 的项目，
+    #     archived_project_cards() 单独投给折叠区。
+    #   provenance — 字段级出处 side-car：{field: {origin: 'doc'|'manual', source, updated_at}}. 未列
+    #     的字段=doc 出处（source=本实体 self.source）；手编字段置 origin='manual', source='手动编辑'.
+    #     value 仍活在实体本字段（不双存），前端读实体值 + provenance[field] 出处。
+    archived: bool = False
+    provenance: dict = field(default_factory=dict)
 
     def as_facts_lines(self) -> list[str]:
         head = f"Project '{self.title}'"
