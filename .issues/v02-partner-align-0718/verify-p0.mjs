@@ -206,17 +206,31 @@ async function run() {
     )
 
     // ── 6 · 「未知」态：缺失字段不得渲染成 0% ───────────────────────────────────
+    // rich-align-0722/03 · 「0%」扫描收窄：排除 [data-metric-source] 自述锚——一个本人自述负载**恰好
+    // 0%** 的人卡（开关开世界）是合法的、带出处的转述，不是「项目缺进度被编成 0%」。剪掉锚内文本后再扫，
+    // 项目栅栏语义不丢，负载 0% 不再误伤（issue-01 的项目进度口径与此各管各的）。
     const unknownState = await page.evaluate(() => {
       const s = window.__lite2Store.getState()
       const projs = s.rawTeam?.projects ?? []
       const missingProgress = projs.filter((p) => typeof p.progress !== 'number')
-      const text = document.body.innerText
+      const textOutsideAnchors = () => {
+        let out = ''
+        const walk = (node) => {
+          if (node.nodeType === 3) { out += node.nodeValue; return }
+          if (node.nodeType !== 1) return
+          if (node.hasAttribute && node.hasAttribute('data-metric-source')) return
+          node.childNodes.forEach(walk)
+        }
+        walk(document.body)
+        return out
+      }
+      const text = textOutsideAnchors()
       return {
         totalProjects: projs.length,
         missingProgress: missingProgress.length,
-        // 缺 progress 的项目名旁边有没有出现 "0%"
+        // 缺 progress 的项目名旁边有没有出现 "0%"（自述锚内的 0% 已被排除）
         zeroPercentOnPage: /(^|[^0-9])0\s*%/.test(text),
-        hasUnknownCopy: /未知|文档未提及|未读到/.test(text),
+        hasUnknownCopy: /未知|文档未提及|未读到/.test(document.body.innerText),
       }
     })
     record(

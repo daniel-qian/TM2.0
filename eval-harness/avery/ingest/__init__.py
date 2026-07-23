@@ -27,6 +27,10 @@ from __future__ import annotations
 from .parse import ParsedDoc, parse_file, parse_bytes
 from .extract import (
     PersonEntity,
+    PersonSelfReport,
+    SelfReportLoad,
+    SelfReportMood,
+    norm_mood_selfreport,
     ProjectEntity,
     SignalEntity,
     MaterialChunk,
@@ -46,7 +50,8 @@ from .pipeline import ingest_paths, ingest_docs, IngestReport
 
 __all__ = [
     "ParsedDoc", "parse_file", "parse_bytes",
-    "PersonEntity", "ProjectEntity", "SignalEntity", "MaterialChunk",
+    "PersonEntity", "PersonSelfReport", "SelfReportLoad", "SelfReportMood", "norm_mood_selfreport",
+    "ProjectEntity", "SignalEntity", "MaterialChunk",
     "ExtractionResult", "HeuristicExtractor", "Extractor", "extract_docs",
     "LLMExtractor", "FallbackExtractor",
     "validate_extraction", "ExtractionRedlineResult", "ExtractionViolation",

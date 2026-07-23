@@ -190,10 +190,10 @@ def _unique_parse_names(display_names: list[str]) -> list[str]:
 
 def _team_payload(ctx: CompanyContext) -> dict:
     """Project a CompanyContext onto the exact LiveTeamPayload shape transport.ts expects."""
-    return {
+    payload = {
         "context_id": ctx.context_id,
         "source_files": ctx.source_files,
-        "people": ctx.team_cards(),      # QUALITATIVE ONLY — no blood-bar / score keys
+        "people": ctx.team_cards(),      # QUALITATIVE by default; self_report only when switch on
         "projects": ctx.project_cards(),
         "briefing": ctx.briefing(),
         "signals": ctx.signal_cards(),
@@ -201,6 +201,14 @@ def _team_payload(ctx: CompanyContext) -> dict:
         # 纯规则产出、无 LLM —— 不增加任何请求延迟，也不受模型随机性影响。
         "decisions": ctx.decision_cards(),
     }
+    # rich-align-0722/03 — additive top-level flag, present-and-true ONLY when person scoring is
+    # unblocked (mirrors account_linked's absent-when-false semantics). The frontend's layer-3 runtime
+    # strip keys off this: absent/false → every number key on a person is dropped (current moat); true
+    # → only the self_report whitelist is allowed through, and only inside a provenance-marked element.
+    from avery.scoring_policy import person_scoring_allowed
+    if person_scoring_allowed():
+        payload["scoring_enabled"] = True
+    return payload
 
 
 @router.post("/ingest")

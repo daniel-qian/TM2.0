@@ -5069,6 +5069,45 @@
   .lite2-shell .lite-detail-milestone-list li:nth-child(n + 5) { animation-delay: 0.16s; }
 }
 
+/* ── rich-align-0722/03：人员自述负载/情绪（人身数字开关口径）──────────────────────
+   只在开关开时渲染。这不是"血条"（不是系统给人打分），是把本人自述的负载/情绪原样转呈，且每枚
+   徽章挂 data-metric-source 出处锚 + hover 出「《X》记录的本人自述」口径角标。软底深字令牌，克制、
+   非评判色——刻意区别于项目风险徽章（那是对项目的判断），这里只是转述本人的话。 */
+.lite2-shell .home-person-selfreport {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  margin: 4px 0 0;
+}
+
+.lite2-shell .lite-selfreport {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--chip-bg, #eef1f6);
+  cursor: help; /* 出处角标走 title；鼠标提示这里有可看的口径 */
+}
+
+.lite2-shell .lite-selfreport-label {
+  color: var(--ink-soft);
+  font-size: 10px;
+  letter-spacing: 0.01em;
+}
+
+.lite2-shell .lite-selfreport-value {
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 情绪吃紧给一点暖色重音（不是红——转述不是报警）；负载纯中性。 */
+.lite2-shell .lite-selfreport--mood .lite-selfreport-value {
+  color: #6b4e2e;
+}
+
 /* ── 卡点 ─────────────────────────────────────────────────────────────────── */
 .lite2-shell .lite-project-blockers {
   display: flex;

@@ -392,6 +392,36 @@
   // Story people carry these numeric badges; a live person card must never render one (red line).
   const BLOOD_BAR_RE = /\b(?:mood|capacity)\s*[:%]|\b\d{1,3}\s*%/;
 
+  // rich-align-0722/03 — the person-scoring switch made ONE number sanctioned: a self-report, and it
+  // lives ONLY inside a [data-metric-source] provenance anchor. The red line is UNCHANGED — any
+  // blood-bar / mood-vocab shape OUTSIDE such an anchor is still a leak. These helpers let the K6/team
+  // scans fire on the OUTSIDE-of-anchor text, so they hold in BOTH worlds (off: no anchors exist at
+  // all; on: numbers/mood only inside anchors). The switch state is read off the shell marker.
+  const MOOD_VOCAB_RE = /如常|偏紧|吃紧|steady|stretched|strained/i;
+  const scoringMarkerOn = () => {
+    const shell = document.querySelector('.lite2-shell, .app-shell');
+    return !!shell && shell.getAttribute('data-scoring-enabled') === 'on';
+  };
+  // Text of a node with every [data-metric-source] subtree pruned. Uses textContent semantics (walks
+  // nodes) so it works on ATTACHED elements without a layout pass — never clone+innerText (a detached
+  // clone has no layout and innerText comes back '').
+  const textOutsideAnchors = (root) => {
+    let out = '';
+    const walk = (node) => {
+      if (node.nodeType === 3) { out += node.nodeValue; return; }
+      if (node.nodeType !== 1) return;
+      if (node.hasAttribute && node.hasAttribute('data-metric-source')) return; // prune anchored subtree
+      node.childNodes.forEach(walk);
+    };
+    walk(root);
+    return out;
+  };
+  const selfReportAnchors = (cards) => {
+    const els = [];
+    cards.forEach((c) => els.push(...Array.from(c.querySelectorAll('[data-metric-source]'))));
+    return els;
+  };
+
   const $ = (sel, root) => (root || document).querySelector(sel);
   const $$ = (sel, root) => Array.from((root || document).querySelectorAll(sel));
   const bodyText = () => document.body.innerText || '';
@@ -489,15 +519,22 @@
     assertTeamRendered() {
       const cards = $$('.home-person-card');
       const names = cards.map((c) => (c.querySelector('h3') || {}).textContent || '');
-      const text = cards.map((c) => c.innerText).join('\n');
+      // rich-align-0722/03 — scan OUTSIDE any self-report anchor so a sanctioned self-report (scoring
+      // world) is not a false leak; off-world corpora have no anchors, so this is byte-identical there.
+      const text = cards.map((c) => textOutsideAnchors(c)).join('\n');
+      const scoringOn = scoringMarkerOn();
       const out = {
         personCards: cards.length,
+        scoringOn,
         hasLinQing: names.some((n) => /lin qing/i.test(n)),
         hasChenMingyuan: names.some((n) => /chen mingyuan/i.test(n)),
         bloodBarLeak: BLOOD_BAR_RE.test(text) ? text.match(BLOOD_BAR_RE)[0] : null,
+        // off-world: NO self-report anchor may exist at all (the switch is the only thing that projects it).
+        strayAnchorsOffWorld: scoringOn ? 0 : selfReportAnchors(cards).length,
         pass: false,
       };
-      out.pass = cards.length >= 15 && out.hasLinQing && out.hasChenMingyuan && !out.bloodBarLeak;
+      out.pass = cards.length >= 15 && out.hasLinQing && out.hasChenMingyuan &&
+        !out.bloodBarLeak && out.strayAnchorsOffWorld === 0;
       results.team = out;
       return out;
     },
@@ -1062,28 +1099,45 @@
 
     async assertAskRedline() {
       // Phase K6 (ADR-0023 structural gate, whole DOM): after receipts are in —
-      //  · person cards carry ZERO numbers (receipts never leak onto people),
-      //  · no cross-person score structure anywhere in the document,
+      //  · person cards carry ZERO numbers OUTSIDE a provenance anchor (receipts never leak onto people),
+      //  · no cross-person score structure anywhere in the document (BOTH worlds, unconditional),
       //  · story-noun blacklist stays 0.
+      // rich-align-0722/03 — TWO WORLDS off the shell marker (data-scoring-enabled):
+      //   OFF: no self-report projected → zero anchors, zero mood-vocab, zero numbers on person cards.
+      //   ON : self-report allowed but ONLY inside a [data-metric-source] anchor that carries a
+      //        non-empty source; any blood-bar/mood shape OUTSIDE an anchor is still a hard leak.
       this._clickTab('Your team');
       try { await poll(() => ($$('.home-person-card').length > 0 ? true : null), 8000, 'person cards to mount'); } catch (e) { /* report below */ }
       const cards = $$('.home-person-card');
-      const cardText = cards.map((c) => c.innerText).join('\n');
+      const scoringOn = scoringMarkerOn();
+      // Every leak scan runs on the text OUTSIDE self-report anchors — so a sanctioned self-report does
+      // not read as a leak, while anything that escaped the anchor still does.
+      const cardText = cards.map((c) => textOutsideAnchors(c)).join('\n');
       const bloodBar = BLOOD_BAR_RE.test(cardText) ? cardText.match(BLOOD_BAR_RE)[0] : null;
       const digitOnPerson = /\d/.test(cardText) ? (cardText.match(/[^\n]*\d[^\n]*/) || [null])[0] : null;
+      const moodOutside = MOOD_VOCAB_RE.test(cardText) ? cardText.match(MOOD_VOCAB_RE)[0] : null;
       const receiptLeak = /self-reported|out of 5|本人自述/i.test(cardText);
+      // score-table / leaderboard / ranking structures are forbidden in BOTH worlds, unconditionally.
       const docTables = $$('table').length +
         $$('[class*="score-table"], [class*="leaderboard"], [class*="ranking"]').length;
+      // Anchor discipline: every self-report anchor must carry a non-empty provenance source.
+      const anchors = selfReportAnchors(cards);
+      const anchorsMissingSource = anchors.filter((el) => !((el.getAttribute('data-metric-source') || '').trim())).length;
+      const worldPass = scoringOn ? anchorsMissingSource === 0 : anchors.length === 0;
       const nounScan = this.scanStoryNouns();
       const out = {
+        scoringOn,
         personCards: cards.length,
         bloodBarLeak: bloodBar,
         digitOnPersonCard: digitOnPerson,
+        moodVocabOutsideAnchor: moodOutside,
         receiptLeakOnPersonCard: receiptLeak,
+        selfReportAnchors: anchors.length,
+        anchorsMissingSource,
         docScoreTables: docTables,
         storyNounHits: nounScan.storyNounHits,
-        pass: cards.length > 0 && !bloodBar && !digitOnPerson && !receiptLeak &&
-          docTables === 0 && nounScan.pass,
+        pass: cards.length > 0 && !bloodBar && !digitOnPerson && !moodOutside && !receiptLeak &&
+          docTables === 0 && nounScan.pass && worldPass,
       };
       results.askRedline = out;
       return out;

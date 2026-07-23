@@ -140,8 +140,18 @@ class CompanyContext:
     # --- Your-team structures (what the frontend renders) -------------------------------------
 
     def team_cards(self) -> list[dict]:
-        """People cards for 'Your team' — QUALITATIVE ONLY. Note: NO moodPct / capacityPct keys are
-        ever emitted (red line: live person cards have no blood bar). feat-017 renders these."""
+        """People cards for 'Your team' — QUALITATIVE by default. feat-017 renders these.
+
+        rich-align-0722/03 — the ONE sanctioned numeric surface is `self_report` (the person's own
+        reported load/mood), and it is **projection-gated on AVERY_ALLOW_PERSON_SCORING** (read live
+        via avery.scoring_policy). Switch OFF → self_report is NOT projected, the card is byte-identical
+        to the pre-03 qualitative shape (zero numbers, the shipped moat). Switch ON → self_report is
+        projected WITH its caliber + source, so the UI can render the system-self-attesting caption
+        「《<文档名>》记录的本人自述」 rather than asserting authorship the system cannot verify. Storage is
+        NOT gated (the extraction always holds self_report — 母本不随开关重铸); only this projection is.
+        DELIBERATELY still absent in BOTH worlds: moodPct/capacityPct/score/rank/tier as free keys."""
+        from avery.scoring_policy import person_scoring_allowed
+        allow_scoring = person_scoring_allowed()
         cards = []
         for p in self.extraction.people:
             card = {"id": p.id, "name": p.name, "role": p.role}
@@ -153,7 +163,23 @@ class CompanyContext:
                 card["owns"] = p.owns
             if p.collaboration:
                 card["collaboration"] = p.collaboration
-            # DELIBERATELY absent: moodPct, capacityPct, any score/rank/tier.
+            # rich-align-0722/03 — self-reported load/mood, ONLY when the switch is on; caliber+source
+            # travel with each metric so the render is forced to carry provenance (data-metric-source).
+            if allow_scoring and p.self_report:
+                sr = {}
+                if p.self_report.load:
+                    sr["load"] = {"value": p.self_report.load.value,
+                                  "caliber": p.self_report.load.caliber,
+                                  "source": p.self_report.load.source}
+                if p.self_report.mood:
+                    mood = {"value": p.self_report.mood.value,
+                            "caliber": p.self_report.mood.caliber,
+                            "source": p.self_report.mood.source}
+                    if p.self_report.mood.valueRaw:      # out-of-vocab: echo the doc's own word
+                        mood["valueRaw"] = p.self_report.mood.valueRaw
+                    sr["mood"] = mood
+                if sr:
+                    card["self_report"] = sr
             cards.append(card)
         return cards
 

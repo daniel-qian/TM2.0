@@ -19,7 +19,9 @@ Seams here:
   * post-advise hook    service.notes.write_note_from_manifest (observation AND echoed excerpt)
   * upload extraction   avery.ingest.pipeline.ingest_docs (a scored PersonEntity)
   * HTTP surface        POST /advise -> GET /team/{id}/notes
-  * NO feature built    CompanyContext.team_cards() stays qualitative even with scoring unblocked
+  * FREE score keys      CompanyContext.team_cards() NEVER emits a free moodPct/capacity/score key —
+                         even with scoring on (rich-align-0722/03 later added the ONE sanctioned slot,
+                         `self_report`, projected only when on; the free-key moat below is unchanged).
 """
 from __future__ import annotations
 
@@ -162,13 +164,17 @@ def test_ingest_still_refuses_unparseable_batch_when_on(monkeypatch, tmp_path):
 
 
 # ==============================================================================================
-# (3) NO FEATURE BUILT — person cards stay qualitative even with scoring unblocked
+# (3) NO FREE SCORE KEY — person cards never carry a free moodPct/capacity/score field, switch or not
+#     (rich-align-0722/03 added the ONE sanctioned slot `self_report`; this fixture has none, and the
+#      free-key moat asserted here is unchanged. The self_report contract is in
+#      test_person_selfreport_switch_03.py.)
 # ==============================================================================================
 
 def test_team_cards_stay_qualitative_when_switch_on(monkeypatch):
-    """'Unblock only, do not build a feature': even with scoring persisted, the live person card
-    carries NO score/mood/capacity field. team_cards() omits them by construction (PersonEntity has
-    no numeric attribute), and the switch does not add any."""
+    """Even with scoring persisted, the live person card carries NO free score/mood/capacity KEY.
+    team_cards() omits them by construction (PersonEntity has no such numeric attribute), and the
+    switch opens only the typed `self_report` slot — never a free scoring key (this fixture, a resume
+    with no self-report lines, projects no self_report at all, in either world)."""
     monkeypatch.setenv(ENV_VAR, "1")
     reg = ContextRegistry()
     rep = ingest_docs([parse_file(RESUME)], extractor=_ScoringExtractor(), registry=reg)

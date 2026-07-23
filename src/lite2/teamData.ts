@@ -7,7 +7,12 @@
 //   ② 指向人的信号停在"情境"（她在扛什么），不变成对人的负面标签。
 //   ③ 聚合数字 R2：真算或不显示，绝不编——briefing.metrics 直接来自 ingestion（人数/项目数真数）。
 
-import type { LivePersonCard, LiveProjectCard, LiveTeamPayload } from './transport'
+import type {
+  LivePersonCard,
+  LivePersonSelfReport,
+  LiveProjectCard,
+  LiveTeamPayload,
+} from './transport'
 
 // 卡片左缘墨条的语气温度（与 shared CSS 的 home-tone-* 类同名）：
 // sage 安稳 · honey 值得一看 · terracotta 今天需要你。
@@ -29,6 +34,9 @@ export interface LitePerson {
   owns?: string[]
   collaboration?: string[]
   sourceLine?: string
+  // rich-align-0722/03 · 本人自述负载/情绪。**只在开关开且文档报了才有**（缺席=文档未提及，不编 0）。
+  // 渲染层凭 caliber/source 出「《X》记录的本人自述」口径角标（data-metric-source），数字只在角标里出现。
+  selfReport?: LivePersonSelfReport
 }
 
 export interface LiteProject {
@@ -119,6 +127,9 @@ export interface LiteTeam {
   projects: LiteProject[]
   handoffs: LiteHandoff[]
   briefing: LiteBriefing
+  // rich-align-0722/03 · 人身自述投影开关（后端 scoring_enabled）的壳内镜像。壳根据此挂
+  // data-scoring-enabled 标记，AFK 门「读壳上开关标记」据此在两世界跑不同断言。缺席即 false。
+  scoringEnabled: boolean
 }
 
 // 🔴 红线运行时兜底：即便后端某天错吐了 moodPct/capacityPct/score/rank/rating/tier，
@@ -135,9 +146,20 @@ const BLOOD_BAR_KEYS = new Set([
   'percentile',
 ])
 
-export function stripPersonNumbers(card: LivePersonCard): LivePersonCard {
+// rich-align-0722/03 · 运行时剥离改**双世界执法**（第③层护栏）。
+//   scoringEnabled=false（开关关 / payload 无 scoring_enabled）→ 原行为：任何 BLOOD_BAR_KEYS、任何
+//     裸数字、以及 self_report 一律剥掉——人卡结构上零数字（现行 moat 一字不改）。
+//   scoringEnabled=true（开关开）→ self_report 是**唯一**放行的数字面（且它自带 caliber/source，渲染
+//     被强制带出处）；其余 BLOOD_BAR_KEYS / 裸数字键仍全剥（散落人身分数永不放行）。
+// 白名单是"键名 self_report"这一个洞，不是"放行所有数字"——第②层类型护栏 + 这里的键名白名单双保险。
+export function stripPersonNumbers(card: LivePersonCard, scoringEnabled = false): LivePersonCard {
   const clean: Record<string, unknown> = {}
   for (const [k, v] of Object.entries(card)) {
+    if (k === 'self_report') {
+      // 仅开关开时放行；且只接受对象（防后端某天错吐个裸数字顶着这个键名）。
+      if (scoringEnabled && v && typeof v === 'object') clean[k] = v
+      continue
+    }
     if (BLOOD_BAR_KEYS.has(k)) continue // 红线：丢弃
     if (typeof v === 'number') continue // 人卡上不留任何裸数字（防新血条字段偷渡）
     clean[k] = v
@@ -205,7 +227,9 @@ function liveHandoffs(payload: LiveTeamPayload): LiteHandoff[] {
 //   说法不同**，刷新才自洽——比两处都是旧语言更糟，因为它让人怀疑的是数据而不是界面。
 // v01 从一开始就把兜底留在渲染层，结构上不可能出这个 bug；这里是补上同一条纪律。
 export function liteTeamFromPayload(payload: LiveTeamPayload): LiteTeam {
-  const cleanPeople = payload.people.map(stripPersonNumbers)
+  // rich-align-0722/03 · 双世界执法从这里起：开关态是 payload 顶层的 scoring_enabled（缺席即 false）。
+  const scoringEnabled = payload.scoring_enabled === true
+  const cleanPeople = payload.people.map((c) => stripPersonNumbers(c, scoringEnabled))
 
   const people: LitePerson[] = cleanPeople.map((card) => {
     const { read, ownsRead, tone } = liveRead(card)
@@ -220,6 +244,8 @@ export function liteTeamFromPayload(payload: LiveTeamPayload): LiteTeam {
       tenure: card.tenure,
       owns: card.owns,
       collaboration: card.collaboration,
+      // 剥离后仍在 = 开关开且文档报了。缺席即 undefined（渲染层据此整段收起，不显任何 0/空数字）。
+      selfReport: card.self_report,
     }
   })
 
@@ -263,6 +289,7 @@ export function liteTeamFromPayload(payload: LiveTeamPayload): LiteTeam {
       metrics: b.metrics ?? [],
       lookKind: readLookKind(b),
     },
+    scoringEnabled,
   }
 }
 

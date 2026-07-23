@@ -41,9 +41,10 @@ import time
 log = logging.getLogger("avery.ingest.llm_extract")
 
 from .extract import (
-    ExtractionResult, Extractor, HeuristicExtractor, PersonEntity, ProjectEntity,
-    ProjectMilestone, ProjectRisk, SignalEntity, _INDEX_TOKEN_RE, _NOT_NAME, _norm_status,
-    _norm_team, _person_key, _project_key, _slug, norm_milestone_status, norm_risk_level,
+    ExtractionResult, Extractor, HeuristicExtractor, PersonEntity, PersonSelfReport,
+    ProjectEntity, ProjectMilestone, ProjectRisk, SelfReportLoad, SelfReportMood, SignalEntity,
+    _INDEX_TOKEN_RE, _NOT_NAME, _norm_status, _norm_team, _person_key, _project_key, _slug,
+    norm_milestone_status, norm_mood_selfreport, norm_risk_level,
 )
 from .parse import ParsedDoc
 from .redline_extract import (
@@ -83,7 +84,8 @@ HARD RULES (a compliance gate rejects your output if you break them):
 _INSTRUCTIONS = """Return exactly this JSON shape:
 {
   "people": [
-    {"name": "", "role": "", "team": "", "tenure": "", "owns": [""], "collaboration": [""], "line": 0}
+    {"name": "", "role": "", "team": "", "tenure": "", "owns": [""], "collaboration": [""],
+     "self_report": {"load": {"value": 0}, "mood": {"value": ""}}, "line": 0}
   ],
   "projects": [
     {"title": "", "ownerName": "", "status": "", "progress": null, "dueDate": "", "summary": "",
@@ -110,6 +112,13 @@ Field rules:
   If a title maps onto none of the six, "".
   tenure = stated experience/tenure phrase (e.g. "8 years of B2B design", free text).
   owns = up to 6 short phrases of what they own / are responsible for, from the doc.
+  self_report: the STRICT, NARROW exception to "people are qualitative only". Emit it ONLY when the
+  document explicitly labels a line as the person's OWN self-report — a 「负载自述：」/「情绪自述：」
+  label (the 自述 / "self-reported" marker is REQUIRED). load.value = the self-reported workload
+  integer 0-100; mood.value = the self-reported mood word VERBATIM (如常/偏紧/吃紧 or the doc's own
+  word). NEVER derive either from your own judgement, and NEVER emit self_report for a number that
+  is not explicitly marked 自述 / self-reported — a bare 「负载：85%」 is NOT a self-report; drop it.
+  Omit the whole self_report key (or its load/mood sub-key) when the doc does not self-report it.
 - projects: one entry per project THE DOCUMENT TRACKS IN ITS OWN RIGHT — it gives that project its
   own owner, status, progress or deadline. A MILESTONE, phase, checkpoint or task INSIDE a project
   is NOT a separate project: do not emit it as its own entry. Instead, a row under a
@@ -220,6 +229,36 @@ def _llm_milestones(v) -> list[ProjectMilestone]:
         out.append(ProjectMilestone(name=name, status=status or "other",
                                     statusRaw="" if status else raw_status))
     return out
+
+
+def _llm_self_report(v, source: str) -> "PersonSelfReport | None":
+    """rich-align-0722/03: LLM people[].self_report → PersonSelfReport, SAME shape/口径 as the
+    heuristic's _selfreport_from_lines. load is 0..100 (out-of-range REJECTED, not clamped); mood maps
+    to the qualitative enum, out-of-vocab kept verbatim as `other`. caliber is forced to 本人自述 and
+    source to the person's line — the model does not get to assert an unverifiable authorship claim;
+    the slot itself IS the provenance. Returns None if neither sub-metric survives."""
+    if not isinstance(v, dict):
+        return None
+    load = None
+    lv = v.get("load")
+    if isinstance(lv, dict):
+        try:
+            iv = int(lv.get("value"))
+        except (TypeError, ValueError):
+            iv = None
+        if iv is not None and 0 <= iv <= 100:       # reject, don't clamp (absent≠none)
+            load = SelfReportLoad(value=iv, source=source)
+    mood = None
+    mv = v.get("mood")
+    if isinstance(mv, dict):
+        raw = _s(mv.get("value"), 40)
+        if raw:
+            enum = norm_mood_selfreport(raw)
+            mood = SelfReportMood(value=enum or "other", source=source,
+                                  valueRaw="" if enum else raw)
+    if not load and not mood:
+        return None
+    return PersonSelfReport(load=load, mood=mood)
 
 
 # Label/header cells that are obviously not a human — belt to the model's suspenders (_SYSTEM
@@ -366,6 +405,7 @@ class LLMExtractor:
             # "same person", so within-doc and cross-doc can never drift apart
             key = _person_key(name)
             person = seen_people.get(key)
+            src = _line_ref(doc, raw.get("line"))
             if person is None:
                 person = PersonEntity(
                     id=_slug(name, "u"), name=name,
@@ -376,7 +416,9 @@ class LLMExtractor:
                           _strip_person_ratings(o)],
                     collaboration=[_strip_person_ratings(c) for c in
                                    _slist(raw.get("collaboration")) if _strip_person_ratings(c)],
-                    source=_line_ref(doc, raw.get("line")))
+                    source=src,
+                    # rich-align-0722/03: person self-report (load/mood), same slot/口径 as heuristic.
+                    self_report=_llm_self_report(raw.get("self_report"), src))
                 seen_people[key] = person
                 res.people.append(person)
             else:
@@ -384,6 +426,16 @@ class LLMExtractor:
                 extra = [_strip_person_ratings(o) for o in _slist(raw.get("owns"))]
                 person.owns = (person.owns + [o for o in extra if o])[:6]
                 person.role = person.role or _strip_person_ratings(_s(raw.get("role"), 120))
+                # keep-first per self-report sub-slot (parity with _dedupe_entities).
+                sr = _llm_self_report(raw.get("self_report"), src)
+                if sr:
+                    if person.self_report is None:
+                        person.self_report = sr
+                    else:
+                        if person.self_report.load is None:
+                            person.self_report.load = sr.load
+                        if person.self_report.mood is None:
+                            person.self_report.mood = sr.mood
 
         seen_titles: set[str] = set()
         stem = re.sub(r"\.[a-z0-9]+$", "", doc.name, flags=re.I).lower()

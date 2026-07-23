@@ -34,6 +34,10 @@ import type { Dict } from "./index";
 //  (里程碑/已完成/进行中/受阻/未开始/其他) were typed in by hand — an AFK offline campaign pass,
 //  trivial fixed copy, no directed M3 run made. Source keys live in en.ts. Fold into the next
 //  DIRECTED zh pass; Danny 审字 pending.
+// ⚠ HAND-WRITTEN, NOT YET M3 (rich-align-0722/03): lite2.selfReport{LoadLabel,MoodLabel,Mood*,
+//  Provenance} (自述负载/自述情绪/如常/偏紧/吃紧/其他 + 《{source}》记录的本人自述). The mood words
+//  are DELIBERATELY the four-token vocabulary the AFK gate scans (如常/偏紧/吃紧) — keep them verbatim.
+//  AFK offline pass, no directed M3; Danny 审字 pending (verified as 复核项 in 03 acceptance).
 // NOTE (feat-047): lite2.tabNotes + the 14-key lite2.notes* block are NEW in this run — 0 fresh
 //  M3 calls (script reused zh.lite's already-approved translation verbatim since the key names
 //  match byte-for-byte; see scripts/i18n-zh-lite2-delta.mjs's sharedKeys logic). Danny 审字
@@ -713,6 +717,13 @@ export const zh: Dict = {
     "projectsMilestoneBlocked": "受阻",
     "projectsMilestoneUpcoming": "未开始",
     "projectsMilestoneOther": "其他",
+    "selfReportLoadLabel": "自述负载",
+    "selfReportMoodLabel": "自述情绪",
+    "selfReportMoodSteady": "如常",
+    "selfReportMoodStretched": "偏紧",
+    "selfReportMoodStrained": "吃紧",
+    "selfReportMoodOther": "其他",
+    "selfReportProvenance": "《{source}》记录的本人自述",
     "onboardEyebrow": "开始上手",
     "onboardCloseAria": "关闭 —— 下次会从上次停下的地方继续",
     "onboardSkip": "跳过设置",

@@ -69,11 +69,69 @@ FORBIDDEN_PERSON_KEYS_ZH = (
 
 
 # --- entity shapes ----------------------------------------------------------------------------
-# NOTE: PersonEntity deliberately has NO numeric field. This is the moat as a type.
+# NOTE: PersonEntity deliberately has NO numeric field EXCEPT the one sanctioned slot below.
+
+# rich-align-0722 · issue 03 — 人员负载/情绪·自述槽。人身数字红线（07-21 解禁 + 07-22 拍板）的
+# 结构化表达：合法的人身数字**只能活在这个槽里**，且 caliber(口径)+source(出处) 必填。散落在 person
+# 其他字段上的自由数字键仍被 redline_extract 全禁（self_report 不在 _person_text_fields 扫描面里，
+# 也不是 FORBIDDEN_PERSON_KEYS——moat 靠结构成立，不靠新检测）。存储恒有自述数据（不随开关重铸，
+# 内容寻址只看文件）；**投影随开关**（registry.team_cards 读 AVERY_ALLOW_PERSON_SCORING）。
+_MOOD_SELFREPORT_MAP = {
+    "如常": "steady", "正常": "steady", "平稳": "steady", "还好": "steady", "steady": "steady",
+    "偏紧": "stretched", "紧张": "stretched", "有点紧": "stretched", "略紧": "stretched",
+    "stretched": "stretched",
+    "吃紧": "strained", "很紧": "strained", "超负荷": "strained", "透支": "strained",
+    "strained": "strained",
+}
+
+
+def norm_mood_selfreport(raw: str | None) -> str:
+    """情绪自述词表: 如常|偏紧|吃紧(+近义/英文) → steady/stretched/strained。词表外 → '' → 走 other。"""
+    return _MOOD_SELFREPORT_MAP.get((raw or "").strip().lower(), "")
+
+
+@dataclass
+class SelfReportLoad:
+    """负载自述（0..100）。value 是本人报的工作负载，caliber 恒『本人自述』，source=所在文档名:行。"""
+    value: int
+    caliber: str = "本人自述"
+    source: str = ""
+
+
+@dataclass
+class SelfReportMood:
+    """情绪自述。value=定性枚举 steady/stretched/strained/other；other 时 valueRaw 回显文档原词。"""
+    value: str
+    caliber: str = "本人自述"
+    source: str = ""
+    valueRaw: str = ""
+
+
+@dataclass
+class PersonSelfReport:
+    """一个人的自述槽 {load?, mood?}。任一子槽缺 = 该维度文档未提及（absent≠none，前端不编 0）。"""
+    load: "SelfReportLoad | None" = None
+    mood: "SelfReportMood | None" = None
+
+    def __post_init__(self) -> None:
+        # asdict() round-trips (pg_registry) hand back plain dicts — coerce so consumers always see
+        # dataclasses, never a raw dict. Production reads contexts back from Postgres, so this is the
+        # load-bearing path, not a test convenience.
+        if isinstance(self.load, dict):
+            self.load = SelfReportLoad(**self.load)
+        if isinstance(self.mood, dict):
+            self.mood = SelfReportMood(**self.mood)
+
 
 @dataclass
 class PersonEntity:
-    """A person card — QUALITATIVE ONLY. No number ever lives here (red line: no blood bar)."""
+    """A person card — QUALITATIVE ONLY. No number ever lives here (red line: no blood bar).
+
+    THE ONE EXCEPTION is `self_report` (rich-align-0722/03): a sanctioned slot for the person's OWN
+    reported load/mood, projected only when the operator has unblocked person scoring. It is a typed
+    slot, not a free field, so the extraction red line (which scans _person_text_fields and forbidden
+    KEYS) never sees it — the moat holds by construction, and a stray number on any other field is
+    still rejected."""
     id: str
     name: str
     role: str = ""
@@ -86,6 +144,15 @@ class PersonEntity:
     owns: list[str] = field(default_factory=list)        # what they own / ship (qualitative)
     collaboration: list[str] = field(default_factory=list)  # who they work with / how
     source: str = ""                            # provenance: "<filename>:<line>" for a cite
+    # rich-align-0722/03 — the ONE sanctioned numeric slot; None when the docs never self-reported.
+    # DELIBERATELY out of as_facts_lines(): self-report never enters facts.md / the advisor's recall
+    # path (the frozen engine stays byte-identical); it reaches the UI only via team_cards projection.
+    self_report: "PersonSelfReport | None" = None
+
+    def __post_init__(self) -> None:
+        # Coerce a dict (pg_registry asdict round-trip) into the dataclass; see PersonSelfReport.
+        if isinstance(self.self_report, dict):
+            self.self_report = PersonSelfReport(**self.self_report)
 
     def as_facts_lines(self) -> list[str]:
         """Render this person as line-addressable company-memory facts (qualitative sentences)."""
@@ -1029,6 +1096,8 @@ class HeuristicExtractor:
         elif doc.doc_kind in ("project", "roadmap"):
             res.merge(self._projects_from_doc(doc))
             res.merge(self._signals_from_doc(doc))
+            # rich-align-0722/03: a weekly's 人员动态 self-report lines → person self_report slot.
+            res.merge(self._selfreport_from_lines(doc))
         # Every doc contributes material chunks to the RAG (including company handbooks).
         res.merge(self._materials(doc))
         return res
@@ -1127,6 +1196,51 @@ class HeuristicExtractor:
         res.people.append(PersonEntity(
             id=_slug(name, "u"), name=name, role=role, tenure=tenure, owns=owns,
             source=f"{doc.name}:1"))
+        return res
+
+    def _selfreport_from_lines(self, doc: ParsedDoc) -> ExtractionResult:
+        """rich-align-0722/03 — a weekly's 「人员动态」self-report lines → the person's self_report slot.
+
+        SYNTAX (issue-01 定稿表第 4 行): `- 小王｜负载自述：85%｜情绪自述：吃紧`. ｜ or | separates cells;
+        cell 0 is the name. **Only 自述-suffixed labels are read** — a bare 「负载：85%」 (no 自述) is
+        NOT a self-report and is dropped, so a stray person number never becomes a score. Load is
+        0..100 only (out-of-range rejected, not clamped); mood maps to the qualitative enum, out-of-
+        vocab kept verbatim as `other` (parity with milestone/status). These people carry ONLY identity
+        + self_report; roster/resume enrich the rest of the card at dedup.
+        """
+        res = ExtractionResult()
+        for i, raw in enumerate(doc.lines):
+            s = strip_decoration(raw.strip())
+            if "自述" not in s:
+                continue
+            cells = re.split(r"[｜|]", s)
+            if len(cells) < 2:
+                continue
+            name = cells[0].lstrip("-*•・ ").strip()
+            if not _looks_like_name(name):
+                continue
+            src = f"{doc.name}:{i + 1}"
+            load: "SelfReportLoad | None" = None
+            mood: "SelfReportMood | None" = None
+            for cell in cells[1:]:
+                m = re.match(r"^\s*(.+?自述)\s*[：:]\s*(.+?)\s*$", cell)
+                if not m:
+                    continue
+                label, val = m.group(1).strip(), m.group(2).strip()
+                if re.search(r"负载|工作量|工作负荷|饱和|负荷", label):
+                    mv = re.match(r"^(\d{1,3})\s*%?$", val)
+                    if mv:
+                        iv = int(mv.group(1))
+                        if 0 <= iv <= 100:          # reject, don't clamp (absent≠none)
+                            load = SelfReportLoad(value=iv, source=src)
+                elif re.search(r"情绪|心情|状态", label):
+                    enum = norm_mood_selfreport(val)
+                    mood = SelfReportMood(value=enum or "other", source=src,
+                                          valueRaw="" if enum else val[:40])
+            if load or mood:
+                res.people.append(PersonEntity(
+                    id=_slug(name, "u"), name=name,
+                    self_report=PersonSelfReport(load=load, mood=mood), source=src))
         return res
 
     # projects & signals ---------------------------------------------------
@@ -1481,6 +1595,17 @@ def _dedupe_entities(res: ExtractionResult) -> None:
         cur.team = cur.team or p.team
         cur.tenure = cur.tenure or p.tenure
         cur.source = cur.source or p.source
+        # rich-align-0722/03 — self_report enriches across docs, keep-first PER sub-slot: a roster
+        # carries identity + no self-report, a weekly carries the self-report + no identity. Merge so
+        # the person who actually exists has both, without a later weekly clobbering an earlier one.
+        if p.self_report:
+            if cur.self_report is None:
+                cur.self_report = p.self_report
+            else:
+                if cur.self_report.load is None:
+                    cur.self_report.load = p.self_report.load
+                if cur.self_report.mood is None:
+                    cur.self_report.mood = p.self_report.mood
         # union, order-preserving, capped at the same 6 _slist/_build use
         cur.owns = (cur.owns + [o for o in p.owns if o and o not in cur.owns])[:6]
         cur.collaboration = (

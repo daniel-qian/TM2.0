@@ -66,7 +66,71 @@ function classNames(parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(' ')
 }
 
-// 单张人卡（分组视图与兜底 flat 视图共用）。🔴 红线：永不渲染任何数字/评分/排名。
+// rich-align-0722/03 · 自述出处 → 展示用文档名（剥掉 `:行号` 尾缀）。
+function docFromSource(source: string): string {
+  return source.replace(/:\d+$/, '')
+}
+
+// rich-align-0722/03 · 情绪定性枚举 → 当前字典的词。other 走文档原词 valueRaw（不替客户改写）。
+function moodLabel(
+  mood: NonNullable<NonNullable<LitePerson['selfReport']>['mood']>,
+  t: ReturnType<typeof useDict>['t'],
+): string {
+  switch (mood.value) {
+    case 'steady':
+      return t.lite2.selfReportMoodSteady
+    case 'stretched':
+      return t.lite2.selfReportMoodStretched
+    case 'strained':
+      return t.lite2.selfReportMoodStrained
+    default:
+      return mood.valueRaw?.trim() || t.lite2.selfReportMoodOther
+  }
+}
+
+// rich-align-0722/03 · 本人自述负载/情绪。🔴 双世界执法的可见端：只在开关开、后端投影了 self_report
+// 时才渲染（selfReport 缺席即整段收起，绝不显 0/空）。**每一处出现数字或情绪词的元素都带
+// data-metric-source 锚点**（AFK 门据此判定：锚点外出现血条/情绪词=红），并挂系统自证式出处角标
+// 「《X》记录的本人自述」——不直接断言"本人自述"（作者身份系统验不了），只归因到文档。
+function SelfReportRow({
+  report,
+  t,
+}: {
+  report: NonNullable<LitePerson['selfReport']>
+  t: ReturnType<typeof useDict>['t']
+}) {
+  const { load, mood } = report
+  if (!load && !mood) return null
+  return (
+    <p className="home-person-selfreport">
+      {load ? (
+        <span
+          className="lite-selfreport lite-selfreport--load"
+          data-metric-source={load.source}
+          data-metric-caliber={load.caliber}
+          title={fill(t.lite2.selfReportProvenance, { source: docFromSource(load.source) })}
+        >
+          <span className="lite-selfreport-label">{t.lite2.selfReportLoadLabel}</span>
+          <span className="lite-selfreport-value">{load.value}%</span>
+        </span>
+      ) : null}
+      {mood ? (
+        <span
+          className="lite-selfreport lite-selfreport--mood"
+          data-metric-source={mood.source}
+          data-metric-caliber={mood.caliber}
+          title={fill(t.lite2.selfReportProvenance, { source: docFromSource(mood.source) })}
+        >
+          <span className="lite-selfreport-label">{t.lite2.selfReportMoodLabel}</span>
+          <span className="lite-selfreport-value">{moodLabel(mood, t)}</span>
+        </span>
+      ) : null}
+    </p>
+  )
+}
+
+// 单张人卡（分组视图与兜底 flat 视图共用）。🔴 红线：定性为主；唯一的数字面是本人自述负载/情绪，
+// 且只在开关开时由后端投影、由 SelfReportRow 带出处渲染（见其注释）。
 function PersonCard({
   person,
   onOpen,
@@ -92,8 +156,9 @@ function PersonCard({
         <h3>{person.name}</h3>
         <p className="home-person-role">{person.role}</p>
         <p className="home-person-read">{read}</p>
+        {/* rich-align-0722/03：本人自述负载/情绪。缺席（含开关关）即不渲染——人卡回到零数字。 */}
+        {person.selfReport ? <SelfReportRow report={person.selfReport} t={t} /> : null}
       </span>
-      {/* 🔴 红线：人卡永不渲染任何数字 —— 无 moodPct/capacityPct/% */}
     </button>
   )
 }

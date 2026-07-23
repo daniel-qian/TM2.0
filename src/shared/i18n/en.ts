@@ -993,6 +993,18 @@ export const en = {
     projectsMilestoneBlocked: 'Blocked',
     projectsMilestoneUpcoming: 'Upcoming',
     projectsMilestoneOther: 'Other',
+    // rich-align-0722/03 · 人员自述负载/情绪（人身数字开关口径）。ONLY rendered when the operator
+    // has unblocked person scoring; each metric carries a system-self-attesting provenance caption
+    // (never a bare assertion of authorship). Mood labels ARE the four-word vocabulary the gate scans.
+    selfReportLoadLabel: 'Self-reported load',
+    selfReportMoodLabel: 'Self-reported mood',
+    selfReportMoodSteady: 'Steady',
+    selfReportMoodStretched: 'Stretched',
+    selfReportMoodStrained: 'Strained',
+    selfReportMoodOther: 'Other',
+    // {source} = the document (filename) the line came from. Phrased as an attribution to that
+    // document, so the system self-attests provenance rather than vouching for the claim.
+    selfReportProvenance: 'Self-reported, per «{source}»',
 
     // ── Onboarding gate (feat-045, PRD F7; input-side-0721 — a full-screen gate page now, not
     // a floating dialog. Escape / "look around" pauses and resumes next visit. NO fake

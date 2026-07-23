@@ -64,6 +64,9 @@ function Lite2Shell() {
   // open-loop-0720：issue #16 提到的「运行时热切换」在本棒落地——从 lookStore 订阅而不是
   // useMemo 挂载时算一次，LiteTopbar 的开关点下去后这里跟着重渲染，不必整页刷新。
   const look = useLook((s) => s.look)
+  // rich-align-0722/03 · 人身自述投影开关的壳内镜像 → data-scoring-enabled 标记。AFK 门「读壳上
+  // 开关标记」据此在两世界跑不同断言（关=人卡零数字；开=数字只许在 data-metric-source 锚内）。
+  const scoringEnabled = useLite((s) => s.team?.scoringEnabled ?? false)
 
   // store 的 goScreen/openDetail/closeDetail 经这个桥推路由（Zustand action 里没有 hook）。
   // 两处都绑，缺一不可：
@@ -98,7 +101,13 @@ function Lite2Shell() {
   }, [])
 
   return (
-    <div className="app-shell lite2-shell" data-scene={screen} data-mode="live" data-look={look}>
+    <div
+      className="app-shell lite2-shell"
+      data-scene={screen}
+      data-mode="live"
+      data-look={look}
+      data-scoring-enabled={scoringEnabled ? 'on' : 'off'}
+    >
       <LiteTopbar />
       <main className="scene-stage">
         {/* 🔴 每条屏路由的 element 都是同一个 <ScreenView />，这不是偷懒——是修复的关键。

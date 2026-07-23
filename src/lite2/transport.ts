@@ -90,6 +90,10 @@ export interface LiveTeamPayload {
   // input-side-0721 · 3A：POST /demo/claim 的首帧自报"这是示例团队的克隆副本"。
   // /team/{id} 刷新帧不发（demo 身份只在领取那一刻有叙事意义；副本此后就是一份普通工作区）。
   demo?: boolean
+  // rich-align-0722 · issue 03：人身自述投影开关（后端 AVERY_ALLOW_PERSON_SCORING）。
+  // present-and-true ONLY when 开关开（仿 account_linked 缺席即 false 语义）。true 时后端才会在人卡上
+  // 投影 self_report；缺席/false 时人卡零自述数字。前端运行时剥离据此决定放不放行 self_report 白名单。
+  scoring_enabled?: boolean
 }
 
 // input-side-0721 · 3A：GET /demo/status 的能力探测契约（无鉴权、无副作用）。
@@ -99,8 +103,28 @@ export interface DemoStatusPayload {
   ready: boolean
 }
 
-// 人卡：定性 ONLY。🔴 红线：moodPct/capacityPct 等血条字段 live 永不出现——
-// 类型里根本不给这些键留位置（结构性护栏），LiveTeamSource 再做一次运行时剥离兜底。
+// rich-align-0722 · issue 03：人员自述读数（负载/情绪）。人身数字红线 07-21 解禁 + 07-22 拍板后的
+// 唯一合法人身数字面——且**只能是本人自述**，caliber(口径)+source(出处) 必带。这不是"血条"（不是系统
+// 对人打的分），是把文档里本人自己报的负载/情绪原样转呈，渲染层凭 source 说「《X》记录的本人自述」。
+export interface LiveSelfReportLoad {
+  value: number // 0..100，本人自述负载
+  caliber: string // 恒『本人自述』
+  source: string // 出处 <文档名>:<行>
+}
+export interface LiveSelfReportMood {
+  value: 'steady' | 'stretched' | 'strained' | 'other' // 情绪定性枚举；other=词表外
+  caliber: string
+  source: string
+  valueRaw?: string // 仅 other 时发：文档原词，原样回显不改写
+}
+export interface LivePersonSelfReport {
+  load?: LiveSelfReportLoad // 缺席=文档没报负载（absent≠none，前端不编 0）
+  mood?: LiveSelfReportMood // 缺席=文档没报情绪
+}
+
+// 人卡：定性为主。🔴 红线：moodPct/capacityPct 等**系统打分式**血条字段 live 永不出现——
+// 类型里根本不给这些键留位置（结构性护栏），teamData.stripPersonNumbers 再做一次运行时剥离兜底。
+// self_report 是**唯一例外**且**只在开关开时**才由后端投影（见 scoring_enabled），运行时剥离据此放行。
 export interface LivePersonCard {
   id: string
   name: string
@@ -111,6 +135,9 @@ export interface LivePersonCard {
   // team_cards() 发的是 list[str]（PersonEntity.collaboration）。feat-023 的 LLM 抽取第一次
   // 真的填了它，暴露此处曾误写 string（heuristic 从不产 collaboration，一直潜伏到 gate 抓到）。
   collaboration?: string[]
+  // rich-align-0722/03：本人自述负载/情绪。**仅当 payload.scoring_enabled===true 时**后端才投影它；
+  // 运行时剥离在开关关时会连它一并丢弃（双世界执法）。
+  self_report?: LivePersonSelfReport
 }
 
 // rich-align-0722 · issue 01：项目级风险（PRD A1）。这是**项目**属性（进度/范围/资源风险），
