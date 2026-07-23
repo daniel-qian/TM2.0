@@ -622,6 +622,95 @@
   border-color: var(--rule);
 }
 
+/* ── rich-align-0722/04 · team 目录形态（筛选 chip 行 + 3 列成员卡网格）──────────
+   她方通讯录形态：组别 chip 行恒在 + 情绪 chip 行仅开关开渲染（挂口径角标）+ 3 列网格。
+   chip 令牌照抄 .lite-home-gap-chip（选中=--ink 深底 --paper-strong 白字，白压深远超 AA）。
+   网格 grid-template-columns 覆盖 shared 的 auto-fill 为 repeat(3)（.lite2-shell .lite-team-directory
+   0,2,0 胜 .home-lane-people 0,1,0）；限高自滚沿用 .home-lane-people（人多不撑爆整页）。 */
+.lite2-shell .lite-team-directory-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.lite2-shell .lite-team-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.lite2-shell .lite-team-mood-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* 口径角标：系统自证式「按本人自述筛选」——不是操作者的判断。--ink-soft 压 --paper 达 AA。 */
+.lite2-shell .lite-team-mood-caption {
+  align-self: flex-start;
+  color: var(--ink-soft);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+.lite2-shell .lite-team-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: none;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 11.5px;
+  line-height: 1.5;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.lite2-shell .lite-team-filter-chip:hover {
+  border-color: var(--rule-strong);
+}
+
+.lite2-shell .lite-team-filter-chip:focus-visible {
+  outline: 2px solid var(--sage);
+  outline-offset: 1px;
+}
+
+.lite2-shell .lite-team-filter-chip[aria-pressed='true'] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper-strong);
+}
+
+.lite2-shell .lite-team-filter-chip-count {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.lite2-shell .lite-team-directory {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.lite2-shell .lite-team-directory-empty {
+  color: var(--ink-soft);
+  font-size: 13px;
+  padding: 8px 4px;
+}
+
+/* 目录网格响应式降列（随既有 880/720 断点体系）：3 → 2 → 1。 */
+@media (max-width: 880px) {
+  .lite2-shell .lite-team-directory {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 720px) {
+  .lite2-shell .lite-team-directory {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ── feat-025 Q2 · Your team 轻量分组视图（部门/项目归属/角色聚类，可折叠）────────
    分组只包容器 + 标题 + 折叠；人卡本身零改（.home-person-card 仍在 DOM、仍可点）。
    限高自滚（Bug4）从 .home-lane-people 上移到整个分组列 .home-people-groups——

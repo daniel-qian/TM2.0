@@ -38,6 +38,8 @@ import type { Dict } from "./index";
 //  Provenance} (自述负载/自述情绪/如常/偏紧/吃紧/其他 + 《{source}》记录的本人自述). The mood words
 //  are DELIBERATELY the four-token vocabulary the AFK gate scans (如常/偏紧/吃紧) — keep them verbatim.
 //  AFK offline pass, no directed M3; Danny 审字 pending (verified as 复核项 in 03 acceptance).
+// ⚠ HAND-WRITTEN, NOT YET M3 (rich-align-0722/04): lite2.directory* (11 keys — team 目录形态的组别/
+//  情绪筛选 chip 文案 + 口径角标「按本人自述筛选」+ 空筛选态). Draft; Danny 审字 pending.
 // NOTE (feat-047): lite2.tabNotes + the 14-key lite2.notes* block are NEW in this run — 0 fresh
 //  M3 calls (script reused zh.lite's already-approved translation verbatim since the key names
 //  match byte-for-byte; see scripts/i18n-zh-lite2-delta.mjs's sharedKeys logic). Danny 审字
@@ -724,6 +726,17 @@ export const zh: Dict = {
     "selfReportMoodStrained": "吃紧",
     "selfReportMoodOther": "其他",
     "selfReportProvenance": "《{source}》记录的本人自述",
+    "directoryGroupAllLabel": "全部",
+    "directoryGroupAllAria": "显示全部成员",
+    "directoryGroupFilterAria": "只看{group}",
+    "directoryUngroupedLabel": "未分组",
+    "directoryMoodRowLabel": "自述情绪",
+    "directoryMoodFilterCaption": "按本人自述筛选",
+    "directoryMoodAllLabel": "全部",
+    "directoryMoodAllAria": "显示全部情绪",
+    "directoryMoodFilterAria": "只看自述{mood}的成员",
+    "directoryEmptyFiltered": "没有符合该筛选的成员。",
+    "directoryReuploadEyebrow": "继续添加文件",
     "onboardEyebrow": "开始上手",
     "onboardCloseAria": "关闭 —— 下次会从上次停下的地方继续",
     "onboardSkip": "跳过设置",

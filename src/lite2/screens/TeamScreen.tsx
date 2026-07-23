@@ -14,7 +14,14 @@ import { projectStatusText } from '../../shared/projectStatus'
 import { UploadPanel } from '../UploadPanel'
 import { InitialAvatar } from '../InitialAvatar'
 import { LiteComposer } from '../LiteComposer'
-import { groupPeople } from '../teamGroups'
+import {
+  deriveGroupFacets,
+  deriveMoodFacets,
+  filterDirectory,
+  GROUP_ALL,
+  GROUP_UNGROUPED,
+  MOOD_ALL,
+} from '../teamDirectory'
 import type { LiteHandoff, LitePerson } from '../teamData'
 
 // feat-024 · lite 屏 1+2：上传空态 · Your team——ADR-0022 决策 1。
@@ -163,43 +170,147 @@ function PersonCard({
   )
 }
 
-// 一个可折叠的人卡分组容器（feat-025 Q2：分组标题 + 人数 + 折叠）。
-function PeopleGroup({
-  title,
+// rich-align-0722/04 · team 屏目录形态（有数据分支）。她方通讯录形态：筛选 chip 行（组别恒在；
+// 情绪仅开关开时渲染，挂「按本人自述筛选」口径角标）+ 3 列成员卡网格。
+// 🔴 裁决（PRD C 节 / ADR-0023）：chip 是**筛选**不是**横向比较**——不排序、不计分。
+//   · 组别 chip 可带 count 徽章；情绪 chip **不带**任何 count（跨人计数=分数并列，裁决禁）。
+//   · 情绪 chip 行仅在 scoringEnabled 且有人报了 mood 时渲染——开关关整行不出现，
+//     情绪词表词（如常/偏紧/吃紧）因此在关世界零出现（人卡的 SelfReportRow 也已被剥离层收起）。
+//   · 上传部件在两分支都渲染（降位不卸载）——AFK 上传相位与 skin probe 依赖 .upload-panel。
+// 成员卡 .home-person-card DOM 锚点零改（门相位 C/E 不受影响）；网格保留 .home-lane-people 类
+// （AFK skin probe 轮询 `.upload-panel || .home-lane-people`）。
+function moodChipLabel(key: string, t: ReturnType<typeof useDict>['t']): string {
+  switch (key) {
+    case 'steady':
+      return t.lite2.selfReportMoodSteady
+    case 'stretched':
+      return t.lite2.selfReportMoodStretched
+    case 'strained':
+      return t.lite2.selfReportMoodStrained
+    default:
+      return t.lite2.selfReportMoodOther
+  }
+}
+
+function TeamDirectory({
   people,
+  scoringEnabled,
   onOpen,
 }: {
-  title: string
   people: LitePerson[]
+  scoringEnabled: boolean
   onOpen: (id: string) => void
 }) {
   const { t } = useDict()
-  const [open, setOpen] = useState(true)
-  const countLabel = people.length === 1 ? t.lite2.groupCountOne : t.lite2.groupCountMany
+  const [groupFilter, setGroupFilter] = useState<string>(GROUP_ALL)
+  const [moodFilter, setMoodFilter] = useState<string>(MOOD_ALL)
+
+  const groupFacets = useMemo(() => deriveGroupFacets(people), [people])
+  const moodFacets = useMemo(
+    () => deriveMoodFacets(people, scoringEnabled),
+    [people, scoringEnabled],
+  )
+
+  // 开关关掉 / 名册变化后失效的筛选值兜底回「全部」（不 setState，纯渲染期收敛——避免开关关时
+  // 残留的 mood 筛选把网格清空、也避免情绪词表词经由残留态漏进关世界）。
+  const effGroupFilter = groupFacets.some((f) => f.key === groupFilter) ? groupFilter : GROUP_ALL
+  const effMoodFilter =
+    moodFacets.length > 0 && moodFacets.some((f) => f.key === moodFilter) ? moodFilter : MOOD_ALL
+
+  const filtered = useMemo(
+    () => filterDirectory(people, effGroupFilter, effMoodFilter),
+    [people, effGroupFilter, effMoodFilter],
+  )
+
+  function groupChipLabel(key: string): string {
+    if (key === GROUP_ALL) return t.lite2.directoryGroupAllLabel
+    if (key === GROUP_UNGROUPED) return t.lite2.directoryUngroupedLabel
+    return key // 部门原文，不翻译
+  }
+
   return (
-    <section className="home-people-group" aria-label={title}>
-      <button
-        type="button"
-        className="home-people-group-head"
-        aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
+    <div className="lite-team-directory-wrap">
+      <div
+        className="lite-team-filter-row"
+        role="group"
+        aria-label={t.lite2.peopleLane}
       >
-        <span className="home-people-group-title">{title}</span>
-        <span className="home-people-group-count">
-          {people.length} {countLabel}
-        </span>
-        <span className="home-people-group-toggle">
-          {open ? t.lite2.groupCollapse : t.lite2.groupExpand}
-        </span>
-      </button>
-      {open ? (
-        <div className="home-lane home-lane-people" aria-label={title}>
-          {people.map((person) => (
+        {groupFacets.map((f) => (
+          <button
+            key={f.key}
+            type="button"
+            className={classNames([
+              'lite-team-filter-chip',
+              f.key === GROUP_ALL && 'is-all',
+            ])}
+            aria-pressed={effGroupFilter === f.key}
+            aria-label={
+              f.key === GROUP_ALL
+                ? t.lite2.directoryGroupAllAria
+                : fill(t.lite2.directoryGroupFilterAria, { group: groupChipLabel(f.key) })
+            }
+            onClick={() => setGroupFilter(f.key)}
+          >
+            <span className="lite-team-filter-chip-label">{groupChipLabel(f.key)}</span>
+            {/* 组别 count 徽章合法（组内计数≠跨人分数并列）。 */}
+            <span className="lite-team-filter-chip-count" aria-hidden="true">
+              {f.count}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {/* 情绪 chip 行——仅开关开且有人自述 mood 时渲染，挂系统自证式口径角标。 */}
+      {moodFacets.length > 0 ? (
+        <div className="lite-team-mood-block">
+          <p className="lite-badge lite-team-mood-caption">{t.lite2.directoryMoodFilterCaption}</p>
+          <div
+            className="lite-team-filter-row lite-team-filter-row--mood"
+            role="group"
+            aria-label={t.lite2.directoryMoodRowLabel}
+          >
+            {moodFacets.map((f) => (
+              <button
+                key={f.key}
+                type="button"
+                className={classNames([
+                  'lite-team-filter-chip',
+                  'lite-team-filter-chip--mood',
+                  f.key === MOOD_ALL && 'is-all',
+                ])}
+                aria-pressed={effMoodFilter === f.key}
+                aria-label={
+                  f.key === MOOD_ALL
+                    ? t.lite2.directoryMoodAllAria
+                    : fill(t.lite2.directoryMoodFilterAria, {
+                        mood: moodChipLabel(f.key, t),
+                      })
+                }
+                onClick={() => setMoodFilter(f.key)}
+              >
+                <span className="lite-team-filter-chip-label">
+                  {f.key === MOOD_ALL ? t.lite2.directoryMoodAllLabel : moodChipLabel(f.key, t)}
+                </span>
+                {/* 🔴 情绪 chip 无 count 徽章（跨人情绪计数=分数并列，裁决禁）。 */}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {filtered.length > 0 ? (
+        <div
+          className="home-lane home-lane-people lite-team-directory"
+          aria-label={t.lite2.peopleLane}
+        >
+          {filtered.map((person) => (
             <PersonCard key={person.id} person={person} onOpen={onOpen} />
           ))}
         </div>
-      ) : null}
-    </section>
+      ) : (
+        <p className="lite-team-directory-empty">{t.lite2.directoryEmptyFiltered}</p>
+      )}
+    </div>
   )
 }
 
@@ -468,25 +579,14 @@ export function TeamScreen() {
               <UploadPanel />
               <div className="home-lanes-head">
                 <p className="eyebrow">{t.lite2.peopleLane}</p>
-                <p className="eyebrow home-people-group-caption">{t.lite2.groupAllLabel}</p>
               </div>
-              {/* feat-025 Q2：轻量分组视图——按部门/项目归属/角色聚类，带分组容器 + 折叠。
-                  人卡本身零改（.home-person-card 仍在 DOM、仍可点，门相位 C/E 不受影响）。 */}
-              <div className="home-people-groups" aria-label={t.lite2.peopleLane}>
-                {groupPeople(
-                  team.people,
-                  team.projects,
-                  t.lite2.groupUngrouped,
-                  t.lite2.groupOwns,
-                ).map((group) => (
-                  <PeopleGroup
-                    key={group.key}
-                    title={group.title}
-                    people={group.people}
-                    onOpen={(id) => openDetail('person', id)}
-                  />
-                ))}
-              </div>
+              {/* rich-align-0722/04：目录形态（筛选 chip 行 + 3 列成员卡网格）取代原 feat-025 分组视图。
+                  人卡 .home-person-card 零改（门相位 C/E 不受影响）；网格保留 .home-lane-people 类。 */}
+              <TeamDirectory
+                people={team.people}
+                scoringEnabled={team.scoringEnabled}
+                onOpen={(id) => openDetail('person', id)}
+              />
 
               <p className="eyebrow home-lane-label">{t.lite2.projectLane}</p>
               <div className="home-lane home-lane-projects" aria-label={t.lite2.projectLane}>

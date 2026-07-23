@@ -50,6 +50,9 @@ const WHITELIST = [
   // 零阻塞行 → deriveGaps 出 0 张卡 → chip 整块不渲染 → 从不进审计（假绿）。加载真验收语料
   // （.issues/layout-real-0722/acceptance-corpus/）后 chip 才渲染，此白名单条目才真正生效。
   '.lite-home-gap-chip',
+  // rich-align-0722/04 · team 目录形态的组别/情绪筛选 chip——与 .lite-home-gap-chip 同属
+  // "筛选/切换 chip"白名单类目（非普通动作按钮，切换筛选态，有专属 pill 语法 + aria-pressed）。
+  '.lite-team-filter-chip',
   '.home-person-card', '.home-people-group-head', '.home-check', '.home-map-card-link',
   '.home-drawer-toggle', '.home-project-card',
   '.lite-project-card', '.lite-followup-check', '.lite-followups-subtab',

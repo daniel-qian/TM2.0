@@ -439,6 +439,46 @@
       "expected": "8",
       "tolerance": "px1",
       "note": "【rich-align/02·真部件闸】里程碑点几何对齐她方 w-2（8px）。rect.width 量真实渲染宽。"
+    },
+    {
+      "key": "team.directoryPresent",
+      "stick": 9,
+      "screen": "team",
+      "selector": ".lite2-shell .lite-team-directory-wrap",
+      "probe": "count",
+      "expected": "1",
+      "tolerance": "exact",
+      "note": "【rich-align/04·目录形态闸】有数据分支 = 她方通讯录目录形态（筛选 chip 行 + 3 列网格），容器恒 1。结构护栏（seed 无关）；3 列几何与她方对齐由 verify-team-directory-04.mjs 关系断言（卡顶同行）+ 像素证据裁决，不反向抄构建像素。"
+    },
+    {
+      "key": "team.filterAllChip",
+      "stick": 9,
+      "screen": "team",
+      "selector": ".lite2-shell .lite-team-filter-chip.is-all",
+      "probe": "count",
+      "expected": "1",
+      "tolerance": "exact",
+      "note": "【rich-align/04·目录形态闸】组别筛选 chip 行的「全部」chip 恒在（is-all）。关世界（cr-alignment 种子无 scoring_enabled）情绪行不渲染，故 is-all 恰 1。筛选 chip ≠ 横向比较（裁决 C 节）。"
+    },
+    {
+      "key": "team.directoryGridPresent",
+      "stick": 9,
+      "screen": "team",
+      "selector": ".lite2-shell .lite-team-directory",
+      "probe": "count",
+      "expected": "1",
+      "tolerance": "exact",
+      "note": "【rich-align/04·目录形态闸】3 列成员卡网格容器恒 1（team 有人即渲染）。保留 .home-lane-people 类（AFK skin probe 轮询 .upload-panel||.home-lane-people）。"
+    },
+    {
+      "key": "team.directoryGridDisplay",
+      "stick": 9,
+      "screen": "team",
+      "selector": ".lite2-shell .lite-team-directory",
+      "prop": "display",
+      "expected": "grid",
+      "tolerance": "exact",
+      "note": "【rich-align/04·目录形态闸】成员网格是 CSS grid（3 列 repeat(3,minmax(0,1fr)) 覆盖 shared auto-fill）。列数几何走 e2e 关系断言+像素，不入 spec 反向抄构建值。"
     }
   ]
 }

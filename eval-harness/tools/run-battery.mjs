@@ -167,7 +167,7 @@ const noRebuild = !!arg('no-rebuild')
 // AFK 自跑自验以 exit code 为准时这是一条永久假红，
 // 且 plan.md 棒H 的收官判据「全电池连续两轮零红」永远达不到。
 // 默认取 CURRENT_STICK（＝当前已交付的最高棒）；跑收官全量断言时显式 SPEC_STICK=99。
-const CURRENT_STICK = '8'
+const CURRENT_STICK = '9'
 const stick = process.env.SPEC_STICK || CURRENT_STICK
 
 let plan = ROSTER.slice()

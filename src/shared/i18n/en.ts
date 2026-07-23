@@ -1006,6 +1006,23 @@ export const en = {
     // document, so the system self-attests provenance rather than vouching for the claim.
     selfReportProvenance: 'Self-reported, per «{source}»',
 
+    // ── Team directory (rich-align-0722/04) · has-data team form: a group-filter chip row (always)
+    // + a self-reported-mood chip row (ONLY when person scoring is unblocked) + a 3-col member grid.
+    // 裁决 C 节: chips filter, they do NOT rank. Group chips may carry a count badge; mood chips must
+    // NOT (a mood count reads as a cross-person tally). The mood row carries a self-attesting caption
+    // so filtering by mood is framed as "by their own words", never as the operator's judgement. ──
+    directoryGroupAllLabel: 'All teams',
+    directoryGroupAllAria: 'Show everyone',
+    directoryGroupFilterAria: 'Show only {group}',
+    directoryUngroupedLabel: 'Everyone else',
+    directoryMoodRowLabel: 'Self-reported mood',
+    directoryMoodFilterCaption: 'Filtered by their own words',
+    directoryMoodAllLabel: 'Any',
+    directoryMoodAllAria: 'Show all moods',
+    directoryMoodFilterAria: 'Show only people who self-reported {mood}',
+    directoryEmptyFiltered: 'No one matches this filter yet.',
+    directoryReuploadEyebrow: 'Add more files',
+
     // ── Onboarding gate (feat-045, PRD F7; input-side-0721 — a full-screen gate page now, not
     // a floating dialog. Escape / "look around" pauses and resumes next visit. NO fake
     // connect-tools step, NO fake create-account step — every step is real wiring: upload
