@@ -794,7 +794,7 @@ export const zh: Dict = {
     "onboardDoorsTitle": "想从哪里开始？",
     "onboardDoorsBody": "两条路。示例团队最快看到全貌；用自己的文件起步，Avery 读的就是你们公司的现实。",
     "onboardDoorDemoTitle": "用一份示例团队先看看",
-    "onboardDoorDemoBody": "一支真实的营销团队（已脱敏）——五份简历加一份工作汇报，Avery 已经读完。点一下就进，不用上传。",
+    "onboardDoorDemoBody": "一份真实的示例团队（已脱敏）——花名册、项目和文档，Avery 已经读完。点一下就进，不用上传。",
     "onboardDoorDemoBusy": "正在为你准备示例副本…",
     "onboardDoorDemoErrorLead": "没法取到示例团队——",
     "onboardDoorUploadTitle": "用自己的文件开始",

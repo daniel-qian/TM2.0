@@ -1092,7 +1092,7 @@ export const en = {
     // probe) — no fake buttons. Copy states what the sample is: real, anonymized material.
     onboardDoorDemoTitle: 'Look around a sample team',
     onboardDoorDemoBody:
-      'A real marketing team, anonymized — five résumés and one work report, already read in. One click, nothing to upload.',
+      'A real, anonymized sample team — a roster, projects and documents, already read in. One click, nothing to upload.',
     onboardDoorDemoBusy: 'Setting up your own copy of the sample…',
     onboardDoorDemoErrorLead: "Couldn't fetch the sample team —",
     onboardDoorUploadTitle: 'Start with your own files',
