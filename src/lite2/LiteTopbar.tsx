@@ -10,7 +10,7 @@ import { useLook } from './lookStore'
 import type { LiteLook } from './look'
 import { LiteBell } from './LiteBell'
 import { LiteSearch } from './LiteSearch'
-import { AuthPanel } from './auth/AuthPanel'
+import { AuthPanel, restartAll } from './auth/AuthPanel'
 
 // feat-035 · lite2 壳的顶栏：6 tab + mode 开关。复用 story 顶栏的 CSS chrome
 //（.prototype-topbar 容器 pointer-events:none——可点子元素 .scene-tabs/.mode-switch
@@ -39,6 +39,13 @@ export function LiteTopbar() {
   // 0721 · 7B：语言/观感切换器收进次级设置菜单（Danny：demo 试玩器常驻顶栏不符合常理
   // UIUX）。本地态即可——菜单不跨屏持久，刷新回到收起是预期行为。
   const [settingsOpen, setSettingsOpen] = useState(false)
+  // rich-align-0722/09：「重新开始」误触保护——两击确认（首击变「确认？」，再击才执行）。
+  // 菜单收起即复位确认态（不留半确认残留）。
+  const [confirmRestart, setConfirmRestart] = useState(false)
+  const closeSettings = () => {
+    setSettingsOpen(false)
+    setConfirmRestart(false)
+  }
 
   // PRD 顺序（6 tab）+ feat-047 第 7 tab：Your team · The room · Follow-ups · Avery's notes ·
   // A closer look · Playbooks · Where this goes。笔记面移植自 src/lite，放在 Follow-ups 之后
@@ -127,7 +134,7 @@ export function LiteTopbar() {
           aria-expanded={settingsOpen}
           aria-label={t.lite2.settingsAria}
           title={t.lite2.settingsAria}
-          onClick={() => setSettingsOpen((v) => !v)}
+          onClick={() => (settingsOpen ? closeSettings() : setSettingsOpen(true))}
         >
           <span aria-hidden="true">⚙</span>
         </button>
@@ -137,7 +144,7 @@ export function LiteTopbar() {
             role="group"
             aria-label={t.lite2.settingsAria}
             onKeyDown={(e) => {
-              if (e.key === 'Escape') setSettingsOpen(false)
+              if (e.key === 'Escape') closeSettings()
             }}
           >
             <div className="lite-settings-row">
@@ -181,6 +188,27 @@ export function LiteTopbar() {
                   {t.lite2.lookSwitchAurora}
                 </button>
               </div>
+            </div>
+            {/* rich-align-0722/09 · 第三行「重新开始」：清 lite2:* 全量（含语言/观感）+ 忘光
+                owner_token + 回 onboarding 闸门。误触保护=两击确认。🔴 单动作按钮（非 nth 开关组），
+                不动上面 lang/look 两行的顺序/嵌套（verify-switchers/auth-form 按 .nth(0/1) 索引它们）。 */}
+            <div className="lite-settings-row lite-settings-row--restart">
+              <button
+                type="button"
+                className="lite-btn lite-btn--danger lite-settings-restart"
+                data-confirm={confirmRestart ? '1' : undefined}
+                aria-label={t.lite2.restartAria}
+                onClick={() => {
+                  if (confirmRestart) {
+                    restartAll()
+                    closeSettings()
+                  } else {
+                    setConfirmRestart(true)
+                  }
+                }}
+              >
+                {confirmRestart ? t.lite2.restartConfirm : t.lite2.restartAction}
+              </button>
             </div>
           </div>
         ) : null}

@@ -526,6 +526,11 @@ export const en = {
     settingsAria: 'Settings',
     lookSwitchPaper: 'Paper',
     lookSwitchAurora: 'Aurora',
+    // rich-align-0722/09 · 设置菜单第三行「重新开始」：清空全部（含语言/观感偏好）+ 回到闸门。
+    // 两击确认防误触（首击变确认态）。
+    restartAction: 'Start over',
+    restartConfirm: 'Confirm start over?',
+    restartAria: 'Start over — clear everything on this device and return to the beginning',
 
     // ── Account panel (feat-053; 收编自 AuthPanel.tsx 的私有字典，07-20 Blockers 5a) ──
     //

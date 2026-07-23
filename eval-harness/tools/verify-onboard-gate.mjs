@@ -234,6 +234,46 @@ async function freshPage(routeHook) {
   await ctx.close()
 }
 
+// ── 世界 F：重新开始——满态后一键复位回闸门（rich-align-0722/09）──────────────────────────
+// 🔴 与世界 C（Escape=pause，status 停在 in-progress、step 保留）**不冲突**：F 是**出厂重置**
+//    （status 回 unseen、step 回 doors、context 锚清空、偏好回出厂），是不同世界不同断言。
+//    freshPage 无痕开页 → hadContextOnLoad 冻在 false；claim 发生在开页之后，故重置后闸门经
+//    selectWizardOpen 重弹（无需 forceOpen，保留 Escape 逃生门）。
+{
+  const { ctx, page, errors } = await freshPage()
+  await page.waitForSelector('.lite-gate-door-demo', { timeout: 5000 })
+  await page.locator('.lite-gate-door-demo').click()
+  await page.waitForFunction(() => window.__lite2Store.getState().contextId !== null, null, { timeout: 15000 })
+  await page.waitForTimeout(400)
+  // 齿轮 → 第三行「重新开始」两击确认。
+  await page.locator('.lite-settings-toggle').click()
+  await page.waitForTimeout(150)
+  await page.click('.lite-settings-restart')
+  await page.waitForTimeout(180)
+  await page.click('.lite-settings-restart')
+  await page.waitForTimeout(600)
+  const f = await page.evaluate(() => {
+    const s = window.__lite2Store.getState()
+    return {
+      ctxId: s.contextId,
+      anchor: localStorage.getItem('lite2:contextId:v1'),
+      onboardKey: localStorage.getItem('lite2:onboard:v1'),
+      gate: document.querySelectorAll('.lite-onboard').length,
+      step: document.querySelector('[data-onboard-step]')?.getAttribute('data-onboard-step') || null,
+      skeleton: document.querySelectorAll('[data-home-skeleton]').length,
+    }
+  })
+  console.log(`  世界F: ${JSON.stringify(f)}`)
+  rec('F·闸门重弹（重新开始把访客打回门厅）', f.gate > 0, `onboard=${f.gate}`)
+  rec('F·闸门回 doors 步（出厂，非 pause 的 in-progress）', f.step === 'doors', `step=${f.step}`)
+  rec('F·context 锚清空（lite2:contextId:v1 = null）', f.anchor === null, `anchor=${f.anchor}`)
+  rec('F·store contextId 清空', f.ctxId === null, `ctxId=${f.ctxId}`)
+  rec('F·onboard 键也清（出厂全清，非 pause 保留进度）', f.onboardKey === null, `onboard=${f.onboardKey}`)
+  rec('F·首页骨架在闸门下', f.skeleton >= 1, `skeleton=${f.skeleton}`)
+  rec('F·无 pageerror', errors.length === 0, errors.slice(0, 2).join(' | ') || '0 条')
+  await ctx.close()
+}
+
 await browser.close()
 
 const pass = R.filter((r) => r.ok).length

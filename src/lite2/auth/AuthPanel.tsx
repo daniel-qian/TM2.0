@@ -5,8 +5,11 @@ import { useLite } from '../store'
 import { forgetAllOwnerTokens } from '../transport'
 import { useDict } from '../../shared/i18n/useDict'
 // 🔴 换账号清场的白名单读的是**常量本身**，不是抄一份字面量 —— 理由见 KEEP_ACROSS_ACCOUNTS。
-import { LOCALE_STORAGE_KEY } from '../../shared/i18n'
-import { LOOK_STORAGE_KEY } from '../look'
+import { LOCALE_STORAGE_KEY, resolveLocale } from '../../shared/i18n'
+import { LOOK_STORAGE_KEY, resolveLook } from '../look'
+// rich-align-0722/09：「重新开始」把 lang/look 也回出厂——in-memory 走 setState（不落盘）。
+import { useLocaleStore } from '../../shared/i18n/localeStore'
+import { useLook } from '../lookStore'
 // fixD/M2：换账号必须一并清掉这三个 localStorage store —— 它们装着上一家公司文档的**逐字原文**。
 import { useFlow } from '../flowStore'
 import { useNotify } from '../notifyStore'
@@ -154,6 +157,54 @@ export function clearCompanyScope(): void {
   // 换账号后 URL 还停在 `/team/<上一家公司的人 id>`，浮层照旧挂着，正是本函数要杀的那个 bug。
   // goScreen 的签名 051 没动，内部改成推路由，一次调用同时收掉「关浮层」和「回团队屏」。
   useLite.getState().goScreen('team')
+}
+
+// ── rich-align-0722/09 · 「重新开始」全量重开（演示 10 秒复位下一场）────────────────────────
+// 🔴 无白名单的全量 lite2:* 清扫（含 lang/look）。与 wipeLite2LocalStorage **分开一条路径**：
+// 换账号（clearCompanyScope）保留偏好，重新开始回出厂全清——故 verify-auth-form ⑨（换账号保留
+// lang/look）不受本函数影响。别把这个白名单去掉到 wipeLite2LocalStorage 上，那会打穿 ⑨。
+function wipeAllLite2LocalStorage(): void {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return
+    const doomed: string[] = []
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const key = window.localStorage.key(i)
+      if (key && key.startsWith('lite2:')) doomed.push(key) // 🔴 无白名单：偏好一并清
+    }
+    for (const key of doomed) window.localStorage.removeItem(key)
+  } catch {
+    /* 无痕/被拒 —— 内存态复位仍生效 */
+  }
+}
+
+// 与 clearCompanyScope（换账号）三处不同（09 拍板①/E1）：
+//   ① **连语言/观感一起清**（whitelist-free wipe——回出厂，不像换账号保留偏好）。
+//   ② **回 onboarding 闸门**（resetLite2MemoryStores 已把 onboard 打回 status:unseen/step:doors；
+//      goScreen('home') 让首页骨架落在闸门下——fresh 会话 hadContextOnLoad=false，status unseen
+//      即重弹闸门，且**不设 forceOpen**以保留 Escape「先随便看看」逃生门）。
+//   ③ **in-memory lang/look 回出厂**：setState 绕开 setLocale/setLook 的 persist，故上面清空的
+//      lite2:lang/look 键保持空（resolveLocale/resolveLook 是纯函数无写盘副作用）。
+export function restartAll(): void {
+  forgetAllOwnerTokens()
+  useLite.getState().resetRun()
+  useLite.getState().adoptContext(null)
+  useLite.setState({
+    team: null,
+    rawTeam: null,
+    files: [],
+    notes: [],
+    noteJustAdded: false,
+    ingestStatus: 'idle',
+    ingestError: null,
+    knownContexts: [],
+    switchError: null,
+    switchPending: null,
+  })
+  resetLite2MemoryStores()
+  wipeAllLite2LocalStorage()
+  useLocaleStore.setState({ locale: resolveLocale() })
+  useLook.setState({ look: resolveLook() })
+  useLite.getState().goScreen('home')
 }
 
 // 门缝（🔴 DEV-ONLY）：同 store.ts 的 `__lite2Store` / authStore.ts 的 `__lite2Auth` 先例。

@@ -20,9 +20,9 @@ B 无 spec 行）。C 直接在 main 上接（C 需要 07 的 SOP + 全部前序
 
 | 片 | commit | stick | 状态 |
 |---|---|---|---|
-| **08** · playbooks 方法库（SOP → 方法卡满态 2 列网格） | `<08>` | 12 | ✅ 全绿 |
-| 09 · 重新开始+演示控制 | — | — | ⏳ 进行中 |
-| 10 · 登录隔离演示线 | — | — | ⏳ |
+| **08** · playbooks 方法库（SOP → 方法卡满态 2 列网格） | `99ace1d` | 12 | ✅ 全绿 |
+| **09** · 重新开始+演示控制（齿轮第三行「重新开始」全量重开） | `<09>` | — | ✅ 全绿 |
+| 10 · 登录隔离演示线 | — | — | ⏳ 进行中 |
 | 11 · 收官（全电池两轮 + 验收表单 + handoff） | — | — | ⏳ |
 
 ---
@@ -96,3 +96,40 @@ absent≠none）→ playbooks 屏满态 2 列网格（方法卡=非交互 `<arti
    留将来「详情展开」态——那时方法卡才升 button，button-family 白名单同 commit 补）。
 3. 像素：满态网格无 tracked 基线覆盖（stub 空态盖不到，同 01/02/04/05a/06）——几何靠 stick 12 +
    verify-playbooks-08 关系断言 + 晨审并排。
+
+---
+
+## 09 · 重新开始+演示控制（无 stick）
+
+齿轮设置菜单加第三行「重新开始」（两击确认防误触）：清 **lite2:* localStorage 全量（含语言/观感
+偏好）** + 忘光全部 owner_token + 回 onboarding 闸门。演示 10 秒复位下一场。纯前端 + localStorage，无新后端。
+
+### 关键设计（含 recon 逮到的两处历史坑）
+- **🔴 whitelist-free 全清另起一条路径**：`wipeLite2LocalStorage`（换账号用）07-20 起有
+  `KEEP_ACROSS_ACCOUNTS` 白名单**保留** lang/look（记忆条目「按前缀整段清」已过时）。重新开始要回
+  出厂全清，故新写 `wipeAllLite2LocalStorage`（无白名单）**与换账号分开**——`verify-auth-form ⑨`
+  （换账号保留偏好）因此零波及。
+- **store 层全量重开 action `restartAll()`**（AuthPanel.tsx，复用 clearCompanyScope 的 teardown +
+  resetLite2MemoryStores）：forgetAllOwnerTokens（已存，复用）→ useLite teardown → 三 store 内存态
+  回出厂 → whitelist-free 全清 → in-memory lang/look 回出厂（`useLocaleStore/useLook.setState` 绕开
+  persist，故清空的 lang/look 键**保持空**）→ goScreen('home')。
+- **闸门重弹的 hadContextOnLoad 冻结坑**：`OnboardGate.tsx` 的 `hadContextOnLoad` 冻在开页那一刻。
+  演示场景是无痕开页后才 claim，故冻在 false → 重置 onboard status:unseen 即经 selectWizardOpen 重弹，
+  **不设 forceOpen**（保留 Escape「先随便看看」逃生门）。
+- 菜单第三行是**单动作按钮**（`.lite-btn--danger`，非 nth 开关组）——不动 lang/look 两行顺序/嵌套
+  （verify-switchers/auth-form 按 `.nth(0/1)` 索引它们）。
+
+### 门绿证据（全离线 mock 三件套 + 三亚 seed）
+| 门 | 结果 |
+|---|---|
+| 新 e2e 闭环 `verify-restart-09.mjs`（无痕→闸门→一键三亚 16人/6项目→切 paper→两击重新开始→lite2:* 键全空含偏好+owner 忘光+闸门重弹 doors+骨架在+零 console error） | **15/15** |
+| `verify-onboard-gate.mjs` 加**世界 F**（重启出厂：闸门重弹 doors/context 锚清/onboard 键清/骨架在，与世界 C 的 pause 语义不冲突；世界 A-E 回归） | **46/0** |
+| `verify-switchers.mjs` 加**重启世界⑥**（全清含语言/观感回出厂 lite2:look/lang:v1=null；④/⑤ 记忆契约不变） | **27/0** |
+| verify-auth-form（C 区殿后独占+跑完重建 dist；⑧ 语言开关经齿轮 + ⑨ 换账号**保留**偏好——证明 restart 全清与换账号保留是两条路径） | **57/0** |
+| A 区电池 SPEC_STICK=12（button-family 含新 `.lite-btn--danger` 重新开始钮 + aria-zh 含新 restartAria + home-skeleton + p0 回归） | **19/19** |
+
+- 新探针 tracked：`verify-restart-09.mjs`（闭环）。verify-onboard-gate/switchers 为**扩世界**（既有门加行）。
+- i18n：en.ts 3 新键（restartAction/restartConfirm/restartAria）；zh.ts 3 键手写 draft 待审字（头已标 09）。
+- 拍板复核项（收官表单）：**①「重新开始」全清含语言/观感**——照共识「清 lite2:*」原文执行（whitelist-free），
+  要保留偏好属改共识不属改实现。
+- 像素：净影响 0（齿轮菜单第三行只在设置弹层内，stub 基线不展开设置弹层；九屏骨架未动）。

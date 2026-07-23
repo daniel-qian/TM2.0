@@ -175,6 +175,40 @@ rec(
   `tab 文案 "${afterSync.homeTabText}"`,
 )
 
+// ── ⑥ 重新开始：全清含语言/观感回出厂（rich-align-0722/09 拍板①）─────────────────────────
+// 非重启世界的 ④ 记忆契约不变（上面 ④/⑤ 已验：裸链刷新记住偏好、深链同步）；本世界考的是
+// 「重新开始」这一动作会把偏好也一并清回出厂——与 ④ 的「记住」正交，两者同一份 localStorage 不冲突。
+console.log('\n═══ ⑥ 重新开始：全清含语言/观感回出厂 ═══')
+await page.goto(`${UI}/?v=2&mode=live`, { waitUntil: 'networkidle' })
+await dismissOnboardIfAny(page)
+// 先造一个"用户改过偏好"的态：切到 paper + en，确认 localStorage 落值。
+await page.locator('.lite-settings-toggle').click()
+await page.waitForTimeout(150)
+await page.locator('.look-switch-btn').nth(0).click() // 暖纸 paper
+await page.waitForTimeout(120)
+await page.locator('.lang-switch-btn').nth(1).click() // 英文 en
+await page.waitForTimeout(120)
+const beforeRestart = await page.evaluate(() => ({
+  look: localStorage.getItem('lite2:look:v1'),
+  lang: localStorage.getItem('lite2:lang:v1'),
+}))
+rec('⑥ restart 前：偏好落值 paper/en', beforeRestart.look === 'paper' && beforeRestart.lang === 'en', JSON.stringify(beforeRestart))
+// 两击「重新开始」（误触保护：首击进确认态，再击执行）。
+await page.click('.lite-settings-restart')
+await page.waitForTimeout(180)
+await page.click('.lite-settings-restart')
+await page.waitForTimeout(500)
+const afterRestart = await page.evaluate(() => ({
+  look: localStorage.getItem('lite2:look:v1'),
+  lang: localStorage.getItem('lite2:lang:v1'),
+  ctxId: localStorage.getItem('lite2:contextId:v1'),
+  gate: document.querySelectorAll('.lite-onboard').length,
+}))
+rec('⑥ restart 后：语言/观感偏好键全清回出厂（lite2:look/lang:v1 = null）',
+  afterRestart.look === null && afterRestart.lang === null, JSON.stringify(afterRestart))
+rec('⑥ restart 后：context 锚也清（lite2:contextId:v1 = null）', afterRestart.ctxId === null, `ctxId=${afterRestart.ctxId}`)
+rec('⑥ restart 后：onboarding 闸门重弹', afterRestart.gate > 0, `onboard=${afterRestart.gate}`)
+
 rec('全程无 pageerror', pageErrors.length === 0, pageErrors.slice(0, 3).join(' | ') || '0 条')
 
 await ctx.close()

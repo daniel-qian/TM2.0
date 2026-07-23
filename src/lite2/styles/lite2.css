@@ -5718,6 +5718,24 @@
   color: var(--ink-faint);
 }
 
+/* rich-align-0722/09 · 「重新开始」行：与上面两行偏好开关用分隔线隔开（它是破坏性动作，不是偏好）。 */
+.lite2-shell .lite-settings-row--restart {
+  border-top: 1px solid var(--rule);
+  padding-top: 10px;
+  margin-top: 2px;
+}
+
+.lite2-shell .lite-settings-restart {
+  width: 100%;
+  justify-content: flex-start;
+  font-size: 12.5px;
+  padding: 7px 10px;
+}
+
+.lite2-shell .lite-settings-restart[data-confirm='1'] {
+  font-weight: 700;
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════════════════
    input-side-0721 · 输入侧棒 r2（APPEND-ONLY 纪律：只加不改上面任何一行）
    ① onboarding 闸门页（OnboardGate）：同一个 LiteModal 底座，layerClassName=lite-gate-layer

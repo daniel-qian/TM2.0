@@ -42,6 +42,8 @@ import type { Dict } from "./index";
 //  情绪筛选 chip 文案 + 口径角标「按本人自述筛选」+ 空筛选态). Draft; Danny 审字 pending.
 // ⚠ HAND-WRITTEN, NOT YET M3 (rich-align-0722/08): lite2.playbooksLibrary* + playbooksCardTagsAria
 //  (5 keys — 满态方法库网格屏头). Draft; Danny 审字 pending.
+// ⚠ HAND-WRITTEN, NOT YET M3 (rich-align-0722/09): lite2.restart{Action,Confirm,Aria}
+//  (3 keys — 设置菜单第三行「重新开始」). Draft; Danny 审字 pending.
 // NOTE (feat-047): lite2.tabNotes + the 14-key lite2.notes* block are NEW in this run — 0 fresh
 //  M3 calls (script reused zh.lite's already-approved translation verbatim since the key names
 //  match byte-for-byte; see scripts/i18n-zh-lite2-delta.mjs's sharedKeys logic). Danny 审字
@@ -458,6 +460,10 @@ export const zh: Dict = {
     "settingsAria": "设置",
     "lookSwitchPaper": "暖纸",
     "lookSwitchAurora": "极光",
+    // rich-align-0722/09 · 3 键手写 draft 待 Danny 审字（同 01-08 手写键口径）。
+    "restartAction": "重新开始",
+    "restartConfirm": "确认重新开始？",
+    "restartAria": "重新开始——清空本设备上的全部内容并回到开头",
     "authSignIn": "登录",
     "authAccount": "账号",
     "authTitle": "账号",
