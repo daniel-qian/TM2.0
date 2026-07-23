@@ -24,6 +24,18 @@ primary「添加项目」内联表单 → DetailOverlay 页脚编辑态（字段
 **交付后 CURRENT_STICK→10。** 后端契约已定，详见 acceptance-2.md §5。之后 05b（重传手编赢+冲突）→ 06（人员 CRUD，复用
 Mixin，人身禁键→422）→ 07 三亚语料 → 08–11。序与依赖见 `issues/README.md` + `issues/05-split-decision.md`。
 
+## 🧵 并行方案（Danny 07-23 拍板：11 全跑完再推；worktree 已修，可并行）
+剩余 8 块按文件冲突面分三段（详见各 kickoff）：
+- **A 线 · CRUD 主线（串行一 session）** = 05a 前端半 → 05b → 06。共用 transport/store/ProjectsScreen/
+  DetailOverlay/TeamScreen + 后端 extract(Person)/registry/ingest_api，互踩必串行；Playwright 门重。
+- **B 线 · 三亚语料（并行另一 session）** = 07。写 9 份语料 + 换 demo-seed + 改 test_demo_claim/onboard-gate 期望；
+  照现有抽取器语法写、**不改抽取器**，与 A 线文件不重叠；pytest 为主。**与 A 并行**。
+- **C 线 · 收尾（A+B 汇合后串行）** = 08→09→10→11。08 要 07 的 SOP、09 要 07 闭环、11 全电池两轮独占。
+- 🔴 **并行纪律**：A、B 各自开 worktree（WorktreeCreate，off `claude/layout-real-components-27b594`）；
+  **前端电池不许俩同时跑**（撞 5173/8137+CPU=假红）——B 的 onboard-gate 错开 A 的电池，或 B 用自建端口
+  （preview 5273 / backend 8237 指 B 的 seed）。汇合＝把 A、B 分支合回 campaign 分支再起 C。
+  绝对路径会让 session 绕过 worktree（记忆条目），干活前先 `git branch`/`status` 自查活在哪。
+
 ## 验收就绪（Danny 回来做这个）
 - **验收手册**：`.issues/rich-align-0722/acceptance-2.md`（🔴 抬头先看账实修正 + 04 否决位；§1 机器自验表；
   §2 team 目录两形态 HITL；§3 pixel-evidence 索引；§4 ①-④ 签认；§5 未做清单=下个 session 的接力棒）。
