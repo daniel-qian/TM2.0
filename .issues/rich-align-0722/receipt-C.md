@@ -22,7 +22,7 @@ B 无 spec 行）。C 直接在 main 上接（C 需要 07 的 SOP + 全部前序
 |---|---|---|---|
 | **08** · playbooks 方法库（SOP → 方法卡满态 2 列网格） | `99ace1d` | 12 | ✅ 全绿 |
 | **09** · 重新开始+演示控制（齿轮第三行「重新开始」全量重开） | `911eed9` | — | ✅ 全绿 |
-| **10** · 登录隔离演示线（真登录→claim 三亚→换号验隔离） | `<10>` | — | ✅ 全绿 |
+| **10** · 登录隔离演示线（真登录→claim 三亚→换号验隔离） | `de85278` | — | ✅ 全绿 |
 | 11 · 收官（全电池两轮 + 验收表单 + handoff） | — | — | ⏳ 进行中 |
 
 ---
@@ -171,3 +171,43 @@ Supabase env，dist 打到单独 `dist-authdemo/`），共享电池零触碰。�
 - 隔离机制零改动（feat-038 token 闸 + feat-053 账号 own；authorize_context 只「加宽」到 own 的 ctx，
   别的落同体 404）；demo 克隆隔离机制零改动。
 - 像素：净影响 0（零前端源码改动）。
+
+---
+
+## 11 · 收官（无 stick，只修门发现的回归——零回归可修）
+
+战役收口，不写新功能。产出 = 全量门两轮零红 + 对照板重拍 + 像素目检重冻 + acceptance-2.md 收编为最终
+验收表单 + handoff 换头。push 不在本片（人工闸，攒满 main 等 Danny）。
+
+### 收官门（全离线 mock 三件套 + 三亚 seed，电池独占，C 区殿后+重建 dist）
+| 门 | 结果 |
+|---|---|
+| 全 25 门电池 `SPEC_STICK=99`（A19/B3/C3，含像素门；C 区 auth-capability/auth-form/bundle-privacy 殿后+runner 自动重建 dev dist） | **连续两轮 25/25 绿**（两轮之间零动码） |
+| verify-cr-alignment 全量（`SPEC_STICK=99` 硬断言 stick 0–12 全部行，含本战役 6–12） | 电池内绿（stick 12 片跑 55/55） |
+| 扫雷 sweep（9屏×2皮×3视口）+ `--selftest` | **selftest 8/0 · 正式跑 0 件 · NEW 0 · 回归 0** |
+| 像素全量（36 张）两轮 | **两轮零 diff**（home-mobile 07-21 先天漂移已重冻，见下） |
+| T9 两世界（三亚一键 claim 满态全字段 + 薄文档诚实降级） | 满态=离线套 test_demo_claim（16人/6项目富字段/self_report 开16关0）+ 08/09 live 探针 claim 实证；薄文档降级=battery file-manifest-truth（真传好文件+损坏 PDF，30 判据）覆盖 |
+| 承诺脚注 | ✅ footerText 含「不能只拿它当依据」· visionSummary3 含「不会成为人事决策的唯一依据」 |
+
+### 🔴 收官唯一像素动作：home-mobile 重冻（先天漂移，非 C 回归）
+C 线 08/09/10 像素净影响全 0。收官全量像素唯一红点 = `{aurora,paper}-home-mobile`（07-21 起就红的跨机
+陈旧基线）。**目检 benign**（内容/结构/样式全同，唯一差异=正文换行宽度微移、末行被挤下折——典型滚动条
+子像素漂移；diff 全落文字区、卡框/上传虚线框/tab 结构像素全对齐 → 非破图非回归）。按 runbook §1「人工闸
+移到晨审」：备份旧基线 `__snapshots__/.bak/*.07-21.png` → actual→baseline 重冻 → 全量像素门 36 张零 diff。
+证据 + 目检结论：`eval-harness/reports/pixel-evidence/11/README.md`（🔴 Danny 晨审签认此重冻）。
+
+### 对照板重拍
+`eval-harness/reports/align-board/<日期>/`：开世界（带口径出处角标）+ 关世界各一版，真 uploadFiles 喂种子
+（非 stub），像素基线维持关世界。已重拍 reports/align-board/2026-07-23/（真 uploadFiles，关世界通用布局对照）；开世界情绪对照见 pixel-evidence/04 onworld、满态方法库网格对照见 pixel-evidence/08。
+
+### 产出物
+- **acceptance-2.md 收编为最终验收表单**：§1 机器自验总表（01–11）· §2 逐屏 HITL（A 门厅+三亚 · B 团队目录
+  两形态两世界 · C 项目富卡+CRUD · D 操作手册满态网格+空态 · E 重新开始闭环 · F 登录隔离线）· §3 pixel-evidence
+  索引晨审 · §4 拍板复核项 ①-④ + 承诺脚注 签认位 · §5 未做清单。
+- **session-handoff.md 换头**：C 线收官 ★最新 段（汇合实况 + 08–11 交付 + 生产暖场提醒 + push 待 Danny）。
+- 拍板复核项 ①-④ 收官状态：① 09 已交付 · ②③ 03 已交付 · ④ 06 已交付（详见 acceptance §4）。
+
+### 已知留后
+- 05b 未做（A 线已侦察落档，独立不挡）；zh 各片手写 draft 待审字；home-mobile 重冻待晨审签认；
+  生产暖场（三亚母本首 claim 为 LLM 铸造分钟级，push 后手动 claim 一次）。
+- **push=人工闸不动**：Danny 逐屏人测 acceptance-2.md 点头 → `git push`（一次上产 08–11）。

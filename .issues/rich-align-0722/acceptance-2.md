@@ -1,128 +1,105 @@
-# 验收手册 · 批次② · team 目录化（04）+ 项目手编 CRUD 写端点先例（05a 后端半）
+# 验收手册（最终）· 满态对齐战役 rich-align-0722 · 收官（01→11 全量）
 
-> 满态对齐战役（rich-align-0722）· 2026-07-23 AFK 夜跑产出。
-> **push=人工闸**：Danny 人测点头后才 `git push` 上产。本批 commit 已攒分支
-> `claude/layout-real-components-27b594`（`62b1464` 04 · `f1ca46d` 05a-be），未推。
-
----
-
-## 🔴 抬头必读：账实修正（本次夜跑发现，Danny HITL 可否决）
-
-kickoff prompt 说「issue 01–04 已交付全绿并 commit，05 已拆成 05a/05b（见
-issues/05-split-decision.md）」。**实况核对**：
-- git 只有 01/02/03 commit（03=`a5f429e`，CURRENT_STICK=8 与之对齐）；**issue 04（team 目录化）未做**
-  ——`a5f429e` 只为 issue-03 的自述开关碰过 TeamScreen，没做目录化。
-- `issues/05-split-decision.md` **原本不存在**（本次已补写，内容照 prompt 的口头拆分 + 记录此账实不符）。
-
-**06 的 Blocked-by 明列「03、04、05」**——04 是 06 的硬前置（人员 CRUD 落在目录形态里）。若跳过 04 直接做
-06，06 得返工。故本次执行序 = **04 → 05a → 05b → 06 → …**，把 Danny 以为已闭的 04 先补上。
-这不碰 push（人工闸）。**若 Danny 认为 04 当时是别的口径（如故意留作 upload-first），可在此否决、回退 `62b1464`。**
+> 2026-07-23 AFK 夜跑收官产出。**本表 = 战役最终验收表单**（收编 批次② 草稿 + C 线 08/09/10 +
+> 收官 11）。**push=人工闸**：Danny 逐屏人测点头后才 `git push`（=Vercel 自动上产 + 生产暖场 claim）。
+> 全部 commit 攒 **main** 未推（ahead origin/main）。
 
 ---
 
 ## 0. 环境（收工保持运行）
 
-- 后端 mock：`http://127.0.0.1:8137`（brain=mock / heuristic / keyword）——**在跑**。
-  🔴 **它是 05a 后端改动之前的进程**：04（前端）HITL 不受影响；若要 HITL 05a 的写端点，先按 runbook §0
-  杀 8137 重起（新代码才生效）。
-- 前端 preview：`http://localhost:5173`——**在跑**（挂 04 终局 dev 构建 `62b1464`）。
+- 后端 mock：`http://127.0.0.1:8137`（brain=mock / heuristic / keyword + 三亚 demo-seed）——在跑，**已是收官最新码**。
+- 前端 preview：`http://localhost:5173`——在跑（挂收官 dev 构建，HEAD 见 git log）。
 - 🔴 **验收入口（必带参）**：`http://localhost:5173/?v=2&mode=live&lang=zh`（aurora 皮加 `&look=aurora`）。
 - 她方参照（对照板/并排）：`cd D:\cr-live && npm run dev`（:3100）。
+- 登录隔离演示台（issue 10，隔离端口，Danny 人手登录）：见 `launch-authdemo-10.md`（5381/8381，真 Supabase）。
 
-## 1. 机器自验（本批全绿，红先行有据）
+---
 
-### 1a. issue 04 · team 目录化（前端，9 门相关面全绿）
+## 1. 机器自验总表（战役全绿）
 
-| 门 | 结果 | 备注 |
+> C 线细节收据见 `receipt-C.md`（08/09/10 逐门）；A 线 `receipt-A.md`、B 线 `receipt-B.md`。
+
+| 面 | 判据 | 结果 |
 |---|---|---|
-| `verify-team-directory-04.mjs`（新 e2e，两形态+两世界） | **18/18** | 空态上传主位→目录形态；3 列几何=关系断言（前 3 同顶+第 4 换行，实测 tops=[620,620,620,708]）；关世界全壳情绪词零出现；开世界口径角标「按本人自述筛选」+情绪 chip 无 count+情绪词只在锚点内+点选真过滤 |
-| cr-alignment `SPEC_STICK=9`（新增 stick9 四行团队结构护栏） | **47/47** | 目录 wrap/全部 chip/网格/display:grid 恒在；stick6/7 富字段行零回归 |
-| verify-status-truth | 31/0 | 项目卡/状态点锚点保活（目录化不碰 projects 栏） |
-| verify-button-family | 12/0 | 新 `.lite-team-filter-chip` 进筛选类目白名单（同 gap-chip） |
-| verify-aria-zh | 4/0 | chip/补传入口全中文 aria，0 可疑拉丁串 |
-| verify-home-skeleton | 17/0 | 不碰 home 骨架闭环 |
-| verify-skin-phases | 16/0 | 上传部件 `.upload-panel` 两分支都在（skin probe 读得到） |
-| selfreport-switch-03（关世界后端） | 8/0 | issue-03 人卡零数字路径未被目录化破坏 |
-| 扫雷 sweep（9屏×2皮×3视口）+ `--selftest` | NEW 0 · selftest 8 PASS | D 系 chip 尺寸/焦点无新缺陷 |
+| 后端全量离线套（四 deselect 必带） | additive 零回归 | **3428 passed / 0 failed** / 65 deselected / 4 xfailed |
+| **收官全电池**（run-battery.mjs 25 门 A19/B3/C3，`SPEC_STICK=99`，C 区殿后+重建 dist，独占） | **连续两轮零红** | **连续两轮 25/25 绿（A19/B3/C3，含像素门）** |
+| verify-cr-alignment 全量（stick 0–12，无 SPEC_STICK 全硬断言） | 战役对齐 DoD | **电池 SPEC_STICK=99 全绿**（stick 0–12 全硬断言；片跑 stick12=55/55） |
+| 扫雷 sweep（9屏×2皮×3视口）+ `--selftest` | NEW=0 / 回归 0 | **selftest 8/0 · 正式跑 0 件 · NEW 0 · 回归 0** |
+| 像素全量（9屏×2皮×2视口=36 张）两轮 | 含像素门零红 | **两轮 36 张零 diff**（home-mobile 07-21 先天漂移已重冻，见 §3） |
+| T9 两世界终检（三亚一键 claim 满态 + 薄文档诚实降级） | 满态全字段 | **满态=离线套 test_demo_claim（16人/6项目富字段/self_report 开16关0）+ 08/09 live 探针 claim；薄文档降级=battery file-manifest-truth 30 判据** |
+| 承诺脚注 | footerText + visionSummary3 | **✅** |
 
-- 像素：**净影响 0**——`transport=stub` 在 team 屏是空态（目录只在有数据分支，tracked 基线一像素未变）；
-  仅 `home-mobile` 先天漂移 2 张（07-21 冻结非回归）。目录两世界截图存
-  `eval-harness/reports/pixel-evidence/04/`（gitignored 同机有效，见 §3）。
+C 线新片机器证据（已 commit）：
+- **08** playbooks：test_playbooks_08 8/8 · verify-playbooks-08 13/13 · cr-align SPEC_STICK=12 55/55 · AFK 2/2 · A 区 19/19 · 像素净 0。
+- **09** 重新开始：verify-restart-09 15/15 · onboard-gate 世界 F 46/0 · switchers ⑥ 27/0 · auth-form 57/0 · A 区 19/19。
+- **10** 登录隔离：test_login_isolation_10 5/5 · auth-capability 25/0 · auth-form 57/0 · verify-auth-demo-10 6/6（演示台）。
 
-### 1b. issue 05a · 项目手编 CRUD 写端点先例（后端半，全离线 pytest 全绿）
-
-| 门 | 结果 | 备注 |
-|---|---|---|
-| `test_project_crud_05a.py`（新，8 例） | **8/8** | 内存 CRUD 合约 + pg 序列化往返（archived/provenance 存活）+ HTTP 端点（无鉴权/坏 token→同体 404、缺 title→422、PATCH 置空→absent、archive 可 restore、无 DELETE 路由→405） |
-| 全量离线套 `-m "not smoke and not seedgate and not needs_keys and not needs_db"` | **3398 passed / 0 failed** / 65 deselected / 4 xfailed | additive 字段（archived/provenance）零回归；修 test_ingest_nonblocking 的 fake ctx 补 archived_project_cards 存根 |
-
-- 电池独占跑（无并发 agent）。C 区调包者本批未触及（04 无 dist 调包；05a-be 无前端）。
-- 探针落点 tracked：`.issues/rich-align-0722/verify-team-directory-04.mjs`（不入 roster）。
+---
 
 ## 2. HITL 逐屏看点（Danny 人测路径）
 
-**准备**：无痕窗开 `http://localhost:5173/?v=2&mode=live&lang=zh`（清 `lite2:` 键或无痕）。上传一份 16 人花名册
-（纯中文名，格式 `姓名 | 职位 | 部门 | 司龄 | 负责`，3 个部门便于验分组），或走「示例团队」门。
+**准备**：无痕窗开 `http://localhost:5173/?v=2&mode=live&lang=zh`。第一眼=onboarding 闸门三扇门。
 
-**team 目录形态（issue 04）**
-1. 进「你的团队」屏。**看点**：右栏 = 上传部件（降位不卸载）+「人员」段。人员段是**目录形态**：
-   - 组别筛选 chip 行：「全部 N · 部门A n · 部门B n …」（组别 count 徽章）。选中态深底白字（对齐她方）。
-   - 3 列成员卡网格（头像/姓名/职位/负责行）。点部门 chip → 网格只剩该组；点「全部」→ 复位。
-2. 并排她方 `http://localhost:3100` /people 通讯录：结构（筛选 chip + 多列卡）与数值令牌应当量；**文本零抄**。
-3. **开关世界**（人身数字开关，默认关）：
-   - 关世界：**无情绪 chip 行**，全屏无「如常/偏紧/吃紧」。人卡零数字（现行 moat）。
-   - 开世界（若在跑开关开的后端/或看截图 §3）：组别行下多「按本人自述筛选」口径角标 + 情绪 chip
-     「全部·如常·偏紧·吃紧」（🔴 **无 count 徽章**）；人卡底部「自述情绪 X」在出处锚点内。
+**A. 门厅 + 一键三亚（07 满态语料）**
+1. 闸门三扇门在（上传自己材料 / 示例团队 / 先随便看看）。点**示例团队** → 秒级 claim 三亚屿澜湾 16 人/6 项目。
+2. 落指挥室（/home）：KPI 条真数（人/项目/文件/笔记/待办）；右栏差距摘要 + 需关注的人（真派生）。
 
-**项目手编 CRUD（issue 05a）——⚠️ 仅后端就绪，前端未落**
-> 本批只交付了 05a 的**写端点**（后端）。前端的「加/改/归档/恢复」按钮与出处角标**尚未接线**，
-> 界面上还看不到。写端点可用 curl 验（需先重起 8137 到新代码），但产品级 HITL 待前端半交付。
+**B. 你的团队（04 目录化 + 03 开关两世界）**
+1. 目录形态：组别筛选 chip 行（全部/部门，count 徽章）+ 3 列成员卡网格 + 上传部件降位不卸载。点部门 chip → 只剩该组。
+2. 关世界（默认）：**无情绪 chip 行**，全屏无「如常/偏紧/吃紧」，人卡零数字。
+3. 开世界（`AVERY_ALLOW_PERSON_SCORING=1` 的后端 / 或看 §3 截图）：口径角标「按本人自述筛选」+ 情绪 chip 无 count + 人卡自述在 `[data-metric-source]` 锚点内。
+4. 人员 CRUD（06）：页头「添加成员」primary → 内联表单；详情浮层编辑/停用/恢复；🔴 手填负载/情绪→硬 422（人身禁键）。
+
+**C. 项目（01/02/05a 富卡 + 手编 CRUD）**
+1. 项目卡：风险徽章 + 6px 进度条 + 里程碑圆点串（真管道抽取，absent≠none：文档没写就不冒）。
+2. 页头「添加项目」primary → 内联表单；详情浮层编辑态（字段变输入框，保存/取消）+ 归档折叠区 + 逐字段「手动编辑」出处角标。
+
+**D. 操作手册（08 playbooks 方法库）**
+1. **满态**（三亚已 claim）：2 列方法卡网格 5 张（重大宴会跨部门协作闭环 / 旺季产能协调 / 红黄蓝过程管控 / 升级与红线判定 / 新人爬坡期公平判断）；每卡方形渐变图标 + 标题 + 描述（适用行）+ 标签徽章。方法卡非交互（不是按钮）。
+2. 并排她方 `:3100/playbooks`（6 卡双列方法库）：结构同构（2 列方法卡）；🔴 文本/图标我方原创零抄。
+3. **非 demo 空态**（无痕新开、不 claim、不上传 SOP）：coming-soon 诚实标 + onboarding 勾选槽位 + 「重看上手引导」入口。
+
+**E. 重新开始闭环（09）**
+1. 满态后 → 右上齿轮 → 第三行「重新开始」→ 首击变「确认重新开始？」→ 再击执行。
+2. **看点**：秒回 onboarding 闸门（10 秒复位下一场）；语言/观感回出厂；上一场数据/登录全清（无残留）。
+
+**F. 登录隔离线（10，凭据墙=Danny 人手）**
+1. 起演示台（`launch-authdemo-10.md`，5381）→ 右上**登录**入口在（能力探测 supported）→ 你的 avery 账号登录（🔴 agent 不代填）。
+2. 一键三亚 → AuthPanel「归到我账号」claim → 退出 → 换第二账号登录 → 只见自己的，看不到前号三亚副本（同体 404）。
+3. 硬切换：面板不便本地起，走线上（生产域名本就配 Supabase），同 1-3 步。
+
+---
 
 ## 3. pixel-evidence 索引（Danny 晨审签认）
 
-- `eval-harness/reports/pixel-evidence/04/`：
-  - `README.md`：净零结论（04 对 tracked 基线净影响 = 0，机理同 01/02）。
-  - `aurora-team-directory-offworld.png`：关世界目录（组别 chip + 3 列网格 + 上传部件，零情绪词）。
-  - `aurora-team-directory-onworld.png`：开世界（口径角标 + 情绪 chip 无 count + 人卡自述情绪在锚点内）。
-- 结论：**本批无改动屏需重冻**（team 的 4 张 stub 基线是空态，未变）；`home-mobile` 先天漂移处置归 Danny 晨审。
+> 像素基线 untracked 同机有效（36 张）。C 线净影响 0；收官唯一像素动作 = home-mobile 重冻。
 
-## 4. 拍板复核项①-④ 签认位
+- `eval-harness/reports/pixel-evidence/04/`：目录两世界截图（关/开）+ 净零 README。
+- `eval-harness/reports/pixel-evidence/08/`：满态方法库网格截图（aurora/paper）+ 净零 README（供并排她方 /playbooks）。
+- `eval-harness/reports/pixel-evidence/11/`：**home-mobile 重冻证据**（expected/actual/diff aurora+paper）+ 目检 README
+  （benign 07-21 换行漂移，非破图非回归；旧基线备份 `__snapshots__/.bak/*.07-21.png`）。🔴 **晨审签认此重冻**。
+- 对照板（收官重拍）：`eval-harness/reports/align-board/<日期>/`（开世界带口径出处 + 关世界，真 uploadFiles）——见 §1 收官全电池行。
 
-> 四项属 issue 03/06/09 的设计决策。03 已交付（自述开关口径），04/05a-be 不新增涉及项；列此为战役级台账。
+---
 
-| # | 复核项 | 归属 | 本批状态 | Danny 签认 |
+## 4. 拍板复核项 ①-④ + 承诺脚注 · 签认位
+
+| # | 复核项 | 归属 | 收官状态 | Danny 签认 |
 |---|---|---|---|---|
-| ① | 「重新开始」全清含语言/观感（清 `lite2:*`） | 09 | 未开始 | ☐ |
-| ② | 人身数字「抽取恒存自述槽、投影随开关」 | 03（已交付） | 本批不涉 | ☐ |
-| ③ | 人身数字开关默认态 = 关 | 03（已交付） | 本批不涉（04 关世界实证零情绪词） | ☐ |
-| ④ | 不对称承认：CRUD 手填他人负载/情绪硬 422 vs 文档通道自述行作者不可验 | 06 | 05a-be 已立「项目字段全量可编辑、人身禁键 06 侧执法」的一半；06 落 person 硬 422 | ☐ |
+| ① | 「重新开始」全清含语言/观感（清 `lite2:*` 原文执行，whitelist-free） | 09 | ✅ 已交付（verify-restart-09 实证 lite2:* 全空含偏好；要保留偏好属改共识不属改实现） | ☐ |
+| ② | 人身数字「抽取恒存自述槽、投影随开关」（母本不随开关重铸→库里恒有自述数据，红线依赖投影层执法） | 03 | ✅ 已交付（B 线 T9：开关关 self_report 整槽不投影） | ☐ |
+| ③ | 人身数字开关默认态 = 关 | 03 | ✅ 默认关（关世界零情绪词实证） | ☐ |
+| ④ | 文档通道不对称（CRUD 手填硬 422 vs 自述行作者不可验，口径改「系统可自证式」PRD A3） | 06 | ✅ 已交付（06 person 写侧禁键 422 恒禁不随开关） | ☐ |
+| 承诺脚注 | footerText 含「不能只拿它当依据」+ visionSummary3 含「不会成为人事决策的唯一依据」 | 全局 | **✅** | ☐ |
 
-**本批 Danny 签认**：dev server 人测 §2 team 目录两形态无误 → ☐ 通过 → （连同后续片）授权 `git push` 上产。
+**总签认**：dev server 逐屏人测 §2（A–F）无误 + §3 像素证据核对 + §4 ①-④ 签认 → ☐ **通过 → 授权 `git push` 上产**（Vercel 自动部署 + 生产手动 claim 暖场一次）。
 
-## 5. 🔴 本批**未做**（下个 session 从这里接，序与依赖已在 issues/README.md + 05-split-decision.md）
+---
 
-一句话：**04 全绿 + 05a 后端先例全绿**；05a 前端半及 05b/06–11 未动。
+## 5. 🔴 已知留后（收官如实记）
 
-- **05a 前端半（紧接，最高优先）**：写端点已就绪（`f1ca46d`），前端要接：
-  - `transport.ts`：+`archived_projects?`/`provenance?` 类型 + 4 个写 API（postProject/patchProject/archive/restore）。
-  - store：CRUD action（写后 refetch /team 或乐观更新）。
-  - `ProjectsScreen`：页头右端 primary「添加项目」按钮 → 内联表单（标题/负责人/状态/截止…）→ POST。
-  - `DetailOverlay`：页脚操作区——编辑态（字段原地变输入框，保存 primary+取消 ghost，出场动画快照对编辑态单独处理）
-    + 归档/恢复（软删入网格下方折叠区）；逐字段出处角标「手动编辑」（读 card.provenance[field].origin==='manual'）。
-  - i18n + CSS + 新 e2e（T8 添加/编辑/归档/恢复 + 出处）+ cr-align **stick 10**（添加按钮 primary rect/prop）+
-    门（aria-zh/button-family/扫雷/verify-p0）+ 像素（projects/详情浮层若入基线）。**交付后 CURRENT_STICK→10。**
-  - 后端契约（已定，前端照此接）：`{context_id, project: <card>}`；card.provenance = `{field:{origin,source,updated_at}}`；
-    payload.archived_projects（空即缺席）；PATCH 只发要改的键，显式 null=清空→absent。
-- **05b**：重传手编赢（origin=manual 字段 ingest 不覆盖）+ 冲突记录（claim=手编值/evidence=文档原句）→
-  前端复用「多看一眼」claim-vs-evidence 冒提示。造真合并管道，不挡 07。
-- **06**：人员 CRUD——直接复用 05a 的 ProjectWriteMixin 模式（新增 people 端点 + PersonEntity 同款
-  archived/provenance）；🔴 写侧红线：负载/情绪禁键→422（人身数字只能来自文档自述通道）；落点=04 的目录形态。
-- **07** 三亚富语料 pack（16 人/6 项目/SOP，原地换 demo-seed + 同 commit 改 test_demo_claim + verify-onboard-gate 期望）·
-  **08** playbooks 方法库（stick 12）· **09** 重新开始（清 lite2:*）· **10** 登录隔离（Supabase MCP 取值，C 区门殿后）·
-  **11** 收官（全 25 门电池两轮 + 对照板重拍 + 像素全量 + acceptance 汇总 + handoff）。
-
-## 6. 本批已知留后
-
-- zh directory 11 键 + risk/milestone 旧键：手写 draft，待 Danny 审字或下次 M3 directed pass（zh.ts 头已标 /04）。
-- 05a 前端未接：写端点已上线但界面无入口（见 §5）；8137 需重起到新代码才能 curl 验写端点。
-- 像素：目录形态无 tracked 基线覆盖（stub 空态盖不到，同 01/02 富字段）——几何靠 e2e 关系断言 + Danny 晨审并排。
+- **05b（重传手编赢+冲突）未做**：A 线交接已侦察落档（receipt-A §末），独立不挡 07/收官；下个 session 直接接。
+- **zh 手写 draft 待审字**：01-10 各片新增 zh 键为手写 draft（zh.ts 头逐条标 rich-align/0N），待 Danny 审字或 M3 directed pass。
+- **home-mobile 像素**：收官已重冻到本机当前（benign 07-21 换行漂移），晨审签认见 §3。
+- **生产暖场**：seed 换三亚 pack 后首次 claim 为 LLM 铸造分钟级——push 部署后需手动 `POST /demo/claim` 暖场一次（见 handoff）。

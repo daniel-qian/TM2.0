@@ -1,4 +1,46 @@
-# ⟳ 2026-07-23 夜跑 · **满态对齐战役 批次②：issue 04 目录化全绿 + 05a 写端点先例（后端半）全绿，等 Danny 验收**（★最新，从这里接）
+# ⟳ 2026-07-23 夜跑 · **满态对齐战役 收官（C 线 08→11 全绿）——01–11 全交付，等 Danny 逐屏验收 + push**（★最新，从这里接）
+
+**一句话**：满态对齐战役 rich-align-0722 **全 11 片交付完毕**。C 线（收尾链）08 playbooks 方法库 /
+09 重新开始 / 10 登录隔离 / 11 收官 全绿，一片一 commit 攒 **main** 未推（ahead origin/main）。
+**验收表单 = `.issues/rich-align-0722/acceptance-2.md`（最终版，收编全战役）**——Danny 逐屏人测点头
+后 `git push`（=Vercel 自动上产 + 生产手动 claim 暖场）。**push=人工闸，未动。**
+
+## 🔴 汇合实况（kickoff 前置与实况不符，已纠）
+kickoff 写「A、B 合回 campaign 分支 `claude/layout-real-components-27b594` 再起 C」，但**实况：A、B 已
+合到 main**（`25269f9` = merge(A `d0ff290`, B `7adf7d0`)，两者都 off campaign tip `ba24144`）。campaign
+分支停在 A+B 之前的 `ba24144`（是 main 祖先、无独有提交）。故 **A+B 汇合＝main 本身**，C 直接在 main 上
+接（C 需 07 的 SOP + 全部前序），未重做分叉汇合。C0 汇合无回归实证：后端 3415→3428 passed 全绿、
+前端 A 区电池 19/19。
+
+## C 线交付（3 片功能 + 收官，均 commit 攒 main 未推）
+- **08 · playbooks 方法库（`99ace1d`，stick 12）**：SOP 文档（三亚 `管理规范与升级红线.md` 5 个
+  `## 方法：` 小节）→ ingest 抽方法卡 `{title,description,tags}` → payload optional `playbooks` 键
+  （absent≠none）→ playbooks 屏满态 2 列网格（非交互 article）。后端 extract+registry+_team_payload+
+  llm_extract+pg 往返；前端网格+CSS+i18n；cr-align stick 12 四行 + stick 4 repoint。CURRENT_STICK→12。
+- **09 · 重新开始（`911eed9`）**：齿轮第三行「重新开始」（两击确认）→ 清 lite2:* 全量含语言/观感
+  （whitelist-free，与换账号分开）+ 忘光 owner_token + 回闸门（10 秒复位）。restartAll() 在 AuthPanel.tsx。
+- **10 · 登录隔离（`de85278`）**：AuthPanel 已是探 /account/status 口径（无需前端改）；补后端 Supabase env
+  （avery-fra，MCP 取）→ 登录入口渲染。隔离演示台 5381/8381（真 Supabase，起法 `launch-authdemo-10.md`）；
+  机器隔离 test_login_isolation_10（mock resolve_account）5/5 + auth-capability 25/0。🔴 凭据墙：真登录 Danny 人手。
+- **11 · 收官（本 commit）**：全 25 门电池 `SPEC_STICK=99` 连续两轮零红 + verify-cr-alignment 全量 +
+  扫雷 NEW=0 + 像素全量两轮（home-mobile 先天漂移已重冻，见 pixel-evidence/11）+ 对照板重拍 + T9 两世界 +
+  承诺脚注；acceptance-2.md 收编为最终验收表单 + 本 handoff 换头。
+
+## 验收就绪（Danny 回来做这个）
+- **逐屏 HITL**：acceptance-2.md §2（A 门厅+一键三亚 · B 团队目录两形态两世界 · C 项目富卡+CRUD ·
+  D 操作手册满态网格+空态 · E 重新开始闭环 · F 登录隔离线）。§3 pixel-evidence 索引晨审。§4 ①-④ 签认。
+- dev server 挂着：preview 5173（收官构建）+ mock 8137（三亚 seed）+ cr-live 3100（对照）。
+- **🔴 生产暖场提醒**：seed 换三亚 pack 后**生产首次 claim 为 LLM 铸造分钟级**——push 部署后需手动
+  `POST /demo/claim` 暖场一次（把母本铸出来 + 顺便验铸造质量），之后访客 claim 全走秒级克隆。
+- 像素基线 untracked 同机有效（本机）；跨机重采。**Danny 点头 → `git push`（一次上产 08–11）。**
+
+## 🔴 留后（下个 session / Danny）
+- **05b（重传手编赢+冲突）未做**：A 线已侦察落档（receipt-A §末），独立不挡；下个 session 直接接。
+- zh 手写 draft 待审字（各片 zh.ts 头已标）；home-mobile 重冻待晨审签认；C 线各片 receipt 见 `receipt-C.md`。
+
+---
+
+# ⟳ 2026-07-23 夜跑 · **满态对齐战役 批次②：issue 04 目录化全绿 + 05a 写端点先例（后端半）全绿，等 Danny 验收**（历史·上一段）
 
 **一句话**：AFK 夜跑先纠账实（kickoff 说「01–04 已交付」是错的——git 只有 01/02/03，**issue 04 没做**、
 `05-split-decision.md` 不存在），补做 issue 04（team 目录化）到全绿，再落 05a 的**后端写端点先例**到全绿。
