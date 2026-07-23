@@ -9,8 +9,9 @@
 // ## 判据（两种世界不同答案；本门要离线后端带 AVERY_DEMO_SEED_DIR 才能跑世界 B/D）
 //   A 全新访客：闸门以整页形态盖满视口、落在 doors 步、两扇门都在、滚动锁生效、
 //     整个闸门 DOM 里不再有「不会发到任何地方」旧承诺（8A 之后它就是谎）。
-//   B 示例团队门：点了真拿到克隆副本——contextId 落地、两个中文名各自成卡（#10 demo 车道）、
-//     rawTeam.demo=true、预铸「实时」笔记继承、闸门关、落 /home、onboard status=done。
+//   B 示例团队门：点了真拿到克隆副本——contextId 落地、16 名中文代号各自成卡（#10 demo 车道，
+//     rich-align-0722/07 三亚满态语料）、rawTeam.demo=true、预铸「实时」笔记继承、闸门关、
+//     落 /home、onboard status=done。
 //   C Escape=pause：门收起、status 停在 in-progress、step 保留、底下 shell 立即可用、
 //     骨架里的示例团队第二机会位在场。
 //   D 8A 延迟送出：走上传门但不传文件，填「公司现状」，走完 finish（此刻无 context、不送）；
@@ -111,7 +112,7 @@ async function freshPage(routeHook) {
   })
   console.log(`  世界B: ${JSON.stringify({ ...b, noteHead: b.noteHead.slice(0, 24) })}`)
   rec('B·contextId 落地（克隆副本领到了）', typeof b.contextId === 'string' && b.contextId.length > 0)
-  rec('B·两个中文名的人都在', b.names.includes('林晓梅') && b.names.includes('郑国豪'), b.names.join('/'))
+  rec('B·三亚代号同事成卡且 16 人满态', b.names.includes('小王') && b.names.includes('小吴') && b.names.length === 16, `${b.names.length}人 · ${b.names.join('/')}`)
   rec('B·人卡 id 不撞（#10 的 demo 车道回归）', new Set(b.ids).size === b.ids.length, b.ids.join('/'))
   rec('B·payload 自报 demo 身份', b.demo)
   rec('B·闸门关了', b.gateGone)

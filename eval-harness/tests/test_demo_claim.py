@@ -15,10 +15,17 @@ onboarding 闸门页」）：后端预铸一个共享 demo 母本 context，访�
     一次），此后 claim 全部走克隆。status.ready 反映母本是否已铸。
   * 每次 claim 返回**不同的** context_id + owner_token；副本能用自己的 token 读 /team/{id}；
     副本之间、副本与母本之间互不写脏（对 A 副本 /advise 落的笔记，B 副本看不见）。
-  * 中文名不塌卡：seed 里两个中文名的人在克隆副本里仍是两张不同 id 的卡（issue #10 的 demo
+  * 中文名不塌卡：seed 里的中文名同事在克隆副本里各是一张不同 id 的卡（issue #10 的 demo
     车道回归——修复本体的判别语料在 test_cjk_identity*.py，这里只守住克隆不把它们再合回去）。
   * 预铸母本自带一条「实时数据缺位」笔记（Danny 3A 附注：示例要呈现缺实时数据的故事），
     克隆副本继承它。
+
+rich-align-0722/07（三亚富语料 pack · T9 满态断言）：seed 目录已从「云岭 2 人世界」换成
+「三亚屿澜湾 16 人 / 6 项目」的原创富语料（她方 demo 文本零抄袭，人名一律小王/小张式代号、
+跨文档逐字一致）。本文件的中文名断言与聚卡数随之从 2 人（林晓梅/郑国豪）改为 16 人代号世界；
+另加 T9 满态断言：16 人聚卡数恰对（无 CJK 撞名分裂/误聚）、self_report 全员各一行（开关开=16 条、
+开关关=零投影）、6 项目全在且每项目 progress/risk/milestones 富字段键在、claim 返 200 非 503
+（打分/排名文字零触发红线，heuristic 路径离线可抽全字段）。
 """
 from __future__ import annotations
 
@@ -31,6 +38,18 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 HERE = Path(__file__).resolve().parent.parent          # eval-harness/
 SEED_DIR = HERE / "tests" / "fixtures" / "demo-seed"
+
+# rich-align-0722/07 — 三亚屿澜湾示例世界的 16 名员工代号（唯一真值源＝员工花名册.md，跨文档逐字
+# 一致；CJK 聚卡教训：断言用花名册原样代号，别用拼音/别名，否则跨文档不聚卡）。
+SANYA_CODENAMES = [
+    "小王", "小张", "小李", "小陈", "小刘", "小杨", "小黄", "小周",
+    "小吴", "小徐", "小孙", "小马", "小林", "小郑", "小何", "小罗",
+]
+# 6 条业务线项目（项目总览.md 的 `## 项目：X` 小节），每个都写满 进度/风险/里程碑 富字段。
+SANYA_PROJECT_TITLES = [
+    "草坪婚宴旺季档", "亲子暑期产品线", "OTA 渠道分销",
+    "微信商城改版", "宴会菜单升级", "别墅区工程整改",
+]
 
 
 def _offline_env(monkeypatch):
@@ -117,7 +136,10 @@ def test_chinese_names_stay_distinct_in_a_clone(client):
     _, _, body = _claim(client)
     names = [p["name"] for p in body["people"]]
     ids = [p["id"] for p in body["people"]]
-    assert "林晓梅" in names and "郑国豪" in names, f"seed 里两个中文名的人都要在：{names}"
+    # 三亚世界：16 名中文代号同事全在，且各自一张不塌卡的独立 id（无 CJK 撞名分裂/误聚）。
+    missing = [n for n in SANYA_CODENAMES if n not in names]
+    assert not missing, f"seed 里的中文名同事都要在，缺：{missing}（实到：{names}）"
+    assert len(names) == 16, f"示例团队应恰好 16 人（花名册唯一真值源），实到 {len(names)}：{names}"
     assert len(ids) == len(set(ids)), f"克隆副本里 id 撞车（#10 的 demo 车道回归）：{ids}"
 
 
@@ -172,3 +194,73 @@ def test_onboard_note_scoring_text_is_refused(client, monkeypatch):
     r = client.post(f"/team/{cid}/notes", headers=hdr, json={
         "text": "综合来看，李雷这个季度的绩效评分是9分，排名第一。"})
     assert r.status_code == 422, "写侧红线对经理口述同样生效（开关默认关时评分内容进不来）"
+
+
+# ── rich-align-0722/07 · 三亚富语料 pack · T9 满态断言 ────────────────────────────────────────
+
+_RICH = {"progress", "risk", "milestones"}
+_RISK_LEVELS = {"high", "medium", "low"}
+_MS_STATUSES = {"done", "active", "blocked", "upcoming", "other"}
+
+
+def test_sanya_claim_returns_200_not_503(client):
+    """整包铸造不触发抽取红线：打分/排名文字零带入 → claim 返 200，非 503 拒铸。"""
+    r = client.post("/demo/claim")
+    assert r.status_code == 200, (
+        f"三亚 seed 一键 claim 应 200（heuristic 离线可抽、红线零触发），实得 "
+        f"{r.status_code}：{r.text[:300]}")
+    assert r.json().get("demo") is True
+
+
+def test_sanya_six_projects_carry_full_rich_fields(client):
+    """6 条业务线项目全在，且每个都写满 进度/风险/里程碑 富字段（缺席不发键的对立面：满态全发）。"""
+    _, _, body = _claim(client)
+    projects = body.get("projects") or []
+    titles = [p["title"] for p in projects]
+    assert len(projects) == 6, f"应恰好 6 个项目（项目总览.md 的 6 个 ## 项目：小节），实到：{titles}"
+    missing_titles = [t for t in SANYA_PROJECT_TITLES if t not in titles]
+    assert not missing_titles, f"缺项目：{missing_titles}（实到：{titles}）"
+    for p in projects:
+        have = _RICH & set(p.keys())
+        assert have == _RICH, f"项目「{p['title']}」富字段键不全，缺：{_RICH - set(p.keys())}"
+        # 进度：0–100 有限数。
+        assert isinstance(p["progress"], int) and 0 <= p["progress"] <= 100, \
+            f"项目「{p['title']}」progress 越界或非整数：{p['progress']}"
+        # 风险：等级归一在词表内；reason 省略时也不该冒出空键以外的东西。
+        assert p["risk"]["level"] in _RISK_LEVELS, \
+            f"项目「{p['title']}」risk.level 词表外：{p['risk']}"
+        # 里程碑：非空列表，每项 name + 归一 status。
+        assert p["milestones"], f"项目「{p['title']}」里程碑为空"
+        for m in p["milestones"]:
+            assert m.get("name"), f"项目「{p['title']}」里程碑缺 name：{m}"
+            assert m.get("status") in _MS_STATUSES, \
+                f"项目「{p['title']}」里程碑 status 词表外：{m}"
+
+
+def test_sanya_selfreport_sixteen_when_scoring_on(client, monkeypatch):
+    """开关开世界：payload 顶层带 scoring_enabled，16 人全员各投一条 self_report（负载+情绪），
+    且每条都带口径(caliber)与出处(source)——满足 A3「合法数字只能活在带出处的自述槽」。"""
+    monkeypatch.setenv("AVERY_ALLOW_PERSON_SCORING", "1")
+    _, _, body = _claim(client)
+    assert body.get("scoring_enabled") is True, "开关开时 payload 顶层应带 scoring_enabled: true"
+    people = body["people"]
+    with_sr = [p for p in people if p.get("self_report")]
+    assert len(with_sr) == 16, f"开关开应 16 人全员各一条 self_report，实到 {len(with_sr)} 条"
+    for p in with_sr:
+        sr = p["self_report"]
+        assert "load" in sr and "mood" in sr, f"{p['name']} 自述槽缺 load/mood：{sr}"
+        load, mood = sr["load"], sr["mood"]
+        assert 0 <= load["value"] <= 100, f"{p['name']} 负载越界：{load}"
+        assert load["caliber"] and load["source"], f"{p['name']} 负载缺口径/出处：{load}"
+        assert "周报" in load["source"], f"{p['name']} 负载出处应指回周报：{load['source']}"
+        assert mood["value"] in {"steady", "stretched", "strained", "other"}, \
+            f"{p['name']} 情绪枚举外：{mood}"
+        assert mood["caliber"] and mood["source"], f"{p['name']} 情绪缺口径/出处：{mood}"
+
+
+def test_sanya_selfreport_absent_when_scoring_off(client):
+    """开关关（默认）世界：self_report 整槽不投影、顶层无 scoring_enabled——人面照旧零数字（moat）。"""
+    _, _, body = _claim(client)
+    assert "scoring_enabled" not in body, "开关关时 payload 不该带 scoring_enabled"
+    leaked = [p["name"] for p in body["people"] if p.get("self_report")]
+    assert not leaked, f"开关关时 self_report 必须整槽不投影，泄漏在：{leaked}"
