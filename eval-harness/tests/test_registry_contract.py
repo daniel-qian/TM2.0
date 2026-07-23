@@ -604,9 +604,10 @@ def test_person_keys_allowlist_covers_exactly_person_fields():
     migrations = sorted((HERE / "db" / "migrations").glob("*.sql"))
     allow: set[str] | None = None   # each migration is DROP IF EXISTS + ADD; last definition wins
     for path in migrations:
+        sql = re.sub(r"--[^\n]*", "", path.read_text(encoding="utf-8"))  # strip comments (hold DDL prose)
         for m in re.finditer(
             r"ADD\s+CONSTRAINT\s+entities_person_keys_allowlist\b.*?payload\s*-\s*ARRAY\s*\[(.*?)\]",
-            path.read_text(encoding="utf-8"), re.S | re.I):
+            sql, re.S | re.I):
             allow = set(re.findall(r"'([^']+)'", m.group(1)))
     assert allow is not None, "no migration defines entities_person_keys_allowlist"
 
@@ -617,6 +618,32 @@ def test_person_keys_allowlist_covers_exactly_person_fields():
         f"  in PersonEntity but NOT allowed by the DB: {sorted(person_fields - allow)}\n"
         f"  allowed by the DB but NOT in PersonEntity:  {sorted(allow - person_fields)}\n"
         "Add a migration that re-ADDs entities_person_keys_allowlist covering exactly these fields.")
+
+
+def test_entities_kind_check_covers_written_kinds():
+    """OFFLINE regression guard (no DB) — sibling to the person-keys guard. The DB entities_kind_check
+    must allow EXACTLY the entity kinds pg_registry.put() writes (_ENTITY_KINDS). Slice 08 added the
+    "playbook" kind to the writer but not to the CHECK, so real Postgres rejected the demo master cast
+    with `violates check constraint "entities_kind_check"` — invisible to `not needs_db`. A static
+    parse of the migrations catches any writer/CHECK drift at commit time, no live DB required."""
+    from avery.ingest.pg_registry import _ENTITY_KINDS
+
+    migrations = sorted((HERE / "db" / "migrations").glob("*.sql"))
+    allow: set[str] | None = None   # last migration to (re)define the kind CHECK wins
+    for path in migrations:
+        sql = re.sub(r"--[^\n]*", "", path.read_text(encoding="utf-8"))  # strip comments (hold DDL prose)
+        candidates = re.findall(r"ARRAY\s*\[([^\]]*)\]", sql)            # kind = ANY (ARRAY[...]) form
+        candidates += re.findall(r"kind\s+IN\s*\(([^)]*)\)", sql, re.I)  # inline CHECK (kind IN (...))
+        for c in candidates:
+            toks = set(re.findall(r"'([^']+)'", c))
+            if {"person", "project", "signal"} <= toks:   # the kind list, not the key allowlist ARRAY
+                allow = toks
+    assert allow is not None, "no migration defines the entities kind CHECK"
+    assert allow == set(_ENTITY_KINDS), (
+        "DB entities_kind_check is out of sync with the kinds pg_registry.put() writes.\n"
+        f"  written (_ENTITY_KINDS) but NOT allowed by the DB: {sorted(set(_ENTITY_KINDS) - allow)}\n"
+        f"  allowed by the DB but NOT written:                 {sorted(allow - set(_ENTITY_KINDS))}\n"
+        "Add a migration that re-ADDs entities_kind_check covering exactly these kinds.")
 
 
 @needs_db

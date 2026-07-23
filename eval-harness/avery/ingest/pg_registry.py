@@ -77,6 +77,13 @@ _PROJECT_FIELDS = {f.name for f in dataclasses.fields(ProjectEntity)}
 _SIGNAL_FIELDS = {f.name for f in dataclasses.fields(SignalEntity)}
 _PLAYBOOK_FIELDS = {f.name for f in dataclasses.fields(MethodCard)}  # rich-align-0722/08
 
+# The entity `kind` column values put() writes — the SINGLE source of truth the DB `entities_kind_check`
+# CHECK (migration 0001 + 0010) must match. Add a kind here WITHOUT extending that CHECK and real
+# Postgres rejects the write in prod, invisible to the offline suite (`not needs_db` never hits the
+# CHECK) — exactly how 08's "playbook" kind shipped and only failed on the prod demo cast. The offline
+# guard test_entities_kind_check_covers_written_kinds asserts the two never drift again.
+_ENTITY_KINDS = ("person", "project", "signal", "playbook")   # rich-align-0722/08 added "playbook"
+
 
 def _entity(cls, fields: set[str], payload: dict):
     """Rebuild a dataclass entity from a stored JSONB payload, ignoring unknown keys so an OLD
@@ -264,13 +271,16 @@ class PostgresContextRegistry(ProjectWriteMixin):
                          (ctx.context_id,))
 
             with conn.cursor() as cur:
+                # kind -> its rows; iterate _ENTITY_KINDS (the set entities_kind_check allows) so the
+                # constant is the one place a new entity kind must be registered.
+                by_kind = {"person": people, "project": projects,
+                           "signal": signals, "playbook": playbooks}
                 cur.executemany(
                     "INSERT INTO avery.entities (context_id, kind, idx, payload) "
                     "VALUES (%s, %s, %s, %s)",
                     [(ctx.context_id, kind, i, Jsonb(payload))
-                     for kind, rows in (("person", people), ("project", projects),
-                                        ("signal", signals), ("playbook", playbooks))
-                     for i, payload in enumerate(rows)])
+                     for kind in _ENTITY_KINDS
+                     for i, payload in enumerate(by_kind[kind])])
                 cur.executemany(
                     "INSERT INTO avery.materials "
                     "(context_id, idx, chunk_id, text, source, doc_kind, embedding) "
