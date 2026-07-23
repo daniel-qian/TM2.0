@@ -646,6 +646,32 @@ def test_entities_kind_check_covers_written_kinds():
         "Add a migration that re-ADDs entities_kind_check covering exactly these kinds.")
 
 
+def test_entity_pg_roundtrip_coerces_nested_dataclasses():
+    """OFFLINE regression guard (no DB) for the pg persistence round-trip. pg_registry stores
+    asdict(entity) as JSONB and rebuilds via Entity(**payload) (_entity). Every nested-dataclass
+    field — ProjectEntity.risk/milestones, PersonEntity.self_report — MUST coerce back to its type in
+    __post_init__; otherwise consumers hit `dict.attr` (e.g. project.risk.level) on the PERSISTED read
+    path, which the in-memory offline suite never exercises. rich-align/01/02 shipped exactly this:
+    the demo claim 500'd on `'dict' object has no attribute 'level'`. Simulate the round-trip with
+    asdict -> dict -> reconstruct and assert the nested fields come back typed, not as dicts."""
+    from dataclasses import asdict
+    from avery.ingest.extract import (
+        PersonEntity, PersonSelfReport, SelfReportLoad, ProjectEntity, ProjectRisk, ProjectMilestone)
+
+    proj = ProjectEntity(id="p1", title="Banquet", risk=ProjectRisk(level="high", reason="rain"),
+                         milestones=[ProjectMilestone(name="tasting", status="done")])
+    proj2 = ProjectEntity(**asdict(proj))    # the exact pg read: _entity(ProjectEntity, .., payload)
+    assert isinstance(proj2.risk, ProjectRisk) and proj2.risk.level == "high"
+    assert proj2.milestones and all(isinstance(m, ProjectMilestone) for m in proj2.milestones)
+    assert proj2.milestones[0].status == "done"
+
+    person = PersonEntity(id="u1", name="Z",
+                          self_report=PersonSelfReport(load=SelfReportLoad(value=70)))
+    person2 = PersonEntity(**asdict(person))
+    assert isinstance(person2.self_report, PersonSelfReport)
+    assert isinstance(person2.self_report.load, SelfReportLoad) and person2.self_report.load.value == 70
+
+
 @needs_db
 def test_pg_put_refuses_free_text_scoring(pg, tmp_path):
     """feat-030 P1: the Python storage gate is LOAD-BEARING and does the FULL red-line scan (value +

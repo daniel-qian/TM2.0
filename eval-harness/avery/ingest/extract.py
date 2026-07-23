@@ -301,6 +301,18 @@ class ProjectEntity:
     archived: bool = False
     provenance: dict = field(default_factory=dict)
 
+    def __post_init__(self) -> None:
+        # pg_registry stores asdict(self); the DB read (_entity -> ProjectEntity(**payload)) hands the
+        # nested fields back as plain dicts. Coerce them so consumers always see the typed dataclasses
+        # (mirrors PersonEntity/self_report) — else `self.risk.level` / `ms.status` is an attribute
+        # access on a dict and raises on the PERSISTED read path (a demo claim / any re-open of a
+        # stored company). The in-memory extraction path already builds the objects, so the offline
+        # suite (`not needs_db`) never sees it — this coercion is the load-bearing production path.
+        if isinstance(self.risk, dict):
+            self.risk = ProjectRisk(**self.risk)
+        self.milestones = [
+            ProjectMilestone(**m) if isinstance(m, dict) else m for m in self.milestones]
+
     def as_facts_lines(self) -> list[str]:
         head = f"Project '{self.title}'"
         if self.ownerName:
