@@ -40,3 +40,6 @@ transcripts/
 .vite-gate-cache/
 vite.out
 vite.err
+
+# rich-align-0722/10 · 登录隔离演示台的临时 demo dist（runtime，不进 git）
+dist-authdemo/

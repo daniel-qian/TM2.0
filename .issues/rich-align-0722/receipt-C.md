@@ -21,9 +21,9 @@ B 无 spec 行）。C 直接在 main 上接（C 需要 07 的 SOP + 全部前序
 | 片 | commit | stick | 状态 |
 |---|---|---|---|
 | **08** · playbooks 方法库（SOP → 方法卡满态 2 列网格） | `99ace1d` | 12 | ✅ 全绿 |
-| **09** · 重新开始+演示控制（齿轮第三行「重新开始」全量重开） | `<09>` | — | ✅ 全绿 |
-| 10 · 登录隔离演示线 | — | — | ⏳ 进行中 |
-| 11 · 收官（全电池两轮 + 验收表单 + handoff） | — | — | ⏳ |
+| **09** · 重新开始+演示控制（齿轮第三行「重新开始」全量重开） | `911eed9` | — | ✅ 全绿 |
+| **10** · 登录隔离演示线（真登录→claim 三亚→换号验隔离） | `<10>` | — | ✅ 全绿 |
+| 11 · 收官（全电池两轮 + 验收表单 + handoff） | — | — | ⏳ 进行中 |
 
 ---
 
@@ -133,3 +133,41 @@ absent≠none）→ playbooks 屏满态 2 列网格（方法卡=非交互 `<arti
 - 拍板复核项（收官表单）：**①「重新开始」全清含语言/观感**——照共识「清 lite2:*」原文执行（whitelist-free），
   要保留偏好属改共识不属改实现。
 - 像素：净影响 0（齿轮菜单第三行只在设置弹层内，stub 基线不展开设置弹层；九屏骨架未动）。
+
+---
+
+## 10 · 登录隔离演示线（无 stick）
+
+端到端演示线：真登录 → 把三亚示例团队 claim 到账号名下 → 换账号验隔离（前号 context 同体 404 看不见）。
+🔴 **凭据墙：真登录（输账号密码走 Supabase）是 Danny 人手，agent 不代填任何凭据**；机器只验到
+401/404/探测边界 + （mock resolve_account 的）隔离断言。
+
+### 🔴 前置：AuthPanel 口径已是「探 /account/status」（历史坑已修，无需前端改动）
+recon 实证：AuthPanel 渲染登录入口的第二道闸 = `accountCapability === 'supported'`（authStore
+`probeAccountCapability` 探后端 `/account/status`，authStore.ts:120-140），**不是只看自身 env**。
+07-20 那条「只看 env 就出假按钮」的坑早已修（生产曾有 key 但 /account/status 404 → 故意不够）。
+故 issue-10 **零前端源码改动**；只补后端 env + 隔离断言 + 演示台。
+
+### 后端 env（值来源 Supabase MCP · 项目 avery=avery-fra `zlxpldzapyoacmgvlqpn`）
+`SUPABASE_URL` + `SUPABASE_ANON_KEY`（account.py::auth_configured 读这俩）→ `/account/status`
+报 `configured:true`。anon key = 公开客户端 key（生产 bundle 本就带，非机密）。**不加到共享
+5173/8137 电池环境**（避免真 Supabase 网络依赖污染电池）——起**隔离演示台** 5381/8381（真
+Supabase env，dist 打到单独 `dist-authdemo/`），共享电池零触碰。起法见 `launch-authdemo-10.md`。
+
+### 门绿证据（全离线 + 隔离演示台）
+| 门 | 结果 |
+|---|---|
+| 新 pytest `test_login_isolation_10.py`（🔴 mock resolve_account：A claim 三亚→只 A 看得见/动得了、B 同体 404、未登录 401、抢已认领 ctx 404、坏 token/未知 ctx 同体 404 无 oracle） | **5/5** |
+| 既有 `test_account_auth.py`（feat-053 隔离矩阵 25 例，mock verify_access_token） | **25/25**（回归） |
+| 全量离线套（四 deselect） | **3428 passed / 0 failed**（additive 零回归） |
+| C 区 `verify-auth-capability`（🔴 口径门：登录入口渲染/隐藏纯看 /account/status 探测；殿后独占+跑完重建 dist） | **25/0** |
+| C 区 `verify-auth-form`（真表单 + 换账号清场；殿后独占+重建 dist） | **57/0**（09 已跑，10 零前端改动不复红） |
+| 新 e2e `verify-auth-demo-10.mjs`（隔离演示台 5381/8381 真 Supabase：/account/status configured + 登录入口真渲染 + 邮箱/密码字段就绪 + 401 边界；🔴 不代填凭据） | **6/6** |
+| verify-p0 | **不受影响**（10 零前端源码改动；共享 dev dist=09 态，p0 已在 09 A 区电池绿；收官全量复跑） |
+
+- 新件 tracked：`test_login_isolation_10.py` · `verify-auth-demo-10.mjs`（演示台探针）· `launch-authdemo-10.md`（演示台起法 + HITL 演法）。
+- **acceptance HITL 看点**（进收官表单）：本地演法（5381 演示台，Danny 人手登录→claim 三亚→换号→隔离）
+  已跑通；线上演法（生产域名，Vercel/后端本就配 Supabase）作 fallback（push 后复演）。
+- 隔离机制零改动（feat-038 token 闸 + feat-053 账号 own；authorize_context 只「加宽」到 own 的 ctx，
+  别的落同体 404）；demo 克隆隔离机制零改动。
+- 像素：净影响 0（零前端源码改动）。
