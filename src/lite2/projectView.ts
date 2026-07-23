@@ -1,4 +1,4 @@
-import type { LivePersonCard, LiveProjectCard } from './transport'
+import type { LiveFieldProvenance, LivePersonCard, LiveProjectCard } from './transport'
 import type { Dict } from '../shared/i18n'
 
 // feat-055（PRD G9）· 项目屏的「已知 / 文档未提及」派生层。
@@ -67,6 +67,17 @@ export interface ProjectView {
   riskReason: string | null
   /** 🔴 空数组 = 文档没写里程碑 = chips 行与详情段整体收起（absent≠none）。 */
   milestones: MilestoneView[]
+  /**
+   * rich-align-0722/05a：字段级出处 side-car（key=字段名 title/ownerName/status/dueDate/summary/
+   * progress/blockers/risk/milestones）。缺席=纯文档抽取卡（provenanceOf 返回 undefined → 不挂角标）。
+   * 🔴 只用于详情浮层逐字段「手动编辑」角标；判据不进 riskLevel/progress 等真值派生（那些仍只认原始值）。
+   */
+  provenance: Record<string, LiveFieldProvenance>
+}
+
+/** 某字段是否为人手编（origin==='manual'）。缺席/doc 出处 → false（不替文档冒充手编）。 */
+export function isManualField(view: ProjectView, field: string): boolean {
+  return view.provenance[field]?.origin === 'manual'
 }
 
 const KNOWN_STATUS = new Set(['blocked', 'at-risk', 'on-track', 'done'])
@@ -159,6 +170,8 @@ export function buildProjectViews(
     riskLevel: riskLevelOf(card.risk?.level),
     riskReason: trimmedOrNull(card.risk?.reason),
     milestones: milestoneViewsOf(card.milestones),
+    // rich-align-0722/05a：出处 side-car 原样透传（缺席=空 dict → isManualField 恒 false）。
+    provenance: card.provenance ?? {},
   }))
 }
 

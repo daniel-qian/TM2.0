@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState, type FormEvent } from 'react'
 import { useLite } from '../store'
 import { useDict } from '../../shared/i18n/useDict'
 import {
@@ -12,6 +12,13 @@ import {
   type ProjectView,
 } from '../projectView'
 import type { Dict } from '../../shared/i18n'
+import type { ProjectAddInput } from '../transport'
+
+// rich-align-0722/05a：某卡是否含手编字段（origin==='manual'）——卡面挂一枚「手动编辑」小角标。
+// 逐字段出处在详情浮层（DetailOverlay）逐行标；卡面只给一个「这张卡有人手动改过」的整体提示。
+function cardHasManual(view: ProjectView): boolean {
+  return Object.values(view.provenance).some((p) => p.origin === 'manual')
+}
 
 // feat-055（PRD G9）· lite2 屏 8：项目屏（整屏新建）。
 //
@@ -127,6 +134,12 @@ function ProjectCard({ view, onOpen }: { view: ProjectView; onOpen: (id: string)
         </span>
       </span>
 
+      {/* rich-align-0722/05a：卡含手编字段 → 一枚「手动编辑」出处角标（逐字段出处在详情浮层）。
+          🔴 纯文档抽取卡（provenance 全 doc/缺席）不挂——不替文档冒充手编。 */}
+      {cardHasManual(view) ? (
+        <span className="lite-project-provenance">{l.projectsManualBadge}</span>
+      ) : null}
+
       {/* 🔴 风险徽章：有 riskLevel 才画（absent≠none）。文档没写风险 = 整个徽章收起，
           绝不渲染「无风险 / low」。等级 → 她的软底深字令牌（high 红/medium 橙/low 绿）。 */}
       {view.riskLevel ? (
@@ -219,6 +232,10 @@ export function ProjectsScreen() {
   const restoring = useLite((s) => s.restoring)
   const restoreError = useLite((s) => s.restoreError)
   const restoreSession = useLite((s) => s.restoreSession)
+  // rich-align-0722/05a：有 context 才出「添加项目」入口（无 context = 首访没上传，addProject 无处可写→不出假按钮）。
+  const contextId = useLite((s) => s.contextId)
+  const resetProjectWrite = useLite((s) => s.resetProjectWrite)
+  const [showAddForm, setShowAddForm] = useState(false)
 
   const views = useMemo(
     () => buildProjectViews(rawTeam?.projects, rawTeam?.people),
@@ -226,6 +243,11 @@ export function ProjectsScreen() {
   )
   const groups = useMemo(() => groupProjects(views), [views])
   const coverage = useMemo(() => projectCoverage(views), [views])
+  // rich-align-0722/05a：归档（软删）项目 → 网格下方折叠区。缺席=空（archived_projects 缺键 → []）。
+  const archivedViews = useMemo(
+    () => buildProjectViews(rawTeam?.archived_projects, rawTeam?.people),
+    [rawTeam],
+  )
 
   const hasCoverageGap =
     coverage.missingProgress > 0 || coverage.missingDueDate > 0 || coverage.missingStatus > 0
@@ -235,8 +257,26 @@ export function ProjectsScreen() {
       <div className="lite-projects-scroll">
         <div className="lite-projects-frame">
           <header className="lite-projects-header">
-            <p className="eyebrow">{l.projectsEyebrow}</p>
-            <h1>{l.projectsTitle}</h1>
+            <div className="lite-projects-header-row">
+              <div className="lite-projects-header-heading">
+                <p className="eyebrow">{l.projectsEyebrow}</p>
+                <h1>{l.projectsTitle}</h1>
+              </div>
+              {/* rich-align-0722/05a：页头右端 primary「添加项目」→ 内联表单。只在有 context 时出。 */}
+              {contextId ? (
+                <button
+                  type="button"
+                  className="lite-btn lite-btn--primary lite-projects-add"
+                  onClick={() => {
+                    resetProjectWrite()
+                    setShowAddForm((v) => !v)
+                  }}
+                  aria-expanded={showAddForm}
+                >
+                  {l.projectsAddCta}
+                </button>
+              ) : null}
+            </div>
             <p className="lite-projects-lede">{l.projectsLede}</p>
             {views.length > 0 ? (
               <p className="lite-projects-count">
@@ -244,6 +284,10 @@ export function ProjectsScreen() {
                   ? l.projectsCountOne
                   : fill(l.projectsCountMany, { count: views.length })}
               </p>
+            ) : null}
+            {/* 内联添加表单（页头下方展开；保存 primary + 取消 ghost，字段全中文 aria）。 */}
+            {showAddForm && contextId ? (
+              <AddProjectForm onDone={() => setShowAddForm(false)} />
             ) : null}
           </header>
 
@@ -327,8 +371,191 @@ export function ProjectsScreen() {
               )}
             </section>
           )}
+
+          {/* rich-align-0722/05a：归档（软删）折叠区——网格下方。有归档项目才出；灰化卡 + 恢复键。 */}
+          {archivedViews.length > 0 ? <ArchivedDrawer views={archivedViews} /> : null}
         </div>
       </div>
+    </section>
+  )
+}
+
+// rich-align-0722/05a：页头内联「添加项目」表单。title 必填；其余可选（不填即不发键，absent≠none：
+// 后端不折 0/默认）。状态用 canonical 键选择（on-track/at-risk/blocked/done）以落进已知分组；
+// 进度选填、越界/非数当作没填（宁可不发也不画骗人的条）。保存 primary + 取消 ghost，字段全中文 aria。
+function AddProjectForm({ onDone }: { onDone: () => void }) {
+  const { t } = useDict()
+  const l = t.lite2
+  const addProject = useLite((s) => s.addProject)
+  const busy = useLite((s) => s.projectWriteBusy)
+  const error = useLite((s) => s.projectWriteError)
+
+  const [title, setTitle] = useState('')
+  const [ownerName, setOwnerName] = useState('')
+  const [status, setStatus] = useState('')
+  const [dueDate, setDueDate] = useState('')
+  const [progress, setProgress] = useState('')
+  const [summary, setSummary] = useState('')
+
+  const canSubmit = title.trim().length > 0 && !busy
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!canSubmit) return
+    // 🔴 只塞真填了的键（absent≠none）——空字段不发，后端就不设、渲染层显「文档未提及」。
+    const input: ProjectAddInput = { title: title.trim() }
+    if (ownerName.trim()) input.ownerName = ownerName.trim()
+    if (status) input.status = status
+    if (dueDate.trim()) input.dueDate = dueDate.trim()
+    if (summary.trim()) input.summary = summary.trim()
+    const p = progress.trim()
+    if (p !== '') {
+      const nRaw = Number(p)
+      // 越界/非数 → 当没填（不发 progress），绝不折 0 或截断成一个骗人的值。
+      if (Number.isFinite(nRaw) && nRaw >= 0 && nRaw <= 100) input.progress = Math.round(nRaw)
+    }
+    const ok = await addProject(input)
+    if (ok) onDone()
+  }
+
+  return (
+    <form className="lite-project-form" onSubmit={submit} aria-label={l.projectsAddFormAria}>
+      <div className="lite-project-form-grid">
+        <label className="lite-project-form-field">
+          <span className="lite-project-form-label">{l.projectsFieldTitle}</span>
+          <input
+            className="lite-project-form-input"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            maxLength={200}
+            aria-label={l.projectsFieldTitle}
+            required
+          />
+        </label>
+        <label className="lite-project-form-field">
+          <span className="lite-project-form-label">{l.projectsOwnerLabel}</span>
+          <input
+            className="lite-project-form-input"
+            value={ownerName}
+            onChange={(e) => setOwnerName(e.target.value)}
+            maxLength={120}
+            aria-label={l.projectsOwnerLabel}
+          />
+        </label>
+        <label className="lite-project-form-field">
+          <span className="lite-project-form-label">{l.detailStatus}</span>
+          <select
+            className="lite-project-form-input"
+            value={status}
+            onChange={(e) => setStatus(e.target.value)}
+            aria-label={l.detailStatus}
+          >
+            <option value="">{l.projectsStatusUnset}</option>
+            <option value="on-track">{l.projectsStatusOnTrack}</option>
+            <option value="at-risk">{l.projectsStatusAtRisk}</option>
+            <option value="blocked">{l.projectsStatusBlocked}</option>
+            <option value="done">{l.projectsStatusDone}</option>
+          </select>
+        </label>
+        <label className="lite-project-form-field">
+          <span className="lite-project-form-label">{l.projectsDueLabel}</span>
+          <input
+            className="lite-project-form-input"
+            value={dueDate}
+            onChange={(e) => setDueDate(e.target.value)}
+            maxLength={60}
+            aria-label={l.projectsDueLabel}
+          />
+        </label>
+        <label className="lite-project-form-field">
+          <span className="lite-project-form-label">{l.projectsProgressLabel}</span>
+          <input
+            className="lite-project-form-input"
+            value={progress}
+            onChange={(e) => setProgress(e.target.value)}
+            inputMode="numeric"
+            maxLength={3}
+            placeholder={l.projectsProgressOptional}
+            aria-label={l.projectsProgressLabel}
+          />
+        </label>
+        <label className="lite-project-form-field lite-project-form-field--wide">
+          <span className="lite-project-form-label">{l.detailSummary}</span>
+          <textarea
+            className="lite-project-form-input lite-project-form-textarea"
+            value={summary}
+            onChange={(e) => setSummary(e.target.value)}
+            maxLength={2000}
+            rows={2}
+            aria-label={l.detailSummary}
+          />
+        </label>
+      </div>
+      {error ? (
+        <p className="lite-project-form-error" aria-live="polite">
+          {l.projectsWriteFailed}
+          {'：'}
+          {error}
+        </p>
+      ) : null}
+      <div className="lite-project-form-actions">
+        <button type="submit" className="lite-btn lite-btn--primary" disabled={!canSubmit}>
+          {l.projectsAddSubmit}
+        </button>
+        <button type="button" className="lite-btn lite-btn--ghost" onClick={onDone} disabled={busy}>
+          {l.detailCancel}
+        </button>
+      </div>
+    </form>
+  )
+}
+
+// rich-align-0722/05a：归档折叠区。默认折起（「已归档 N」按钮），展开见灰化卡 + 恢复键。
+// 🔴 归档卡不是 button（不开详情浮层）——避免「卡即按钮」里再套恢复 button 的嵌套交互；
+// 恢复走卡内独立 ghost 文字键，软删可逆一键回主网格。
+function ArchivedDrawer({ views }: { views: ProjectView[] }) {
+  const { t } = useDict()
+  const l = t.lite2
+  const restoreProject = useLite((s) => s.restoreProject)
+  const busy = useLite((s) => s.projectWriteBusy)
+  const [open, setOpen] = useState(false)
+
+  return (
+    <section className="lite-projects-archived" aria-label={l.projectsArchivedAria}>
+      <button
+        type="button"
+        className="lite-btn lite-btn--ghost lite-projects-archived-toggle"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+      >
+        {fill(l.projectsArchivedTitle, { count: views.length })}
+      </button>
+      {open ? (
+        <div className="lite-projects-archived-grid">
+          {views.map((view) => (
+            <div key={view.id} className="lite-project-card is-archived" data-project-id={view.id}>
+              <span className="lite-project-card-head">
+                <h3 className="lite-project-title">{view.title}</h3>
+              </span>
+              <span className="lite-project-facts">
+                <FactRow
+                  label={l.projectsOwnerLabel}
+                  value={view.ownerName}
+                  unknownLabel={l.projectsUnknownValue}
+                />
+              </span>
+              <button
+                type="button"
+                className="lite-btn lite-btn--ghost lite-project-restore"
+                onClick={() => void restoreProject(view.id)}
+                disabled={busy}
+              >
+                {l.projectsArchivedRestore}
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : null}
     </section>
   )
 }

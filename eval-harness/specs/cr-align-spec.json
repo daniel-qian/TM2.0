@@ -479,6 +479,26 @@
       "expected": "grid",
       "tolerance": "exact",
       "note": "【rich-align/04·目录形态闸】成员网格是 CSS grid（3 列 repeat(3,minmax(0,1fr)) 覆盖 shared auto-fill）。列数几何走 e2e 关系断言+像素，不入 spec 反向抄构建值。"
+    },
+    {
+      "key": "projects.addBtnPresent",
+      "stick": 10,
+      "screen": "projects",
+      "selector": ".lite2-shell .lite-projects-add",
+      "probe": "count",
+      "expected": "1",
+      "tolerance": "exact",
+      "note": "【rich-align/05a·项目 CRUD 闸】页头右端「添加项目」入口恒 1（有 context 的项目屏）。结构护栏（seed 无关）；她方无此件，无可对齐的构建值——只断在/是 primary，rect/色由 button-family + 像素证据裁决。"
+    },
+    {
+      "key": "projects.addBtnPrimary",
+      "stick": 10,
+      "screen": "projects",
+      "selector": ".lite2-shell .lite-projects-add.lite-btn--primary",
+      "probe": "count",
+      "expected": "1",
+      "tolerance": "exact",
+      "note": "【rich-align/05a·项目 CRUD 闸】「添加项目」挂 primary 家族类恰 1（主 CTA 语义）。spec→门→码：先定「必须是 primary」，非反向抄她像素；rect/半径由 button-family 族强断言 + 像素证据守。"
     }
   ]
 }

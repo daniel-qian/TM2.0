@@ -94,6 +94,10 @@ export interface LiveTeamPayload {
   // present-and-true ONLY when 开关开（仿 account_linked 缺席即 false 语义）。true 时后端才会在人卡上
   // 投影 self_report；缺席/false 时人卡零自述数字。前端运行时剥离据此决定放不放行 self_report 白名单。
   scoring_enabled?: boolean
+  // rich-align-0722 · issue 05a：软删（归档）的项目卡，投给网格下方折叠区（灰化 + 恢复键）。
+  // 🔴 缺席 = 没有归档项目（absent≠none：后端 archived_project_cards 为空时整键不发，仿
+  // decisions/scoring_enabled 的 additive-key 语义）。前端 `?? []` 收敛，绝不把缺席当成异常。
+  archived_projects?: LiveProjectCard[]
 }
 
 // input-side-0721 · 3A：GET /demo/status 的能力探测契约（无鉴权、无副作用）。
@@ -155,6 +159,15 @@ export interface LiveProjectMilestone {
   statusRaw?: string // 仅 other 时发：文档原状态词，原样回显不改写
 }
 
+// rich-align-0722 · issue 05a：字段级出处（ADR-0028）。后端 side-car，缺就不发键（absent≠none）。
+// origin='doc' = 文档抽取（source=<文件名>:<行>）；origin='manual' = 人手编（source 恒『手动编辑』）。
+// 🔴 前端凭 origin==='manual' 才挂「手动编辑」角标——doc 出处或键缺席都不挂（不替文档冒充手编）。
+export interface LiveFieldProvenance {
+  origin: 'doc' | 'manual'
+  source: string // 手编='手动编辑'；文档=<filename>:<line>
+  updated_at: string // ISO8601
+}
+
 export interface LiveProjectCard {
   id: string
   title: string
@@ -167,6 +180,53 @@ export interface LiveProjectCard {
   blockers?: string[]
   risk?: LiveProjectRisk // rich-align-0722/01：文档写了才有；absent≠none（缺席=文档未提及）
   milestones?: LiveProjectMilestone[] // rich-align-0722/02：文档写了才有；缺席=空/不发键
+  // rich-align-0722/05a：字段级出处 side-car。key=字段名（title/ownerName/status/dueDate/summary/
+  // progress/blockers/risk/milestones），value=出处。缺席=纯文档抽取的老卡（前端一律当 doc 出处，不挂角标）。
+  provenance?: Record<string, LiveFieldProvenance>
+}
+
+// ── rich-align-0722 · issue 05a：项目手编 CRUD 写端点契约（后端 f1ca46d，service/ingest_api.py）──
+// 端点：POST /team/{ctx}/projects · PATCH …/{id} · POST …/{id}/archive · POST …/{id}/restore。
+// 鉴权同读端点（owner_token header 或账号，缺/错→同体 404 无枚举）；title 校验失败→422。
+// 🔴 归档=软删可逆，**无物理删除端点**（销毁类人工闸哲学延伸到产品语义）。
+export interface ProjectRiskInput {
+  level: string // 高/中/低 | high/medium/low（后端归一，词表外整块不抽）
+  reason?: string
+}
+export interface ProjectMilestoneInput {
+  name: string
+  status?: string
+}
+// POST body：title 必填；其余可选（absent≠none：不传即不设，绝不折 0/默认）。
+export interface ProjectAddInput {
+  title: string
+  ownerName?: string
+  status?: string
+  progress?: number | null
+  dueDate?: string
+  summary?: string
+  blockers?: string[]
+  risk?: ProjectRiskInput | null
+  milestones?: ProjectMilestoneInput[]
+}
+// PATCH body：只发**要改的键**（后端 exclude_unset），显式 null=清空→渲染 absent。没发的键不动。
+// 🔴 调用方只把真正改了的字段塞进来（含用户手动置空得到的 null），绝不整体回灌——那会把没碰过的
+// 字段也盖成 manual 出处（后端 _mark_manual 只标发来的键）。
+export type ProjectPatchInput = {
+  title?: string | null
+  ownerName?: string | null
+  status?: string | null
+  progress?: number | null
+  dueDate?: string | null
+  summary?: string | null
+  blockers?: string[] | null
+  risk?: ProjectRiskInput | null
+  milestones?: ProjectMilestoneInput[] | null
+}
+// 四个写端点同形回执：{context_id, project:<更新后的卡（含 provenance）>}。
+export interface ProjectWriteResult {
+  context_id: string
+  project: LiveProjectCard
 }
 
 // feat-056 决策定级契约。口径真源在后端 `eval-harness/avery/decision_rules.py`，
@@ -387,6 +447,18 @@ export interface LiveTransport {
   // 把经理在初始设置里口述的公司情况追加进本公司的 company_notes（owner_token 门后）。
   // 🔴 服务端写侧红线原样把关（评分/排名文本 422）——这条通道不绕任何闸。
   appendNote?: (contextId: string, text: string, sourceExcerpt: string) => Promise<void>
+
+  // ── 项目手编 CRUD（rich-align-0722 · issue 05a）。同为可选：联网后端能力，stub 天然没有 ────
+  // 🔴 store 侧 action 判空降级（同 claimDemoTeam 判 demoClaim 先例）——stub/离线态无 contextId，
+  // CRUD 入口本就不该出现。四端点全走 owner_token header 鉴权（authHeader），回执 {context_id, project}。
+  addProject?: (contextId: string, input: ProjectAddInput) => Promise<ProjectWriteResult>
+  patchProject?: (
+    contextId: string,
+    projectId: string,
+    patch: ProjectPatchInput,
+  ) => Promise<ProjectWriteResult>
+  archiveProject?: (contextId: string, projectId: string) => Promise<ProjectWriteResult>
+  restoreProject?: (contextId: string, projectId: string) => Promise<ProjectWriteResult>
 }
 
 // ── 账号契约（feat-053；后端 service/auth_api.py）────────────────────────────────────────
@@ -755,6 +827,57 @@ export function createHttpTransport(base: string = apiBase()): LiveTransport {
         body: JSON.stringify({ text, source_excerpt: sourceExcerpt }),
       })
       if (!res.ok) throw transportError('notes', res)
+    },
+
+    // ── 项目手编 CRUD（rich-align-0722 · issue 05a；service/ingest_api.py 写端点）──────────────
+    // header-only owner_token（同读端点纪律，缺/伪 token → 后端 404，前端大声失败不静默回落）。
+    // body 只发调用方给的键（PATCH 的 exclude_unset 语义靠 store 侧只塞改动键实现，见 ProjectPatchInput）。
+    async addProject(contextId, input) {
+      const res = await send(
+        'project add',
+        `${base}/team/${encodeURIComponent(contextId)}/projects`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...authHeader(contextId) },
+          body: JSON.stringify(input),
+        },
+      )
+      if (!res.ok) throw transportError('project add', res)
+      return (await res.json()) as ProjectWriteResult
+    },
+
+    async patchProject(contextId, projectId, patch) {
+      const res = await send(
+        'project patch',
+        `${base}/team/${encodeURIComponent(contextId)}/projects/${encodeURIComponent(projectId)}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', ...authHeader(contextId) },
+          body: JSON.stringify(patch),
+        },
+      )
+      if (!res.ok) throw transportError('project patch', res)
+      return (await res.json()) as ProjectWriteResult
+    },
+
+    async archiveProject(contextId, projectId) {
+      const res = await send(
+        'project archive',
+        `${base}/team/${encodeURIComponent(contextId)}/projects/${encodeURIComponent(projectId)}/archive`,
+        { method: 'POST', headers: authHeader(contextId) },
+      )
+      if (!res.ok) throw transportError('project archive', res)
+      return (await res.json()) as ProjectWriteResult
+    },
+
+    async restoreProject(contextId, projectId) {
+      const res = await send(
+        'project restore',
+        `${base}/team/${encodeURIComponent(contextId)}/projects/${encodeURIComponent(projectId)}/restore`,
+        { method: 'POST', headers: authHeader(contextId) },
+      )
+      if (!res.ok) throw transportError('project restore', res)
+      return (await res.json()) as ProjectWriteResult
     },
 
     // ── Ask（feat-034；阶段 C 端点已落地）────────────────────────────────────────────────

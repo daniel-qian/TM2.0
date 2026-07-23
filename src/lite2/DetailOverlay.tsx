@@ -1,13 +1,20 @@
-import { useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useLite } from './store'
 import { useRouteDetail } from './routes'
 import { useDict } from '../shared/i18n/useDict'
 import { InitialAvatar } from './InitialAvatar'
 import { LiteModal } from './LiteModal'
-import { buildProjectViews, milestoneStatusLabel, projectRiskLabel, projectStatusLabel } from './projectView'
+import {
+  buildProjectViews,
+  isManualField,
+  milestoneStatusLabel,
+  projectRiskLabel,
+  projectStatusLabel,
+  type ProjectView,
+} from './projectView'
 import type { LiteDetail } from './store'
 import type { LiteTeam } from './teamData'
-import type { LiveTeamPayload } from './transport'
+import type { LiveTeamPayload, ProjectPatchInput } from './transport'
 
 // feat-024 · 薄只读详情浮层——ADR-0022 决策 2（v1 范围拍板）。
 // 点人卡/项目卡开 ~百行纯 live payload 浮层：名字/角色/owns/来源文件——零 fixtures，
@@ -68,9 +75,24 @@ export function DetailOverlay() {
   // 注：store 里 team 与 rawTeam 永远成对写入（uploadFiles / restoreSession / refreshTeam
   // 三处都在同一次 set 里落），所以「有 team 没 raw」不会发生。
   // 吃的是 held 快照里那份 raw（见上），不是 live rawTeam——理由同人卡。
-  const projectViews = useMemo(() => buildProjectViews(heldRaw?.projects, heldRaw?.people), [heldRaw])
+  // rich-align-0722/05a：浮层项目查找并入归档列表。归档后卡离开 heldRaw.projects，若只查活动列表，
+  // 归档那一刻 project 会瞬变 null 闪一下「detailGone」。并入归档列表则归档态平滑（页脚翻成恢复），
+  // 也让归档项目的深链可打开。archivedIds 把页脚从「编辑·归档」翻成「恢复」。
+  const projectViews = useMemo(
+    () =>
+      buildProjectViews(
+        [...(heldRaw?.projects ?? []), ...(heldRaw?.archived_projects ?? [])],
+        heldRaw?.people,
+      ),
+    [heldRaw],
+  )
+  const archivedIds = useMemo(
+    () => new Set((heldRaw?.archived_projects ?? []).map((p) => p.id)),
+    [heldRaw],
+  )
   const project =
     detail?.kind === 'project' ? projectViews.find((p) => p.id === detail.id) ?? null : null
+  const projectArchived = project ? archivedIds.has(project.id) : false
 
   return (
     <LiteModal
@@ -129,108 +151,7 @@ export function DetailOverlay() {
       ) : null}
 
       {project ? (
-        <>
-          <header className="lite-detail-head">
-            <div>
-              <p className="eyebrow">{t.lite2.detailProjectEyebrow}</p>
-              <h2>{project.title}</h2>
-              {/* feat-055：副标题以前是 `{status} · {ownerName}`，直接吃 teamData 的兜底
-                  默认值——一个文档从没写过状态的项目会在这里显示成 "on-track"，把「没写」
-                  说成了「在按计划推进」。现在三项各自成行、各自会说「文档未提及」。 */}
-              <p className="lite-detail-subtitle">
-                {t.lite2.detailStatus}
-                {': '}
-                <span className={project.statusKey === 'unknown' ? 'is-unknown' : undefined}>
-                  {projectStatusLabel(project, t.lite2)}
-                </span>
-              </p>
-              <p className="lite-detail-subtitle">
-                {t.lite2.detailOwner}
-                {': '}
-                <span className={project.ownerName ? undefined : 'is-unknown'}>
-                  {project.ownerName ?? t.lite2.projectsUnknownValue}
-                </span>
-              </p>
-              <p className="lite-detail-subtitle">
-                {t.lite2.detailDue}
-                {': '}
-                <span className={project.dueDate ? undefined : 'is-unknown'}>
-                  {project.dueDate ?? t.lite2.projectsUnknownValue}
-                </span>
-              </p>
-            </div>
-          </header>
-
-          {project.summary ? (
-            <section className="lite-detail-section">
-              <p className="eyebrow">{t.lite2.detailSummary}</p>
-              <p>{project.summary}</p>
-            </section>
-          ) : null}
-
-          {/* 🔴 进度未知时也要出这一节，写明「文档未提及」——以前是整节不渲染，于是
-              「文档没写进度」和「这个项目没有进度这回事」在屏幕上完全一样。
-              rich-align-0722/01：有值时画环形进度（结构量级对齐她方 SVG 56 / stroke 5）。 */}
-          <section className="lite-detail-section lite-detail-progress-section">
-            <p className="eyebrow">{t.lite2.detailProgress}</p>
-            {project.progress === null ? (
-              <p className="is-unknown">{t.lite2.projectsUnknownValue}</p>
-            ) : (
-              <ProjectProgressRing value={project.progress} />
-            )}
-          </section>
-
-          {/* rich-align-0722/01：项目级风险行。🔴 缺席=整节收起（absent≠none）——文档没写风险
-              就不出这一节，绝不显示「无风险 / low」。 */}
-          {project.riskLevel ? (
-            <section className="lite-detail-section">
-              <p className="eyebrow">{t.lite2.projectsRiskLabel}</p>
-              <span className={`lite-project-risk risk-${project.riskLevel}`}>
-                <span className="lite-project-risk-dot" aria-hidden="true" />
-                <span className="lite-project-risk-level">
-                  {projectRiskLabel(project.riskLevel, t.lite2)}
-                </span>
-              </span>
-              {project.riskReason ? (
-                <p className="lite-detail-risk-reason">{project.riskReason}</p>
-              ) : null}
-            </section>
-          ) : null}
-
-          {/* rich-align-0722/02：里程碑清单 + 分段总览条。🔴 缺席=整节收起（absent≠none）。 */}
-          {project.milestones.length > 0 ? (
-            <section className="lite-detail-section">
-              <p className="eyebrow">{t.lite2.projectsMilestonesLabel}</p>
-              <span className="lite-detail-milestone-bar" aria-hidden="true">
-                {project.milestones.map((m, idx) => (
-                  <span key={idx} className={`lite-detail-milestone-seg ms-${m.status}`} />
-                ))}
-              </span>
-              <ul className="lite-detail-milestone-list">
-                {project.milestones.map((m, idx) => (
-                  <li key={`${m.name}-${idx}`} className={`ms-${m.status}`}>
-                    <span className="lite-detail-milestone-dot" aria-hidden="true" />
-                    <span className="lite-detail-milestone-name">{m.name}</span>
-                    <span className="lite-detail-milestone-status">
-                      {milestoneStatusLabel(m, t.lite2)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
-
-          {project.blockers.length > 0 ? (
-            <section className="lite-detail-section">
-              <p className="eyebrow">{t.lite2.detailBlockers}</p>
-              <ul>
-                {project.blockers.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
-        </>
+        <ProjectDetailBody key={project.id} project={project} open={open} archived={projectArchived} />
       ) : null}
 
       {detail && !person && !project ? (
@@ -264,6 +185,351 @@ export function DetailOverlay() {
         </section>
       ) : null}
     </LiteModal>
+  )
+}
+
+// rich-align-0722/05a：详情浮层项目体——读态（逐字段「手动编辑」出处角标）/ 编辑态（字段原地变
+// 输入框，保存 primary + 取消 ghost）/ 页脚操作（编辑 · 归档 / 或恢复）。
+// 🔴 出场动画单独处理编辑态：open→false（关浮层）即退回读态，不显编辑输入框；切卡由 key={id} 重挂重置。
+// 🔴 归档=软删可逆：归档成功即 closeDetail（卡去 projects 屏「已归档」折叠区）；归档态（深链/过渡）页脚给恢复。
+function ProjectDetailBody({
+  project,
+  open,
+  archived,
+}: {
+  project: ProjectView
+  open: boolean
+  archived: boolean
+}) {
+  const { t } = useDict()
+  const l = t.lite2
+  const patchProject = useLite((s) => s.patchProject)
+  const archiveProject = useLite((s) => s.archiveProject)
+  const restoreProject = useLite((s) => s.restoreProject)
+  const closeDetail = useLite((s) => s.closeDetail)
+  const busy = useLite((s) => s.projectWriteBusy)
+  const error = useLite((s) => s.projectWriteError)
+  const resetProjectWrite = useLite((s) => s.resetProjectWrite)
+
+  const [editing, setEditing] = useState(false)
+  const [dTitle, setDTitle] = useState(project.title)
+  const [dOwner, setDOwner] = useState(project.ownerName ?? '')
+  const [dStatus, setDStatus] = useState(project.statusRaw ?? '')
+  const [dDue, setDDue] = useState(project.dueDate ?? '')
+  const [dProgress, setDProgress] = useState(project.progress === null ? '' : String(project.progress))
+  const [dSummary, setDSummary] = useState(project.summary ?? '')
+
+  // 关浮层（open→false）即退编辑态——出场动画显读态快照（编辑态单独处理）。切卡由 key={project.id} 重挂。
+  useEffect(() => {
+    if (!open) setEditing(false)
+  }, [open])
+
+  const startEdit = () => {
+    resetProjectWrite()
+    setDTitle(project.title)
+    setDOwner(project.ownerName ?? '')
+    setDStatus(project.statusRaw ?? '')
+    setDDue(project.dueDate ?? '')
+    setDProgress(project.progress === null ? '' : String(project.progress))
+    setDSummary(project.summary ?? '')
+    setEditing(true)
+  }
+
+  const cancelEdit = () => {
+    resetProjectWrite()
+    setEditing(false)
+  }
+
+  const save = async (e: FormEvent) => {
+    e.preventDefault()
+    if (busy) return
+    const patch: ProjectPatchInput = {}
+    // title 必填、不可清空：非空且变了才发。
+    const nt = dTitle.trim()
+    if (nt && nt !== project.title) patch.title = nt
+    // 其余字段：变了才发；清空（''）→ null（后端清→渲染 absent「文档未提及」，绝不折默认）。
+    const diff = (draft: string, orig: string | null): string | null | undefined => {
+      const d = draft.trim()
+      const o = orig ?? ''
+      if (d === o) return undefined
+      return d === '' ? null : d
+    }
+    const owner = diff(dOwner, project.ownerName)
+    if (owner !== undefined) patch.ownerName = owner
+    const status = diff(dStatus, project.statusRaw)
+    if (status !== undefined) patch.status = status
+    const due = diff(dDue, project.dueDate)
+    if (due !== undefined) patch.dueDate = due
+    const summary = diff(dSummary, project.summary)
+    if (summary !== undefined) patch.summary = summary
+    // progress：'' → null（清空→absent）；有值只接受 0–100 有限数，越界/非数当没改（不发骗人的值）。
+    const origProg = project.progress === null ? '' : String(project.progress)
+    const np = dProgress.trim()
+    if (np !== origProg) {
+      if (np === '') patch.progress = null
+      else {
+        const n = Number(np)
+        if (Number.isFinite(n) && n >= 0 && n <= 100) patch.progress = Math.round(n)
+      }
+    }
+    if (Object.keys(patch).length === 0) {
+      setEditing(false)
+      return
+    }
+    const ok = await patchProject(project.id, patch)
+    if (ok) setEditing(false)
+  }
+
+  const archive = async () => {
+    if (busy) return
+    const ok = await archiveProject(project.id)
+    if (ok) closeDetail() // 卡去「已归档」折叠区；并入归档列表的查找让此刻不闪 detailGone。
+  }
+
+  const restore = async () => {
+    if (busy) return
+    await restoreProject(project.id) // 留在浮层：恢复后页脚翻回「编辑·归档」。
+  }
+
+  const canSave = dTitle.trim().length > 0 && !busy
+  const isEditing = editing && open && !archived
+
+  const manual = (field: string) =>
+    isManualField(project, field) ? (
+      <span className="lite-detail-provenance">{l.projectsManualBadge}</span>
+    ) : null
+
+  if (isEditing) {
+    return (
+      <form className="lite-detail-edit" onSubmit={save} aria-label={l.projectsEditFormAria}>
+        <header className="lite-detail-head">
+          <div>
+            <p className="eyebrow">{l.detailProjectEyebrow}</p>
+            <label className="lite-detail-edit-field">
+              <span className="lite-detail-edit-label">{l.projectsFieldTitle}</span>
+              <input
+                className="lite-detail-edit-input"
+                value={dTitle}
+                onChange={(e) => setDTitle(e.target.value)}
+                maxLength={200}
+                aria-label={l.projectsFieldTitle}
+                autoFocus
+                required
+              />
+            </label>
+          </div>
+        </header>
+        <div className="lite-detail-edit-grid">
+          <label className="lite-detail-edit-field">
+            <span className="lite-detail-edit-label">{l.detailOwner}</span>
+            <input
+              className="lite-detail-edit-input"
+              value={dOwner}
+              onChange={(e) => setDOwner(e.target.value)}
+              maxLength={120}
+              aria-label={l.detailOwner}
+            />
+          </label>
+          <label className="lite-detail-edit-field">
+            <span className="lite-detail-edit-label">{l.detailStatus}</span>
+            <input
+              className="lite-detail-edit-input"
+              value={dStatus}
+              onChange={(e) => setDStatus(e.target.value)}
+              maxLength={40}
+              aria-label={l.detailStatus}
+            />
+          </label>
+          <label className="lite-detail-edit-field">
+            <span className="lite-detail-edit-label">{l.detailDue}</span>
+            <input
+              className="lite-detail-edit-input"
+              value={dDue}
+              onChange={(e) => setDDue(e.target.value)}
+              maxLength={60}
+              aria-label={l.detailDue}
+            />
+          </label>
+          <label className="lite-detail-edit-field">
+            <span className="lite-detail-edit-label">{l.detailProgress}</span>
+            <input
+              className="lite-detail-edit-input"
+              value={dProgress}
+              onChange={(e) => setDProgress(e.target.value)}
+              inputMode="numeric"
+              maxLength={3}
+              placeholder={l.projectsProgressOptional}
+              aria-label={l.detailProgress}
+            />
+          </label>
+          <label className="lite-detail-edit-field lite-detail-edit-field--wide">
+            <span className="lite-detail-edit-label">{l.detailSummary}</span>
+            <textarea
+              className="lite-detail-edit-input lite-detail-edit-textarea"
+              value={dSummary}
+              onChange={(e) => setDSummary(e.target.value)}
+              maxLength={2000}
+              rows={3}
+              aria-label={l.detailSummary}
+            />
+          </label>
+        </div>
+        {error ? (
+          <p className="lite-project-form-error" aria-live="polite">
+            {l.projectsWriteFailed}
+            {'：'}
+            {error}
+          </p>
+        ) : null}
+        <div className="lite-detail-actions">
+          <button type="submit" className="lite-btn lite-btn--primary" disabled={!canSave}>
+            {l.detailSave}
+          </button>
+          <button type="button" className="lite-btn lite-btn--ghost" onClick={cancelEdit} disabled={busy}>
+            {l.detailCancel}
+          </button>
+        </div>
+      </form>
+    )
+  }
+
+  // ── 读态 ──
+  return (
+    <>
+      <header className="lite-detail-head">
+        <div>
+          <p className="eyebrow">{l.detailProjectEyebrow}</p>
+          <h2>
+            {project.title}
+            {manual('title')}
+          </h2>
+          {archived ? <p className="lite-detail-archived-note">{l.projectsArchivedNote}</p> : null}
+          <p className="lite-detail-subtitle">
+            {l.detailStatus}
+            {': '}
+            <span className={project.statusKey === 'unknown' ? 'is-unknown' : undefined}>
+              {projectStatusLabel(project, l)}
+            </span>
+            {manual('status')}
+          </p>
+          <p className="lite-detail-subtitle">
+            {l.detailOwner}
+            {': '}
+            <span className={project.ownerName ? undefined : 'is-unknown'}>
+              {project.ownerName ?? l.projectsUnknownValue}
+            </span>
+            {manual('ownerName')}
+          </p>
+          <p className="lite-detail-subtitle">
+            {l.detailDue}
+            {': '}
+            <span className={project.dueDate ? undefined : 'is-unknown'}>
+              {project.dueDate ?? l.projectsUnknownValue}
+            </span>
+            {manual('dueDate')}
+          </p>
+        </div>
+      </header>
+
+      {project.summary ? (
+        <section className="lite-detail-section">
+          <p className="eyebrow">
+            {l.detailSummary}
+            {manual('summary')}
+          </p>
+          <p>{project.summary}</p>
+        </section>
+      ) : null}
+
+      <section className="lite-detail-section lite-detail-progress-section">
+        <p className="eyebrow">
+          {l.detailProgress}
+          {manual('progress')}
+        </p>
+        {project.progress === null ? (
+          <p className="is-unknown">{l.projectsUnknownValue}</p>
+        ) : (
+          <ProjectProgressRing value={project.progress} />
+        )}
+      </section>
+
+      {project.riskLevel ? (
+        <section className="lite-detail-section">
+          <p className="eyebrow">{l.projectsRiskLabel}</p>
+          <span className={`lite-project-risk risk-${project.riskLevel}`}>
+            <span className="lite-project-risk-dot" aria-hidden="true" />
+            <span className="lite-project-risk-level">{projectRiskLabel(project.riskLevel, l)}</span>
+          </span>
+          {project.riskReason ? <p className="lite-detail-risk-reason">{project.riskReason}</p> : null}
+        </section>
+      ) : null}
+
+      {project.milestones.length > 0 ? (
+        <section className="lite-detail-section">
+          <p className="eyebrow">{l.projectsMilestonesLabel}</p>
+          <span className="lite-detail-milestone-bar" aria-hidden="true">
+            {project.milestones.map((m, idx) => (
+              <span key={idx} className={`lite-detail-milestone-seg ms-${m.status}`} />
+            ))}
+          </span>
+          <ul className="lite-detail-milestone-list">
+            {project.milestones.map((m, idx) => (
+              <li key={`${m.name}-${idx}`} className={`ms-${m.status}`}>
+                <span className="lite-detail-milestone-dot" aria-hidden="true" />
+                <span className="lite-detail-milestone-name">{m.name}</span>
+                <span className="lite-detail-milestone-status">{milestoneStatusLabel(m, l)}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {project.blockers.length > 0 ? (
+        <section className="lite-detail-section">
+          <p className="eyebrow">{l.detailBlockers}</p>
+          <ul>
+            {project.blockers.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {/* rich-align-0722/05a：页脚操作区。活动卡→编辑·归档（软删可逆）；归档卡→恢复回主网格。 */}
+      <div className="lite-detail-actions lite-detail-actions--footer">
+        {archived ? (
+          <button
+            type="button"
+            className="lite-btn lite-btn--soft lite-detail-restore"
+            onClick={restore}
+            disabled={busy}
+          >
+            {l.projectsArchivedRestore}
+          </button>
+        ) : (
+          <>
+            <button type="button" className="lite-btn lite-btn--soft" onClick={startEdit} disabled={busy}>
+              {l.detailEdit}
+            </button>
+            <button
+              type="button"
+              className="lite-btn lite-btn--ghost lite-detail-archive"
+              onClick={archive}
+              disabled={busy}
+            >
+              {l.detailArchive}
+            </button>
+          </>
+        )}
+      </div>
+      {error ? (
+        <p className="lite-project-form-error" aria-live="polite">
+          {l.projectsWriteFailed}
+          {'：'}
+          {error}
+        </p>
+      ) : null}
+    </>
   )
 }
 

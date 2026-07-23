@@ -993,6 +993,25 @@ export const en = {
     projectsMilestoneBlocked: 'Blocked',
     projectsMilestoneUpcoming: 'Upcoming',
     projectsMilestoneOther: 'Other',
+    // rich-align-0722/05a · 项目手编 CRUD（add/edit/archive/restore + 逐字段出处 ADR-0028）。
+    projectsAddCta: 'Add a project',
+    projectsAddSubmit: 'Add',
+    projectsAddFormAria: 'Add a project',
+    projectsEditFormAria: 'Edit project',
+    projectsFieldTitle: 'Title',
+    projectsStatusUnset: 'Not set',
+    projectsProgressOptional: 'optional 0-100',
+    projectsWriteFailed: 'Could not save',
+    // provenance badge — this field/card carries a manual edit (origin=manual); doc-only fields never show it.
+    projectsManualBadge: 'Hand-edited',
+    projectsArchivedTitle: 'Archived ({count})',
+    projectsArchivedAria: 'Archived projects',
+    projectsArchivedRestore: 'Restore',
+    projectsArchivedNote: 'This project is archived.',
+    detailEdit: 'Edit',
+    detailSave: 'Save',
+    detailCancel: 'Cancel',
+    detailArchive: 'Archive',
     // rich-align-0722/03 · 人员自述负载/情绪（人身数字开关口径）。ONLY rendered when the operator
     // has unblocked person scoring; each metric carries a system-self-attesting provenance caption
     // (never a bare assertion of authorship). Mood labels ARE the four-word vocabulary the gate scans.

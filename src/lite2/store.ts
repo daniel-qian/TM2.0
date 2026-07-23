@@ -6,6 +6,8 @@ import type {
   LiveNoteEntry,
   LiveTeamPayload,
   LiveTransport,
+  ProjectAddInput,
+  ProjectPatchInput,
 } from './transport'
 import { isStubTransportSelected, resolveTransport } from './stubTransport'
 import { createHttpTransport, storedOwnerToken, TransportError } from './transport'
@@ -292,6 +294,12 @@ interface LiteState {
   agentSource: LiveAgentSource
   _abort: (() => void) | null
 
+  // ── 项目手编 CRUD（rich-align-0722 · issue 05a）──────────────────────────────────────
+  // 🔴 单个 CRUD 写在飞（add/patch/archive/restore 互斥，UI 同时只开一处）——共用一对忙/错态。
+  // busy 用于把提交/保存/归档键置灰（防双击=两次写）；error 是**诚实报错**（写失败必说，不伪装成功）。
+  projectWriteBusy: boolean
+  projectWriteError: string | null
+
   // ── Ask / Quick ask（feat-034 阶段 B）——当前 Thread 的一张活体 Quick ask。
   // 🔴 回执数据只活在这里（AskDraft.recipients[].receipt）——LitePerson / 人卡零新增字段。
   ask: AskDraft | null
@@ -326,6 +334,17 @@ interface LiteState {
   refreshTeam: () => Promise<void>
   refreshFiles: () => Promise<void>
   refreshNotes: () => Promise<void>
+  // ── 项目手编 CRUD（rich-align-0722 · issue 05a）。写端点已就绪（f1ca46d）；action 写后
+  // refreshTeam() 从权威 /team 重新派生网格（含 archived_projects + 逐字段 provenance），
+  // 不做易漂移的乐观拼装（archive/restore 要跨 active↔archived 两个数组，单条回执拼不全）。
+  // 🔴 transport.addProject 等为可选（stub 无）——判空即无操作（同 claimDemoTeam 判 demoClaim 先例）。
+  // 返回 boolean：true=成功（UI 关表单/退编辑态），false=失败或不可用（UI 留在原地 + 读 projectWriteError）。
+  addProject: (input: ProjectAddInput) => Promise<boolean>
+  patchProject: (projectId: string, patch: ProjectPatchInput) => Promise<boolean>
+  archiveProject: (projectId: string) => Promise<boolean>
+  restoreProject: (projectId: string) => Promise<boolean>
+  // 清写态（打开表单 / 进编辑态 / 关浮层时调，别把上一次的报错挂到下一次操作上）。
+  resetProjectWrite: () => void
   askLive: (req: AdviseRequest) => void
   resetRun: () => void
 
@@ -348,6 +367,43 @@ interface LiteState {
 // 这个开关。dev 下行为一字不变（AFK/DOM 门就靠 ?v=2&mode=live&transport=stub 驱动）。
 // 与 src/main.tsx 的 __AVERY_LITE__ 测试缝同一个写法。
 const defaultTransport = import.meta.env.DEV ? resolveTransport() : createHttpTransport()
+
+// rich-align-0722/05a：四个项目写 action 的共用骨架。判可用 → 判忙（防双击=两次写）→ 置忙 →
+// 调 transport 写端点 → 成功后 refreshTeam() 从权威 /team 重派生（含 archived_projects + 逐字段
+// provenance；archive/restore 跨 active↔archived 两数组，单条回执拼不全，故一律回权威）→ 落忙态。
+// 🔴 写失败 = projectWriteError 诚实报错（不伪装成功）；transport 没实现该端点（run 返 undefined，
+// stub/老后端）= 同样诚实置错，绝不静默。
+async function runProjectWrite(
+  get: () => LiteState,
+  set: (partial: Partial<LiteState>) => void,
+  run: (contextId: string, transport: LiveTransport) => Promise<unknown> | undefined,
+): Promise<boolean> {
+  const { contextId, transport } = get()
+  if (!contextId) return false
+  if (get().projectWriteBusy) return false
+  set({ projectWriteBusy: true, projectWriteError: null })
+  try {
+    const pending = run(contextId, transport)
+    if (pending === undefined) {
+      set({
+        projectWriteBusy: false,
+        projectWriteError: 'project write is not available on this transport',
+      })
+      return false
+    }
+    await pending
+    // 写成功 → 从权威 /team 重新派生（refreshTeam 自带 stillOn 闸：await 期间切了公司就不落旧结果）。
+    await get().refreshTeam()
+    set({ projectWriteBusy: false })
+    return true
+  } catch (err) {
+    set({
+      projectWriteBusy: false,
+      projectWriteError: err instanceof Error ? err.message : String(err),
+    })
+    return false
+  }
+}
 
 export const useLite = create<LiteState>((set, get) => ({
   transport: defaultTransport,
@@ -375,6 +431,9 @@ export const useLite = create<LiteState>((set, get) => ({
   run: emptyRunState(),
   agentSource: createLiveAgentSource(defaultTransport),
   _abort: null,
+
+  projectWriteBusy: false,
+  projectWriteError: null,
 
   ask: null,
   askBusy: 'idle',
@@ -690,6 +749,17 @@ export const useLite = create<LiteState>((set, get) => ({
       // 笔记是次要只读视图——拉取失败不该打断主流程。
     }
   },
+
+  // ── 项目手编 CRUD（rich-align-0722 · issue 05a）。四个都走 runProjectWrite 共用骨架
+  // （判可用/判忙 → 写 → refreshTeam 从权威 /team 重派生 → 落忙态/诚实报错）。────────────────
+  addProject: (input) => runProjectWrite(get, set, (cid, t) => t.addProject?.(cid, input)),
+  patchProject: (projectId, patch) =>
+    runProjectWrite(get, set, (cid, t) => t.patchProject?.(cid, projectId, patch)),
+  archiveProject: (projectId) =>
+    runProjectWrite(get, set, (cid, t) => t.archiveProject?.(cid, projectId)),
+  restoreProject: (projectId) =>
+    runProjectWrite(get, set, (cid, t) => t.restoreProject?.(cid, projectId)),
+  resetProjectWrite: () => set({ projectWriteBusy: false, projectWriteError: null }),
 
   askLive: (req) => {
     // 中止上一轮（切问题不叠流）。新一轮开跑即撤旧 Ask 卡（与 advice 卡同生命周期：

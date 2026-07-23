@@ -6679,3 +6679,177 @@
     animation: lite-ask-avery-expand 0.22s ease both;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   rich-align-0722 · issue 05a — 项目手编 CRUD（添加表单 / 归档折叠区 / 逐字段出处角标 /
+   详情浮层编辑态）。结构 + 中性配色走 --rule/--paper-strong/--ink* 令牌，两皮自适应；
+   按钮走既有 .lite-btn 族（primary/ghost/soft），颜色不在此重定义。错误文案照 restore-failed
+   先例走中性 ink（本壳约定不用红字）。APPEND-ONLY：只加不改上方任何一行。
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── 页头行：标题左 / 「添加项目」primary 右 ── */
+.lite2-shell .lite-projects-header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.lite2-shell .lite-projects-header-heading {
+  min-width: 0;
+}
+.lite2-shell .lite-projects-add {
+  flex: none;
+  white-space: nowrap;
+}
+
+/* ── 内联添加表单（页头下方展开）+ 详情浮层编辑态输入网格（共用字段样式）── */
+.lite2-shell .lite-project-form {
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: rgba(var(--lite2-ink-rgb), 0.02);
+}
+.lite2-shell .lite-project-form-grid,
+.lite2-shell .lite-detail-edit-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 14px;
+}
+.lite2-shell .lite-project-form-field,
+.lite2-shell .lite-detail-edit-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.lite2-shell .lite-project-form-field--wide,
+.lite2-shell .lite-detail-edit-field--wide {
+  grid-column: 1 / -1;
+}
+.lite2-shell .lite-project-form-label,
+.lite2-shell .lite-detail-edit-label {
+  color: var(--ink-faint);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.lite2-shell .lite-project-form-input,
+.lite2-shell .lite-detail-edit-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 11px;
+  border: 1px solid var(--rule);
+  border-radius: 9px;
+  background: var(--paper-strong);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13.5px;
+}
+.lite2-shell .lite-project-form-textarea,
+.lite2-shell .lite-detail-edit-textarea {
+  resize: vertical;
+  min-height: 46px;
+  line-height: 1.5;
+}
+.lite2-shell .lite-project-form-input:focus-visible,
+.lite2-shell .lite-detail-edit-input:focus-visible {
+  border-color: var(--sage);
+  outline: 2px solid rgba(var(--lite2-sky-rgb), 0.9);
+  outline-offset: 1px;
+}
+.lite2-shell .lite-project-form-actions,
+.lite2-shell .lite-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.lite2-shell .lite-detail-actions--footer {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--rule);
+}
+/* 错误文案（写失败诚实报错）——中性 ink，压到最轻，同 restore-failed 先例，不用红字。 */
+.lite2-shell .lite-project-form-error {
+  margin: 10px 0 0;
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.5;
+  border-left: 3px solid rgba(var(--lite2-danger-rgb), 0.5);
+  padding-left: 10px;
+}
+
+/* ── 卡面「手动编辑」出处角标（含手编字段的卡）+ 详情浮层逐字段角标 ── */
+.lite2-shell .lite-project-provenance,
+.lite2-shell .lite-detail-provenance {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: rgba(var(--lite2-accent-rgb), 0.1);
+  color: var(--ink-soft);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+.lite2-shell .lite-project-provenance {
+  align-self: flex-start;
+  margin: 2px 0 0;
+  padding: 2px 8px;
+}
+/* 浮层逐字段角标——挂在字段行/标题末尾，与文字基线对齐，间距小。 */
+.lite2-shell .lite-detail-provenance {
+  margin-left: 8px;
+  padding: 1px 7px;
+  vertical-align: middle;
+}
+
+/* ── 归档折叠区（网格下方）+ 灰化归档卡 + 恢复键 ── */
+.lite2-shell .lite-projects-archived {
+  margin-top: 26px;
+  padding-top: 18px;
+  border-top: 1px solid var(--rule);
+}
+.lite2-shell .lite-projects-archived-toggle {
+  font-size: 12.5px;
+}
+.lite2-shell .lite-projects-archived-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+/* 灰化：软删卡整体降透明 + 去饱和，一眼看出「已归档」而非活动卡；恢复键把它拉回。 */
+.lite2-shell .lite-project-card.is-archived {
+  opacity: 0.62;
+  filter: saturate(0.7);
+  cursor: default;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.lite2-shell .lite-project-restore {
+  align-self: flex-start;
+  font-size: 12px;
+}
+
+/* ── 详情浮层：编辑态容器 + 归档提示 + 恢复/归档键 ── */
+.lite2-shell .lite-detail-edit {
+  display: block;
+}
+.lite2-shell .lite-detail-archived-note {
+  margin: 4px 0 8px;
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  font-style: italic;
+}
+
+/* 窄屏：表单单列（避免两列挤成不可读）。 */
+@media (max-width: 560px) {
+  .lite2-shell .lite-project-form-grid,
+  .lite2-shell .lite-detail-edit-grid {
+    grid-template-columns: 1fr;
+  }
+}
