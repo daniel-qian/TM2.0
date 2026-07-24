@@ -21,7 +21,7 @@ import os
 import tempfile
 import uuid
 from dataclasses import dataclass, field, replace
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from .extract import (
@@ -719,6 +719,7 @@ class ContextRegistry(ProjectWriteMixin):
         self._ask_tokens: dict[str, tuple[str, int]] = {}  # share_token -> (ask_id, recipient idx)
         self._account_contexts: dict[str, list[str]] = {}  # feat-053: user_id -> [context_id]
         self._context_owner: dict[str, str] = {}           # feat-053: context_id -> user_id (1:1)
+        self._ephemeral_at: dict[str, datetime] = {}       # gc-demo-clones-0724: clone_id -> created (UTC)
 
     def put(self, ctx: CompanyContext) -> str:
         self._by_id[ctx.context_id] = ctx
@@ -820,6 +821,8 @@ class ContextRegistry(ProjectWriteMixin):
         ctxs = self._account_contexts.setdefault(user_id, [])
         if context_id not in ctxs:
             ctxs.append(context_id)
+        # gc-demo-clones-0724: a linked context is a real owned workspace now — never GC'd.
+        self._ephemeral_at.pop(context_id, None)
         return True
 
     def contexts_for_account(self, user_id: str) -> list[str]:
@@ -860,7 +863,7 @@ class ContextRegistry(ProjectWriteMixin):
     # --- input-side-0721 · 3A: clone (the one-click sample-team seam) --------------------------
 
     def clone_context(self, src_context_id: str, *, new_context_id: str,
-                      new_owner_token: str) -> bool:
+                      new_owner_token: str, ephemeral: bool = True) -> bool:
         """Copy one context WHOLE into a new id with a NEW owner_token — the demo-claim seam.
 
         Why clone instead of sharing the demo master: /advise appends company notes and /ask lands
@@ -889,7 +892,27 @@ class ContextRegistry(ProjectWriteMixin):
         self._by_id[new_context_id] = twin
         self._notes[new_context_id] = [replace(n, id=new_note_id())
                                        for n in self._notes.get(src_context_id, [])]
+        # gc-demo-clones-0724: mark the twin ephemeral (default — the sole caller is /demo/claim) so
+        # sweep_ephemeral can TTL-collect it. The SOURCE keeps its own flag; only the twin is marked.
+        if ephemeral:
+            self._ephemeral_at[new_context_id] = datetime.now(timezone.utc)
         return True
+
+    def sweep_ephemeral(self, *, older_than_hours: int, limit: int = 50) -> int:
+        """gc-demo-clones-0724 (the in-memory twin of PostgresContextRegistry.sweep_ephemeral): drop
+        up to `limit` ephemeral clones older than `older_than_hours` that are NOT account-linked.
+        Returns the count dropped. Never touches a master (never marked ephemeral) or an
+        account-linked context (link_account_context clears the flag; the owner guard re-checks)."""
+        hours = max(0, int(older_than_hours))
+        batch = max(1, int(limit))
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+        victims = [cid for cid, at in sorted(self._ephemeral_at.items(), key=lambda kv: kv[1])
+                   if at < cutoff and cid not in self._context_owner][:batch]
+        for cid in victims:
+            self._by_id.pop(cid, None)
+            self._notes.pop(cid, None)
+            self._ephemeral_at.pop(cid, None)
+        return len(victims)
 
     def __contains__(self, context_id: str) -> bool:
         return context_id in self._by_id
@@ -901,6 +924,7 @@ class ContextRegistry(ProjectWriteMixin):
         self._ask_tokens.clear()
         self._account_contexts.clear()
         self._context_owner.clear()
+        self._ephemeral_at.clear()
 
 
 # Process-wide default registry (the offline in-memory instance).

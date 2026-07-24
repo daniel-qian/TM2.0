@@ -44,6 +44,7 @@ from __future__ import annotations
 import dataclasses
 import logging
 import os
+import time
 from dataclasses import asdict
 from pathlib import Path
 
@@ -71,6 +72,13 @@ def _embed_dim() -> int:
         return int(os.environ.get("AVERY_EMBED_DIM", str(_DEFAULT_EMBED_DIM)))
     except (TypeError, ValueError):
         return _DEFAULT_EMBED_DIM
+
+
+def _int_env(name: str, default: int) -> int:
+    try:
+        return int(os.environ.get(name, str(default)))
+    except (TypeError, ValueError):
+        return default
 
 _PERSON_FIELDS = {f.name for f in dataclasses.fields(PersonEntity)}
 _PROJECT_FIELDS = {f.name for f in dataclasses.fields(ProjectEntity)}
@@ -125,13 +133,50 @@ class PostgresContextRegistry(ProjectWriteMixin):
 
         feat-030 P5: a permission error means a locked-down prod role whose schema was provisioned
         out-of-band — TOLERATED only if `avery.contexts` actually exists; if it does NOT, re-raise a
-        clear bootstrap error rather than letting a downstream `UndefinedTable` confuse the caller."""
+        clear bootstrap error rather than letting a downstream `UndefinedTable` confuse the caller.
+
+        gc-demo-clones-0724 (lock-cheap bootstrap): each migration runs under a short lock_timeout +
+        statement_timeout, and the whole replay retries with backoff. So a bootstrap that races a
+        concurrent /demo/claim holding an entities lock — or an ORPHANED idle-in-transaction claim, the
+        exact 2026-07-23 outage — FAILS FAST and retries instead of hanging until Supabase's 2-min
+        statement_timeout and tripping the container HEALTHCHECK. Paired with 0009/0010's guarded ADD
+        CONSTRAINT (a no-op catalog lookup on the normal boot where nothing changed), the steady-state
+        bootstrap takes NO ACCESS EXCLUSIVE lock on entities at all — the lock_timeout is the backstop
+        for the rare apply path (a genuine schema change, or a fresh DB) and for a stuck writer."""
         if self._schema_ready:
             return
+        lock_ms = _int_env("AVERY_BOOTSTRAP_LOCK_TIMEOUT_MS", 3000)
+        stmt_ms = _int_env("AVERY_BOOTSTRAP_STMT_TIMEOUT_MS", 30000)
+        retries = max(1, _int_env("AVERY_BOOTSTRAP_RETRIES", 4))
+        contended = (self._psycopg.errors.LockNotAvailable, self._psycopg.errors.QueryCanceled)
+        for attempt in range(1, retries + 1):
+            try:
+                self._replay_migrations(lock_ms, stmt_ms)
+                self._schema_ready = True
+                return
+            except contended as e:
+                if attempt >= retries:
+                    raise RuntimeError(
+                        f"avery schema bootstrap could not lock the entities table after {retries} "
+                        f"attempts (lock_timeout={lock_ms}ms) — a concurrent /demo/claim or an "
+                        "orphaned idle-in-transaction connection is likely holding it; clear it "
+                        "(SELECT pg_terminate_backend(pid) on the blocker) and restart."
+                    ) from e
+                logger.warning(
+                    "schema bootstrap attempt %d/%d hit a lock/timeout (%s); retrying",
+                    attempt, retries, type(e).__name__)
+                time.sleep(min(2.0, 0.25 * (2 ** (attempt - 1))))   # 0.25 / 0.5 / 1.0s backoff
+
+    def _replay_migrations(self, lock_ms: int, stmt_ms: int) -> None:
+        """Run each migration file in its own short-lived, time-bounded connection. lock_ms / stmt_ms
+        are millisecond GUCs (bare-int units for lock_timeout/statement_timeout); coerced to int so
+        they are injection-safe when inlined into SET."""
         for path in sorted(_MIGRATIONS_DIR.glob("*.sql")):
             sql = path.read_text(encoding="utf-8")
             try:
                 with self._connect() as conn:
+                    conn.execute(f"SET lock_timeout = {int(lock_ms)}")
+                    conn.execute(f"SET statement_timeout = {int(stmt_ms)}")
                     conn.execute(sql)
             except self._psycopg.errors.InsufficientPrivilege as e:
                 with self._connect() as conn:
@@ -141,8 +186,7 @@ class PostgresContextRegistry(ProjectWriteMixin):
                         "avery schema is not provisioned and this DB role lacks CREATE privilege; "
                         "apply eval-harness/db/migrations/*.sql out-of-band (or grant CREATE)."
                     ) from e
-                break   # schema exists, role just can't (re)create it — assume provisioned in full
-        self._schema_ready = True
+                return   # schema exists, role just can't (re)create it — assume provisioned in full
 
     # --- red line at the storage door ------------------------------------------------------------
 
@@ -384,7 +428,7 @@ class PostgresContextRegistry(ProjectWriteMixin):
     # --- input-side-0721 · 3A: clone (the one-click sample-team seam) --------------------------
 
     def clone_context(self, src_context_id: str, *, new_context_id: str,
-                      new_owner_token: str) -> bool:
+                      new_owner_token: str, ephemeral: bool = True) -> bool:
         """The Postgres twin of ContextRegistry.clone_context — one transaction of SQL-level
         INSERT..SELECT row copies. Deliberately NOT get()+put() recomposition, which would
         ① re-embed the whole corpus (a second billable DashScope pass for identical vectors —
@@ -392,14 +436,19 @@ class PostgresContextRegistry(ProjectWriteMixin):
         bytes (get() never pulls bytea; the clone's file space would list files it cannot serve).
         Notes get FRESH ids (company_notes.id is globally unique) but keep created_at.
         No red-line re-scan: every copied row passed the storage door on its way in, and a
-        byte-copy cannot manufacture new content. False = unknown source context."""
+        byte-copy cannot manufacture new content. False = unknown source context.
+
+        gc-demo-clones-0724: `ephemeral` (default True — the sole caller is /demo/claim minting a
+        disposable guest twin) marks the clone for TTL garbage-collection (sweep_ephemeral). The
+        SOURCE master keeps its own flag (a master built via put() is ephemeral=false), so cloning
+        a master never marks the master; only the new twin is ephemeral."""
         self._ensure_schema()
         with self._connect() as conn, conn.transaction():
             row = conn.execute(
-                "INSERT INTO avery.contexts (context_id, name, source_files, owner_token) "
-                "SELECT %s, name, source_files, %s FROM avery.contexts WHERE context_id = %s "
+                "INSERT INTO avery.contexts (context_id, name, source_files, owner_token, ephemeral) "
+                "SELECT %s, name, source_files, %s, %s FROM avery.contexts WHERE context_id = %s "
                 "RETURNING context_id",
-                (new_context_id, new_owner_token or None, src_context_id)).fetchone()
+                (new_context_id, new_owner_token or None, ephemeral, src_context_id)).fetchone()
             if row is None:
                 return False
             conn.execute(
@@ -435,6 +484,34 @@ class PostgresContextRegistry(ProjectWriteMixin):
                         "VALUES (%s, %s, %s, %s, %s)",
                         [(new_note_id(), new_context_id, t, se, ca) for t, se, ca in notes])
         return True
+
+    def sweep_ephemeral(self, *, older_than_hours: int, limit: int = 50) -> int:
+        """gc-demo-clones-0724: garbage-collect stale demo guest clones. Deletes up to `limit`
+        contexts that are (a) ephemeral — clone_context set the flag; masters/real uploads are
+        false — AND (b) older than `older_than_hours` AND (c) NOT linked to any account. Returns the
+        number deleted. The ON DELETE CASCADE from every child table takes each clone's
+        entities/materials/memory/notes/... with it, so this one DELETE reclaims the whole footprint.
+
+        NEVER touches a demo master (ctx_demo_*, built via put() -> ephemeral=false) or an
+        account-linked context (the NOT EXISTS guard, belt-and-suspenders with link_account_context's
+        ephemeral -> false). Runs under its own short lock_timeout/statement_timeout and a bounded
+        LIMIT, so an opportunistic call on the /demo/claim path can never stall the claim."""
+        self._ensure_schema()
+        hours = max(0, int(older_than_hours))
+        batch = max(1, int(limit))
+        with self._connect() as conn:
+            conn.execute(f"SET lock_timeout = {_int_env('AVERY_BOOTSTRAP_LOCK_TIMEOUT_MS', 3000)}")
+            conn.execute(f"SET statement_timeout = {_int_env('AVERY_BOOTSTRAP_STMT_TIMEOUT_MS', 30000)}")
+            cur = conn.execute(
+                "DELETE FROM avery.contexts WHERE context_id IN ("
+                "  SELECT c.context_id FROM avery.contexts c"
+                "  WHERE c.ephemeral"
+                "    AND c.created_at < now() - make_interval(hours => %s)"
+                "    AND NOT EXISTS (SELECT 1 FROM avery.account_contexts a"
+                "                    WHERE a.context_id = c.context_id)"
+                "  LIMIT %s)",
+                (hours, batch))
+            return cur.rowcount
 
     def source_document_bytes(self, context_id: str, idx: int) -> bytes | None:
         """feat-032 download seam: the raw bytea of one uploaded file, pulled on demand (never in
@@ -617,6 +694,14 @@ class PostgresContextRegistry(ProjectWriteMixin):
                 conn.execute(
                     "INSERT INTO avery.account_contexts (user_id, context_id) VALUES (%s, %s) "
                     "ON CONFLICT DO NOTHING", (user_id, context_id))
+                # gc-demo-clones-0724: a context now bound to THIS account is a real owned workspace,
+                # never GC'd — clear the ephemeral flag (only when the link actually landed for this
+                # user, so a losing race against another owner does not touch their row).
+                conn.execute(
+                    "UPDATE avery.contexts SET ephemeral = false WHERE context_id = %s "
+                    "AND EXISTS (SELECT 1 FROM avery.account_contexts a "
+                    "            WHERE a.context_id = %s AND a.user_id = %s)",
+                    (context_id, context_id, user_id))
         except self._psycopg.errors.ForeignKeyViolation:
             return False   # unknown context_id — nothing to claim
         return self.account_for_context(context_id) == user_id

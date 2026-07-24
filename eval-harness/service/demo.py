@@ -27,6 +27,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import mimetypes
 import os
 import threading
@@ -42,6 +43,8 @@ from avery.ingest.registry import SourceDocument, active_registry, new_context_i
 from . import embedding_factory, extractor_factory
 from .ingest_api import _team_payload, mint_owner_token
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
 
 # 首铸互斥：两个访客同时打第一个 claim，只有一个真的去跑（生产 LLM 铸造要两分钟 + 真钱）。
@@ -54,6 +57,32 @@ _GAP_NOTE = ("这是一个示例工作区：Avery 只读过这里的几份示例
              "那一天。签约、回款、到访这类实时数据还没有接入——接入你们自己的系统之后，"
              "这里会跟着当天的数字走。")
 _GAP_NOTE_EXCERPT = "示例团队 · 实时数据还没接入"
+
+
+def _int_env(name: str, default: int) -> int:
+    try:
+        return int(os.environ.get(name, str(default)))
+    except (TypeError, ValueError):
+        return default
+
+
+def _sweep_expired_clones(reg) -> None:
+    """gc-demo-clones-0724: opportunistically TTL-collect stale demo guest clones on the claim path —
+    the traffic that MINTS clones is what cleans them (GC scales with demo load, no scheduler/new
+    infra). BEST-EFFORT by construction: the clone already committed, so a sweep failure NEVER fails
+    the claim — it is logged and swallowed. The registry-side sweep is bounded (LIMIT) and self-timing-
+    out (its own lock_timeout/statement_timeout), so this can't stall the claim. TTL/batch are env
+    knobs (AVERY_DEMO_TTL_HOURS default 48h; AVERY_DEMO_GC_BATCH default 50)."""
+    sweep = getattr(reg, "sweep_ephemeral", None)
+    if sweep is None:                       # a registry without the GC seam — nothing to do
+        return
+    try:
+        ttl = _int_env("AVERY_DEMO_TTL_HOURS", 48)
+        n = sweep(older_than_hours=ttl, limit=_int_env("AVERY_DEMO_GC_BATCH", 50))
+        if n:
+            logger.info("demo GC: swept %d expired guest clone(s) (ttl=%dh)", n, ttl)
+    except Exception:                        # noqa: BLE001 — GC must never break a successful claim
+        logger.warning("demo GC sweep failed (ignored; claim already succeeded)", exc_info=True)
 
 
 def _seed_dir() -> Path | None:
@@ -152,6 +181,7 @@ async def demo_claim() -> dict:
         payload = _team_payload(ctx)
         payload["owner_token"] = token
         payload["demo"] = True     # 前端要标注「这是示例」语义，不许冒充用户自己的数据
+        _sweep_expired_clones(reg)   # gc-demo-clones-0724: opportunistic TTL GC, best-effort
         return payload
 
     # 铸造（生产 LLM 路径分钟级）+ 克隆都是同步工作——丢线程池，别冻住单 worker 的事件循环

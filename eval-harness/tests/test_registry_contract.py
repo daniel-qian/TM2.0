@@ -596,12 +596,15 @@ def test_person_keys_allowlist_covers_exactly_person_fields():
     registry never hits a real CHECK) and fatal in prod:
       (1) drift — pg_registry.put() writes asdict(PersonEntity), which ALWAYS emits every field, so a
           field added to PersonEntity without extending the allowlist REJECTS every person write;
-      (2) replay-safety — _ensure_schema replays every migration and each ADD re-validates all rows,
-          so a STALE allowlist ADD (a strict subset of the current fields) aborts the WHOLE bootstrap
-          once any row carries a newer key (0002's pre-03 8-key ADD did exactly this after the demo's
-          self_report rows existed).
-    So EVERY ALTER-ADD of the allowlist — not just the last — must equal PersonEntity's fields. A
-    static parse of the migrations closes both gaps at commit time, no live DB required."""
+      (2) replay-safety — _ensure_schema replays every migration and the ADD validates all rows WHEN
+          IT FIRES, so a STALE allowlist ADD (a strict subset of the current fields) aborts the WHOLE
+          bootstrap once any row carries a newer key (0002's pre-03 8-key ADD did exactly this after
+          the demo's self_report rows existed).
+    So EVERY ALTER-ADD of the allowlist — not just the last — must equal PersonEntity's fields. (Since
+    gc-demo-clones-0724 the ADD is guarded to SKIP when the constraint is already present & correct —
+    but it still fires on a fresh DB or an in-place edit, so the array must stay in sync regardless;
+    the real-pg oid-stability check is test_pg_bootstrap_constraint_guard_skips_re_add.) A static parse
+    of the migrations closes both gaps at commit time, no live DB required."""
     import dataclasses
     from avery.ingest.extract import PersonEntity
     person_fields = {f.name for f in dataclasses.fields(PersonEntity)}
@@ -630,8 +633,9 @@ def test_entities_kind_check_covers_written_kinds():
     """OFFLINE regression guard (no DB) — sibling to the person-keys guard, same two failure modes
     (drift + replay-safety). entities_kind_check must allow EXACTLY the entity kinds pg_registry.put()
     writes (_ENTITY_KINDS); 08 added the "playbook" kind to the writer but not the CHECK, so real
-    Postgres rejected the demo cast. Every ALTER-ADD of the CHECK is re-validated on each _ensure_schema
-    replay, so all must equal _ENTITY_KINDS. (0001's inline CREATE-TABLE CHECK is exempt — CREATE TABLE
+    Postgres rejected the demo cast. Every ALTER-ADD of the CHECK validates rows WHEN IT FIRES (since
+    gc-demo-clones-0724 it is guarded to skip when unchanged, but still fires on a fresh DB / in-place
+    edit), so all must equal _ENTITY_KINDS. (0001's inline CREATE-TABLE CHECK is exempt — CREATE TABLE
     IF NOT EXISTS is a no-op on replay and never re-validates — so this inspects only `ADD CONSTRAINT`.)"""
     from avery.ingest.pg_registry import _ENTITY_KINDS
     kinds = set(_ENTITY_KINDS)
@@ -821,3 +825,128 @@ def test_clone_of_a_missing_context_is_a_clean_no(impl, tmp_path):
     reg = impl.fresh()
     assert reg.clone_context("ctx_never_existed", new_context_id=impl.track(_new_cid()),
                              new_owner_token="t") is False
+
+
+# ==============================================================================================
+# gc-demo-clones-0724 · 访客克隆的 TTL 回收（sweep_ephemeral）
+# 每次 /demo/claim 把母本整体克隆成访客私有副本（三亚 seed = 16 人 + 12 项目 + 5 方法卡 + 212 材料/份），
+# 永不回收就是 avery.contexts/entities/materials 无界增长，早晚拖慢 _ensure_schema 的 ADD CONSTRAINT。
+# 克隆打 ephemeral 标（母本走 put() 不带标）；sweep 只删「够旧 + 未登账号」的 ephemeral 克隆——母本
+# （ctx_demo_*）和 account_contexts 里的克隆一律豁免。两个 registry 走同一份合约。
+
+
+def _demo_clone(impl, master_cid: str, *, ephemeral: bool = True) -> str:
+    """A guest twin off a demo master (like /demo/claim), tracked for post-test DB cleanup."""
+    reg = impl.fresh()
+    new = impl.track(_new_cid())
+    assert reg.clone_context(master_cid, new_context_id=new, new_owner_token="tok-" + new,
+                             ephemeral=ephemeral)
+    return new
+
+
+def test_sweep_collects_only_old_unlinked_ephemeral_clones(impl, tmp_path):
+    reg, master, _ = _ingest(impl, tmp_path / "mem", owner_token="token-master")
+    guest = _demo_clone(impl, master)             # an anonymous demo guest clone
+    linked = _demo_clone(impl, master)            # a guest who then signs in
+    assert reg.link_account_context("user_signed_in", linked)
+
+    # a generous TTL collects nothing — none of these clones is old enough yet.
+    assert reg.sweep_ephemeral(older_than_hours=99999, limit=50) == 0
+    assert master in reg and guest in reg and linked in reg
+
+    # ttl=0 = "collect every eligible ephemeral clone now": only the unlinked guest goes.
+    assert reg.sweep_ephemeral(older_than_hours=0, limit=50) == 1
+    assert guest not in reg, "过期访客克隆没被回收"
+    assert master in reg, "母本（非 ephemeral）被误删"
+    assert linked in reg, "已登账号的克隆被误删（link 应清 ephemeral 标 + sweep 有 account 守卫）"
+
+
+def test_sweep_respects_the_batch_limit(impl, tmp_path):
+    """A bounded sweep deletes at most `limit`, leaving the rest for the next claim's sweep — so an
+    opportunistic claim-time GC is a small, cheap delete, never an unbounded one on the hot path."""
+    reg, master, _ = _ingest(impl, tmp_path / "mem", owner_token="token-master")
+    clones = [_demo_clone(impl, master) for _ in range(3)]
+    assert reg.sweep_ephemeral(older_than_hours=0, limit=2) == 2
+    assert len([c for c in clones if c in reg]) == 1, "batch 上限没生效（应留 1 份给下次 claim 扫）"
+    assert reg.sweep_ephemeral(older_than_hours=0, limit=50) == 1
+    assert all(c not in reg for c in clones)
+
+
+def test_a_non_ephemeral_clone_is_never_swept(impl, tmp_path):
+    """clone_context(ephemeral=False) — a real (non-demo) copy — is exempt from GC even when old."""
+    reg, master, _ = _ingest(impl, tmp_path / "mem", owner_token="token-master")
+    keep = _demo_clone(impl, master, ephemeral=False)
+    assert reg.sweep_ephemeral(older_than_hours=0, limit=50) == 0
+    assert keep in reg
+
+
+@needs_db
+def test_pg_ephemeral_flag_round_trips(pg, tmp_path):
+    """The clone's ephemeral flag actually lands in avery.contexts (GC keys on it): a default clone is
+    ephemeral=true, an ephemeral=False clone is false, and a master (put()) is false."""
+    reg, master, _ = _ingest(pg, tmp_path / "mem", owner_token="tm")
+    guest = _demo_clone(pg, master)
+    plain = _demo_clone(pg, master, ephemeral=False)
+
+    def _eph(cid: str):
+        with reg._connect() as conn:
+            return conn.execute("SELECT ephemeral FROM avery.contexts WHERE context_id = %s",
+                                (cid,)).fetchone()[0]
+    assert _eph(master) is False, "母本不该是 ephemeral"
+    assert _eph(guest) is True, "默认克隆应是 ephemeral（可回收）"
+    assert _eph(plain) is False, "ephemeral=False 克隆不该被标记"
+
+
+@needs_db
+def test_pg_sweep_honors_created_at_ttl(pg, tmp_path):
+    """The REAL age gate over the created_at column (the shared ttl=0 test can't exercise it): a clone
+    backdated past the 48h TTL is swept; a fresh one within the TTL survives."""
+    reg, master, _ = _ingest(pg, tmp_path / "mem", owner_token="tm")
+    old = _demo_clone(pg, master)
+    fresh = _demo_clone(pg, master)
+    with reg._connect() as conn:
+        conn.execute("UPDATE avery.contexts SET created_at = now() - interval '72 hours' "
+                     "WHERE context_id = %s", (old,))
+    assert reg.sweep_ephemeral(older_than_hours=48, limit=50) == 1
+    assert old not in reg, "超过 48h TTL 的克隆没被回收"
+    assert fresh in reg, "48h 内的新克隆被误删"
+
+
+@needs_db
+def test_pg_link_clears_ephemeral_flag(pg, tmp_path):
+    """A guest who signs in and links their demo clone: the ephemeral flag flips false, so a later
+    sweep (even ttl=0) never touches it — belt-and-suspenders with the sweep's account guard."""
+    reg, master, _ = _ingest(pg, tmp_path / "mem", owner_token="tm")
+    clone = _demo_clone(pg, master)
+    assert reg.link_account_context("user_a", clone)
+    with reg._connect() as conn:
+        flag = conn.execute("SELECT ephemeral FROM avery.contexts WHERE context_id = %s",
+                            (clone,)).fetchone()[0]
+    assert flag is False, "link 之后 ephemeral 标没清"
+    assert reg.sweep_ephemeral(older_than_hours=0, limit=50) == 0
+    assert clone in reg
+
+
+@needs_db
+def test_pg_bootstrap_constraint_guard_skips_re_add(pg, tmp_path):
+    """Fix #2 Tier 2: 0009/0010's guarded ADD CONSTRAINT SKIPS the DROP+ADD (and its full-table
+    re-validation under ACCESS EXCLUSIVE) when the constraint is already present & correct — proven by
+    the constraint OID staying constant across a second _ensure_schema (a re-DROP would mint a new oid).
+    This is also the real-pg check that 0009/0010's skip-comparison `want` matches Postgres's own
+    rendering of the ADD: a mismatch would re-DROP every bootstrap and this oid would move."""
+    reg = pg.fresh()
+    reg._ensure_schema()
+
+    def _oids() -> dict:
+        with pg.fresh()._connect() as conn:
+            return dict(conn.execute(
+                "SELECT conname, oid::text FROM pg_constraint "
+                "WHERE conrelid = 'avery.entities'::regclass "
+                "AND conname IN ('entities_person_keys_allowlist', 'entities_kind_check')").fetchall())
+    before = _oids()
+    assert set(before) == {"entities_person_keys_allowlist", "entities_kind_check"}
+
+    pg.fresh()._ensure_schema()   # a second bootstrap; the schema is already present & correct
+    assert _oids() == before, (
+        "guarded ADD CONSTRAINT re-DROPped an unchanged constraint — the skip comparison (`want`) is "
+        "out of sync with pg_get_constraintdef, so every bootstrap re-validates the whole table")
