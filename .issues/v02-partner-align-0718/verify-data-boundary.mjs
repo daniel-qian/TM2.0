@@ -39,8 +39,47 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 const PORT = Number(process.env.VERIFY_PORT || 5304)
-const BASE = `http://127.0.0.1:${PORT}`
-const ENTRY = `${BASE}/?v=2&mode=live&look=paper&lang=zh`
+
+// 🔴 dev server 绑在哪个回环栈上，是随机器变的（2026-07-28 本机实测；与
+// eval-harness/tools/verify-auth-{form,capability}.mjs 同一个坑，见 commit 2dd7b26）：
+// 不显式给 host 时 vite 只监听 IPv6 回环 —— `netstat -ano | findstr <port>` 看到的是
+// `TCP [::1]:PORT`，`curl http://localhost:PORT/` 200 而 `curl http://127.0.0.1:PORT/`
+// 直接连接被拒（Node 24 把 localhost 解析成 ::1 优先，vite 监听的就是这个解析结果）。
+// 本门此前把 BASE 写死成 127.0.0.1，于是「自起服务器」这一路会**哑火**——不是 FAIL，是
+// 每个 page.goto 都撞连接错误，一条判据都跑不到。
+// 修两层，缺一不可：
+//   ① 下面 createServer 显式 `host: '127.0.0.1'`，把监听钉在 IPv4，不依赖任何解析顺序；
+//   ② listen 之后仍按候选列表探一遍活，谁先答应就用谁，并把那个 base 回填进 BASE/ENTRY
+//      ——探活与 page.goto 用同一个地址，不会错位。哪天 vite 改默认，门最多慢一拍，
+//      不会再退回哑火。
+const BASE_CANDIDATES = [`http://127.0.0.1:${PORT}`, `http://localhost:${PORT}`]
+const entryFor = (base) => `${base}/?v=2&mode=live&look=paper&lang=zh`
+// 🔴 let 不是 const：真正用哪个 base 要等 listen 之后探活才知道（见上）。所有 page.goto
+// 都发生在 main() 起服务器之后，读到的一定是回填过的值。
+let BASE = BASE_CANDIDATES[0]
+let ENTRY = entryFor(BASE)
+
+// 返回**真正答应了的**那个 base（见上面 BASE_CANDIDATES 的注释）。
+function waitForServer(urls, timeoutMs = 20000) {
+  const started = Date.now()
+  return new Promise((resolve, reject) => {
+    const tick = async () => {
+      for (const url of urls) {
+        try {
+          const res = await fetch(url)
+          if (res.ok || res.status < 500) return resolve(url)
+        } catch {
+          /* not up yet */
+        }
+      }
+      if (Date.now() - started > timeoutMs) {
+        return reject(new Error(`server didn't come up: ${urls.join(' / ')}`))
+      }
+      setTimeout(tick, 300)
+    }
+    tick()
+  })
+}
 
 // born-red 用：把某个 git ref 的 store.ts 顶替掉工作树那份（见文件头）。
 const OLD_STORE_REF = process.env.VERIFY_OLD_STORE || null
@@ -184,12 +223,22 @@ async function main() {
       }),
     },
     cacheDir: join(tmpdir(), 'avery-fixd-vite-cache'),
-    server: { port: PORT, strictPort: true },
+    // 🔴 host 别删：不显式给它时本机的 vite 只绑 IPv6 回环，这道门就会哑火。见文件上方
+    // BASE_CANDIDATES 的注释。
+    server: { port: PORT, strictPort: true, host: '127.0.0.1' },
     optimizeDeps: { force: true },
     logLevel: 'warn',
     plugins: oldStoreSource ? [oldStorePlugin()] : [],
   })
   await server.listen()
+  try {
+    BASE = await waitForServer(BASE_CANDIDATES)
+    ENTRY = entryFor(BASE)
+  } catch (e) {
+    console.error(e.message)
+    await server.close()
+    process.exit(1)
+  }
   console.log(`dev server on ${BASE}（独立 cacheDir，见文件头 F9 注释）`)
   if (oldStoreSource) {
     console.log(
