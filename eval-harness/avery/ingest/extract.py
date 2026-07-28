@@ -1032,7 +1032,15 @@ def _zh_states(t: str, pattern: str, *, positive_claim: bool = False) -> bool:
     return False
 
 
-_ZH_BLOCKED = r"受阻|已阻断|阻塞|卡住|停滞|停工|中止|搁置|无法推进|推不动"
+# partner-docs-0728 · 「暂停」补进本行（漏网，不是新语义）。这一列原本就收了 中止|搁置|停滞
+# ——「项目暂停了」和「项目搁置了」在管理语境里是同一件事，只有 暂停 不在，纯属清单没写全。
+# 后果是可见的：合伙人《标准管理信息填写表单》表 02「当前状态」的四个选项里，
+# 「已暂停」在补进来之前一个词表都不在 → _norm_status 返回 '' → projectView.ts:87 判成
+# 'unknown' → 用户照着我们发的表认真填了「已暂停」，项目卡上写「状态未知」。
+# 同一批里的「未开始」**有意不补**：它是计划态、不是健康度，留空并归到「状态未知」是对的
+# （里程碑词表有 未开始→upcoming，那是另一个轴，别拿来对齐）。
+# 否定照旧由 _zh_states 统一处理，所以「尚未暂停」不会被读成 blocked。
+_ZH_BLOCKED = r"受阻|已阻断|阻塞|卡住|停滞|停工|中止|搁置|暂停|无法推进|推不动"
 _ZH_AT_RISK = r"风险|延期|逾期|滞后|落后|推迟|拖期|告急|吃紧|超期"
 # INABILITY is not absence. 「未完成」 is a neutral fact about a date — the thing is not finished
 # yet, which is what "in progress" looks like — and it stays a blank. 「无法完成」 is the project

@@ -43,3 +43,6 @@ vite.err
 
 # rich-align-0722/10 · 登录隔离演示台的临时 demo dist（runtime，不进 git）
 dist-authdemo/
+
+# partner-docs-0728 · scripts/ 下跑 python 会落这个（make-intake-xlsx.py）
+scripts/__pycache__/
