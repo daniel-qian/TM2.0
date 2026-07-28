@@ -42,7 +42,20 @@ import { fileURLToPath } from 'node:url'
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
 const PORT = process.env.VERIFY_PORT || '5291'
 const API_BASE = process.env.VERIFY_API_BASE || 'http://127.0.0.1:8291'
-const UI = `http://127.0.0.1:${PORT}`
+
+// 🔴 preview 绑在哪个回环栈上，是随机器变的（2026-07-28 本机实测）：不带 `--host` 时
+// vite 只监听 IPv6 回环 —— `netstat -ano | findstr <port>` 看到的是 `TCP [::1]:PORT`，
+// `curl http://localhost:PORT/` 200 而 `curl http://127.0.0.1:PORT/` 直接连接被拒
+// （Node 24 把 localhost 解析成 ::1 优先，vite 监听的就是这个解析结果）。此前这里把探活
+// 地址写死成 127.0.0.1，于是这两道自起服务器的门在本机**永远哑火**——不是 FAIL，是
+// 「server didn't come up」压根没跑到断言，run-battery 里看着像两个空位。
+// 修两层，缺一不可：
+//   ① 下面 spawn 显式 `--host 127.0.0.1`，把监听钉在 IPv4，不依赖任何解析顺序；
+//   ② 探活/访问地址仍按候选列表逐个试，谁先答应就用谁。哪天 vite 改默认、或 `--host`
+//      的语义又变，门最多慢一拍，不会再退回哑火。
+// （其余 26 道门不受影响：它们的 base 走 VERIFY_BASE，由调用方传入。）
+const UI_CANDIDATES = [`http://127.0.0.1:${PORT}`, `http://localhost:${PORT}`]
+let UI = UI_CANDIDATES[0]
 
 const R = []
 const rec = (n, ok, d) => {
@@ -58,17 +71,23 @@ function run(cmd, args, opts = {}) {
   })
 }
 
-function waitForServer(url, timeoutMs = 20000) {
+// 返回**真正答应了的**那个 base（见上面 UI_CANDIDATES 的注释）：调用方拿它覆盖 UI，
+// 之后 page.goto 用的就是同一个地址，不会出现「探活走 IPv4、浏览器走 IPv6」的错位。
+function waitForServer(urls, timeoutMs = 20000) {
   const started = Date.now()
   return new Promise((resolve, reject) => {
     const tick = async () => {
-      try {
-        const res = await fetch(url)
-        if (res.ok || res.status < 500) return resolve()
-      } catch {
-        /* not up yet */
+      for (const url of urls) {
+        try {
+          const res = await fetch(url)
+          if (res.ok || res.status < 500) return resolve(url)
+        } catch {
+          /* not up yet */
+        }
       }
-      if (Date.now() - started > timeoutMs) return reject(new Error(`server didn't come up: ${url}`))
+      if (Date.now() - started > timeoutMs) {
+        return reject(new Error(`server didn't come up: ${urls.join(' / ')}`))
+      }
       setTimeout(tick, 300)
     }
     tick()
@@ -107,14 +126,24 @@ await run(process.execPath, [
 console.log(`\n═══ 起 vite preview（isolated port ${PORT}）═══`)
 const preview = spawn(
   process.execPath,
-  [path.join(ROOT, 'node_modules/vite/bin/vite.js'), 'preview', '--port', PORT, '--strictPort'],
+  [
+    path.join(ROOT, 'node_modules/vite/bin/vite.js'),
+    'preview',
+    '--port',
+    PORT,
+    '--strictPort',
+    // 🔴 别删：不给 --host 时本机的 vite 只绑 IPv6 回环，这道门就会哑火。见上方 UI_CANDIDATES。
+    '--host',
+    '127.0.0.1',
+  ],
   { cwd: ROOT, stdio: 'ignore' },
 )
 let previewExited = false
 preview.on('exit', () => { previewExited = true })
 
 try {
-  await waitForServer(UI)
+  UI = await waitForServer(UI_CANDIDATES)
+  console.log(`         preview 就位：${UI}`)
 } catch (e) {
   console.error(e.message)
   preview.kill()
