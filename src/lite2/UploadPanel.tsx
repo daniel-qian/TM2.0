@@ -1,4 +1,6 @@
 import { useRef, useState, type ChangeEvent, type CSSProperties, type DragEvent } from 'react'
+import { Link } from 'react-router-dom'
+import { paperworkHref } from './routes'
 import { useLite } from './store'
 import { useDict } from '../shared/i18n/useDict'
 import { clearIngestStart, useIngestElapsedSeconds } from '../shared/ingestClock'
@@ -308,6 +310,20 @@ export function UploadPanel() {
       ) : null}
 
       <p className="upload-privacy-note">{t.upload.privacyNote}</p>
+
+      {/* partner-docs-0728 · 上传口旁边的两条链接。顺序是首访者真实的提问顺序：
+          先「我到底该发什么给你」，再「你拿到之后会怎么处理」。两条都去 /paperwork。
+          🔴 用 <Link> + paperworkHref()（带粘性 query）而不是裸 <a href="/paperwork">：
+          丢了 `?v=2` 整个壳会掉回 v01，而 v01 里根本没有这条路由（routes.ts 同款纪律）。
+          站内导航不会打断正在跑的 ingest——上传状态活在模块级 store 里，不随路由卸载。 */}
+      <p className="upload-paperwork-links">
+        <Link className="upload-paperwork-link" to={paperworkHref()}>
+          {t.upload.paperworkFormsLink}
+        </Link>
+        <Link className="upload-paperwork-link" to={paperworkHref()}>
+          {t.upload.paperworkPrivacyLink}
+        </Link>
+      </p>
     </section>
   )
 }

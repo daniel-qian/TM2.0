@@ -8,6 +8,7 @@ import {
   type OnboardStep,
 } from './onboardStore'
 import { useDemo } from './demoStore'
+import { paperworkHref } from './routes'
 import { flushCompanyNote, wireCompanyNoteFlush } from './onboardNote'
 import { useDict } from '../shared/i18n/useDict'
 import { clearIngestStart, useIngestElapsedSeconds } from '../shared/ingestClock'
@@ -372,6 +373,16 @@ function StepUpload() {
         ) : (
           <p className="lite-onboard-upload-idle">{l.onboardUploadIdle}</p>
         )}
+        {/* partner-docs-0728 · 首访者第一次面对「传什么」就在这一步，这条链接最该在这儿。
+            🔴 用裸 <a target="_blank"> 而不是 <Link>：闸门是覆盖全屏的 modal，站内导航只会把
+            /paperwork 渲染在**它底下**——用户以为自己离开了向导，实际什么都没发生，进度还卡
+            在原地。新标签页打开，闸门原样留着。href 仍要带粘性 query（丢 `?v=2` 会掉回 v01，
+            而 v01 没有这条路由）。rel 补 noreferrer：新标签拿不到 window.opener。 */}
+        <p className="lite-onboard-upload-forms">
+          <a href={paperworkHref()} target="_blank" rel="noopener noreferrer">
+            {l.onboardUploadFormsLink}
+          </a>
+        </p>
       </div>
     </div>
   )

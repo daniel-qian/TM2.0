@@ -7146,3 +7146,328 @@
     margin: 20px auto 40px;
   }
 }
+
+/* ── partner-docs-0728 ·「文件与表单」/paperwork ──────────────────────────────────────────
+   一张独立页（不是第九屏，见 PaperworkScreen.tsx 文件头）。全部走既有 token，不新增变量——
+   两张皮（paper / aurora）因此自动跟随，本段不需要各写一份。
+   排版口径：正文最大宽度 74ch。这是合同文本，一行超过 ~90 个汉字就读不下去了；卡片本身可以
+   更宽（下载区是横向的），所以宽度限制挂在 .paperwork-doc-body 而不是外框。 */
+.paperwork-page {
+  overflow-y: auto;
+}
+
+/* 🔴 顶距吃 --lite2-clear-top（96px / 窄屏 72px），不许硬写数字。
+   胶囊顶栏是浮在内容之上的，每一屏的 frame 都在消费这个变量给它让位（l.6003 那张
+   「九消费者」清单）。第一版这里写死 padding-top:32px，真机截图上整个 h1「文件与表单」
+   被顶栏吃掉、正文第一行直接贴在胶囊底下——本页是第十个消费者，照同一套走。
+   左右/底部维持本块自己的值，与那张清单的口径一致（只让位顶距）。 */
+.paperwork-inner {
+  width: min(100%, 940px);
+  margin: 0 auto;
+  padding: var(--lite2-clear-top, 96px) 24px 72px;
+}
+
+.paperwork-head h1 {
+  font-family: var(--lite2-heading-font);
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--ink);
+  margin: 0 0 10px;
+}
+
+.paperwork-lede,
+.paperwork-langnote {
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  max-width: 70ch;
+}
+
+.paperwork-langnote {
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+
+/* 常驻免责横幅。刻意用 honey（提醒）而不是 alert（错误）：这不是出了问题，是先打个招呼。 */
+.paperwork-banner {
+  margin: 18px 0 28px;
+  padding: 12px 14px;
+  border-left: 4px solid var(--honey, #b8860b);
+  border-radius: 0 var(--radius, 8px) var(--radius, 8px) 0;
+  background: var(--chip-bg, rgba(184, 134, 11, 0.06));
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+}
+
+.paperwork-section {
+  margin: 0 0 40px;
+}
+
+.paperwork-section h2 {
+  font-family: var(--lite2-heading-font);
+  font-size: 18px;
+  font-weight: 750;
+  color: var(--ink);
+  margin: 0 0 6px;
+}
+
+.paperwork-section-lede {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+  margin: 0 0 16px;
+  max-width: 68ch;
+}
+
+.paperwork-notes-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 16px;
+  font-size: 12px;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+
+.paperwork-card {
+  border: 1px solid var(--rule, rgba(0, 0, 0, 0.1));
+  border-radius: var(--lite2-radius-lg, 12px);
+  background: var(--lite2-surface, var(--paper));
+  padding: 20px 22px;
+  margin: 0 0 16px;
+}
+
+.paperwork-card-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.paperwork-card-title h3 {
+  font-family: var(--lite2-heading-font);
+  font-size: 16px;
+  font-weight: 750;
+  color: var(--ink);
+  margin: 0;
+}
+
+.paperwork-draft-badge {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: var(--honey-text, #8a6508);
+  background: var(--chip-bg, rgba(184, 134, 11, 0.1));
+  border: 1px solid var(--honey, #b8860b);
+}
+
+.paperwork-card-sub {
+  font-size: 12px;
+  color: var(--ink-faint);
+  margin: 6px 0 0;
+}
+
+.paperwork-card-audience {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+  margin: 8px 0 0;
+  max-width: 66ch;
+}
+
+/* 下载区。永远在正文之前——真正拿去盖章/填写的是原件，页内正文只是「不下载也能读」。 */
+.paperwork-files {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+}
+
+.paperwork-file + .paperwork-file {
+  margin-top: 10px;
+}
+
+.paperwork-file-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  max-width: 100%;
+}
+
+.paperwork-file-format {
+  font-family: var(--lite2-mono-font, monospace);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--rule-strong, rgba(0, 0, 0, 0.18));
+  color: var(--ink-soft);
+}
+
+.paperwork-file-name {
+  overflow-wrap: anywhere;
+}
+
+.paperwork-file-size {
+  font-size: 11px;
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+
+.paperwork-file-hint {
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--ink-faint);
+  margin: 4px 0 0 6px;
+  max-width: 64ch;
+}
+
+.paperwork-toggle {
+  margin-top: 16px;
+}
+
+/* ── 文档正文 ─────────────────────────────────────────────────────────────────────────── */
+.paperwork-doc-body {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--rule, rgba(0, 0, 0, 0.1));
+  max-width: 74ch;
+}
+
+.paperwork-doc-h {
+  font-family: var(--lite2-heading-font);
+  font-size: 14px;
+  font-weight: 750;
+  color: var(--ink);
+  margin: 22px 0 8px;
+}
+
+.paperwork-doc-p {
+  font-size: 13.5px;
+  line-height: 1.85;
+  color: var(--ink);
+  margin: 0 0 10px;
+}
+
+.paperwork-doc-ul {
+  margin: 0 0 12px;
+  padding-left: 20px;
+}
+
+.paperwork-doc-ul li {
+  font-size: 13.5px;
+  line-height: 1.8;
+  color: var(--ink);
+  margin-bottom: 4px;
+}
+
+.paperwork-doc-choice {
+  margin-left: 14px;
+  white-space: nowrap;
+}
+
+/* 表格自己横滚；页面 body 永远不横滚（附件一在 390px 上必然超宽）。 */
+.paperwork-doc-tablewrap {
+  overflow-x: auto;
+  margin: 0 0 14px;
+}
+
+.paperwork-doc-table {
+  border-collapse: collapse;
+  min-width: 100%;
+  font-size: 13px;
+}
+
+.paperwork-doc-table th,
+.paperwork-doc-table td {
+  border: 1px solid var(--rule, rgba(0, 0, 0, 0.1));
+  padding: 8px 10px;
+  text-align: left;
+  vertical-align: top;
+  line-height: 1.7;
+  color: var(--ink);
+}
+
+.paperwork-doc-table th {
+  font-weight: 700;
+  background: var(--chip-bg, rgba(0, 0, 0, 0.03));
+  white-space: nowrap;
+}
+
+/* 🔴 起草者内部批注。视觉上必须**一眼看出不是合同正文**——默认隐藏（见 PaperworkScreen），
+   开出来之后也用虚线框 + 标签把它和条款隔开。别把它做得像正文里的一段强调。 */
+.paperwork-doc-note {
+  display: block;
+  margin: 12px 0 14px;
+  padding: 10px 12px;
+  border: 1px dashed var(--lite2-violet-deep, #6b5b95);
+  border-radius: var(--radius, 8px);
+  background: rgba(var(--lite2-violet-rgb, 107, 91, 149), 0.05);
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--ink-soft);
+}
+
+.paperwork-doc-note-tag {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  color: var(--lite2-violet-deep, #6b5b95);
+  margin-bottom: 4px;
+}
+
+.paperwork-doc-sign {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 20px;
+  margin: 24px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule, rgba(0, 0, 0, 0.1));
+}
+
+.paperwork-doc-sign-col p {
+  font-size: 13px;
+  line-height: 2.4;
+  color: var(--ink-soft);
+  margin: 0;
+}
+
+.paperwork-provenance {
+  margin: 24px 0 0;
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+
+/* ── 上传口旁边的两条链接 ─────────────────────────────────────────────────────────────── */
+.upload-paperwork-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin: 10px 0 0;
+}
+
+.upload-paperwork-link,
+.lite-settings-paperwork-link,
+.lite-onboard-upload-forms a {
+  font-size: 12px;
+  color: var(--ink-soft);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.upload-paperwork-link:hover,
+.lite-settings-paperwork-link:hover,
+.lite-onboard-upload-forms a:hover {
+  color: var(--ink);
+}
+
+.lite-onboard-upload-forms {
+  margin: 10px 0 0;
+}

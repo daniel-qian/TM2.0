@@ -104,6 +104,37 @@ export const en = {
     switchErrorUnreadable:
       "Avery couldn't open that upload — the server didn't hand it over. That can mean it's gone, or that this browser can no longer prove it's yours; Avery can't tell which from here. It stays on this list either way, so you can try again.",
     switchErrorFailed: "Couldn't reach the server just now. Nothing was lost — try again.",
+
+    // partner-docs-0728 — the two links beside the dropzone. They answer the two questions a
+    // first-time uploader actually has, in the order they have them: "what am I supposed to send
+    // you?" and "what are you going to do with it?". Both go to /paperwork.
+    paperworkFormsLink: 'Not sure what to send? Get the standard forms',
+    paperworkPrivacyLink: 'How we handle what you upload',
+  },
+
+  // ── Paperwork (partner-docs-0728) ─────────────────────────────────────────
+  // `/paperwork` — the intake forms a company fills in, plus the legal drafts (NDA / DPA /
+  // privacy policy). The DOCUMENTS THEMSELVES ARE CHINESE ONLY in both locales; only this
+  // chrome is translated, and `langNote` says so rather than pretending an English version
+  // exists. `zh.langNote` is deliberately the empty string — the note is meaningless there.
+  paperwork: {
+    title: 'Forms and agreements',
+    lede:
+      'What a company fills in before Avery can be useful, and the agreements that sit around it. Everything here is downloadable — the file is the thing you actually sign or fill in; the text on this page is so you can read it without downloading first.',
+    langNote: 'The documents are in Chinese only. This page around them is not.',
+    draftBanner:
+      'Sample text, not a final version. Nothing here has been through a lawyer, and the actual terms are whatever the two parties end up signing.',
+    draftBadge: 'Draft',
+    formsHeading: 'Intake forms',
+    formsLede:
+      "If you are wondering what to send Avery, this is the answer. Fill them in, then upload them the same way you'd upload anything else.",
+    legalHeading: 'Legal samples',
+    legalLede:
+      'Drafts, for discussion. They are signed on paper — there is no signing flow in the app, and clicking anything here does not commit anyone to anything.',
+    showNotes: "Show the drafter's internal notes",
+    internalNoteTag: 'Internal note · not part of the agreement',
+    expand: 'Read the full text',
+    collapse: 'Collapse',
   },
 
   // ── Your team, live ───────────────────────────────────────────────────────
@@ -531,6 +562,11 @@ export const en = {
     restartAction: 'Start over',
     restartConfirm: 'Confirm start over?',
     restartAria: 'Start over — clear everything on this device and return to the beginning',
+    // partner-docs-0728 · 设置菜单第四行「文件与表单」。**追加在最后一行之后**，上面
+    // 三行的顺序/嵌套一个字没动——verify-switchers / verify-auth-form 按 .nth(0/1) 索引
+    // 语言与观感那两行，往末尾加一行不动它们的索引。
+    settingsPaperworkLabel: 'Paperwork',
+    settingsPaperworkLink: 'Forms and agreements',
 
     // ── Account panel (feat-053; 收编自 AuthPanel.tsx 的私有字典，07-20 Blockers 5a) ──
     //
@@ -1113,6 +1149,10 @@ export const en = {
     onboardUploadReady: 'Your team is ready',
     onboardUploadError: "Couldn't read those files — try again, or move on and upload later.",
     onboardUploadIdle: 'Nothing uploaded yet — this step is fine to skip.',
+    // partner-docs-0728 · 这一步是首访用户第一次面对「传什么」的时刻，也是这条链接最该
+    // 出现的地方。opens in a new tab —— 闸门是全屏 modal，站内导航会把它盖在下面，
+    // 用户以为自己离开了向导，实际进度还卡在原地。
+    onboardUploadFormsLink: 'Not sure what to send? Get the standard forms',
 
     onboardTeamTitle: 'A little about you',
     // input-side-0721 · 8A — the honesty line moved from "nothing is sent anywhere" (no longer

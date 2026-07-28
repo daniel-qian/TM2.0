@@ -60,6 +60,21 @@ export const SCREEN_PATH: Record<LiteScreen, string> = {
 // 「浮层底下垫哪一屏」：冷深链现在垫项目屏，不再垫团队屏（见 screenFromPathname）。
 export const PROJECT_PATH = '/projects'
 
+// partner-docs-0728 ·「文件与表单」页。**刻意不进 LiteScreen 联合类型**：它不是第九屏，
+// 没有 tab、不参与 data-scene、不进 SCREEN_PATH。顶栏已经 9 个 tab 且正在因窄屏溢出被另一条
+// 线修（LiteTopbar.tsx 的 uiux-narrow-0728 段），把它塞成第十个 tab 是直接往那个 bug 上撞。
+// 于是 screenFromPathname('/paperwork') 照常兜底成 DEFAULT_SCREEN——底屏语义无所谓，因为
+// Lite2App 给这条路由挂的是 PaperworkScreen 自己，不走 ScreenView。
+//
+// 🔴 站内链到这一页必须 `${PAPERWORK_PATH}${carrySearch()}`，不能写裸路径：丢了 `?v=2`
+// 整个壳会掉回 v01，而 v01 里根本没有这条路由（本文件顶部「粘性 query」一节的同一条纪律）。
+export const PAPERWORK_PATH = '/paperwork'
+
+/** 站内链到「文件与表单」的 href（已带粘性 query）。别在组件里手拼。 */
+export function paperworkHref(): string {
+  return `${PAPERWORK_PATH}${carrySearch()}`
+}
+
 // feat-057：默认落点从 'team' 改成 'home'（聚合入口）。理由与代价写在
 // .issues/v02-partner-align-0718/progress-feat-057.md —— 一句话：Danny 拍板"聚合做入口"，
 // 而一个只能靠手改 URL 才到得了的屏不叫入口。首屏空态自带上传面板，首访者不会被晾在

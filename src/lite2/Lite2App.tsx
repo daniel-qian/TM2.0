@@ -19,6 +19,7 @@ import { PlaybooksScreen } from './screens/PlaybooksScreen'
 import { VisionScreen } from './screens/VisionScreen'
 import { ProjectsScreen } from './screens/ProjectsScreen'
 import { HomeScreen } from './screens/HomeScreen'
+import { PaperworkScreen } from './paperwork/PaperworkScreen'
 import { DetailOverlay } from './DetailOverlay'
 import { DraftComposer } from './DraftComposer'
 import { AskAveryLauncher } from './AskAveryLauncher'
@@ -30,6 +31,7 @@ import {
   bindNavigator,
   publishBaseScreen,
   DEFAULT_SCREEN,
+  PAPERWORK_PATH,
   PROJECT_PATH,
   SCREEN_PATH,
   useCurrentScreen,
@@ -60,6 +62,8 @@ export function Lite2App() {
 function Lite2Shell() {
   const navigate = useNavigate()
   const screen = useCurrentScreen()
+  // partner-docs-0728 · 文档页不是应用面——见下方弹层家族那段注释。
+  const isPaperwork = useLocation().pathname === PAPERWORK_PATH
   // feat-068：观感（Look，原 skin——`Skin` 现专指 ADR-0021 的行业视觉主题，见 CONTEXT.md）。
   // open-loop-0720：issue #16 提到的「运行时热切换」在本棒落地——从 lookStore 订阅而不是
   // useMemo 挂载时算一次，LiteTopbar 的开关点下去后这里跟着重渲染，不必整页刷新。
@@ -149,24 +153,42 @@ function Lite2Shell() {
               仍垫用户原来那一屏。路径形状与导航入口（openDetail('project', id)）一个字没动。 */}
           <Route path={`${PROJECT_PATH}/:projectId`} element={<ScreenView />} />
 
+          {/* partner-docs-0728 ·「文件与表单」。唯一一条 element **不是** <ScreenView /> 的
+              路由，因为它压根不是屏：不在 LiteScreen 里、没有 tab、不参与详情浮层的底屏
+              语义（见 routes.ts 的 PAPERWORK_PATH）。上面那段「共用同一个 element」的纪律
+              说的是屏与屏之间的复用，跟这条独立页无关——它没有"底下垫哪一屏"这回事。 */}
+          <Route path={PAPERWORK_PATH} element={<PaperworkScreen />} />
+
           {/* 兜底：未知路径回默认屏，同样保住 query。 */}
           <Route path="*" element={<RedirectToDefault />} />
         </Routes>
       </main>
-      {/* feat-052：弹层一律常驻挂载，开关在各自组件里（LiteModal 的 open）——父层条件挂载
-          会把组件直接摘掉，出场动画没机会跑。 */}
-      <DetailOverlay />
-      {/* input-side-0721：onboarding 从浮层向导改为全屏闸门页（OnboardGate，原 OnboardWizard）。
-          挂载位不变——它仍是常驻弹层家族的一员（出场动画 + Escape/焦点圈由 LiteModal 底座管），
-          "整页"是 layerClassName 的 CSS 观感，不是路由（深链/门脚本的 URL 语义零变化）。 */}
-      <OnboardGate />
-      {/* feat-058 · 应用内草稿框。挂在壳层而不是各屏内部：开框的入口在「你的团队」的分诊卡
-          和「跟进」的队列条目上，跨两棵子树；且弹层必须盖在整壳之上（同 DetailOverlay）。 */}
-      <DraftComposer />
-      {/* 棒F · 悬浮「问 Avery」入口。挂在 .scene-stage 的兄弟层（.lite2-shell 直接子元素），
-          绝不进屏组件内部：.scene.is-active 的 transform 会给 fixed 后代建包含块、.scene
-          overflow:hidden 会裁掉它。position:fixed + z45（见组件头与 lite2.css 棒F 段）。 */}
-      <AskAveryLauncher />
+      {/* partner-docs-0728 · `/paperwork` 上整个弹层家族**不挂载**。
+          这不是洁癖，是真机上逮到的 bug：闸门对「没有 contextId 的访客」一律弹出，而
+          `/paperwork` 恰恰是新访客最可能第一次到达的地方——onboarding 上传步里那条
+          「不知道该发什么？」是 target="_blank"，新标签页是全新会话、没有 contextId，
+          于是闸门在新标签里又盖了一次：用户点了链接，看到的还是闸门。
+          文档页不是应用面，这里既没有可开的详情、也没有可写的草稿、更不该有悬浮提问入口。
+          条件挂载在这里是对的（feat-052 那条「弹层一律常驻挂载」说的是同一棵应用树内部的
+          出场动画，跨路由整体缺席不在它的射程里）。 */}
+      {isPaperwork ? null : (
+        <>
+          {/* feat-052：弹层一律常驻挂载，开关在各自组件里（LiteModal 的 open）——父层条件挂载
+              会把组件直接摘掉，出场动画没机会跑。 */}
+          <DetailOverlay />
+          {/* input-side-0721：onboarding 从浮层向导改为全屏闸门页（OnboardGate，原 OnboardWizard）。
+              挂载位不变——它仍是常驻弹层家族的一员（出场动画 + Escape/焦点圈由 LiteModal 底座管），
+              "整页"是 layerClassName 的 CSS 观感，不是路由（深链/门脚本的 URL 语义零变化）。 */}
+          <OnboardGate />
+          {/* feat-058 · 应用内草稿框。挂在壳层而不是各屏内部：开框的入口在「你的团队」的分诊卡
+              和「跟进」的队列条目上，跨两棵子树；且弹层必须盖在整壳之上（同 DetailOverlay）。 */}
+          <DraftComposer />
+          {/* 棒F · 悬浮「问 Avery」入口。挂在 .scene-stage 的兄弟层（.lite2-shell 直接子元素），
+              绝不进屏组件内部：.scene.is-active 的 transform 会给 fixed 后代建包含块、.scene
+              overflow:hidden 会裁掉它。position:fixed + z45（见组件头与 lite2.css 棒F 段）。 */}
+          <AskAveryLauncher />
+        </>
+      )}
       <Lite2Footer />
     </div>
   )

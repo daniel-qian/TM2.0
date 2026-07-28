@@ -236,7 +236,30 @@ export const zh: Dict = {
     "switchForgetNote": "只是把这台电脑上的入口去掉，服务端的数据不会被删。",
     "switchErrorMissingCredential": "这台电脑上已经没有打开那一份的钥匙了。公司数据本身还在服务端——用当初绑定的账号登录就能拿回来。",
     "switchErrorUnreadable": "打不开那一份——服务端没有把它交出来。可能是那一份真的没了，也可能是这台电脑已经证明不了它是你的，Avery 分不出是哪一种。两种情况下它都还留在这个列表里，可以再试一次。",
-    "switchErrorFailed": "刚才没连上服务器。什么都没丢，再试一次。"
+    "switchErrorFailed": "刚才没连上服务器。什么都没丢，再试一次。",
+    // partner-docs-0728 · 上传口旁边的两条链接（→ /paperwork）。M3 生成，2026-07-28。
+    "paperworkFormsLink": "不知道该发什么？拿一份标准表单",
+    "paperworkPrivacyLink": "你上传的内容，我们怎么处理"
+  },
+  // partner-docs-0728 ·「文件与表单」页。M3 生成，2026-07-28。
+  // 🔴 langNote 在中文下是**有意的空串**：那句话说的是「文件正文只有中文、页面外壳不是」，
+  // 对中文读者没有意义。组件按空串跳过渲染，不要为了"两边对齐"给它编一句中文。
+  "paperwork": {
+    "title": "文件与表单",
+    "lede": "公司先把这几份交过来，Avery 才派得上用场；边上再放几份配套协议。全都能下载——真正签、填的是文件本身，页面上的文字只是让你下载前先过一遍。",
+    "langNote": "",
+    "draftBanner": "先打个招呼：这是样本，不是定稿。还没送律师过目，最终条款以双方实际签署的那份为准。",
+    "draftBadge": "草案",
+    "formsHeading": "标准表单",
+    "formsLede": "还在想该给 Avery 递什么？就是这些。填好之后，按平时上传文件的方式传过来就行。",
+    "legalHeading": "协议草案样本",
+    // M3 原句里是「App 里没有签章流程」；改成「产品里」是为了不给 verify-zh-purity 的
+    // 拉丁词表加一个本来就有中文写法的词（那张表只该收 PDF/DPA 这类真专名）。语义未动。
+    "legalLede": "几份草案，仅供讨论。签署走线下纸面，产品里没有签章流程——在这里点任何按钮，都不构成任何承诺。",
+    "showNotes": "查看起草者的内部备注",
+    "internalNoteTag": "内部备注 · 不属于协议正文",
+    "expand": "展开全文",
+    "collapse": "收起"
   },
   "team": {
     "liveEyebrow": "从你上传的文件里",
@@ -464,6 +487,9 @@ export const zh: Dict = {
     "restartAction": "重新开始",
     "restartConfirm": "确认重新开始？",
     "restartAria": "重新开始——清空本设备上的全部内容并回到开头",
+    // partner-docs-0728 · 设置菜单第四行（追加在末尾，不动上面三行）。M3 生成，2026-07-28。
+    "settingsPaperworkLabel": "文件与表单",
+    "settingsPaperworkLink": "标准表单与协议",
     "authSignIn": "登录",
     "authAccount": "账号",
     "authTitle": "账号",
@@ -808,6 +834,8 @@ export const zh: Dict = {
     "onboardUploadReady": "团队已就绪",
     "onboardUploadError": "没能读取这些文件 —— 再试一次，或者先跳过、稍后再上传。",
     "onboardUploadIdle": "还没上传文件 —— 这一步可以跳过。",
+    // partner-docs-0728 · 闸门上传步的那条链接（新标签页打开，理由见 en.ts）。M3 生成，2026-07-28。
+    "onboardUploadFormsLink": "不知道该发什么？拿一份标准表单",
     "onboardTeamTitle": "关于你的一点信息",
     "onboardTeamBody": "这里的字段用于产品里的招呼语，仅保存在本浏览器——只有最后那一格例外：它会交给 Avery，让它的判读从你们公司的现实出发。",
     "onboardCompanyLabel": "公司",

@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { applyModeToUrl, useMode } from '../shared/modeStore'
 import { useDict } from '../shared/i18n/useDict'
 import { useLocaleStore } from '../shared/i18n/localeStore'
 import type { Locale } from '../shared/i18n'
 import { useLite, type LiteScreen } from './store'
-import { useCurrentScreen } from './routes'
+import { paperworkHref, useCurrentScreen } from './routes'
 import { showModeSwitch, type AveryMode } from '../shared/mode'
 import { useLook } from './lookStore'
 import type { LiteLook } from './look'
@@ -235,7 +236,23 @@ export function LiteTopbar() {
                 </button>
               </div>
             </div>
-            {/* rich-align-0722/09 · 第三行「重新开始」：清 lite2:* 全量（含语言/观感）+ 忘光
+            {/* partner-docs-0728 ·「文件与表单」入口（→ /paperwork）。
+                插在**语言/观感之后、重新开始之前**：verify-switchers / verify-auth-form 按
+                `.nth(0/1)` 索引语言与观感那两行，插在它们之后不动那两个索引；而「重新开始」
+                是靠 `.lite-settings-restart` 类名找的、不吃 nth，所以把它往后推一位是安全的。
+                放在销毁类按钮之前也更顺手——把一条查资料的链接排在红色「重新开始」下面很怪。
+                用 <Link>+paperworkHref()（带粘性 query），裸 href 会丢 `?v=2` 掉回 v01。 */}
+            <div className="lite-settings-row lite-settings-row--paperwork">
+              <span className="lite-settings-row-label">{t.lite2.settingsPaperworkLabel}</span>
+              <Link
+                className="lite-settings-paperwork-link"
+                to={paperworkHref()}
+                onClick={closeSettings}
+              >
+                {t.lite2.settingsPaperworkLink}
+              </Link>
+            </div>
+            {/* rich-align-0722/09 · 「重新开始」：清 lite2:* 全量（含语言/观感）+ 忘光
                 owner_token + 回 onboarding 闸门。误触保护=两击确认。🔴 单动作按钮（非 nth 开关组），
                 不动上面 lang/look 两行的顺序/嵌套（verify-switchers/auth-form 按 .nth(0/1) 索引它们）。 */}
             <div className="lite-settings-row lite-settings-row--restart">

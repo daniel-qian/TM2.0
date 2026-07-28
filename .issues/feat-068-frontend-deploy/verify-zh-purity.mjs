@@ -33,7 +33,12 @@ const V2_SCREENS = ['home', 'team', 'projects', 'room', 'followups', 'notes', 'c
 // （t.upload.acceptedExts）第一次真的显示在 /team 屏上——此前这个键存在但没有任何组件
 // 渲染它，所以 DOCX 这个格式专名从没被本门扫到过。补进允许名单，和已有的 PDF/CSV/XLSX/MD
 // 同一类（文件格式专名，不是英文残留），不是放宽判据。
-const ALLOW = /^(Avery|Esc|W\d+|\d+%|v\d+|MB|PDF|CSV|XLSX|DOCX|TSV|TXT|MD|OK|Word|Excel|Markdown)$/i
+// partner-docs-0728 追加四个：`DPA` / `NDA` 是两份协议**自己的名字**（中文里没有别的叫法，
+// 同 PDF/XLSX 一类）；`KB` 是文件大小单位（`MB` 早就在表里，只是这批文件都小于 1 MB 才第一次
+// 撞上）；`TLS` 是协议名（DPA 附件一「全链路采用 TLS 加密传输」）。
+// 🔴 只加真的没有中文写法的专名。同一批里 `App`→「产品」、`HR`→「人事」是**改文案**解决的，
+// 没有塞进这张表——放宽纯度门去迁就一句能改好的中文，是把门本身花掉。
+const ALLOW = /^(Avery|Esc|W\d+|\d+%|v\d+|MB|KB|PDF|CSV|XLSX|DOCX|TSV|TXT|MD|OK|Word|Excel|Markdown|DPA|NDA|TLS)$/i
 
 const DOC = [
   '# 三亚鹿山雅居 · 周报 W29', '',
@@ -315,6 +320,32 @@ for (const screen of V2_SCREENS) {
   await p2.waitForTimeout(800)
   v02[`/${screen}`] = latinHits(await p2.evaluate(() => document.body.innerText))
 }
+// partner-docs-0728 ·「文件与表单」页。它**不在 V2_SCREENS 里**（不是屏、没有 tab、
+// goScreen 到不了它），所以上面那一圈天然扫不到——一整页新中文对这个门是隐形的，
+// 而它恰恰是全站中文密度最高的一页（三份合同正文）。真导航过去采一次。
+//
+// 正文默认折叠，所以要**先展开全部**再采样：只采卡片头等于只验了目录，合同条款一个字
+// 没进判据（「门全绿≠真部件被验到」）。内部批注也一并打开——它默认隐藏，但它同样是
+// 要给人读的中文。
+await p2.goto(`${UI}/paperwork?v=2&mode=live&look=paper&lang=zh`, { waitUntil: 'networkidle' })
+await p2.evaluate(() => {
+  const notes = document.querySelector('.paperwork-notes-toggle input')
+  if (notes && !notes.checked) notes.click()
+  for (const b of document.querySelectorAll('.paperwork-toggle')) {
+    if (b.getAttribute('aria-expanded') === 'false') b.click()
+  }
+})
+await p2.waitForTimeout(600)
+const paperworkOpened = await p2.evaluate(() => document.querySelectorAll('.paperwork-doc-body').length)
+// 硬失败判据，同议事室那条的理由：展开失败时每张卡都只剩标题，门照样报「干净」、退出码
+// 照样 0，而三份合同正文一个字都没被看过。
+if (paperworkOpened < 4) {
+  console.error(`\n🔴 /paperwork 只展开了 ${paperworkOpened} 份正文（应为 4）——采样无效，不是"干净"。`)
+  process.exitCode = 1
+}
+v02['/paperwork'] = latinHits(await p2.evaluate(() => document.body.innerText))
+await p2.goto(`${UI}/?v=2&mode=live&look=paper&lang=zh`, { waitUntil: 'networkidle' })
+
 // feat-069：v02 的议事室同样推进到"跑过一次"。上面 V2_SCREENS 那一圈里的 `/room`
 // 采的是 **idle 空态**（对话流一行都没有），它报「干净」不代表这一屏干净——真正的
 // 判据是下面这三段。
@@ -339,6 +370,13 @@ console.log('  已知可接受项：文件格式专名（PDF/Word/Excel/CSV/Mark
 // 不再出现在残留列表里；这条注释因此从 7 词收窄成 3 词，别再往回加。
 console.log('  「往哪走」屏的中英混排宣讲词（demo / agent / prompt）——')
 console.log('  那是刻意的产品腔调，不是漏译，改不改归 Danny 判（见 issue 记录）。')
+// partner-docs-0728 ·「文件与表单」页的残留只有一类：**下载件的文件名**
+// （Avery-保密协议NDA-草案.docx 之类）。带连字符的 `NDA-` / `DPA-` / `Avery-` 切不进
+// ALLOW 的 `^…$` 锚定，这是对的——文件名本来就该原样显示，用户点下去落盘就是这个名字，
+// 翻译它反而对不上。同一页第一次跑出来还带着 `scripts/make-intake-xlsx.py`（仓库路径漏到
+// 用户界面上），那是真漏，已改掉；再出现同类就是又漏了，别当成本类忽略。
+console.log('  /paperwork 的残留应当**只有下载件文件名**（Avery- / NDA- / DPA- 前缀）——')
+console.log('  文件名原样显示是对的；出现别的（尤其是路径、变量名）就是真漏。')
 // open-loop-0720：TOOL / MANIFEST 前缀已翻（纯前端展示徽标，零代码按文本匹配，见
 // speakerMeta()/roomToolLabel/roomManifestLabel）。仍留着不翻的只剩 read_case / cite /
 // case_id / source_ref 这几个——它们是后端协议 token（工具名 + 入参 key），逐字透传是
