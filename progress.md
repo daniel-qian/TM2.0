@@ -910,3 +910,27 @@ look-aurora ㉒ 纯 CSS：lite2-rise 铺到 gap 卡/notes 行/vision 卡/playboo
 **🔴 动效债（Danny 07-22 点名「不能漏」）**：`.lite-ask-avery` 一条 transition/animation 都没有——点胶囊「啪」地硬切成输入框、hover 变色也硬切。她是平滑展开。归入批次③ 棒G3 动效 pass，另见 polish-checklist.md。
 
 验收手册 `.issues/layout-real-0722/acceptance-1.md`（+.html 渲染副本）+ `acceptance-2.md`；总计划 plan.md；作战地图 battle-map.md。
+
+## Update — 2026-07-28 · partner-docs-0728：合伙人五份文件进 app（未推送）
+
+**入口**：`/grill-with-docs` 两轮盘问，Danny 拍板 8 项（记录见 `.issues/partner-docs-0728/decisions.md`，架构后果见 ADR-0030）。核心厘清：这不是一件事而是三件——《隐私政策》读者是员工本人、《NDA》《DPA》读者是客户公司且盖章生效、7 张表是产品功能。**Danny 的定性**：averylite 现在是 preview 不是签约主体，五份文件都是样本，正式条款等深度合作时再谈。
+
+**做完的（feat-090/091/092）**：
+- **`/paperwork`「文件与表单」页**。不挂顶栏 tab（顶栏已 9 个且正被另一条线修窄屏溢出）、不进 `LiteScreen`；唯一一条 element 不是 `<ScreenView/>` 的路由。三份法律草案逐字转录成页内正文，**起草者内部批注默认隐藏**（DPA 第三条后那句「谈判中甲方可能要求乙方承担脱敏义务，需谨慎权衡」是我方谈判底牌，混进正文渲染 = 哪天带客户看时当场念出去），开出来带「不属于协议正文」标签。常驻免责横幅承担三处口径差（存储地/姓名/打分）的提前免责——文件和产品都不改。
+- **xlsx 空白件 + 三处真入口**。`scripts/make-intake-xlsx.py` 生成 7 sheet 工作簿；入口=上传面板两条 + 顶栏设置菜单第三行 + onboarding 上传步（新标签页打开）。
+- **顺带修一个真 bug**：表 02 下拉的「已暂停」在 `_ZH_BLOCKED` 里根本不存在（该列早就收了 中止/搁置/停滞，只有 暂停 漏网），用户照我们发的表认真填完，项目卡显示「状态未知」。「未开始」有意不补（计划态不是健康度）。
+
+**证据**：离线电池 **3464 passed / 0 failed**；新增契约门 14/14；`verify-zh-purity` exit 0（本批给它扩了 `/paperwork` 采样——该页此前对所有门隐形）；`verify-switchers` 27/0；`verify-aria-zh` 4/0；`tsc -b` 零错。端到端真管线：填好的表 → `doc_kind=roster` → **3 个人卡字段全对、零幽灵人**。详见 `.issues/partner-docs-0728/acceptance.md`。
+
+**到这个结果之前推翻了四版表格设计，全是实测出来的**：表头写中文括号提示 → `_canon_header` 失联抽 0 人；表头用 `\n` 换行 → 表头行被切碎和数据混行；「人员ID」照 docx 原序放第一列 → 姓名恒取 `cells[0]`，抽 0 人；说明页排最前 → 它的小表抢占「全文档第一条 `|` 行」，花名册表头永远读不到、`owns` 整列静默丢失。
+
+**真机逮到并已修的两个 bug**（截图/DOM 采样看出来的，不是读代码想出来的）：①新访客的 onboarding 闸门盖在文档页上——而 onboarding 里那条链接正是新标签页打开的，等于点了链接又被闸门挡住（`/paperwork` 上整个弹层家族改为不挂载）；②`.paperwork-inner` 硬写 `padding-top:32px`，h1 被胶囊顶栏整个吃掉（改吃 `--lite2-clear-top`，本页是第十个消费者）。
+
+**Notes（越界发现，都已开独立任务，本批按 stay-in-scope 没顺手修）**：
+- 🔴 **红线误报**：`KPI-001` 这种编号形状被判成人身评分（`KPI`+`-`+`001` 命中 `_ZH_SCORE_NEAR_NUM`），而红线是**整批硬拒**——一个被误判的编号会让同一发上传里所有文件一起失败。合伙人表 03 的指标ID 示例原文就是「如 KPI-001」，是用户会照着填出来的形状。
+- 🔴 **两道门在本机永远起不来**：`verify-auth-form` / `verify-auth-capability` 自己 spawn `vite preview` 然后连 `127.0.0.1`，而本机 vite 只绑 `[::1]`（`curl localhost:4199` 200 / `curl 127.0.0.1:4199` 拒）。其余 26 道走 `VERIFY_BASE` 的门不受影响。
+- ✅ **本机环境已修（当天，Danny 放行）**：`npm run typecheck` / `npm run dev` 之前都跑不了。根因不是"突然坏的"——是 **07-19 拆 worktree 时 `rm -rf` 顺着 junction 把共享 `node_modules` 削掉了 69 个包**（整个 `@babel/*` 树 + `.bin/` 全没），而 `vite build` 走 esbuild 不需要 babel，所以生产构建一路正常、这个洞在主检出上**静默存在了 9 天**。查法：lock 声明 216 个包 vs 磁盘实际 147 个。修法 `npm install`（增量补齐，已执行，typecheck + dev 均已验证恢复）——**不是 `npm ci`**，ci 先删后装，会把并行 worktree 会话当场搞崩。
+
+**留后**：`noindex` 没加（第 8 项拍板选的是「不加锁」，noindex 是并列未选项）；03/05/06/07 四张表仍只进材料库，做成结构化实体是独立战役。
+
+**🔴 未推送**，且**后端有改动**（`_ZH_BLOCKED` 补词）——前端上了、后端没 swap 的话，线上填「已暂停」照样是灰卡。要一起上。

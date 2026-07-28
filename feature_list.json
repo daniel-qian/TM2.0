@@ -755,6 +755,30 @@
       "evidence": "skin-phases 16/16 原样绿（零探针迁移证明）；button-family/clearance/cr-alignment(s4) 穿越；电池 23/23 连续第四轮零红；净室扫雷 0 件/0 指纹；像素基线 36 张构造性绿。未推送（dev server 验收，五 commit 队列等一次上产）。",
       "status": "done",
       "date": "2026-07-22"
+    },
+    {
+      "id": "feat-090",
+      "name": "partner-docs-0728 ①：/paperwork「文件与表单」页（样本预览 + 下载）",
+      "description": "合伙人五份文件进 app。不挂顶栏 tab（顶栏已 9 个且正被另一条线修溢出）、不进 LiteScreen；唯一一条 element 不是 <ScreenView/> 的路由。三份法律草案逐字转录成页内正文（起草者内部批注默认隐藏、开出来带「不属于协议正文」标签），常驻草案免责横幅；原件 docx/pdf 放 public/paperwork 供下载。不做同意面、不做签署流（ADR-0030）。文件正文两语言下都是中文，只有外壳走 i18n。",
+      "evidence": "真机（vite preview 隔离端口 4199，dist bake 本地后端 8198）：4 张卡渲染、DPA 展开 11 条标题/2 表/17 行/3 条内部批注带标签/落款区/第七条勾选项；6 个下载件全部 200 且字节数对（xlsx 61478 / docx 15820 / pdf 335334 / 三份 legal 11566·13677·13307）；下载文件名带中文 download 属性；375px 无横向溢出、4 列表格自己横滚；EN 下外壳英文 + 「文件只有中文」提示、文档标题保持中文。真机逮到并已修两处：①新访客的 onboarding 闸门盖在文档页上（该页整个弹层家族改为不挂载）②顶距硬写 32px 导致 h1 被顶栏吃掉（改吃 --lite2-clear-top）。截图 .issues/partner-docs-0728/shot-1..3。",
+      "status": "done",
+      "date": "2026-07-28"
+    },
+    {
+      "id": "feat-091",
+      "name": "partner-docs-0728 ②：标准表单 xlsx 空白件 + 三处真入口",
+      "description": "scripts/make-intake-xlsx.py 生成 7 sheet 工作簿（一表一 sheet、一行一记录、枚举列下拉、表头挂批注、说明页带「Avery 现在吃到哪一层」逐张实话 + 07 表红线后果）。docx 原件并存不二选一。入口三处：上传面板两条（该发什么 / 怎么处理）、顶栏设置菜单第三行、onboarding 上传步（新标签页打开，否则闸门盖住）。",
+      "evidence": "端到端真管线实测：填好的样本走 parse+ingest → doc_kind=roster、3 个人卡字段全对（姓名/岗位/部门/司龄/owns 按「、」切分）、红线 PASS、零幽灵人。逐条量出的设计约束：表头中文括号会让 _canon_header 失联（抽 0 人）、表头换行会切碎表头行、姓名必须第 0 列、说明页排最前会抢占花名册表头判定。契约门 tests/test_partner_intake_form_contract.py 14/14（直接 import 生成器，两侧漂了就红）。三处入口真机验证 href 均带粘性 query。",
+      "status": "done",
+      "date": "2026-07-28"
+    },
+    {
+      "id": "feat-092",
+      "name": "partner-docs-0728 ③：项目状态词表补「暂停」+ zh-purity 门覆盖 /paperwork",
+      "description": "_ZH_BLOCKED 补「暂停」——表 02 下拉的「已暂停」此前一个词表都不在，用户照我们发的表填完，项目卡显示「状态未知」。「未开始」有意不补（计划态不是健康度）。verify-zh-purity 新增 /paperwork 采样（该页此前对所有门隐形）+ 展开全部正文的硬失败判据；ALLOW 收 DPA/NDA/KB/TLS。",
+      "evidence": "离线电池 3464 passed / 0 failed（85s）。verify-zh-purity exit 0，/paperwork 残留收敛到 3 处且只剩下载件文件名（第一次跑出来的 scripts/make-intake-xlsx.py 是真漏——仓库路径漏到用户界面，已改）。verify-switchers 27 PASS/0 FAIL（设置菜单第四行插在 lang/look 之后不动 nth(0/1)）、verify-aria-zh 4 PASS/0 FAIL。tsc -b 零错、vite build 通过。",
+      "status": "done",
+      "date": "2026-07-28"
     }
   ]
 }
