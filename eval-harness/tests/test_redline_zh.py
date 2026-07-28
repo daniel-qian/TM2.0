@@ -633,3 +633,70 @@ def test_zh_r4_colloquial_superlatives_hard_fail():
         assert not redline.validate(text).passed, f"口语超级比较级人员判决逃逸: {text!r}"
     # project subject still passes.
     assert redline.validate("这个方案评为最烂。").passed, "项目'最烂'被人员规则误伤"
+
+
+# =============================================================================================
+# PART E (partner-docs-0728) — an IDENTIFIER is not a rating.
+#
+# 「KPI-001」 是合伙人《Avery 标准管理信息填写表单》表03 给出的指标ID **示例原文**，用户会照着填。
+# 修复前 `PersonEntity(name='KPI-001')` 单独一条就 EXTRACTION-REDLINE FAIL[person-score-value]：
+# '-' 落进 `_ZH_SCORE_NEAR_NUM` 那个 0-8 字符间隔，'001' 落进 `\d{1,3}`，而量词否定表（年/个月/人/
+# 次/条/…）不含 ID 形状。这不是丢一个字段——`pipeline.ingest_docs:130` 上红线是整批硬拒，同一发上传
+# 里**所有文件**一起失败。
+#
+# 两侧都要钉死：编号放行，真分数照抓。特别是 E-mixed —— 「KPI-001 得分 3 分」必须仍然失败，那正是
+# "整段做一次 ID 预扫就跳过该 field" 那种改法会放过的串。
+# =============================================================================================
+
+# E1 — 编号形状：必须 PASS（含 name / role / owns 三种落点，name 是文件名兜底最常见的入口）。
+ZH_E_IDENTIFIER_PEOPLE = [
+    PersonEntity(id="u_e1", name="KPI-001"),                       # 表03 示例原文，孤条也曾硬拒
+    PersonEntity(id="u_e2", name="KPI_2026"),                      # 下划线 + 年份
+    PersonEntity(id="u_e3", name="OKR-01"),                        # 前导零
+    PersonEntity(id="u_e4", name="张三-KPI-001"),                   # 文件名兜底: 张三-KPI-001.pdf
+    PersonEntity(id="u_e5", name="安某", role="KPI-001 指标负责人"),
+    PersonEntity(id="u_e6", name="安某", owns=["负责 KPI-012 与 KPI-013 两项指标"]),
+    PersonEntity(id="u_e7", name="安某", owns=["考核-002 流程改造"]),  # 中文话题词 + 编号
+    PersonEntity(id="u_e8", name="安某", owns=["KPI#001 数据看板"]),   # # 分隔符
+]
+
+
+@pytest.mark.parametrize("person", ZH_E_IDENTIFIER_PEOPLE, ids=lambda p: p.id)
+def test_zh_e_identifier_shape_is_not_a_person_score(person):
+    res = validate_extraction(ExtractionResult(people=[person]))
+    assert res.ok, f"指标编号被误判成人身评分(整批上传会一起硬拒) ({res.summary()}): {person!r}"
+
+
+def test_zh_e_identifier_does_not_fail_the_whole_batch():
+    """整批语义：一个人带编号，同一发里的干净同事不该被连坐。修复前这整个 result 都 ok=False。"""
+    res = validate_extraction(ExtractionResult(people=[
+        PersonEntity(id="u_e9a", name="安某", owns=["KPI-001 指标口径梳理"]),
+        PersonEntity(id="u_e9b", name="李某", role="后端工程师", tenure="入职18个月"),
+    ]))
+    assert res.ok, f"编号误判把同批干净人员一起拖失败: {res.summary()}"
+
+
+# E2 — 真分数：必须仍然 FAIL（同一批话题词，只是没有编号形状 / 带分数单位）。
+ZH_E_REAL_SCORES_STILL_CAUGHT = [
+    ("KPI 3 分", PersonEntity(id="u_e10", name="安某", owns=["KPI 3 分"])),
+    ("KPI：85", PersonEntity(id="u_e11", name="安某", owns=["KPI：85"])),
+    ("绩效 2 分", PersonEntity(id="u_e12", name="安某", owns=["绩效 2 分"])),
+    ("KPI-100分", PersonEntity(id="u_e13", name="安某", owns=["KPI-100分"])),   # 分数单位取消编号豁免
+    ("KPI-3", PersonEntity(id="u_e14", name="安某", owns=["KPI-3"])),          # 短裸数：有意 fail-closed
+    ("mixed", PersonEntity(id="u_e15", name="安某", owns=["KPI-001 得分 3 分"])),  # 编号 + 真分数混排
+]
+
+
+@pytest.mark.parametrize("label,person", ZH_E_REAL_SCORES_STILL_CAUGHT, ids=[
+    p[0] for p in ZH_E_REAL_SCORES_STILL_CAUGHT])
+def test_zh_e_real_person_scores_still_hard_fail(label, person):
+    res = validate_extraction(ExtractionResult(people=[person]))
+    assert not res.ok, f"编号豁免放过了真人身评分: {label!r}"
+
+
+def test_zh_e_identifier_never_masks_a_later_score_in_the_same_field():
+    """`finditer` 不重叠：被豁免的编号命中不能吃掉后面那个真分数的匹配位置。"""
+    res = validate_extraction(ExtractionResult(people=[
+        PersonEntity(id="u_e16", name="安某", owns=["KPI-001 得分 3 分"])]))
+    assert any(v.kind == "person-score-value" for v in res.violations), (
+        f"混排串没有在结构扫描层被抓到(只靠内容门兜底就说明豁免吃掉了后续匹配): {res.summary()}")

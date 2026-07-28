@@ -82,6 +82,10 @@ _SCORE_WORD_NEAR_NUM_EN = re.compile(
 # counter (3成/3组/3版/5项/3份/…), or a VERSION dot-number (系统2.0). The gap forbids ASCII letters so a
 # JOB-GRADE token ('定级为P7') breaks the chain and passes. Qualitative labels with no digit
 # ('绩效评级：不合格', '排名倒数第一') are NOT scanned here — the content gate catches them.
+# partner-docs-0728 — one more thing the digit must not be: an IDENTIFIER (KPI-001). That shape is
+# NOT vetoed in this pattern; it is suppressed by `_zh_score_num_is_identifier` at the call site,
+# for the same reason work-suppression lives there — a lookahead cannot express it without letting
+# `\d{1,3}` backtrack into a shorter, still-matching digit run.
 _ZH_SCORE_NEAR_NUM = re.compile(
     r"(评分|打分|得分|评级|定级|评估|排名|绩效|潜力|情绪|画像|考核|KPI|kpi|产能|工时)"
     r"[^\dA-Za-z]{0,8}(?!19\d{2}|20\d{2})\d{1,3}"
@@ -112,6 +116,43 @@ def _zh_score_num_is_work(fld: str, m: re.Match) -> bool:
     if redline._ZH_BUILD_RE.search(before) and redline._ZH_ARTIFACT_RE.search(after):
         return True
     return False
+
+
+# partner-docs-0728 — the ID shape, and the score unit that cancels it. Deliberately TIGHT: the
+# separator must be GLUED to the topic word (no space), and the digits must read as a serial.
+_ID_AFTER_TOPIC = re.compile(r"[-_#]+(\d+)")
+_SCORE_UNIT_AFTER_ID = re.compile(r"\s{0,2}(?:分(?!钟)|%|％|星)")
+
+
+def _zh_score_num_is_identifier(fld: str, m: re.Match) -> bool:
+    """An IDENTIFIER is not a rating: 「KPI-001」 is a 指标ID, not a person scored 1 out of anything.
+
+    MEASURED, before the fix — `PersonEntity(name='KPI-001')` alone produced
+        EXTRACTION-REDLINE FAIL[person-score-value:KPI-001]
+    because '-' fell into `_ZH_SCORE_NEAR_NUM`'s 0-8 char gap, '001' into its `\\d{1,3}`, and the
+    quantifier veto list (年/个月/人/次/条/…) knows nothing about ID shapes. That is a HARD FAIL at
+    `pipeline.ingest_docs:130`, which rejects the customer's ENTIRE upload — every file in the same
+    POST, not just the offending field. And it is a shape users are TOLD to type: the partner intake
+    form (《Avery 标准管理信息填写表单》表03) gives 「如 KPI-001」 as its 指标ID example.
+
+    SUPPRESSED ONLY FOR THE ID SHAPE, all three conditions:
+      1. the topic word is GLUED to the digits by an identifier separator (`-` / `_` / `#`) — a real
+         score keeps a normal gap, so 「KPI 3 分」 / 「KPI：85」 / 「绩效 2 分」 are untouched;
+      2. the digit run reads as a SERIAL — leading zero (KPI-01) or >= 3 digits (KPI-001). A short
+         bare number (KPI-3) is left to fail closed: on this gate a false negative is worse;
+      3. no score UNIT follows (「KPI-100分」 is a score written with a dash; 「KPI-100分钟」 is not).
+
+    Non-overlapping `finditer` in the caller means a suppressed ID never masks a genuine score later
+    in the same field — 「KPI-001 得分 3 分」 still hard-fails on 得分3 (this is the concrete hole that
+    made the alternative fix, a whole-field ID pre-scan, the wrong one).
+    """
+    idm = _ID_AFTER_TOPIC.match(fld, m.end(1))
+    if idm is None:
+        return False
+    digits = idm.group(1)
+    if not (digits.startswith("0") or len(digits) >= 3):
+        return False
+    return _SCORE_UNIT_AFTER_ID.match(fld, idm.end()) is None
 
 
 def _person_text_fields(p: PersonEntity) -> list[str]:
@@ -193,12 +234,14 @@ def _scan_person_value(p: PersonEntity) -> list[ExtractionViolation]:
         hit = bool(_RATING_NUMBER.search(fld) or _SCORE_WORD_NEAR_NUM_EN.search(fld))
         if not hit:
             # ZH: a score topic word next to a score-shaped number, UNLESS it is bound to a work
-            # artifact (parity with the advice gate's work-suppression). Iterate so a suppressed
-            # first match ('排名算法…3') doesn't mask a later genuine one.
+            # artifact (parity with the advice gate's work-suppression) or the "number" is an
+            # IDENTIFIER (KPI-001). Iterate so a suppressed first match ('排名算法…3', 'KPI-001…')
+            # doesn't mask a later genuine one.
             for zm in _ZH_SCORE_NEAR_NUM.finditer(fld):
-                if not _zh_score_num_is_work(fld, zm):
-                    hit = True
-                    break
+                if _zh_score_num_is_work(fld, zm) or _zh_score_num_is_identifier(fld, zm):
+                    continue
+                hit = True
+                break
         if hit:
             out.append(ExtractionViolation(
                 kind="person-score-value", person=p.name,
