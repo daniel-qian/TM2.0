@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { applyModeToUrl, useMode } from '../shared/modeStore'
 import { useDict } from '../shared/i18n/useDict'
 import { useLocaleStore } from '../shared/i18n/localeStore'
@@ -47,6 +47,47 @@ export function LiteTopbar() {
     setConfirmRestart(false)
   }
 
+  // uiux-narrow-0728 · tab 条溢出信号。.scene-tabs 是横滚容器且藏了滚动条
+  // （lite2.css l.5414 scrollbar-width:none + ::-webkit-scrollbar{display:none}）——960px 起
+  // 「未来方向」就滑出可视区，390px 掉六个，屏上却没有任何「右边还有」的提示，第一次用的人
+  // 不知道那几屏存在（合伙人验收暴露的同批问题）。这里只量、只打 data-overflow，渐隐遮罩由
+  // CSS 挂（lite2.css 尾 ④）。🔴 不真溢出就不打属性 —— 宽屏一像素不变，像素基线不动。
+  const tabsRef = useRef<HTMLElement | null>(null)
+  const [tabsOverflow, setTabsOverflow] = useState<'none' | 'left' | 'right' | 'both'>('none')
+  useEffect(() => {
+    const el = tabsRef.current
+    if (!el) return
+    const measure = () => {
+      const max = el.scrollWidth - el.clientWidth
+      if (max <= 1) return setTabsOverflow('none')
+      const hasLeft = el.scrollLeft > 1
+      const hasRight = el.scrollLeft < max - 1
+      setTabsOverflow(hasLeft && hasRight ? 'both' : hasLeft ? 'left' : 'right')
+    }
+    // 当前屏的 tab 若被滑出可视区，把它拉回来（窄屏 9 个 tab 必然溢出；不拉回的话
+    // 点进某屏后高亮 tab 看不见，等于丢了「我在哪」）。🔴 只动 el.scrollLeft，不用
+    // scrollIntoView —— 后者会连带滚祖先，能把整页顶上去。
+    const revealActive = () => {
+      const active = el.querySelector('.scene-tab.is-active')
+      if (!active) return
+      const a = active.getBoundingClientRect()
+      const e = el.getBoundingClientRect()
+      if (a.left < e.left + 8) el.scrollLeft -= e.left + 8 - a.left
+      else if (a.right > e.right - 8) el.scrollLeft += a.right - (e.right - 8)
+    }
+    revealActive()
+    measure()
+    el.addEventListener('scroll', measure, { passive: true })
+    // 视口变化改 clientWidth；语言切换改 scrollWidth（en tab 条实测比 zh 宽 ~200px），
+    // 后者靠 effect 依赖 locale 重跑。
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => {
+      el.removeEventListener('scroll', measure)
+      ro.disconnect()
+    }
+  }, [locale, screen])
+
   // PRD 顺序（6 tab）+ feat-047 第 7 tab：Your team · The room · Follow-ups · Avery's notes ·
   // A closer look · Playbooks · Where this goes。笔记面移植自 src/lite，放在 Follow-ups 之后
   // （本棒的 tab 顺序决定，理由见 progress.md）。
@@ -88,7 +129,12 @@ export function LiteTopbar() {
 
   return (
     <header className="prototype-topbar" aria-label={t.lite2.topbarAria}>
-      <nav className="scene-tabs" aria-label={t.lite2.screenNavAria}>
+      <nav
+        className="scene-tabs"
+        aria-label={t.lite2.screenNavAria}
+        ref={tabsRef}
+        data-overflow={tabsOverflow === 'none' ? undefined : tabsOverflow}
+      >
         {tabs.map((tab) => (
           <button
             key={tab.screen}

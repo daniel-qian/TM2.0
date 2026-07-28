@@ -7007,3 +7007,142 @@
 .lite2-shell .lite-people-archived-card .lite-project-restore {
   align-self: center;
 }
+
+/* ═══ uiux-narrow-0728 · 合伙人验收逮到的两个真机 bug + 同批同源的三条 ═══════════════
+   证据链：verify-topbar-clearance.mjs 扩容后红先行（空态×高度矩阵 28 红；zh/en 两语、
+   paper/aurora 两皮全中）+ 本战役 .issues/uiux-narrow-0728/recon.md 的 16 视口实测表。
+   🔴 全部 .lite2-shell 作用域，shared/00-base.css 与 40-nexus-empty.css 一个字不动
+   （它们同时供 v01/story 用，是冻结面）。APPEND-ONLY，同权重后写者胜。
+
+   ── 病根一句话：让位余量一直被当成「宽度的函数」，但空态卡是**垂直居中**的，
+      余量其实是**高度的函数**。屏越矮越危险，而门只跑过 900 一个高度。 ─────────── */
+
+/* ① 空态卡：从「死钉 42% 垂直居中」改成「能居中就居中，不够就贴让位线」。
+   原式（shared/40-nexus-empty.css:3）top:42% + translate(-50%,-50%) 把卡顶算成
+   `0.42×容器高 − 卡高/2` —— 操作手册空态卡高 512px 时，视口高 <776 卡顶就钻进顶栏，
+   <707 眉题被吃，<664 连 h2 都被吃（1366×768 笔记本正在红区）。
+   新式用绝对定位的 over-constrained + `margin-block:auto`：空间够时 auto 上下均分＝
+   仍然视觉居中（大屏观感一像素不变，1440×900 实测卡顶 122→122）；空间不够时 auto 解析
+   为 0，盒子从 top 起排、往下溢出，于是**永远不会往上钻进顶栏**。再配 max-height + 内滚，
+   溢出的部分在卡内可滚而不是被裁。
+   🔴 顺序：本块在 .lite-playbooks-empty（l.1141，同为 0,2,0）之后，后写者胜——
+   那条的 `max-height:min(78vh,640px)` 正是把卡撑到 512px 高的元凶之一，此处接管。 */
+.lite2-shell .nexus-empty,
+.lite2-shell .lite-playbooks-empty,
+.lite2-shell .lite-notes-empty,
+.lite2-shell .lite-room-nomaterial {
+  top: var(--lite2-clear-top);
+  bottom: 24px;
+  transform: translateX(-50%);
+  height: max-content;
+  max-height: calc(100% - var(--lite2-clear-top) - 24px);
+  margin-block: auto;
+  overflow-y: auto;
+}
+
+/* ② 横向溢出 15px：.app-shell 的 `width:100vw`（00-base l.55）——100vw **含**竖滚动条宽度，
+   而窄屏 body 转 overflow:auto 后真会出竖滚动条（实测占 15px）→ 内容宽 = 视口宽，比可用宽
+   多出正好那 15px → 整页可横向拖动（合伙人截图 2 底下那根横条）。
+   🔴 headless 看不见：headless Chromium 是零宽 overlay 滚动条，同页同视口 headless 量到
+   hOver=0、headed 量到 15 —— 这类 bug 在 headless 下 structurally 不可见，故门的 phase C 走 headed。
+   改 100% 即随可用宽走。作用域钉在 .lite2-shell 上（与 .app-shell 同元素，(0,2,0) 压 (0,1,0)）。 */
+.app-shell.lite2-shell {
+  width: 100%;
+}
+
+/* ③ 操作手册满态是唯一没并进 --lite2-clear-top 的屏：l.1252 硬写 84px（比全屋标准 96 少 12），
+   实测眉题距带底只剩 14px 空气，别的屏都是 26px。08 是 07-22 加的屏，比棒2 的变量体系晚，
+   当时照抄了 .lite-projects-frame 的**旧字面量**而不是变量。并进来。 */
+.lite2-shell .lite-playbooks-library {
+  padding-top: var(--lite2-clear-top);
+}
+
+/* ④ tab 条溢出无提示：.scene-tabs 是横滚容器且把滚动条藏了（l.5414 scrollbar-width:none
+   + ::-webkit-scrollbar{display:none}）——960px 起「未来方向」滑出可视区，861px 掉两个，
+   390px 掉六个，而屏上**没有任何「右边还有」的信号**，第一次用的人不知道那几屏存在。
+   这里给右缘一道渐隐遮罩，只在真的溢出时挂（data-overflow 由 LiteTopbar 量出来打）——
+   不真溢出就不挂，宽屏观感一像素不变（像素基线 1440 不受影响）。
+   🔴 用 mask 不用 background/box-shadow：skinVerdict 探针读的正是 .scene-tabs 的
+   background/backdrop-filter/box-shadow，动它们会连累皮相门（topbar-budget.md 记过）。 */
+.lite2-shell .scene-tabs[data-overflow='right'] {
+  mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent 100%);
+}
+.lite2-shell .scene-tabs[data-overflow='left'] {
+  mask-image: linear-gradient(to right, transparent 0, #000 28px);
+}
+.lite2-shell .scene-tabs[data-overflow='both'] {
+  mask-image: linear-gradient(to right, transparent 0, #000 28px, #000 calc(100% - 28px), transparent 100%);
+}
+
+/* ═══ ⑤ 窄屏（≤860）重做 ══════════════════════════════════════════════════════════
+   ≤860 走的是 00-base l.1110 的老窄屏分支，那条规则写于顶栏只有 2 个孩子（tabs + mode 开关）
+   的年代，用的是 `flex-direction:column; align-items:stretch`。如今顶栏有 5 个子块
+   （tab 条/搜索/铃铛/登录/齿轮）→ 竖排摞成 208px 高的墙（合伙人截图 2）。
+   棒2（l.6034）当时明写「≤860 的 sticky 竖排模式一字不碰」——**那不是保护，是划到界外**，
+   而门又刚好 skip 掉非 fixed 的顶栏，于是界外从此无人看管。这里收回界内。
+   00-base 仍然一个字不动：以下全部 .lite2-shell (0,2,0) 覆盖 (0,1,0)，媒体查询不提特异性，
+   同权重靠源序——本块在文件尾，稳胜。 */
+@media (max-width: 860px) {
+  /* 单行横排：tab 条自己横滚（它本来就是滚动容器），右簇不参与压缩。 */
+  .lite2-shell .prototype-topbar {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+  }
+
+  /* 🔴 justify-content 必须显式扳回 flex-start：00-base l.1133 的窄屏块给的是 `center`，
+     而 .scene-tabs 同时是 overflow-x 滚动容器 —— 居中一个**溢出**的 flex 行，会把行首那段
+     推到滚动原点**之前**，scrollLeft 最小只能到 0，于是左边那几个 tab 既不可见也滚不回来
+     （截图实证：修完顶栏单行后，当前高亮的「指挥室」自己被切在左缘外）。
+     这条是 tab 条改成横滚容器（l.5414，feat-055）时就埋下的，只是竖排模式下行没溢出所以没显形。 */
+  .lite2-shell .scene-tabs {
+    margin-right: auto;
+    min-width: 0;
+    justify-content: flex-start;
+  }
+
+  .lite2-shell .lite-bell,
+  .lite2-shell .lite-auth,
+  .lite2-shell .lite-settings {
+    flex: 0 0 auto;
+  }
+
+  /* 顶栏此时是 sticky **进流**的，自己占掉了高度，内容不需要再让 72px。
+     （72 是从 fixed 悬浮时代的 home@720 惯例抄来的，进流后纯属死空白。） */
+  .lite2-shell {
+    --lite2-clear-top: 24px;
+  }
+
+  /* 老 stage 假设 `min-height:1500px`（00-base l.1140）：那是 story 时代「一屏一场景、
+     绝对定位堆叠」的遗产。空态卡钉在它的 42% 上 → 卡落到 598–736px，740 高的窗口首屏全空
+     （合伙人截图 2 那一大片空白）。改成跟视口走，卡就回到第一屏。
+     dvh 优先（移动端地址栏收放时 vh 会跳），不支持 dvh 的浏览器吃上面那行 vh 回落。 */
+  .lite2-shell .scene-stage,
+  .lite2-shell .scene {
+    min-height: calc(100vh - 96px);
+    min-height: calc(100dvh - 96px);
+  }
+
+  /* .scene 在 00-base 是 overflow:hidden（配 1500px 死高度用的）。高度改成跟视口走之后，
+     再 hidden 就会把超出一屏的内容裁掉 —— 窄屏靠**文档滚动**读长内容，这里放开。 */
+  .lite2-shell .scene {
+    overflow: visible;
+  }
+
+  /* 空态卡在窄屏回归**文档流**：绝对定位 + max-height + 内滚在手机上会套出「卡里一根滚动条、
+     页面外面还有一根」的双层滚动（390×844 实测），拇指滑到卡上就滚不动页面了。
+     窄屏本来就靠文档滚动读长内容，静态流是更短的路径 —— 卡自带上下外边距，不借 .scene 的
+     padding（那会和各 frame 自己的内边距叠成双份）。 */
+  .lite2-shell .nexus-empty,
+  .lite2-shell .lite-playbooks-empty,
+  .lite2-shell .lite-notes-empty,
+  .lite2-shell .lite-room-nomaterial {
+    position: static;
+    transform: none;
+    height: auto;
+    max-height: none;
+    overflow-y: visible;
+    margin: 20px auto 40px;
+  }
+}
