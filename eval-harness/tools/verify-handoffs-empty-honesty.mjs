@@ -96,8 +96,13 @@ async function driveShell({ label, url, storeSeam }) {
     worldA.ok && !textA.includes('平稳') && !/read steady/i.test(textA), `text="${textA}"`)
   rec(tag('A·空态把信号数说出来（3 处，与简报同源）'),
     worldA.ok && textA.includes('3'), `text="${textA}"`)
-  rec(tag('A·空态提到「多看一眼」（与简报/tab 同一个词，不另造词）'),
-    worldA.ok && (textA.includes('多看一眼') || /closer look/i.test(textA)), `text="${textA}"`)
+  // 0729 大白话命名（ADR-0031）：v02 词=「值得注意/worth noting」；v01 是冻结壳，保留旧词
+  // 「多看一眼/closer look」——断言按壳分词，判的仍是「与本壳简报/tab 同一个词，不另造词」。
+  const lookWord = label === 'v01'
+    ? (textA.includes('多看一眼') || /closer look/i.test(textA))
+    : (textA.includes('值得注意') || /worth noting/i.test(textA))
+  rec(tag('A·空态提到本壳的「值得注意」词族（与简报/tab 同一个词，不另造词）'),
+    worldA.ok && lookWord, `text="${textA}"`)
 
   // ── 世界 B：handoffs 空 + 零信号（条目不存在 = 后端口径的零）──────────────────────
   await page.evaluate((seam) => {

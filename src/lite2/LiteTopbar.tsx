@@ -97,8 +97,10 @@ export function LiteTopbar() {
   // 0721 对齐棒 · Danny 拍板 2C（主+副小字）：home/followups 换主名（指挥室/待办清单），
   // 原名降为副小字（sub）。副小字渲染成 .scene-tab-sub（display:block 的 10px 行，样式在
   // lite2.css 0721 段），门读主名走 .scene-tab-main。其余 7 tab 无 sub，DOM 形状不变。
+  // 0729 大白话命名（ADR-0031）：home 主名改回「今天/Today」，副小字取消（tabHomeSub 键保留
+  // 未用）；5 个 tab 主名换企业大白话，词表 Danny 07-29 审字通过。
   const tabs: { label: string; sub?: string; screen: LiteScreen }[] = [
-    { label: t.lite2.tabHome, sub: t.lite2.tabHomeSub, screen: 'home' },
+    { label: t.lite2.tabHome, screen: 'home' },
     { label: t.lite2.tabTeam, screen: 'team' },
     // feat-055（PRD G9）：第 8 个 tab「项目」。放在「你的团队」之后而不是队尾——它和团队屏
     // 是同一份上传长出来的两半（人 / 项目），排到「Where this goes」后面等于把主数据屏

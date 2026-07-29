@@ -527,10 +527,10 @@ export const en = {
   // Same product copy as `lite` — duplicated under its own namespace per kickoff-dev.md §6 so v01
   // and v02 wording can diverge independently without touching v01's committed strings) ─────────
   lite2: {
-    tabTeam: 'Your team',
-    tabRoom: 'The room',
+    tabTeam: 'Team',
+    tabRoom: 'Ask Avery',
     tabPlaybooks: 'Playbooks',
-    tabVision: 'Where this goes',
+    tabVision: "What's coming",
 
     // ── New tabs (feat-035 6-tab skeleton — PRD order: team, room, followups, closerlook,
     // playbooks, vision) ──
@@ -540,7 +540,7 @@ export const en = {
     // ⚠ 主名一动必须同 commit 改 scripts/gates/live-frontend-gate.snippet.js assertV2Boots。
     tabFollowups: 'To-do list',
     tabFollowupsSub: 'Follow-ups',
-    tabCloserLook: 'A closer look',
+    tabCloserLook: 'Worth noting',
     // feat-047: 7th tab, ported from `lite` — same key name/value as `en.lite.tabNotes` so
     // scripts/i18n-zh-lite2-delta.mjs reuses the already-approved zh.lite translation verbatim
     // (no fresh M3 call needed). Placed after Follow-ups in the topbar (LiteTopbar.tsx).
@@ -626,18 +626,18 @@ export const en = {
     followupsGroupLater: 'Later',
     followupsActiveTab: 'Active',
     followupsHistoryTab: 'History',
-    followupsEmptyActive: "Nothing on your follow-up list yet — add one below, or bring one over from this morning's list, the room, or a quick ask.",
+    followupsEmptyActive: "Nothing on your follow-up list yet — add one below, or bring one over from this morning's list, Ask Avery, or a quick ask.",
     followupsEmptyHistory: "Nothing completed yet — finished items land here.",
     followupsSourceTriage: 'From this morning',
-    followupsSourceRoom: 'From the room',
+    followupsSourceRoom: 'From Ask Avery',
     followupsSourceAsk: 'From a quick ask',
-    followupsSourceCloserLook: 'From a closer look',
+    followupsSourceCloserLook: 'From Worth noting',
     followupsSourceManual: 'Added by you',
     // 0721 对齐棒 · B4 闭环：首页决策卡的「加入跟进」来源标签。
     followupsSourceDecision: 'From a decision',
     followupsAddTitlePlaceholder: 'What needs following up?',
     followupsAddGroupLabel: 'When',
-    followupsAddSubmit: 'Add to follow-ups',
+    followupsAddSubmit: 'Add to to-dos',
     followupsDone: 'Done',
     followupsRestore: 'Bring it back',
     followupsDelete: 'Delete',
@@ -650,14 +650,14 @@ export const en = {
     followupAdded: 'Added',
 
     // Advice card — "add to follow-ups" on each recommended action (feat-036, source=room)
-    adviceAddFollowup: 'Add to follow-ups',
+    adviceAddFollowup: 'Add to to-dos',
 
     // ── A closer look screen (feat-035 laid the skeleton as an honest empty placeholder;
     // feat-044 replaces it with the real comparison-card derivation — PRD F4 / decisions.md
     // 拍板#4. The old closerLookEyebrow/Title/Body/ComingSoon placeholder keys are retired
     // outright, not reused — a fresh key set avoids any risk of a stale ZH translation surviving
     // under an old key name with new meaning, per session-handoff's i18n discipline note.) ──
-    gapPageEyebrow: 'A closer look',
+    gapPageEyebrow: 'Worth noting',
     gapPageTitle: "Where the file and the read don't quite line up",
     gapPageBody:
       "When a project's own status reads steady but something in the files says otherwise, it shows up here — what the files say next to what the signals show, with a way to settle it, let it go, or ask the person directly.",
@@ -671,7 +671,7 @@ export const en = {
     gapResolveLabel: 'Settled',
     gapDismissLabel: 'Let it go',
     gapAskLabel: 'Ask them directly',
-    gapAddFollowupLabel: 'Add to follow-ups',
+    gapAddFollowupLabel: 'Add to to-dos',
 
     // History (resolved + dismissed, collapsed by default — same drawer language as the
     // morning-triage "Taken care of today" pattern, feat-036).
@@ -681,7 +681,7 @@ export const en = {
     gapRestoreLabel: 'Bring it back',
 
     // Honest empty state — nothing derived from the current corpus.
-    gapEmptyTitle: 'Nothing worth a closer look right now',
+    gapEmptyTitle: 'Nothing worth noting right now',
     gapEmptyBody:
       "When a project's own status and its blockers tell different stories, it'll show up here.",
 
@@ -699,10 +699,10 @@ export const en = {
     // on-message with the existing family (upload.privacyNote / emptyHintPrivacy /
     // visionProofRedline)——0721 · 1A 之后口径改为「确定性 gate 执行公司拍的开关」
     // （scoring_policy.py），不再是「永不」；写新文案别把绝对句抄回来。 ──
-    notesEyebrow: 'Field notes',
+    notesEyebrow: 'Notes',
     notesTitle: 'What Avery has noticed about your company',
     notesLede:
-      'Every time you ask the room a real question, Avery writes down what it observed — in its own words, for you to read. It builds up the longer you work together.',
+      'Every time you ask Avery a real question, it writes down what it observed — in its own words, for you to read. It builds up the longer you work together.',
     // 0721 · 1A：绝对句改开关句。「prompt 掰不动」仍然为真——开关是进程环境变量，
     // 不是提示词能碰到的东西。
     notesRedlineNote:
@@ -712,21 +712,21 @@ export const en = {
     notesCountMany: 'observations', // per-day group count (plural)
     notesToday: 'Today',
     notesSourcePrefix: 'From your question about', // + excerpt + " →"
-    notesOpenRoom: 'Open the room →',
+    notesOpenRoom: 'Ask Avery →',
     notesEmptyEyebrow: 'Nothing written yet',
     notesEmptyTitle: "Avery hasn't taken its first note",
     notesEmptyBody:
-      'Ask the room a real question about your team. When Avery notices something worth keeping — a pattern, a risk, a dependency — it writes it here.',
-    notesEmptyCta: 'Ask the room',
+      'Ask Avery a real question about your team. When Avery notices something worth keeping — a pattern, a risk, a dependency — it writes it here.',
+    notesEmptyCta: 'Ask Avery',
     notesNudge: 'Avery added a note', // Room chip after a note lands
 
     // ── Playbooks screen (feat-025 Q1: honest empty state, anchored to future capability) ──
     playbooksEyebrow: 'Coming soon',
     playbooksTitle: 'Playbooks grow from the way your team already works',
     playbooksBody:
-      'Once Avery is wired into your own SOPs, checklists, and past decisions, it distills them into reusable playbooks — so the next time a familiar situation lands, the room already knows your house rules.',
+      'Once Avery is wired into your own SOPs, checklists, and past decisions, it distills them into reusable playbooks — so the next time a familiar situation lands, Avery already knows your house rules.',
     playbooksSlotRoster: 'Your onboarding and handover SOPs become step-by-step playbooks.',
-    playbooksSlotIncident: 'Recurring situations turn into a saved play the room runs the same way each time.',
+    playbooksSlotIncident: 'Recurring situations turn into a saved play Avery runs the same way each time.',
     playbooksSlotPack: 'Industry packs (starting with the hospitality pack) drop in pre-built plays you can adapt.',
     playbooksSlotLabel: 'What will live here',
     playbooksComingSoon: 'Not connected yet — this is a preview of where Avery is headed.',
@@ -736,7 +736,7 @@ export const en = {
     playbooksLibraryEyebrow: 'Playbooks',
     playbooksLibraryTitle: "Playbooks from your team's SOPs",
     playbooksLibrarySub:
-      'Avery read your standard operating procedures and distilled them into method cards — the plays your room already runs.',
+      'Avery read your standard operating procedures and distilled them into method cards — the plays Avery already runs.',
     playbooksLibraryAria: 'Playbooks — method library',
     playbooksCardTagsAria: 'Tags',
     // open-loop-0720: Danny approved "don't auto-open once there's data" for the onboarding
@@ -749,7 +749,7 @@ export const en = {
     // ── Vision surface (feat-026: positioning narrative + honestly-labeled capability mock) ──
     // The narrative is deliberately calm and does not interrupt the trial flow — it's its own tab.
     // Beats 1→2→3: what you're seeing now → what the real product is → what this demo is proving.
-    visionEyebrow: 'Where this goes',
+    visionEyebrow: "What's coming",
     visionTitle: 'You just tried the demo. Here is the product behind it.',
     visionLede:
       "Everything in the other tabs ran on files you uploaded yourself. That's on purpose — it's the fastest way to feel how Avery reads a team. The real product is a step past this.",
@@ -758,7 +758,7 @@ export const en = {
     visionNowLabel: 'What you just used',
     visionNowTitle: 'A demo you drove with your own files',
     visionNowBody:
-      "You dropped in a roster and a plan, watched your team grow out of them, and asked the room a real question. Nothing here was scripted for you — it read what you gave it. This is a public, try-it-yourself build, not the deployed product.",
+      "You dropped in a roster and a plan, watched your team grow out of them, and asked Avery a real question. Nothing here was scripted for you — it read what you gave it. This is a public, try-it-yourself build, not the deployed product.",
 
     // Beat 2 — what the real product is (custom agent, your data, private deploy)
     visionRealLabel: 'What Avery actually is',
@@ -770,7 +770,7 @@ export const en = {
     visionProofLabel: 'What this demo is proving',
     visionProofTitle: 'Three things worth judging today',
     visionProofUiux: 'The interface — how a team and a live read actually feel to move through.',
-    visionProofJudgment: "The judgment — whether the room's read of a real situation is one you'd trust.",
+    visionProofJudgment: "The judgment — whether Avery's read of a real situation is one you'd trust.",
     // 0721 对齐棒 · Danny 拍板 1A：绝对承诺（"永不打分、任何指令关不掉"）已不再为真——
     // AVERY_ALLOW_PERSON_SCORING 开关存在且由运营方控制（scoring_policy.py：默认关、
     // fail-closed，开关只决定写入/ingest 缝的红线机制是拒收还是放行，检测器本身未动）。
@@ -842,7 +842,7 @@ export const en = {
     // read on the EN build, kept only because zh.ts is typed `Dict`.
     briefingHeadlineFilesPartial: 'Read {ingested} of {uploaded} file(s): {people} people, {projects} active projects.',
     briefingSubheadRisk:
-      'Everything below is drawn from your uploads — nothing invented. {atRisk} project(s) worth a closer look.',
+      'Everything below is drawn from your uploads — nothing invented. {atRisk} project(s) worth noting.',
     // fixA · the SAME count, worded for the case where part of it is not a project. The backend
     // ships the count's shape (briefing.look_kind: 'projects' | 'items' | 'none'); 'items' means a
     // signal in there reached no decision card, so naming it a project would invent a project —
@@ -850,21 +850,21 @@ export const en = {
     // right under 「没有一处是编的」. Byte-identical to what registry.py emits for that branch, so
     // the EN passthrough and the ZH recomposition say the same thing.
     briefingSubheadRiskItems:
-      'Everything below is drawn from your uploads — nothing invented. {atRisk} item(s) worth a closer look.',
+      'Everything below is drawn from your uploads — nothing invented. {atRisk} item(s) worth noting.',
     briefingSubheadCalm:
       'Everything below is drawn from your uploads — nothing invented. No risk signals surfaced from the documents.',
     briefingMetricPeople: 'people',
     briefingMetricProjects: 'active projects',
     briefingMetricNeedLook: 'need a look',
-    handoffsTitle: 'Worth your attention today',
+    handoffsTitle: "Today's reminders",
     handoffsEmpty: 'Nothing needs you right now — your uploads read steady.',
     // UIUX 棒 F4 · 同款于 lite 段（见上）。v02 多一层去处：那几处信号有自己的 tab，
-    // 文案顺手把路指给客户（“A closer look” 必须与 tabCloserLook 的实际标签一致）。
-    handoffsEmptyButLook: 'Nothing needs you to step in right now — though {count} spots are worth a closer look. They are under “A closer look”.',
+    // 文案顺手把路指给客户（“Worth noting” 必须与 tabCloserLook 的实际标签一致，0729 改名后同步）。
+    handoffsEmptyButLook: 'Nothing needs you to step in right now — though {count} spots are worth noting. They are under “Worth noting”.',
     handoffOpen: 'Open the project',
     // feat-068 · triage-item copy — see the identical block in the `lite` section above for why
     // this layer exists (frontend-derived strings; no backend change can reach them).
-    handoffToneLabel: 'Worth a closer look',
+    handoffToneLabel: 'Worth noting',
     handoffAction: 'Take a look at {project}',
     handoffEvidenceFallback: '{project} is flagged {status} in your uploads.',
     handoffEvidenceTag: 'From your uploads',
@@ -886,7 +886,7 @@ export const en = {
     streamAskDrafted: 'A quick ask is drafted — yours to confirm',
     streamAdviceReady: 'The read is ready',
     streamAdviceDone: 'Done',
-    streamFailed: 'Something went wrong reaching the room.',
+    streamFailed: 'Something went wrong reaching Avery.',
     streamErrorUnknown: 'No detail came back about what failed.',
 
     // fixA 的分诊卡文案键在集成时**去掉了**——不是丢弃，是被更好的实现取代：
@@ -906,8 +906,8 @@ export const en = {
     triageRemaining: '{pending} of {total} still worth a look',
     triageDoneAria: 'Done — {action}',
     triageDiscardLabel: 'Not today',
-    triageTakeToRoomLabel: 'Take to the room',
-    triageAddFollowupLabel: 'Add to follow-ups',
+    triageTakeToRoomLabel: 'Ask Avery',
+    triageAddFollowupLabel: 'Add to to-dos',
     triageDraftMailLabel: 'Draft the message',
     triageDrawerLabel: 'Taken care of today',
     triageSetAsideLabel: 'set aside',
@@ -933,7 +933,7 @@ export const en = {
     projectLane: 'Projects',
 
     // The room — empty state
-    roomEmptyTitle: 'Bring a situation to the room',
+    roomEmptyTitle: 'Bring a situation to Avery',
     roomEmptyBody:
       'Describe what is on your mind about the team — it thinks it through against your uploads and comes back with a read.',
 
@@ -980,7 +980,7 @@ export const en = {
     detailCollab: 'Working with',
     detailSummary: 'Summary',
     detailProgress: 'Progress',
-    detailBlockers: 'Worth a closer look',
+    detailBlockers: 'Worth noting',
     detailSignals: 'What the documents say',
     detailSource: 'From your uploads',
     detailGone: 'This card is no longer in your uploads.',
@@ -1011,8 +1011,8 @@ export const en = {
       'Only one project came out of your uploads. If your documents cover more than one, they may not be split into sections Avery can tell apart yet — a heading per project usually helps.',
     projectsEmptyTitle: 'No projects yet',
     projectsEmptyBody:
-      'Upload a project plan, a weekly note or a status report from Your team, and the projects it describes will show up here.',
-    projectsEmptyCta: 'Go to Your team',
+      'Upload a project plan, a weekly note or a status report under Team, and the projects it describes will show up here.',
+    projectsEmptyCta: 'Go to Team',
     projectsGroupNeedsYou: 'Needs you',
     projectsGroupMoving: 'Moving',
     projectsGroupOther: 'Other status',
@@ -1138,7 +1138,7 @@ export const en = {
     onboardUploadTitle: 'Start with a few files',
     // 0721（B5）：同 upload.caption 的重心修正——产出是管理判断，不只是「长出团队」。
     onboardUploadBody:
-      "Hand Avery what you'd hand a new manager on day one — a roster, a project plan, a weekly note. It reads them into a working picture: people, projects, and what needs your eye. Fine to skip; you can upload later from Your team.",
+      "Hand Avery what you'd hand a new manager on day one — a roster, a project plan, a weekly note. It reads them into a working picture: people, projects, and what needs your eye. Fine to skip; you can upload later from Team.",
     onboardUploadChoose: 'Choose files',
     onboardUploadReading: 'Reading your files…',
     // feat-068 — 同 upload.ingestingHint 的理由（真等 100–120s）。向导版多一句"可以先进行
@@ -1237,7 +1237,7 @@ export const en = {
     // ── The room — simplified thinking view (feat-059, PRD G7). Four phases driven by REAL
     // stream events: a phase that got no event stays "not started yet". No fake progress, no
     // scripted beats, no invented timing. The raw stream stays one click away, complete. ──
-    roomFlowTitle: 'How it worked through this',
+    roomFlowTitle: 'How Avery got here',
     roomFlowRawTitle: 'Raw stream',
     roomFlowShowRaw: 'Show raw stream',
     roomFlowHideRaw: 'Back to the summary',
@@ -1265,13 +1265,13 @@ export const en = {
     bellAria: 'Notifications',
     bellTitle: 'What came in',
     bellEmpty:
-      'Nothing yet. When your files finish reading or a run in the room completes, it lands here.',
+      'Nothing yet. When your files finish reading or Avery finishes a run, it lands here.',
     bellMarkAll: 'Mark all read',
     bellUnreadAria: '{count} unread',
     notifIngest: 'Your team is ready — the files you brought in have been read.',
-    notifRun: 'The room has finished thinking it through — the read is ready.',
+    notifRun: 'Avery has finished thinking it through — the read is ready.',
     notifAsk: 'All replies to your quick ask are in.',
-    notifGap: 'Something in the files is worth a closer look.',
+    notifGap: 'Something in the files is worth noting.',
 
     // ── Compliance footer (PRD F6) — shell-global, memo tone (not regulatory tone). ──
     footerText:
@@ -1309,10 +1309,11 @@ export const en = {
     // counted from the live payload by homeDerive.ts; there is no hardcoded statistic here and
     // there must never be one (the partner reference library's greeting line — "scanned 186
     // signals" — is hardcoded; ours are counted or absent). ──
-    // 0721 对齐棒 · Danny 拍板 2C：home 主名改「指挥室/Command room」，原名「今天/Today」
-    // 降为副小字（tabHomeSub）——「指挥室」一词由 Danny 0721 显式解锁（推翻 0718 锁定词表
-    // 的这一项；Nexus/现实差距维持锁定）。⚠ 同 commit 必须同步 assertV2Boots 期望数组。
-    tabHome: 'Command room',
+    // 0721 对齐棒 · Danny 拍板 2C 曾把 home 主名改「指挥室/Command room」+ 副小字「今天」。
+    // 0729 大白话命名（ADR-0031，Danny 审字）：主名改回「今天/Today」，副小字取消
+    // （LiteTopbar 不再传 sub；tabHomeSub 键保留未用）。Nexus/现实差距维持锁定。
+    // ⚠ 改 tab 主名同 commit 必须同步 assertV2Boots 期望数组。
+    tabHome: 'Today',
     tabHomeSub: 'Today',
     homeEyebrow: 'Today',
     homeTitle: 'What today asks of you',
@@ -1322,7 +1323,7 @@ export const en = {
     // ── 0721 对齐棒 · Danny 拍板 4A：无数据空态 = 指挥室骨架（合伙人反馈 B1「第一眼
     // 不该是拖文件」）。四块骨架文案全是**预告**：描述的每个产出面都真实存在（决策卡/
     // 多看一眼/需关注的人/概览计数），零数字、零装加载。 ──
-    homeSkeletonTitle: 'This is your command room',
+    homeSkeletonTitle: 'This is where your day starts',
     homeSkeletonLede:
       'It has nothing to work from yet. Every block below fills from files you bring in — and only from them. Nothing here is ever invented.',
     homeSkeletonDecisions:
@@ -1341,7 +1342,7 @@ export const en = {
     // ── 0721 · B4 闭环：首页今日待办块 + 决策卡「加入跟进」。 ──
     homeTodayTitle: 'To do today',
     homeTodayEmpty:
-      'Nothing queued for today. Decisions, the room, and a closer look can all drop items here.',
+      'Nothing queued for today. Decisions, Ask Avery, and Worth noting can all drop items here.',
     homeTodayDoneAria: 'Mark "{title}" done',
     homeTodayMore: '+{count} more in the list',
     homeDecisionAddFollowup: 'Add to to-dos',
@@ -1366,7 +1367,7 @@ export const en = {
     homeDecisionReasonRule: 'By the rules',
     homeDecisionReasonAvery: "Avery's own read",
     homeDecisionEscalated: 'Avery raised this grade',
-    homeDecisionRulesToggle: 'Why this grade',
+    homeDecisionRulesToggle: 'The reasoning',
     homeDecisionRuleBasis: 'Read from',
     homeDecisionEvidenceLabel: 'Straight from your files',
     // 🔴 Two different kinds of "no value" — never merge these two sentences. The first means
@@ -1376,7 +1377,7 @@ export const en = {
     homeDecisionUnknownLabel: 'Not mentioned in the files',
     homeDecisionUnparsed: '{field} reads "{raw}" — that does not pin down a value.',
     homeDecisionOpenProject: 'Open the project',
-    homeDecisionAskRoom: 'Take it to the room',
+    homeDecisionAskRoom: 'Ask Avery',
     homeFieldStatus: 'Status',
     homeFieldProgress: 'Progress',
     homeFieldDueDate: 'Due date',
@@ -1385,12 +1386,12 @@ export const en = {
     // The "Active" chip label is the only new word — Settled / Set aside reuse gapResolvedBadge /
     // gapDismissedBadge so the same state reads identically here and on the closer-look history.
     // The evidence-source tag reuses handoffEvidenceTag ("From your uploads").
-    homeGapsTitle: 'Where the files disagree with themselves',
+    homeGapsTitle: 'Where the documents disagree',
     homeGapsCount: '{count} open',
     homeGapsEmpty: 'Nothing is contradicting itself right now.',
     homeGapsFilterEmpty: 'Nothing in this state right now.',
     homeGapFilterActive: 'Active',
-    homeGapsLink: 'A closer look',
+    homeGapsLink: 'Worth noting',
 
     // Block 3 — people worth a look. 🔴 The count says how many times the FILES mention them.
     // It is not a score, a rank or a rating, and the screen says so out loud.
@@ -1399,10 +1400,10 @@ export const en = {
     homeAttentionWhySignals: 'named in {count} signals',
     homeAttentionWhyBlockers: '{count} blockers on their projects',
     homeAttentionEmpty: 'No one is being singled out by the files right now.',
-    homeAttentionLink: 'Your team',
+    homeAttentionLink: 'Team',
 
     // Block 4 — plain counts, each a door.
-    homeOverviewTitle: 'What Avery is working from',
+    homeOverviewTitle: 'What Avery has',
     homeOverviewPeople: 'people',
     homeOverviewProjects: 'projects',
     homeOverviewFiles: 'files read',
@@ -1413,8 +1414,8 @@ export const en = {
     // avery-sync zh-purity slice; see the comment on lite.adviceCardAria for the full why).
     // Kept in its own lite2 namespace per kickoff-dev.md §6 so v01/v02 copy can diverge
     // independently later, even though today the two cards render identical labels.
-    adviceCardAria: 'What it found — the read',
-    adviceEyebrow: 'What it found',
+    adviceCardAria: "Avery's analysis — the read",
+    adviceEyebrow: "Avery's analysis",
     adviceReadTitle: 'The read',
     adviceSignOff: 'Yours to sign off',
     adviceSummaryAria: 'Summary — the read',
@@ -1456,15 +1457,15 @@ export const en = {
     composerRefsAria: 'Composer references',
     composerRemoveRefAria: 'Remove {label}',
     composerFilterAria: 'Filter references',
-    roomBoardAria: 'The room — board',
+    roomBoardAria: 'Ask Avery — board',
     roomAskAria: 'Ask your team',
     roomLiveQuestionAria: 'Live question',
     roomEmptyAria: 'Working it through — ask your team',
     notesEmptyAria: "Avery's notes — nothing yet",
     playbooksEmptyAria: 'Playbooks — coming soon',
-    teamLiveAria: 'Your team — live',
+    teamLiveAria: 'Team — live',
     followupsViewAria: 'Follow-ups view',
-    gapEmptyAria: 'A closer look — nothing pending',
+    gapEmptyAria: 'Worth noting — nothing pending',
     projectsEmptyAria: 'Projects — nothing yet',
     complianceFooterAria: 'How to use what Avery tells you',
   },

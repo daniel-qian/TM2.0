@@ -103,14 +103,14 @@ const afterLang = await page.evaluate(() => ({
   activeText: document.querySelector('.lang-switch-btn.is-active')?.textContent ?? null,
   firstBtnStillActive: document.querySelectorAll('.lang-switch-btn')[0]?.classList.contains('is-active') ?? null,
   storage: localStorage.getItem('lite2:lang:v1'),
-  homeTabText: (document.querySelector('.scene-tab .scene-tab-main') || document.querySelector('.scene-tab'))?.textContent ?? null,
+  homeTabText: (document.querySelector('.scene-tab')?.querySelector('.scene-tab-main') ?? document.querySelector('.scene-tab'))?.textContent ?? null,
 }))
 rec('语言开关点击换 class：英文按钮变 is-active', afterLang.activeText === 'English', JSON.stringify(afterLang))
 rec('语言开关点击换 class：中文按钮掉 is-active（互斥）', afterLang.firstBtnStillActive === false)
 rec('语言开关点击写 localStorage（lite2:lang:v1 = en）', afterLang.storage === 'en', `实得 "${afterLang.storage}"`)
 rec(
   '点击立即生效：顶栏 tab 文案跟着变英文（不必刷新——useDict 反应式订阅 localeStore）',
-  afterLang.homeTabText === 'Command room',
+  afterLang.homeTabText === 'Today',
   `实得 "${afterLang.homeTabText}"`,
 )
 
@@ -120,7 +120,7 @@ await page.goto(`${UI}/?v=2&mode=live`, { waitUntil: 'networkidle' })
 await dismissOnboardIfAny(page)
 const remembered = await page.evaluate(() => ({
   shellLook: document.querySelector('.lite2-shell')?.getAttribute('data-look') ?? null,
-  homeTabText: (document.querySelector('.scene-tab .scene-tab-main') || document.querySelector('.scene-tab'))?.textContent ?? null,
+  homeTabText: (document.querySelector('.scene-tab')?.querySelector('.scene-tab-main') ?? document.querySelector('.scene-tab'))?.textContent ?? null,
   lookStorage: localStorage.getItem('lite2:look:v1'),
   langStorage: localStorage.getItem('lite2:lang:v1'),
 }))
@@ -131,7 +131,7 @@ rec(
 )
 rec(
   '裸链重进：语言仍是上次选的英文（localStorage 记住了）',
-  remembered.homeTabText === 'Command room',
+  remembered.homeTabText === 'Today',
   `tab 文案 "${remembered.homeTabText}"`,
 )
 
@@ -141,7 +141,7 @@ await page.goto(`${UI}/?v=2&mode=live&look=aurora&lang=zh`, { waitUntil: 'networ
 await dismissOnboardIfAny(page)
 const urlWins = await page.evaluate(() => ({
   shellLook: document.querySelector('.lite2-shell')?.getAttribute('data-look') ?? null,
-  homeTabText: (document.querySelector('.scene-tab .scene-tab-main') || document.querySelector('.scene-tab'))?.textContent ?? null,
+  homeTabText: (document.querySelector('.scene-tab')?.querySelector('.scene-tab-main') ?? document.querySelector('.scene-tab'))?.textContent ?? null,
   lookStorage: localStorage.getItem('lite2:look:v1'),
   langStorage: localStorage.getItem('lite2:lang:v1'),
 }))
@@ -150,7 +150,7 @@ rec(
   urlWins.shellLook === 'aurora',
   JSON.stringify(urlWins),
 )
-rec('?lang=zh 赢过 localStorage 里的 en', urlWins.homeTabText === '指挥室', `tab 文案 "${urlWins.homeTabText}"`)
+rec('?lang=zh 赢过 localStorage 里的 en', urlWins.homeTabText === '今天', `tab 文案 "${urlWins.homeTabText}"`)
 rec(
   '深链参数同步回 localStorage（下次不带参数仍保持这次深链的选择）',
   urlWins.lookStorage === 'aurora' && urlWins.langStorage === 'zh',
@@ -162,7 +162,7 @@ await page.goto(`${UI}/?v=2&mode=live`, { waitUntil: 'networkidle' })
 await dismissOnboardIfAny(page)
 const afterSync = await page.evaluate(() => ({
   shellLook: document.querySelector('.lite2-shell')?.getAttribute('data-look') ?? null,
-  homeTabText: (document.querySelector('.scene-tab .scene-tab-main') || document.querySelector('.scene-tab'))?.textContent ?? null,
+  homeTabText: (document.querySelector('.scene-tab')?.querySelector('.scene-tab-main') ?? document.querySelector('.scene-tab'))?.textContent ?? null,
 }))
 rec(
   '深链同步生效：裸链再进一次，保持的是深链那次的 aurora（不是弹回 paper）',
@@ -171,7 +171,7 @@ rec(
 )
 rec(
   '深链同步生效：裸链再进一次，保持的是深链那次的中文（不是弹回英文）',
-  afterSync.homeTabText === '指挥室',
+  afterSync.homeTabText === '今天',
   `tab 文案 "${afterSync.homeTabText}"`,
 )
 

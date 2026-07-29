@@ -19,7 +19,7 @@ _Avoid_: 把人情味当产品自我定义来写（它是红线与风格，不�
 _Avoid_: 给人打分/量化成数值（人不该有血条）；没有真人评分就上 eval scorecard
 
 **Dashboard**：
-进门第一面（surface label "Your team"）——回答"**今天该把心思花在哪**"：分析浏览区（人与项目双轨卡片）+ 今日 Handoff checklist 区，分区混排、概念不混。（live mode 下这些卡片由 **Ingestion** 从上传文件填充，story mode 下由 `fixtures`；见 [ADR-0020](docs/adr/0020-avery-graduates-from-demo-only-to-live-lite-product.md)。）它是**观察 + 轻照料面**：看清处境、勾掉/搁置今天的小事；重的编排仍去 Nexus。地图不再是这一面的主形态，退为页内的全景子视图（见 Team map）。见 [ADR-0017](docs/adr/0017-card-home-demotes-team-map.md)。
+进门第一面（surface label "Team"／「团队」，0729 大白话命名 [ADR-0031](docs/adr/0031-plain-speak-naming-pass.md) 前为 "Your team"）——回答"**今天该把心思花在哪**"：分析浏览区（人与项目双轨卡片）+ 今日 Handoff checklist 区，分区混排、概念不混。（live mode 下这些卡片由 **Ingestion** 从上传文件填充，story mode 下由 `fixtures`；见 [ADR-0020](docs/adr/0020-avery-graduates-from-demo-only-to-live-lite-product.md)。）它是**观察 + 轻照料面**：看清处境、勾掉/搁置今天的小事；重的编排仍去 Nexus。地图不再是这一面的主形态，退为页内的全景子视图（见 Team map）。见 [ADR-0017](docs/adr/0017-card-home-demotes-team-map.md)。
 _Avoid_: home、canvas（canvas 是视觉手法，不是这个概念本身）、PM 仪表盘语言（P0 徽章 / 统计数字 chips / capacity 读数——SaaS 腔，违反 [ADR-0015](docs/adr/0015-product-tone-human-advisor-debrand-saas-naming.md)）
 
 **Team map**：
@@ -28,7 +28,7 @@ _Avoid_: 把它当独立页面/tab（已降级，见 [ADR-0017](docs/adr/0017-ca
 
 **Nexus**：
 **行动面** —— manager 的一个问题在这里变成一条被编排的 Thread：specialist agents 与人类同事协同，agent 在背景聆听并交叉校对证据，按需调用 tools，最终产出供人 review 的结构化可信输出。
-_Surface label_（[ADR-0015](docs/adr/0015-product-tone-human-advisor-debrand-saas-naming.md)）：user-facing 不出现 "Nexus" / "orchestration"（纯技术腔）；动作语境用 **"Working it through"**（自解释），需要名词指代该空间时才用 **"the room"**。"Nexus" 仅作内部领域概念名保留。
+_Surface label_（[ADR-0015](docs/adr/0015-product-tone-human-advisor-debrand-saas-naming.md)，0729 更新 [ADR-0031](docs/adr/0031-plain-speak-naming-pass.md)）：user-facing 不出现 "Nexus" / "orchestration"（纯技术腔）；现行入口名 **"Ask Avery"／「问 Avery」**（0729 前为 "The room"／「议事室」——「空间」隐喻整体退役，指代一律落在 Avery 本人身上）。"Nexus" 仅作内部领域概念名保留。
 _Avoid_: 把**整个** Nexus 等同于 chat / conversation / 一个聊天 thread（会抹掉多 agent 编排本质）。注意：Nexus 内部确实嵌着一个**窄口径**的子面 **Chat**（见下条），但 Nexus ≠ Chat——Chat 只是编排走到"需要人裁断"那一步时临时开出的决策面。
 
 **Thread**：
@@ -62,7 +62,7 @@ _Avoid_: select、filter（filter 暗示"减项"，focus 是"点亮关联簇"）
 
 **Reality gap**：
 "被相信的状态"与"实时信号"之间被检测出的矛盾（例：owner 报 on-track，但信号显示 PR 卡住、重复 blocker、任务零更新）。系统只**指出矛盾并给低风险下一步**，绝不做人身/人格评价。其中"自报 vs 信号"这一具体子类叫 **report mismatch**。
-_Surface label_（[ADR-0015](docs/adr/0015-product-tone-human-advisor-debrand-saas-naming.md)）：user-facing 不用 "Reality gap" / "report mismatch"（像数据校验错误、点名时刺痛），改 **"Worth a closer look"**；底层领域概念名不变。
+_Surface label_（[ADR-0015](docs/adr/0015-product-tone-human-advisor-debrand-saas-naming.md)，0729 更新 [ADR-0031](docs/adr/0031-plain-speak-naming-pass.md)）：user-facing 不用 "Reality gap" / "report mismatch"（像数据校验错误、点名时刺痛），现行 **"Worth noting"／「值得注意」**（0729 前为 "A closer look"／「多看一眼」）；底层领域概念名不变，不刺痛判据不变。
 _Avoid_: discrepancy、conflict
 
 **Manifest**：

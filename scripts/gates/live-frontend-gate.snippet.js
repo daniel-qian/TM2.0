@@ -481,7 +481,7 @@
       // team renders the UploadPanel in BOTH branches, so drive the upload from there. Guarded
       // on `.lite2-shell` so the v01 phases (which have their own topbar) are untouched.
       if ($('.lite2-shell')) {
-        this._clickTab('Your team');
+        this._clickTab('Team');
         try {
           await poll(() => ($('.upload-input') ? true : null), 4000, 'Your team upload panel to mount');
         } catch (e) { /* fall through — the null check below reports it */ }
@@ -675,7 +675,7 @@
       // Phase G (feat-025 Q2): the People lane must render as grouped, collapsible containers
       // (group blocks + group heads with titles + a toggle) — NOT a flat card grid. The person
       // cards themselves stay in the DOM and clickable (grouping only wraps them in containers).
-      this._clickTab('Your team');
+      this._clickTab('Team');
       // React re-renders on the next tick after the tab click — poll for the grouped lane to mount.
       try {
         await poll(() => ($('.home-people-groups') ? true : null), 8000, 'grouped people lane to mount');
@@ -732,7 +732,7 @@
       // .react-transform-component under our .lite-room-canvas. The composer stays OUTSIDE it.
       // NOTE: the canvas only mounts once a run has started (hasStarted) — call this AFTER
       // composerAskLive so the terminal board exists.
-      this._clickTab('The room');
+      this._clickTab('Ask Avery');
       try {
         await poll(() => ($('.lite-room-canvas') ? true : null), 8000, 'room canvas to mount');
       } catch (e) { /* fall through */ }
@@ -808,7 +808,7 @@
       //  ZERO numbers/score/rank. And the story-noun blacklist stays 0 on this surface.
       // The Vision tab's visible label is product copy ("Where this goes"), not "Vision" — click
       // by that label, with a fallback that clicks whichever tab mounts the .lite-vision screen.
-      if (!this._clickTab('Where this goes')) {
+      if (!this._clickTab("What's coming")) {
         for (const tab of $$('.scene-tabs .scene-tab')) {
           tab.click();
           if ($('.lite-vision')) break;
@@ -874,7 +874,7 @@
       // Phase K1: after composerAskLive the advise stream carried manifest{kind:'ask-draft'} —
       // the AskCard mounts in DRAFT state: 1..3 questions each verbatim-editable, named roster
       // recipients, and the HONEST red-line note (check happens at save, server-side, not yet run).
-      this._clickTab('The room');
+      this._clickTab('Ask Avery');
       try { await poll(() => ($('.lite-ask-card') ? true : null), 20000, 'ask card to mount'); } catch (e) { /* report below */ }
       const card = $('.lite-ask-card');
       if (!card) return (results.askDraft = { pass: false, error: 'no .lite-ask-card in DOM' });
@@ -1062,7 +1062,7 @@
     async assertAskSingleFlow() {
       // Phase K5: a FRESH ask (composerAskLive re-ran) — deselect down to ONE recipient,
       // share (1 link), collect, then the single-receipt shape: number + self-reported + verbatim.
-      this._clickTab('The room');
+      this._clickTab('Ask Avery');
       try {
         await poll(() => {
           const c = $('.lite-ask-card');
@@ -1106,7 +1106,7 @@
       //   OFF: no self-report projected → zero anchors, zero mood-vocab, zero numbers on person cards.
       //   ON : self-report allowed but ONLY inside a [data-metric-source] anchor that carries a
       //        non-empty source; any blood-bar/mood shape OUTSIDE an anchor is still a hard leak.
-      this._clickTab('Your team');
+      this._clickTab('Team');
       try { await poll(() => ($$('.home-person-card').length > 0 ? true : null), 8000, 'person cards to mount'); } catch (e) { /* report below */ }
       const cards = $$('.home-person-card');
       const scoringOn = scoringMarkerOn();
@@ -1362,8 +1362,8 @@
       // Phase v2Boots: `?v=2&mode=live` must render the .lite2-shell root with all 8 tabs
       // Tab order = feat-057's aggregate entry + PRD order + feat-047's "Avery's notes"
       // + feat-055's "Projects":
-      //   Today · Your team · Projects · The room · Follow-ups · Avery's notes ·
-      //   A closer look · Playbooks · Where this goes
+      //   Today · Team · Projects · Ask Avery · To-do list/Follow-ups · Avery's notes ·
+      //   Worth noting · Playbooks · What's coming   (0729 大白话命名，ADR-0031)
       //
       // "Avery's notes" was ported from `lite` and placed after Follow-ups per feat-047's
       // tab-order decision (see progress.md).
@@ -1387,12 +1387,13 @@
       const shell = $('.lite2-shell');
       // 0721 对齐棒 · Danny 2C：home/followups 换主名 + 副小字。主名读 .scene-tab-main
       // （有副小字的 tab 才有这个 span；没有的 tab 整个 button 就是主名），副小字单独断言
-      // ——textContent 直读会把「Command roomToday」连成一坨，这里明确分层。
+      // ——textContent 直读会把「To-do listFollow-ups」连成一坨，这里明确分层。
       const tabBtns = $$('.lite2-shell .scene-tabs .scene-tab');
       const tabs = tabBtns.map((b) => ((b.querySelector('.scene-tab-main') || b).textContent || '').trim());
       const subs = tabBtns.map((b) => { const s = b.querySelector('.scene-tab-sub'); return s ? (s.textContent || '').trim() : null; });
-      const expected = ['Command room', 'Your team', 'Projects', 'The room', 'To-do list', "Avery's notes", 'A closer look', 'Playbooks', 'Where this goes'];
-      const expectedSubs = ['Today', null, null, null, 'Follow-ups', null, null, null, null];
+      // 0729 大白话命名（ADR-0031，Danny 审字）：5 个主名换企业大白话；home 副小字取消。
+      const expected = ['Today', 'Team', 'Projects', 'Ask Avery', 'To-do list', "Avery's notes", 'Worth noting', 'Playbooks', "What's coming"];
+      const expectedSubs = [null, null, null, null, 'Follow-ups', null, null, null, null];
       const out = {
         shellPresent: !!shell,
         dataScene: shell ? shell.getAttribute('data-scene') : null,
@@ -1508,7 +1509,7 @@
       // team.handoffs, itself derived from real project blockers — teamData.ts liveHandoffs()),
       // each with a done check + a discard control + a take-to-room control, and zero person-
       // number leak inside the triage DOM (red line, same BLOOD_BAR_RE as v01 person cards).
-      this._clickTab('Your team');
+      this._clickTab('Team');
       try {
         await poll(() => ($$('.home-handoff').length > 0 ? true : null), 8000, 'triage cards to render');
       } catch (e) { /* fall through — assertions below report absence */ }
@@ -1540,7 +1541,7 @@
       // order (restored between steps via the drawer's undo button) — see the note above
       // assertTriageRenders on why the corpus now yields two triage cards (feat-044) and why
       // this phase always targets the first.
-      this._clickTab('Your team');
+      this._clickTab('Team');
       try {
         await poll(() => ($$('.home-handoff').length > 0 ? true : null), 8000, 'a triage card to act on');
       } catch (e) { /* report below */ }
@@ -1666,7 +1667,7 @@
       const beforeIds = await collectAllIds();
 
       // 1) Add from the first triage card.
-      this._clickTab('Your team');
+      this._clickTab('Team');
       try {
         await poll(() => ($$('.home-handoff').length > 0 ? true : null), 8000, 'triage cards present');
       } catch (e) { /* fall through */ }
@@ -1821,13 +1822,13 @@
       // "现实差距"/"Nexus" from ever reaching this user-facing surface); and zero person-name+
       // digit co-occurrence (reuses the Ask redline's _askValueRe — same "no scored person"
       // shape, ADR-0023).
-      this._clickTab('Your team');
+      this._clickTab('Team');
       try {
         await poll(() => ($$('.home-person-card').length > 0 ? true : null), 8000, 'person cards to read roster');
       } catch (e) { /* rosterNames stays whatever is in the DOM (possibly empty) */ }
       const rosterNames = $$('.home-person-card h3').map((el) => (el.textContent || '').trim()).filter(Boolean);
 
-      this._clickTab('A closer look');
+      this._clickTab('Worth noting');
       try {
         await poll(() => ($('.lite-closerlook') ? true : null), 8000, 'closer look screen to mount');
       } catch (e) { /* fall through — assertions below report absence */ }
@@ -1882,7 +1883,7 @@
       // now extended with a `gapMarks` field; snapshotGaps() below additionally lets the driver
       // do a real full-page-reload check the same way snapshotFollowups()/assertFollowupsPersist
       // did, as supplementary (non-aggregated) evidence.
-      this._clickTab('A closer look');
+      this._clickTab('Worth noting');
       try {
         await poll(() => ($$('.lite-gap-card').length > 0 ? true : null), 8000, 'a gap card to act on');
       } catch (e) { /* report below */ }
@@ -1992,7 +1993,7 @@
       // the composer pre-filled with that card's project title + claim/evidence context (NOT
       // auto-submitted — manager reviews before it goes out, same authorship principle as the
       // triage "take to the room" flow, feat-036/kickoff-dev.md §Feature 切分).
-      this._clickTab('A closer look');
+      this._clickTab('Worth noting');
       try {
         await poll(() => ($$('.lite-gap-card').length > 0 ? true : null), 8000, 'a gap card to act on');
       } catch (e) { /* report below */ }
@@ -2245,7 +2246,7 @@
         if (skip) skip.click();
         try { await poll(() => (!this._wizard() ? true : null), 5000, 'wizard to close before chips'); } catch (e) { /* fall through */ }
       }
-      this._clickTab('The room');
+      this._clickTab('Ask Avery');
       try { await poll(() => ($('.nexus-empty') ? true : null), 8000, 'room empty state to mount'); } catch (e) { /* report below */ }
       const chips = $$('.lite-room-chip');
       const chipIds = chips.map((c) => c.getAttribute('data-chip-id')).filter(Boolean);
@@ -2314,7 +2315,7 @@
       const emptyMarker = !!$('.lite-bell-empty');
 
       // ── 2) real stub ingest -> exactly {gap, ingest} ──
-      this._clickTab('Your team');
+      this._clickTab('Team');
       let ingestOk = false;
       const upInput = $('.upload-input');
       if (upInput) {
@@ -2335,7 +2336,7 @@
       const ingestExact = JSON.stringify(afterIngestKinds) === JSON.stringify(['gap', 'ingest']);
 
       // ── 3) run to completion -> exactly {gap, ingest, run} ──
-      this._clickTab('The room');
+      this._clickTab('Ask Avery');
       let runOk = false;
       try {
         await poll(() => ($('.nexus-followup-composer input') ? true : null), 6000, 'room composer to mount');
@@ -2478,7 +2479,7 @@
       const activeTab = $('.scene-tab.is-active');
       out.activeTabBackgroundColor = activeTab ? cs(activeTab).backgroundColor : null;
 
-      this._clickTab('Your team');
+      this._clickTab('Team');
       try {
         await poll(() => ($('.upload-panel') || $('.home-lane-people') ? true : null), 4000, 'team screen to settle');
       } catch (e) { /* fall through — uploadPanel probe reports null below */ }
@@ -2493,7 +2494,7 @@
       out.playbookTagBackgroundColor = tag ? cs(tag).backgroundColor : null;
       out.playbookTagColor = tag ? cs(tag).color : null;
 
-      this._clickTab('Your team'); // leave the page on a neutral default screen
+      this._clickTab('Team'); // leave the page on a neutral default screen
       return out;
     },
 
@@ -2672,7 +2673,7 @@
       // URL. src/lite's own UploadPanel doesn't render either. This phase checks what's real,
       // not an invented shape; call it AFTER a real or stub ingest (an empty upload-files block
       // is not tolerated here — unlike notesSurfaceV2, this phase is meant to run post-ingest).
-      this._clickTab('Your team');
+      this._clickTab('Team');
       try {
         await poll(() => ($('.upload-files') ? true : null), 8000, 'upload files list to mount');
       } catch (e) { /* fall through — assertions below report absence */ }
@@ -2947,7 +2948,7 @@
       const prevScene = prevShell ? prevShell.getAttribute('data-scene') : null;
       if (terminal) {
         store.setState({ run: { ...prevRun, status: 'complete' }, ask: terminal, askBusy: 'idle' });
-        this._clickTab('The room');
+        this._clickTab('Ask Avery');
         // TRAP #2 (cost this probe a second red herring): the run above already left a DRAFT
         // ask-card mounted, so polling for `.lite-ask-card` PRESENCE resolves on the first tick
         // and reads STALE DOM before React commits the setState — the probe then reports the old
