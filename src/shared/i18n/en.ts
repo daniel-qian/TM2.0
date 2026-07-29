@@ -577,6 +577,26 @@ export const en = {
       "Avery hasn't listed any files for this upload. If you just uploaded, give it a moment and refresh; if it stays empty, the files came back unreadable and uploading them again is the fix.",
     filesUploadTitle: 'Upload another batch',
 
+    // ── files-hub-0729/03 · team screen goes file-free, entry points get laid ────────────────
+    // The team screen used to carry the upload panel in BOTH states. Danny's ruling: 「团队和
+    // 项目应该只分析团队和项目」. Its empty state becomes a pointer instead of a second upload
+    // mouth. 🔴 The empty copy must not say the customer HAS no team — it says WE have not been
+    // given anything to read yet. Same absent≠none discipline as everywhere else.
+    // The v02 twin of `team.emptyBody`. That shared string says "drop a few files on the right",
+    // which is still TRUE in v01 (its team screen keeps the upload panel) and became FALSE in v02
+    // the moment the panel moved to the Files hub. Diverging here rather than editing the shared
+    // key is the whole reason lite2 has its own namespace.
+    teamEmptyLead:
+      'People and projects appear here once Avery has read a few of your files — a roster, a plan, some weekly notes. Nothing to configure.',
+    teamEmptyTitle: 'Nothing to read yet',
+    teamEmptyBody:
+      "Avery builds this screen out of files you send it — a roster, a plan, a few weekly notes. Nothing has come in yet, so there is no team to show. That is about what Avery has been given, not about your company.",
+    teamEmptyCta: 'Go to Files',
+    // Home keeps its upload card (a first-time visitor should not have to jump a screen to make
+    // their first move); these two links are the way back out to the hub.
+    homeFilesLink: 'Files',
+    homeFilesManageLink: 'Manage your files',
+
     // ── Topbar controls: language / look switches (open-loop-0720). URL param wins over the
     // remembered localStorage choice, which wins over the default — see
     // shared/i18n/localeStore.ts (language) and lite2/lookStore.ts (look). ──

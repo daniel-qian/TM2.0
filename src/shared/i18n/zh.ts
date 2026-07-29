@@ -503,6 +503,17 @@ export const zh: Dict = {
     "filesCurrentEmptyNone": "还没传过材料。在下面发几份给 Avery，团队就会长出来。",
     "filesCurrentEmptyRead": "这一批里 Avery 没列出任何文件。如果刚传完，等一会儿再刷新；要是一直是空的，多半是这些文件没读出内容，重新传一次是最快的解法。",
     "filesUploadTitle": "上传新一批",
+    // ⚠ HAND-WRITTEN（files-hub-0729/03）：团队屏零文件元素 + 入口铺设。
+    // 🔴 teamEmptyBody 说的是「我们还没拿到东西可读」，不是「你们没有团队」——
+    // absent≠none 在这一格的样子。
+    // teamEmptyLead = v02 版的 team.emptyBody。共用那句写的是「拖到右边」，v01 仍然为真
+    // （它的团队屏还留着上传口），v02 撤走之后就成了假话——所以在这儿分叉，不改共用键。
+    "teamEmptyLead": "等 Avery 读过你的几份文件——一份花名册、一份计划、几篇周报——人和项目就会出现在这里。什么也不用配置。",
+    "teamEmptyTitle": "还没有可读的材料",
+    "teamEmptyBody": "这一屏是 Avery 读你给它的文件长出来的——一份花名册、一份计划、几篇周报。现在还什么都没进来，所以没有团队可显示。这说的是 Avery 手上有什么，不是你们公司有什么。",
+    "teamEmptyCta": "去资料库",
+    "homeFilesLink": "资料库",
+    "homeFilesManageLink": "去资料库管理",
     "langSwitchAria": "语言",
     "langSwitchZh": "中文",
     "langSwitchEn": "英文",

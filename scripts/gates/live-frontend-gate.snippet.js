@@ -477,13 +477,17 @@
       // feat-057: in v02 the default landing is now `/home` (the aggregate entry). Its EMPTY
       // state mounts the UploadPanel, but the moment ingest succeeds `team` turns non-null and
       // Home swaps to the summary layout — the panel unmounts and the `.upload-ready` /
-      // `.upload-error` markers this function polls for never appear (a 360s false red). Your
-      // team renders the UploadPanel in BOTH branches, so drive the upload from there. Guarded
-      // on `.lite2-shell` so the v01 phases (which have their own topbar) are untouched.
+      // `.upload-error` markers this function polls for never appear (a 360s false red). So this
+      // must drive the upload from a screen that mounts the panel in BOTH states.
+      //
+      // files-hub-0729/03 (ADR-0032): that screen used to be "Team" — it no longer is. Team is
+      // now FILE-FREE (no upload mouth, no manifest); Files is the one surface that mounts the
+      // UploadPanel unconditionally, which is exactly the property this helper needs. Guarded on
+      // `.lite2-shell` so the v01 phases (which have their own topbar) are untouched.
       if ($('.lite2-shell')) {
-        this._clickTab('Team');
+        this._clickTab('Files');
         try {
-          await poll(() => ($('.upload-input') ? true : null), 4000, 'Your team upload panel to mount');
+          await poll(() => ($('.upload-input') ? true : null), 4000, 'Files hub upload panel to mount');
         } catch (e) { /* fall through — the null check below reports it */ }
       }
       const input = $('.upload-input');
@@ -2354,7 +2358,12 @@
       const emptyMarker = !!$('.lite-bell-empty');
 
       // ── 2) real stub ingest -> exactly {gap, ingest} ──
-      this._clickTab('Team');
+      // files-hub-0729/03 · 上传口已从 Team 搬到 Files（ADR-0032）。
+      // 🔴 这里原来是 `_clickTab('Team')`，而下面是 `if (upInput) {...}` —— 面搬走之后
+      // upInput 变成 null，整个 if 被跳过，`ingestOk` 一路留在 false，通知种类断言压根
+      // 到不了 ['gap','ingest','run']。那不会报错，只会给出一个**错的判决**：一道读起来
+      // 像超时的假绿/假红。改指 Files 的同时把这条记下来，免得下次搬面又踩一遍。
+      this._clickTab('Files');
       let ingestOk = false;
       const upInput = $('.upload-input');
       if (upInput) {
@@ -2518,9 +2527,12 @@
       const activeTab = $('.scene-tab.is-active');
       out.activeTabBackgroundColor = activeTab ? cs(activeTab).backgroundColor : null;
 
-      this._clickTab('Team');
+      // files-hub-0729/03 · `.upload-panel` 的圆角探针改在 Files 上读——Team 已经零文件元素
+      // （ADR-0032），在那儿读只会拿到 null，而 PAPER_BASELINE 里这一格有值 → 逐字节 diff 必红。
+      // 探的是**同一个组件的同一个属性**，只是它现在住在另一屏，所以基线值不变、判据不变。
+      this._clickTab('Files');
       try {
-        await poll(() => ($('.upload-panel') || $('.home-lane-people') ? true : null), 4000, 'team screen to settle');
+        await poll(() => ($('.upload-panel') ? true : null), 4000, 'files hub upload panel to settle');
       } catch (e) { /* fall through — uploadPanel probe reports null below */ }
       const uploadPanel = $('.upload-panel');
       out.uploadPanelBorderRadius = uploadPanel ? cs(uploadPanel).borderRadius : null;
@@ -2704,15 +2716,24 @@
     },
 
     async assertFilesSurfaceV2() {
-      // Phase filesSurfaceV2: Your team's UploadPanel renders a persistent "your files" list
-      // after ingest — one row per uploaded file, filename + a human-formatted size + n_chunks.
+      // Phase filesSurfaceV2: a persistent "your files" list renders after ingest — one row per
+      // uploaded file, filename + a human-formatted size + n_chunks.
+      //
+      // files-hub-0729 (ADR-0032): this list moved. It used to hang off the team screen's
+      // UploadPanel; it now lives on the Files hub, rendered by the shared `FileManifest`
+      // component (same DOM: `.upload-files` / `.upload-file-row` / `.upload-file-name` /
+      // `.upload-file-meta`, deliberately unchanged so this phase's selectors kept working).
+      // The team screen is now file-free, so clicking "Team" here would assert against a surface
+      // that structurally cannot have the list — a guaranteed red that says nothing.
+      //
       // NOTE (documented deviation — see progress.md): the ACTUAL ported LiveFileEntry contract
       // (src/lite/transport.ts, byte-identical here — feat-047 didn't touch it) carries idx/
-      // filename/size_bytes/mime/doc_kind/uploaded_at/n_chunks — no `status` field, no download
-      // URL. src/lite's own UploadPanel doesn't render either. This phase checks what's real,
-      // not an invented shape; call it AFTER a real or stub ingest (an empty upload-files block
-      // is not tolerated here — unlike notesSurfaceV2, this phase is meant to run post-ingest).
-      this._clickTab('Team');
+      // filename/size_bytes/mime/doc_kind/uploaded_at/n_chunks. `status` DID land later
+      // (07-19 fixB) and is rendered; the download seam landed in files-hub-0729/01. This phase
+      // still checks the three fields it was written for, not an invented shape; call it AFTER a
+      // real or stub ingest (an empty upload-files block is not tolerated here — unlike
+      // notesSurfaceV2, this phase is meant to run post-ingest).
+      this._clickTab('Files');
       try {
         await poll(() => ($('.upload-files') ? true : null), 8000, 'upload files list to mount');
       } catch (e) { /* fall through — assertions below report absence */ }

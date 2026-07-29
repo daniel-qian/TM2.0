@@ -114,7 +114,17 @@ async function driveShell({ label, url, storeSeam }) {
     `ingestStatus=${ingestStatus}`)
 
   await page.waitForTimeout(1500) // 给 refreshFiles() 的 GET 一点时间落地
-  await page.evaluate((seam) => window[seam].getState().goScreen('team'), storeSeam)
+  // files-hub-0729/03（ADR-0032）· 清单所在的屏**两张皮已经不一样了**：
+  //   · v02：团队屏零文件元素，清单搬进资料库屏 `/files`（渲染件是共享的 FileManifest，
+  //     `.upload-file-row` 那套类名一字未动，所以下面断言 2 的选择器一个都不用改）。
+  //   · v01：`src/lite` 一个字节没动，UploadPanel 仍在团队屏。
+  // 🔴 两张皮走同一个屏名 = 其中一张必然采不到样。这正是本门当初存在的理由的同族错误
+  //（"门只跑一张皮就看不见另一张皮上的同一个洞"），只不过这次差的是**屏**不是皮。
+  const manifestScreen = storeSeam === '__lite2Store' ? 'files' : 'team'
+  await page.evaluate(
+    ({ seam, screen }) => window[seam].getState().goScreen(screen),
+    { seam: storeSeam, screen: manifestScreen },
+  )
   await page.waitForTimeout(600)
 
   // ── 断言 1：manifest 里两份文件的 status 字段真的不同（派生层，证明后端确实吐了三态）────
@@ -161,7 +171,21 @@ async function driveShell({ label, url, storeSeam }) {
     badRow?.hint.includes('没能打开') || badRow?.hint.includes('编码') || false,
     `hint="${badRow?.hint}"`)
 
+  // ── 断言 4（提前取样）：readyLabel（上传面板头部「团队已就绪」）本身没有撒谎——它只是
+  // 一句总括，真正的诚实信号在上面的逐行状态里，这里只确认它没有被误改成别的谎话。
+  // 🔴 必须在**离开清单那一屏之前**取：它和 `.upload-file-row` 同住在 UploadPanel 里
+  //（v02 起那是资料库屏），下面断言 3 会把 v02 开回团队屏，那之后再取只能取到空串。
+  // 断言的顺序编号保持 3→4 不变（沿革索引），只是取样点提到了这里。────────────────────
+  const readyLabel = await page.evaluate(() => document.querySelector('.upload-ready-label')?.innerText ?? '')
+
   // ── 断言 3：headline 不能说「一切正常」而只字不提有文件没读进去 ───────────────────────
+  // 🔴 headline（`.home-greeting h1`）住在**团队屏**，和文件清单不再是同一屏（v02）。
+  // 上面为了断言 1/2 把 v02 开到了 `/files`，这里必须先回团队屏，否则读到的是空串——
+  // 那会是一条"因为没去对屏所以红"的假红，比不测更糟（它会让人以为 headline 真的哑了）。
+  if (manifestScreen !== 'team') {
+    await page.evaluate((seam) => window[seam].getState().goScreen('team'), storeSeam)
+    await page.waitForTimeout(600)
+  }
   const headline = await page.evaluate(() => document.querySelector('.home-greeting h1')?.innerText ?? '')
   console.log('  headline:', headline)
   rec(tag('headline 提到了文件数（读取了 N/M 份），不是只说人和项目'),
@@ -169,9 +193,6 @@ async function driveShell({ label, url, storeSeam }) {
   rec(tag('headline 里的 N/M 确实反映"没有全部读进去"（1/2，不是 2/2）'),
     headline.includes('1/2'), `headline="${headline}"`)
 
-  // ── 断言 4：readyLabel（上传面板头部「团队已就绪」）本身没有撒谎——它只是一句总括，
-  // 真正的诚实信号在下面的逐行状态里，这里只确认它没有被误改成别的谎话。──────────────
-  const readyLabel = await page.evaluate(() => document.querySelector('.upload-ready-label')?.innerText ?? '')
   rec(tag('upload 面板的 readyLabel 存在（本门不是在一个空面板上断言）'), readyLabel.length > 0, readyLabel)
 
   rec(tag('无 pageerror'), pageErrors.length === 0, pageErrors.slice(0, 2).join(' | ') || '0 条')

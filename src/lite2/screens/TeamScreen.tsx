@@ -12,7 +12,9 @@ import {
   type HandoffDisplay,
 } from '../../shared/handoffCopy'
 import { projectStatusText } from '../../shared/projectStatus'
-import { UploadPanel } from '../UploadPanel'
+// files-hub-0729/03 · UploadPanel 的 import 已删——本屏彻底零文件元素（ADR-0032）。
+import { Link } from 'react-router-dom'
+import { filesHref } from '../routes'
 import { InitialAvatar } from '../InitialAvatar'
 import { LiteComposer } from '../LiteComposer'
 import {
@@ -547,7 +549,14 @@ export function TeamScreen() {
               <header className="home-greeting lite-empty-greeting">
                 <p className="eyebrow">{t.lite2.emptyEyebrow}</p>
                 <h1>{t.team.emptyTitle}</h1>
-                <p className="home-greeting-sub">{t.team.emptyBody}</p>
+                {/* files-hub-0729/03 · 这里**不能**再用 `t.team.emptyBody`：那句话写的是
+                    「把几个文件拖到右边」，而右边的上传口本片已经撤走了——它会当场变成一句
+                    假话（本战役修的正是这一类）。
+                    🔴 但也不能就地改 `t.team.emptyBody`：那个键是 v01 与 v02 **共用**的
+                    （src/lite/screens/TeamScreen.tsx:219 也在读它），而 v01 一个字节没动、
+                    右边的上传口还在，那句话在 v01 里仍然是真的。改它等于为了修 v02 去把 v01
+                    弄错。lite2 有自己的命名空间正是为了这种分叉（kickoff-dev.md §6）。 */}
+                <p className="home-greeting-sub">{t.lite2.teamEmptyLead}</p>
                 {/* feat-050 · 会话不丢：有存下的 contextId 时，先说"正在取回"，别让人对着
                     上传引导以为数据没了。取不回来（且非 404）就一行说明 + 重试，不堆红字；
                     404 走干净空态（下面的默认分支）——context 真没了，上传引导就是诚实答案。 */}
@@ -578,10 +587,15 @@ export function TeamScreen() {
             )}
           </div>
 
-          {/* ── 右栏：空态 = 上传；上传后 = 双轨卡带（上传入口保留可加文件）── */}
+          {/* ── 右栏：空态 = 去资料库的引导；满态 = 双轨卡带 ──────────────────────────
+              files-hub-0729/03（ADR-0032）· 本屏**彻底零文件元素**。Danny 原话：
+              「团队和项目应该只分析团队和项目」。
+              🔴 顺带删掉了原来那句注释「上传入口保留可加文件」——它是**假话**：后端不支持
+              追加，`POST /ingest` 每次新铸 context，传旧 id 是重建并覆盖。在团队屏摆一个
+              上传口，等于邀请用户做一件会把当前这份换掉的事，还告诉他这是"加文件"。
+              上传、清单、下载、多库切换现在全在 /files。 */}
           {team ? (
             <div className="home-lanes">
-              <UploadPanel />
               <div className="home-lanes-head lite-team-head-row">
                 <p className="eyebrow">{t.lite2.peopleLane}</p>
                 {/* rich-align-0722/06：目录页头右端 primary「添加成员」→ 内联表单。只在有 context 时出。 */}
@@ -657,8 +671,17 @@ export function TeamScreen() {
               </div>
             </div>
           ) : (
+            // files-hub-0729/03 · 空态换引导卡：说清楚这里为什么是空的，并把人送去资料库。
+            // 🔴 不在这里放上传口（本屏零文件元素），也不假装"正在加载"——没有 team 就是
+            // 还没传过材料，说实话比转一个永远转不完的圈诚实。
             <div className="home-lanes home-lanes-live-empty">
-              <UploadPanel />
+              <div className="lite-team-empty-card">
+                <p className="lite-team-empty-title">{t.lite2.teamEmptyTitle}</p>
+                <p className="lite-team-empty-body">{t.lite2.teamEmptyBody}</p>
+                <Link className="lite-btn lite-btn--primary lite-team-empty-cta" to={filesHref()}>
+                  {t.lite2.teamEmptyCta}
+                </Link>
+              </div>
             </div>
           )}
         </div>

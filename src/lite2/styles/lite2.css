@@ -7611,3 +7611,51 @@
   color: var(--ink-faint, #8a8578);
   max-width: 62ch;
 }
+
+/* ── files-hub-0729/03 · 团队屏空态引导卡 + 首页去资料库的两条链接 ───────────────────────
+   团队屏右栏空态原来摆的是 UploadPanel；本战役把它换成一张"这里为什么是空的 + 去哪"的卡。
+   刻意不用 .nexus-empty 的垂直居中语法：那是给**整屏空**用的，这里只是双栏里的右栏空。 */
+.lite2-shell .lite-team-empty-card {
+  padding: 18px 20px;
+  border: 1px solid var(--rule, rgba(0, 0, 0, 0.1));
+  border-radius: 14px;
+  background: var(--paper-raised, transparent);
+  max-width: 46ch;
+}
+
+.lite2-shell .lite-team-empty-title {
+  margin: 0 0 6px;
+  font-family: var(--lite2-heading-font);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.lite2-shell .lite-team-empty-body {
+  margin: 0 0 14px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--ink-soft);
+}
+
+/* CTA 是 <Link>（真链接，可中键新开 / 可复制地址），所以要把 .lite-btn 的行内默认补齐
+   ——a 元素没有 button 的 line-height/居中默认值。 */
+.lite2-shell .lite-team-empty-cta {
+  display: inline-block;
+  text-decoration: none;
+}
+
+.lite2-shell .lite-home-files-link-row {
+  margin: 10px 0 0;
+}
+
+.lite2-shell .lite-home-files-link {
+  font-size: 12px;
+  color: var(--ink-soft);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.lite2-shell .lite-home-files-link:hover {
+  color: var(--ink);
+}

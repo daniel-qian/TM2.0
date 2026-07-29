@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { useLite } from '../store'
 import { useFlow, selectGapsActive, selectGapsResolved, selectGapsDismissed } from '../flowStore'
 import { useDict } from '../../shared/i18n/useDict'
+import { Link } from 'react-router-dom'
 import { UploadPanel } from '../UploadPanel'
+import { filesHref } from '../routes'
 import { InitialAvatar } from '../InitialAvatar'
 import { useAuth } from '../auth/authStore'
 import { useDemo } from '../demoStore'
@@ -187,7 +189,17 @@ export function HomeScreen() {
                     ) : null}
                   </div>
                 ) : null}
+                {/* files-hub-0729/03 · 首页骨架的上传卡**保留**（Danny 拍板）：首访者的
+                    第一个动作不该先跳一屏。卡底补一条去资料库的链接——上传之后"我传过什么、
+                    现在用的是哪一批"都在那儿。
+                    🔴 这里刻意不传 showFiles={false}：首页这份清单是首访者上传完的即时回执，
+                    与资料库屏不同屏，不会出现两个 .upload-files。 */}
                 <UploadPanel />
+                <p className="lite-home-files-link-row">
+                  <Link className="lite-home-files-link" to={filesHref()}>
+                    {t.lite2.homeFilesManageLink} →
+                  </Link>
+                </p>
                 <ul className="lite-empty-hints">
                   <li>{t.lite2.emptyHintRoster}</li>
                   <li>{t.lite2.emptyHintProject}</li>
@@ -227,6 +239,16 @@ export function HomeScreen() {
           <section className="lite-home-block lite-home-overview" aria-label={t.lite2.homeOverviewTitle}>
             <div className="lite-home-block-head">
               <h2>{t.lite2.homeOverviewTitle}</h2>
+              {/* files-hub-0729/03 · 「资料概览」标题行加去资料库的链接。照本屏其他区块
+                  `.lite-home-block-link` 的既有样式与写法（button + goScreen），不新造语法。
+                  这一块数的就是文件/笔记，点进去管理它们是最自然的下一步。 */}
+              <button
+                type="button"
+                className="lite-home-block-link"
+                onClick={() => goScreen('files')}
+              >
+                {t.lite2.homeFilesLink} →
+              </button>
             </div>
             {/* 每个数都是真数组的 length —— people/projects 来自 ingestion 回包，
                 files/notes 来自各自的持久化端点，跟进来自 flowStore 的未完成条目。 */}
