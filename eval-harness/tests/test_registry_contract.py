@@ -259,6 +259,49 @@ def test_source_documents_round_trip(impl, tmp_path):
     assert fresh.source_document_bytes(cid, 99) is None, "out-of-range idx must be None, not a crash"
 
 
+def test_manual_crud_does_not_destroy_the_uploaded_bytes(impl, tmp_path):
+    """files-hub-0729/01 · An UNRELATED write (add a project by hand) must not wipe the raw uploads.
+
+    The bug this pins: every manual-CRUD entry point is `get() -> mutate -> put()`
+    (registry.py add_project / patch_project / add_person / archive_*), and the postgres `get()`
+    deliberately does NOT pull the bytea (pg_registry.py, `content=None` — a multi-MB upload has no
+    business loading just to read a roster). So `put()` used to re-INSERT `content=None` right after
+    DELETEing the real rows: one "add a project" click permanently destroyed every original file the
+    customer uploaded, and `GET /team/{id}/files/{idx}` 404'd forever after while the manifest kept
+    listing the files with correct sizes.
+
+    Two things ride on this, and the second is the heavier one:
+      1. the file hub's per-file Download becomes a button that is visible, clickable and always
+         fails — precisely the 「不建假按钮」 red line, arriving through the back door;
+      2. the user's ORIGINAL uploads are gone, which is data loss independent of any UI.
+
+    Memory passes trivially (it hands back the same objects); postgres is the real subject. Both owe
+    the same contract, so the assertion lives in the shared section rather than under @needs_db —
+    a future third implementation inherits it automatically."""
+    src_docs = _sample_source_docs()
+    reg, cid, _ = _ingest(impl, tmp_path / "mem", source_documents=src_docs)
+    assert reg.source_document_bytes(cid, 0) == HANDBOOK.read_bytes(), "fixture precondition"
+
+    # The most ordinary write there is — nothing to do with files.
+    reg.add_project(cid, {"name": "Harbor refit", "status": "active"})
+
+    fresh = impl.fresh()
+    assert fresh.source_document_bytes(cid, 0) == HANDBOOK.read_bytes(), (
+        "a manual project write destroyed the first upload's bytes")
+    assert fresh.source_document_bytes(cid, 1) == ROSTER.read_bytes(), (
+        "a manual project write destroyed the second upload's bytes")
+    # The manifest must still agree with what is actually downloadable — a list that promises files
+    # the download seam cannot serve is the same lie in a different place.
+    got = fresh.get(cid)
+    assert [c["filename"] for c in got.file_cards()] == [HANDBOOK.name, ROSTER.name]
+
+    # And it must survive REPEATED writes, not just the first one (the round-trip re-reads what the
+    # previous put wrote back, so a fix that only works once would pass the assertion above).
+    reg.add_person(cid, {"name": "Wu Lei", "role": "Front office"})
+    assert impl.fresh().source_document_bytes(cid, 0) == HANDBOOK.read_bytes(), (
+        "the bytes survived one write but not two")
+
+
 def test_source_documents_absent_is_empty_manifest(impl, tmp_path):
     """A context ingested WITHOUT source_documents (the pre-032 path) has an empty file manifest and
     None bytes — never a crash. Backward-compatible with every existing ingest."""
@@ -409,6 +452,43 @@ def test_notes_switch_on_still_refuses_a_nul(impl, tmp_path, monkeypatch):
     with pytest.raises(ValueError, match="control character|NUL"):
         reg.append_note(cid, "a note with a\x00hidden nul", "a real question")
     assert reg.list_notes(cid) == [], "a NUL note must never land, switch on or off"
+
+
+# ==============================================================================================
+# OFFLINE GUARD — runs with NO database. See the 2026-07-23 lesson: `not needs_db` makes the whole
+# postgres layer invisible to the default suite, so a pg-only defect ships green and only surfaces
+# on a deploy. The behavioral proof of this invariant is
+# `test_manual_crud_does_not_destroy_the_uploaded_bytes` above (its postgres parametrization);
+# this guard exists so the *offline* suite still fails when someone deletes the fix.
+# ==============================================================================================
+
+def test_pg_put_restores_bytes_that_get_deliberately_dropped():
+    """files-hub-0729/01 · Structural pin on a two-method invariant that no single method owns.
+
+    `PostgresContextRegistry.get()` intentionally returns `content=None` (not loading multi-MB
+    uploads to read a roster). That is fine ONLY while `put()` compensates — otherwise the ordinary
+    `get -> mutate -> put` of every manual CRUD call silently destroys the customer's originals.
+
+    A source-level assertion is a poor substitute for behavior and is used here on purpose: the real
+    thing needs a live database, and this suite must stay runnable without one. If this ever fights
+    a legitimate refactor, the fix is to make the postgres behavioral test reachable — not to relax
+    this into nothing."""
+    import inspect
+    from avery.ingest.pg_registry import PostgresContextRegistry
+
+    get_src = inspect.getsource(PostgresContextRegistry.get)
+    assert "content=None" in get_src.replace(" ", ""), (
+        "get() no longer drops the bytea — re-check whether put()'s restore is still needed, and "
+        "update this guard deliberately rather than deleting it")
+
+    put_src = inspect.getsource(PostgresContextRegistry.put)
+    assert "prior_bytes" in put_src, (
+        "put() lost the prior-bytes restore: every manual CRUD write now NULLs avery.source_documents"
+        ".content, permanently destroying uploaded originals and turning the file hub's Download into"
+        " a button that always fails")
+    assert "sd.content is not None" in put_src, (
+        "put() must only FALL BACK to the stored bytes — overwriting caller-supplied content would "
+        "make a genuine re-ingest resurrect stale bytes")
 
 
 # ==============================================================================================

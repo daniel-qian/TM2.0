@@ -19,6 +19,7 @@ import { PlaybooksScreen } from './screens/PlaybooksScreen'
 import { VisionScreen } from './screens/VisionScreen'
 import { ProjectsScreen } from './screens/ProjectsScreen'
 import { HomeScreen } from './screens/HomeScreen'
+import { FilesScreen } from './screens/FilesScreen'
 import { PaperworkScreen } from './paperwork/PaperworkScreen'
 import { DetailOverlay } from './DetailOverlay'
 import { DraftComposer } from './DraftComposer'
@@ -143,6 +144,10 @@ function Lite2Shell() {
           <Route path={SCREEN_PATH.projects} element={<ScreenView />} />
           {/* feat-057 · 聚合入口屏（追加在既有屏路由末尾，上面一条都没动）。 */}
           <Route path={SCREEN_PATH.home} element={<ScreenView />} />
+          {/* files-hub-0729/01 · 资料库屏（追加，上面一条都没动）。
+              ⚠ 它是**真屏**（进 LiteScreen / 有 tab / 参与 data-scene），所以 element 照
+              规矩是 <ScreenView />，不像 /paperwork 那条独立页。 */}
+          <Route path={SCREEN_PATH.files} element={<ScreenView />} />
 
           {/* 深链：项目详情。底下垫的是**来源屏**（routes.ts 的 baseScreenFrom）。
               feat-055 落地后这里**依然**是 <ScreenView />，而不是换成 ProjectsScreen：
@@ -215,6 +220,7 @@ const SCREEN_COMPONENT: Record<LiteScreen, ComponentType> = {
   // feat-055：项目屏。追加在既有条目末尾（本批 feat-057 的 'home' 同样追加在这之后）。
   projects: ProjectsScreen,
   home: HomeScreen, // feat-057 · 聚合入口（追加，不动上面任何一条）
+  files: FilesScreen, // files-hub-0729/01 · 资料库（追加，不动上面任何一条）
 }
 
 // 所有屏路由共用的渲染位。屏组件由**底屏**决定（详情深链上 = 打开浮层时用户所在的那一屏），

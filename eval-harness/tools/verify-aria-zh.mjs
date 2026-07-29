@@ -41,7 +41,10 @@
 import { chromium } from 'playwright'
 
 const UI = process.env.VERIFY_BASE || 'http://127.0.0.1:5173'
-const V2_SCREENS = ['home', 'team', 'projects', 'room', 'followups', 'notes', 'closerlook', 'playbooks', 'vision']
+// files-hub-0729/01 · 'files' 追加在末尾：这个数组是「哪些屏会被采样」的唯一名单，
+// 漏掉一屏不会红、只会**永远不采样它**（假绿）。资料库屏是 t.upload.* 那 38 个键在
+// 07-29 之后唯一的落屏点（上传面板已从团队屏撤走），漏了等于整族文案无人扫。
+const V2_SCREENS = ['home', 'team', 'projects', 'room', 'followups', 'notes', 'closerlook', 'playbooks', 'vision', 'files']
 const V1_SCREENS = ['team', 'room', 'notes', 'playbooks', 'vision']
 
 // 白名单：品牌名 + 一条从 verify-zh-purity.mjs 继承来的、Danny 已经拍过板的产品腔调例外。

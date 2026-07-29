@@ -110,6 +110,15 @@ export const en = {
     // you?" and "what are you going to do with it?". Both go to /paperwork.
     paperworkFormsLink: 'Not sure what to send? Get the standard forms',
     paperworkPrivacyLink: 'How we handle what you upload',
+
+    // files-hub-0729/01 — per-file download. The endpoint has existed since feat-032; the
+    // front end never wired it up, so "here is what Avery read" was a list you could look at
+    // and nothing else. `downloadError` deliberately does NOT say the file is gone: the
+    // endpoint answers "no such file" and "you can't prove this is yours" with the same 404
+    // (feat-038 tenant isolation), so we say what we actually observed.
+    download: 'Download',
+    downloading: 'Downloading…',
+    downloadError: "Couldn't download that file just now. Try again.",
   },
 
   // ── Paperwork (partner-docs-0728) ─────────────────────────────────────────
@@ -548,6 +557,26 @@ export const en = {
     // (no fresh M3 call needed). Placed after Follow-ups in the topbar (LiteTopbar.tsx).
     tabNotes: "Avery's notes",
 
+    // ── files-hub-0729/01 (ADR-0032) · the Files hub — 10th screen, tail of the tab row ──────
+    // `tabVision` stays in this dict and the vision screen stays reachable; it simply moved off
+    // the tab row into the settings menu (same treatment /paperwork already has).
+    // ⚠ Adding this tab means updating assertV2Boots' expected array in the SAME commit.
+    tabFiles: 'Files',
+    filesEyebrow: 'Files',
+    // Page name: the zh side is 「资料库」, deliberately the same word family as the home
+    // screen's 「资料概览」 — one product, one word for the thing.
+    filesHeading: 'Files',
+    filesSub:
+      'Everything you have uploaded, and which batch Avery is reading right now. Files stay on the server; this page is how you look back at them.',
+    filesCurrentTitle: 'What Avery is reading now',
+    // 🔴 Two different empty states, because they mean different things to a user. Neither one
+    // is allowed to say "your files are gone" — see the switchErrorUnreadable note above for the
+    // same discipline: a 404 from this backend carries no existence information.
+    filesCurrentEmptyNone: 'Nothing uploaded yet. Send Avery a few files below and your team appears.',
+    filesCurrentEmptyRead:
+      "Avery hasn't listed any files for this upload. If you just uploaded, give it a moment and refresh; if it stays empty, the files came back unreadable and uploading them again is the fix.",
+    filesUploadTitle: 'Upload another batch',
+
     // ── Topbar controls: language / look switches (open-loop-0720). URL param wins over the
     // remembered localStorage choice, which wins over the default — see
     // shared/i18n/localeStore.ts (language) and lite2/lookStore.ts (look). ──
@@ -569,6 +598,10 @@ export const en = {
     // 语言与观感那两行，往末尾加一行不动它们的索引。
     settingsPaperworkLabel: 'Paperwork',
     settingsPaperworkLink: 'Forms and agreements',
+    // files-hub-0729/01 · 设置菜单第五行「完整版预告」——vision 从 tab 降到这里（ADR-0032）。
+    // 同样追加在既有行之后，nth 索引不动。
+    settingsVisionLabel: 'Roadmap',
+    settingsVisionLink: "What's coming",
 
     // ── Account panel (feat-053; 收编自 AuthPanel.tsx 的私有字典，07-20 Blockers 5a) ──
     //

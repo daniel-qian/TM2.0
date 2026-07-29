@@ -333,6 +333,10 @@ interface LiteState {
   // fixD 复核 · 新 finding 2：把某一份从名册上拿掉。**只有用户显式点了才允许调**——
   // 一次读失败（404）绝不许触发它，见 forgetKnownContext 上那段。
   forgetContext: (contextId: string) => void
+  // files-hub-0729/01 · 取回某一份原始文件的字节。**抛错不吞**——调用方（FileManifest 的
+  // 每一行各自持一份 pending/error）负责把失败说给用户看。这里只做 contextId 收口：
+  // 没有 contextId 就没有可下载的东西，压根不该有按钮（不建假按钮）。
+  downloadFile: (idx: number) => Promise<Blob>
   refreshTeam: () => Promise<void>
   refreshFiles: () => Promise<void>
   refreshNotes: () => Promise<void>
@@ -714,6 +718,20 @@ export const useLite = create<LiteState>((set, get) => ({
   forgetContext: (contextId) => {
     if (!contextId) return
     set({ knownContexts: forgetKnownContext(contextId), switchError: null })
+  },
+
+  // files-hub-0729/01 · 逐份下载。
+  //
+  // 🔴 刻意**不写任何 state**：下载是一次性动作，不是屏上的一份状态。每行自己的
+  // pending/error 活在 FileManifest 的组件局部（一行失败不该让另一行也变红），
+  // 而"这次取回了什么字节"根本不该进 store —— 文件内容是不可信的用户内容，
+  // 让它在全局 state 里躺着只会多一处可被误渲染的地方。
+  //
+  // 🔴 抛错不吞：切不过去要说、下不下来同样要说（同 switchContext 那条"绝不静默失败"）。
+  downloadFile: async (idx) => {
+    const { contextId, transport } = get()
+    if (!contextId) throw new Error('no context')
+    return await transport.downloadFile(contextId, idx)
   },
 
   // 下面三个 refresh 全部带同一道 `stillOn` 闸（fixD 复核 · 新 finding 1 的同族）：

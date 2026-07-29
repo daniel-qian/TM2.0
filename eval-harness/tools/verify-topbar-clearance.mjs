@@ -64,7 +64,10 @@ const SEED_DOC = [
   '',
 ].join('\n')
 
-const V2_SCREENS = ['home', 'team', 'projects', 'room', 'followups', 'notes', 'closerlook', 'playbooks', 'vision']
+// files-hub-0729/01 · 'files' 追加在末尾：这个数组是「哪些屏会被采样」的唯一名单，
+// 漏掉一屏不会红、只会**永远不采样它**（假绿）。资料库屏是 t.upload.* 那 38 个键在
+// 07-29 之后唯一的落屏点（上传面板已从团队屏撤走），漏了等于整族文案无人扫。
+const V2_SCREENS = ['home', 'team', 'projects', 'room', 'followups', 'notes', 'closerlook', 'playbooks', 'vision', 'files']
 
 // ── 扩容矩阵（2026-07-28）───────────────────────────────────────────────────────
 // 高度是主变量（盲维①）。选点理由：

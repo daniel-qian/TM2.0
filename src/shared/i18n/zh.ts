@@ -244,7 +244,14 @@ export const zh: Dict = {
     "switchErrorFailed": "刚才没连上服务器。什么都没丢，再试一次。",
     // partner-docs-0728 · 上传口旁边的两条链接（→ /paperwork）。M3 生成，2026-07-28。
     "paperworkFormsLink": "不知道该发什么？拿一份标准表单",
-    "paperworkPrivacyLink": "你上传的内容，我们怎么处理"
+    "paperworkPrivacyLink": "你上传的内容，我们怎么处理",
+    // ⚠ HAND-WRITTEN, NOT YET M3（files-hub-0729/01）：下载三键。按 PRD「en 源 → zh 导演手改，
+    // 短键先例」办（同 feat-032 的 filesTitle/filesChunks 那条先例）。
+    // 🔴 downloadError 刻意**不说「文件没了」**：这个端点把「没有这份」和「你证明不了这是你的」
+    // 编码成同一个 404（feat-038 租户隔离），前端一种都分不出来——同 switchErrorUnreadable 的纪律。
+    "download": "下载",
+    "downloading": "下载中…",
+    "downloadError": "这份文件刚才没能下下来，再试一次。"
   },
   // partner-docs-0728 ·「文件与表单」页。M3 生成，2026-07-28。
   // 🔴 langNote 在中文下是**有意的空串**：那句话说的是「文件正文只有中文、页面外壳不是」，
@@ -482,6 +489,20 @@ export const zh: Dict = {
     "tabFollowupsSub": "跟进",
     "tabCloserLook": "值得注意",
     "tabNotes": "Avery 的笔记",
+    // ⚠ HAND-WRITTEN, NOT YET M3（files-hub-0729/01 · ADR-0032）：资料库屏。按 PRD
+    // 「en 源 → zh 导演手改，短键先例」办。词族锁定见 scripts/i18n-zh-lite2-delta.mjs 的铁律 4：
+    // 文件这一族统一说「资料」——页名「资料库」与首页板块「资料概览」同词族，不混用
+    // 「文档/档案/文件库/知识库」。
+    // 🔴 filesCurrentEmptyRead 同样不许说「你的文件没了」：清单为空只说明我们没读到，
+    // 不等于客户那边没有（本轮总纪律 absent≠none）。
+    "tabFiles": "资料库",
+    "filesEyebrow": "资料库",
+    "filesHeading": "资料库",
+    "filesSub": "你传给 Avery 的材料都在这里，也能看到现在读的是哪一批。文件存在服务器上，这一页是你回头看它们的地方。",
+    "filesCurrentTitle": "当前资料",
+    "filesCurrentEmptyNone": "还没传过材料。在下面发几份给 Avery，团队就会长出来。",
+    "filesCurrentEmptyRead": "这一批里 Avery 没列出任何文件。如果刚传完，等一会儿再刷新；要是一直是空的，多半是这些文件没读出内容，重新传一次是最快的解法。",
+    "filesUploadTitle": "上传新一批",
     "langSwitchAria": "语言",
     "langSwitchZh": "中文",
     "langSwitchEn": "英文",
@@ -496,6 +517,11 @@ export const zh: Dict = {
     // partner-docs-0728 · 设置菜单第四行（追加在末尾，不动上面三行）。M3 生成，2026-07-28。
     "settingsPaperworkLabel": "文件与表单",
     "settingsPaperworkLink": "标准表单与协议",
+    // ⚠ HAND-WRITTEN（files-hub-0729/01 · ADR-0032）：设置菜单第五行——「完整版预告」从 tab
+    // 降到这里。link 文案与 tabVision 逐字相同（"完整版预告"），入口换了地方、叫法不换，
+    // 否则用户会以为是另一个页面。
+    "settingsVisionLabel": "完整版",
+    "settingsVisionLink": "完整版预告",
     "authSignIn": "登录",
     "authAccount": "账号",
     "authTitle": "账号",

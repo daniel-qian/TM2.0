@@ -33,6 +33,10 @@ export type LiteScreen =
   // feat-057（PRD G4）· 聚合入口屏。7 个分屏一个都没退休——聚合只是它们的门厅
   // （decisions.md Q2「两个都极端 → 结合」）。追加在末尾，不重排既有条目。
   | 'home'
+  // files-hub-0729/01（ADR-0032）· 资料库屏。追加在末尾，不重排既有条目。
+  // ⚠ 'vision' 仍在这个联合类型里：它只是**不再占 tab**（降进设置菜单），路由 / 屏组件 /
+  // data-scene 语义一个字没改。「不做 tab」和「不是屏」是两件事，别把它从这里删掉。
+  | 'files'
 
 export type LiteDetail = { kind: 'person' | 'project'; id: string } | null
 
@@ -51,6 +55,7 @@ export const SCREEN_PATH: Record<LiteScreen, string> = {
   // 两者不许分叉，改一个必须改另一个。
   projects: '/projects',
   home: '/home', // feat-057 · 聚合入口（追加，不动上面任何一条）
+  files: '/files', // files-hub-0729/01 · 资料库（追加，不动上面任何一条）
 }
 
 // 深链：人卡挂在「你的团队」下（`/team/:personId`）；项目详情是独立顶层段
@@ -73,6 +78,21 @@ export const PAPERWORK_PATH = '/paperwork'
 /** 站内链到「文件与表单」的 href（已带粘性 query）。别在组件里手拼。 */
 export function paperworkHref(): string {
   return `${PAPERWORK_PATH}${carrySearch()}`
+}
+
+// files-hub-0729/01（ADR-0032）· 资料库 tab 上线，「完整版预告」（vision）**降进设置菜单**。
+// 页面与路由原样保留、仍是 LiteScreen 的一员——变的只是"进得去的入口在哪"。
+//
+// 🔴 为什么给它一个 href 助手而不是让设置菜单调 goScreen('vision')：设置菜单里那一行照
+// `/paperwork` 的先例做成真链接（<Link>），而真链接必须带粘性 query，否则丢了 `?v=2`
+// 整个壳掉回 v01（本文件顶部「粘性 query」一节的同一条纪律）。别在组件里手拼路径。
+export function visionHref(): string {
+  return `${SCREEN_PATH.vision}${carrySearch()}`
+}
+
+/** 站内链到「资料库」的 href（已带粘性 query）。首页卡底 / 团队屏引导卡 CTA 都走它。 */
+export function filesHref(): string {
+  return `${SCREEN_PATH.files}${carrySearch()}`
 }
 
 // feat-057：默认落点从 'team' 改成 'home'（聚合入口）。理由与代价写在

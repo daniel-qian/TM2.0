@@ -474,6 +474,18 @@ export interface LiveTransport {
   // feat-047 移植：按 context_id 拉取「你的文件」清单（feat-032 file space；重启后仍在）。
   fetchFiles: (contextId: string) => Promise<LiveFilesPayload>
 
+  // files-hub-0729/01 · 取回某一份原始文件的字节（`GET /team/{id}/files/{idx}`，feat-032 起
+  // 就在后端，前端从未接过）。
+  //
+  // 🔴 为什么必须走 transport 拿 Blob，而不是给一行 `<a href="…/files/0" download>`：
+  // 这个端点吃 **owner_token header**（feat-038 租户隔离，缺/错一律 404），而 `<a href>`
+  // 发的是一次浏览器裸导航——带不上任何自定义 header。裸链接的结果不是"下载失败"，是
+  // **一个看起来能点、点了必 404 的假按钮**，正是本战役的红线所禁。
+  //
+  // 🔴 返回 Blob 而不是直接触发下载：副作用留给调用方（objectURL 的建/撤要成对，见
+  // FileManifest 的 downloadOne），transport 只管"把字节取回来"。
+  downloadFile: (contextId: string, idx: number) => Promise<Blob>
+
   // feat-047 移植：按 context_id 拉取「Avery's notes」累积笔记（feat-033；只读、新→旧、重启后仍在）。
   fetchNotes: (contextId: string) => Promise<LiveNotesPayload>
 
@@ -1033,6 +1045,21 @@ export function createHttpTransport(base: string = apiBase()): LiveTransport {
       })
       if (!res.ok) throw transportError('files', res)
       return (await res.json()) as LiveFilesPayload
+    },
+
+    // files-hub-0729/01 · 逐份下载。同 fetchFiles 的 header-only owner_token 纪律；
+    // 后端以 `Content-Disposition: attachment` + `X-Content-Type-Options: nosniff` 发
+    // application/octet-stream（bytes 是完全不可信的用户内容，浏览器绝不许内联渲染）。
+    // 这里只把字节收成 Blob —— 文件名不从响应头里抠，用清单里那一份（同一个 filename，
+    // 且已经在 UI 上给用户看过；抠 header 反而多一条要防注入的路径）。
+    async downloadFile(contextId, idx) {
+      const res = await send(
+        'file download',
+        `${base}/team/${encodeURIComponent(contextId)}/files/${encodeURIComponent(String(idx))}`,
+        { headers: authHeader(contextId) },
+      )
+      if (!res.ok) throw transportError('file download', res)
+      return await res.blob()
     },
 
     // feat-047 移植：按 context_id 拉取「Avery's notes」累积笔记——同上 header-only 纪律。

@@ -311,6 +311,21 @@ export function createStubTransport(): LiveTransport {
       return { context_id: STUB_CONTEXT_ID, files: stubFiles }
     },
 
+    // files-hub-0729/01 · 逐份下载。stub **不留原始字节**（上传时只记了元数据），所以这里
+    // 发的是一份写明"这是 stub"的占位内容，而不是假装把用户的文件还给他。
+    // 🔴 越界 idx 照真后端一样大声 404（feat-028 纪律）——门要能验到"点不该点的会被拒"，
+    // 静默返回空 Blob 会让那条断言永远绿。
+    async downloadFile(contextId, idx) {
+      if (!ingested || contextId !== STUB_CONTEXT_ID) throw new Error('file download HTTP 404 (stub)')
+      if (!Number.isInteger(idx) || idx < 0 || idx >= stubFiles.length) {
+        throw new Error('file download HTTP 404 (stub)')
+      }
+      const name = stubFiles[idx]?.filename ?? 'download'
+      return new Blob([`stub transport: original bytes for ${name} are not retained.\n`], {
+        type: 'application/octet-stream',
+      })
+    },
+
     // feat-047 移植（feat-033）：新→旧；advise 每落定一次多一条（与真后端写侧同节奏）。
     async fetchNotes(contextId) {
       if (!ingested || contextId !== STUB_CONTEXT_ID) throw new Error('notes HTTP 404 (stub)')

@@ -307,6 +307,33 @@ class PostgresContextRegistry(ProjectWriteMixin):
                 "  owner_token = EXCLUDED.owner_token, updated_at = now()",
                 (ctx.context_id, ctx.name, Jsonb(list(ctx.source_files)),
                  (ctx.owner_token or None)))
+            # files-hub-0729/01 · 🔴 保住已存的原始字节，别让一次无关的写把它们抹掉。
+            #
+            # 病灶（真 bug，不是假设）：`get()` 读回 SourceDocument 时**刻意不拉 bytea**
+            # （见本文件 :417-421 `content=None`，理由与 clone_context 的注释 :436 同源——
+            # 一份几 MB 的上传不该为了读一次名册整个进内存）。而所有手编 CRUD 都是
+            # `get() → 改 → put()`（registry.py:190-238 的 add_project/patch_project/
+            # add_person/archive_* 全部如此）。于是一次「加一个项目」就会带着一整批
+            # `content=None` 的 SourceDocument 走到下面那条 INSERT——DELETE 已经把真字节
+            # 删了，再 INSERT 回去的是 NULL。
+            #
+            # 后果有两层，第二层更重：
+            #   ① `GET /team/{id}/files/{idx}` 从此永远 404（"file content is not available"），
+            #      清单却照样列着文件、size_bytes 还是对的 —— 资料库屏那个「下载」会变成一个
+            #      看得见、点得动、必然失败的按钮，正是本战役「不建假按钮」红线所禁。
+            #   ② 用户上传的**原件被永久销毁**。这一层与 UI 无关，改造前就在生产上成立。
+            #
+            # 修法：DELETE 之前先把这批 (source_key/filename → content) 捞在手里，INSERT 时
+            # 只对 `sd.content is None` 的那些回填。
+            # 🔴 只回填 None，绝不覆盖调用方明确给出的字节：一次真 ingest 带的是真 content，
+            # 那时这张表压根不该说话（新 ingest 本就是新 context_id，捞出来是空的）。
+            prior_bytes: dict[str, bytes] = {}
+            for key, blob in conn.execute(
+                    "SELECT COALESCE(source_key, filename), content FROM avery.source_documents "
+                    "WHERE context_id = %s AND content IS NOT NULL", (ctx.context_id,)).fetchall():
+                if key is not None and blob is not None:
+                    prior_bytes[key] = bytes(blob)
+
             # re-put = replace: a context is one atomic snapshot, never a merge of two ingests.
             conn.execute("DELETE FROM avery.entities WHERE context_id = %s", (ctx.context_id,))
             conn.execute("DELETE FROM avery.materials WHERE context_id = %s", (ctx.context_id,))
@@ -346,7 +373,12 @@ class PostgresContextRegistry(ProjectWriteMixin):
                     "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, "
                     "        COALESCE(%s::timestamptz, now()))",
                     [(ctx.context_id, i, sd.filename, sd.source_key, sd.mime, sd.size_bytes,
-                      sd.doc_kind, sd.status, sd.content, sd.storage_ref, sd.uploaded_at or None)
+                      sd.doc_kind, sd.status,
+                      # files-hub-0729/01 · 见上面 prior_bytes 那段：调用方给了字节就用它的，
+                      # 没给（get→put 往返，content 恒为 None）才回填这一份原有的。
+                      sd.content if sd.content is not None
+                      else prior_bytes.get(sd.source_key or sd.filename),
+                      sd.storage_ref, sd.uploaded_at or None)
                      for i, sd in enumerate(ctx.source_documents)])
         return ctx.context_id
 

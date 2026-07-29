@@ -26,7 +26,10 @@
 import { chromium } from 'playwright'
 
 const UI = process.env.VERIFY_BASE || 'http://127.0.0.1:5173'
-const V2_SCREENS = ['home', 'team', 'projects', 'room', 'followups', 'notes', 'closerlook', 'playbooks', 'vision']
+// files-hub-0729/01 · 'files' 追加在末尾：这个数组是「哪些屏会被采样」的唯一名单，
+// 漏掉一屏不会红、只会**永远不采样它**（假绿）。资料库屏是 t.upload.* 那 38 个键在
+// 07-29 之后唯一的落屏点（上传面板已从团队屏撤走），漏了等于整族文案无人扫。
+const V2_SCREENS = ['home', 'team', 'projects', 'room', 'followups', 'notes', 'closerlook', 'playbooks', 'vision', 'files']
 
 // 允许出现的拉丁串：品牌名 / 文件格式专名 / 单位。命中这些的不计入。
 // 对抗复审 fixA1：找回 07-19 fixB 的上传清单状态渲染后，「支持哪些格式」那句补充说明

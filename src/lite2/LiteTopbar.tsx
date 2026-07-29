@@ -5,7 +5,7 @@ import { useDict } from '../shared/i18n/useDict'
 import { useLocaleStore } from '../shared/i18n/localeStore'
 import type { Locale } from '../shared/i18n'
 import { useLite, type LiteScreen } from './store'
-import { paperworkHref, useCurrentScreen } from './routes'
+import { paperworkHref, visionHref, useCurrentScreen } from './routes'
 import { showModeSwitch, type AveryMode } from '../shared/mode'
 import { useLook } from './lookStore'
 import type { LiteLook } from './look'
@@ -114,7 +114,16 @@ export function LiteTopbar() {
     { label: t.lite2.tabNotes, screen: 'notes' },
     { label: t.lite2.tabCloserLook, screen: 'closerlook' },
     { label: t.lite2.tabPlaybooks, screen: 'playbooks' },
-    { label: t.lite2.tabVision, screen: 'vision' },
+    // files-hub-0729/01（ADR-0032）· tab 换防：「资料库 / Files」进队尾，「完整版预告」
+    // （vision）出 tabs 数组、降进下面的设置菜单。净效果是 tab 数从 9 回到 9 —— 加一个、
+    // 减一个，窄屏溢出的压力没有变差（uiux-narrow-0728 那条 bug 的射程不变）。
+    //
+    // 🔴 为什么 vision 可以下、七个分屏不可以：feat-057 的裁定原文是「聚合与分屏两极都要，
+    // 7 个分屏一个都没退休」，指的是 team/room/followups/notes/closerlook/playbooks/projects
+    // 这七屏。vision 是 feat-026 的**叙事页**，从来不在那七个里面 —— 把它的 tab 收进设置
+    // 菜单不触碰那条裁定。而且它的路由、屏组件、data-scene 一个字没改，只是入口换了地方
+    //（同 /paperwork 的待遇）。
+    { label: t.lite2.tabFiles, screen: 'files' },
   ]
 
   const switchMode = (next: AveryMode) => {
@@ -252,6 +261,23 @@ export function LiteTopbar() {
                 onClick={closeSettings}
               >
                 {t.lite2.settingsPaperworkLink}
+              </Link>
+            </div>
+            {/* files-hub-0729/01 ·「完整版预告」（vision）从 tab 降进设置菜单，照
+                `/paperwork` 那一行的样式与写法。插在 paperwork 之后、「重新开始」之前，
+                理由与 paperwork 那条完全相同：verify-switchers / verify-auth-form 按
+                `.nth(0/1)` 索引语言与观感两行，往它们**之后**插不动那两个索引；而
+                「重新开始」靠 `.lite-settings-restart` 类名找、不吃 nth，往后推一位安全。
+                🔴 用 <Link>+visionHref()（带粘性 query）。vision 的路由与页面一个字没改，
+                变的只是入口在哪。 */}
+            <div className="lite-settings-row lite-settings-row--vision">
+              <span className="lite-settings-row-label">{t.lite2.settingsVisionLabel}</span>
+              <Link
+                className="lite-settings-vision-link"
+                to={visionHref()}
+                onClick={closeSettings}
+              >
+                {t.lite2.settingsVisionLink}
               </Link>
             </div>
             {/* rich-align-0722/09 · 「重新开始」：清 lite2:* 全量（含语言/观感）+ 忘光

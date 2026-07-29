@@ -671,6 +671,27 @@
       return !!tab;
     },
 
+    // files-hub-0729/01 · SPA navigation to a screen that has NO tab.
+    //
+    // Why this exists: "What's coming" (vision) left the tab row for the settings menu
+    // (ADR-0032), so `_clickTab("What's coming")` can no longer reach it. A full page load
+    // (`location.assign`) is NOT an option here — it would tear down this injected snippet and
+    // every phase result collected so far.
+    //
+    // pushState + a synthetic popstate is what react-router's BrowserRouter listens to, so this
+    // is a real in-app navigation with no reload. 🔴 `window.location.search` is carried
+    // verbatim: dropping `?v=2` drops the whole v02 shell back to v01 (routes.ts's sticky-query
+    // rule applies to the gate exactly as it applies to product code).
+    _gotoPath(pathname) {
+      try {
+        window.history.pushState({}, '', `${pathname}${window.location.search}`);
+        window.dispatchEvent(new PopStateEvent('popstate', { state: {} }));
+        return true;
+      } catch (e) {
+        return false;
+      }
+    },
+
     async assertTeamGrouped() {
       // Phase G (feat-025 Q2): the People lane must render as grouped, collapsible containers
       // (group blocks + group heads with titles + a toggle) — NOT a flat card grid. The person
@@ -807,14 +828,21 @@
       //     carries a .lite-vision-tag marker — zero unlabeled mock cards.
       //  Red line (same as everywhere): if a mock shows an example PERSON, that person carries
       //  ZERO numbers/score/rank. And the story-noun blacklist stays 0 on this surface.
-      // The Vision tab's visible label is product copy ("Where this goes"), not "Vision" — click
-      // by that label, with a fallback that clicks whichever tab mounts the .lite-vision screen.
-      if (!this._clickTab("What's coming")) {
-        for (const tab of $$('.scene-tabs .scene-tab')) {
-          tab.click();
-          if ($('.lite-vision')) break;
-        }
-      }
+      // files-hub-0729/01 (ADR-0032) · Vision NO LONGER HAS A TAB. It moved into the settings
+      // menu, the same treatment /paperwork already had; route + screen + data-scene unchanged.
+      //
+      // Primary path is the REAL user path — open the settings menu and click the link — so this
+      // phase now also proves the new entry actually reaches the page (a tab-swap that quietly
+      // stranded the vision screen would otherwise pass unnoticed: the phase would just navigate
+      // there by URL and never touch the menu).
+      // Fallback is an in-app pushState to /vision, which keeps this phase meaningful even if the
+      // menu markup is mid-refactor. 🔴 Neither path reloads: a reload would tear down this
+      // injected snippet and every result collected before it.
+      const settingsToggle = $('.lite-settings-toggle');
+      if (settingsToggle) settingsToggle.click();
+      const visionLink = $('.lite-settings-vision-link');
+      if (visionLink) visionLink.click();
+      else this._gotoPath('/vision');
       try {
         await poll(() => ($('.lite-vision') ? true : null), 8000, 'vision surface to mount');
       } catch (e) { /* fall through — assertions below report absence */ }
@@ -1360,11 +1388,11 @@
     // arguments rather than driving everything in-page. The driver session's job: navigate,
     // re-inject this snippet each time, call the matching phase, and carry the JSON forward.
     async assertV2Boots() {
-      // Phase v2Boots: `?v=2&mode=live` must render the .lite2-shell root with all 8 tabs
+      // Phase v2Boots: `?v=2&mode=live` must render the .lite2-shell root with all 9 tabs
       // Tab order = feat-057's aggregate entry + PRD order + feat-047's "Avery's notes"
-      // + feat-055's "Projects":
+      // + feat-055's "Projects" + files-hub-0729's "Files":
       //   Today · Team · Projects · Ask Avery · To-do list/Follow-ups · Avery's notes ·
-      //   Worth noting · Playbooks · What's coming   (0729 大白话命名，ADR-0031)
+      //   Worth noting · Playbooks · Files   (0729 大白话命名 ADR-0031 + 资料库 ADR-0032)
       //
       // "Avery's notes" was ported from `lite` and placed after Follow-ups per feat-047's
       // tab-order decision (see progress.md).
@@ -1372,9 +1400,19 @@
       // screen — an entry placed at the tail is not an entry. 🔴 The 7 detail screens did NOT
       // retire; Danny's ruling was "aggregate AND split, both extremes". If a future line
       // removes one of the seven, that is a regression, not a contract update.
+      //   ⚠ Clarification (files-hub-0729/01, ADR-0032) — read this before citing the ruling
+      //   above: the seven are team / room / followups / notes / closerlook / playbooks /
+      //   projects. "What's coming" (vision) was NEVER one of them — it is feat-026's
+      //   NARRATIVE page. It left the tab row in files-hub-0729/01 and now lives in the
+      //   settings menu (the treatment /paperwork already had); its route, screen component
+      //   and data-scene are byte-identical. So a 9-tab row WITHOUT "What's coming" does not
+      //   contradict feat-057. Removing one of the seven still would.
       // "Projects" sits at index 2 (feat-055): the projects screen and the team screen are the
       // two halves of the same upload (people / projects), so it rides next to "Your team"
       // rather than at the tail.
+      // "Files" (files-hub-0729/01) sits at the TAIL: it is where uploads, the file manifest
+      // and multi-upload switching moved to, and it is a management surface — not a place the
+      // manager starts their day, so it does not compete for a front slot.
       //
       // ⚠ The expected array below is the SINGLE SOURCE OF TRUTH for tab order in this gate.
       // Any line that adds/removes/reorders a tab in src/lite2/LiteTopbar.tsx MUST update this
@@ -1393,7 +1431,7 @@
       const tabs = tabBtns.map((b) => ((b.querySelector('.scene-tab-main') || b).textContent || '').trim());
       const subs = tabBtns.map((b) => { const s = b.querySelector('.scene-tab-sub'); return s ? (s.textContent || '').trim() : null; });
       // 0729 大白话命名（ADR-0031，Danny 审字）：5 个主名换企业大白话；home 副小字取消。
-      const expected = ['Today', 'Team', 'Projects', 'Ask Avery', 'To-do list', "Avery's notes", 'Worth noting', 'Playbooks', "What's coming"];
+      const expected = ['Today', 'Team', 'Projects', 'Ask Avery', 'To-do list', "Avery's notes", 'Worth noting', 'Playbooks', 'Files'];
       const expectedSubs = [null, null, null, null, 'Follow-ups', null, null, null, null];
       const out = {
         shellPresent: !!shell,

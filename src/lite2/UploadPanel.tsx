@@ -4,6 +4,7 @@ import { paperworkHref } from './routes'
 import { useLite } from './store'
 import { useDict } from '../shared/i18n/useDict'
 import { clearIngestStart, useIngestElapsedSeconds } from '../shared/ingestClock'
+import { FileManifest } from './FileManifest'
 
 // feat-017 · 上传 UI——ADR-0020 决策 2 / 施工图 §2 表 #1；feat-024 随 lite 壳入墙。
 //
@@ -17,15 +18,6 @@ function classNames(parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(' ')
 }
 
-// feat-047 移植（feat-032）：人类可读的文件大小（清单里 size_bytes 的展示）。纯展示，无逻辑分支。
-function formatBytes(bytes: number): string {
-  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B'
-  const units = ['B', 'KB', 'MB', 'GB']
-  const i = Math.min(units.length - 1, Math.floor(Math.log(bytes) / Math.log(1024)))
-  const value = bytes / 1024 ** i
-  return `${i === 0 ? value : value.toFixed(1)} ${units[i]}`
-}
-
 // 对抗复审 fixB1（找回 07-19 fixB/M3）· accept 必须与后端 guards.SUPPORTED_EXTS 一致。
 //
 // 这里曾经多列了 `.doc` 和 `.xls`——后端从来不支持这两个。后果不是"少一种格式"，是**用户能在
@@ -35,61 +27,11 @@ function formatBytes(bytes: number): string {
 // 🔴 改这一行时同步 eval-harness/avery/ingest/guards.py::SUPPORTED_EXTS，两边必须一致。
 const ACCEPT = '.pdf,.docx,.xlsx,.csv,.tsv,.md,.markdown,.txt'
 
-// 对抗复审 fixB1（找回 07-19 fixB/M4）· 每份文件"读没读进去"的展示口径。
-//
-// 后端 registry.SourceDocument.status 发 'ingested' / 'empty' / 'failed'——前端此前既没有这个
-// 字段也不显示，于是一份扫描版 PDF（一个字没抽出来）和一份读全了的花名册在清单里长得一模一样，
-// 头部还照样说「团队已就绪」。这条渲染 07-19 就修过一次，07-19 深夜的一次合并冲突按"整份取
-// ours"解决时被悄悄丢回了这个没有状态的版本——见 git show 6f838f3 / a45bb4a 与
-// 3106536（丢弃点）。
-// 🔴 缺席不等于成功：老后端 / stub transport 不发这个键，那种情况显示「状态未知」，
-// 绝不默认渲染成「已读取」。这就是本轮的总纪律在这一格里的样子——
-// 「我没读到」和「客户说没有」是两件事，永远不许混。
-type FileStatusView = {
-  labelKey: 'fileStatusIngested' | 'fileStatusEmpty' | 'fileStatusFailed' | 'fileStatusUnknown'
-  hintKey: 'fileStatusEmptyHint' | 'fileStatusFailedHint' | null
-  tone: 'ok' | 'warn' | 'bad' | 'unknown'
-}
-
-function fileStatusView(status: string | undefined): FileStatusView {
-  switch (status) {
-    case 'ingested':
-      return { labelKey: 'fileStatusIngested', hintKey: null, tone: 'ok' }
-    case 'empty':
-      return { labelKey: 'fileStatusEmpty', hintKey: 'fileStatusEmptyHint', tone: 'warn' }
-    case 'failed':
-      return { labelKey: 'fileStatusFailed', hintKey: 'fileStatusFailedHint', tone: 'bad' }
-    default:
-      return { labelKey: 'fileStatusUnknown', hintKey: null, tone: 'unknown' }
-  }
-}
-
-// 状态色。刻意内联而不进 CSS 文件（同 07-19 fixB 收口的取舍）：本轮的文件边界不含样式表，
-// 而一个**看不见的**状态徽章等于没修这条 finding。后续可把这些搬进 lite2 的样式层，行为
-// 不依赖它。
-// UIUX 棒 2026-07-20 · ok/warn 换小字深色调（--*-text，见 look-*.css）：13px 的「已读取」
-// 用装饰亮度的 sage/honey 只有 3.9–4.5:1，不够 AA 小字。取不到 text token 时逐级回落。
-const STATUS_TONE_COLOR: Record<FileStatusView['tone'], string> = {
-  ok: 'var(--sage-text, var(--sage, #4a7c59))',
-  warn: 'var(--honey-text, var(--honey, #b8860b))',
-  bad: 'var(--alert, #b3261e)',
-  unknown: 'var(--ink-faint, #8a8578)',
-}
-
-// 07-19 fixB 收口的版式修正一并找回：accepted 三行合并、文件行换行——原因见当时的注释
-// （真机实测：新元素落在浏览器默认 16px 全墨字 + 16px 下边距，失败行的文件名被压成两行）。
+// 07-19 fixB 收口的版式修正：accepted 三行合并——原因见当时的注释（真机实测：新元素落在
+// 浏览器默认 16px 全墨字 + 16px 下边距）。
+// files-hub-0729/01：文件行那几条样式常量与状态徽章逻辑随渲染一起搬进 FileManifest.tsx，
+// 本文件只留 dropzone 自己的版式。
 const ACCEPTED_LINE_STYLE: CSSProperties = { display: 'block', marginTop: '2px' }
-const FILE_ROW_STYLE: CSSProperties = { flexWrap: 'wrap' }
-// minWidth:0 是必须的——flex item 的默认 min-width:auto 会拒绝收缩到内容宽度以下，
-// 但 .upload-file-name 有 word-break:break-word，于是它改为把中文文件名逐字折行。
-const FILE_NAME_STYLE: CSSProperties = { flex: '1 1 auto', minWidth: 0 }
-const FILE_STATUS_STYLE: CSSProperties = { flex: 'none', whiteSpace: 'nowrap' }
-const FILE_HINT_STYLE: CSSProperties = {
-  flexBasis: '100%',      // 独占一行：hint 是一句话，不是一个能塞进标题行的徽章
-  fontSize: '11px',
-  lineHeight: 1.45,
-  color: 'var(--ink-faint, #8a8578)',
-}
 
 // feat-068 · 模板填充（与 OnboardWizard 的同名 helper 同形；这里只用于秒表文案）。
 function fill(template: string, vars: Record<string, string | number>): string {
@@ -108,13 +50,24 @@ function fill(template: string, vars: Record<string, string | number>): string {
 // UploadPanel 与 OnboardWizard.StepUpload 从此读同一个起点：两边显示的秒数一致，且都是真值。
 // 这一处**刻意不再按 v01→v02 惯例各留一份**——两个壳要的正是同一个时间锚。
 
-export function UploadPanel() {
+type UploadPanelProps = {
+  /**
+   * files-hub-0729/01 · 底下那份「你的文件」清单渲不渲染。默认渲染（首页骨架卡、引导闸
+   * 之外的既有用法一字不变）。
+   *
+   * 🔴 资料库屏传 `false`：那一屏在上传口**上方**已经有一份带下载列的清单，两处都渲染就是
+   * 两个 `.upload-files` —— 门按类名全局取样（filesSurfaceV2 数 `.upload-file-row`），
+   * 会数出双倍行数。这不是样式偏好，是断言正确性。
+   */
+  showFiles?: boolean
+}
+
+export function UploadPanel({ showFiles = true }: UploadPanelProps = {}) {
   const { t } = useDict()
   const uploadFiles = useLite((s) => s.uploadFiles)
   const status = useLite((s) => s.ingestStatus)
   const error = useLite((s) => s.ingestError)
   const team = useLite((s) => s.team)
-  const files = useLite((s) => s.files)
   const inputRef = useRef<HTMLInputElement | null>(null)
   const [dragOver, setDragOver] = useState(false)
 
@@ -268,46 +221,11 @@ export function UploadPanel() {
       </div>
 
       {/* feat-047 移植（feat-032）·「你的文件」持久清单——回看上传过哪些材料、Avery 的记忆
-          基于什么。🔴 文件名/元数据是不可信内容：只展示，绝不当指令跑。人卡红线不涉——这里没有人。 */}
-      {files.length > 0 ? (
-        <div className="upload-files" aria-label={t.upload.filesTitle}>
-          <p className="upload-files-title">{t.upload.filesTitle}</p>
-          <ul className="upload-files-list">
-            {files.map((file) => {
-              const view = fileStatusView(file.status)
-              return (
-                <li
-                  key={file.idx}
-                  className="upload-file-row"
-                  data-status={file.status ?? 'unknown'}
-                  style={FILE_ROW_STYLE}
-                >
-                  <span className="upload-file-name" style={FILE_NAME_STYLE}>
-                    {file.filename}
-                  </span>
-                  <span className="upload-file-meta">
-                    {formatBytes(file.size_bytes)} · {file.n_chunks} {t.upload.filesChunks}
-                  </span>
-                  {/* fixB1/M4 · 每一行都表态，包括成功的那些——只给失败的加标记，用户就得靠
-                      "没有标记" 反推 "读进去了"，那仍然是让人猜。 */}
-                  <span
-                    className="upload-file-status"
-                    data-tone={view.tone}
-                    style={{ ...FILE_STATUS_STYLE, color: STATUS_TONE_COLOR[view.tone] }}
-                  >
-                    {t.upload[view.labelKey]}
-                  </span>
-                  {view.hintKey ? (
-                    <span className="upload-file-status-hint" style={FILE_HINT_STYLE}>
-                      {t.upload[view.hintKey]}
-                    </span>
-                  ) : null}
-                </li>
-              )
-            })}
-          </ul>
-        </div>
-      ) : null}
+          基于什么。files-hub-0729/01：渲染搬进共享件 FileManifest（资料库屏的「当前资料」
+          用的是同一个组件，多带一个下载列）。DOM 形状与类名一个字节没动。
+          🔴 `showFiles={false}` 是给资料库屏用的：那一屏在上传口**上方**已经有一份清单了，
+          这里再渲染一遍会出现两个 `.upload-files`，门按类名全局取样会数出双倍行数。 */}
+      {showFiles ? <FileManifest /> : null}
 
       <p className="upload-privacy-note">{t.upload.privacyNote}</p>
 

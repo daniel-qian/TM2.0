@@ -7422,3 +7422,105 @@
 .lite-onboard-upload-forms {
   margin: 10px 0 0;
 }
+
+/* ── files-hub-0729/01 ·「资料库 / Files」屏（ADR-0032）────────────────────────────────────
+   第十个 tab 屏。全部走既有 token，不新增变量——两张皮（paper / aurora）因此自动跟随，
+   本段不需要各写一份（同 /paperwork 那段的取舍）。
+
+   🔴 顶距吃 var(--lite2-clear-top)（96px / 窄屏 72px / 极窄 24px），不许硬写数字。
+   胶囊顶栏是浮在内容之上的，每一屏的 frame 都在消费这个变量给它让位。/paperwork 第一版
+   在这里写死 32px，真机截图上整个 h1 被顶栏吃掉——本屏是同一张清单上的又一个消费者。
+
+   滚动壳用 .lite-files-scroll（position:absolute + inset:0 + overflow-y:auto），与
+   .lite-playbooks-scroll / .lite-projects-scroll 同一套语法：.scene 自己 overflow:hidden，
+   内容长了必须由内层滚，否则超出部分直接被裁掉。 */
+.lite2-shell .lite-files-scroll {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.lite2-shell .lite-files-head,
+.lite2-shell .lite-files-section {
+  width: min(100%, 820px);
+  margin: 0 auto;
+  padding-inline: 24px;
+}
+
+.lite2-shell .lite-files-head {
+  padding-top: var(--lite2-clear-top, 96px);
+}
+
+.lite2-shell .lite-files-head h2 {
+  margin: 4px 0 6px;
+  font-size: clamp(22px, 2.6vw, 28px);
+  line-height: 1.28;
+}
+
+.lite2-shell .lite-files-sub {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--ink-soft);
+  max-width: 68ch;
+}
+
+.lite2-shell .lite-files-section {
+  margin-top: 34px;
+}
+
+/* 末段留出底部余量——最后一行贴着视口底边会读起来像"还没加载完"。 */
+.lite2-shell .lite-files-section:last-of-type {
+  padding-bottom: 90px;
+}
+
+.lite2-shell .lite-files-section-title {
+  margin: 0 0 12px;
+  font-family: var(--lite2-heading-font);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+/* 空态是一句话，不是一张卡：这一段的空不代表出了问题，只代表还没传东西。
+   刻意不用 .nexus-empty 的垂直居中卡——那个语法给的是"整屏空"，这里只是三段中的一段空。 */
+.lite2-shell .lite-files-empty {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--ink-soft);
+  max-width: 62ch;
+}
+
+/* 「再传一批 = 另建一份画像」的诚实说明。honey（提醒）而不是 alert（错误）：
+   没出问题，是先把后果讲在前头（同 .paperwork-banner 的取舍）。 */
+.lite2-shell .lite-files-again {
+  border-left: 3px solid var(--honey, #b8860b);
+  padding: 2px 0 2px 12px;
+  margin: 0 0 16px;
+}
+
+.lite2-shell .lite-files-again-title {
+  margin: 0 0 4px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.lite2-shell .lite-files-again-body {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--ink-soft);
+  max-width: 62ch;
+}
+
+/* 逐份下载按钮。.lite-btn--ghost 已给出全部观感，这里只压小一档并锁住不换行
+   ——文件行是 flex-wrap 的，一个会折行的按钮会把整行撑成两行。 */
+.lite2-shell .upload-file-download {
+  flex: none;
+  padding: 2px 10px;
+  font-size: 11px;
+  white-space: nowrap;
+}
