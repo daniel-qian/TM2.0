@@ -1,8 +1,22 @@
 # 资料库战役（files-hub-0729）· PRD
 
-**状态**：Danny 2026-07-29 盘问定稿（grilling ×3 轮，逐项拍板）。**本 session 只出票不开发**，
-下个 session 从这里接。前置侦察全在 `.issues/feedback-0729/persona-review-0729.md` 与
-07-29 侦察（上传散三屏四点两套实现/文件管理只有只读清单/后端写端点全缺/多库切换 store 现成）。
+**状态**：Danny 2026-07-29 盘问定稿（grilling ×3 轮，逐项拍板）。前置侦察全在
+`.issues/feedback-0729/persona-review-0729.md` 与 07-29 侦察（上传散三屏四点两套实现/
+文件管理只有只读清单/后端写端点全缺/多库切换 store 现成）。
+
+**票已开齐（2026-07-29，`/to-issues`）** —— GitHub `daniel-qian/avery`，父票
+[#21](https://github.com/daniel-qian/avery/issues/21)：
+
+| 票 | 内容 | 阻塞于 | 标签 |
+| --- | --- | --- | --- |
+| [#22](https://github.com/daniel-qian/avery/issues/22) | 01 资料库屏本体 + tab 换防 | — | ready-for-agent |
+| [#23](https://github.com/daniel-qian/avery/issues/23) | 02 多库切换 UI | #22 | ready-for-agent |
+| [#24](https://github.com/daniel-qian/avery/issues/24) | 03 团队屏零文件元素 + 入口铺设 | #22 | ready-for-agent |
+| [#25](https://github.com/daniel-qian/avery/issues/25) | 04 收官 | #22 #23 #24 | ready-for-agent |
+| [#26](https://github.com/daniel-qian/avery/issues/26) | T1 笔记升级真记忆 | — | ready-for-agent |
+| [#27](https://github.com/daniel-qian/avery/issues/27) | T2 两套上传实现合一 | — | ready-for-agent |
+| [#28](https://github.com/daniel-qian/avery/issues/28) | T3 后端文件写端点批 | — | ready-for-agent |
+| [#29](https://github.com/daniel-qian/avery/issues/29) | T4 tab 合并观察票 | 等真用户反馈 | needs-triage |
 
 ## 拍板记录（8 项，全部 Danny 口径）
 
