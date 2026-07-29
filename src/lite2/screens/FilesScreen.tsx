@@ -1,6 +1,7 @@
 import { useDict } from '../../shared/i18n/useDict'
 import { useLite } from '../store'
 import { FileManifest } from '../FileManifest'
+import { KnownContextList } from '../KnownContextList'
 import { UploadPanel } from '../UploadPanel'
 
 // files-hub-0729/01（ADR-0032）· 资料库屏。
@@ -20,6 +21,21 @@ import { UploadPanel } from '../UploadPanel'
 // 删除 / 重传 / 替换：后端写端点整批缺席（见 issue T3）。按"不建假按钮"红线，**UI 上一个
 // 都不出现**——一个点了必然失败的删除键比没有删除键伤得多。愿景里那个「agent 自己的文件
 // 空间」也不在这儿：那是 Vision 页的诚实预告，v1 只管用户上传的文件，两者不许混。
+// files-hub-0729/02 · 第三段的外壳。抽成小组件只为一件事：小节标题与内容**同生共死**。
+// 名册不足两批时 KnownContextList 返回 null，标题必须跟着消失——一个「你上传过的几批」
+// 底下空无一物的小节，读起来像加载失败。
+function SwitchSection() {
+  const { t } = useDict()
+  const known = useLite((s) => s.knownContexts)
+  if (known.length < 2) return null
+  return (
+    <section className="lite-files-section lite-files-switch-section" aria-label={t.upload.switchTitle}>
+      <h3 className="lite-files-section-title">{t.upload.switchTitle}</h3>
+      <KnownContextList />
+    </section>
+  )
+}
+
 export function FilesScreen() {
   const { t } = useDict()
   const l = t.lite2
@@ -74,8 +90,10 @@ export function FilesScreen() {
         </section>
 
         {/* ── ③ 你上传过的几批 ───────────────────────────────────────────────────
-            多库切换 UI 在 files-hub-0729/02 落地（issue #23）。这里刻意**不**先放一个
-            "敬请期待"占位：一个空壳子不比没有它更诚实。 */}
+            files-hub-0729/02 · 多库切换。KnownContextList 在只有 0/1 批时自己返回 null
+            ——所以这里连标题一起藏，否则会留下一个「你上传过的几批」下面什么都没有的空
+            小节（比不显示更让人以为出了问题）。 */}
+        <SwitchSection />
       </div>
     </section>
   )

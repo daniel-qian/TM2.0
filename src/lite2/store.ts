@@ -677,8 +677,20 @@ export const useLite = create<LiteState>((set, get) => ({
   // 现在换成"取到了再换"：失败时用户仍停在原来那份公司上（不留半切状态），
   // 竞态由 switchSeq 收口——只有最后一次点击允许落地，先到的结果一律作废。
   switchContext: async (contextId) => {
-    const { contextId: current, transport } = get()
+    const { contextId: current, transport, switchPending } = get()
     if (!contextId || contextId === current) return
+    // files-hub-0729/02 · 同一目标已在路上 → 直接返回。
+    //
+    // 🔴 为什么这一道非在 store 里不可，UI 的 `disabled` 顶不住：React 的 `disabled` 要等
+    // 一次重渲染才落到 DOM 上，而**同一拍**里的第二次 click（用户手抖连点，两下之间没有任何
+    // 网络往返）发生在重渲染之前——那一刻按钮在 DOM 上仍然是可用的，handler 照样跑。
+    // 新门 verify-context-switch 的「同一拍连点两下只打一次 /team」相位就是这么逮到它的：
+    // 置灰是真的、结果也是对的（switchSeq 让后到的那次作废），但**两发请求真的出去了**。
+    // 一发多余的请求本身不致命，致命的是它证明了那道闸不在真正的临界区上。
+    //
+    // 只挡「同一个目标」：切到**别的**一份是合法的取代（switchSeq 负责让先发的那次作废），
+    // 挡掉它会让用户点错一份之后无法立刻改点另一份。
+    if (switchPending === contextId) return
     const seq = ++switchSeq
     set({ switchError: null, switchPending: contextId })
     if (!storedOwnerToken(contextId)) {

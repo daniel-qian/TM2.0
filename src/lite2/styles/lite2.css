@@ -7524,3 +7524,90 @@
   font-size: 11px;
   white-space: nowrap;
 }
+
+/* ── files-hub-0729/02 ·「你上传过的几批」多库切换列表 ─────────────────────────────────
+   同 01 段的取舍：只用既有 token，两张皮自动跟随。 */
+.lite2-shell .lite-files-switch-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.lite2-shell .lite-files-switch-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--rule, rgba(0, 0, 0, 0.08));
+}
+
+.lite2-shell .lite-files-switch-row:last-child {
+  border-bottom: 0;
+}
+
+/* 当前这一份要一眼认得出——只加一条左边线，不换底色：底色会让它读起来像"被选中待操作"，
+   而它的意思是"你正在看的就是这个"。 */
+.lite2-shell .lite-files-switch-row[data-current='1'] {
+  border-left: 3px solid var(--sage, #4a7c59);
+  padding-left: 10px;
+}
+
+.lite2-shell .lite-files-switch-main {
+  flex: 1 1 auto;
+  min-width: 0;   /* 同 .upload-file-name：flex item 默认拒绝收缩到内容宽度以下 */
+}
+
+.lite2-shell .lite-files-switch-files {
+  margin: 0 0 3px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ink);
+}
+
+.lite2-shell .lite-files-switch-files-label,
+.lite2-shell .lite-files-switch-meta {
+  font-size: 11px;
+  color: var(--ink-faint, #8a8578);
+}
+
+.lite2-shell .lite-files-switch-meta {
+  margin: 0;
+}
+
+.lite2-shell .lite-files-switch-current {
+  margin-left: 4px;
+  color: var(--sage-text, var(--sage, #4a7c59));
+}
+
+.lite2-shell .lite-files-switch-actions {
+  flex: none;
+  display: flex;
+  gap: 8px;
+}
+
+.lite2-shell .lite-files-switch-open,
+.lite2-shell .lite-files-switch-forget {
+  padding: 2px 10px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+/* 切换失败的横幅。alert（真出错了）而不是 honey（提个醒）——用户点了、没成，这是错误。 */
+.lite2-shell .lite-files-switch-error {
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border-left: 3px solid var(--alert, #b3261e);
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--ink-soft);
+  max-width: 62ch;
+}
+
+.lite2-shell .lite-files-switch-note {
+  margin: 10px 0 0;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--ink-faint, #8a8578);
+  max-width: 62ch;
+}

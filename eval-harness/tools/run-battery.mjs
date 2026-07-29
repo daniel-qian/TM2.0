@@ -8,6 +8,9 @@
 //
 // 🔴 清账结论：**实际是 25 道，不是 23 道**（A 19 / B 3 / C 3）。逐条依据见下面的「E3 裁定」。
 // 0729 更新：+1 道 answer-split（输出形态战役 03 分流短答）→ **26 道**（A 20 / B 3 / C 3）。
+// 0729 更新（files-hub-0729/02）：+1 道 context-switch（多库切换 + forget 源码闸）
+//   → **27 道**（A 21 / B 3 / C 3）。它是**上传型门**，与 file-manifest-truth /
+//   onboarding-returning 同罪：绝不能排到 C 区之后，否则就是往生产库里写测试数据。
 //
 // ## 三段序是铁律，不是习惯
 //   ① 电池必须**独占跑**：与 agent 工作流并发会撞 CPU 超时，出假红（棒4 出过 6 条假红）。
@@ -79,7 +82,9 @@ const BASE = process.env.VERIFY_BASE || 'http://localhost:5173'
 //   env       额外环境变量
 //   note      口径备注
 const ROSTER = [
-  // ── A 区 · 吃共享 preview:5173（17 道，先跑）────────────────────────────────
+  // ── A 区 · 吃共享 preview:5173（21 道，先跑）────────────────────────────────
+  //   ⚠ 这行数字长期是 17，实际 20 —— files-hub-0729/02 加 context-switch 之后是 21。
+  //   注释里的计数没人维护就会变成假信息，顺手改对。
   { zone: 'A', name: 'topbar-clearance',      cmd: ['eval-harness/tools/verify-topbar-clearance.mjs'],            host: 'preview', backend: false, dist: false, note: '九屏×两皮顶栏让位几何' },
   { zone: 'A', name: 'cr-alignment',          cmd: ['eval-harness/tools/verify-cr-alignment.mjs'],                host: 'preview', backend: true,  dist: false, note: '规格表逐行断言；吃 SPEC_STICK（row.stick > N 打 [FUTURE] 不计红）' },
   { zone: 'A', name: 'skin-phases',           cmd: ['eval-harness/tools/verify-skin-phases.mjs'],                 host: 'preview', backend: false, dist: false, note: '走 ?transport=stub，不碰后端' },
@@ -102,6 +107,7 @@ const ROSTER = [
   //   它们**真上传**，所以必须留在 A 区（C 区之后 dist 指向生产域名，跑它们 = 往生产库写数据）。
   { zone: 'A', name: 'file-manifest-truth',   cmd: ['eval-harness/tools/verify-file-manifest-truth.mjs'],          host: 'preview', backend: true,  dist: false, note: '🔴 上传型门（真传一份好文件 + 一份结构性损坏 PDF）；30 判据；**绝不能排在 C 区之后**' },
   { zone: 'A', name: 'onboarding-returning',  cmd: ['eval-harness/tools/verify-onboarding-returning.mjs'],         host: 'preview', backend: true,  dist: false, note: '🔴 上传型门（铺垫一次真上传造"返回访客"）；15 判据；**绝不能排在 C 区之后**' },
+  { zone: 'A', name: 'context-switch',        cmd: ['eval-harness/tools/verify-context-switch.mjs'],               host: 'preview', backend: true,  dist: false, note: '🔴 上传型门（真传两批造多库）；15 判据；files-hub-0729/02 多库切换 + forget 只许显式触发的源码闸；**绝不能排在 C 区之后**' },
 
   // ── B 区 · 自带服务器 / 像素基线（3 道，中段）───────────────────────────────
   { zone: 'B', name: 'data-boundary',         cmd: ['.issues/v02-partner-align-0718/verify-data-boundary.mjs'],   host: 'self',    backend: false, dist: false, note: '自起 dev server :5304（VERIFY_PORT 可改）；可选 VERIFY_OLD_STORE=<git-ref> 做 born-red' },
