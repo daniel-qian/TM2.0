@@ -934,3 +934,29 @@ look-aurora ㉒ 纯 CSS：lite2-rise 铺到 gap 卡/notes 行/vision 卡/playboo
 **留后**：`noindex` 没加（第 8 项拍板选的是「不加锁」，noindex 是并列未选项）；03/05/06/07 四张表仍只进材料库，做成结构化实体是独立战役。
 
 **🔴 未推送**，且**后端有改动**（`_ZH_BLOCKED` 补词）——前端上了、后端没 swap 的话，线上填「已暂停」照样是灰卡。要一起上。
+
+## Update — 2026-07-29 · files-hub-0729：资料库战役全交付（未推送）
+
+**入口**：`/to-issues` 把盘问定稿的 PRD（`.issues/files-hub-0729/prd.md`，Danny ×3 轮 8 项拍板）拆成 GitHub issue —— 父票 #21、四切片 #22-#25、四独立票 #26-#29 —— 然后 AFK 直接把四个切片做完。ADR-0032。
+
+**做完的（feat-093）**：
+
+- **`/files`「资料库」升第 10 屏、tab 排队尾；「完整版预告」（vision）撤出 tab 条降进设置菜单**（照 `/paperwork` 待遇，路由/屏组件/data-scene 一字节没改），净回 9 个 tab。与 feat-057「7 个分屏一个没退休」不冲突：那七个是 team/room/followups/notes/closerlook/playbooks/projects，vision 是 feat-026 的叙事页，从来不在里面——这句话已经写进门的注释里，免得后人读成违约。
+- **三段屏**：当前资料（文件清单 + **逐份下载**）／上传新一批（UploadPanel 整件 + 「再传会另建一份画像」诚实说明）／你上传过的几批（多库切换）。「你的文件」渲染抽成共享件 `FileManifest`，DOM 类名一字节没动（门按类名取样，所以选择器一个都不用改）。
+- **逐份下载**走 fetch→Blob→objectURL：端点吃 owner_token header，裸 `<a href>` 带不上——那会是个点了必然 404 的假按钮。
+- **多库切换 UI**：store 侧（`switchContext`/`forgetContext`/`switchPending`/`switchError`）与**全部 12 条中英文案**一直都在、都过过审字，**只有 JSX 被一次合并吃掉**——那 12 个键因此长期是孤儿键（AGENTS.md「孤儿文案键是红旗」写的正是这种事故）。本片一个字新 copy 都没写，全是接回去。
+- **团队屏彻底零文件元素**（Danny 原话「团队和项目应该只分析团队和项目」），空态换引导卡；首页保留上传卡 + 两条去资料库的链接。
+
+**顺带修掉的两句假话**：①TeamScreen 注释「上传入口保留可加文件」——后端根本不支持追加，传旧 id 是重建并覆盖；②空态正文「把几个文件拖到右边」——右边的上传口撤了。🔴 第二句**没有就地改共用键** `t.team.emptyBody`：v01 也在读它，而 v01 的上传口还在、那句话在 v01 里仍为真。新增 `lite2.teamEmptyLead` 分叉。
+
+**🔴 顺带修一个真 bug（不在 PRD 里，但不修就没法交付「逐份下载」）**：`pg_registry.put()` 会把上传原件写成 NULL。`get()` 刻意不拉 bytea（`content=None`），而手编 CRUD 全是 `get→改→put`，于是**一次「加一个项目」就永久销毁全部原始字节**——下载端点此后永远 404（假按钮），且**用户原件真的没了**（这一层与 UI 无关，改造前就在生产上成立）。修法=DELETE 前先捞旧字节、只对 `content is None` 回填。
+
+**新门**：`verify-context-switch`（A 区第 21 道，15 判据）。它**逮到一个真缺陷**：同一拍连点两下「打开这一份」会打出**两发** `/team`——React 的 `disabled` 要等重渲染才落到 DOM，第二下发生在重渲染之前，那道闸根本不在临界区上。修法=`switchContext` 开头加「同一目标已在路上就返回」（只挡同目标，切到别的一份仍是合法取代）。
+
+**证据**：全电池连跑两轮 **27/27 绿**（A21/B3/C3）；后端 pytest 四 deselect **3469 passed / 0 failed / 4 xfailed**；像素基线重冻 **36→40** 张（新增 files 屏 ×2 皮 ×2 视口）后再跑零漂移、四张新基线人眼过；真后端实测 ingest→清单→带 token 下载 200 且**字节与原件逐字节相同**、无 token 404、越界 404；团队屏两态 DOM 实测文件类元素全 0。详见 `.issues/files-hub-0729/acceptance.md`。
+
+**⚠ 一条没验到的**：pg_registry 那个修复的 **postgres 侧行为断言跑不了**（本机没有可用的 postgres）。现在兜住它的是 memory 参数化 + 一条离线结构守卫；**部署预检必须在真库上跑一次**——这正是 `offline-suite-blind-to-pg-persistence` 那条教训（`not needs_db` 让整个 pg 层对默认套件隐形）。
+
+**Notes（体检发现，本轮按 stay-in-scope 没顺手补）**：`feature_list.json` 里 `naming-0729` 与 `output-form-0729` 两战役**一行都没有**（4 个代码 commit 零 feature 行）；本轮只补了自己这条 `feat-093`——替别人编 evidence 不做。
+
+**🔴 未推送**，且**后端有改动**（`pg_registry.put`）——前端上了、后端没 swap 的话，那个原件被销毁的 bug 在生产上照旧。要一起上。

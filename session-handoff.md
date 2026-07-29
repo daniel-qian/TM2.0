@@ -1,3 +1,77 @@
+# ⟳ 2026-07-29 · **资料库战役（files-hub-0729）全交付 + 一个真数据丢失 bug 顺手修掉**（★最新，从这里接）
+
+**一句话**：`/to-issues` 把资料库 PRD 拆成 9 张 GitHub issue（父票 #21 / 切片 #22-#25 /
+独立票 #26-#29），然后 AFK 把四个切片全做完 —— 资料库屏上线、tab 换防、逐份下载、多库切换、
+团队屏零文件元素，**全电池连跑两轮 27/27 绿**，像素基线重冻 36→40 张。
+顺手修掉一个**改造前就在生产上成立的真 bug**：一次「加一个项目」会永久销毁用户上传的原件。
+
+**🔴 下个 session 第一件事**：`main` 领先 `origin/main` **14 个 commit** 未推
+（07-29 早先两战役 9 个 + 本战役 5 个）。push 是人工闸，**且这次前后端都有改动**
+（`eval-harness/avery/ingest/pg_registry.py`）—— 前端上了、后端没 swap 的话，
+「下载键点了必 404 + 原件被销毁」在生产上照旧。**要一起上**（07-28 姿势）。
+
+## 本战役交付（5 commit）
+
+| commit | 片 | 内容 |
+| --- | --- | --- |
+| `41c3f9e` | — | `/to-issues` 开票 + PRD 回填票号 |
+| `3003401` | 01（#22） | 资料库屏本体 + tab 换防 + 逐份下载 + **pg_registry 数据丢失修复** + ADR-0032 |
+| `0bd1c30` | 02（#23） | 多库切换 UI + 新门 verify-context-switch |
+| `5383adb` | 03（#24） | 团队屏零文件元素 + 首页两条入口 |
+| （本片） | 04（#25） | 收官：两轮全电池 / 像素重冻 / 验收手册 / 本文件 |
+
+## 三件下一个人最该知道的事
+
+### 1. 那个 pg bug 的真库验证**还没做**（唯一一条未验项）
+
+`pg_registry.get()` 刻意不拉 bytea（`content=None`），而所有手编 CRUD 都是
+`get() → 改 → put()`，`put()` 先 DELETE 再按 `sd.content` 重插 —— 于是**一次「加一个项目」
+就把整批原始字节写成 NULL**。后果两层：下载端点此后永远 404（假按钮），
+**且用户上传的原件被永久销毁**（这一层与 UI 无关，改造前就成立）。
+
+修法=DELETE 前先捞旧字节、只对 `content is None` 回填。
+**但本机没有可用的 postgres**（无 pg 安装、无 docker、`.env` 无 `AVERY_DB_URL`），
+所以 `test_manual_crud_does_not_destroy_the_uploaded_bytes` 的 **postgres 参数化跑不了**。
+现在兜住它的是：① memory 参数化（会过，但证不到 pg 那侧）② 离线结构守卫
+`test_pg_put_restores_bytes_that_get_deliberately_dropped`（删了修复就红）。
+🔴 **部署预检必须在真库上跑一次那条行为断言** —— `offline-suite-blind-to-pg-persistence`
+那条教训说的就是这个：`not needs_db` 让整个 pg 层对默认套件隐形。
+
+### 2. 新门是**上传型门**，排位有毒性
+
+`eval-harness/tools/verify-context-switch.mjs`（A 区第 21 道）会真上传两批。
+与 `file-manifest-truth` / `onboarding-returning` 同罪：**绝不能排到 C 区之后** ——
+C 区的 `bundle-privacy` 会把 dist 打成指向**生产域名**，之后再跑上传型门
+= 往生产库里写测试数据（2026-07-20 真发生过）。runner 里已经排好，别动顺序。
+
+它还带一条**源码闸**：`forgetContext` 只许出现在 store 与那个按钮里、且不在任何 catch 块中。
+理由：挂在 catch 里的 forget 跑一百遍正常流程也全绿，只在用户真丢数据那天现形。
+
+### 3. 独立票四张，一张都没开工
+
+- **#26 T1** 笔记升级真记忆（`append_note` 回流检索层）—— 现状确认过：只写不回流，
+  「越合作越厚」那句文案目前在替一个不存在的能力背书。
+- **#27 T2** 两套上传实现合一（`UploadPanel` / `OnboardGate.StepUpload`）。
+- **#28 T3** 后端文件写端点批 —— ⚠ **先给 `SourceDocument` 稳定 id**：现在按数组下标寻址，
+  一支持删除下标就漂。v1 的资料库屏因此刻意没有删除/重传/替换按钮（不建假按钮）。
+- **#29 T4** tab 合并观察票（needs-triage，等真用户反馈；动前须开 ADR 推翻 feat-057）。
+
+## 环境（本 session 收尾态）
+
+- 后端 8137（mock 三件套 + `AVERY_DEMO_SEED_DIR`）与 preview 5173 **本 session 起过，收尾已停**。
+  起法照 `.issues/rich-align-0722/runbook.md` §0，或 `.issues/files-hub-0729/acceptance.md` §一.0。
+- `dist/` 由 runner 在 C 区之后重建成 dev dist。**碰任何上传路径前先确认
+  `window.__AVERY_BUILD__.apiBase`**。
+- 像素基线是 gitignore 的单机产物，本机已重冻到 40 张。
+
+## 体检发现（不是本战役造成的，记着免得再没人提）
+
+- `feature_list.json` 里 `naming-0729` 与 `output-form-0729` **一行都没有**（4 个代码 commit
+  零 feature 行）。本轮只补了自己那条 `feat-093` —— 替别人编 evidence 不做。
+- 六个 worktree 还挂着（`git worktree list`），分支都停在更早的 commit。
+
+---
+
 # ⟳ 2026-07-29 · **Danny 六条反馈 → 两战役当日交付（大白话命名 + 输出形态），攒 main 等推**（★最新，从这里接）
 
 **一句话**：Danny 冷启动六条反馈 → 五路侦察落实据 → 三项拍板 → **命名战役 + 输出形态战役

@@ -1,6 +1,10 @@
-// 9 屏 × 2 皮 × 2 视口 = 36 张像素基线（cr-align 视觉战役棒0）。
+// 10 屏 × 2 皮 × 2 视口 = 40 张像素基线（cr-align 视觉战役棒0；files-hub-0729 加第 10 屏）。
 // 数据走 ?transport=stub（固定 16 人团队，零后端零随机）；onboarding Escape 掉。
 // mask 原则：出现日期/时钟类动态区再按需加 locator，先跑裸的看稳定性。
+//
+// ⚠ 一个 test 里串着跑 10 次 toHaveScreenshot：**第一处不匹配就中止整条**，后面的屏根本
+// 不会被采样。所以一次红跑给出的漂移清单是不完整的（本轮实测：desktop 停在 home，
+// mobile 停在 team，`files` 两张压根没生成）。要拿全量清单就重冻后再跑一轮确认零红。
 import { test, expect } from 'playwright/test'
 
 const UI = process.env.VERIFY_BASE || 'http://localhost:5173'

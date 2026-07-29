@@ -779,6 +779,14 @@
       "evidence": "离线电池 3464 passed / 0 failed（85s）。verify-zh-purity exit 0，/paperwork 残留收敛到 3 处且只剩下载件文件名（第一次跑出来的 scripts/make-intake-xlsx.py 是真漏——仓库路径漏到用户界面，已改）。verify-switchers 27 PASS/0 FAIL（设置菜单第四行插在 lang/look 之后不动 nth(0/1)）、verify-aria-zh 4 PASS/0 FAIL。tsc -b 零错、vite build 通过。",
       "status": "done",
       "date": "2026-07-28"
+    },
+    {
+      "id": "feat-093",
+      "name": "files-hub-0729 · 资料库战役（Files hub 升 tab + 逐份下载 + 多库切换 + 团队屏零文件元素）",
+      "description": "PRD .issues/files-hub-0729/prd.md（Danny 盘问 ×3 轮 8 项拍板）→ GitHub #21 父票 / #22-#25 四切片 / #26-#29 四独立票。01 新屏 /files 三段（文件清单+逐份下载、上传新一批+「另建一份画像」诚实文案、多库切换）+ tab 换防（Files 进队尾，完整版预告 vision 降设置菜单，净回 9 tab，路由/屏/data-scene 一字未改）；「你的文件」渲染抽成共享件 FileManifest。02 多库切换 UI——store 侧与 12 条中英文案早就在、只有 JSX 被一次合并吃掉（孤儿键红旗），本片全是接回去，零新 copy。03 团队屏满态/空态两个 UploadPanel 全撤、空态换引导卡，首页保留上传卡 + 两条去资料库的链接；顺带删掉两句已成假话的文案/注释。ADR-0032 + CONTEXT.md「资料库」术语条 + 词族锁定表补「资料」。🔴 顺带修一个真 bug：pg_registry.put() 会把上传原件写成 NULL（get() 刻意不拉 bytea，而手编 CRUD 全是 get→改→put），一次「加一个项目」就永久销毁全部原始字节、下载端点此后永远 404 = 假按钮 + 真数据丢失。v1 刻意不做删除/重传/替换（后端端点缺，见 #28）。",
+      "evidence": "全电池 run-battery 连续两轮 27/27 绿（A21/B3/C3，含本战役新增 A 区 verify-context-switch 15/15）；后端 pytest not smoke/seedgate/needs_keys/needs_db = 3469 passed 0 failed 4 xfailed；像素基线重冻 36→40 张（新增 files 屏 ×2 皮 ×2 视口），重冻后再跑一轮零漂移，四张新基线人眼过；真后端（mock 三件套）实测 ingest→清单→带 owner_token 下载 HTTP 200 且字节与原件逐字节相同、无 token 404、越界 idx 404；浏览器实测下载按钮产出真 blob（含中文文件名）；团队屏满态/空态 DOM 实测 upload-panel/dropzone/files/file-row/input 全 0；四视口 elementFromPoint 零遮挡；tsc -b 绿 / vite build 绿。⚠ 未验：pg_registry 修复的 postgres 侧行为断言（本机无可用 postgres，test_manual_crud_does_not_destroy_the_uploaded_bytes 的 pg 参数化跑不了）——已加一条离线结构守卫兜住，真库断言须在部署预检跑一次。",
+      "status": "done",
+      "date": "2026-07-29"
     }
   ]
 }
