@@ -58,20 +58,24 @@ export interface LiteCitation {
   resolved: boolean | null // null = cite 的 observe 还没到
 }
 
-// ── 8 字段 advice 契约（feat-015 manifest.advice；对齐 service/contract.py 投影）──
+// ── advice 契约（feat-015 manifest.advice；对齐 service/contract.py 投影）──
 // 🔴 红线：没有任何"人评分"槽位——诊断是对处境的 hypothesis，不是对人的裁决。
+// 0729 输出形态战役 02（砍样板）：必填=summary/evidence/recommended_actions 三件套；
+// 其余字段按需出现（absent≠none）——后端投影不再用常量补齐 confidence/escalation/
+// metrics_to_track/diagnosis_hypotheses。缺席时卡对应节不渲染，绝不用默认值编造
+// 「中等置信度」「暂时不用拉 HR」这类系统没真判断过的话。
 export interface LiteAdvice {
   summary: string
   detected_signals: string[]
   diagnosis_hypotheses: { label: string; kind: 'primary' | 'alternative' }[]
   evidence: string[]
   recommended_actions: string[]
-  confidence: {
+  confidence?: {
     level: 'low' | 'medium' | 'high'
     rationale: string
     wouldChange: string[]
   }
-  escalation: {
+  escalation?: {
     level: 'none' | 'HRBP' | 'legal' | 'wellbeing' | 'compensation' | 'executive'
     note: string
     confirmWith: string[]
@@ -397,11 +401,7 @@ export function coerceAdvice(raw: unknown): LiteAdvice | null {
   const r = raw as Record<string, unknown>
   const strArr = (v: unknown): string[] =>
     Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []
-  const confidence = (r.confidence ?? {}) as Record<string, unknown>
-  const escalation = (r.escalation ?? {}) as Record<string, unknown>
-  const level = confidence.level
-  const escLevel = escalation.level
-  return {
+  const out: LiteAdvice = {
     summary: typeof r.summary === 'string' ? r.summary : '',
     detected_signals: strArr(r.detected_signals),
     diagnosis_hypotheses: Array.isArray(r.diagnosis_hypotheses)
@@ -414,12 +414,24 @@ export function coerceAdvice(raw: unknown): LiteAdvice | null {
       : [],
     evidence: strArr(r.evidence),
     recommended_actions: strArr(r.recommended_actions),
-    confidence: {
+    metrics_to_track: strArr(r.metrics_to_track),
+    conversation_script: typeof r.conversation_script === 'string' ? r.conversation_script : '',
+  }
+  // 0729/02 absent≠none：calibration 字段只有后端真发了键才进快照——缺席绝不用默认值
+  // 编造（旧行为会把缺席补成 medium/none，等于替系统撒谎说它做过这个判断）。
+  if (r.confidence && typeof r.confidence === 'object') {
+    const confidence = r.confidence as Record<string, unknown>
+    const level = confidence.level
+    out.confidence = {
       level: level === 'low' || level === 'medium' || level === 'high' ? level : 'medium',
       rationale: typeof confidence.rationale === 'string' ? confidence.rationale : '',
       wouldChange: strArr(confidence.wouldChange),
-    },
-    escalation: {
+    }
+  }
+  if (r.escalation && typeof r.escalation === 'object') {
+    const escalation = r.escalation as Record<string, unknown>
+    const escLevel = escalation.level
+    out.escalation = {
       level:
         escLevel === 'none' ||
         escLevel === 'HRBP' ||
@@ -431,10 +443,9 @@ export function coerceAdvice(raw: unknown): LiteAdvice | null {
           : 'none',
       note: typeof escalation.note === 'string' ? escalation.note : '',
       confirmWith: strArr(escalation.confirmWith),
-    },
-    metrics_to_track: strArr(r.metrics_to_track),
-    conversation_script: typeof r.conversation_script === 'string' ? r.conversation_script : '',
+    }
   }
+  return out
 }
 
 // manifest{kind:'ask-draft'}.ask 的防御性形状归一（与 coerceAdvice 同规格）。

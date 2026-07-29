@@ -42,22 +42,24 @@ def _manifest(events):
 
 # === 8-field schema is enforced through the API ================================================
 
-def test_manifest_carries_all_eight_fields_plus_script():
+def test_manifest_carries_required_trio_and_no_boilerplate():
+    """0729 输出形态战役 02：必填=真内容三件套；四个旧样板字段（恒定常量文）必须**缺席**
+    （absent≠none）——投影层再把它们用硬编码补回来就是回归。"""
     case = load_case(CASE)
     m = _manifest(_events_for_case(case, make_mock_brain(case, "avery")))
     payload = m["advice"]
     for f in contract.REQUIRED_FIELDS:
         assert f in payload and payload[f], f"missing/empty contract field: {f}"
-    # the canonical 8 + conversation_script (partner advice_output_schema shape)
-    assert set(contract.REQUIRED_FIELDS) == {
-        "summary", "detected_signals", "diagnosis_hypotheses", "evidence",
-        "recommended_actions", "confidence", "escalation", "metrics_to_track",
-        "conversation_script"}
-    assert payload["confidence"]["level"] in contract.CONFIDENCE_LEVELS
-    assert payload["escalation"]["level"] in contract.ESCALATION_LEVELS
-    # hypotheses are hypotheses (>=1 primary + >=1 alternative), never a lone verdict
-    kinds = [h["kind"] for h in payload["diagnosis_hypotheses"]]
-    assert "primary" in kinds and "alternative" in kinds
+    assert set(contract.REQUIRED_FIELDS) == {"summary", "evidence", "recommended_actions"}
+    # 真内容的可选字段：mock brain 有 cites 与 framing，二者应在场
+    assert payload.get("detected_signals"), "cite claims should surface as detected_signals"
+    assert payload.get("conversation_script"), "framing should surface as conversation_script"
+    # 样板字段砍除：投影层绝不发这些键（引擎原生产出前，它们只能是常量文）
+    for boiler in ("diagnosis_hypotheses", "confidence", "escalation", "metrics_to_track"):
+        assert boiler not in payload, f"boilerplate field resurrected: {boiler}"
+    # 全部键都必须在契约认识的字段表内（required + optional）
+    known = set(contract.REQUIRED_FIELDS) | set(contract.OPTIONAL_FIELDS)
+    assert set(payload) <= known, f"unknown fields: {set(payload) - known}"
     assert m["schema_ok"] and m["contract_ok"]
 
 

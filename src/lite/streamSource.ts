@@ -42,12 +42,14 @@ export interface LiteAdvice {
   diagnosis_hypotheses: { label: string; kind: 'primary' | 'alternative' }[]
   evidence: string[]
   recommended_actions: string[]
-  confidence: {
+  // 0729 输出形态战役 02（随 v02 同步的 API 现实）：calibration 字段按需出现（absent≠none），
+  // 后端投影不再用常量补齐——缺席时不渲染，绝不默认成 medium/none。v01 只加守卫不重设计。
+  confidence?: {
     level: 'low' | 'medium' | 'high'
     rationale: string
     wouldChange: string[]
   }
-  escalation: {
+  escalation?: {
     level: 'none' | 'HRBP' | 'legal' | 'wellbeing' | 'compensation' | 'executive'
     note: string
     confirmWith: string[]
@@ -213,11 +215,7 @@ export function coerceAdvice(raw: unknown): LiteAdvice | null {
   const r = raw as Record<string, unknown>
   const strArr = (v: unknown): string[] =>
     Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []
-  const confidence = (r.confidence ?? {}) as Record<string, unknown>
-  const escalation = (r.escalation ?? {}) as Record<string, unknown>
-  const level = confidence.level
-  const escLevel = escalation.level
-  return {
+  const out: LiteAdvice = {
     summary: typeof r.summary === 'string' ? r.summary : '',
     detected_signals: strArr(r.detected_signals),
     diagnosis_hypotheses: Array.isArray(r.diagnosis_hypotheses)
@@ -230,12 +228,23 @@ export function coerceAdvice(raw: unknown): LiteAdvice | null {
       : [],
     evidence: strArr(r.evidence),
     recommended_actions: strArr(r.recommended_actions),
-    confidence: {
+    metrics_to_track: strArr(r.metrics_to_track),
+    conversation_script: typeof r.conversation_script === 'string' ? r.conversation_script : '',
+  }
+  // 0729/02 absent≠none：calibration 字段只有后端真发了键才进快照（与 v02 同款守卫）。
+  if (r.confidence && typeof r.confidence === 'object') {
+    const confidence = r.confidence as Record<string, unknown>
+    const level = confidence.level
+    out.confidence = {
       level: level === 'low' || level === 'medium' || level === 'high' ? level : 'medium',
       rationale: typeof confidence.rationale === 'string' ? confidence.rationale : '',
       wouldChange: strArr(confidence.wouldChange),
-    },
-    escalation: {
+    }
+  }
+  if (r.escalation && typeof r.escalation === 'object') {
+    const escalation = r.escalation as Record<string, unknown>
+    const escLevel = escalation.level
+    out.escalation = {
       level:
         escLevel === 'none' ||
         escLevel === 'HRBP' ||
@@ -247,10 +256,9 @@ export function coerceAdvice(raw: unknown): LiteAdvice | null {
           : 'none',
       note: typeof escalation.note === 'string' ? escalation.note : '',
       confirmWith: strArr(escalation.confirmWith),
-    },
-    metrics_to_track: strArr(r.metrics_to_track),
-    conversation_script: typeof r.conversation_script === 'string' ? r.conversation_script : '',
+    }
   }
+  return out
 }
 
 // manifest{kind:'ask-draft'}.ask 的防御性形状归一（与 coerceAdvice 同规格）。

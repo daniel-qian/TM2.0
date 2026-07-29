@@ -79,29 +79,32 @@ export function LiteAdviceCard({ advice }: { advice: LiteAdvice }) {
             </ol>
           </section>
 
-          <section className="report-section report-confidence" aria-label={t.lite.adviceConfidenceLabel}>
-            <p className="report-section-label">
-              {t.lite.adviceConfidenceLabel}{' '}
-              <span className={classNames(['confidence-badge', `is-${advice.confidence.level}`])}>
-                {confidenceLevelText(advice.confidence.level, t.lite)}
-              </span>
-            </p>
-            <p className="confidence-rationale">{advice.confidence.rationale}</p>
-            {advice.confidence.wouldChange.length > 0 ? (
-              <details className="report-disclosure">
-                <summary>
-                  <span className="disclosure-caret" aria-hidden="true" />
-                  {t.lite.adviceConfidenceWouldChange}{' '}
-                  <span className="disclosure-count">{advice.confidence.wouldChange.length}</span>
-                </summary>
-                <ul className="report-list">
-                  {advice.confidence.wouldChange.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
-              </details>
-            ) : null}
-          </section>
+          {/* 0729/02 absent≠none（随 API 砍样板同步的守卫，v01 不重设计）：缺席整节不渲染 */}
+          {advice.confidence ? (
+            <section className="report-section report-confidence" aria-label={t.lite.adviceConfidenceLabel}>
+              <p className="report-section-label">
+                {t.lite.adviceConfidenceLabel}{' '}
+                <span className={classNames(['confidence-badge', `is-${advice.confidence.level}`])}>
+                  {confidenceLevelText(advice.confidence.level, t.lite)}
+                </span>
+              </p>
+              <p className="confidence-rationale">{advice.confidence.rationale}</p>
+              {advice.confidence.wouldChange.length > 0 ? (
+                <details className="report-disclosure">
+                  <summary>
+                    <span className="disclosure-caret" aria-hidden="true" />
+                    {t.lite.adviceConfidenceWouldChange}{' '}
+                    <span className="disclosure-count">{advice.confidence.wouldChange.length}</span>
+                  </summary>
+                  <ul className="report-list">
+                    {advice.confidence.wouldChange.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                </details>
+              ) : null}
+            </section>
+          ) : null}
         </div>
       </div>
 
@@ -144,27 +147,30 @@ export function LiteAdviceCard({ advice }: { advice: LiteAdvice }) {
           </section>
         ) : null}
 
-        <section className="report-section" aria-label={t.lite.adviceHrAria}>
-          <p className="report-section-label">
-            {t.lite.adviceHrLabel}{' '}
-            <span className={classNames(['escalation-badge', `is-${advice.escalation.level}`])}>
-              {escalationLevelText(advice.escalation.level, t.lite)}
-            </span>
-          </p>
-          {advice.escalation.note ? <p className="escalation-note">{advice.escalation.note}</p> : null}
-          {advice.escalation.confirmWith.length > 0 ? (
-            <>
-              <p className="report-subtle-label">{t.lite.adviceConfirmsLabel}</p>
-              <div className="confirmation-list">
-                {advice.escalation.confirmWith.map((label) => (
-                  <span key={label} className="confirmation-chip">
-                    {label}
-                  </span>
-                ))}
-              </div>
-            </>
-          ) : null}
-        </section>
+        {/* 0729/02 absent≠none：escalation 缺席=系统这轮没做升级判断，整节不渲染 */}
+        {advice.escalation ? (
+          <section className="report-section" aria-label={t.lite.adviceHrAria}>
+            <p className="report-section-label">
+              {t.lite.adviceHrLabel}{' '}
+              <span className={classNames(['escalation-badge', `is-${advice.escalation.level}`])}>
+                {escalationLevelText(advice.escalation.level, t.lite)}
+              </span>
+            </p>
+            {advice.escalation.note ? <p className="escalation-note">{advice.escalation.note}</p> : null}
+            {advice.escalation.confirmWith.length > 0 ? (
+              <>
+                <p className="report-subtle-label">{t.lite.adviceConfirmsLabel}</p>
+                <div className="confirmation-list">
+                  {advice.escalation.confirmWith.map((label) => (
+                    <span key={label} className="confirmation-chip">
+                      {label}
+                    </span>
+                  ))}
+                </div>
+              </>
+            ) : null}
+          </section>
+        ) : null}
       </div>
     </section>
   )

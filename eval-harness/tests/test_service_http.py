@@ -70,10 +70,12 @@ def test_advise_sse_stream(client):
     assert manifest["schema_ok"] is True
     assert manifest["gates"]["cite_gate_passed"] is True
     payload = manifest["advice"]
-    for f in ("summary", "detected_signals", "diagnosis_hypotheses", "evidence",
-              "recommended_actions", "confidence", "escalation", "metrics_to_track",
+    # 0729/02 砍样板：必填三件套 + 真内容可选字段在场；四个旧样板字段必须缺席（absent≠none）
+    for f in ("summary", "evidence", "recommended_actions", "detected_signals",
               "conversation_script"):
         assert payload.get(f), f"missing contract field over HTTP: {f}"
+    for boiler in ("diagnosis_hypotheses", "confidence", "escalation", "metrics_to_track"):
+        assert boiler not in payload, f"boilerplate field resurrected over HTTP: {boiler}"
 
 
 def test_advise_buffered_json(client):
@@ -86,9 +88,9 @@ def test_advise_buffered_json(client):
     assert body["contract_ok"] is True
     assert body["redline_passed"] is True
     assert body["schema_ok"] is True
-    assert body["advice"]["confidence"]["level"] in ("low", "medium", "high")
-    assert body["advice"]["escalation"]["level"] in (
-        "none", "HRBP", "legal", "wellbeing", "compensation", "executive")
+    # 0729/02：calibration 字段不再由投影层用常量补齐——buffered 路径同样必须缺席
+    assert "confidence" not in body["advice"] and "escalation" not in body["advice"]
+    assert body["advice"]["summary"] and body["advice"]["recommended_actions"]
     # the buffered body also carries the raw event trail for debugging
     assert any(e["type"] == "started" for e in body["events"])
 

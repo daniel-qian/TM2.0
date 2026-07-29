@@ -1,26 +1,28 @@
-"""The 8-field advice contract — enforced THROUGH the API.
+"""The advice contract — enforced THROUGH the API.
 
 The engine's native artifact (`avery/tools.py::Advice`) is 3 fields: read / move / framing. The
-product's canonical output (frontend `src/data/fixtures.ts::AgentOutput`) is the partner
-`advice_output_schema`: 8 fields + a conversation_script:
+partner `advice_output_schema` remains the UPPER-BOUND shape (8 fields + conversation_script):
 
     summary · detected_signals · diagnosis_hypotheses · evidence · recommended_actions ·
     confidence · escalation · metrics_to_track   (+ conversation_script)
 
+0729 输出形态战役 02（Danny 拍板「分流+砍样板」）：REQUIRED 收缩到真内容三件套
+（summary/evidence/recommended_actions）；其余字段**按需出现**（absent≠none）——投影层
+不再用硬编码常量把 confidence/escalation/metrics_to_track/diagnosis_hypotheses 补齐成
+每答必贴的样板文。对外口径同步：schema 字段仍全部有效，但除三件套外均为 optional，
+「absent 表示引擎这一轮没有产出该判断」，不是空值。
+
 This module PROJECTS one onto the other WITHOUT touching the engine:
 
-  * `project_advice()` deterministically maps a finished loop transcript onto the 8-field shape.
-    The mapping is structural (no new LLM call): read->summary, the cited evidence + tool trail ->
-    detected_signals/evidence, move->recommended_actions, framing->conversation_script, and the
-    calibration fields (diagnosis_hypotheses/confidence/escalation/metrics_to_track) are derived
-    from the advice text + cites as HYPOTHESES with alternatives (partner guardrail: never a
-    verdict on a person).
+  * `project_advice()` deterministically maps a finished loop transcript onto the contract shape.
+    The mapping is structural (no new LLM call): read->summary, cited claims->detected_signals,
+    resolved cite lines->evidence, move->recommended_actions, framing->conversation_script.
   * `enforce()` then RE-RUNS the red-line validator over the fully-assembled payload and asserts
-    schema completeness. This is the whole point: the moat is verified on what the API actually
-    returns, not only on the loop's internal artifact. A crossing anywhere in the projected copy
-    (summary, actions, script, hypotheses...) fails the contract.
+    schema completeness (required trio + shape checks on whatever optional fields are present).
+    The moat is verified on what the API actually returns, not only on the loop's internal
+    artifact. A crossing anywhere in the projected copy fails the contract.
 
-The schema field list is asserted against the frontend `AgentOutput` type by the contract tests,
+The schema field list is asserted against the frontend render contracts by the contract tests,
 so the two never silently drift.
 """
 from __future__ import annotations
@@ -30,14 +32,22 @@ from typing import Any
 
 from avery import redline
 
-# The canonical 8 fields (partner advice_output_schema.required) + conversation_script.
-# Mirrors src/data/fixtures.ts::AgentOutput. Kept in lock-step by test_contract.py.
+# 0729 输出形态战役 02（Danny 拍板「分流+砍样板」，用户侧证据 persona-review P1）：
+# 必填集从 9 字段收缩到真内容三件套；其余字段改为「有真内容才发键」（absent≠none）。
+# 完整 9 字段形状仍是对外 advice_output_schema 的上限形状（OPTIONAL_FIELDS 记录），
+# 与前端渲染契约的锁步测试改为「必填 ⊆ 前端」+「可选字段前端都认识」。
 REQUIRED_FIELDS = [
     "summary",
-    "detected_signals",
-    "diagnosis_hypotheses",
     "evidence",
     "recommended_actions",
+]
+
+# 按需出现的字段：真 brain 在建议文本里真的给出判断时才有；投影层绝不用硬编码常量补齐
+# （旧行为：confidence/escalation/metrics_to_track/diagnosis_hypotheses.alternative 是每答
+# 必贴的 500+ 字符样板文——问「例会几点」也带一段「何时拉 HR」。已砍。）
+OPTIONAL_FIELDS = [
+    "detected_signals",
+    "diagnosis_hypotheses",
     "confidence",
     "escalation",
     "metrics_to_track",
@@ -101,65 +111,28 @@ def project_advice(transcript: dict) -> dict[str, Any]:
     # 1 · summary: the read, verbatim — it is already a situation-level read, not a person verdict.
     summary = read
 
-    # 3 · diagnosis_hypotheses: the read as a PRIMARY hypothesis + an explicit alternative, never
-    #     a fact/verdict (partner guardrail). Derived structurally from the read.
-    primary = _sentences(read)[0] if _sentences(read) else read
-    diagnosis_hypotheses = [
-        {"label": f"Most likely (a read of the situation, not a verdict on the person): {primary}",
-         "kind": "primary"},
-        {"label": ("Alternative: a fixable, situational cause — an unclear expectation, a blocker, "
-                   "or the wrong work — rather than the person. Worth ruling out in the 1:1 before "
-                   "concluding anything."),
-         "kind": "alternative"},
-    ]
-
     # 5 · recommended_actions: the decisive move, split into discrete steps.
     recommended_actions = _actions_from_move(move)
-
-    # 6 · confidence: medium by default — the read is grounded in work-trail evidence but the
-    #     motivation/why stays a hypothesis until the conversation. Calibrated, with what'd move it.
-    confidence = {
-        "level": "medium",
-        "rationale": ("The pattern is grounded in the cited evidence, but the cause behind it is a "
-                      "hypothesis until the direct conversation confirms it."),
-        "wouldChange": [
-            "Higher once the 1:1 confirms what is actually behind the pattern.",
-            "Lower if new evidence points to a different cause than the primary read.",
-        ],
-    }
-
-    # 7 · escalation: default none; the projection cannot invent a legal/pay/wellbeing trigger the
-    #     manager didn't state, but it names when to pull HR in. (Real brains may put escalation
-    #     language in the advice text itself, which the red line still governs.)
-    escalation = {
-        "level": "none",
-        "note": ("No HR/legal involvement indicated yet — this reads as a work-and-situation "
-                 "matter. Pull in HRBP if the conversation surfaces burnout, pay/fairness, or "
-                 "conduct, or if the pattern recurs after this reset."),
-        "confirmWith": ["You (manager) — the direct conversation and the agreed check-in date"],
-    }
-
-    # 8 · metrics_to_track: what tells you it worked. Qualitative, grounded — no invented numbers.
-    metrics_to_track = [
-        "The specific pattern named in the read easing after the conversation and agreed reset.",
-        "The agreed 'back on track' checkpoint being met by its near date.",
-        "A quick check-in on how the person is doing after the reset.",
-    ]
 
     # + · conversation_script: the safe-framing opener, verbatim ('senior in your ear').
     conversation_script = framing
 
-    return {
+    # 0729/02 砍样板：diagnosis_hypotheses（复读 read 的首句 + 固定 alternative 段）、
+    # confidence（恒 medium + 固定 rationale/wouldChange）、escalation（恒 none + 固定
+    # 「何时拉 HR」）、metrics_to_track（固定 3 条）——四块全是与问题无关的常量文，
+    # 投影层不再补齐。absent≠none：缺席=引擎这轮没有真判断，前端对应节不渲染。
+    # 真 brain 若在建议文本里给出这些判断，仍由建议正文承载并过红线；
+    # 未来引擎原生产出这些槽时（分流片 03+），在这里按真值透传即可。
+    payload: dict[str, Any] = {
         "summary": summary,
-        "detected_signals": detected_signals,
-        "diagnosis_hypotheses": diagnosis_hypotheses,
         "evidence": evidence,
         "recommended_actions": recommended_actions,
-        "confidence": confidence,
-        "escalation": escalation,
-        "metrics_to_track": metrics_to_track,
-        "conversation_script": conversation_script,
     }
+    if detected_signals:
+        payload["detected_signals"] = detected_signals
+    if conversation_script:
+        payload["conversation_script"] = conversation_script
+    return payload
 
 
 # --- schema + red-line enforcement over the assembled payload ---------------------------------
@@ -183,7 +156,10 @@ def _redline_text(payload: dict[str, Any]) -> str:
 
 
 def check_schema(payload: dict[str, Any]) -> list[str]:
-    """Return the list of missing/empty required fields ([] == schema-complete)."""
+    """Return the list of missing/empty required fields ([] == schema-complete).
+
+    0729/02: required 收缩到三件套；calibration 字段（confidence/escalation）改为
+    「在场才验形状」——absent 合法（≠none），在场就必须是合法枚举。"""
     missing: list[str] = []
     for f in REQUIRED_FIELDS:
         if f not in payload:
@@ -192,14 +168,14 @@ def check_schema(payload: dict[str, Any]) -> list[str]:
         val = payload[f]
         if val is None or (isinstance(val, (str, list, dict)) and len(val) == 0):
             missing.append(f)
-    # Nested calibration shape.
-    conf = payload.get("confidence") or {}
-    if isinstance(conf, dict):
-        if conf.get("level") not in CONFIDENCE_LEVELS:
+    # Nested calibration shape — only when the field is actually present.
+    if "confidence" in payload:
+        conf = payload.get("confidence") or {}
+        if not isinstance(conf, dict) or conf.get("level") not in CONFIDENCE_LEVELS:
             missing.append("confidence.level")
-    esc = payload.get("escalation") or {}
-    if isinstance(esc, dict):
-        if esc.get("level") not in ESCALATION_LEVELS:
+    if "escalation" in payload:
+        esc = payload.get("escalation") or {}
+        if not isinstance(esc, dict) or esc.get("level") not in ESCALATION_LEVELS:
             missing.append("escalation.level")
     return missing
 
