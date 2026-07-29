@@ -1040,7 +1040,7 @@ export const zh: Dict = {
     "composerRefsAria": "引用资料",
     "composerRemoveRefAria": "移除 {label}",
     "composerFilterAria": "筛选引用资料",
-    "roomBoardAria": "问 Avery —— 看板",
+    "roomBoardAria": "问 Avery —— 输出区",
     "roomAskAria": "向你的团队提问",
     "roomLiveQuestionAria": "当前提问",
     "roomEmptyAria": "还在梳理中 —— 向你的团队提问",

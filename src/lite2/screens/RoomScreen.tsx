@@ -5,7 +5,6 @@ import { useDict } from '../../shared/i18n/useDict'
 import type { Dict } from '../../shared/i18n'
 import { LiteAdviceCard } from '../LiteAdviceCard'
 import { AskCard } from '../AskCard'
-import { LitePanZoom } from '../LitePanZoom'
 import { localizeStreamLine } from '../../shared/streamCopy'
 import type {
   LiteStreamLine,
@@ -293,8 +292,11 @@ export function RoomScreen() {
     <section className="scene scene-nexus is-active lite-room" aria-label={t.lite2.tabRoom}>
       {hasStarted ? (
         <>
-          {/* 薄画布：终端 + brief HUD + 8 字段卡随 pan/zoom 移动缩放；composer 留画布外 */}
-          <LitePanZoom>
+          {/* 0729 输出形态战役 01 · 画板退役（Danny 拍板，kickoff 见 .issues/output-form-0729/）：
+              pan/zoom 画布换成全站统一的 scroll→frame 纵向语法。⚠ .lite-room-board 类名保留——
+              它同时承担「解除 story 绝对定位」的职责（lite2.css board 段），改的只是它自己的
+              布局规则（1180px 世界宽 → 纵向列）。composer 仍在滚动区外恒可点。 */}
+          <div className="lite-room-scroll" aria-label={t.lite2.roomBoardAria}>
             <div className="lite-room-board">
               <LiteThinkingFlow run={run} running={running} />
               <div className="nexus-brief-hud">
@@ -333,7 +335,7 @@ export function RoomScreen() {
                 </div>
               ) : null}
             </div>
-          </LitePanZoom>
+          </div>
           <LiteAskComposer
             placeholder={t.nexus.askPlaceholder}
             submitLabel={t.nexus.ask}

@@ -31,9 +31,10 @@
    - `__seedGate.assertTeamGrouped()` — **相位 G**(feat-025 Q2):Your team 人栏 = 分组
      容器(分组块 `.home-people-group` + 分组标题 + 折叠 toggle),人卡仍在 DOM/可点;
      断折叠真生效(折叠后卡数减、复展后复原)。
-   - `__seedGate.assertRoomCanvas()` — **相位 H**(feat-025 Q3):The room 有薄 pan/zoom
-     画布 `.lite-room-canvas`(含 board + react-zoom-pan-pinch wrapper + 复位控件),
-     composer 留画布外(恒可点)。
+   - `__seedGate.assertRoomCanvas()` — **相位 H**(0729 输出形态战役 01 · 画板退役后**翻转**):
+     Ask Avery 的 pan/zoom 画布必须**绝迹**(.lite-room-canvas/.lite-panzoom-* 不在 v02 DOM),
+     改断 `.lite-room-scroll`→`.lite-room-board` 纵向语法 + 判读卡回文档流,composer 留
+     滚动区外(恒可点)。相位名/结果键保留 roomCanvas 免动 verdict 聚合。
    - `__seedGate.assertPlaybooksEmpty()` — **相位 I**(feat-025 Q1):Playbooks 屏空态
      (引导标题 + coming-soon 标 + 未来数据槽),该屏 story 名词黑名单 = 0。
    - `__seedGate.assertVisionSurface()` — **相位 J**(feat-026):Vision 定位叙事页

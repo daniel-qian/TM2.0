@@ -432,33 +432,16 @@
   gap: 4px;
 }
 
-/* ── The room（薄建）：8 字段卡从 board 世界坐标解放成滚动列 ─────────────── */
-.lite-room .lite-room-card {
-  position: absolute;
-  top: 76px;
-  right: 28px;
-  bottom: 96px;
-  left: 496px;
-  overflow: auto;
-  display: grid;
-  align-content: start;
-  padding: 4px;
-}
-
+/* ── The room（0729 画板退役 · output-form-0729/01）：判读卡回文档流 ──────────
+   卡自身的定位由 board 段（.lite2-shell .lite-room-board .lite-room-card）负责；
+   这里只保留对 story .structured-output-card 绝对定位的解除。 */
 .lite-room .lite-room-card .structured-output-card {
   position: static;
   width: 100%;
-  max-width: 950px;
+  max-width: none;
   max-height: none;
   transform: none;
-  margin: 0 auto;
-}
-
-@media (max-width: 1100px) {
-  .lite-room .lite-room-card {
-    left: 24px;
-    top: 320px;
-  }
+  margin: 0;
 }
 
 /* ── composer 引用空态 ───────────────────────────────────────────────────── */
@@ -794,44 +777,31 @@
   text-transform: uppercase;
 }
 
-/* ── feat-025 Q3 · The room 薄可拖拽/缩放画布（LitePanZoom）─────────────────────
-   画布填满 room scene（顶让 topbar、底让 composer）；board 内把原本 viewport-fixed
-   absolute 的终端/结果卡改成随 board 流动布局（scope 在 .lite2-shell .lite-room-board，
-   story 的 .nexus-terminal/.lite-room-card 一像素不动）。composer 留在画布外恒可点。 */
-.lite2-shell .lite-room-canvas {
+/* ── 0729 输出形态战役 01 · 画板退役（原 feat-025 Q3 的 LitePanZoom 薄画布）──────
+   pan/zoom 画布整体退役：议事室输出改用全站统一的 scroll→frame 纵向语法（同
+   closerlook/followups 口径）。⚠ .lite-room-board 类名保留——它的后代规则同时承担
+   「解除 story viewport-fixed absolute」的职责（.nexus-terminal / .nexus-brief-hud /
+   .lite-room-card 的 static 化都锚在它上），退役改的只是 board 自己的布局：
+   1180px 世界宽 flex-wrap → 纵向列。composer 在滚动区外恒可点（门盯着）。
+   v01 的画布（src/lite/LitePanZoom.tsx + lite.css）是冻结壳资产，原样保留。 */
+.lite2-shell .lite-room-scroll {
   position: absolute;
-  inset: 68px 20px 92px;
-  overflow: hidden;
-  border: 1px solid var(--rule);
-  border-radius: var(--radius);
-  background:
-    radial-gradient(circle at 1px 1px, rgba(var(--lite2-ink-rgb), 0.06) 1px, transparent 0) 0 0 / 22px 22px,
-    rgba(var(--lite2-surface-rgb), 0.55);
+  inset: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
-.lite2-shell .lite-panzoom-wrapper {
-  width: 100%;
-  height: 100%;
-  cursor: grab;
-}
-.lite2-shell .lite-panzoom-wrapper:active {
-  cursor: grabbing;
-}
-
-.lite2-shell .lite-panzoom-content {
-  display: block;
-}
-
-/* board = 一块自然流动的画面（终端 + HUD + 结果卡），随 pan/zoom 整体移动缩放 */
 .lite2-shell .lite-room-board {
   position: relative;
   display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
+  flex-direction: column;
+  align-items: stretch;
   gap: 20px;
-  width: 1180px;
-  max-width: none;
-  padding: 24px;
+  max-width: 900px;
+  margin: 0 auto;
+  /* 顶距由文件尾「让位统一」消费者清单给（var(--lite2-clear-top)，后写者胜）；
+     底 150 让屏底常驻 composer（92px 带 + 余量），滚到底时卡尾不被压住。 */
+  padding: 96px 36px 150px;
 }
 
 /* board 内解除 story 的 viewport-fixed absolute：终端与结果卡进入 flow */
@@ -840,13 +810,16 @@
   top: auto;
   left: auto;
   bottom: auto;
-  width: min(440px, 100%);
-  height: 420px;
+  width: 100%;
+  /* 0729 画板退役：纵向列里高度随内容走（简化四相很矮），原始流长日志封顶 420 内滚 */
+  height: auto;
+  min-height: 0;
+  max-height: 420px;
 }
 
 .lite2-shell .lite-room-board .nexus-brief-hud {
   position: static;
-  flex: 1 1 260px;
+  flex: none;
   /* 00-base 的 story 定位残留必须清干净：translateX(-50%) 会把这个 flex 子项左拖半个身位、
      压在终端头栏上（z 40 > 30 连带吃掉「展开原始流」的点击）。verify-room-usability 盯着。 */
   transform: none;
@@ -866,10 +839,12 @@
 .lite2-shell .lite-room-board .lite-room-card {
   position: static;
   inset: auto;
-  flex: 1 1 520px;
-  min-width: 300px;
-  max-height: 560px;
-  overflow: auto;
+  width: 100%;
+  min-width: 0;
+  /* 0729 画板退役：纵向滚动归页面（.lite-room-scroll），卡不再内滚——
+     1700px+ 高的判读卡整卡可读，这正是 persona check P1 的修法之一。 */
+  max-height: none;
+  overflow: visible;
 }
 
 /* ── feat-059 · 议事室简化输出（PRD G7）────────────────────────────────────────
@@ -1095,46 +1070,8 @@
   line-height: 1.5;
 }
 
-.lite2-shell .lite-room-canvas-controls {
-  position: absolute;
-  z-index: 5;
-  top: 10px;
-  right: 12px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  /* .lite-room-canvas 无 pointer-events 限制；控件自身即可点 */
-}
-
-.lite2-shell .lite-room-canvas-hint {
-  padding: 4px 10px;
-  border-radius: 999px;
-  background: rgba(var(--lite2-surface-rgb), 0.86);
-  border: 1px solid var(--rule);
-  color: var(--ink-faint);
-  font-size: 11px;
-  backdrop-filter: blur(8px);
-}
-
-.lite2-shell .lite-room-canvas-reset {
-  padding: 4px 12px;
-  border-radius: 999px;
-  border: 1px solid var(--rule);
-  background: rgba(var(--lite2-surface-rgb), 0.86);
-  color: var(--ink-soft);
-  font-size: 11px;
-  font-weight: 700;
-  backdrop-filter: blur(8px);
-  transition:
-    background var(--fast) ease,
-    color var(--fast) ease;
-}
-.lite2-shell .lite-room-canvas-reset:hover,
-.lite2-shell .lite-room-canvas-reset:focus-visible {
-  background: var(--ink);
-  color: var(--paper);
-  outline: none;
-}
+/* （0729 画板退役：.lite-room-canvas-controls / -hint / -reset 随 LitePanZoom 删除；
+    v01 的画布控件样式在 lite.css，冻结不动。） */
 
 /* ── feat-025 Q1 · Playbooks 空态屏（诚实标 coming-soon，文案锚未来能力）──────────
    复用 .nexus-empty 卡壳，但内容更长 → 放宽宽度 + 允许纵向滚动；左对齐读作叙事。 */
@@ -1559,9 +1496,8 @@
    lite 第二种 artifact 卡，与 .lite-room-card 内的 8 字段卡并列进 board flow。
    🔴 ADR-0023：多人回执只有 .ask-receipt-summary 一段——没有任何"每人一行×数值"的样式钩子。 */
 .lite2-shell .lite-room-board .lite-room-ask {
-  flex: 1 1 420px;
-  min-width: 300px;
-  max-width: 520px;
+  /* 0729 画板退役：board 变纵向列，快问卡随列全宽（原 flex-basis 420 是画布时代的并排位） */
+  width: 100%;
 }
 
 .lite-ask-card {
@@ -6005,16 +5941,14 @@
 .lite2-shell .lite-projects-frame,
 .lite2-shell .lite-followups-frame,
 .lite2-shell .lite-closerlook-frame,
+.lite2-shell .lite-room-board,
 .lite2-shell .lite-notes,
 .lite2-shell .lite-vision {
   padding-top: var(--lite2-clear-top);
 }
 
-/* 议事室画布：inset 简写（l.714，68px 20px 92px）里的 top 让位给变量——右 20/底 92
-   composer 带维持原值（棒2 审计清单：底部钉死件不动）。 */
-.lite2-shell .lite-room-canvas {
-  top: var(--lite2-clear-top);
-}
+/* （0729 画板退役：.lite-room-canvas 的 top 让位规则随画布删除；room 的顶距并入下面
+    消费者清单——.lite-room-board 吃 var(--lite2-clear-top)。） */
 
 /* 锚点跳转/聚焦滚动不钻顶栏（我们的滚动全在内滚容器，不在 html——她的
    html{scroll-padding-top:120px} 翻译到内滚层）。 */
@@ -6022,6 +5956,7 @@
 .lite2-shell .lite-projects-scroll,
 .lite2-shell .lite-followups-scroll,
 .lite2-shell .lite-closerlook-scroll,
+.lite2-shell .lite-room-scroll,
 .lite2-shell .lite-notes-body,
 .lite2-shell .lite-vision-scroll {
   scroll-padding-top: 120px;

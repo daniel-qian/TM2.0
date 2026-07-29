@@ -1457,7 +1457,7 @@ export const en = {
     composerRefsAria: 'Composer references',
     composerRemoveRefAria: 'Remove {label}',
     composerFilterAria: 'Filter references',
-    roomBoardAria: 'Ask Avery — board',
+    roomBoardAria: 'Ask Avery — output', // 0729 画板退役：board→纵向输出区（output-form-0729/01）
     roomAskAria: 'Ask your team',
     roomLiveQuestionAria: 'Live question',
     roomEmptyAria: 'Working it through — ask your team',

@@ -126,27 +126,82 @@ async function driveShell({ label, url, storeSeam }) {
   }
 
   // ── F2 · 滚轮在滚动区上必须是滚动，不是缩放 ────────────────────────────────────────
+  // 0729 画板退役（output-form-0729/01）：v02 已无画布——F2 的「不被缩放劫持」在 v02 变成
+  // 「defaultPrevented=false（劫持源整个退役）」；v01 冻结壳仍有画布，保留原 transform 断言。
   // ⚠ 顺序：先测滚轮再做真实点击——v02 点开原始流后 .lite-flow-body（简化态）就不在 DOM 里了。
-  for (const sel of ['.lite-room-card', label === 'v02' ? '.lite-flow-body' : '.nexus-terminal-log']) {
-    const wheel = await page.evaluate((s) => {
-      const el = document.querySelector(s)
-      const content = document.querySelector('.lite-panzoom-content')
-      if (!el || !content) return { found: false, sel: s }
-      const before = getComputedStyle(content).transform
-      const r = el.getBoundingClientRect()
-      const cx = Math.min(Math.max(r.x + 30, 10), innerWidth - 10)
-      const cy = Math.min(Math.max(r.y + 30, 10), innerHeight - 10)
-      const target = document.elementFromPoint(cx, cy) || el
-      const ev = new WheelEvent('wheel', { deltaY: 120, clientX: cx, clientY: cy, bubbles: true, cancelable: true })
-      target.dispatchEvent(ev)
-      return new Promise((res) => setTimeout(() => {
-        res({ found: true, sel: s, prevented: ev.defaultPrevented, before, after: getComputedStyle(content).transform })
-      }, 250))
-    }, sel)
-    if (!wheel.found) { rec(tag(`滚动区存在（${sel}）`), false, '选择器没找到'); continue }
-    rec(tag(`滚轮在 ${sel} 上不被缩放劫持（defaultPrevented=false 且 scale 不变）`),
-      wheel.prevented === false && wheel.before === wheel.after,
-      `prevented=${wheel.prevented} transform ${wheel.before === wheel.after ? '不变' : wheel.before + ' → ' + wheel.after}`)
+  if (label === 'v02') {
+    const decanvas = await page.evaluate(() => {
+      const scroll = document.querySelector('.lite-room-scroll')
+      const card = document.querySelector('.lite-room-board .lite-room-card')
+      return {
+        canvasGone: !document.querySelector('.lite-room-canvas') &&
+          !document.querySelector('.lite-panzoom-wrapper') && !document.querySelector('.lite-panzoom-content'),
+        scrollPresent: !!scroll,
+        scrollable: scroll ? scroll.scrollHeight > scroll.clientHeight : false,
+        cardStatic: card ? getComputedStyle(card).position === 'static' : null,
+        cardNoInnerScroll: card ? getComputedStyle(card).overflowY !== 'auto' : null,
+      }
+    })
+    rec(tag('画布退役：.lite-room-canvas/.lite-panzoom-* 不在 v02 DOM'), decanvas.canvasGone, JSON.stringify(decanvas))
+    rec(tag('滚动容器 .lite-room-scroll 在且真的可滚（1700px+ 卡靠页面滚）'),
+      decanvas.scrollPresent && decanvas.scrollable, `scrollable=${decanvas.scrollable}`)
+    rec(tag('判读卡回文档流（static 且不内滚——整卡可读是 persona P1 的修法）'),
+      decanvas.cardStatic === true && decanvas.cardNoInnerScroll === true,
+      `static=${decanvas.cardStatic} noInnerScroll=${decanvas.cardNoInnerScroll}`)
+    for (const sel of ['.lite-room-card', '.lite-flow-body']) {
+      const wheel = await page.evaluate((s) => {
+        const el = document.querySelector(s)
+        if (!el) return { found: false, sel: s }
+        const r = el.getBoundingClientRect()
+        const cx = Math.min(Math.max(r.x + 30, 10), innerWidth - 10)
+        const cy = Math.min(Math.max(r.y + 30, 10), innerHeight - 10)
+        const ev = new WheelEvent('wheel', { deltaY: 120, clientX: cx, clientY: cy, bubbles: true, cancelable: true })
+        ;(document.elementFromPoint(cx, cy) || el).dispatchEvent(ev)
+        return { found: true, sel: s, prevented: ev.defaultPrevented }
+      }, sel)
+      if (!wheel.found) { rec(tag(`滚动区存在（${sel}）`), false, '选择器没找到'); continue }
+      rec(tag(`滚轮在 ${sel} 上不被任何 handler 劫持（defaultPrevented=false）`),
+        wheel.prevented === false, `prevented=${wheel.prevented}`)
+    }
+    // composer 不压卡尾：滚到底后 board 最后一个子元素的下沿必须在 composer 上沿之上
+    //（board 底 padding 150px 就是给这个让位的——padding 被砍这里必红）。
+    const clearance = await page.evaluate(() => new Promise((res) => {
+      const scroll = document.querySelector('.lite-room-scroll')
+      const composer = document.querySelector('.lite-room .nexus-followup-composer')
+      const board = document.querySelector('.lite-room-board')
+      if (!scroll || !composer || !board || !board.children.length) return res({ found: false })
+      scroll.scrollTop = scroll.scrollHeight
+      setTimeout(() => {
+        const last = board.children[board.children.length - 1]
+        const lb = last.getBoundingClientRect().bottom
+        const ct = composer.getBoundingClientRect().top
+        res({ found: true, lastBottom: Math.round(lb), composerTop: Math.round(ct), clear: lb <= ct + 1 })
+      }, 150)
+    }))
+    rec(tag('滚到底后卡尾不被 composer 压住（底部让位足够）'),
+      clearance.found && clearance.clear, JSON.stringify(clearance))
+  } else {
+    for (const sel of ['.lite-room-card', '.nexus-terminal-log']) {
+      const wheel = await page.evaluate((s) => {
+        const el = document.querySelector(s)
+        const content = document.querySelector('.lite-panzoom-content')
+        if (!el || !content) return { found: false, sel: s }
+        const before = getComputedStyle(content).transform
+        const r = el.getBoundingClientRect()
+        const cx = Math.min(Math.max(r.x + 30, 10), innerWidth - 10)
+        const cy = Math.min(Math.max(r.y + 30, 10), innerHeight - 10)
+        const target = document.elementFromPoint(cx, cy) || el
+        const ev = new WheelEvent('wheel', { deltaY: 120, clientX: cx, clientY: cy, bubbles: true, cancelable: true })
+        target.dispatchEvent(ev)
+        return new Promise((res) => setTimeout(() => {
+          res({ found: true, sel: s, prevented: ev.defaultPrevented, before, after: getComputedStyle(content).transform })
+        }, 250))
+      }, sel)
+      if (!wheel.found) { rec(tag(`滚动区存在（${sel}）`), false, '选择器没找到'); continue }
+      rec(tag(`滚轮在 ${sel} 上不被缩放劫持（defaultPrevented=false 且 scale 不变）`),
+        wheel.prevented === false && wheel.before === wheel.after,
+        `prevented=${wheel.prevented} transform ${wheel.before === wheel.after ? '不变' : wheel.before + ' → ' + wheel.after}`)
+    }
   }
 
   // v02 · 真实点击全链路：actionability（可见/未被遮挡）+ 点完确实切到原始流 + 原始流终端的
@@ -161,27 +216,26 @@ async function driveShell({ label, url, storeSeam }) {
     if (realClickOk) {
       const isRaw = await page.evaluate(() => Boolean(document.querySelector('.lite-flow.is-raw')))
       rec(tag('点完真的展开了原始流（.lite-flow.is-raw）'), isRaw, `isRaw=${isRaw}`)
+      // 0729 画板退役：v02 无 .lite-panzoom-content 可量 transform——只断言无劫持。
       const rawWheel = await page.evaluate(() => {
         const el = document.querySelector('.nexus-terminal-log')
-        const content = document.querySelector('.lite-panzoom-content')
-        if (!el || !content) return { found: false }
-        const before = getComputedStyle(content).transform
+        if (!el) return { found: false }
         const r = el.getBoundingClientRect()
         const cx = Math.min(Math.max(r.x + 30, 10), innerWidth - 10)
         const cy = Math.min(Math.max(r.y + 30, 10), innerHeight - 10)
         const ev = new WheelEvent('wheel', { deltaY: 120, clientX: cx, clientY: cy, bubbles: true, cancelable: true })
         ;(document.elementFromPoint(cx, cy) || el).dispatchEvent(ev)
-        return new Promise((res) => setTimeout(() => {
-          res({ found: true, prevented: ev.defaultPrevented, same: before === getComputedStyle(content).transform })
-        }, 250))
+        return { found: true, prevented: ev.defaultPrevented }
       })
-      rec(tag('原始流终端上滚轮不被缩放劫持'),
-        rawWheel.found && rawWheel.prevented === false && rawWheel.same,
-        rawWheel.found ? `prevented=${rawWheel.prevented} scale${rawWheel.same ? '不变' : '变了'}` : '终端没找到')
+      rec(tag('原始流终端上滚轮不被劫持'),
+        rawWheel.found && rawWheel.prevented === false,
+        rawWheel.found ? `prevented=${rawWheel.prevented}` : '终端没找到')
     }
   }
 
-  // 反向护栏：空白画布上滚轮**仍然**缩放（别把 wheel-zoom 一刀关死——排除是精确的，不是全局的）。
+  // 反向护栏（0729 起 v01-only：v02 画布已退役，无 zoom 可护）：空白画布上滚轮**仍然**缩放
+  //（别把 wheel-zoom 一刀关死——排除是精确的，不是全局的）。
+  if (label === 'v01') {
   const bgZoom = await page.evaluate(() => {
     const content = document.querySelector('.lite-panzoom-content')
     const wrapper = document.querySelector('.lite-panzoom-wrapper')
@@ -198,6 +252,7 @@ async function driveShell({ label, url, storeSeam }) {
   rec(tag('空白画布上滚轮仍是缩放（排除名单没把 wheel-zoom 一刀关死）'),
     bgZoom.found && bgZoom.before !== bgZoom.after,
     bgZoom.found ? (bgZoom.before === bgZoom.after ? 'scale 没变——zoom 被全局关掉了？' : 'zoom 正常') : '画布没找到')
+  }
 
   rec(tag('无 pageerror'), pageErrors.length === 0, pageErrors.slice(0, 2).join(' | ') || '0 条')
   await ctx.close()

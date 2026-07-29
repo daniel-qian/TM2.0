@@ -727,32 +727,33 @@
     },
 
     async assertRoomCanvas() {
-      // Phase H (feat-025 Q3): The room must carry a thin pan/zoom canvas wrapper in the DOM,
-      // holding the terminal board. react-zoom-pan-pinch renders a .react-transform-wrapper /
-      // .react-transform-component under our .lite-room-canvas. The composer stays OUTSIDE it.
-      // NOTE: the canvas only mounts once a run has started (hasStarted) — call this AFTER
-      // composerAskLive so the terminal board exists.
+      // Phase H（0729 输出形态战役 01 · 画板退役——本相位从「画布必须在」**翻转**为
+      // 「画布必须绝迹」）：Ask Avery 的输出改全站统一 scroll→frame 纵向语法
+      // （.lite-room-scroll 滚动容器 + .lite-room-board 纵向列）。LitePanZoom /
+      // .lite-room-canvas / .lite-panzoom-* 在 v02 DOM 里必须绝迹（v01 冻结壳的画布
+      // 不归本相位管）。composer 仍在滚动区外恒可点。
+      // NOTE: board 只在 run 开始后挂载（hasStarted）——仍必须在 composerAskLive 之后调。
       this._clickTab('Ask Avery');
       try {
-        await poll(() => ($('.lite-room-canvas') ? true : null), 8000, 'room canvas to mount');
+        await poll(() => ($('.lite-room-scroll') ? true : null), 8000, 'room scroll frame to mount');
       } catch (e) { /* fall through */ }
-      const canvas = $('.lite-room-canvas');
-      const board = $('.lite-room-canvas .lite-room-board');
-      // react-zoom-pan-pinch injects these class names (both our wrapperClass and its own).
-      const transformWrapper =
-        $('.lite-room-canvas .lite-panzoom-wrapper') ||
-        $('.lite-room-canvas .react-transform-wrapper');
-      const resetBtn = $('.lite-room-canvas .lite-room-canvas-reset');
-      // Composer must be present and NOT nested inside the canvas (stays pinned/interactive).
-      const composerInCanvas = !!$('.lite-room-canvas .nexus-followup-composer');
-      const composerOutside = !!$('.lite-room .nexus-followup-composer') && !composerInCanvas;
+      const scroll = $('.lite-room-scroll');
+      const board = $('.lite-room-scroll .lite-room-board');
+      const canvasGone = !$('.lite-room-canvas') && !$('.lite-panzoom-wrapper') && !$('.react-transform-wrapper');
+      const scrollable = scroll ? getComputedStyle(scroll).overflowY === 'auto' : false;
+      const card = $('.lite-room-board .lite-room-card');
+      // 判读卡回文档流且纵向滚动归页面；卡未出（advise 没跑）时记 null 不判红。
+      const cardStatic = card ? getComputedStyle(card).position === 'static' : null;
+      const composerInScroll = !!$('.lite-room-scroll .nexus-followup-composer');
+      const composerOutside = !!$('.lite-room .nexus-followup-composer') && !composerInScroll;
       const out = {
-        canvasPresent: !!canvas,
+        scrollPresent: !!scroll,
         boardPresent: !!board,
-        panZoomWrapperPresent: !!transformWrapper,
-        resetControlPresent: !!resetBtn,
-        composerOutsideCanvas: composerOutside,
-        pass: !!canvas && !!board && !!transformWrapper && composerOutside,
+        canvasGone,
+        scrollable,
+        cardStatic,
+        composerOutsideScroll: composerOutside,
+        pass: !!scroll && !!board && canvasGone && scrollable && composerOutside && cardStatic !== false,
       };
       results.roomCanvas = out;
       return out;
