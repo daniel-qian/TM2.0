@@ -180,6 +180,42 @@ def check_schema(payload: dict[str, Any]) -> list[str]:
     return missing
 
 
+def enforce_answer(transcript: dict, cited_snippets: list[str] | None = None) -> ContractResult:
+    """0729/03 分流短答的契约闸：短答不过 9 字段投影，但三条地板一条不松——
+    ① 非空文本；② 红线全文复验（与 advice 同一把尺）；③ cite 闸（引擎 tool 侧已执法，
+    这里复核 transcript 里确有 resolved cite）。payload = {"text": ...}。"""
+    text = (transcript.get("answer") or "").strip()
+    payload: dict[str, Any] = {"text": text}
+
+    missing = [] if text else ["text"]
+    cites = transcript.get("cites") or []
+    if not any(c.get("resolved") for c in cites):
+        missing.append("resolved_cite")
+    schema_ok = not missing
+
+    rl = redline.validate(text, cited_snippets or [])
+    redline_passed = rl.passed
+
+    ok = schema_ok and redline_passed
+    reason = ""
+    if not schema_ok:
+        reason = "answer incomplete: missing " + ", ".join(missing)
+    elif not redline_passed:
+        reason = "red-line crossing in answer: " + rl.summary()
+
+    return ContractResult(
+        ok=ok,
+        payload=payload,
+        redline_passed=redline_passed,
+        redline_summary=rl.summary(),
+        schema_ok=schema_ok,
+        missing_fields=missing,
+        redline_violations=[{"rule_id": v.rule_id, "snippet": v.snippet, "note": v.note}
+                            for v in rl.violations],
+        reason=reason,
+    )
+
+
 def enforce(transcript: dict, cited_snippets: list[str] | None = None) -> ContractResult:
     """Project the transcript to the 8-field contract, then RE-VALIDATE red line + schema over the
     assembled payload. This is the API-level contract gate."""

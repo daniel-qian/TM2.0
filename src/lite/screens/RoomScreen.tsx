@@ -141,6 +141,16 @@ export function RoomScreen() {
                   </span>
                 </div>
               </div>
+              {/* 0729/03 分流短答（随 API 同步的最小镜像，v01 不重设计）：事实查询的一段话
+                  直答，与判读卡互斥。样式借 .lite-room-card 卡壳。 */}
+              {!advice && run.answer ? (
+                <div className="lite-room-card">
+                  <section className="lite-room-answer-card" aria-label={t.lite.roomAnswerLabel}>
+                    <p className="eyebrow">{t.lite.roomAnswerLabel}</p>
+                    <p className="lite-room-answer-text">{run.answer}</p>
+                  </section>
+                </div>
+              ) : null}
               {advice ? (
                 <div className="lite-room-card">
                   <LiteAdviceCard advice={advice} />

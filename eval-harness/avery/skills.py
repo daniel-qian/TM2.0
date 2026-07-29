@@ -14,9 +14,15 @@ from . import memory
 _FULL = ["00-relational-model.md", "01-red-line.md", "02-kind-read-can-be-wrong.md"]
 _MINUS_REDLINE = ["00-relational-model.md", "02-kind-read-can-be-wrong.md"]  # 011b baseline B
 
+# 0729/03 分流短答：链的地板不变（cite 先行），终局出口按问题类型二选一。
 CHAIN_HINT = (
     "Work in this fixed order, and only this order: read_case -> recall -> cite (once per "
-    "grounded claim) -> draft_advice. You cannot finish without at least one resolved cite."
+    "grounded claim) -> then ONE of two exits. You cannot finish without at least one resolved "
+    "cite. Exit A — answer_direct(text): the ask is a plain factual lookup (a time, a date, a "
+    "number, a name, a status); answer in one to three sentences, no more. Exit B — "
+    "draft_advice(read, move, framing): the ask needs judgment (a situation to read, a person "
+    "dynamic, a 'what should I do'). Keep each of read/move/framing tight — a short paragraph "
+    "each, no padding; length should match the weight of the question."
 )
 
 

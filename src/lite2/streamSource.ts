@@ -88,7 +88,9 @@ export interface LiteAdvice {
 export interface LiveRunState {
   status: 'idle' | 'running' | 'complete' | 'error'
   lines: LiteStreamLine[] // 逐拍累积的终端流行
-  advice: LiteAdvice | null // manifest.advice（8 字段）——ready 后填
+  advice: LiteAdvice | null // manifest.advice（契约 payload）——ready 后填
+  // 0729/03 分流短答：manifest.answer_kind='answer' 时的一段话直答（与 advice 互斥）。
+  answer: string | null
   // feat-034：manifest{kind:'ask-draft'} 落进来的 Quick ask 草稿（出生帧）。
   // 后续编辑/分享/回执的活体状态归 store 持有——这里只是"流里出生了一张草稿"的快照。
   askDraft: AskDraft | null
@@ -109,6 +111,7 @@ export function emptyRunState(): LiveRunState {
     status: 'idle',
     lines: [],
     advice: null,
+    answer: null,
     askDraft: null,
     contractOk: null,
     redlinePassed: null,
@@ -236,8 +239,22 @@ export function applyEvent(
         // ask-draft 帧不判 run 完成——advice 帧（或流自然收尾）才收 status。
         break
       }
+      // 0729/03 分流短答：answer 帧与 advice 帧互斥（advice=null、answer={text}）。
+      if (ev.answer_kind === 'answer') {
+        const a = ev.answer as Record<string, unknown> | null | undefined
+        state.answer = a && typeof a === 'object' && typeof a.text === 'string' && a.text ? a.text : null
+        state.advice = null
+        state.contractOk = ev.contract_ok ?? null
+        state.redlinePassed = ev.redline_passed ?? null
+        push('system', 'manifest', '', state.answer ? 'advice-ready' : 'advice-done')
+        state.status = 'complete'
+        countStep(state, 'act')
+        sealPhases(state)
+        break
+      }
       const advice = coerceAdvice(ev.advice)
       state.advice = advice
+      state.answer = null
       state.contractOk = ev.contract_ok ?? null
       state.redlinePassed = ev.redline_passed ?? null
       push('system', 'manifest', '', advice ? 'advice-ready' : 'advice-done')

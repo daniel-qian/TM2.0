@@ -456,6 +456,8 @@ export const en = {
     // grep and the align-line behavioural gate; only the ZH purity screen-scrape catches it).
     adviceCardAria: 'What it found — the read',
     adviceEyebrow: 'What it found',
+    // 0729/03 分流短答（v01 最小镜像）：事实查询的一段话直答气泡。
+    roomAnswerLabel: "Avery's answer",
     adviceReadTitle: 'The read',
     adviceSignOff: 'Yours to sign off',
     adviceSummaryAria: 'Summary — the read',
@@ -1416,6 +1418,8 @@ export const en = {
     // independently later, even though today the two cards render identical labels.
     adviceCardAria: "Avery's analysis — the read",
     adviceEyebrow: "Avery's analysis",
+    // 0729/03 分流短答：事实查询的一段话直答气泡（与判读卡互斥）。
+    roomAnswerLabel: "Avery's answer",
     adviceReadTitle: 'The read',
     adviceSignOff: 'Yours to sign off',
     adviceSummaryAria: 'Summary — the read',

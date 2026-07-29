@@ -311,6 +311,25 @@ export function RoomScreen() {
                   </span>
                 </div>
               </div>
+              {/* 0729/03 分流短答：事实查询的一段话直答（与判读卡互斥）。出处已由上方
+                  分析过程面板的「依据 N 条原文」承载；追问入口就是屏底常驻 composer。 */}
+              {!advice && run.answer ? (
+                <div className="lite-room-card lite-room-answer">
+                  <section className="lite-room-answer-card" aria-label={t.lite2.roomAnswerLabel}>
+                    <p className="eyebrow">{t.lite2.roomAnswerLabel}</p>
+                    <p className="lite-room-answer-text">{run.answer}</p>
+                  </section>
+                  {noteJustAdded ? (
+                    <button
+                      type="button"
+                      className="lite-btn lite-btn--ghost lite-notes-nudge"
+                      onClick={() => goScreen('notes')}
+                    >
+                      {t.lite2.notesNudge} →
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
               {advice ? (
                 <div className="lite-room-card">
                   <LiteAdviceCard advice={advice} />

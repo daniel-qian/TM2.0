@@ -44,11 +44,15 @@ export interface LiveAgentEvent {
   gate?: 'chain' | 'redline'
   message?: string
   // manifest：可选判别字段 kind（feat-034 契约提案，additive）：
-  //   缺省 / 'advice'  → advice = 8 字段 AgentOutput 契约 payload（现有消费者零破坏）
+  //   缺省 / 'advice'  → advice = 契约 payload（现有消费者零破坏）
   //   'ask-draft'      → ask = AskDraft 形状（agent 起草的 Quick ask，等 manager 确认）
   kind?: 'advice' | 'ask-draft'
   advice?: unknown
   ask?: unknown
+  // 0729/03 分流短答（additive）：answer_kind='answer' 时 advice=null、answer={text}——
+  // 事实查询的一段话直答；'advice'/缺省 = 判读卡路径，旧消费者零破坏。
+  answer_kind?: 'advice' | 'answer'
+  answer?: unknown
   contract_ok?: boolean
   redline_passed?: boolean
   schema_ok?: boolean

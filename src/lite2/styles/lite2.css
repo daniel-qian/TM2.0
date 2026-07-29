@@ -1500,6 +1500,22 @@
   width: 100%;
 }
 
+/* ── 0729/03 分流短答 · 一段话直答气泡（与判读卡互斥；出处由分析过程面板承载）────── */
+.lite2-shell .lite-room-answer-card {
+  background: var(--paper-strong);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  padding: 22px 24px;
+  box-shadow: var(--shadow-soft);
+}
+
+.lite2-shell .lite-room-answer-text {
+  margin: 10px 0 0;
+  font-size: 16px;
+  line-height: 1.7;
+  color: var(--ink);
+}
+
 .lite-ask-card {
   background: var(--paper-strong);
   border: 1px solid var(--rule-strong);

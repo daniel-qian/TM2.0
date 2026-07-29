@@ -1702,3 +1702,19 @@
 .lite-shell .lite-vision-tag {
   color: var(--honey-text, var(--honey));
 }
+
+/* ── 0729/03 分流短答（v01 最小镜像）· 一段话直答气泡 ─────────────────────────── */
+.lite-shell .lite-room-answer-card {
+  background: var(--paper-strong);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  padding: 22px 24px;
+  box-shadow: var(--shadow-soft);
+}
+
+.lite-shell .lite-room-answer-text {
+  margin: 10px 0 0;
+  font-size: 16px;
+  line-height: 1.7;
+  color: var(--ink);
+}

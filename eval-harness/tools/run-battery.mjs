@@ -7,6 +7,7 @@
 // 顺序错一次就是一轮假红（见下）。本文件就是那张名单本身。
 //
 // 🔴 清账结论：**实际是 25 道，不是 23 道**（A 19 / B 3 / C 3）。逐条依据见下面的「E3 裁定」。
+// 0729 更新：+1 道 answer-split（输出形态战役 03 分流短答）→ **26 道**（A 20 / B 3 / C 3）。
 //
 // ## 三段序是铁律，不是习惯
 //   ① 电池必须**独占跑**：与 agent 工作流并发会撞 CPU 超时，出假红（棒4 出过 6 条假红）。
@@ -88,6 +89,7 @@ const ROSTER = [
   { zone: 'A', name: 'status-truth',          cmd: ['eval-harness/tools/verify-status-truth.mjs'],                host: 'preview', backend: false, dist: false, note: 'absent ≠ none 的仲裁者' },
   { zone: 'A', name: 'room-nomaterial',       cmd: ['eval-harness/tools/verify-room-nomaterial.mjs'],             host: 'preview', backend: false, dist: false, note: '无材料 gate' },
   { zone: 'A', name: 'room-usability',        cmd: ['eval-harness/tools/verify-room-usability.mjs'],              host: 'preview', backend: true,  dist: false, note: '遮挡几何 + elementFromPoint' },
+  { zone: 'A', name: 'answer-split',          cmd: ['eval-harness/tools/verify-answer-split-03.mjs'],             host: 'preview', backend: true,  dist: false, note: '0729/03 分流短答：事实问→气泡无卡、判断问→卡无气泡（宁漏勿错杀钉子）+ v01 镜像' },
   { zone: 'A', name: 'handoffs-empty-honesty', cmd: ['eval-harness/tools/verify-handoffs-empty-honesty.mjs'],     host: 'preview', backend: false, dist: false, note: '空态不许编造交接' },
   { zone: 'A', name: 'switchers',             cmd: ['eval-harness/tools/verify-switchers.mjs'],                   host: 'preview', backend: false, dist: false, note: '顶栏右簇 皮/语/版 三切换器' },
   { zone: 'A', name: 'aria-zh',               cmd: ['eval-harness/tools/verify-aria-zh.mjs'],                     host: 'preview', backend: true,  dist: false, note: '扫 aria-label/title/alt（扫不到 placeholder）' },

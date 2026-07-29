@@ -104,10 +104,13 @@ def stream_advice(brain: Brain, case: Case, system_prompt: str, *, agent_name: s
             if resp.text and resp.text.strip():
                 yield {"type": "think", "text": resp.text}
 
-            if enforce_chain and ctx.advice is None and not nudged_chain:
+            # 0729/03 分流：两个合法终局出口——draft_advice（判断类）或 answer_direct（事实查询）。
+            if enforce_chain and ctx.advice is None and ctx.answer is None and not nudged_chain:
                 nudged_chain = True
-                msg = ("Deliver your answer by calling draft_advice(read, move, framing) — and "
-                       "cite() your evidence first. Do not answer in free text.")
+                msg = ("Deliver your answer through a tool — cite() your evidence first, then "
+                       "either answer_direct(text) for a plain factual lookup, or "
+                       "draft_advice(read, move, framing) for anything needing judgment. "
+                       "Do not answer in free text.")
                 conversation.append(_nudge(msg))
                 yield {"type": "nudge", "gate": "chain", "message": msg}
                 continue
@@ -123,6 +126,7 @@ def stream_advice(brain: Brain, case: Case, system_prompt: str, *, agent_name: s
                 yield {"type": "nudge", "gate": "redline", "message": msg,
                        "violations": [asdict(v) for v in rl.violations]}
                 ctx.advice = None
+                ctx.answer = None
                 continue
 
             steps.append({"type": "final", "text": final_text})
@@ -134,17 +138,39 @@ def stream_advice(brain: Brain, case: Case, system_prompt: str, *, agent_name: s
 
     transcript = _finish_transcript(ctx, steps, case, agent_name, scaffold, system_prompt,
                                     stop_reason)
+    # 0729/03 分流：answer_direct 终局走短答契约（红线 + 非空 + cite 闸），不过 9 字段投影；
+    # draft_advice 终局照旧走 advice 投影。manifest 用 answer_kind 区分，advice/answer 互斥。
+    if ctx.answer is not None and ctx.advice is None:
+        result = contract.enforce_answer(transcript, cited_snippets(ctx))
+        yield {
+            "type": "manifest",
+            "answer_kind": "answer",
+            "contract_ok": result.ok,
+            "contract_reason": result.reason,
+            "redline_passed": result.redline_passed,
+            "redline_summary": result.redline_summary,
+            "schema_ok": result.schema_ok,
+            "missing_fields": result.missing_fields,
+            "advice": None,
+            "answer": result.payload,      # {"text": ...} — 一段话直答
+            "gates": transcript["gates"],
+            "cites": transcript["cites"],
+            "transcript": transcript,
+        }
+        return
+
     result = contract.enforce(transcript, cited_snippets(ctx))
 
     yield {
         "type": "manifest",
+        "answer_kind": "advice",
         "contract_ok": result.ok,
         "contract_reason": result.reason,
         "redline_passed": result.redline_passed,
         "redline_summary": result.redline_summary,
         "schema_ok": result.schema_ok,
         "missing_fields": result.missing_fields,
-        "advice": result.payload,          # the 8-field AgentOutput contract payload
+        "advice": result.payload,          # the slim contract payload (required trio + optionals)
         "gates": transcript["gates"],
         "cites": transcript["cites"],
         "transcript": transcript,          # full native transcript (parity with run_loop)
@@ -167,6 +193,9 @@ def _finish_transcript(ctx: ToolContext, steps: list[dict], case: Case, agent_na
         "cites": [asdict(c) for c in ctx.cites],
         "used_draft_advice": ctx.advice is not None,
         "advice": asdict(ctx.advice) if ctx.advice else None,
+        # 0729/03：短答终局（answer_direct）。advice/answer 互斥；batch 侧 run_loop 不产出
+        # 这个键（服务端专属路径），parity 测试只比对共有键。
+        "answer": ctx.answer,
         "final_text": final_answer,
         "redline": {
             "passed": rl.passed,
@@ -176,7 +205,8 @@ def _finish_transcript(ctx: ToolContext, steps: list[dict], case: Case, agent_na
         },
         "gates": {
             "cite_gate_passed": any(c.resolved for c in ctx.cites),
-            "artifact_gate_passed": ctx.advice is not None,
+            # 0729/03：合法终局 artifact = advice 或 answer（两出口都吃过 cite 闸）
+            "artifact_gate_passed": ctx.advice is not None or ctx.answer is not None,
         },
         "stop_reason": stop_reason,
     }

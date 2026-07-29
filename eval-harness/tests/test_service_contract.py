@@ -210,6 +210,52 @@ def test_company_context_id_is_accepted_as_stub():
         live_input.discard(case)
 
 
+# === 0729/03 分流短答 =========================================================================
+
+def test_factual_ask_takes_answer_direct_exit():
+    """事实查询型问题走 answer_direct 短答出口——manifest.answer_kind='answer'、payload 只有
+    一段文本、9 字段投影不上场；红线与 cite 闸照吃（tool 序：cite 在 answer_direct 之前）。"""
+    sit = live_input.LiveSituation(situation="明天中层例会是几点？")
+    case = live_input.build_live_case(sit, MEMORY_DIR, with_mock=True)
+    try:
+        events = _events_for_case(case, make_mock_brain(case, "avery"))
+        m = _manifest(events)
+        assert m["answer_kind"] == "answer"
+        assert m["advice"] is None
+        assert m["answer"]["text"]
+        assert m["contract_ok"] and m["redline_passed"] and m["schema_ok"]
+        assert m["gates"]["cite_gate_passed"] and m["gates"]["artifact_gate_passed"]
+        tool_names = [e["name"] for e in events if e["type"] == "tool"]
+        assert "answer_direct" in tool_names and "draft_advice" not in tool_names
+        assert tool_names.index("cite") < tool_names.index("answer_direct")
+    finally:
+        live_input.discard(case)
+
+
+def test_judgment_ask_still_takes_advice_exit():
+    """判断类问题（含疑问词但要判断）绝不能被错杀成短答——mock 正则「宁漏勿错杀」的钉子。"""
+    sit = live_input.LiveSituation(situation="这周团队里有谁可能需要我搭把手？")
+    case = live_input.build_live_case(sit, MEMORY_DIR, with_mock=True)
+    try:
+        m = _manifest(_events_for_case(case, make_mock_brain(case, "avery")))
+        assert m["answer_kind"] == "advice"
+        assert m["advice"] and m["advice"]["summary"]
+    finally:
+        live_input.discard(case)
+
+
+def test_answer_direct_refused_without_cite():
+    """短答同吃 cite 闸：没 cite 就 answer_direct = REFUSED，产不出合法终局 artifact。"""
+    case = load_case(CASE)
+    plan = [_Step(tool=_tc(0, "read_case", {"case_id": case.case_id})),
+            _Step(tool=_tc(1, "answer_direct", {"text": "3 点开会。"})),
+            _Step(final="")]
+    m = _manifest(_events_for_case(case, MockBrain("hasty(mock)", plan)))
+    assert m["gates"]["artifact_gate_passed"] is False
+    assert m["answer_kind"] == "advice"  # 无合法短答终局 → 落回 advice 分支且契约必不 ok
+    assert not m["contract_ok"]
+
+
 # === parity: streaming driver terminal transcript == run_loop ==================================
 
 def test_stream_terminal_transcript_matches_run_loop():

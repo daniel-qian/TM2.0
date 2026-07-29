@@ -105,6 +105,13 @@ def make_mock_brain(case, persona: str) -> MockBrain:
         for c in spec.get("cites", []):
             plan.append(_Step(tool=_tc(n, "cite",
                         {"claim": c["claim"], "source_ref": c["source_ref"]}))); n += 1
+        # 0729/03 分流：MOCK 块给了 answer 就走短答出口（answer_direct），否则照旧 advice。
+        ans = spec.get("answer")
+        if ans:
+            text = ans.get("text", "") if isinstance(ans, dict) else str(ans)
+            plan.append(_Step(tool=_tc(n, "answer_direct", {"text": text}))); n += 1
+            plan.append(_Step(final=text))
+            return MockBrain("avery(mock)", plan)
         adv = spec.get("advice", {})
         plan.append(_Step(tool=_tc(n, "draft_advice", {
             "read": adv.get("read", ""), "move": adv.get("move", ""),

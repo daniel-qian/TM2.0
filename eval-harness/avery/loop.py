@@ -131,9 +131,11 @@ def _anthropic_tools() -> list[dict]:
 
 
 def _delivered(ctx, prose: str | None) -> str:
-    """The full answer the agent delivered = the draft_advice artifact + any final prose, so the
-    red line is checked against everything it actually emitted (not one half of it)."""
-    artifact = ctx.advice.render() if ctx.advice else ""
+    """The full answer the agent delivered = the terminal artifact + any final prose, so the
+    red line is checked against everything it actually emitted (not one half of it).
+    0729/03：终局 artifact 也可能是 answer_direct 的短答（服务端分流路径；batch 的 run_loop
+    自己的链闸仍只认 draft_advice，批测 persona 不走短答出口）。"""
+    artifact = ctx.advice.render() if ctx.advice else (getattr(ctx, "answer", None) or "")
     prose = (prose or "").strip()
     if artifact and prose and prose not in artifact:
         return artifact + "\n\n" + prose

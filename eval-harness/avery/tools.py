@@ -41,6 +41,9 @@ class ToolContext:
     case_id: str
     cites: list[Cite] = field(default_factory=list)
     advice: Advice | None = None
+    # 0729 输出形态战役 03（分流短答）：简单事实问的第二出口。与 advice 互斥地作为终局
+    # artifact——同样吃 cite 闸（无凭据不许答），但不过 9 字段投影。
+    answer: str | None = None
     read_case_called: bool = False
     # Optional embedder -> recall() ranks memory lines semantically (vs keyword). None = keyword.
     # Set by the service from env (key stays server-side); the offline gate leaves it None.
@@ -91,7 +94,9 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
         "name": "draft_advice",
         "description": "Produce the final, structured read. Refused if you have cited nothing. "
-                       "Never score/label the person; name the work and recommend the call.",
+                       "Never score/label the person; name the work and recommend the call. "
+                       "Use this ONLY for asks that need judgment — a situation to read, a call "
+                       "to make, a person dynamic. For a plain factual lookup use answer_direct.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -100,6 +105,24 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                 "framing": {"type": "string", "description": "how to open the conversation (safe framing)"},
             },
             "required": ["read", "move", "framing"],
+        },
+    },
+    # 0729/03 分流短答：简单事实问（几点/哪天/多少/谁负责这类查询）的直答出口。
+    # 仍然吃 cite 闸——无凭据不许答；答案一到三句，不套读/招/开场白三件套。
+    {
+        "name": "answer_direct",
+        "description": "Answer a plain factual lookup (a time, a date, a number, a name, a "
+                       "status) in one to three sentences, grounded in what you cited. Refused "
+                       "if you have cited nothing. Do NOT use this for anything needing "
+                       "judgment — situations, people dynamics, and 'what should I do' asks go "
+                       "through draft_advice.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string",
+                         "description": "the direct answer, one to three sentences"},
+            },
+            "required": ["text"],
         },
     },
 ]
@@ -119,6 +142,8 @@ def dispatch(name: str, args: dict[str, Any], ctx: ToolContext) -> str:
         return _cite(args, ctx)
     if name == "draft_advice":
         return _draft_advice(args, ctx)
+    if name == "answer_direct":
+        return _answer_direct(args, ctx)
     raise ToolError(f"unknown tool: {name}")
 
 
@@ -162,6 +187,20 @@ def _draft_advice(args: dict, ctx: ToolContext) -> str:
         raise ToolError("draft_advice needs non-empty `read`, `move`, and `framing`.")
     ctx.advice = Advice(read=read.strip(), move=move.strip(), framing=framing.strip())
     return "✓ advice drafted. You may now give your final answer."
+
+
+def _answer_direct(args: dict, ctx: ToolContext) -> str:
+    # 0729/03：短答与 advice 同吃 cite 闸——凭据先行是链的地板，不因形态短而松。
+    resolved = [c for c in ctx.cites if c.resolved]
+    if not resolved:
+        raise ToolError(
+            "REFUSED: you have not cited any evidence yet. Call cite(claim, source_ref) — at "
+            "least one resolved cite — before answer_direct.")
+    text = ((args or {}).get("text") or "").strip()
+    if not text:
+        raise ToolError("answer_direct needs a non-empty `text`.")
+    ctx.answer = text
+    return "✓ answered. You may now finish."
 
 
 def cited_snippets(ctx: ToolContext) -> list[str]:

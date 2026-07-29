@@ -52,6 +52,21 @@ def _slugify(text: str, fallback: str = "live-situation") -> str:
     return (slug[:48] or fallback)
 
 
+# 0729/03 · 事实查询判别（mock 专用，窄正则宁漏勿错杀——详见 _default_mock_block 内注释）。
+# 命中=纯查数/查时间/查日期/查状态的问法；判断类问题（谁需要帮助/该怎么办/为什么）不命中。
+# ⚠ 只收「疑问式查询」短语；deadline/截止 这类**话题词**不进正则——判断类问题
+# （"quiet before deadlines, how should I approach it"）撞上话题词被劈成短答就是错杀。
+_FACTUAL_RE = re.compile(
+    r"(几点|几号|哪一?天|什么时候|何时|多少|几个|几人|几位|"
+    r"what time|when is|when does|how many|how much|which date)",
+    re.IGNORECASE,
+)
+
+
+def _looks_factual(situation: str) -> bool:
+    return bool(_FACTUAL_RE.search(situation or ""))
+
+
 def _default_mock_block(memory_dir: Path, situation: str) -> dict:
     """A minimal deterministic plan for MockBrain on the live path.
 
@@ -70,6 +85,25 @@ def _default_mock_block(memory_dir: Path, situation: str) -> dict:
         cites = [{"claim": f"Grounded in the record: {h.text[:80]}", "source_ref": h.source}
                  for h in hits]
         recall_queries = [situation[:60]]
+
+    # 0729/03 分流短答（mock 侧）：事实查询型问题（几点/哪天/多少这类）给 answer 罐头，
+    # 让门电池能离线测到两条出口。真 brain 由提示词判据自行选工具，不走这个正则。
+    # 🔴 判据刻意收窄：只认明确的「查数/查时间」词，宁可漏（漏=多给一张结构卡，无害）
+    # 不可错杀（错杀=判断类问题被降成一句话）。「谁的项目最需要我搭把手」这类含疑问词
+    # 但要判断的问题必须继续走 advice 路。
+    if _looks_factual(situation):
+        return {
+            "prompt": situation.strip(),
+            "avery": {
+                "recall_queries": recall_queries,
+                "cites": cites,
+                "answer": {
+                    "text": ("Direct answer, grounded in the cited line — (mock backend: this "
+                             "canned sentence demonstrates the short-answer path; a real brain "
+                             "reads the actual fact out of your documents here)."),
+                },
+            },
+        }
 
     return {
         "prompt": situation.strip(),
