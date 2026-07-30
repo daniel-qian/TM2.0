@@ -325,6 +325,12 @@ class PostgresContextRegistry(ProjectWriteMixin):
             #
             # 修法：DELETE 之前先把这批 (source_key/filename → content) 捞在手里，INSERT 时
             # 只对 `sd.content is None` 的那些回填。
+            #
+            # ⚠ 代价：put() 期间这批字节会短暂进 Python 内存。上界由上传闸给死——
+            # `guards.max_total_bytes()` 默认 32 MiB / context（`AVERY_MAX_TOTAL_UPLOAD_BYTES`），
+            # 所以最坏情况是每次写多占 ~32MB 瞬时。**谁要调大那个环境变量，先回来看这一段**：
+            # 再往上抬就该改成纯 SQL 回填（临时表 + UPDATE...FROM，字节全程不出库），
+            # 别让一次「加一个项目」把容器顶到 OOM。
             # 🔴 只回填 None，绝不覆盖调用方明确给出的字节：一次真 ingest 带的是真 content，
             # 那时这张表压根不该说话（新 ingest 本就是新 context_id，捞出来是空的）。
             prior_bytes: dict[str, bytes] = {}
