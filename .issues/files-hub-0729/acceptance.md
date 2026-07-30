@@ -4,7 +4,7 @@
 - 范围：GitHub #21 父票 / #22 #23 #24 四切片（#25 = 本文件所属的收官片）
 - 提交：`3003401`（01）· `0bd1c30`（02）· `5383adb`（03）· 本片收官
 - ADR：[0032](../../docs/adr/0032-files-hub-tab-and-vision-demotion.md)
-- ⚠ **未推**：main 领先 origin/main 若干 commit，push 是人工闸（AGENTS.md § Autonomy & gates）。
+- ✅ **已上线**（2026-07-30）：前端 Vercel + 后端容器 swap，回执见 `receipt-deploy-0730.md`。
 
 ## 一、自己验一遍（10 分钟）
 
@@ -97,7 +97,10 @@ cd /d/avery && node node_modules/typescript/bin/tsc -b && node node_modules/vite
 修法：`put()` 在 DELETE 之前先把 `(source_key/filename → content)` 捞在手里，
 INSERT 时**只对 `sd.content is None` 的回填**。
 
-⚠ **这一条的真库验证还没做**：本机没有可用的 postgres，
+✅ **2026-07-30 已在真库上验了**（部署回执 `receipt-deploy-0730.md`）：拿 `/demo/claim` 的
+ephemeral 克隆当被试——不是客户真 context，但走同一个生产 Postgres、同一条 `get→改→put`。
+**旧镜像上「加一个项目」之后下载 404（born-red 实锤，且当时正 live）；新镜像上字节逐字节完好。**
+下面这段是当时的状态，留作沿革：本机没有可用的 postgres，
 `test_manual_crud_does_not_destroy_the_uploaded_bytes` 的 postgres 参数化跑不了。
 现在兜住它的是 ① memory 参数化（会过，但证不到 pg 那一侧）+ ② 一条离线结构守卫
 `test_pg_put_restores_bytes_that_get_deliberately_dropped`（删了修复就红）。

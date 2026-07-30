@@ -22,7 +22,7 @@
 
 ## 三件下一个人最该知道的事
 
-### 1. 那个 pg bug 的真库验证**还没做**（唯一一条未验项）
+### 1. 那个 pg bug —— **已在真库上验完，且已上线**（2026-07-30）
 
 `pg_registry.get()` 刻意不拉 bytea（`content=None`），而所有手编 CRUD 都是
 `get() → 改 → put()`，`put()` 先 DELETE 再按 `sd.content` 重插 —— 于是**一次「加一个项目」
@@ -34,8 +34,9 @@
 所以 `test_manual_crud_does_not_destroy_the_uploaded_bytes` 的 **postgres 参数化跑不了**。
 现在兜住它的是：① memory 参数化（会过，但证不到 pg 那侧）② 离线结构守卫
 `test_pg_put_restores_bytes_that_get_deliberately_dropped`（删了修复就红）。
-🔴 **部署预检必须在真库上跑一次那条行为断言** —— `offline-suite-blind-to-pg-persistence`
-那条教训说的就是这个：`not needs_db` 让整个 pg 层对默认套件隐形。
+✅ **已经跑了**（见 `.issues/files-hub-0729/receipt-deploy-0730.md`）：用 `/demo/claim` 的
+ephemeral 克隆当被试，绕开「不能拿真 context 做测试」那条限制——**旧镜像上「加一个项目」
+之后下载 404（born-red 实锤），新镜像上字节逐字节完好，swap 后在生产上复验也是完好**。
 
 ### 2. 新门是**上传型门**，排位有毒性
 
