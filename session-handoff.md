@@ -10,7 +10,7 @@
 
 ## 现在线上是什么
 
-- **前端** averylite.dannyqian.com = `origin/main`（`8769f6b`，Vercel 自动部署 ● Ready）。
+- **前端** averylite.dannyqian.com = `origin/main`（Vercel 自动部署 ● Ready；产品基线 `8769f6b`，其后仅 docs 提交）。
 - **后端** avery.dannyqian.com = 镜像 `avery-agent:main-20260730-125353`（SWAP SUCCESS，回滚梯
   `avery-prev-20260730-125353` 保留）。
 - 用户可见新面：/files 资料库第 10 屏（逐份下载 + 多库切换）、vision 降设置菜单、大白话命名
