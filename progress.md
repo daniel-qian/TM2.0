@@ -7,7 +7,7 @@
 
 ## Current State
 
-- **git**：`main` = `origin/main` = `8769f6b`（工作树干净，无未推提交）。生产 = main：前端 Vercel 自动部署（averylite.dannyqian.com）；后端容器 `avery-agent:main-20260730-125353`，回滚梯 `avery-prev-20260730-125353` 保留。
+- **git**：`main` 与 `origin/main` 推平、工作树干净；**最后一个产品 commit = `8769f6b`**（07-30 部署基线，其后 main 上只有 docs/快照类提交）。生产 = main：前端 Vercel 自动部署（averylite.dannyqian.com）；后端容器 `avery-agent:main-20260730-125353`（= `8769f6b`），回滚梯 `avery-prev-20260730-125353` 保留。
 - **07-28 → 07-30 三波已全部上线**：partner-docs（/paperwork 页 + 7 张 intake 表 + 红线 KPI-001 误报修，ADR-0030）、naming-0729（大白话命名 pass，5 tab 主名 + 词族，ADR-0031）、output-form-0729（议事室画板退役 / 砍契约样板 REQUIRED 9→3 / 分流短答 answer_direct）、files-hub-0729（feat-093：/files 资料库第 10 屏 + 逐份下载 + 多库切换 + 团队屏零文件元素，vision 降设置菜单，ADR-0032）。
 - **pg_registry 数据丢失 bug 已修并在真库实证**：`get→改→put` 会把上传原件 bytea 写 NULL（下载 404 + 原件永久销毁，改造前就在生产成立）。三跑取证：旧镜像 born-red 404 → 新镜像 200 字节相同 → swap 后生产复验 200。见 `.issues/files-hub-0729/receipt-deploy-0730.md`。
 - **验证账实（部署时点）**：全电池 27/27（A21/B3/C3，runner=`eval-harness/tools/run-battery.mjs`）；离线 pytest 四 deselect 3469 passed / 0 failed / 4 xfailed；像素基线 40 张（单机产物，gitignored）。

@@ -4,7 +4,8 @@
 > 更早的逐棒 handoff 已从本文件清出（2026-08-01 换血）——要考古用 `git log --follow session-handoff.md` 按日期捞旧版。
 
 **一句话**：naming-0729 + output-form-0729 + files-hub-0729 三战役 14 提交已于 07-30 前后端同上生产
-（含 pg_registry 原件销毁 bug 的真库 born-red 实证修复），`main` 与 `origin/main` 推平，无攒着的提交。
+（含 pg_registry 原件销毁 bug 的真库 born-red 实证修复），`main` 与 `origin/main` 推平，无攒着的提交
+（产品基线 = `8769f6b`，其后 main 只有 docs/快照类提交）。
 当前无 active 编码线，下一棒从「真 brain 取证」或独立票 #26–#29 起。
 
 ## 现在线上是什么
