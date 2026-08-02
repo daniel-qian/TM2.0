@@ -4,8 +4,11 @@ This asserts ONLY the contract (8 fields present, red line clean, cite gate sati
 provider — NOT verbatim copy (a real model's wording varies). It is SKIPPED, never failed, when no
 key is configured or the SDK is missing, so the suite stays green AFK. Run it live with e.g.:
 
-    AVERY_BRAIN=minimax python -m pytest tests/test_service_smoke.py -q -rs
-    AVERY_BRAIN=claude  python -m pytest tests/test_service_smoke.py -q -rs
+    AVERY_BRAIN=minimax python -m pytest tests/test_service_smoke.py -q -rs -m smoke
+    AVERY_BRAIN=claude  python -m pytest tests/test_service_smoke.py -q -rs -m smoke
+
+(`-m smoke` is required: pytest.ini is offline-by-default since arch-0802, and the explicit CLI
+-m is what overrides that deselect. Without it this file collects 0 tests.)
 
 Keys are read from eval-harness/.env (loaded by service.app / run_one). Nothing key-bearing is
 asserted or logged here.

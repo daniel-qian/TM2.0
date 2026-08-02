@@ -75,7 +75,7 @@ tests, so the two can't silently drift.
 
 ```bash
 python -m pytest tests/test_service_contract.py tests/test_service_http.py -q   # gate 1: battery
-AVERY_BRAIN=minimax python -m pytest tests/test_service_smoke.py -q -rs         # gate 2: real smoke
+AVERY_BRAIN=minimax python -m pytest tests/test_service_smoke.py -q -rs -m smoke  # gate 2: real smoke (-m smoke overrides the offline-by-default addopts)
 ```
 
 - `test_service_contract.py` — red-line hard-fail / cite gate / 8-field schema / SSE ordering /

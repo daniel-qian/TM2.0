@@ -54,7 +54,9 @@ BRAIN="${AVERY_BRAIN:-mock}"
 if [ "$BRAIN" != "mock" ]; then
   step "BACKEND — REAL-brain contract smoke (AVERY_BRAIN=$BRAIN)"
   # Contract-only (8 fields / red line / cite gate), never verbatim copy. Skips cleanly w/o a key.
-  if AVERY_BRAIN="$BRAIN" python -m pytest tests/test_service_smoke.py -q -rs; then
+  # `-m smoke` is REQUIRED since pytest.ini went offline-by-default (arch-0802): the explicit CLI
+  # -m overrides the addopts deselect; without it this path-selected file collects 0 tests (exit 5).
+  if AVERY_BRAIN="$BRAIN" python -m pytest tests/test_service_smoke.py -q -rs -m smoke; then
     echo "real-brain smoke: OK (or SKIPPED-need-keys)"
   else
     echo "real-brain smoke: FAILED"; FAIL=1
