@@ -91,8 +91,7 @@ Two independent artifacts, four targets, one env matrix:
 | `ANTHROPIC_API_KEY` | 🧑 **HITL** set | — | brain (claude) |
 | `MINIMAX_API_KEY` | — | 🧑 **HITL** set | brain (minimax) |
 | `DEEPSEEK_API_KEY` | — | 🧑 **HITL** set (if deepseek) | brain (deepseek) |
-| `AVERY_RETRIEVAL` | `keyword` (lite) → `vector` (turn-on §D) | same | `avery/ingest/store.py` |
-| `AVERY_EMBEDDINGS` | `openai`/`voyage` (when vector) | `bge-m3`/`minimax` (when vector) | `avery/ingest/store.py` |
+| `AVERY_EMBEDDINGS` | `dashscope`\|`bailian`\|`qwen`\|`text-embedding-v4` → real embeddings; anything else (incl. unset) → `keyword` | same | `avery/embeddings.py:119` (`resolve_embeddings_kind`) |
 | `PGVECTOR_URL` | 🧑 **HITL** (when vector) | 🧑 **HITL** (when vector) | vector store |
 | `AVERY_INGEST_CONCURRENCY` | `4` (default) | `4` (default) | `avery/ingest/extract.py` (feat-027 parallel ingest) |
 | `PORT` | `8137` | `8137` | uvicorn |
@@ -383,14 +382,18 @@ VITE_AVERY_MODE=live VITE_AVERY_LOCALE=zh VITE_AVERY_API_BASE=https://<境内-se
 Lite ships on the **keyword** retriever (offline, deterministic — the AFK gate). To turn on real
 vector RAG:
 
-1. 🧑 **HITL** — Danny picks the embeddings family per host (境内 BGE-M3/MiniMax · 海外 OpenAI/Voyage)
-   and stands up **pgvector** (self-hosted on each host — avoids 境内-unstable managed services,
-   ADR-0021 §取舍).
-2. Set `AVERY_RETRIEVAL=vector`, `AVERY_EMBEDDINGS=<family>`, `PGVECTOR_URL=…` (host secret store).
-3. **Small follow-up (not yet wired):** `avery/ingest/pipeline.py` currently selects the store in
-   code (`build_store(prefer_vector=…)`); the env-read for these three vars is the pairing change
-   when the real embedder is turned on. The matrix + code seam (`Embedder`, `VectorStore`,
-   `persistence="pgvector"`) are in place; the switch is a localized edit, not a rebuild of the core.
+1. 🧑 **HITL** — Danny picks the embeddings family and stands up pgvector. **Already done for 境内:**
+   DashScope `text-embedding-v4` / 1024-dim over the Supabase Postgres. The BGE-M3 / OpenAI / Voyage
+   options this step used to offer were never implemented — see the matrix row above for the only
+   kinds `resolve_embeddings_kind()` accepts.
+2. Set `AVERY_EMBEDDINGS=dashscope` (or another accepted kind), `DASHSCOPE_API_KEY=…`,
+   `AVERY_EMBED_MODEL` / `AVERY_EMBED_DIM`, and `AVERY_DB_URL`/`PGVECTOR_URL` (host secret store).
+3. **This IS wired now** (feat-031, superseding the "not yet wired" note that stood here): the env is
+   read by `avery/embeddings.py::resolve_embeddings_kind()` / `make_embedder_from_env()`. What decides
+   keyword-vs-vector at runtime is **not** the string alone but
+   `prefer_vector = embedder is not None and registry.persistent`
+   (`service/ingest_api.py:305`, `service/demo.py:119`) — i.e. you need BOTH a working key AND a
+   persistent (Postgres) registry. Miss either and retrieval silently degrades to keyword.
 
 ---
 
