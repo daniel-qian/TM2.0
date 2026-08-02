@@ -667,10 +667,27 @@
 
     // ── feat-025 (S5) new-module phases ──────────────────────────────────────
     // Tab-nav helper: click a lite topbar .scene-tab by (case-insensitive) label.
+    //
+    // 🔴 2026-08-02 修：这个助手自 0721 对齐棒起对 'Follow-ups' **永久失效**，直到今天才被
+    // 逮到——因为驱动 B/C 判定组的机械 runner 那天才刚落地（verify-flow-gap-phases.mjs），
+    // 在那之前它只被人工注入协议调用，而没人真去走那份协议。症状是 assertFollowupsFlow /
+    // assertFollowupsPersist 里三次 _clickTab('Follow-ups') 100% 超时。
+    //
+    // 根因：0721 把 follow-ups 那个 tab 拆成了两层（LiteTopbar.tsx:176-181 只有这一个 tab
+    // 这么做）——`.scene-tab-main` = 'To-do list' + `.scene-tab-sub` = 'Follow-ups'，
+    // 于是整颗按钮的 textContent 是 'To-do listFollow-ups'，与任何一个单独的标签都不相等。
+    // 本文件 1431-1438 承认过那次 rename，但只有 assertV2Boots 跟着改了读法，这里没跟。
+    //
+    // 修法：整颗 textContent 精确匹配**优先**（保持既有全部调用方的行为逐字不变），
+    // 匹配不上再看 main/sub 两层。只放宽"点得到"，不放宽任何判据。
     _clickTab(label) {
-      const tab = $$('.scene-tabs .scene-tab').find(
-        (b) => (b.textContent || '').trim().toLowerCase() === label.toLowerCase(),
-      );
+      const want = label.trim().toLowerCase();
+      const tabs = $$('.scene-tabs .scene-tab');
+      const txt = (el) => (el ? (el.textContent || '').trim().toLowerCase() : '');
+      const tab =
+        tabs.find((b) => txt(b) === want) ||
+        tabs.find((b) => txt(b.querySelector('.scene-tab-main')) === want) ||
+        tabs.find((b) => txt(b.querySelector('.scene-tab-sub')) === want);
       if (tab) tab.click();
       return !!tab;
     },
