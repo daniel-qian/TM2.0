@@ -14,6 +14,8 @@ inspect the client's configured timeout.
 """
 from __future__ import annotations
 
+import logging
+
 import pytest
 
 from service import brain_factory
@@ -53,6 +55,46 @@ def test_deepseek_advise_brain_also_bounded(monkeypatch):
 
     brain = brain_factory.make_brain(_dummy_case(), "deepseek")
     assert float(brain._client.timeout) == brain_factory.ADVISE_TIMEOUT_S_DEFAULT
+
+
+def test_unknown_adapter_without_client_is_flagged(caplog):
+    """_with_timeout used to silently return any brain lacking a bindable client — that's a real
+    gap (the brain then makes network calls with no timeout, see the SDK-default-600s comment
+    above), not a legitimate no-op. It should only stay silent for MockBrain; anything else must
+    log a warning naming the offending brain class."""
+
+    class _NoClientAtAll:
+        """No `_client` attribute whatsoever — e.g. a future adapter that forgot to set one."""
+
+    class _ClientWithoutWithOptions:
+        """Has a `_client`, but it's not an OpenAI/Anthropic-SDK-shaped client."""
+
+        def __init__(self):
+            self._client = object()
+
+    from service import live_input
+    from pathlib import Path
+
+    HERE = Path(__file__).resolve().parent.parent
+    sit = live_input.LiveSituation(situation="A teammate keeps going quiet before deadlines.")
+    case = live_input.build_live_case(sit, HERE / "memory", with_mock=True)
+    try:
+        mock_brain = brain_factory.make_brain(case, "mock")
+        with caplog.at_level(logging.WARNING, logger="service.brain_factory"):
+            brain_factory._with_timeout(_NoClientAtAll())
+            brain_factory._with_timeout(_ClientWithoutWithOptions())
+            brain_factory._with_timeout(mock_brain)
+    finally:
+        live_input.discard(case)
+
+    messages = [r.getMessage() for r in caplog.records]
+    assert any("_NoClientAtAll" in m for m in messages), (
+        f"expected a warning naming _NoClientAtAll, got: {messages!r}")
+    assert any("_ClientWithoutWithOptions" in m for m in messages), (
+        f"expected a warning naming _ClientWithoutWithOptions, got: {messages!r}")
+    assert len(messages) == 2, (
+        f"expected exactly one warning per unbound non-mock brain (MockBrain must stay silent), "
+        f"got: {messages!r}")
 
 
 def test_mock_brain_path_untouched(monkeypatch):

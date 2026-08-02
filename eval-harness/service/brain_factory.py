@@ -15,11 +15,14 @@ brains ignore it.
 """
 from __future__ import annotations
 
+import logging
 import os
 
 from avery.brain import (
     MINIMAX_BASE_URL, MINIMAX_MODEL, Brain, OpenAICompatBrain, make_mock_brain,
 )
+
+logger = logging.getLogger(__name__)
 
 DEEPSEEK_BASE_URL = "https://api.deepseek.com/v1"
 DEEPSEEK_MODEL = "deepseek-chat"
@@ -40,10 +43,23 @@ def _advise_timeout_s() -> float:
 def _with_timeout(brain: Brain) -> Brain:
     """Apply a bounded per-call timeout to a real brain's HTTP client (OpenAI/Anthropic SDK clients
     both support `.with_options(timeout=...)`). The mock brain has no `_client` and is returned
-    untouched — it is pure/local and never makes a network call."""
+    untouched — it is pure/local and never makes a network call, so it is explicitly whitelisted
+    out of the warning below (otherwise the offline test suite, which builds MockBrain constantly,
+    would get spammed).
+
+    Any OTHER brain that lands here without a bindable client is a silent gap — it will make real
+    network calls with no timeout bound (the SDK default is 600s read/write/pool), so we log a
+    warning instead of quietly returning it untouched."""
     client = getattr(brain, "_client", None)
     if client is not None and hasattr(client, "with_options"):
         brain._client = client.with_options(timeout=_advise_timeout_s())
+    elif type(brain).__name__ != "MockBrain":
+        logger.warning(
+            "brain_factory._with_timeout: %s has no bindable `_client.with_options` — "
+            "this brain is NOT bounded by AVERY_ADVISE_TIMEOUT_S and can hang the worker "
+            "for the SDK default (~600s) on a stalled provider.",
+            type(brain).__name__,
+        )
     return brain
 
 
