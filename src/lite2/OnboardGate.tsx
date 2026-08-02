@@ -106,9 +106,11 @@ export function OnboardGate() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Escape / 点背景 = 与 × 等价（pause 语义：进度保留、下次续跑）——对抗验证打回
-  // （2026-07-14）：aria-modal 弹层必须可键盘退出，否则键盘用户被困。feat-052 起这条由
-  // LiteModal 基座统一提供（onClose = pause），本组件不再自挂 window 监听。
+  // Escape = pause（进度保留、下次续跑）——对抗验证打回（2026-07-14）：aria-modal 弹层
+  // 必须可键盘退出，否则键盘用户被困。feat-052 起由 LiteModal 基座统一提供（onClose =
+  // pause），本组件不再自挂 window 监听。背景**不可点**（closeOnBackdrop=false，整页闸门
+  // 不是可随手拍掉的浮窗）；ui-sweep-0802 起基座在该配置下渲染 aria-hidden 纯遮罩，
+  // 不再是挂着关闭标签却无为的假按钮。
 
   const stepIndex = ONBOARD_STEPS.indexOf(step)
   const goNext = () => {
@@ -244,7 +246,12 @@ function StepDoors() {
   return (
     <div className="lite-onboard-step lite-gate-doors" data-gate-doors="">
       <h2>{l.onboardDoorsTitle}</h2>
-      <p className="lite-onboard-step-body">{l.onboardDoorsBody}</p>
+      {/* ui-sweep-0802：正文与门数联动——示例团队门被能力闸藏起时（探测失败/离线），还念
+          「两条路」就是向首访用户许诺一个屏上不存在的选项（7 屏走查同批实锤）。与下面
+          demo 门的渲染判据同一条：availability==='yes' 才是两扇门。 */}
+      <p className="lite-onboard-step-body">
+        {availability === 'yes' ? l.onboardDoorsBody : l.onboardDoorsBodySolo}
+      </p>
       <div className="lite-gate-door-grid">
         {/* 🔴 示例团队门只在后端真有 demo 时出现（demoStore 能力探测）——不出假按钮。 */}
         {availability === 'yes' ? (

@@ -1179,6 +1179,10 @@ export const en = {
     onboardDoorsTitle: 'How do you want to start?',
     onboardDoorsBody:
       'Two ways in. The sample team is the fastest look; your own files make it yours.',
+    // ui-sweep-0802: shown when the sample-team door is hidden by the capability probe —
+    // the two-ways line must never promise a door that is not on screen (7-screen finding).
+    onboardDoorsBodySolo:
+      'One way in right now: your own files — Avery reads them, and the picture it builds is yours.',
     // 🔴 The demo door renders ONLY when the backend really has a sample team (capability
     // probe) — no fake buttons. Copy states what the sample is: real, anonymized material.
     onboardDoorDemoTitle: 'Look around a sample team',

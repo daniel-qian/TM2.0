@@ -862,6 +862,7 @@ export const zh: Dict = {
     "onboardBrowse": "先随便看看",
     "onboardDoorsTitle": "想从哪里开始？",
     "onboardDoorsBody": "两条路。示例团队最快看到全貌；用自己的文件起步，Avery 读的就是你们公司的现实。",
+    "onboardDoorsBodySolo": "用自己的文件起步，Avery 读的就是你们公司的现实。",
     "onboardDoorDemoTitle": "用一份示例团队先看看",
     "onboardDoorDemoBody": "一份真实的示例团队（已脱敏）——花名册、项目和文档，Avery 已经读完。点一下就进，不用上传。",
     "onboardDoorDemoBusy": "正在为你准备示例副本…",

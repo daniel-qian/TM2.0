@@ -266,13 +266,18 @@ export function LiteModal({
 
   const layerClass = `lite-modal-layer${layerClassName ? ` ${layerClassName}` : ''}`
   const panelClass = `lite-modal-panel${panelClassName ? ` ${panelClassName}` : ''}`
-  const backdrop = (
+  // ui-sweep-0802：closeOnBackdrop=false 时背板不再渲染成「挂着关闭标签的 button」——
+  // 键盘/读屏用户会聚焦到一个自称 Close 却什么都不做的控件上（0802 走查实锤）。降级为
+  // 纯遮罩：不可聚焦、aria-hidden；视觉与点击拦截不变（同一个类，样式与元素无关）。
+  const backdrop = closeOnBackdrop ? (
     <button
       type="button"
       className="lite-modal-backdrop"
       aria-label={backdropLabel}
       onClick={dismiss}
     />
+  ) : (
+    <div className="lite-modal-backdrop" aria-hidden="true" />
   )
 
   // 静态分支：完全不进 AnimatePresence。open=false → 返回 null → React 同步卸载，
