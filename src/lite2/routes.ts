@@ -19,6 +19,15 @@ import { useLocation, useMatch } from 'react-router-dom'
 // 口径是「默认全带走 + 极小 EPHEMERAL 黑名单」，不是白名单：白名单会把别的线新加的参数
 // 悄悄吃掉（feat-061 的 `?showInactive=1`、AFK 门的 `?transport=stub` 都不在本条范围内，
 // 但都必须原样活着）。新参数默认继承，是这条设计的目的。
+//
+// 站内所有 `<Link to=...>` 必须经过下面的 href 助手（paperworkHref/visionHref/filesHref），
+// 不能在组件里手拼字面量路径或模板字符串：手拼会漏掉 carrySearch()，一次导航就把 `?v=2`
+// 丢了——壳整个掉回 v01（v01 里根本没有这些 lite2 路由）。这条纪律不再只靠注释提醒：
+// eslint.config.js 里给 src/lite2/**/*.tsx 加了一条 no-restricted-syntax，口径是**白名单**：
+// 只有 `<Link to={xxxHref()}>`（直接函数调用）能过，其余一律红——`to="/x"`、`to={'/x'}`、
+// `to={`/x`}`、`to={PAPERWORK_PATH}` 全拦。新增站内链接必须加一个 href 助手，不能绕过它。
+// （最初写成黑名单只拦字面量与模板串，复核用探针实测 `to={'/x'}` 与 `to={常量}` 两种都能溜过去，
+//  而后者恰恰是这条纪律要防的原始 bug 形状。黑名单永远漏在"想不到的那一种"上。）
 export type LiteScreen =
   | 'team'
   | 'room'
@@ -70,27 +79,21 @@ export const PROJECT_PATH = '/projects'
 // 线修（LiteTopbar.tsx 的 uiux-narrow-0728 段），把它塞成第十个 tab 是直接往那个 bug 上撞。
 // 于是 screenFromPathname('/paperwork') 照常兜底成 DEFAULT_SCREEN——底屏语义无所谓，因为
 // Lite2App 给这条路由挂的是 PaperworkScreen 自己，不走 ScreenView。
-//
-// 🔴 站内链到这一页必须 `${PAPERWORK_PATH}${carrySearch()}`，不能写裸路径：丢了 `?v=2`
-// 整个壳会掉回 v01，而 v01 里根本没有这条路由（本文件顶部「粘性 query」一节的同一条纪律）。
 export const PAPERWORK_PATH = '/paperwork'
 
-/** 站内链到「文件与表单」的 href（已带粘性 query）。别在组件里手拼。 */
+/** 站内链到「文件与表单」的 href（已带粘性 query）。别在组件里手拼——见顶部「粘性 query」节。 */
 export function paperworkHref(): string {
   return `${PAPERWORK_PATH}${carrySearch()}`
 }
 
 // files-hub-0729/01（ADR-0032）· 资料库 tab 上线，「完整版预告」（vision）**降进设置菜单**。
 // 页面与路由原样保留、仍是 LiteScreen 的一员——变的只是"进得去的入口在哪"。
-//
-// 🔴 为什么给它一个 href 助手而不是让设置菜单调 goScreen('vision')：设置菜单里那一行照
-// `/paperwork` 的先例做成真链接（<Link>），而真链接必须带粘性 query，否则丢了 `?v=2`
-// 整个壳掉回 v01（本文件顶部「粘性 query」一节的同一条纪律）。别在组件里手拼路径。
+/** 站内链到「完整版预告」的 href（已带粘性 query）。别在组件里手拼——见顶部「粘性 query」节。 */
 export function visionHref(): string {
   return `${SCREEN_PATH.vision}${carrySearch()}`
 }
 
-/** 站内链到「资料库」的 href（已带粘性 query）。首页卡底 / 团队屏引导卡 CTA 都走它。 */
+/** 站内链到「资料库」的 href（已带粘性 query）。别在组件里手拼——见顶部「粘性 query」节。 */
 export function filesHref(): string {
   return `${SCREEN_PATH.files}${carrySearch()}`
 }
