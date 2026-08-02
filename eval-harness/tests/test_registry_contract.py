@@ -481,14 +481,25 @@ def test_pg_put_restores_bytes_that_get_deliberately_dropped():
         "get() no longer drops the bytea — re-check whether put()'s restore is still needed, and "
         "update this guard deliberately rather than deleting it")
 
+    # arch-0802：restore 机制从 Python dict（prior_bytes）换成了纯 SQL（ON COMMIT DROP 临时表 +
+    # UPDATE...FROM，字节不出库）。按本测试自己的规矩「更新守卫而不是删弱」——改钉新机制的
+    # 三条不变量；行为面在真 PG 上由 test_manual_crud_does_not_destroy_the_uploaded_bytes（pg 腿）
+    # 与 test_pg_manual_crud_roundtrip_erases_no_column_anywhere（全列守卫）双钉。
     put_src = inspect.getsource(PostgresContextRegistry.put)
-    assert "prior_bytes" in put_src, (
+    assert "_prior_src_bytes" in put_src, (
         "put() lost the prior-bytes restore: every manual CRUD write now NULLs avery.source_documents"
         ".content, permanently destroying uploaded originals and turning the file hub's Download into"
         " a button that always fails")
-    assert "sd.content is not None" in put_src, (
-        "put() must only FALL BACK to the stored bytes — overwriting caller-supplied content would "
-        "make a genuine re-ingest resurrect stale bytes")
+    assert "content IS NULL" in put_src, (
+        "put() must only backfill rows whose NEW content is NULL — overwriting caller-supplied "
+        "content would make a genuine re-ingest resurrect stale bytes")
+    assert "NULLIF(source_key, '')" in put_src, (
+        "the restore's join key must treat source_key='' as absent (COALESCE alone only skips NULL "
+        "while INSERT never writes NULL there) — dropping NULLIF re-opens the exact bug the "
+        "roundtrip guard caught on 2026-08-02: docs without a source_key lose their bytes")
+    assert "_prior_mat_vecs" in put_src, (
+        "put() lost the embedding restore: an embedder-less put over an embedded context now NULLs "
+        "materials.embedding, silently degrading retrieval to keyword after any manual CRUD")
 
 
 # ==============================================================================================
