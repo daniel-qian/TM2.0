@@ -11,6 +11,10 @@
 // 0729 更新（files-hub-0729/02）：+1 道 context-switch（多库切换 + forget 源码闸）
 //   → **27 道**（A 21 / B 3 / C 3）。它是**上传型门**，与 file-manifest-truth /
 //   onboarding-returning 同罪：绝不能排到 C 区之后，否则就是往生产库里写测试数据。
+// 票 #14 更新：+1 道 flow-gap-phases（B/C 组判定：triage/follow-ups + "A closer look" 差距卡，
+//   snippet 1537-2074 行那 7 个断言函数此前零机械化 runner）→ **28 道**（A 22 / B 3 / C 3）。
+//   同样归入 A 区上传型门那一挂——它走真 HTTP 打本地 mock 后端（不是 `?transport=stub`，那个
+//   参数在 `vite build` 产物里是死的，见该门文件头注释），零花费但真上传，不能排到 C 区之后。
 //
 // ## 三段序是铁律，不是习惯
 //   ① 电池必须**独占跑**：与 agent 工作流并发会撞 CPU 超时，出假红（棒4 出过 6 条假红）。
@@ -82,16 +86,16 @@ const BASE = process.env.VERIFY_BASE || 'http://localhost:5173'
 //   env       额外环境变量
 //   note      口径备注
 const ROSTER = [
-  // ── A 区 · 吃共享 preview:5173（21 道，先跑）────────────────────────────────
-  //   ⚠ 这行数字长期是 17，实际 20 —— files-hub-0729/02 加 context-switch 之后是 21。
-  //   注释里的计数没人维护就会变成假信息，顺手改对。
+  // ── A 区 · 吃共享 preview:5173（22 道，先跑）────────────────────────────────
+  //   ⚠ 这行数字长期是 17，实际 20 —— files-hub-0729/02 加 context-switch 之后是 21，
+  //   票 #14 加 flow-gap-phases 之后是 22。注释里的计数没人维护就会变成假信息，顺手改对。
   { zone: 'A', name: 'topbar-clearance',      cmd: ['eval-harness/tools/verify-topbar-clearance.mjs'],            host: 'preview', backend: false, dist: false, note: '九屏×两皮顶栏让位几何' },
   { zone: 'A', name: 'cr-alignment',          cmd: ['eval-harness/tools/verify-cr-alignment.mjs'],                host: 'preview', backend: true,  dist: false, note: '规格表逐行断言；吃 SPEC_STICK（row.stick > N 打 [FUTURE] 不计红）' },
-  { zone: 'A', name: 'skin-phases',           cmd: ['eval-harness/tools/verify-skin-phases.mjs'],                 host: 'preview', backend: false, dist: false, note: '走 ?transport=stub，不碰后端' },
+  { zone: 'A', name: 'skin-phases',           cmd: ['eval-harness/tools/verify-skin-phases.mjs'],                 host: 'preview', backend: false, dist: false, note: '不碰后端——因为它的断言只读 CSS 计算值、从不 fetch。⚠ 不是因为 ?transport=stub 生效：那个参数在 `vite build` 产物里恒为死开关（store.ts:385 的 DEV 闸静态为 false），本仓门环境一律 build+preview，别照抄「走 stub 所以离线」这个理由去写新门（票 #14 实测）' },
   { zone: 'A', name: 'button-family',         cmd: ['eval-harness/tools/verify-button-family.mjs'],               host: 'preview', backend: true,  dist: false, note: '新按钮必须挂 .lite-btn 或进白名单；🔴 序错（dist 被调包）时这道必假红' },
   { zone: 'A', name: 'contrast-smalltext',    cmd: ['eval-harness/tools/verify-contrast-smalltext.mjs'],          host: 'preview', backend: false, dist: false, note: 'AA 4.5 硬地板' },
   { zone: 'A', name: 'home-skeleton',         cmd: ['eval-harness/tools/verify-home-skeleton.mjs'],               host: 'preview', backend: false, dist: false, note: '空态骨架零数字' },
-  { zone: 'A', name: 'status-truth',          cmd: ['eval-harness/tools/verify-status-truth.mjs'],                host: 'preview', backend: false, dist: false, note: 'absent ≠ none 的仲裁者' },
+  { zone: 'A', name: 'status-truth',          cmd: ['eval-harness/tools/verify-status-truth.mjs'],                host: 'preview', backend: true,  dist: false, note: '🔴 上传型门（uploadAndGoTeam 真发 POST /ingest + route.fetch 真打后端）；absent ≠ none 的仲裁者；**绝不能排在 C 区之后**。⚠ 2026-08-02 修：此前 backend 字段写的是 false 且没挂上传型标记——排位一直安全所以没咬到人，但照那个字段以为它能离线跑、或用 --from 把它拎到 C 区之后，就是往生产库写数据' },
   { zone: 'A', name: 'room-nomaterial',       cmd: ['eval-harness/tools/verify-room-nomaterial.mjs'],             host: 'preview', backend: false, dist: false, note: '无材料 gate' },
   { zone: 'A', name: 'room-usability',        cmd: ['eval-harness/tools/verify-room-usability.mjs'],              host: 'preview', backend: true,  dist: false, note: '遮挡几何 + elementFromPoint' },
   { zone: 'A', name: 'answer-split',          cmd: ['eval-harness/tools/verify-answer-split-03.mjs'],             host: 'preview', backend: true,  dist: false, note: '0729/03 分流短答：事实问→气泡无卡、判断问→卡无气泡（宁漏勿错杀钉子）+ v01 镜像' },
@@ -108,6 +112,7 @@ const ROSTER = [
   { zone: 'A', name: 'file-manifest-truth',   cmd: ['eval-harness/tools/verify-file-manifest-truth.mjs'],          host: 'preview', backend: true,  dist: false, note: '🔴 上传型门（真传一份好文件 + 一份结构性损坏 PDF）；30 判据；**绝不能排在 C 区之后**' },
   { zone: 'A', name: 'onboarding-returning',  cmd: ['eval-harness/tools/verify-onboarding-returning.mjs'],         host: 'preview', backend: true,  dist: false, note: '🔴 上传型门（铺垫一次真上传造"返回访客"）；15 判据；**绝不能排在 C 区之后**' },
   { zone: 'A', name: 'context-switch',        cmd: ['eval-harness/tools/verify-context-switch.mjs'],               host: 'preview', backend: true,  dist: false, note: '🔴 上传型门（真传两批造多库）；15 判据；files-hub-0729/02 多库切换 + forget 只许显式触发的源码闸；**绝不能排在 C 区之后**' },
+  { zone: 'A', name: 'flow-gap-phases',       cmd: ['eval-harness/tools/verify-flow-gap-phases.mjs'],              host: 'preview', backend: true,  dist: false, note: '🔴 上传型门（票 #14；手写种子造 gapDerive 要的"自报稳/真有卡点"矛盾）；triage/follow-ups(B组4判据)+差距卡(C组3判据)；`?transport=stub` 在这份 dist 上是死的（DEV 静态 false），走真 mock 后端；**绝不能排在 C 区之后**' },
 
   // ── B 区 · 自带服务器 / 像素基线（3 道，中段）───────────────────────────────
   { zone: 'B', name: 'data-boundary',         cmd: ['.issues/v02-partner-align-0718/verify-data-boundary.mjs'],   host: 'self',    backend: false, dist: false, note: '自起 dev server :5304（VERIFY_PORT 可改）；可选 VERIFY_OLD_STORE=<git-ref> 做 born-red' },
