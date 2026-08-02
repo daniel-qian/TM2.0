@@ -1,3 +1,5 @@
+> 已结案存档（2026-07-08），当前状态以 progress.md / feature_list.json 为准，本文件不再更新。
+
 # feat-026 per-line handoff — lite 定位叙事页 + 能力边界 mock（S6）
 
 > Worktree/line 纪律（AGENTS.md）：本文件是 feat-026 这条线的 per-line 交接；跨线合成（根

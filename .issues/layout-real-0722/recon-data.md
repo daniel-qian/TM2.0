@@ -219,7 +219,7 @@ if ((project.blockers ?? []).length === 0) continue
 
 | 实体 | 可检索字段路径 | 全量在内存? | 量级 |
 |---|---|---|---|
-| 成员 | `useLite.team.people[].name / .role / .team / .tenure / .owns[] / .collaboration[]` | 是 | **~30**（真 seed 实测 30 人卡，`.issues/feat-026/session-handoff.md:68`） |
+| 成员 | `useLite.team.people[].name / .role / .team / .tenure / .owns[] / .collaboration[]` | 是 | **~30**（真 seed 实测 30 人卡，`.issues/feat-026/session-handoff.md:70`） |
 | 项目 | `useLite.team.projects[].title / .summary / .ownerName / .status / .blockers[]` | 是 | **17**（`projectView.ts:9`） |
 | 信号 | `useLite.rawTeam.signals[].summary / .tag / .source` | 是 | 每文档若干，未上限；**已被 DetailOverlay 按 subjectId 过滤消费**（`DetailOverlay.tsx:53-56`） |
 | 笔记 | `useLite.notes[].text / .source_excerpt` | 是（后端全量返回，无分页） | 随 advise 次数累积 |

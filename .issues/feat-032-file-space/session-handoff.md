@@ -1,3 +1,5 @@
+> 已结案存档（2026-07-13），当前状态以 progress.md / feature_list.json 为准，本文件不再更新。
+
 # feat-032 — 每公司文件空间:源文档持久留存 + 可回看 · session handoff
 
 > 2026-07-13 · AFK gate-first · branch `feat/032-file-space`(base=feat/031-real-rag tip `21e6bae`,**未 push**)

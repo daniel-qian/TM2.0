@@ -1,3 +1,5 @@
+> 已结案存档（2026-07-13），当前状态以 progress.md / feature_list.json 为准，本文件不再更新。
+
 # feat/031 — 真向量 RAG(pgvector 落实)· session handoff
 
 > Branch `feat/031-real-rag`(base = feat/030-persistence tip `608a8c9`,**未 push**)。

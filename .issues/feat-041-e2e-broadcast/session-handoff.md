@@ -1,3 +1,5 @@
+> 已结案存档（2026-07-14），当前状态以 progress.md / feature_list.json 为准，本文件不再更新。
+
 # feat/041 session-handoff — 端到端 + 基本压测 + 广播（链尾收尾）
 
 > 2026-07-14 AFK,gate-first。分支 `feat/041-e2e-broadcast`（base = feat/040 tip `6d0f1e5`，**未 push**）。这是 lite-v1 lean-real 持久化链的**最后一环 + 第一波自动化端到端**（第二波 HITL = Danny）。

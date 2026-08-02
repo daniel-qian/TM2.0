@@ -1,3 +1,5 @@
+> 已结案存档（2026-07-18），当前状态以 progress.md / feature_list.json 为准，本文件不再更新。
+
 # ask-card per-line handoff（2026-07-13 grill 会话 → 双面施工 → 阶段 C 后端 → 部署收工）
 
 ## 2026-07-14 · feat-034 全线收工 ✅（最新状态，看这条即可）

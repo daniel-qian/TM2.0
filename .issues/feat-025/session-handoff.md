@@ -1,3 +1,5 @@
+> 已结案存档（2026-07-08），当前状态以 progress.md / feature_list.json 为准，本文件不再更新。
+
 # Session Handoff — feat-025 (S5 · lite 模块补齐) per-line
 
 > Worktree/per-line 纪律(AGENTS.md):本文件只记 feat-025 line;根 `session-handoff.md` + `progress.md` 由 main-checkout integrator 折叠。**接续只靠本文件 + git，不回放聊天。**

@@ -1,3 +1,5 @@
+> 已结案存档（2026-07-14），当前状态以 progress.md / feature_list.json 为准，本文件不再更新。
+
 # feat/039 上传硬门 — session handoff
 
 > impl 子代理在"实现全绿、提交前"卡死(agent-runtime 挂起,非代码 bug);编排者接管:验证行为→提交(`a36cd3c`)→起对抗验证。

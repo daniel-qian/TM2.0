@@ -1,3 +1,5 @@
+> 已结案存档（2026-07-03），当前状态以 progress.md / feature_list.json 为准，本文件不再更新。
+
 # Session handoff — 2026-07-03 investor-roadshow landing restructure (worktree line)
 
 Worktree: `elated-noether-7807c8` · branch `claude/intelligent-lichterman-d65856`. Uncommitted work — commit/merge is the integrator's call.

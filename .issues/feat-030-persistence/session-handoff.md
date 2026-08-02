@@ -1,3 +1,5 @@
+> 已结案存档（2026-07-13），当前状态以 progress.md / feature_list.json 为准，本文件不再更新。
+
 # feat/030 — session handoff(交接:对抗验证 + feat/031 接续)
 
 > 分支 `feat/030-persistence`(base = main `2bda603`,不 push,对外闸留 Danny)。
@@ -75,7 +77,7 @@ memory_files  (context_id FK cascade, filename∈facts.md|notes.md) PK · conten
 3. **feat-033 Avery 笔记**:memory_files 表可直接长出 agent 自写 notes(写侧必过红线门,PRD 已定)。
 4. **feat-034 隔离**:`owner_token` 列在位,零校验逻辑(现状:拿到 context_id 就能读,与 030 前同——本 feature 明确不做)。
 5. `updated_at` 只在 contexts upsert 时刷新;entities/materials 无独立时间戳(030 不需要)。
-6. Danny:独立 Supabase 项目迁移建议(ADR-0023 §决策4);生产 `AVERY_DB_URL` 填充;push。
+6. Danny:独立 Supabase 项目迁移建议(ADR-0023-postgres §决策4);生产 `AVERY_DB_URL` 填充;push。
 
 ## 8. 薄弱点自评(对抗验证请打这里)
 
@@ -113,7 +115,7 @@ memory_files  (context_id FK cascade, filename∈facts.md|notes.md) PK · conten
 
 - `d33c4e5` test(feat-030): persistence gates first, born red
 - `cbd6a4d` feat(030): Postgres persistence behind the ContextRegistry seam — gates green
-- `869aae5` docs(feat-030): ADR-0023 + feature_list entry + session handoff
+- `869aae5` docs(feat-030): ADR-0023 + feature_list entry + session handoff（= ADR-0023-postgres 那篇）
 - `fe977e8` test(feat-030): adversarial-gap gates, born red (P1/P2/P3/P6)
 - `6a56ba6` fix(feat-030): close 6 adversarial-validation gaps — gates green
 - (收盘 commit:handoff §9 追加,见 git log)

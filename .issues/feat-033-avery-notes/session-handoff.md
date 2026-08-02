@@ -1,3 +1,5 @@
+> 已结案存档（2026-07-13），当前状态以 progress.md / feature_list.json 为准，本文件不再更新。
+
 # feat/033 — Avery's notes · session handoff
 
 status: done (AFK, gate-first) · date: 2026-07-13 · branch: `feat/033-avery-notes` (NOT pushed)

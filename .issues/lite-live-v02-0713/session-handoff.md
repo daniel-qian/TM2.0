@@ -1,3 +1,5 @@
+> 已结案存档（2026-07-18），当前状态以 progress.md / feature_list.json 为准，本文件不再更新。
+
 # session-handoff · v02 线（feat-047/048/049）
 
 > 2026-07-18 收工。本线专属交接。**没碰** `progress.md` 与根 `session-handoff.md`

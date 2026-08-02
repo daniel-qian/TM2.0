@@ -1,3 +1,5 @@
+> 已结案存档（2026-07-19），当前状态以 progress.md / feature_list.json 为准，本文件不再更新。
+
 # feat-068 · 前端首次真部署 — session handoff（2026-07-18）
 
 > ## ⚠️ 07-19 收尾更正（原文一律不删，只在这里统一纠偏）
@@ -17,7 +19,7 @@
 > | `:74` `store.uploadFiles` 无 store 层防重入 | 已由对齐波 fixD（S5 blocker）在 store 层处理（`src/lite2/store.ts` +278/-11）。本行改为「复核 fixD 是否也覆盖了防重入」。 |
 > | `:75` 不抽 `shared/transport.ts` 的理由是「会和 8 条并行 UI 线正面冲突」 | **理由已消失**：并行线全部合流、两条线都停。且重复已经真实付了代价——fixB 只修了 `lite2/transport.ts`，`lite/transport.ts` 没跟上。现在是抽 shared/ 的窗口期。 |
 > | 各处「八条并行线」 | 对齐波是**十一条**（feat-050..060）。红线复核当时树上只有八条，**feat-055 / 057 / 058 三条的红线复核仍待补**。 |
-> | `:70` #13「上传前无客户端预检（10 文件 / 10MB / 类型）」 | 数字**是对的**，别照对齐波 S9 改。线上 env 显式覆盖了默认值：`AVERY_MAX_FILES=10`、`AVERY_MAX_UPLOAD_BYTES=10485760`（env 名与 `guards.py:41,46` 一致）。S9 说的 15 个 / 8 MiB 是**代码默认值**，不是生产真值。 |
+> | `:70` #13「上传前无客户端预检（10 文件 / 10MB / 类型）」 | 数字**是对的**，别照对齐波 S9 改。线上 env 显式覆盖了默认值：`AVERY_MAX_FILES=10`、`AVERY_MAX_UPLOAD_BYTES=10485760`（env 名与 `guards.py:45,54` 一致）。S9 说的 15 个 / 8 MiB 是**代码默认值**，不是生产真值。 |
 >
 > 07-19 收尾另修两条（详见 `acceptance-0719.html` 第「零」节与
 > `.issues/v02-partner-align-0718/receipt-deploy-line-0719-wrapup.md`）：

@@ -1,3 +1,5 @@
+> 已结案存档（2026-07-14），当前状态以 progress.md / feature_list.json 为准，本文件不再更新。
+
 # feat/040 部署预备 — session handoff
 
 > 本 feature = **预备 + 本地 docker 冒烟**。真部署(SSH ECS / nginx vhost / 阿里云 DNS / Vercel 连接 /

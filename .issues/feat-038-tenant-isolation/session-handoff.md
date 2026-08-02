@@ -1,3 +1,5 @@
+> 已结案存档（2026-07-13），当前状态以 progress.md / feature_list.json 为准，本文件不再更新。
+
 # feat/038 — 基础租户隔离 · session handoff
 
 > 2026-07-13 AFK,gate-first。分支 `feat/038-tenant-isolation`(未 push),base = `feat/033-avery-notes` tip `dbf888a`。
