@@ -28,7 +28,13 @@ Danny 一个人背 N 个项目，没时间逐项审。默认 **act first, report
 Before writing code:
 
 1. 读本文件。
-2. 读 `feature_list.json` —— 当前各 feature 的状态、依赖、证据。
+2. 读 `feature_list.json` —— **活的** feature（`not-started` / `in-progress`）在这里，字段齐全：状态、依赖、证据。
+   已 `done` 的 77 条只留四字段指针（`id` / `name` / `status` / `evidence_ref`），**完整记录（description、
+   dependencies、date、evidence 正文）整条搬进了 `feature_archive.json`**，按 id 查。
+   为什么搬：这个文件每个 session 都被强制读一遍，而 98%（按字节）是历史 done 的证据散文。
+   🔴 **`feature_archive.json` 是 190KB+ 的历史正文，任何"扫全仓修引用/行号/文档链接"的保洁必须把它
+   一起纳进扫描范围**——否则它就是一块永远扫不到的暗区（它是 2026-08-02 才拆出来的，此前所有
+   全仓扫描的口径里都没有它）。
 3. 读 `progress.md` —— 上个 session 停在哪、下一步是什么。
 4. 跑 `./init.sh`（或手动 `npm run typecheck && npm run build`）确认起点是绿的。
 
@@ -37,7 +43,10 @@ Before writing code:
 ## Scope
 
 - **One feature at a time**：只做 `feature_list.json` 里你认领的那一个 feature，依赖未完成的不要开。Stay in scope —— 顺手发现的问题记进 `progress.md` 的 Notes，不要顺手修。
-- feature 状态只有三种：`not-started` / `in-progress` / `done`。改状态必须同步改 `evidence` 字段。
+- feature 状态只有三种：`not-started` / `in-progress` / `done`（连字符，不是 `in_progress`）。**改状态必须同步落证据**：
+  活条目改的是自己的 `evidence` 字段；一条**改成 `done`** 时，把完整记录（description / dependencies /
+  date / evidence）写进 `feature_archive.json`，`feature_list.json` 里只留
+  `{id, name, status:"done", evidence_ref:"feature_archive.json#<id>"}` 四个字段。
 
 ## Verification Commands
 
