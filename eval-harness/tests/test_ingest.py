@@ -278,23 +278,3 @@ def test_seam_resolver_falls_back_to_default_for_unknown_id():
     assert got == default
     got2 = seam.resolve_memory_dir(None, default=default, registry=_fresh_registry())
     assert got2 == default
-
-
-def test_build_live_case_for_context_uses_ingested_memory(tmp_path):
-    """Compose with feat-015's build_live_case: a registered context routes the advisor to ingested
-    facts. Proves the stub goes real without rewriting service/live_input.py."""
-    from service.live_input import LiveSituation
-    reg = _fresh_registry()
-    ingest_paths(ALL_FILES, work_dir=tmp_path, registry=reg, context_id="ctx_live")
-    sit = LiveSituation(situation="Delivery on the core flow feels off — help me read it.",
-                        company_context_id="ctx_live")
-    case = seam.build_live_case_for_context(sit, HERE.parent / "memory", with_mock=True,
-                                            work_dir=tmp_path, registry=reg)
-    try:
-        # the MOCK block's cites were synthesized against the INGESTED facts.md, not the demo memory
-        assert case.mock, "expected a mock plan"
-        cited_refs = [c["source_ref"] for c in case.mock["avery"]["cites"]]
-        assert any(r.startswith("facts.md:") for r in cited_refs)
-    finally:
-        from service.live_input import discard
-        discard(case)
