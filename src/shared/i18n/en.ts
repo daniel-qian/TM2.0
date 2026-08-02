@@ -667,9 +667,10 @@ export const en = {
     groupCountOne: 'person',
     groupCountMany: 'people',
 
-    // ── The room — thin pan/zoom canvas (feat-025 Q3) ──
-    roomCanvasHint: 'Drag to move · scroll to zoom',
-    roomCanvasReset: 'Reset view',
+    // 0729 画板退役：lite2 曾经也有自己的 pan/zoom canvas 一对键（roomCanvasHint/
+    // roomCanvasReset），画板退役后 lite2 这侧再没人引用过——删了（i18n-orphans.mjs 扫出来的
+    // 孤儿，见 scripts/i18n-orphans.mjs）。lite.roomCanvasHint/roomCanvasReset（本文件 218-219
+    // 行）是活的孪生，被 src/lite/LitePanZoom.tsx 真引用，没有动。
 
     // ── Follow-ups screen (feat-035 laid the skeleton; feat-036 wires the real derivation —
     // today/this-week/later grouping, source tags, manual add, history, localStorage persistence.

@@ -561,8 +561,6 @@ export const zh: Dict = {
     "groupExpand": "展开",
     "groupCountOne": "人",
     "groupCountMany": "人",
-    "roomCanvasHint": "拖动平移 · 滚动缩放",
-    "roomCanvasReset": "重置视图",
     "followupsEyebrow": "跟进",
     "followupsTitle": "所有要跟进的事，收在一处",
     "followupsGroupToday": "今天",
