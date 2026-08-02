@@ -46,3 +46,6 @@ dist-authdemo/
 
 # partner-docs-0728 · scripts/ 下跑 python 会落这个（make-intake-xlsx.py）
 scripts/__pycache__/
+
+# 走查产物：截图 + 逐屏 JSON 快照，单机产物、体量大，不入 git（round-1 的 2026-08-02-shots 同样惯例）
+.issues/sweep/*-shots/
