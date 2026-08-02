@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useLite } from '../store'
 import { useDict } from '../../shared/i18n/useDict'
+import type { Locale } from '../../shared/i18n'
 import type { LiveNoteEntry } from '../transport'
 
 // feat-033 · lite 屏 5：Avery's notes——写侧、可见、跨会话累积的 agent 自写观察（UX 稿 §1-6）。
@@ -17,23 +18,29 @@ function dayKey(iso: string): string {
   return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
 }
 
-function dayLabel(iso: string, todayKey: string, todayText: string): string {
+// ui-sweep-0802 · 日期文案跟应用 locale，不跟 OS（与 lite2/screens/NotesScreen.tsx 同步修，
+// 口径对齐 KnownContextList.tsx 的 zh→zh-CN / en→en-US）。
+function dateLocale(locale: Locale): string {
+  return locale === 'zh' ? 'zh-CN' : 'en-US'
+}
+
+function dayLabel(iso: string, todayKey: string, todayText: string, locale: Locale): string {
   if (dayKey(iso) === todayKey) return todayText
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return iso
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  return d.toLocaleDateString(dateLocale(locale), { month: 'short', day: 'numeric' })
 }
 
-function timeLabel(iso: string): string {
+function timeLabel(iso: string, locale: Locale): string {
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return ''
-  return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+  return d.toLocaleTimeString(dateLocale(locale), { hour: 'numeric', minute: '2-digit' })
 }
 
-function sinceLabel(iso: string): string {
+function sinceLabel(iso: string, locale: Locale): string {
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return ''
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  return d.toLocaleDateString(dateLocale(locale), { month: 'short', day: 'numeric' })
 }
 
 interface NoteGroup {
@@ -42,7 +49,7 @@ interface NoteGroup {
   notes: LiveNoteEntry[]
 }
 
-function groupByDay(notes: LiveNoteEntry[], todayKey: string, todayText: string): NoteGroup[] {
+function groupByDay(notes: LiveNoteEntry[], todayKey: string, todayText: string, locale: Locale): NoteGroup[] {
   const groups: NoteGroup[] = []
   const byKey = new Map<string, NoteGroup>()
   for (const note of notes) {
@@ -50,7 +57,7 @@ function groupByDay(notes: LiveNoteEntry[], todayKey: string, todayText: string)
     const key = dayKey(note.created_at)
     let group = byKey.get(key)
     if (!group) {
-      group = { key, label: dayLabel(note.created_at, todayKey, todayText), notes: [] }
+      group = { key, label: dayLabel(note.created_at, todayKey, todayText, locale), notes: [] }
       byKey.set(key, group)
       groups.push(group)
     }
@@ -61,11 +68,11 @@ function groupByDay(notes: LiveNoteEntry[], todayKey: string, todayText: string)
 
 // 单条只读笔记条目（非 button；仅来源行可跳 Room）。is-new 高亮最新一条。
 function NoteEntry({ note, isNew }: { note: LiveNoteEntry; isNew: boolean }) {
-  const { t } = useDict()
+  const { t, locale } = useDict()
   const goScreen = useLite((s) => s.goScreen)
   return (
     <article className={`lite-notes-entry${isNew ? ' is-new' : ''}`}>
-      <p className="lite-notes-entry-time">{timeLabel(note.created_at)}</p>
+      <p className="lite-notes-entry-time">{timeLabel(note.created_at, locale)}</p>
       <p className="lite-notes-entry-text">{note.text}</p>
       {note.source_excerpt ? (
         <button
@@ -118,7 +125,7 @@ function NoteDayGroup({ group, defaultOpen, newestId }: {
 }
 
 export function NotesScreen() {
-  const { t } = useDict()
+  const { t, locale } = useDict()
   const notes = useLite((s) => s.notes)
   const contextId = useLite((s) => s.contextId)
   const refreshNotes = useLite((s) => s.refreshNotes)
@@ -131,7 +138,7 @@ export function NotesScreen() {
 
   const now = new Date()
   const todayKey = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`
-  const groups = groupByDay(notes, todayKey, t.lite.notesToday)
+  const groups = groupByDay(notes, todayKey, t.lite.notesToday, locale)
   const newestId = notes.length > 0 ? notes[0].id : null
   const oldest = notes.length > 0 ? notes[notes.length - 1] : null
 
@@ -146,7 +153,7 @@ export function NotesScreen() {
             {/* 🔴 常驻红线信任说明（复用 .upload-privacy-note 静音层级） */}
             <p className="upload-privacy-note lite-notes-redline-note">{t.lite.notesRedlineNote}</p>
             <p className="lite-notes-count">
-              {notes.length} {t.lite.notesCountSince} {oldest ? sinceLabel(oldest.created_at) : ''}
+              {notes.length} {t.lite.notesCountSince} {oldest ? sinceLabel(oldest.created_at, locale) : ''}
             </p>
           </header>
 

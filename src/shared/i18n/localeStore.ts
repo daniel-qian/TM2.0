@@ -17,12 +17,23 @@ export interface LocaleState {
   setLocale: (locale: Locale) => void
 }
 
+// ui-sweep-0802 · 读屏器只认 `<html lang>`：index.html 静态写死 lang="en"，zh 会话下辅助
+// 技术一直按英文规则念中文文案（0802 走查 5 屏实锤）。锚在本 store 是因为它是两壳唯一的
+// locale 反应点（初值与 setLocale 都经过这里）；纯 Vite SPA 无 SSR，模块加载期 document
+// 已存在，直接写安全。
+function syncDocumentLang(locale: Locale) {
+  if (typeof document !== 'undefined') {
+    document.documentElement.lang = locale === 'zh' ? 'zh-CN' : 'en'
+  }
+}
+
 function initialLocale(): Locale {
   const locale = resolveLocale()
   // 深链同步（kickoff 需求②）：`?lang=` 显式给出时，把这次的选择落 localStorage——下次
   // 不带参数的裸链/刷新仍保持这次的选择。只在「这次确实是 URL 赢的」时才写，否则每次
   // 无参访问都会把 env/默认值错当"用户选择"焊死进 localStorage。
   if (localeFromUrlParam() === locale) persistLocale(locale)
+  syncDocumentLang(locale)
   return locale
 }
 
@@ -30,6 +41,7 @@ export const useLocaleStore = create<LocaleState>((set) => ({
   locale: initialLocale(),
   setLocale: (locale) => {
     persistLocale(locale)
+    syncDocumentLang(locale)
     set({ locale })
   },
 }))
