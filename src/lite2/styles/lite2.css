@@ -1,11 +1,20 @@
-/* ═══════════════════════ feat-024 · lite 壳（ADR-0022）═══════════════════════
-   lite 专属增量样式。只取色于既有 token（paper/ink/sage/honey/terracotta），无新色板。
-   卡片/字体/终端/报告卡的 chrome 全部来自 shared chunk——这里只补 lite 独有件：
-   上传面板（feat-017 时代裸奔无样式）、首字母 avatar、真数 briefing chips、
-   空态引导、薄详情浮层、The room 的卡布局。 */
+/* ═════════════════════ lite2（v02）壳专属样式 · ADR-0022 ═════════════════════
+   本文件是 v02 壳（`.lite2-shell`，见 Lite2App.tsx）的全部增量样式。只取色于既有
+   token（paper/ink/sage/honey/terracotta），无新色板；卡片/字体/终端/报告卡的 chrome
+   来自 shared chunk，这里只补 v02 独有件。
+
+   🔴 唯一硬纪律：**每一条规则的选择器都必须 scoped 在 `.lite2-shell` 之下**——
+   包括 @media 块内部的规则（@media 不构成作用域）。理由是 v01 壳（src/lite/styles/
+   lite.css）与本文件有近百个逐字同名的类；任何一条裸选择器都会越界污染 v01。
+   例外只有三类：@keyframes 内部的关键帧选择器（0%/from/to，不是选择器）、@font-face、
+   以及 :root 级变量声明。
+
+   main.tsx 里本文件 import 在最后一位——同特异性时它压 lite.css / look-*.css，
+   所以「越界」的后果是 v01 被静默改版，不会有任何报错。
+   守门脚本：`node scripts/css-scope-check.mjs`（非 0 退出 = 有裸选择器）。 */
 
 /* ── 首字母 avatar（live 人无 sprite——不凭空派 avatar 资产）─────────────── */
-.initial-avatar {
+.lite2-shell .initial-avatar {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -19,7 +28,7 @@
 }
 
 /* ── 上传面板 ────────────────────────────────────────────────────────────── */
-.upload-panel {
+.lite2-shell .upload-panel {
   display: grid;
   gap: 12px;
   padding: 16px;
@@ -29,21 +38,21 @@
   box-shadow: var(--shadow-soft);
 }
 
-.upload-panel-head h2 {
+.lite2-shell .upload-panel-head h2 {
   margin: 0 0 4px;
   font-family: var(--lite2-heading-font);
   font-size: 17px;
   font-weight: 500;
 }
 
-.upload-panel-head p {
+.lite2-shell .upload-panel-head p {
   margin: 0;
   color: var(--ink-soft);
   font-size: 13px;
   line-height: 1.5;
 }
 
-.upload-dropzone {
+.lite2-shell .upload-dropzone {
   display: grid;
   justify-items: center;
   gap: 8px;
@@ -56,23 +65,23 @@
   transition: border-color var(--fast) ease, background var(--fast) ease;
 }
 
-.upload-dropzone.is-dragover {
+.lite2-shell .upload-dropzone.is-dragover {
   border-color: var(--sage);
   background: rgba(var(--lite2-accent-rgb), 0.08);
 }
 
-.upload-dropzone.is-busy {
+.lite2-shell .upload-dropzone.is-busy {
   opacity: 0.65;
   pointer-events: none;
 }
 
-.upload-drop-label {
+.lite2-shell .upload-drop-label {
   margin: 0;
   color: var(--ink-soft);
   font-size: 13px;
 }
 
-.upload-choose {
+.lite2-shell .upload-choose {
   min-height: 34px;
   padding: 0 18px;
   border: 0;
@@ -83,39 +92,39 @@
   font-weight: 700;
 }
 
-.upload-choose:hover,
-.upload-choose:focus-visible {
+.lite2-shell .upload-choose:hover,
+.lite2-shell .upload-choose:focus-visible {
   outline: none;
   background: var(--lite2-ink-hover);
 }
 
-.upload-accepted {
+.lite2-shell .upload-accepted {
   margin: 0;
   color: var(--ink-faint);
   font-size: 11px;
 }
 
-.upload-status p {
+.lite2-shell .upload-status p {
   margin: 0;
   font-size: 13px;
 }
 
-.upload-ingesting {
+.lite2-shell .upload-ingesting {
   color: var(--honey);
 }
 
-.upload-ready-label {
+.lite2-shell .upload-ready-label {
   color: var(--sage);
   font-weight: 700;
 }
 
-.upload-grown-from {
+.lite2-shell .upload-grown-from {
   margin-top: 4px !important;
   color: var(--ink-soft);
   font-size: 12px !important;
 }
 
-.upload-source-chip {
+.lite2-shell .upload-source-chip {
   display: inline-block;
   margin: 2px 4px 0 0;
   padding: 2px 8px;
@@ -125,17 +134,17 @@
   font-size: 11px;
 }
 
-.upload-error-label {
+.lite2-shell .upload-error-label {
   color: var(--terracotta);
   font-weight: 700;
 }
 
-.upload-error-detail {
+.lite2-shell .upload-error-detail {
   color: var(--ink-soft);
   font-size: 12px !important;
 }
 
-.upload-retry {
+.lite2-shell .upload-retry {
   margin-top: 6px;
   min-height: 30px;
   padding: 0 14px;
@@ -145,11 +154,11 @@
   font-size: 12px;
 }
 
-.upload-empty {
+.lite2-shell .upload-empty {
   color: var(--ink-faint);
 }
 
-.upload-privacy-note {
+.lite2-shell .upload-privacy-note {
   margin: 0;
   color: var(--ink-faint);
   font-size: 11px;
@@ -158,20 +167,20 @@
 
 /* feat-047 移植（feat-032）·「你的文件」持久清单——薄回看视图（filename · size · n_chunks）。
    令牌纪律：--lite2-paper-rgb 随皮肤切换（paper=暖纸/aurora=白），不写死暖纸字面量。 */
-.upload-files {
+.lite2-shell .upload-files {
   margin-top: 4px;
   padding-top: 10px;
   border-top: 1px solid var(--rule);
 }
 
-.upload-files-title {
+.lite2-shell .upload-files-title {
   margin: 0 0 6px;
   color: var(--ink-soft);
   font-size: 12px;
   font-weight: 700;
 }
 
-.upload-files-list {
+.lite2-shell .upload-files-list {
   margin: 0;
   padding: 0;
   list-style: none;
@@ -180,7 +189,7 @@
   gap: 4px;
 }
 
-.upload-file-row {
+.lite2-shell .upload-file-row {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
@@ -191,13 +200,13 @@
   background: rgba(var(--lite2-paper-rgb), 0.6);
 }
 
-.upload-file-name {
+.lite2-shell .upload-file-name {
   color: var(--ink);
   font-size: 12px;
   word-break: break-word;
 }
 
-.upload-file-meta {
+.lite2-shell .upload-file-meta {
   flex: none;
   color: var(--ink-faint);
   font-size: 11px;
@@ -205,17 +214,17 @@
 }
 
 /* 空态右栏：上传面板不贴边、居中呼吸 */
-.home-lanes-live-empty {
+.lite2-shell .home-lanes-live-empty {
   align-content: start;
   padding-top: 24px;
 }
 
 /* ── 上传空态左脊柱（live 自己的引导，零 scripted 占位）───────────────────── */
-.lite-empty-greeting .home-greeting-sub {
+.lite2-shell .lite-empty-greeting .home-greeting-sub {
   max-width: 44ch;
 }
 
-.lite-empty-hints {
+.lite2-shell .lite-empty-hints {
   margin: 18px 0 0;
   padding: 0;
   list-style: none;
@@ -223,7 +232,7 @@
   gap: 10px;
 }
 
-.lite-empty-hints li {
+.lite2-shell .lite-empty-hints li {
   position: relative;
   padding-left: 18px;
   color: var(--ink-soft);
@@ -231,7 +240,7 @@
   line-height: 1.55;
 }
 
-.lite-empty-hints li::before {
+.lite2-shell .lite-empty-hints li::before {
   content: '';
   position: absolute;
   left: 0;
@@ -244,21 +253,21 @@
 }
 
 /* ── feat-050 会话恢复：空态里的"正在取回 / 没连上"两行（安静，不抢上传引导的戏）── */
-.lite-empty-restoring {
+.lite2-shell .lite-empty-restoring {
   margin: 18px 0 0;
   color: var(--ink-soft);
   font-size: 13px;
   line-height: 1.55;
 }
 
-.lite-empty-restore-failed {
+.lite2-shell .lite-empty-restore-failed {
   margin: 18px 0 0;
   display: grid;
   gap: 6px;
   justify-items: start;
 }
 
-.lite-empty-restore-note {
+.lite2-shell .lite-empty-restore-note {
   margin: 0;
   color: var(--ink-soft);
   font-size: 13px;
@@ -266,7 +275,7 @@
 }
 
 /* 原始错误串（`team HTTP 500` 之类）——现场排障看得见，但压到最轻。 */
-.lite-empty-restore-detail {
+.lite2-shell .lite-empty-restore-detail {
   margin: 0;
   color: var(--ink-faint);
   font-size: 11px;
@@ -274,7 +283,7 @@
   word-break: break-word;
 }
 
-.lite-empty-restore-retry {
+.lite2-shell .lite-empty-restore-retry {
   margin-top: 2px;
   padding: 5px 12px;
   border: 1px solid var(--rule-strong);
@@ -286,19 +295,19 @@
   cursor: pointer;
 }
 
-.lite-empty-restore-retry:hover {
+.lite2-shell .lite-empty-restore-retry:hover {
   border-color: var(--sage);
 }
 
 /* ── briefing 真数顶栏（聚合数字 R2：真算才显）───────────────────────────── */
-.lite-metrics {
+.lite2-shell .lite-metrics {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 12px;
 }
 
-.lite-metric-chip {
+.lite2-shell .lite-metric-chip {
   display: inline-flex;
   align-items: baseline;
   gap: 5px;
@@ -310,12 +319,12 @@
   font-size: 12px;
 }
 
-.lite-metric-chip strong {
+.lite2-shell .lite-metric-chip strong {
   color: var(--ink);
   font-size: 14px;
 }
 
-.lite-handoffs-empty {
+.lite2-shell .lite-handoffs-empty {
   margin: 0;
   color: var(--ink-faint);
   font-size: 13px;
@@ -358,7 +367,7 @@
 }
 
 /* ── 薄只读详情浮层（纯 live payload，杀死 "Unknown teammate"）──────────── */
-.lite-detail-card {
+.lite2-shell .lite-detail-card {
   position: relative;
   width: min(560px, 92vw);
   max-height: min(78vh, 720px);
@@ -372,7 +381,7 @@
   box-shadow: var(--shadow);
 }
 
-.lite-detail-close {
+.lite2-shell .lite-detail-close {
   position: absolute;
   top: 14px;
   right: 16px;
@@ -385,48 +394,48 @@
   font-size: 12px;
 }
 
-.lite-detail-close:hover,
-.lite-detail-close:focus-visible {
+.lite2-shell .lite-detail-close:hover,
+.lite2-shell .lite-detail-close:focus-visible {
   outline: none;
   border-color: var(--ink);
   color: var(--ink);
 }
 
-.lite-detail-head {
+.lite2-shell .lite-detail-head {
   display: flex;
   gap: 14px;
   align-items: center;
   padding-right: 72px;
 }
 
-.lite-detail-head h2 {
+.lite2-shell .lite-detail-head h2 {
   margin: 0;
   font-family: var(--lite2-heading-font);
   font-size: 22px;
   font-weight: 500;
 }
 
-.lite-detail-subtitle {
+.lite2-shell .lite-detail-subtitle {
   margin: 2px 0 0;
   color: var(--ink-soft);
   font-size: 13px;
 }
 
-.lite-detail-section p,
-.lite-detail-section ul {
+.lite2-shell .lite-detail-section p,
+.lite2-shell .lite-detail-section ul {
   margin: 0;
   color: var(--ink);
   font-size: 13.5px;
   line-height: 1.6;
 }
 
-.lite-detail-section ul {
+.lite2-shell .lite-detail-section ul {
   padding-left: 18px;
   display: grid;
   gap: 4px;
 }
 
-.lite-detail-source p {
+.lite2-shell .lite-detail-source p {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
@@ -435,7 +444,7 @@
 /* ── The room（0729 画板退役 · output-form-0729/01）：判读卡回文档流 ──────────
    卡自身的定位由 board 段（.lite2-shell .lite-room-board .lite-room-card）负责；
    这里只保留对 story .structured-output-card 绝对定位的解除。 */
-.lite-room .lite-room-card .structured-output-card {
+.lite2-shell .lite-room .lite-room-card .structured-output-card {
   position: static;
   width: 100%;
   max-width: none;
@@ -445,7 +454,7 @@
 }
 
 /* ── composer 引用空态 ───────────────────────────────────────────────────── */
-.lite-reference-empty {
+.lite2-shell .lite-reference-empty {
   margin: 8px 4px;
   color: var(--ink-faint);
   font-size: 12px;
@@ -1516,7 +1525,7 @@
   color: var(--ink);
 }
 
-.lite-ask-card {
+.lite2-shell .lite-ask-card {
   background: var(--paper-strong);
   border: 1px solid var(--rule-strong);
   border-radius: var(--radius);
@@ -1527,7 +1536,7 @@
   gap: 14px;
 }
 
-.lite-ask-header {
+.lite2-shell .lite-ask-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -1536,14 +1545,14 @@
   padding-bottom: 12px;
 }
 
-.lite-ask-header h2 {
+.lite2-shell .lite-ask-header h2 {
   margin: 2px 0 0;
   font-family: var(--lite2-heading-font);
   font-size: 20px;
   color: var(--ink);
 }
 
-.ask-status-chip {
+.lite2-shell .ask-status-chip {
   flex: 0 0 auto;
   padding: 4px 10px;
   border-radius: 999px;
@@ -1555,7 +1564,7 @@
   white-space: nowrap;
 }
 
-.lite-ask-card .ask-lede {
+.lite2-shell .lite-ask-card .ask-lede {
   margin: 0;
   color: var(--ink-soft);
   font-size: 13px;
@@ -1563,7 +1572,7 @@
 }
 
 /* 诚实提示：保存时才过红线门（服务端、阶段 C）——不是"已校验"的绿标 */
-.lite-ask-card .ask-redline-note {
+.lite2-shell .lite-ask-card .ask-redline-note {
   margin: 0;
   padding: 8px 12px;
   border-left: 3px solid var(--honey);
@@ -1573,19 +1582,19 @@
   line-height: 1.5;
 }
 
-.lite-ask-card .ask-questions {
+.lite2-shell .lite-ask-card .ask-questions {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.lite-ask-card .ask-q-row {
+.lite2-shell .lite-ask-card .ask-q-row {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.lite-ask-card .ask-q-kind {
+.lite2-shell .lite-ask-card .ask-q-kind {
   flex: 0 0 auto;
   min-width: 52px;
   text-align: center;
@@ -1598,11 +1607,11 @@
   color: var(--ink-soft);
   background: rgba(var(--lite2-sky-rgb), 0.1);
 }
-.lite-ask-card .ask-q-kind.is-yesno {
+.lite2-shell .lite-ask-card .ask-q-kind.is-yesno {
   background: rgba(var(--lite2-violet-rgb), 0.1);
 }
 
-.lite-ask-card .ask-q-input {
+.lite2-shell .lite-ask-card .ask-q-input {
   flex: 1 1 auto;
   padding: 8px 10px;
   border: 1px solid var(--rule-strong);
@@ -1612,12 +1621,12 @@
   font-size: 13px;
   line-height: 1.4;
 }
-.lite-ask-card .ask-q-input:focus {
+.lite2-shell .lite-ask-card .ask-q-input:focus {
   outline: 2px solid rgba(var(--lite2-accent-rgb), 0.45);
   outline-offset: 1px;
 }
 
-.lite-ask-card .ask-q-remove {
+.lite2-shell .lite-ask-card .ask-q-remove {
   flex: 0 0 auto;
   width: 26px;
   height: 26px;
@@ -1629,19 +1638,19 @@
   line-height: 1;
   cursor: pointer;
 }
-.lite-ask-card .ask-q-remove:disabled {
+.lite2-shell .lite-ask-card .ask-q-remove:disabled {
   opacity: 0.35;
   cursor: default;
 }
 
-.lite-ask-card .ask-q-actions {
+.lite2-shell .lite-ask-card .ask-q-actions {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
 }
 
-.lite-ask-card .ask-q-add {
+.lite2-shell .lite-ask-card .ask-q-add {
   padding: 5px 10px;
   border: 1px dashed var(--rule-strong);
   border-radius: 6px;
@@ -1650,24 +1659,24 @@
   font-size: 12px;
   cursor: pointer;
 }
-.lite-ask-card .ask-q-add:disabled {
+.lite2-shell .lite-ask-card .ask-q-add:disabled {
   opacity: 0.35;
   cursor: default;
 }
 
-.lite-ask-card .ask-q-hint {
+.lite2-shell .lite-ask-card .ask-q-hint {
   color: var(--ink-faint);
   font-size: 11px;
 }
 
-.lite-ask-card .ask-comment-prompt {
+.lite2-shell .lite-ask-card .ask-comment-prompt {
   margin: 0;
   color: var(--ink-soft);
   font-size: 12px;
   line-height: 1.5;
 }
 
-.lite-ask-card .ask-section-label {
+.lite2-shell .lite-ask-card .ask-section-label {
   margin: 0 0 2px;
   font-size: 11px;
   font-weight: 700;
@@ -1676,13 +1685,13 @@
   color: var(--ink-faint);
 }
 
-.lite-ask-card .ask-recipients-hint {
+.lite2-shell .lite-ask-card .ask-recipients-hint {
   margin: 0 0 8px;
   color: var(--ink-faint);
   font-size: 12px;
 }
 
-.lite-ask-card .ask-recipient-chips {
+.lite2-shell .lite-ask-card .ask-recipient-chips {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
@@ -1690,7 +1699,7 @@
   overflow: auto;
 }
 
-.lite-ask-card .ask-recipient-chip {
+.lite2-shell .lite-ask-card .ask-recipient-chip {
   padding: 4px 10px;
   border-radius: 999px;
   border: 1px solid var(--rule-strong);
@@ -1699,14 +1708,14 @@
   font-size: 12px;
   cursor: pointer;
 }
-.lite-ask-card .ask-recipient-chip.is-selected {
+.lite2-shell .lite-ask-card .ask-recipient-chip.is-selected {
   background: rgba(var(--lite2-accent-rgb), 0.16);
   border-color: var(--sage);
   color: var(--ink);
   font-weight: 700;
 }
 
-.lite-ask-card .ask-footer {
+.lite2-shell .lite-ask-card .ask-footer {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
@@ -1714,8 +1723,8 @@
   padding-top: 12px;
 }
 
-.lite-ask-card .ask-confirm,
-.lite-ask-card .ask-refresh {
+.lite2-shell .lite-ask-card .ask-confirm,
+.lite2-shell .lite-ask-card .ask-refresh {
   padding: 8px 16px;
   border-radius: 6px;
   border: 1px solid var(--rule-strong);
@@ -1725,29 +1734,29 @@
   font-weight: 700;
   cursor: pointer;
 }
-.lite-ask-card .ask-refresh {
+.lite2-shell .lite-ask-card .ask-refresh {
   background: transparent;
   color: var(--ink);
 }
-.lite-ask-card .ask-confirm:disabled,
-.lite-ask-card .ask-refresh:disabled {
+.lite2-shell .lite-ask-card .ask-confirm:disabled,
+.lite2-shell .lite-ask-card .ask-refresh:disabled {
   opacity: 0.4;
   cursor: default;
 }
 
-.lite-ask-card .ask-links {
+.lite2-shell .lite-ask-card .ask-links {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.lite-ask-card .ask-link-row {
+.lite2-shell .lite-ask-card .ask-link-row {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.lite-ask-card .ask-link-name {
+.lite2-shell .lite-ask-card .ask-link-name {
   flex: 0 0 auto;
   min-width: 110px;
   font-size: 13px;
@@ -1755,7 +1764,7 @@
   color: var(--ink);
 }
 
-.lite-ask-card .ask-link-url {
+.lite2-shell .lite-ask-card .ask-link-url {
   flex: 1 1 auto;
   padding: 5px 8px;
   border: 1px solid var(--rule);
@@ -1768,7 +1777,7 @@
   white-space: nowrap;
 }
 
-.lite-ask-card .ask-copy-btn {
+.lite2-shell .lite-ask-card .ask-copy-btn {
   flex: 0 0 auto;
   padding: 5px 10px;
   border: 1px solid var(--rule-strong);
@@ -1779,20 +1788,20 @@
   cursor: pointer;
 }
 
-.lite-ask-card .ask-receipts {
+.lite2-shell .lite-ask-card .ask-receipts {
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
-.lite-ask-card .ask-receipt-who {
+.lite2-shell .lite-ask-card .ask-receipt-who {
   margin: 0;
   font-family: var(--lite2-heading-font);
   font-size: 15px;
   color: var(--ink);
 }
 
-.lite-ask-card .ask-self-label {
+.lite2-shell .lite-ask-card .ask-self-label {
   margin: 0;
   display: flex;
   flex-direction: column;
@@ -1803,7 +1812,7 @@
   text-transform: uppercase;
   color: var(--sage);
 }
-.lite-ask-card .ask-self-hint {
+.lite2-shell .lite-ask-card .ask-self-hint {
   font-weight: 400;
   letter-spacing: 0;
   text-transform: none;
@@ -1811,7 +1820,7 @@
   font-size: 11px;
 }
 
-.lite-ask-card .ask-receipt-q {
+.lite2-shell .lite-ask-card .ask-receipt-q {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
@@ -1820,20 +1829,20 @@
   border-bottom: 1px dashed var(--rule);
 }
 
-.lite-ask-card .ask-receipt-q-text {
+.lite2-shell .lite-ask-card .ask-receipt-q-text {
   font-size: 13px;
   color: var(--ink-soft);
   line-height: 1.45;
 }
 
-.lite-ask-card .ask-receipt-value {
+.lite2-shell .lite-ask-card .ask-receipt-value {
   flex: 0 0 auto;
   font-family: var(--lite2-heading-font);
   font-size: 15px;
   color: var(--ink);
 }
 
-.lite-ask-card .ask-receipt-comment {
+.lite2-shell .lite-ask-card .ask-receipt-comment {
   margin: 4px 0 0;
   padding: 8px 12px;
   border-left: 3px solid var(--sage);
@@ -1844,20 +1853,20 @@
   line-height: 1.55;
 }
 
-.lite-ask-card .ask-receipt-when {
+.lite2-shell .lite-ask-card .ask-receipt-when {
   margin: 0;
   color: var(--ink-faint);
   font-size: 11px;
 }
 
-.lite-ask-card .ask-receipt-summary {
+.lite2-shell .lite-ask-card .ask-receipt-summary {
   margin: 0;
   font-size: 13px;
   color: var(--ink);
   line-height: 1.6;
 }
 
-.lite-ask-card .ask-error {
+.lite2-shell .lite-ask-card .ask-error {
   margin: 0;
   color: var(--terracotta);
   font-size: 12px;
@@ -4561,7 +4570,7 @@
    的分工。两张皮零分支：全部消费 --paper-strong / --rule / --shadow / --sage 令牌，
    aurora 自动跟随。
    主次分明：复制到聊天应用 = 实心主键（国内团队的真出口），邮件与完成 = 描边次键。 */
-.lite-draft-card {
+.lite2-shell .lite-draft-card {
   position: relative;
   width: min(620px, 94vw);
   max-height: min(86vh, 780px);
@@ -5722,13 +5731,13 @@
   margin: 0 auto;
 }
 
-.lite-gate-step-count {
+.lite2-shell .lite-gate-step-count {
   color: var(--ink-faint);
   letter-spacing: 0.04em;
 }
 
 /* 右上「先自己逛逛 →」：闸门的可见退路（pause 语义），字色收灰、悬停亮起。 */
-.lite-gate-browse {
+.lite2-shell .lite-gate-browse {
   border: 0;
   background: none;
   padding: 4px 6px;
@@ -5739,13 +5748,13 @@
   white-space: nowrap;
 }
 
-.lite-gate-browse:hover,
-.lite-gate-browse:focus-visible {
+.lite2-shell .lite-gate-browse:hover,
+.lite2-shell .lite-gate-browse:focus-visible {
   color: var(--ink);
 }
 
 /* ── ⓪ 三扇门 ─────────────────────────────────────────────────────────────────────── */
-.lite-gate-door-grid {
+.lite2-shell .lite-gate-door-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
@@ -5753,11 +5762,11 @@
 }
 
 /* 只剩一扇门（后端没配示例团队）时占满整行——不留一半空椅子。 */
-.lite-gate-door-grid > .lite-gate-door:only-child {
+.lite2-shell .lite-gate-door-grid > .lite-gate-door:only-child {
   grid-column: 1 / -1;
 }
 
-.lite-gate-door {
+.lite2-shell .lite-gate-door {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -5773,48 +5782,48 @@
   transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
 }
 
-.lite-gate-door:hover:not(:disabled),
-.lite-gate-door:focus-visible {
+.lite2-shell .lite-gate-door:hover:not(:disabled),
+.lite2-shell .lite-gate-door:focus-visible {
   border-color: var(--accent, var(--ink));
   transform: translateY(-1px);
   box-shadow: var(--shadow-soft, var(--shadow));
 }
 
-.lite-gate-door:disabled {
+.lite2-shell .lite-gate-door:disabled {
   cursor: progress;
   opacity: 0.7;
 }
 
-.lite-gate-door-title {
+.lite2-shell .lite-gate-door-title {
   font-weight: 700;
   font-size: 15px;
 }
 
-.lite-gate-door-body {
+.lite2-shell .lite-gate-door-body {
   font-size: 13px;
   line-height: 1.55;
   color: var(--ink-soft, var(--ink-faint));
 }
 
 /* 示例团队门是主推路径：描边用强调色系，视觉分量略高于上传门。 */
-.lite-gate-door-demo {
+.lite2-shell .lite-gate-door-demo {
   border-color: color-mix(in srgb, var(--accent, currentColor) 45%, var(--rule-strong));
 }
 
-.lite-gate-door-error {
+.lite2-shell .lite-gate-door-error {
   margin-top: 10px;
   font-size: 13px;
   color: var(--tone-terracotta-ink, #a04533);
 }
 
 /* ── ② 团队信息扩展（8A）───────────────────────────────────────────────────────────── */
-.lite-onboard-field-row {
+.lite2-shell .lite-onboard-field-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
 }
 
-.lite-onboard-companynote {
+.lite2-shell .lite-onboard-companynote {
   width: 100%;
   resize: vertical;
   min-height: 74px;
@@ -5828,7 +5837,7 @@
   line-height: 1.55;
 }
 
-.lite-onboard-field-hint {
+.lite2-shell .lite-onboard-field-hint {
   display: block;
   margin-top: 4px;
   font-size: 12px;
@@ -5837,12 +5846,12 @@
 }
 
 /* 「会送给 Avery」的提示比"只存本机"的字段多一分可见度——去向不同，视觉权重也不同。 */
-.lite-onboard-field-hint[data-note-hint] {
+.lite2-shell .lite-onboard-field-hint[data-note-hint] {
   color: var(--ink-soft, var(--ink-faint));
 }
 
 /* ── 首页骨架 · 示例团队插槽（Q3-A 兑现；主入口在闸门三扇门，这是第二次机会位）────── */
-.lite-home-demo {
+.lite2-shell .lite-home-demo {
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -5852,7 +5861,7 @@
   background: var(--lite2-surface);
 }
 
-.lite-home-demo-btn {
+.lite2-shell .lite-home-demo-btn {
   align-self: flex-start;
   padding: 8px 16px;
   border: 0;
@@ -5865,26 +5874,26 @@
   cursor: pointer;
 }
 
-.lite-home-demo-btn:disabled {
+.lite2-shell .lite-home-demo-btn:disabled {
   cursor: progress;
   opacity: 0.7;
 }
 
-.lite-home-demo-note {
+.lite2-shell .lite-home-demo-note {
   font-size: 12.5px;
   line-height: 1.55;
   color: var(--ink-faint);
 }
 
-.lite-home-demo-error {
+.lite2-shell .lite-home-demo-error {
   font-size: 12.5px;
   color: var(--tone-terracotta-ink, #a04533);
 }
 
 /* ── 窄屏：门与字段行落单列 ────────────────────────────────────────────────────────── */
 @media (max-width: 620px) {
-  .lite-gate-door-grid,
-  .lite-onboard-field-row {
+  .lite2-shell .lite-gate-door-grid,
+  .lite2-shell .lite-onboard-field-row {
     grid-template-columns: 1fr;
   }
 }
@@ -7106,7 +7115,7 @@
    两张皮（paper / aurora）因此自动跟随，本段不需要各写一份。
    排版口径：正文最大宽度 74ch。这是合同文本，一行超过 ~90 个汉字就读不下去了；卡片本身可以
    更宽（下载区是横向的），所以宽度限制挂在 .paperwork-doc-body 而不是外框。 */
-.paperwork-page {
+.lite2-shell .paperwork-page {
   overflow-y: auto;
 }
 
@@ -7115,13 +7124,13 @@
    「九消费者」清单）。第一版这里写死 padding-top:32px，真机截图上整个 h1「文件与表单」
    被顶栏吃掉、正文第一行直接贴在胶囊底下——本页是第十个消费者，照同一套走。
    左右/底部维持本块自己的值，与那张清单的口径一致（只让位顶距）。 */
-.paperwork-inner {
+.lite2-shell .paperwork-inner {
   width: min(100%, 940px);
   margin: 0 auto;
   padding: var(--lite2-clear-top, 96px) 24px 72px;
 }
 
-.paperwork-head h1 {
+.lite2-shell .paperwork-head h1 {
   font-family: var(--lite2-heading-font);
   font-size: 26px;
   font-weight: 800;
@@ -7129,8 +7138,8 @@
   margin: 0 0 10px;
 }
 
-.paperwork-lede,
-.paperwork-langnote {
+.lite2-shell .paperwork-lede,
+.lite2-shell .paperwork-langnote {
   font-size: 14px;
   line-height: 1.65;
   color: var(--ink-soft);
@@ -7138,13 +7147,13 @@
   max-width: 70ch;
 }
 
-.paperwork-langnote {
+.lite2-shell .paperwork-langnote {
   font-size: 12px;
   color: var(--ink-faint);
 }
 
 /* 常驻免责横幅。刻意用 honey（提醒）而不是 alert（错误）：这不是出了问题，是先打个招呼。 */
-.paperwork-banner {
+.lite2-shell .paperwork-banner {
   margin: 18px 0 28px;
   padding: 12px 14px;
   border-left: 4px solid var(--honey, #b8860b);
@@ -7155,11 +7164,11 @@
   color: var(--ink-soft);
 }
 
-.paperwork-section {
+.lite2-shell .paperwork-section {
   margin: 0 0 40px;
 }
 
-.paperwork-section h2 {
+.lite2-shell .paperwork-section h2 {
   font-family: var(--lite2-heading-font);
   font-size: 18px;
   font-weight: 750;
@@ -7167,7 +7176,7 @@
   margin: 0 0 6px;
 }
 
-.paperwork-section-lede {
+.lite2-shell .paperwork-section-lede {
   font-size: 13px;
   line-height: 1.6;
   color: var(--ink-soft);
@@ -7175,7 +7184,7 @@
   max-width: 68ch;
 }
 
-.paperwork-notes-toggle {
+.lite2-shell .paperwork-notes-toggle {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -7185,7 +7194,7 @@
   cursor: pointer;
 }
 
-.paperwork-card {
+.lite2-shell .paperwork-card {
   border: 1px solid var(--rule, rgba(0, 0, 0, 0.1));
   border-radius: var(--lite2-radius-lg, 12px);
   background: var(--lite2-surface, var(--paper));
@@ -7193,14 +7202,14 @@
   margin: 0 0 16px;
 }
 
-.paperwork-card-title {
+.lite2-shell .paperwork-card-title {
   display: flex;
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
 }
 
-.paperwork-card-title h3 {
+.lite2-shell .paperwork-card-title h3 {
   font-family: var(--lite2-heading-font);
   font-size: 16px;
   font-weight: 750;
@@ -7208,7 +7217,7 @@
   margin: 0;
 }
 
-.paperwork-draft-badge {
+.lite2-shell .paperwork-draft-badge {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -7219,13 +7228,13 @@
   border: 1px solid var(--honey, #b8860b);
 }
 
-.paperwork-card-sub {
+.lite2-shell .paperwork-card-sub {
   font-size: 12px;
   color: var(--ink-faint);
   margin: 6px 0 0;
 }
 
-.paperwork-card-audience {
+.lite2-shell .paperwork-card-audience {
   font-size: 13px;
   line-height: 1.6;
   color: var(--ink-soft);
@@ -7234,17 +7243,17 @@
 }
 
 /* 下载区。永远在正文之前——真正拿去盖章/填写的是原件，页内正文只是「不下载也能读」。 */
-.paperwork-files {
+.lite2-shell .paperwork-files {
   list-style: none;
   margin: 16px 0 0;
   padding: 0;
 }
 
-.paperwork-file + .paperwork-file {
+.lite2-shell .paperwork-file + .paperwork-file {
   margin-top: 10px;
 }
 
-.paperwork-file-link {
+.lite2-shell .paperwork-file-link {
   display: inline-flex;
   align-items: center;
   gap: 10px;
@@ -7252,7 +7261,7 @@
   max-width: 100%;
 }
 
-.paperwork-file-format {
+.lite2-shell .paperwork-file-format {
   font-family: var(--lite2-mono-font, monospace);
   font-size: 10px;
   font-weight: 700;
@@ -7263,17 +7272,17 @@
   color: var(--ink-soft);
 }
 
-.paperwork-file-name {
+.lite2-shell .paperwork-file-name {
   overflow-wrap: anywhere;
 }
 
-.paperwork-file-size {
+.lite2-shell .paperwork-file-size {
   font-size: 11px;
   color: var(--ink-faint);
   white-space: nowrap;
 }
 
-.paperwork-file-hint {
+.lite2-shell .paperwork-file-hint {
   font-size: 12px;
   line-height: 1.55;
   color: var(--ink-faint);
@@ -7281,19 +7290,19 @@
   max-width: 64ch;
 }
 
-.paperwork-toggle {
+.lite2-shell .paperwork-toggle {
   margin-top: 16px;
 }
 
 /* ── 文档正文 ─────────────────────────────────────────────────────────────────────────── */
-.paperwork-doc-body {
+.lite2-shell .paperwork-doc-body {
   margin-top: 18px;
   padding-top: 18px;
   border-top: 1px solid var(--rule, rgba(0, 0, 0, 0.1));
   max-width: 74ch;
 }
 
-.paperwork-doc-h {
+.lite2-shell .paperwork-doc-h {
   font-family: var(--lite2-heading-font);
   font-size: 14px;
   font-weight: 750;
@@ -7301,44 +7310,44 @@
   margin: 22px 0 8px;
 }
 
-.paperwork-doc-p {
+.lite2-shell .paperwork-doc-p {
   font-size: 13.5px;
   line-height: 1.85;
   color: var(--ink);
   margin: 0 0 10px;
 }
 
-.paperwork-doc-ul {
+.lite2-shell .paperwork-doc-ul {
   margin: 0 0 12px;
   padding-left: 20px;
 }
 
-.paperwork-doc-ul li {
+.lite2-shell .paperwork-doc-ul li {
   font-size: 13.5px;
   line-height: 1.8;
   color: var(--ink);
   margin-bottom: 4px;
 }
 
-.paperwork-doc-choice {
+.lite2-shell .paperwork-doc-choice {
   margin-left: 14px;
   white-space: nowrap;
 }
 
 /* 表格自己横滚；页面 body 永远不横滚（附件一在 390px 上必然超宽）。 */
-.paperwork-doc-tablewrap {
+.lite2-shell .paperwork-doc-tablewrap {
   overflow-x: auto;
   margin: 0 0 14px;
 }
 
-.paperwork-doc-table {
+.lite2-shell .paperwork-doc-table {
   border-collapse: collapse;
   min-width: 100%;
   font-size: 13px;
 }
 
-.paperwork-doc-table th,
-.paperwork-doc-table td {
+.lite2-shell .paperwork-doc-table th,
+.lite2-shell .paperwork-doc-table td {
   border: 1px solid var(--rule, rgba(0, 0, 0, 0.1));
   padding: 8px 10px;
   text-align: left;
@@ -7347,7 +7356,7 @@
   color: var(--ink);
 }
 
-.paperwork-doc-table th {
+.lite2-shell .paperwork-doc-table th {
   font-weight: 700;
   background: var(--chip-bg, rgba(0, 0, 0, 0.03));
   white-space: nowrap;
@@ -7355,7 +7364,7 @@
 
 /* 🔴 起草者内部批注。视觉上必须**一眼看出不是合同正文**——默认隐藏（见 PaperworkScreen），
    开出来之后也用虚线框 + 标签把它和条款隔开。别把它做得像正文里的一段强调。 */
-.paperwork-doc-note {
+.lite2-shell .paperwork-doc-note {
   display: block;
   margin: 12px 0 14px;
   padding: 10px 12px;
@@ -7367,7 +7376,7 @@
   color: var(--ink-soft);
 }
 
-.paperwork-doc-note-tag {
+.lite2-shell .paperwork-doc-note-tag {
   display: block;
   font-size: 10.5px;
   font-weight: 700;
@@ -7377,7 +7386,7 @@
   margin-bottom: 4px;
 }
 
-.paperwork-doc-sign {
+.lite2-shell .paperwork-doc-sign {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 20px;
@@ -7386,43 +7395,43 @@
   border-top: 1px solid var(--rule, rgba(0, 0, 0, 0.1));
 }
 
-.paperwork-doc-sign-col p {
+.lite2-shell .paperwork-doc-sign-col p {
   font-size: 13px;
   line-height: 2.4;
   color: var(--ink-soft);
   margin: 0;
 }
 
-.paperwork-provenance {
+.lite2-shell .paperwork-provenance {
   margin: 24px 0 0;
   font-size: 11px;
   color: var(--ink-faint);
 }
 
 /* ── 上传口旁边的两条链接 ─────────────────────────────────────────────────────────────── */
-.upload-paperwork-links {
+.lite2-shell .upload-paperwork-links {
   display: flex;
   flex-wrap: wrap;
   gap: 6px 18px;
   margin: 10px 0 0;
 }
 
-.upload-paperwork-link,
-.lite-settings-paperwork-link,
-.lite-onboard-upload-forms a {
+.lite2-shell .upload-paperwork-link,
+.lite2-shell .lite-settings-paperwork-link,
+.lite2-shell .lite-onboard-upload-forms a {
   font-size: 12px;
   color: var(--ink-soft);
   text-decoration: underline;
   text-underline-offset: 3px;
 }
 
-.upload-paperwork-link:hover,
-.lite-settings-paperwork-link:hover,
-.lite-onboard-upload-forms a:hover {
+.lite2-shell .upload-paperwork-link:hover,
+.lite2-shell .lite-settings-paperwork-link:hover,
+.lite2-shell .lite-onboard-upload-forms a:hover {
   color: var(--ink);
 }
 
-.lite-onboard-upload-forms {
+.lite2-shell .lite-onboard-upload-forms {
   margin: 10px 0 0;
 }
 
