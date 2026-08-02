@@ -13,41 +13,35 @@
    健康检查 `GET :8137/health` → `brain:minimax`。跑前清残留 uvicorn(07-05 坑)。
 2. **起前端**:`npm run dev`(preview_start `dev`)→ 打开 `http://localhost:5173/?mode=live`。
 3. **注入断言包**:把 `live-frontend-gate.snippet.js` 全文 eval 进页面(preview_eval)。
-4. **按序跑相位**(每步返回 JSON,全部记进 evidence):
-   - `__seedGate.defuseAnimations()` — transition:none 旁路(headless rAF 停摆坑,feat-014)。
-   - `__seedGate.scanStoryNouns()` — **相位 A**:上传前空态,story 专有名词黑名单 = 0。
-   - `await __seedGate.injectSeeds([{name, b64}, …])` — **相位 B**:两个官方 seed
-     (`eval-harness/tests/fixtures/seed/`)base64 注入真 `<input>` → 真 POST /ingest。
-   - `__seedGate.assertTeamRendered()` — **相位 C**:人卡 ≥15、含 Lin Qing/Chen Mingyuan、
-     卡上零血条数字。
-   - `__seedGate.scanStoryNouns()` — **相位 D**:上传后再扫,黑名单 = 0。
-   - `await __seedGate.openPersonDetail('Lin Qing')` — **相位 E**:点人卡开详情,
-     无 "Unknown teammate"、显 live payload。
-   - `__seedGate.composerCheck()` — **相位 F1**:composer 无 story 预填/引用(静态)。
-   - `await __seedGate.composerAskLive('Who leads design, and what do they own?')` —
-     **相位 F2**(S2/feat-024 补齐):真提交 composer → askLive → /advise SSE 事件到帧
-     (终端行渲染 → manifest → 8 字段卡),真后端实跑 ~1–3 分钟。verdict 的
-     `composerIsLive` = F1 静态 **且** F2 动态,漏跑 F2 = 红。
-   - `__seedGate.assertTeamGrouped()` — **相位 G**(feat-025 Q2):Your team 人栏 = 分组
-     容器(分组块 `.home-people-group` + 分组标题 + 折叠 toggle),人卡仍在 DOM/可点;
-     断折叠真生效(折叠后卡数减、复展后复原)。
-   - `__seedGate.assertRoomCanvas()` — **相位 H**(0729 输出形态战役 01 · 画板退役后**翻转**):
-     Ask Avery 的 pan/zoom 画布必须**绝迹**(.lite-room-canvas/.lite-panzoom-* 不在 v02 DOM),
-     改断 `.lite-room-scroll`→`.lite-room-board` 纵向语法 + 判读卡回文档流,composer 留
-     滚动区外(恒可点)。相位名/结果键保留 roomCanvas 免动 verdict 聚合。
-   - `__seedGate.assertPlaybooksEmpty()` — **相位 I**(feat-025 Q1):Playbooks 屏空态
-     (引导标题 + coming-soon 标 + 未来数据槽),该屏 story 名词黑名单 = 0。
-   - `__seedGate.assertVisionSurface()` — **相位 J**(feat-026):Vision 定位叙事页
-     (三拍叙事 `.lite-vision-beat` ≥3 + 能力边界 mock `.lite-vision-mock` ≥3,**每张 mock
-     必带 `.lite-vision-tag` preview/coming 标注**——零未标注 mock);若 mock 含示例人
-     (`.lite-vision-person`)则**零数字**(红线);该屏 story 名词黑名单 = 0。
-   - `await __seedGate.assertNotesSurface()` — **相位 K**(feat-033):Avery's notes 写侧笔记屏。
-     **在 composerAskLive 之后跑**——一次真 advise 现在会写一条真笔记,故此时应已 POPULATED。
-     断言:屏挂载 + **常驻红线信任条 `.lite-notes-redline-note`** + 观察条目(`.lite-notes-entry-text`)
-     **零人卡数字**(红线,写侧后端门已拦,此处在渲染面复核)+ 条目**只读**(观察正文非 button)
-     + 该屏 story 名词黑名单 = 0。空态(没跑 advise)也容忍(空态卡 + 信任条)。
-   - `__seedGate.verdict()` — 聚合判定(11 相位:原 6 + teamGrouped/roomCanvas/playbooksEmpty
-     + visionSurface + notesSurface)。
+4. **按序跑相位**(每步返回 JSON,全部记进 evidence)。
+   🔴 **判定口径一概不在本文件**——每条断言的阈值/名单/例外以
+   `live-frontend-gate.snippet.js` 的函数头注释为准,这里只留**调用序 + 一句话这相位管什么**
+   (够你决定"该不该跑它/它红了大概是哪块坏了",要改断言就去 snippet)。
+   括号里的数字是 snippet 顶部 Usage 表的行号。
+
+   | 序 | 调用 | 这相位管什么 | snippet |
+   |---|---|---|---|
+   | — | `defuseAnimations()` | headless 下 rAF 停摆,先把 transition 旁路掉 | :17 |
+   | A | `scanStoryNouns()` | 上传**前**空态:story 专有名词黑名单 | :18 |
+   | B | `await injectSeeds([{name,b64},…])` | 真 `<input>` 注入官方 seed → 真 POST /ingest | :19 |
+   | C | `assertTeamRendered()` | 人卡渲染出来了,且卡上零血条数字(红线) | :20 |
+   | D | `scanStoryNouns()` | 上传**后**再扫一次(同 A 的函数) | :21 |
+   | E | `await openPersonDetail(name)` | 点人卡开详情,显 live payload 而非兜底 | :22 |
+   | F1 | `composerCheck()` | composer 无 story 预填/引用(**静态**) | :23 |
+   | F2 | `await composerAskLive(q)` | 真提交 → /advise SSE 到帧(**动态**,真后端 1–3 分钟)。<br>🔴 verdict 的 `composerIsLive` = F1 **且** F2,漏跑 F2 = 红 | :24-26 |
+   | G | `assertTeamGrouped()` | 人栏是分组容器 + 折叠 toggle 真生效 | :27 |
+   | H | `assertRoomCanvas()` | 画布已**绝迹**(0729 翻转)+ composer 留滚动区外恒可点。<br>相位名/结果键仍叫 roomCanvas,别改(verdict 聚合认它) | :28 |
+   | I | `assertPlaybooksEmpty()` | Playbooks 空态形态 | :29 |
+   | J | `assertVisionSurface()` | Vision 三拍叙事 + mock 必带 preview/coming 标注;示例人零数字(红线) | :30 |
+   | K | `await assertNotesSurface()` | 笔记屏:常驻红线信任条 + 条目零人卡数字 + 只读。<br>**必须排在 F2 之后**(一次真 advise 才会写出笔记) | 函数头注释<br>1314-1321<br>(Usage 表漏收) | 
+   | — | `verdict()` | 11 相位聚合判定 | :31 |
+
+   🔴 **"snippet 为准"有一个例外：snippet 自己的顶部 Usage 表已经陈旧。**
+   `snippet.js:31` 还写「aggregate (10 phases)」、`:71-72` 写「10-phase gate (phases A-J)」、
+   `:63` 写「8 tabs」——都是 feat-033（相位 K）与 files-hub-0729（第 9 个 tab）之后没同步的旧数。
+   **真相在函数体里**：`verdict()`（:1364-1383）实际聚合 **11** 个键；`assertV2Boots` 的 expected
+   数组（:1395-1426）实际断 **9** 个 tab。照 Usage 表跑会得出错的相位数和错的 tab 名单。
+   （同步 snippet 头注释本身是另一张票，不在本次改动范围内。）
 5. **收尾**:停 dev server、杀 8137 uvicorn。verdict JSON 原样贴进
    `feature_list.json` evidence / progress.md。
 
@@ -147,39 +141,31 @@ LiveTransport seam,与 v01 stub 独立实例)。跨 3 次页面导航 + 1 次仓
 1. 打开 `http://localhost:5173/?v=2&mode=live&transport=stub&look=paper`(或 preview_start
    起的 dev 端口),注入 snippet:
    - `__seedGate.defuseAnimations()`
-   - `await __seedGate.assertV2Boots()` — **v2Boots**:`.lite2-shell` 挂载 + 8 个 tab、
-     顺序精确匹配(`Today · Your team · Projects · The room · Follow-ups · Avery's notes ·
-     A closer look · Playbooks · Where this goes`)。PRD 的 6 个 + feat-047 的 `Avery's notes`
-     + feat-055 的 `Projects` + feat-057 前置的聚合入口 `Today`(它同时是 `/` 的落点)。
-     🔴 7 个分屏一个都没退休(Danny 拍板「两个都极端 → 结合」),少掉其中任何一个都是回归,
-     不是契约更新。⚠ 增删或重排 `src/lite2/LiteTopbar.tsx` 的 tab,必须在同一个 commit 里
-     同步 snippet 里的 `expected` 数组,否则本相位必红。
-   - `const before = __seedGate.readSkinSnapshot()` — 记下 paper 观感的 `data-look` + 关键计算值。
+   - `await __seedGate.assertV2Boots()`:见 live-frontend-gate.snippet.js 的 assertV2Boots
+     (头注释 63-64,tab 顺序权威清单见函数正上方 1395-1426);snippet 为准。
+   - `const before = __seedGate.readSkinSnapshot()`:见 live-frontend-gate.snippet.js 的
+     readSkinSnapshot(头注释 65,实现自带注释 1496-1499);snippet 为准。
 2. 导航到同 URL 但 `&look=aurora`(整页刷新,重新注入 snippet——观感只在挂载时读一次 URL,
    见 `src/lite2/look.ts`):
    - `const after = __seedGate.readSkinSnapshot()`
-   - `__seedGate.assertSkinTokens(before, after)` — **skinTokens**:`data-look` 属性变化
-     **且**至少一个关键计算值(背景图/文字色)随之变化(证明令牌层真的接进去了,不是挂了个
-     没人消费的属性)。
-3. 导航到 `?v=1&mode=live&transport=stub`——🔴 **2026-07-19 起必须显式写 `?v=1`**。
-   这一步原本写的是「默认 URL(不带 `v=`)」;Danny 拍板 ① 把 `resolveVersion()` 的缺省翻成
-   了 `'2'`,裸链现在开出来的是 v02,照原文跑等于拿 v02 去断言「v01 未受影响」。
-   ——**先跑一遍既有 10 相位**
-   (相位 A-J,同一 stub session,seed 内容任意字节即可)拿到 `verdict()`,再:
-   - `__seedGate.assertV1Untouched(verdictResult.pass)` — **v1Untouched**:当前页零
-     `.lite2-shell` 节点 **且** 传入的 v01 十相位 verdict 全绿。
+   - `__seedGate.assertSkinTokens(before, after)`:见 live-frontend-gate.snippet.js 的
+     assertSkinTokens(头注释 68,实现自带注释 1511-1513);snippet 为准。
+3. 导航到 `?v=1&mode=live&transport=stub`——**先跑一遍既有 11 相位**(相位 A-K,同一 stub
+   session,seed 内容任意字节即可)拿到 `verdict()`,再:
+   - `__seedGate.assertV1Untouched(verdictResult.pass)`:见 live-frontend-gate.snippet.js 的
+     assertV1Untouched(头注释 73,`?v=1` 裁定出处见函数正上方 1461-1464);snippet 为准。
 4. 导航到 `?mode=story`:
-   - `__seedGate.assertStoryUntouched()` — **storyUntouched**:零 `.lite2-shell` 节点
-     (story 壳物理够不到 lite2 的根类,同 S4/S5 的 "story 未受影响" 套路搬到 lite2 根类)。
-5. 仓外(不在浏览器里):对 4 个新墙方向各自实证"先红后绿"——
+   - `__seedGate.assertStoryUntouched()`:见 live-frontend-gate.snippet.js 的
+     assertStoryUntouched(头注释 75,实现自带注释 1476-1478);snippet 为准。
+5. 仓外(不在浏览器里,snippet 管不到):对 4 个新墙方向各自实证"先红后绿"——
    `lite2→story` / `story→lite2` / `lite→lite2` / `lite2→lite`,每个方向:临时在对应文件
    追加一行违规 import → `npm run lint` 记 exit code(须为 1)→ 撤掉该行 → 复跑
    `npm run lint`(须为 0)→ `git diff --stat` 确认改动文件已归零。四个方向都验完后:
-   - `__seedGate.recordWallRed({ pass: true, directions: { liteToLite2: {...}, ... } })` —
-     **wallRed**:把上面 4 组 exit code 证据塞进来(浏览器测不了 lint,这一相位是唯一一个
-     纯手工记录、不靠 DOM 断言的相位)。
-6. `__seedGate.v2Verdict()` — 聚合(5 相位:v2Boots / v1Untouched / storyUntouched /
-   wallRed / skinTokens)。
+   - `__seedGate.recordWallRed({ pass: true, directions: { liteToLite2: {...}, ... } })`:
+     见 live-frontend-gate.snippet.js 的 recordWallRed(头注释 78,实现自带注释 1486-1490);
+     snippet 为准。
+6. `__seedGate.v2Verdict()`:见 live-frontend-gate.snippet.js 的 v2Verdict(头注释 79);
+   snippet 为准。
 
 **收尾**:JSON 原样贴进 `feature_list.json` evidence / progress.md,连同第 5 步 lint 的原始
 exit code 记录(红是成功,绿是收工)。
