@@ -19,7 +19,7 @@ Red line: `team_cards()` emits QUALITATIVE-ONLY person cards (no moodPct/capacit
 the same structural guarantee the frontend `LivePersonCard` type encodes. The gate lives in the
 engine (`avery/ingest/redline_extract.py`); this layer just surfaces its verdict as an HTTP status.
 
-Persistence (feat-030, ADR-0023): `active_registry()` — Postgres-backed when AVERY_DB_URL /
+Persistence (feat-030, ADR-0023-postgres): `active_registry()` — Postgres-backed when AVERY_DB_URL /
 PGVECTOR_URL is set (company data survives restarts/redeploys), else the process-local in-memory
 registry (offline default, the pre-030 ADR-0021 §6 ephemeral behavior). Same get/put seam either way.
 """

@@ -1,4 +1,4 @@
--- feat-030 — Avery persistence schema (ADR-0023; supersedes the deliberate ephemerality of
+-- feat-030 — Avery persistence schema (ADR-0023-postgres; supersedes the deliberate ephemerality of
 -- ADR-0021 §6 for the lite v1 lean-real product).
 --
 -- EVERYTHING lives in the dedicated `avery` schema. The production Supabase project
