@@ -196,3 +196,11 @@ export function initNotifications() {
     }
   })
 }
+
+// ── arch-0802 · 公司域清扫收口 ────────────────────────────────────────────────────────────
+// 同 flowStore.resetFlowCompanyScope 的口径：清单与 state 形状同文件共置，AuthPanel 只组合
+// 调用。🔴 往 NotifyState 加字段时必须同步决定进不进这里（通知条目/已见 id 是公司数据；
+// open 是 UI 态，宁可多清）。
+export function resetNotifyCompanyScope(): void {
+  useNotify.setState({ items: [], seenGapIds: [], seenAskIds: [], open: false })
+}

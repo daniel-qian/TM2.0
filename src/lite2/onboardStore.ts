@@ -259,3 +259,17 @@ export function selectWizardOpen(s: OnboardState, hasStoredContext: boolean): bo
   if (hasStoredContext) return false
   return (s.status === 'unseen' || s.status === 'in-progress') && !s.pausedThisSession
 }
+
+// ── arch-0802 · 公司域清扫收口 ────────────────────────────────────────────────────────────
+// 同 flowStore.resetFlowCompanyScope 的口径：清单与 state 形状同文件共置。向导采集的全部
+// 是公司数据（公司名/部门/称呼/团队规模/角色/「公司现状」口述/送达账本），换账号一个
+// 都不许活。🔴 往 PersistedOnboard/OnboardState 加字段时必须同步决定进不进这里；
+// pausedThisSession 是内存态（EMPTY_PERSISTED 不含它），别漏。playbooks 给新数组，
+// 不共享 DEFAULT_PLAYBOOKS 模块常量的引用。
+export function resetOnboardCompanyScope(): void {
+  useOnboard.setState({
+    ...EMPTY_PERSISTED,
+    playbooks: [...DEFAULT_PLAYBOOKS],
+    pausedThisSession: false,
+  })
+}

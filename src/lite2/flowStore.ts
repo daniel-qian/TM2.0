@@ -234,3 +234,13 @@ export function selectGapsResolved(team: LiteTeam | null, marks: Record<string, 
 export function selectGapsDismissed(team: LiteTeam | null, marks: Record<string, GapMark>): GapCard[] {
   return deriveGaps(team).filter((g) => marks[g.id] === 'dismissed')
 }
+
+// ── arch-0802 · 公司域清扫收口 ────────────────────────────────────────────────────────────
+// 换账号/「重新开始」时本 store 哪些字段必须清，由本文件自己说了算——此前这份清单以
+// setState 字面量寄居在 AuthPanel（多份手工同步），新增字段漏清扫的后果是跨租户串数据
+// （fixD 战役反复修的 bug 类）。🔴 往 FlowState 加 state 字段时必须同步决定它进不进这里：
+// 公司数据（条目/标记/草稿正文）必进；找不到不清的理由就清。
+// 对象/数组给新字面量而非 spread EMPTY_PERSISTED——模块常量的内层引用不进活 state。
+export function resetFlowCompanyScope(): void {
+  useFlow.setState({ triageMarks: {}, followups: [], gapMarks: {}, composerDraft: null })
+}

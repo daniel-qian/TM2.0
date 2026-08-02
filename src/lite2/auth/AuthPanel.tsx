@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useAuth } from './authStore'
 import { authConfigured } from './supabaseClient'
-import { useLite } from '../store'
+import { useLite, resetLiteCompanyData } from '../store'
 import { forgetAllOwnerTokens } from '../transport'
 import { useDict } from '../../shared/i18n/useDict'
 // 🔴 换账号清场的白名单读的是**常量本身**，不是抄一份字面量 —— 理由见 KEEP_ACROSS_ACCOUNTS。
@@ -11,9 +11,11 @@ import { LOOK_STORAGE_KEY, resolveLook } from '../look'
 import { useLocaleStore } from '../../shared/i18n/localeStore'
 import { useLook } from '../lookStore'
 // fixD/M2：换账号必须一并清掉这三个 localStorage store —— 它们装着上一家公司文档的**逐字原文**。
-import { useFlow } from '../flowStore'
-import { useNotify } from '../notifyStore'
-import { useOnboard, DEFAULT_PLAYBOOKS } from '../onboardStore'
+// arch-0802：清什么字段由各 owning store 的 resetXxxCompanyScope 自己说了算（清单与 state
+// 形状同文件共置），这里只组合调用；useFlow/useNotify/useOnboard 仍要 import——window 缝用。
+import { useFlow, resetFlowCompanyScope } from '../flowStore'
+import { useNotify, resetNotifyCompanyScope } from '../notifyStore'
+import { useOnboard, resetOnboardCompanyScope } from '../onboardStore'
 
 // feat-053 · 账号入口（顶栏，LiteBell 旁）。
 //
@@ -99,27 +101,13 @@ function wipeLite2LocalStorage(): void {
 // 之后再也不读 localStorage。不复位的话，B 的经理这一整个标签页里照样看得见 A 的条目
 // （要等他手动刷新才消失，而演示时没人会刷新）。
 //
-// 用裸 setState 而不是给各 store 加 reset()：那三个文件不在本线的边界内。形状取自各自的
-// EMPTY_PERSISTED，`persist()` 不会被裸 setState 触发，所以不会把空态又写回去（写回去也无妨，
-// 上面已经删干净了）。
+// arch-0802 收口：原来这里代持三份 setState 字面量（"那三个文件不在本线边界内"是 fixD 当时
+// 的并行约束，早已过期）——字段清单与 store 形状分居两文件，新增字段漏清扫即跨租户串数据。
+// 现在清单住进各 owning store（resetXxxCompanyScope，与 state 声明同文件共置），这里只组合。
 function resetLite2MemoryStores(): void {
-  useFlow.setState({ triageMarks: {}, followups: [], gapMarks: {}, composerDraft: null })
-  useNotify.setState({ items: [], seenGapIds: [], seenAskIds: [], open: false })
-  useOnboard.setState({
-    status: 'unseen',
-    step: 'doors', // input-side-0721：闸门页第 0 步（三扇门）
-    company: '',
-    dept: '',
-    yourName: '',
-    // input-side-0721 · 8A：新增采集字段同属公司数据，换账号必须一并复位（companyNote 是
-    // 上一家公司的现状口述，串给下一个账号看正是这个函数存在的理由）。
-    teamCount: '',
-    yourRole: '',
-    companyNote: '',
-    companyNoteSentTo: [],
-    playbooks: [...DEFAULT_PLAYBOOKS],
-    pausedThisSession: false,
-  })
+  resetFlowCompanyScope()
+  resetNotifyCompanyScope()
+  resetOnboardCompanyScope()
 }
 
 export function clearCompanyScope(): void {
@@ -131,24 +119,10 @@ export function clearCompanyScope(): void {
   // 锚点还指着上一个账号的公司：下一个人打开就被 restoreSession 拿去请求（token 已清 → 404 →
   // 才回上传态），中间那一拍屏幕上挂的是别人公司的 id。
   useLite.getState().adoptContext(null)
-  useLite.setState({
-    // adoptContext 只在 contextId **确实变了**时才清派生数据；登出时它多半确实变了，但
-    // "contextId 本来就是 null、team 却还挂着"这种中间态不该赌 —— 显式再清一遍，
-    // 租户隔离这种地方不留"多半"。
-    team: null,
-    rawTeam: null,
-    files: [],
-    notes: [],
-    noteJustAdded: false,
-    ingestStatus: 'idle',
-    ingestError: null,
-    // fixD/B1：名册也是公司数据（谁传过哪些文件），跟着走。
-    knownContexts: [],
-    switchError: null,
-    // 换人时可能正有一次切换在飞。它自己会被 stillOn/switchSeq 判为过期而不写任何数据，
-    // 但屏上那个 pending 态得由这里收掉，否则名册按钮永远灰着。
-    switchPending: null,
-  })
+  // adoptContext 只在 contextId **确实变了**时才清派生数据；「id 本来就是 null、team 却还
+  // 挂着」的中间态不该赌——显式再清一遍（清单收口在 store.ts 的 resetLiteCompanyData，
+  // 含 fixD/B1 名册与在飞切换 pending 态的理由，见彼处注释）。
+  resetLiteCompanyData()
   // fixD/M2：三个漏网 store —— 内存态先复位，再把 `lite2:` 底下整段抹掉。
   resetLite2MemoryStores()
   wipeLite2LocalStorage()
@@ -188,18 +162,7 @@ export function restartAll(): void {
   forgetAllOwnerTokens()
   useLite.getState().resetRun()
   useLite.getState().adoptContext(null)
-  useLite.setState({
-    team: null,
-    rawTeam: null,
-    files: [],
-    notes: [],
-    noteJustAdded: false,
-    ingestStatus: 'idle',
-    ingestError: null,
-    knownContexts: [],
-    switchError: null,
-    switchPending: null,
-  })
+  resetLiteCompanyData()
   resetLite2MemoryStores()
   wipeAllLite2LocalStorage()
   useLocaleStore.setState({ locale: resolveLocale() })

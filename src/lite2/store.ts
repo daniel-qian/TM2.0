@@ -961,4 +961,25 @@ if (typeof window !== 'undefined') {
   ;(window as unknown as Record<string, unknown>).__lite2Store = useLite
 }
 
+// ── arch-0802 · 公司域清扫收口（useLite 半边）───────────────────────────────────────────
+// 换账号（clearCompanyScope）与「重新开始」（restartAll）共用的公司数据清单——原先在
+// AuthPanel 两处逐字重复。adoptContext(null) 只在 contextId **确实变了**时才清派生数据；
+// 「id 本来就是 null、team 却还挂着」的中间态不该赌，租户隔离不留「多半」——调用方先
+// adoptContext(null)，再用这里显式全清。🔴 往 LiteState 加公司域字段（团队/文件/笔记/
+// 名册/切换态/ask…）时必须同步进这份清单；纯用户偏好才有资格不进。
+export function resetLiteCompanyData(): void {
+  useLite.setState({
+    team: null,
+    rawTeam: null,
+    files: [],
+    notes: [],
+    noteJustAdded: false,
+    ingestStatus: 'idle',
+    ingestError: null,
+    knownContexts: [],
+    switchError: null,
+    switchPending: null,
+  })
+}
+
 
