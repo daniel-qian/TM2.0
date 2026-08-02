@@ -23,5 +23,5 @@ Each is also a Claude Code subagent under `.claude/agents/` — invoke with the 
 **Avery** — the management-decision layer: it helps managers make safer, traceable, accountable people-and-project calls (the awkward 1:1, the wrong-fire risk, quiet burnout). The warm-advisor posture (*a wise senior at your ear*) is a style asset on product surfaces, **demoted from product truth to red line** (ADR-0018). **Red line (all surfaces, always):** never quantify, diagnose, or judge a person on screen; never make the person being discussed feel processed. Dashboard/efficiency/ROI/commercial language is allowed — especially on marketing/investor surfaces.
 
 - **Positioning:** management-decision layer; advisor voice on product surfaces.
-- **Business model:** advisor-style AI + tools **free**, **playbooks paid**.
-- **Market:** overseas first, **all English** — copy must be native, never translated-sounding.
+- **Business model:** four-layer paid model (Pilot / Setup / Manager seats / Benchmark + Consulting), **no free tier** — minimum entry is a paid Pilot (ADR-0019, supersedes the retired free-tools/paid-playbooks model).
+- **Market:** domestic vertical-first — hotel is the first vertical pack (feat-019, still `in_progress`; nominally so, actually a long-parked external research line — see `progress.md:17`), construction is the paired Skin example (CONTEXT.md · Skin). Chinese-copy purity is a hard gate in the battery (`.issues/feat-068-frontend-deploy/verify-zh-purity.mjs`), which is why "all English" is not the operating reality.
