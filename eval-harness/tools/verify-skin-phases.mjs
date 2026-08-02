@@ -12,27 +12,28 @@
 // 棒2 构建 → 全绿。URL 与 feff6be 基线采集时逐字一致（不带 lang 参数）。
 //
 //   VERIFY_BASE=http://localhost:5173 node eval-harness/tools/verify-skin-phases.mjs
-import { chromium } from 'playwright'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
+// 迁自票 #16：boot/上报/收尾管线搬进 lib/gate-run.mjs，断言判据一字未改。
+// 本门是分歧台账里的模式⑤(a)——一个 browser 反复开新 context/page；
+// 且是台账分歧④的"不装 pageerror"那一类（trackPageErrors 留默认 false）。
+import { bootPage, makeRec, finish } from './lib/gate-run.mjs'
 
 const UI = process.env.VERIFY_BASE || 'http://localhost:5173'
 const HERE = dirname(fileURLToPath(import.meta.url))
 const SNIPPET = readFileSync(join(HERE, '..', '..', 'scripts', 'gates', 'live-frontend-gate.snippet.js'), 'utf8')
 
-const R = []
-const rec = (n, ok, d) => { R.push({ n, ok }); console.log(`  [${ok ? 'PASS' : 'FAIL'}] ${n}${d ? ' — ' + d : ''}`) }
+const gateRec = makeRec()
+const rec = gateRec.rec
 
-const browser = await chromium.launch({ headless: true })
+// 首次调用不传 browser：bootPage 内部新 launch 一个，之后每次调用把它传回去复用
+// （原写法是外层先 launch 一次、loadWithSnippet 只开 newContext——行为等价）。
+let sharedBrowser
 
 async function loadWithSnippet(url) {
-  const page = await (await browser.newContext({ viewport: { width: 1280, height: 900 } })).newPage()
-  await page.goto(url, { waitUntil: 'networkidle' })
-  if (await page.locator('.lite-onboard').count()) {
-    await page.keyboard.press('Escape')
-    await page.waitForTimeout(500)
-  }
+  const { browser, page } = await bootPage({ browser: sharedBrowser, url, onboardWait: 500 })
+  sharedBrowser = browser
   await page.addScriptTag({ content: SNIPPET })
   await page.evaluate(() => window.__seedGate.defuseAnimations())
   return page
@@ -73,7 +74,4 @@ async function loadWithSnippet(url) {
   await ps.context().close()
 }
 
-await browser.close()
-const fail = R.filter((r) => !r.ok).length
-console.log(`\n═══ 皮相位 E 组：${R.length - fail} PASS · ${fail} FAIL ═══`)
-process.exit(fail ? 1 : 0)
+await finish(gateRec, { browser: sharedBrowser, label: '皮相位 E 组' })

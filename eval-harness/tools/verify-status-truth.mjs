@@ -34,14 +34,18 @@
 //      （AVERY_CORS_ORIGINS 精确匹配前端来源）
 //   2) 前端起在与 CORS 白名单一致的端口（vite build --mode development + vite preview）
 //   3) VERIFY_BASE=http://127.0.0.1:<port> node eval-harness/tools/verify-status-truth.mjs
-import { chromium } from 'playwright'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+// 迁自票 #16：boot/上报/收尾管线搬进 lib/gate-run.mjs，断言判据一字未改。
+// 本门是分歧台账里的模式⑤(c)——一个 browser，每个"世界"（v01/v02）开一个新
+// context/page、各自装 pageerror、各自 Escape 前奏（onboardWait:700，与本仓多数门
+// 用的 600 不同，原样保留成显式选项，不悄悄改成默认值）。
+import { bootPage, makeRec, finish } from './lib/gate-run.mjs'
 
 const UI = process.env.VERIFY_BASE || 'http://127.0.0.1:5173'
-const R = []
-const rec = (n, ok, d) => { R.push({ n, ok }); console.log(`  [${ok ? 'PASS' : 'FAIL'}] ${n}${d ? ' — ' + d : ''}`) }
+const gateRec = makeRec()
+const rec = gateRec.rec
 
 // 一份中文周报：两个真写了状态的项目（on-track 对照 + blocked 对照），供颜色/文案回归比对。
 // rich-align-0722/01：on-track 对照项目补 进度 + 项目级风险，让「真值卡照常渲染进度条 + 风险
@@ -95,7 +99,7 @@ async function injectStatuslessProject(route) {
   return route.fulfill({ response: res, body: JSON.stringify(body) })
 }
 
-const browser = await chromium.launch({ headless: true })
+let sharedBrowser
 
 async function uploadAndGoTeam(page, seam) {
   await page.route('**/ingest', injectStatuslessProject)
@@ -111,13 +115,11 @@ async function uploadAndGoTeam(page, seam) {
 
 // ── 团队屏（首页项目道）：v01 与 v02 共用同一套断言 ─────────────────────────────
 async function runTeamScreen(shellQuery, seam) {
-  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } })
-  const p = await ctx.newPage()
-  const errs = []
-  p.on('pageerror', (e) => errs.push(e.message))
-
-  await p.goto(`${UI}/?${shellQuery}&mode=live&look=paper&lang=zh`, { waitUntil: 'networkidle' })
-  if (await p.locator('.lite-onboard').count()) { await p.keyboard.press('Escape'); await p.waitForTimeout(700) }
+  const { browser, context: ctx, page: p, pageErrors: errs } = await bootPage({
+    browser: sharedBrowser, base: UI, path: `/?${shellQuery}&mode=live&look=paper&lang=zh`,
+    trackPageErrors: true, onboardWait: 700,
+  })
+  sharedBrowser = browser
 
   await uploadAndGoTeam(p, seam)
 
@@ -214,13 +216,11 @@ for (const [q, seam, label] of [
 {
   const label = 'v02 · 项目屏分组'
   console.log(`\n═══ ${label} ═══`)
-  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } })
-  const p = await ctx.newPage()
-  const errs = []
-  p.on('pageerror', (e) => errs.push(e.message))
-
-  await p.goto(`${UI}/?v=2&mode=live&look=paper&lang=zh`, { waitUntil: 'networkidle' })
-  if (await p.locator('.lite-onboard').count()) { await p.keyboard.press('Escape'); await p.waitForTimeout(700) }
+  const { browser, context: ctx, page: p, pageErrors: errs } = await bootPage({
+    browser: sharedBrowser, base: UI, path: '/?v=2&mode=live&look=paper&lang=zh',
+    trackPageErrors: true, onboardWait: 700,
+  })
+  sharedBrowser = browser
 
   await uploadAndGoTeam(p, '__lite2Store')
   await p.evaluate(() => window.__lite2Store.getState().goScreen('projects'))
@@ -282,11 +282,6 @@ for (const [q, seam, label] of [
   await ctx.close()
 }
 
-await browser.close()
-
 rec('注入路径本身生效过（否则以上"没出现按计划推进"是空真）', sawInjection)
 
-const pass = R.filter((r) => r.ok).length
-const fail = R.length - pass
-console.log(`\n═══ 状态缺失分支：${pass} PASS · ${fail} FAIL ═══`)
-process.exit(fail ? 1 : 0)
+await finish(gateRec, { browser: sharedBrowser, label: '状态缺失分支' })

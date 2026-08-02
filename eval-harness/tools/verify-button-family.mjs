@@ -15,11 +15,15 @@
 //
 // ## 怎么跑
 //   VERIFY_BASE=http://localhost:5173 node eval-harness/tools/verify-button-family.mjs
-import { chromium } from 'playwright'
+// 迁自票 #16：boot/上报/收尾管线搬进 lib/gate-run.mjs，断言判据一字未改。
+// 本门是分歧台账里的模式⑤(b)——一个 browser + 一个 context/page 用到底；
+// 且是分歧③的反例：bootPage 传 dismissOnboard:false，Escape 前奏推迟到下面
+// 「审完闸门页按钮」那段断言逻辑自己去按（判断条件比通用助手多一项，见下方注释）。
+import { bootPage, makeRec, finish } from './lib/gate-run.mjs'
 
 const UI = process.env.VERIFY_BASE || 'http://localhost:5173'
-const R = []
-const rec = (n, ok, d) => { R.push({ n, ok }); console.log(`  [${ok ? 'PASS' : 'FAIL'}] ${n}${d ? ' — ' + d : ''}`) }
+const gateRec = makeRec()
+const rec = gateRec.rec
 
 const SEED_DOC = [
   '# 望江咨询 · 项目周报 W33',
@@ -79,15 +83,14 @@ const AUDIT_FN = `((whitelist) => {
   return out
 })`
 
-const browser = await chromium.launch({ headless: true })
-const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } })
-const page = await ctx.newPage()
-const pageErrors = []
-page.on('pageerror', (e) => pageErrors.push(e.message))
-
-await page.goto(`${UI}/?v=2&mode=live&lang=zh`, { waitUntil: 'networkidle' })
+const { browser, page, pageErrors } = await bootPage({
+  base: UI, path: '/?v=2&mode=live&lang=zh', trackPageErrors: true, dismissOnboard: false,
+})
 
 // 闸门页自己的按钮先审一轮（它在 Escape 前渲染，是新访客第一眼）。
+// 🔴 下面这段自己按 Escape，不走 dismissOnboard() 助手——它的判断条件是
+// `.lite-onboard, .lite-gate-layer`（比助手多一个 .lite-gate-layer），是断言逻辑本身
+// 的一部分（审完闸门页按钮才关闸），原样保留，不套用通用 Escape 前奏。
 if (await page.locator('.lite-onboard, .lite-gate-layer').count()) {
   const gate = await page.evaluate(`(${AUDIT_FN})(${JSON.stringify(WHITELIST)})`)
   rec(`闸门页零裸按钮（${gate.total} 可见：族 ${gate.family} + 白名单 ${gate.whitelisted}）`,
@@ -143,8 +146,4 @@ for (const sc of V2_SCREENS) {
 rec(`.lite-btn 族挂载总量 ≥15（九屏累计，实测 ${familyTotal}）`, familyTotal >= 15)
 rec('无 pageerror', pageErrors.length === 0, pageErrors.slice(0, 2).join(' | ') || '0 条')
 
-await browser.close()
-const pass = R.filter((r) => r.ok).length
-const fail = R.length - pass
-console.log(`\n═══ 按钮族：${pass} PASS · ${fail} FAIL ═══`)
-process.exit(fail ? 1 : 0)
+await finish(gateRec, { browser, label: '按钮族' })
