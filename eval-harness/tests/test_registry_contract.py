@@ -1030,3 +1030,80 @@ def test_pg_bootstrap_constraint_guard_skips_re_add(pg, tmp_path):
     assert _oids() == before, (
         "guarded ADD CONSTRAINT re-DROPped an unchanged constraint — the skip comparison (`want`) is "
         "out of sync with pg_get_constraintdef, so every bootstrap re-validates the whole table")
+
+
+@needs_db
+def test_pg_manual_crud_roundtrip_erases_no_column_anywhere(pg, tmp_path):
+    """arch-0802 — 关掉类而不是实例：put/get 不对称快照的全列守卫。
+
+    get() 是有损投影（source_documents.content 刻意不拉 bytea、materials.embedding 不读回），
+    put() 是整快照 DELETE+INSERT，而全部手编 CRUD 都是 get→改→put——投影丢掉的任何列都会被
+    往返静默抹掉。bytes 列真踩过（files-hub-0729），当时的钉子只看 bytes 一列。本守卫在一次
+    get→add_project→put 往返之后对 avery.* 里**每张带 context_id 的表逐列** diff（时间戳审计列
+    updated_at/created_at 除外；uploaded_at 是业务数据，**不豁免**）：未来任何进快照的新列被
+    往返抹掉，这里直接红——不需要有人预言是哪一列。
+    """
+    import psycopg
+
+    reg, cid, _ = _ingest(pg, tmp_path / "mem", source_documents=_sample_source_docs())
+
+    AUDIT_COLS = {"updated_at", "created_at"}
+
+    def _norm(v):
+        if isinstance(v, memoryview):
+            return bytes(v)
+        if hasattr(v, "isoformat"):
+            return v.isoformat()
+        return v
+
+    def dump(conn) -> dict[str, list[dict]]:
+        tables = [r[0] for r in conn.execute(
+            "SELECT table_name FROM information_schema.tables WHERE table_schema='avery' "
+            "AND table_type='BASE TABLE' ORDER BY table_name").fetchall()]
+        snap: dict[str, list[dict]] = {}
+        for t in tables:
+            cols = [r[0] for r in conn.execute(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_schema='avery' AND table_name=%s ORDER BY ordinal_position",
+                (t,)).fetchall()]
+            if "context_id" not in cols:
+                continue  # 与单个 context 快照无关的表（如迁移台账）不属于本守卫
+            keep = [c for c in cols if c not in AUDIT_COLS]
+            rows = conn.execute(
+                f'SELECT {", ".join(keep)} FROM avery.{t} WHERE context_id = %s',
+                (cid,)).fetchall()
+            snap[t] = sorted(
+                (dict(zip(keep, (_norm(v) for v in row))) for row in rows),
+                key=lambda d: str(sorted((k, str(v)) for k, v in d.items())))
+        return snap
+
+    with psycopg.connect(_db_url()) as conn:
+        before = dump(conn)
+    assert any(r.get("content") for r in before.get("source_documents", [])), (
+        "fixture胎里就没有字节——守卫没有测到东西")
+
+    reg.add_project(cid, {"title": "Roundtrip Guard"})   # 最典型的 get→改→put 路径
+
+    with psycopg.connect(_db_url()) as conn:
+        after = dump(conn)
+
+    # entities 本来就该多一行（新项目）：非 project 行必须逐列原样，project 旧行原样 +1 新行。
+    ent_before = before.pop("entities")
+    ent_after = after.pop("entities")
+    assert [r for r in ent_before if r["kind"] != "project"] == \
+           [r for r in ent_after if r["kind"] != "project"], "非 project 实体行被往返改写"
+    pj_before = sorted((r for r in ent_before if r["kind"] == "project"), key=lambda r: r["idx"])
+    pj_after = sorted((r for r in ent_after if r["kind"] == "project"), key=lambda r: r["idx"])
+    assert len(pj_after) == len(pj_before) + 1 and pj_after[:-1] == pj_before, (
+        "已有 project 行没有原样活过一次 add_project")
+    assert pj_after[-1]["payload"].get("title") == "Roundtrip Guard"
+
+    erased = {
+        t: [k for k in {c for row in before[t] for c in row}
+            if any(b.get(k) not in (None, "") for b in before[t])
+            and all(a.get(k) in (None, "") for a in after[t])]
+        for t in before if before[t] != after.get(t)
+    }
+    assert before == after, (
+        f"get→改→put 往返改写了快照列。整列被抹掉的: { {t: v for t, v in erased.items() if v} }; "
+        f"全部差异表: {sorted(t for t in before if before[t] != after.get(t))}")

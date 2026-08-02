@@ -310,38 +310,42 @@ class PostgresContextRegistry(ProjectWriteMixin):
                 "  owner_token = EXCLUDED.owner_token, updated_at = now()",
                 (ctx.context_id, ctx.name, Jsonb(list(ctx.source_files)),
                  (ctx.owner_token or None)))
-            # files-hub-0729/01 · 🔴 保住已存的原始字节，别让一次无关的写把它们抹掉。
+            # files-hub-0729/01 → arch-0802 · 保住已存的原始字节，改为**纯 SQL 回填**
+            # （老注释里"再往上抬就该改成临时表 + UPDATE...FROM"的那一步，现在就是）。
             #
-            # 病灶（真 bug，不是假设）：`get()` 读回 SourceDocument 时**刻意不拉 bytea**
-            # （见本文件 :417-421 `content=None`，理由与 clone_context 的注释 :436 同源——
-            # 一份几 MB 的上传不该为了读一次名册整个进内存）。而所有手编 CRUD 都是
-            # `get() → 改 → put()`（registry.py:190-238 的 add_project/patch_project/
-            # add_person/archive_* 全部如此）。于是一次「加一个项目」就会带着一整批
-            # `content=None` 的 SourceDocument 走到下面那条 INSERT——DELETE 已经把真字节
-            # 删了，再 INSERT 回去的是 NULL。
+            # 病灶不变：`get()` 的清单投影刻意不拉 bytea（见 :418-424 `content=None`），而全部
+            # 手编 CRUD 都是 `get() → 改 → put()`（registry.py:190-238），快照 DELETE+INSERT 会把
+            # content 抹成 NULL——
+            #   ① `GET /team/{id}/files/{idx}` 永远 404 而清单照列（「不建假按钮」红线走后门）；
+            #   ② 用户上传的**原件被永久销毁**（与 UI 无关，更重）。
             #
-            # 后果有两层，第二层更重：
-            #   ① `GET /team/{id}/files/{idx}` 从此永远 404（"file content is not available"），
-            #      清单却照样列着文件、size_bytes 还是对的 —— 资料库屏那个「下载」会变成一个
-            #      看得见、点得动、必然失败的按钮，正是本战役「不建假按钮」红线所禁。
-            #   ② 用户上传的**原件被永久销毁**。这一层与 UI 无关，改造前就在生产上成立。
-            #
-            # 修法：DELETE 之前先把这批 (source_key/filename → content) 捞在手里，INSERT 时
-            # 只对 `sd.content is None` 的那些回填。
-            #
-            # ⚠ 代价：put() 期间这批字节会短暂进 Python 内存。上界由上传闸给死——
-            # `guards.max_total_bytes()` 默认 32 MiB / context（`AVERY_MAX_TOTAL_UPLOAD_BYTES`），
-            # 所以最坏情况是每次写多占 ~32MB 瞬时。**谁要调大那个环境变量，先回来看这一段**：
-            # 再往上抬就该改成纯 SQL 回填（临时表 + UPDATE...FROM，字节全程不出库），
-            # 别让一次「加一个项目」把容器顶到 OOM。
-            # 🔴 只回填 None，绝不覆盖调用方明确给出的字节：一次真 ingest 带的是真 content，
-            # 那时这张表压根不该说话（新 ingest 本就是新 context_id，捞出来是空的）。
-            prior_bytes: dict[str, bytes] = {}
-            for key, blob in conn.execute(
-                    "SELECT COALESCE(source_key, filename), content FROM avery.source_documents "
-                    "WHERE context_id = %s AND content IS NOT NULL", (ctx.context_id,)).fetchall():
-                if key is not None and blob is not None:
-                    prior_bytes[key] = bytes(blob)
+            # 老修法（prior_bytes dict）有两处硬伤，都已实锤：内存峰值与上传闸耦合
+            # （AVERY_MAX_TOTAL_UPLOAD_BYTES，最坏 ~32MiB/次写）；以及 key 口径分裂——
+            # SQL 侧 COALESCE 只认 NULL 而 source_key 实际存 ''（INSERT 从不落 NULL），
+            # Python 侧 `sd.source_key or sd.filename` 认空串，于是无 source_key 的文档
+            # 回填必落空、bytes 照样被抹（arch-0802 的 roundtrip 全列守卫第一跑当场抓获，
+            # 既有 bytes 钉子的 pg 腿同刻复红——它此前一直被离线反选静默跳过）。
+            # 现在：同事务内先把原行 content 存进 ON COMMIT DROP 临时表（字节全程不出库，
+            # 内存耦合消失——guards 那头想调多大都与本函数无关了），INSERT 后 UPDATE...FROM
+            # 只回填**新行为 NULL**的格子；key 统一为 COALESCE(NULLIF(source_key,''), filename)，
+            # 与 Python 侧 `or` 同义。🔴 只回填 NULL：真 ingest 带真 content，临时表不说话。
+            conn.execute(
+                "CREATE TEMP TABLE _prior_src_bytes ON COMMIT DROP AS "
+                "SELECT DISTINCT ON (COALESCE(NULLIF(source_key, ''), filename)) "
+                "       COALESCE(NULLIF(source_key, ''), filename) AS key, content "
+                "FROM avery.source_documents "
+                "WHERE context_id = %s AND content IS NOT NULL "
+                "ORDER BY COALESCE(NULLIF(source_key, ''), filename), idx DESC",
+                (ctx.context_id,))
+            # arch-0802 · 同类第二实例：materials.embedding 同样不在 get() 投影里——无 embedder
+            # 的 put 会把已嵌入 context 的向量抹成 NULL（检索静默降级 keyword）。同一张方子。
+            conn.execute(
+                "CREATE TEMP TABLE _prior_mat_vecs ON COMMIT DROP AS "
+                "SELECT DISTINCT ON (chunk_id) chunk_id, text, embedding "
+                "FROM avery.materials "
+                "WHERE context_id = %s AND embedding IS NOT NULL "
+                "ORDER BY chunk_id, idx DESC",
+                (ctx.context_id,))
 
             # re-put = replace: a context is one atomic snapshot, never a merge of two ingests.
             conn.execute("DELETE FROM avery.entities WHERE context_id = %s", (ctx.context_id,))
@@ -383,12 +387,27 @@ class PostgresContextRegistry(ProjectWriteMixin):
                     "        COALESCE(%s::timestamptz, now()))",
                     [(ctx.context_id, i, sd.filename, sd.source_key, sd.mime, sd.size_bytes,
                       sd.doc_kind, sd.status,
-                      # files-hub-0729/01 · 见上面 prior_bytes 那段：调用方给了字节就用它的，
-                      # 没给（get→put 往返，content 恒为 None）才回填这一份原有的。
-                      sd.content if sd.content is not None
-                      else prior_bytes.get(sd.source_key or sd.filename),
+                      # arch-0802：调用方给了字节就写字节；没给（get→put 往返恒 None）先落
+                      # NULL，由下面的 UPDATE...FROM 在库内回填——字节不再过 Python。
+                      sd.content,
                       sd.storage_ref, sd.uploaded_at or None)
                      for i, sd in enumerate(ctx.source_documents)])
+                # arch-0802 · 库内回填（只补 NULL，绝不覆盖真值）。key 口径见上面临时表注释。
+                cur.execute(
+                    "UPDATE avery.source_documents sd SET content = pb.content "
+                    "FROM _prior_src_bytes pb "
+                    "WHERE sd.context_id = %s AND sd.content IS NULL "
+                    "  AND COALESCE(NULLIF(sd.source_key, ''), sd.filename) = pb.key",
+                    (ctx.context_id,))
+                # chunk_id+text 双键：text 变了说明块真变了，不给旧向量（诚实降级）。有 embedder
+                # 时新行非 NULL，本条不说话——CRUD 重嵌的**成本**问题（核验按语点名）另立票，
+                # 此处只治「抹掉」。
+                cur.execute(
+                    "UPDATE avery.materials m SET embedding = pv.embedding "
+                    "FROM _prior_mat_vecs pv "
+                    "WHERE m.context_id = %s AND m.embedding IS NULL "
+                    "  AND m.chunk_id = pv.chunk_id AND m.text = pv.text",
+                    (ctx.context_id,))
         return ctx.context_id
 
     def get(self, context_id: str) -> CompanyContext | None:
