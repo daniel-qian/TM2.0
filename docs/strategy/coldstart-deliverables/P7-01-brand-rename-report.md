@@ -1,7 +1,7 @@
 # P7-01 · Brand rename (TeamMaster → Avery) + surface-leak sweep — report
 
 Worktree branch: `worktree-agent-a8f046cd9bc00f9c0`. Scope per
-`.to-issues/P7-01-brand-rename-avery.md` + `docs/adr/0015-...md`. NOT run:
+`.to-issues/archived/P7-01-brand-rename-avery.md` + `docs/adr/0015-...md`. NOT run:
 `init.sh`, `npm`, dev server, tests (skip-tests per Danny).
 
 ---

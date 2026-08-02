@@ -49,7 +49,7 @@
     {
       "id": "feat-005",
       "name": "Brand rename TeamMaster -> Avery + surface-label leak sweep",
-      "description": "P7-01. Rename brand identity + user-facing TeamMaster/TM to Avery; sweep that no internal surface term (Nexus/Dashboard/Capabilities/Reality gap) leaks onto a user-facing screen. DO NOT rename internal ids/files/CSS/types or ADRs/archived history (ADR-0015 keeps internal names). Internal-id rename is an OPEN question for Danny (default NO). See .to-issues/P7-01-brand-rename-avery.md.",
+      "description": "P7-01. Rename brand identity + user-facing TeamMaster/TM to Avery; sweep that no internal surface term (Nexus/Dashboard/Capabilities/Reality gap) leaks onto a user-facing screen. DO NOT rename internal ids/files/CSS/types or ADRs/archived history (ADR-0015 keeps internal names). Internal-id rename is an OPEN question for Danny (default NO). See .to-issues/archived/P7-01-brand-rename-avery.md.",
       "dependencies": [
         "feat-001"
       ],
@@ -59,7 +59,7 @@
     {
       "id": "feat-006",
       "name": "Demo-video capture readiness",
-      "description": "P7-02. Clean capture mode so Danny can screen-record the 60-90s product video (beat sheet in docs/strategy/2026-06-20-coldstart-eval-roundtable.md). Hide dev chrome + any on-screen number on Lin Qing herself. Agent preps; Danny records. See .to-issues/P7-02-demo-video-capture-mode.md.",
+      "description": "P7-02. Clean capture mode so Danny can screen-record the 60-90s product video (beat sheet in docs/strategy/2026-06-20-coldstart-eval-roundtable.md). Hide dev chrome + any on-screen number on Lin Qing herself. Agent preps; Danny records. See .to-issues/archived/P7-02-demo-video-capture-mode.md.",
       "dependencies": [
         "feat-005"
       ],
@@ -69,7 +69,7 @@
     {
       "id": "feat-007",
       "name": "Avery consultant-agent: research + brief + architecture",
-      "description": "P7-03. HEADLESS company-consultant agent for EVAL DATA ONLY (no UI). Research openclaw/codex/hermes, brief+grill Danny, propose architecture, optional skeleton. Danny's bet: onboarding-files->RAG, advisor skills + workflow chain, artifact tools; copy the rest. Build on roundtable eval-architect section. See .to-issues/P7-03-consultant-agent-research-brief.md.",
+      "description": "P7-03. HEADLESS company-consultant agent for EVAL DATA ONLY (no UI). Research openclaw/codex/hermes, brief+grill Danny, propose architecture, optional skeleton. Danny's bet: onboarding-files->RAG, advisor skills + workflow chain, artifact tools; copy the rest. Build on roundtable eval-architect section. See .to-issues/archived/P7-03-consultant-agent-research-brief.md.",
       "dependencies": [],
       "status": "done",
       "evidence": "2026-06-21 (commit 46084d1). Research+brief+architecture+open-questions delivered: docs/strategy/coldstart-deliverables/consultant-agent-brief.md (codex/claude-code/hermes/opencode/openclaw loop+memory+tools, web-cited), -architecture.md (Python+Anthropic SDK ~150-line loop, 4 file tools, red-line validator = the moat), -open-questions.md (stack/RAG/skill-encoding, each w/ recommendation). NOTE: this is the RESEARCH/DESIGN deliverable; the actual harness BUILD is feat-011 (Danny's next-wave task #3)."
@@ -77,7 +77,7 @@
     {
       "id": "feat-008",
       "name": "Evaluation sheet layout + benchmark spec",
-      "description": "P7-04. Define the benchmark + the publishable eval sheet (advice-contrast vs scoreboard, per Claire/Dana). Mock with Lin Qing case; reuse product card CSS. Bake in Ray's must-have (>=3 non-authored scenarios incl. one where the kind read is wrong). Partner supplies real company materials + questions. See .to-issues/P7-04-eval-sheet-benchmark-spec.md.",
+      "description": "P7-04. Define the benchmark + the publishable eval sheet (advice-contrast vs scoreboard, per Claire/Dana). Mock with Lin Qing case; reuse product card CSS. Bake in Ray's must-have (>=3 non-authored scenarios incl. one where the kind read is wrong). Partner supplies real company materials + questions. See .to-issues/archived/P7-04-eval-sheet-benchmark-spec.md.",
       "dependencies": [],
       "status": "done",
       "evidence": "2026-06-21 (commit 46084d1). docs/strategy/coldstart-deliverables/eval-sheet-spec.md: benchmark def (rubric dims + hard-fail gates, cross-family judges never-Claude + 30% human/kappa), advice-contrast layout (not scoreboard), Lin Qing mock row. Ray's adversarial requirement SPEC'd but NOT yet rendered as a mock row -> see feat-012. Buyer flags to fix before publish (Dana/Ray, in DECISION-MEMO sec.4): kill N/X/M placeholder footnote, show the evidence Avery was given, drop named competitors. Real fill-in waits on partner materials + feat-011 runs."
@@ -85,7 +85,7 @@
     {
       "id": "feat-009",
       "name": "Avery copy kit (slug + email/message + PH/LinkedIn)",
-      "description": "P7-05. Reconcile Will's roundtable drafts with the founder voice (observe faster / better team / avoid conflicts) AGAINST the red line -- KEY TENSION: do not ship 'observe your team faster' / 'avoid conflicts' verbatim (surveillance + conflict-suppression). Produce 3-5 red-line-safe slug candidates + all channel copy, marked review-pending. See .to-issues/P7-05-avery-copy-drafts.md.",
+      "description": "P7-05. Reconcile Will's roundtable drafts with the founder voice (observe faster / better team / avoid conflicts) AGAINST the red line -- KEY TENSION: do not ship 'observe your team faster' / 'avoid conflicts' verbatim (surveillance + conflict-suppression). Produce 3-5 red-line-safe slug candidates + all channel copy, marked review-pending. See .to-issues/archived/P7-05-avery-copy-drafts.md.",
       "dependencies": [],
       "status": "done",
       "evidence": "2026-06-21 (commit 46084d1). docs/strategy/coldstart-deliverables/copy-kit.md: 5 ranked red-line-safe slugs, HR+CEO cold email + warmer follow-up, LinkedIn launch post, PH tagline+maker comment, DM ladder. Founder 3-verb intent reframed (notice sooner / best work / handle the hard conversation well). HITL REMAINING (not agent scope): Danny 审字 on all external strings + 6 buyer-driven copy fixes in DECISION-MEMO sec.6 (reframe 'reads the situation', drop 'the move', cut repeated 'free' + add data-privacy line, strip 审字 markers from real sends)."
@@ -93,7 +93,7 @@
     {
       "id": "feat-010",
       "name": "Avery landing page scaffold",
-      "description": "P7-06. Single-page site = slug + product video + eval sheet/benchmark + CTA. Likely a new Next.js/Vercel project (this repo is demo-only, ADR-0001). Scaffold with placeholders. Copy (feat-009) + eval-spec (feat-008) now DONE, so the SCAFFOLD can start AFK with placeholders for video (feat-013) + real eval numbers (feat-011/012). Danny next-wave task #2. See .to-issues/P7-06-landing-page-scaffold.md.",
+      "description": "P7-06. Single-page site = slug + product video + eval sheet/benchmark + CTA. Likely a new Next.js/Vercel project (this repo is demo-only, ADR-0001). Scaffold with placeholders. Copy (feat-009) + eval-spec (feat-008) now DONE, so the SCAFFOLD can start AFK with placeholders for video (feat-013) + real eval numbers (feat-011/012). Danny next-wave task #2. See .to-issues/archived/P7-06-landing-page-scaffold.md.",
       "dependencies": [
         "feat-009",
         "feat-008"

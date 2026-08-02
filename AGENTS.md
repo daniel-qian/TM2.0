@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Avery（旧称 TeamMaster 2.0）—— 面向小公司 manager 的管理平台 **demo 原型**（Vite + React + framer-motion + zustand）。品牌已锁定 Avery（ADR-0015）；老字眼清理见 `.to-issues/P7-01`。代码只服务 demo 叙事，不按产品工程标准要求（见 ADR-0001）；领域术语表在 `CONTEXT.md`，架构决策在 `docs/adr/`，动手前先读与所改区域相关的条目。
+Avery（旧称 TeamMaster 2.0）—— 面向小公司 manager 的管理平台 **demo 原型**（Vite + React + framer-motion + zustand）。品牌已锁定 Avery（ADR-0015）；老字眼清理已完成（feat-005，2026-06-21），报告见 `docs/strategy/coldstart-deliverables/P7-01-brand-rename-report.md`。代码只服务 demo 叙事，不按产品工程标准要求（见 ADR-0001）；领域术语表在 `CONTEXT.md`，架构决策在 `docs/adr/`，动手前先读与所改区域相关的条目。
 
 ## Autonomy & gates（先斩后奏，2026-07-06）
 
@@ -44,7 +44,7 @@ Before writing code:
 - `./init.sh` —— 一键跑全部检查（typecheck + build，fail fast）。
 - `npm run typecheck` —— `tsc -b` 零错。
 - `npm run build` —— typecheck + vite build。
-- 前端行为门是 `verify-*.mjs`（真浏览器），分散在**两处**：2026-07-20 新增的 8 道在 `eval-harness/tools/`，更早的既有门在 `.issues/<issue-dir>/`（`verify-p0` / `verify-blockers` 在 `.issues/v02-partner-align-0718/`，`verify-zh-purity` / `verify-404-discriminator` / `verify-bare-url-shell` 在 `.issues/feat-068-frontend-deploy/`，`verify-null-owner` 在 `.issues/v02-joint-0719/`）。找门用 `git ls-files "*verify-*.mjs"`，别只翻一个目录。跑之前：后端 `AVERY_BRAIN=mock` 起 8137、前端起 5173；端口被占就用隔离端口 + `VERIFY_BASE` + `AVERY_CORS_ORIGINS`（CORS 精确匹配，端口对不上会被浏览器静默拦掉，门看起来像"页面空的"）。
+- 前端行为门是 `verify-*.mjs`（真浏览器），分散在**两处**：2026-07-20 新增的 8 道在 `eval-harness/tools/`，更早的既有门在 `.issues/<issue-dir>/`（`verify-p0` 在 `.issues/v02-partner-align-0718/`，`verify-zh-purity` / `verify-404-discriminator` / `verify-bare-url-shell` 在 `.issues/feat-068-frontend-deploy/`，`verify-null-owner` 在 `.issues/v02-joint-0719/`）。**唯一权威跑器是 `eval-harness/tools/run-battery.mjs`**（`node eval-harness/tools/run-battery.mjs --only=A`／`--only=B`／`--only=C`，A→B→C 顺序不可乱），在册 ROSTER 见该文件 84-121 行；`git ls-files "*verify-*.mjs"` 会捞出 42 个文件，其中 7 个是 run-battery.mjs:28-48 明列的**死件**（.issues/v02-partner-align-0718/ 下的 verify-server / fixA / fixA-live / fixB-transport / fixB-upload-ui / fixB-upload-layout / blockers），**一律不要单独跑**——verify-server 跑起来不退出会卡死电池，verify-blockers 会真上传语料污染同批门共用的 context。⚠ 42 ≠ 在册 + 死件：另有 9 道 `.issues/rich-align-0722/verify-*.mjs` 是那场战役的一次性门，**既不在 ROSTER 也不在死件清单**——没人裁定过它们，别默认"不在册就是死的"。三个数字自查：`git ls-files "*verify-*.mjs" | wc -l` / run-battery.mjs 的 ROSTER 与死件块各自数一遍。跑之前：后端 `AVERY_BRAIN=mock` 起 8137、前端起 5173；端口被占就用隔离端口 + `VERIFY_BASE` + `AVERY_CORS_ORIGINS`（CORS 精确匹配，端口对不上会被浏览器静默拦掉，门看起来像"页面空的"）。
 - 后端电池：`cd eval-harness && python -m pytest -m "not smoke and not seedgate and not needs_keys and not needs_db"`。**这四个 deselect 不是可选的**——本机 `eval-harness/.env`（untracked）里有真 key，漏掉就真出网烧钱。
 - 没有自动化 test suite：行为验证靠 `npm run dev` 目测，验证了什么写进 evidence。
 - Harness 收尾机械门见 `docs/agents/clean-state-checklist.md`；较大 session 的验收评分见 `docs/agents/evaluator-rubric.md`。
