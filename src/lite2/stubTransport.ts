@@ -12,6 +12,8 @@
 //   · ask 问句问"事"不问"人"；回执只挂 AskDraft.recipients[].receipt，人卡零新增字段。
 //   · 多人同题只给 receipts_summary 定性一段话（真实现里该话由服务端生成并过红线门）。
 // 未知 context_id / ask id 一律大声 throw（feat-028 的 404 纪律，stub 不弱化）。
+//
+// 端点分歧台账见同目录 transport.ts 顶部。
 
 import type {
   AdviseRequest,

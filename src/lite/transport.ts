@@ -215,6 +215,29 @@ export interface LiveNotesPayload {
   notes: LiveNoteEntry[]
 }
 
+// ── 端点分歧台账（wire-contract-duplicated-endpoint-asymmetry-unledgered）──────────────────
+// 两壳各自持一份 LiveTransport（本文件 vs src/lite2/transport.ts），端点早就不对称了。
+// 区分信息只活在 commit message 里，代码与 AGENTS.md 均无痕迹——本台账把它挖出来钉在这里，
+// 免得下次合并把真端点当缺陷补丢，或者反过来把刻意的缺口当 bug 修。
+//
+// 仅 v01（本文件）有、v02 没有（1 个）：
+//   · revokeAsk —— 刻意。出处 commit 8a2ec6c（feat-047 引擎同步）message 原话：
+//     「刻意不带：revokeAsk/offlinePreview/AskStatus revoked|expired（lite 的 Ask 阶段 C
+//     后续加法，kickoff 合流契约附录 §2 只点名 owner_token/header/fetchFiles/fetchNotes
+//     这一段 delta）」。（offlinePreview 那时也没带，但 feat-068 后来补齐了——见下方
+//     offlinePreview 字段注释；revokeAsk 至今仍是那唯一没补的缺口。）
+//
+// 仅 v02（src/lite2/transport.ts）有、v01 没有（14 个）—— 未裁定：
+//   downloadFile（files-hub-0729/01）、fetchAccountContexts / claimContext（feat-053）、
+//   demoStatus / demoClaim / appendNote（input-side-0721）、addProject / patchProject /
+//   archiveProject / restoreProject（rich-align-0722 issue 05a）、addPerson / patchPerson /
+//   archivePerson / restorePerson（rich-align-0722 issue 06）。这 14 个全部诞生在
+//   2026-07-19 v01 冻结（src/shared/version.ts:8，Danny 拍板）之后——冻结之后所有新功能
+//   只往 v02 加，v01 没跟进不是逐条比对后"判定 v01 不需要"，只是没轮到。没有任何一条
+//   commit message 像 revokeAsk 那样写"刻意不给 v01"，所以标未裁定。
+//
+// 上提共享类型到 src/shared/liveContract.ts 的建议本台账不做，留给 grilling。
+//
 // ── 传输接口：seam 只认这个，AFK 门注入确定性 stub ─────────────────────────────────────
 export interface LiveTransport {
   // 打开 /advise SSE，逐事件回调；返回一个可 abort 的 handle。
