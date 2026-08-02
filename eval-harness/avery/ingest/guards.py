@@ -37,12 +37,24 @@ def _int_env(name: str, default: int) -> int:
 
 
 def max_file_bytes() -> int:
-    """Per-FILE byte ceiling (default 8 MiB). A single upload over this is a 413."""
+    """Per-FILE byte ceiling (default 8 MiB). A single upload over this is a 413.
+
+    WARNING — the default here is NOT the production value. The live container overrides both
+    upload ceilings via env: AVERY_MAX_UPLOAD_BYTES=10485760 / AVERY_MAX_FILES=10, i.e. 10 MiB and
+    10 files, not the 8 MiB / 15 written above. Always judge a limit from the RUNNING container's
+    env, never from these defaults: on 2026-07-20 someone read the defaults, concluded the frontend
+    copy ("up to 10 files, 10MB each") was lying, and nearly "fixed" correct copy into a real bug.
+    See AGENTS.md:61.
+    """
     return _int_env("AVERY_MAX_UPLOAD_BYTES", 8 * _MiB)
 
 
 def max_files() -> int:
-    """Per-REQUEST file-count ceiling (default 15). More files than this is a 413."""
+    """Per-REQUEST file-count ceiling (default 15). More files than this is a 413.
+
+    WARNING — production overrides this to 10 via AVERY_MAX_FILES; see max_file_bytes() above for
+    why reading these defaults as production truth has already caused one false bug report.
+    """
     return _int_env("AVERY_MAX_FILES", 15)
 
 
