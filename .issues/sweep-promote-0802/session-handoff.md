@@ -1,59 +1,52 @@
-# sweep-promote-0802 · 本线交接（AFK 自跑，2026-08-02）
+# sweep-promote-0802 · 本线交接（2026-08-02 · 菜单已走完）
 
-> 上游：`.issues/sweep/2026-08-02.md`（UI 46 条）+ `2026-08-02-architecture.md`（架构 7 已核验 + 19 附录）。
-> Danny 批准全菜单（"按照你的建议，AFK"）后按 begin-loop 节奏一票一验一提交。全部在
-> `claude/codebase-architecture-improve-20b9eb` 分支，**未 push、未合 main**。
+> 上一棒交接（合并前的那份）已被本文件整体替换——它的「下一棒菜单」三条**全部做完了**。
+> 本线的完整证据链：`receipt-deploy-0802.md`（上线+盘点）· `../sweep/2026-08-02-r2.md`（第二轮走查）
+> · `git log 12282e8..c255b87`（21 个提交，每票一提交）。
 
-## 落地清单（9 波，提交序）
+## 三件都做完了
 
-| 提交 | 票 | 一句话 | 验证 |
-|---|---|---|---|
-| 100d28b | arch-6 | 裸 pytest 默认离线（addopts 四反选）+ dual-smoke:57 `-m smoke` | collect 3473/3546；smoke 文件 0/1 收集两向 |
-| 623aac9 | ui-B | `<html lang>` 随 locale + notes 日期跟应用 locale（两壳） | Playwright 4/4（OS zh-CN 下 en 显 "Jul 31"） |
-| d7d8db7 | ui-C | followups 断行 + 弹层 Escape + projects CTA 改 /files | 自家 6/6 + 四门全绿；互斥经 stash 基线判别后刻意缩窄 |
-| 42ef1e7 | ui-A | doors 文案单门条件化 + 背板去假 Close 按钮 | 自家 3/3（route-abort 造两世界）+ onboard 46/0 |
-| dd564b9 | arch-2 | 公司域清扫收口进各 owning store，AuthPanel 只组合 | auth-form 57/0 + switchers 27/0 + onboard 46/0 |
-| f40440d | arch-5 | ContextRegistryProtocol 落字（~26 成员）+ 4 条离线一致性门 | 新门 4/4；契约离线段 60 passed |
-| c27c34e | arch-1 | lite2.css 177 选择器补 .lite2-shell + css-scope-check 新门 | v02 三截图逐字节相同；v01 人眼过；opus 子代理执行 |
-| （issue）| arch-3 | v01 退役成本账 → [#33](https://github.com/daniel-qian/avery/issues/33)（ready-for-human，交叉 #32） | — |
-| 2f484df | arch-4 | put/get 全列 roundtrip 守卫 + 纯 SQL 回填（content+embedding） | 真 PG：contract pg 腿 42、全量 needs_db 65 全绿 |
-| 73bfaa9 | arch-4b | 离线源码守卫对齐新机制（按其自身"更新勿删弱"规矩） | 全离线 3473/0 |
+| 菜单 | 结果 |
+|---|---|
+| ① 合并上线 + 生产盘点 | 12 提交快进合 main、前后端全量上生产；**盘点 0 条**（9 条命中全是 demo 克隆残骸，已被 GC 扫掉）|
+| ② 文档保洁 19 条 | **19/19 落地，0 弃票**；分三波、每票一提交；两轮 opus 复核 11 条 fix-needed 全修 |
+| ③ 第二轮 UI 扫 | **20 条，REGRESSED 0**；3 条 hard-contract 已开票 #34/#36/#37 |
 
-## 本线抓到的活 bug（超出走查预期的收获）
+## 本线最该被下一棒记住的三件事
 
-**prior_bytes 修复在本分支上其实是坏的**：SQL `COALESCE(source_key, filename)` 只认 NULL，
-而 INSERT 从不落 NULL（`source_key` 默认 `''`）；Python 回填侧 `or` 认空串——键法分裂，无
-source_key 的文档 bytes 照样被 CRUD 抹掉。全列守卫第一跑抓获，既有钉子的 pg 腿同刻复红
-（此前一直被离线反选静默跳过）。修法：`COALESCE(NULLIF(source_key,''), filename)` 统一键法
-+ 字节全程不出库。**生产库是否存在已被抹掉的 content 值得跑一次盘点**（`SELECT context_id,
-filename FROM avery.source_documents WHERE content IS NULL AND status='ingested'`）。
+**1. 上一轮 46 条走查发现里，12 条是同一个 harness 破口造成的假象。**
+`?transport=stub` 在 `vite build` 产物里被 DEV 闸整段 DCE，页面根本进不了数据态；
+那 12 条 hard-contract 全在描述这一件事，不是产品缺陷。换成
+`__lite2Store.uploadFiles()` + 真 mock 后端之后整族消失。
+👉 驱动已落库：`eval-harness/tools/sweep-r2-driver.mjs`，两道自检写死在里面
+（apiBase 必须本地 8137、后端必须离线三件套，**验不过 exit，不假跑**）。
 
-## 三个拍板——已裁（Danny，2026-08-02 当日）
+**2. 「没有机械 runner 的判定组」= 从来没被跑过。**
+给 snippet 的 B/C 判定组补上 runner（票 #14）的第一次跑就 6 PASS/2 FAIL——查下去发现共享助手
+`_clickTab('Follow-ups')` 自 0721 起就永久失效（tab 拆成 main/sub 两层，整颗 textContent
+变成 'To-do listFollow-ups'）。**这意味着 gate.md 那套人工注入协议也一直是坏的**，
+任何人照文档手跑 B 组都会卡在同一处。已在 snippet 侧修好（一次修好全部调用方），
+新门里的绕过补丁**整段删掉**——留着就是把上游的坏掩盖成局部的绿。
 
-1. **弹层叠加：维持现状，结案。** Escape 已修够用；互斥要连 button-family 防作弊计数与
-   onboard 世界 F 一起改，不值。今后 sweep 复现此条按 KNOWN-by-design 记，不再开票。
-2. **demo/status 不走 stub：不修，结案。** "纯离线开打包版演示"场景不存在（演示恒连真
-   后端/dev 模式）。今后 checker 撞到此行为不算 finding。
-3. **CRUD 重嵌成本：先不管。** 毛票级浪费，等真实客户量再立票（届时规则=文本没变不重算）。
+**3. 本轮抓到的东西里，一半是"验证本身在撒谎"。** 逐条：
+- 生产写路径探针第③步 400 未写入，第④步的"字节相同"是**空真**（换 Python 拿到真 200 才算数）；
+- 我自己的走查驱动把 paperwork 十份产物全采成了 home（`screen` 字段与 `url` 字段当场打架）；
+- 同一驱动的 `bareButtons` 按 class 白名单数，报 11/15 全是误报——量的是命名习惯不是缺陷；
+- 新立的 eslint 墙**承诺得比拦得多**：`<Link to={PAPERWORK_PATH}>` 能溜过去，而那恰恰是它要防的原始 bug 形状；
+- 像素门报 4 张漂移，重冻后实际漂了 **26** 张——它首处不匹配就中止整条 test；
+- ROSTER 里 status-truth 的 `backend:false` 是错的（它真上传），skin-phases 的"走 stub 所以不碰后端"理由是假的。
+👉 所以本轮所有新加的机器门都做了 born-red。**证明不了它会红的门，是一个无声的零。**
 
-## 下一棒菜单（Danny 已拍板，按序）
+## 环境状态（收工时）
 
-1. 🔴 **合并上线 + 生产盘点**（第一优先）：本分支 11 提交合回 main（[[merge-to-main-from-own-worktree]]
-   纪律：在自己 worktree 做、合前后跑门），按 AGENTS.md「默认从 main 构建」推生产；上线后
-   对生产库跑原件盘点 `SELECT context_id, filename FROM avery.source_documents WHERE content
-   IS NULL AND status='ingested'`——有命中出清单报告，**不擅自补救**（数据修复属销毁类邻域）。
-2. **文档保洁 19 条**（架构报告未核验附录）：每条动手前先复核引用行号还成立，不成立弃票留痕。
-3. **第二轮 UI 扫**：`__lite2Store` 缝注入数据态，补扫上轮 Not covered 的全部"有数据"页面；
-   台账=上一份报告的同日修复附记，按 NEW/KNOWN/REGRESSED 记。
+- 工作树干净，`main` 与 `origin/main` 推平在 `c255b87`。HEAD 在 main（C 区门跑完查过）。
+- mock 后端 8137（离线三件套）与 preview 5173 **仍在跑**——下一棒可以直接用；
+  dist 是 `vite build --mode development` 的健康产物（apiBase 本地 8137）。
+- 本地 `avery-pg`（5433）容器留跑。
+- 走查产物 `.issues/sweep/2026-08-02-r2-shots/` 220 份（untracked，已进 .gitignore）。
 
-## 环境状态
+## 下一棒该看哪
 
-- 本地 `avery-pg`（5433）容器：本线启动（此前 Exited 255 两周，疑似宿主机重启殃及），**留跑**。
-- 预览服务器（4173/::1、5173/127.0.0.1）与 mock 后端（8137）：本线收尾已停。
-- dist：`vite build --mode development` 产物（含全部本线改动）。
-- zh 文案两处非 M3：projects CTA（名词替换）与 onboardDoorsBodySolo（已审句复用）——待抽查。
-
-## 未动区
-
-progress.md / 根 session-handoff.md / feature_list.json（归 main-checkout integrator）；
-src/story 零改；架构报告"未核验附录"19 条一条没动（按语要求先自行复核再派波）。
+不再由本文件排菜单——**统一看 `progress.md` 的 What's Next**（本轮已整体换血）。
+其中与本线直接相关的两条：r2 剩下 17 条未开票的发现；snippet 头注释那套"零后端/离线 stub"
+的假前提值得单开一票刷掉。
