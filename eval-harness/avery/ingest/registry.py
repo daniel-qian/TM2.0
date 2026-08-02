@@ -23,6 +23,7 @@ import uuid
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Protocol
 
 from .extract import (
     ExtractionResult,
@@ -927,6 +928,61 @@ class ContextRegistry(ProjectWriteMixin):
         self._ephemeral_at.clear()
 
 
+# --- arch-0802: the registry seam, WRITTEN DOWN -----------------------------------------------
+# Two adapters satisfy this seam (the in-memory ContextRegistry above; PostgresContextRegistry in
+# pg_registry.py), but until now the interface existed nowhere in code: ~26 duck-typed members
+# whose drift was only catchable by the @needs_db parity suite — which the offline battery skips
+# by design (a pg-side gap shipped green on 2026-07-23 exactly this way; see the offline-guard
+# block in tests/test_registry_contract.py). This Protocol is the seam's single written surface:
+# tests/test_registry_protocol.py asserts OFFLINE that both adapters implement every member with
+# an identical parameter list — method drift now goes red with no DB attached.
+#
+# Growing the seam: add the method HERE first, then to both adapters. The pg-only extra is
+# deliberate and stays out: PostgresContextRegistry.delete() is shared-dev-DB hygiene the service
+# never calls (the in-memory twin's clear() already drops everything).
+class ContextRegistryProtocol(Protocol):
+    """Everything a caller (HTTP layer, pipeline, gates) may rely on across BOTH adapters."""
+
+    # company contexts
+    def put(self, ctx: CompanyContext) -> str: ...
+    def get(self, context_id: str) -> CompanyContext | None: ...
+    def __contains__(self, context_id: str) -> bool: ...
+    def clear(self) -> None: ...
+    def resolve_memory_dir(self, context_id: str) -> Path | None: ...
+    def source_document_bytes(self, context_id: str, idx: int) -> bytes | None: ...
+    def clone_context(self, src_context_id: str, *, new_context_id: str,
+                      new_owner_token: str, ephemeral: bool = True) -> bool: ...
+    def sweep_ephemeral(self, *, older_than_hours: int, limit: int = 50) -> int: ...
+
+    # Avery's notes (write side)
+    def append_note(self, context_id: str, text: str, source_excerpt: str = "") -> CompanyNote: ...
+    def list_notes(self, context_id: str) -> list[CompanyNote]: ...
+
+    # ask cards
+    def put_ask(self, ask): ...
+    def get_ask(self, ask_id: str): ...
+    def get_ask_by_token(self, share_token: str): ...
+    def record_answer(self, share_token: str, answers: list, comment: str,
+                      answered_at: str) -> str: ...
+
+    # account <-> context binding (feat-038 / feat-053)
+    def link_account_context(self, user_id: str, context_id: str) -> bool: ...
+    def contexts_for_account(self, user_id: str) -> list[str]: ...
+    def account_for_context(self, context_id: str) -> str | None: ...
+    def account_owns(self, user_id: str | None, context_id: str) -> bool: ...
+
+    # manual CRUD (today via the shared ProjectWriteMixin; enumerated so the seam stays
+    # complete even if an adapter ever stops inheriting the mixin)
+    def add_project(self, context_id: str, fields: dict) -> ProjectEntity: ...
+    def patch_project(self, context_id: str, project_id: str, fields: dict) -> ProjectEntity: ...
+    def archive_project(self, context_id: str, project_id: str) -> ProjectEntity: ...
+    def restore_project(self, context_id: str, project_id: str) -> ProjectEntity: ...
+    def add_person(self, context_id: str, fields: dict): ...
+    def patch_person(self, context_id: str, person_id: str, fields: dict): ...
+    def archive_person(self, context_id: str, person_id: str): ...
+    def restore_person(self, context_id: str, person_id: str): ...
+
+
 # Process-wide default registry (the offline in-memory instance).
 REGISTRY = ContextRegistry()
 
@@ -952,7 +1008,7 @@ def data_root() -> Path:
 _PG_REGISTRIES: dict[str, object] = {}   # url -> PostgresContextRegistry (per-process cache)
 
 
-def active_registry() -> ContextRegistry:
+def active_registry() -> ContextRegistryProtocol:
     """THE registry the service should use right now. `AVERY_DB_URL`/`PGVECTOR_URL` set -> the
     Postgres-backed registry (company data survives restarts/redeploys); unset -> the in-memory
     REGISTRY (offline default, no external service, suite stays green with no DB).
@@ -968,7 +1024,7 @@ def active_registry() -> ContextRegistry:
         # feat-031: a configured embedder turns the DB registry into real pgvector RAG (put() fills
         # embeddings, get() rebuilds a pgvector store). None (keyword / no key) -> KeywordStore.
         reg = _PG_REGISTRIES[url] = PostgresContextRegistry(url, embedder=make_embedder_from_env())
-    return reg  # type: ignore[return-value]  # duck-typed: same get/put/resolve/__contains__ API
+    return reg  # 契约面见 ContextRegistryProtocol；两适配器的一致性由 test_registry_protocol.py 离线钉住
 
 
 def new_context_id() -> str:

@@ -1,9 +1,12 @@
 """feat-030 — the Postgres-backed ContextRegistry (the DB twin feat-018's registry promised).
 
-Same duck-typed API as the in-memory `ContextRegistry` (`put/get/resolve_memory_dir/__contains__/
-clear`), so it plugs in behind the existing seam with ZERO change to the pipeline, the loop, or the
-HTTP handlers — `active_registry()` (registry.py) picks it whenever `AVERY_DB_URL`/`PGVECTOR_URL`
-is set. Everything a company workspace is made of goes to Postgres (schema `avery`, see
+Same API as the in-memory `ContextRegistry` — the full ~26-member surface is written down as
+`registry.ContextRegistryProtocol`, and `tests/test_registry_protocol.py` asserts OFFLINE that both
+adapters implement every member with identical parameter lists (this docstring used to claim a
+5-method API; that was stale by ~21 methods). It plugs in behind the existing seam with ZERO change
+to the pipeline, the loop, or the HTTP handlers — `active_registry()` (registry.py) picks it
+whenever `AVERY_DB_URL`/`PGVECTOR_URL` is set. The one deliberate pg-only extra is `delete()`
+(shared-dev-DB hygiene; not seam surface — the conformance test pins this asymmetry as intended). Everything a company workspace is made of goes to Postgres (schema `avery`, see
 db/migrations/0001_avery_persistence.sql):
 
     contexts       id / name / source_files / owner_token (feat-038 tenant-isolation credential)
