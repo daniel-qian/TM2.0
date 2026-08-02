@@ -2450,6 +2450,9 @@
   font-size: 13.5px;
   font-weight: 700;
   line-height: 1.35;
+  /* ui-sweep-0802：无断点长标题（300 字符无空格）会涂出白卡右缘一路到视口边——
+     anywhere 允许在任意点断行，正常带空格文案不受影响。 */
+  overflow-wrap: anywhere;
 }
 
 /* 已完成条目（History tab）的标题走删除线，视觉上与 story homeStore 的 .home-drawer-item 呼应 */

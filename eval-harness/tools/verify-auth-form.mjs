@@ -630,7 +630,9 @@ console.log('\n═══ ⑧ 点语言开关 → 账号面板文案跟着变（�
   await ensurePanelClosed(p)
 
   // 🔴 刻意不 reload：刷新会让这个 bug 自愈，也就测不到它。
-  // 0721 · 7B：语言开关收进了设置菜单——点开关前先开齿轮（菜单不自动关，回程共用这次展开）。
+  // 0721 · 7B：语言开关收进了设置菜单——点开关前先开齿轮。
+  // ui-sweep-0802：菜单现在「按下在菜单外即收」（弹层互斥修复）——点账号按钮它就收起，
+  // 回程要重新展开（见下），不再共用这次展开。断言零改动，驱动步骤跟上新交互。
   await p.locator('.lite-settings-toggle').click()
   await p.waitForTimeout(200)
   await p.locator('.lang-switch-btn').nth(1).click()   // → English
@@ -654,6 +656,9 @@ console.log('\n═══ ⑧ 点语言开关 → 账号面板文案跟着变（�
   // ensurePanelClosed 显式关掉，否则它压在设置弹层上，语言按钮永远「可见但点不着」。
   await ensurePanelClosed(p)
   await p.waitForTimeout(150)
+  // ui-sweep-0802：点账号按钮（菜单外）时设置菜单已按新交互自动收起——回程前重新展开。
+  await p.locator('.lite-settings-toggle').click()
+  await p.waitForTimeout(200)
   await p.locator('.lang-switch-btn').nth(0).click()   // → 中文
   await p.waitForTimeout(400)
   const toggleBack = await p.locator('.lite-auth-toggle').innerText()

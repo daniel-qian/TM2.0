@@ -48,6 +48,23 @@ export function LiteTopbar() {
     setConfirmRestart(false)
   }
 
+  // ui-sweep-0802 · 弹层 Escape 失聪实锤：原 Escape 挂在 pop 的 onKeyDown 上，焦点不在菜单
+  // 内（比如刚点完开关、焦点还在 body）就没反应。展开期挂 document 级 Escape，收起即卸。
+  // 🔴 刻意只修 Escape、不做「点外即收」也不做与铃铛互斥：verify-button-family 的防作弊
+  // 计数（≥15）靠**同时展开**两弹层审计其内按钮，verify-onboard-gate 世界 F 的两击确认
+  // 「重新开始」也依赖菜单在外点后仍开。叠加是否算产品缺陷留 Danny 裁，别在这里顺手改。
+  useEffect(() => {
+    if (!settingsOpen) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setSettingsOpen(false)
+        setConfirmRestart(false)
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [settingsOpen])
+
   // uiux-narrow-0728 · tab 条溢出信号。.scene-tabs 是横滚容器且藏了滚动条
   // （lite2.css l.5414 scrollbar-width:none + ::-webkit-scrollbar{display:none}）——960px 起
   // 「未来方向」就滑出可视区，390px 掉六个，屏上却没有任何「右边还有」的提示，第一次用的人

@@ -359,11 +359,13 @@ export function ProjectsScreen() {
                 <>
                   <h2>{l.projectsEmptyTitle}</h2>
                   <p>{l.projectsEmptyBody}</p>
-                  {/* 上传入口住在「你的团队」——这里不复制一个上传面板，只把人送过去。 */}
+                  {/* 上传入口自 ADR-0032（files-hub-0729）起住在「资料库」——此前这里送去
+                      「你的团队」，但 Team 屏已零上传元素，用户落地后还要被引导卡再转发一跳
+                      （0802 走查实锤的两跳绕路）。直接送到上传真正所在的屏。 */}
                   <button
                     type="button"
                     className="lite-btn lite-btn--primary lite-projects-empty-cta"
-                    onClick={() => goScreen('team')}
+                    onClick={() => goScreen('files')}
                   >
                     {l.projectsEmptyCta} →
                   </button>

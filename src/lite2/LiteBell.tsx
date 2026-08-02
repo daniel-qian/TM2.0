@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useLite } from './store'
 import {
   NOTIF_TARGET,
@@ -46,6 +47,18 @@ export function LiteBell() {
   const unread = useNotify(selectUnreadCount)
 
   const goScreen = useLite((s) => s.goScreen)
+
+  // ui-sweep-0802 · 与设置菜单同批修：铃铛弹层原本没有任何键盘关闭路径。展开期挂 document
+  // 级 Escape，收起即卸。🔴 刻意不做「点外即收」/互斥——理由见 LiteTopbar 同批注释
+  // （verify-button-family 依赖两弹层同开审计）。
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closePop()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [open, closePop])
 
   return (
     <div className="lite-bell">

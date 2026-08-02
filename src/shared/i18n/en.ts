@@ -1066,8 +1066,8 @@ export const en = {
       'Only one project came out of your uploads. If your documents cover more than one, they may not be split into sections Avery can tell apart yet — a heading per project usually helps.',
     projectsEmptyTitle: 'No projects yet',
     projectsEmptyBody:
-      'Upload a project plan, a weekly note or a status report under Team, and the projects it describes will show up here.',
-    projectsEmptyCta: 'Go to Team',
+      'Upload a project plan, a weekly note or a status report under Files, and the projects it describes will show up here.',
+    projectsEmptyCta: 'Go to Files',
     projectsGroupNeedsYou: 'Needs you',
     projectsGroupMoving: 'Moving',
     projectsGroupOther: 'Other status',
