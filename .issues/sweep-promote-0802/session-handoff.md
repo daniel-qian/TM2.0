@@ -28,14 +28,23 @@ source_key 的文档 bytes 照样被 CRUD 抹掉。全列守卫第一跑抓获�
 + 字节全程不出库。**生产库是否存在已被抹掉的 content 值得跑一次盘点**（`SELECT context_id,
 filename FROM avery.source_documents WHERE content IS NULL AND status='ingested'`）。
 
-## 留给 Danny 的三个未拍板
+## 三个拍板——已裁（Danny，2026-08-02 当日）
 
-1. **弹层叠加**：Escape 已修；互斥/点外即收会拆 button-family 防作弊计数与 onboard 世界 F，
-   要改须连门断言一起动（断言域，AFK 不越权）。
-2. **demo/status 不走 stub**：stubTransport 未实现 demoStatus，任何构建下探测都真出网——
-   "离线 demo 一个 built dist" 要不要支持是方向题。
-3. **CRUD 重嵌成本**（核验按语第二实例）：有 embedder 时每次手编 CRUD 全量重嵌走计费
-   DashScope；本波只治"抹掉"（无 embedder 时向量保留），省钱要另立票定 staleness 语义。
+1. **弹层叠加：维持现状，结案。** Escape 已修够用；互斥要连 button-family 防作弊计数与
+   onboard 世界 F 一起改，不值。今后 sweep 复现此条按 KNOWN-by-design 记，不再开票。
+2. **demo/status 不走 stub：不修，结案。** "纯离线开打包版演示"场景不存在（演示恒连真
+   后端/dev 模式）。今后 checker 撞到此行为不算 finding。
+3. **CRUD 重嵌成本：先不管。** 毛票级浪费，等真实客户量再立票（届时规则=文本没变不重算）。
+
+## 下一棒菜单（Danny 已拍板，按序）
+
+1. 🔴 **合并上线 + 生产盘点**（第一优先）：本分支 11 提交合回 main（[[merge-to-main-from-own-worktree]]
+   纪律：在自己 worktree 做、合前后跑门），按 AGENTS.md「默认从 main 构建」推生产；上线后
+   对生产库跑原件盘点 `SELECT context_id, filename FROM avery.source_documents WHERE content
+   IS NULL AND status='ingested'`——有命中出清单报告，**不擅自补救**（数据修复属销毁类邻域）。
+2. **文档保洁 19 条**（架构报告未核验附录）：每条动手前先复核引用行号还成立，不成立弃票留痕。
+3. **第二轮 UI 扫**：`__lite2Store` 缝注入数据态，补扫上轮 Not covered 的全部"有数据"页面；
+   台账=上一份报告的同日修复附记，按 NEW/KNOWN/REGRESSED 记。
 
 ## 环境状态
 
