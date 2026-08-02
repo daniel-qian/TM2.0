@@ -314,6 +314,9 @@ interface LiteState {
   goScreen: (screen: LiteScreen, params?: Record<string, string | null>) => void
   openDetail: (kind: 'person' | 'project', id: string) => void
   closeDetail: () => void
+  // nudge-clear-only-on-goscreen-path：Room 内一次性 nudge 的「路由变更即清」动作。不挂在
+  // goScreen 里——由 RoomScreen.tsx 的 useEffect 订阅 location 调用（见 goScreen 上方注释）。
+  clearNoteNudge: () => void
   setTransport: (transport: LiveTransport) => void // AFK 门注入确定性 stub
   uploadFiles: (files: File[]) => Promise<void>
   // input-side-0721 · 3A：领一份示例团队（后端克隆预铸母本 → 本访客私有副本）。
@@ -452,14 +455,23 @@ export const useLite = create<LiteState>((set, get) => ({
   askBusy: 'idle',
   askError: null,
 
-  // 切屏消掉 Room 内的一次性 nudge（用户已离开事发现场；nudge 是瞬态感知，不是持久红点）。
+  // Room 内的一次性 nudge（用户已离开事发现场；nudge 是瞬态感知，不是持久红点）按「路由变更
+  // 即清」的统一动作走，三条离开 Room 的路径都要清：① goScreen tab 切换；② Topbar 的 <Link>
+  // （LiteTopbar.tsx:275/292，到「文件与表单」/「资料库」——不经 goScreen，goScreen 自己清不
+  // 到它）；③ 浏览器前进后退。三条路径唯一的公共信号是「location 变了」，所以清点不挂在
+  // goScreen 里，而是暴露成下面的 clearNoteNudge()，由 RoomScreen.tsx 的 useEffect 订阅
+  // location.pathname + location.search 调用。
   // feat-051：切屏本身交给路由（导航自带「离开详情」的语义，不必再手动清 detail）。
+  // 🔴 本文件另有三处 `noteJustAdded: false`（初始 state / `askLive` 新一轮起跑重置 /
+  // `resetLiteCompanyData` 换账号重新开始）——那三处是 init-reset 点，不是导航清点，
+  // 别把这条逻辑往那几处叠。（刻意不写行号：这条注释自己就会把下面的行号顶漂，
+  // 上一版写的 434/822/976 在加完本段之后已经分别指向 rawTeam / 一句无关注释 / AuthPanel。）
   goScreen: (screen, params) => {
-    set({ noteJustAdded: false })
     navigateToScreen(screen, params)
   },
   openDetail: (kind, id) => navigateToDetail(kind, id),
   closeDetail: () => navigateCloseDetail(),
+  clearNoteNudge: () => set({ noteJustAdded: false }),
 
   setTransport: (transport) =>
     set({ transport, agentSource: createLiveAgentSource(transport) }),

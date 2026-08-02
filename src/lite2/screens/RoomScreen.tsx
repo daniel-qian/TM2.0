@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useLocation } from 'react-router-dom'
 import { useLite } from '../store'
 import { useFlow } from '../flowStore'
 import { useDict } from '../../shared/i18n/useDict'
@@ -266,6 +267,7 @@ export function RoomScreen() {
   const askLive = useLite((s) => s.askLive)
   const noteJustAdded = useLite((s) => s.noteJustAdded)
   const goScreen = useLite((s) => s.goScreen)
+  const clearNoteNudge = useLite((s) => s.clearNoteNudge)
   // 0721 对齐棒（合伙人反馈 A2）：无材料 gate 的判据。用 contextId 而不用 team——
   // contextId 在 store 模块求值时就从 localStorage 同步恢复（restoredContextId），
   // 回访用户第一帧就非空，不会在 restoreSession 网络往返期间闪一下"没材料"空态；
@@ -283,6 +285,16 @@ export function RoomScreen() {
     // 只在挂载时消费一次——依赖数组特意留空，effect 不该在 composerDraft 变化时重跑。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // nudge-clear-only-on-goscreen-path：离开 Room 的三条路径（goScreen tab 切换 / Topbar
+  // <Link> / 浏览器前进后退）唯一的公共信号是 location 变了——所以在这里订阅
+  // location.pathname + location.search，值一变就清掉本屏的一次性 nudge（见 store.ts
+  // clearNoteNudge 上方注释）。RoomScreen 挂载本身也算一次「变了」，覆盖「离开后又回到
+  // Room」这条路：Room 之外触发的清点走不到这个 effect，全靠重新挂载补上。
+  const { pathname, search } = useLocation()
+  useEffect(() => {
+    clearNoteNudge()
+  }, [pathname, search, clearNoteNudge])
 
   const running = run.status === 'running'
   const hasStarted = run.status !== 'idle'
