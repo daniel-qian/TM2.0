@@ -21,7 +21,6 @@ export function DetailOverlay() {
   const signals = (rawTeam?.signals ?? []).filter(
     (sig) => sig.subjectId === detail.id && (sig.subjectType === 'person' || sig.subjectType === 'project'),
   )
-  const sourceFiles = team.sourceFiles
 
   const person = detail.kind === 'person' ? team.people.find((p) => p.id === detail.id) : null
   const project = detail.kind === 'project' ? team.projects.find((p) => p.id === detail.id) : null
@@ -142,18 +141,10 @@ export function DetailOverlay() {
           </section>
         ) : null}
 
-        {sourceFiles.length > 0 ? (
-          <section className="lite-detail-section lite-detail-source">
-            <p className="eyebrow">{t.lite.detailSource}</p>
-            <p>
-              {sourceFiles.map((name) => (
-                <span key={name} className="upload-source-chip">
-                  {name}
-                </span>
-              ))}
-            </p>
-          </section>
-        ) : null}
+        {/* #37：与 lite2 同款删除（墙纪律：拷贝不 import）。这一节曾把 workspace 级的
+            team.sourceFiles 当作**这张卡的**「出处」渲染——契约里没有逐卡溯源字段，
+            所以那句话对任何一张卡都说不出口。完整理由见 src/lite2/DetailOverlay.tsx 同位注释。
+            票 #37 只报了 lite2 两屏，但同一个谎在 v01 里逐字存在，一起改掉。 */}
       </div>
     </div>
   )

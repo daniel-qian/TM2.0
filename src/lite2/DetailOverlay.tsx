@@ -61,7 +61,6 @@ export function DetailOverlay() {
     (sig) =>
       sig.subjectId === detail?.id && (sig.subjectType === 'person' || sig.subjectType === 'project'),
   )
-  const sourceFiles = team?.sourceFiles ?? []
 
   // rich-align-0722/06：人查找并入停用列表（同项目并入归档），停用瞬间不闪 detailGone + 深链可开。
   const person =
@@ -138,18 +137,24 @@ export function DetailOverlay() {
         </section>
       ) : null}
 
-      {sourceFiles.length > 0 ? (
-        <section className="lite-detail-section lite-detail-source">
-          <p className="eyebrow">{t.lite2.detailSource}</p>
-          <p>
-            {sourceFiles.map((name) => (
-              <span key={name} className="upload-source-chip">
-                {name}
-              </span>
-            ))}
-          </p>
-        </section>
-      ) : null}
+      {/* #37：这里曾经渲染「出处：你上传的文件」——喂的是 team.sourceFiles，
+          一个**工作区级**的全量文件名清单，与被打开的这张卡没有任何关系。
+          于是 16 个人的详情浮层逐字打印同一份 9 文件清单（人力经理的「出处」里列着
+          另外两个人的简历），而纯手打、六个字段全挂「手动编辑」角标的项目，
+          详情里照样列出全部 9 份文档——与角标本身直接自相矛盾。
+
+          为什么是**删掉**而不是「手打卡改显示『此卡无文档出处』」：
+          契约里根本没有逐卡溯源这个东西。LivePersonCard / LiveProjectCard
+          （src/lite/transport.ts）都不带任何 source 字段，只有 payload 顶层的
+          workspace 级 `source_files`。所以「这张卡出自这些文件」这句话，
+          对**任何**一张卡都是我们说不出口的——不只是手打的那些。
+          只给手打卡加一句「无文档出处」，反而等于坐实了"其余卡片列的就是它们的出处"，
+          把同一个谎话说得更隐蔽。产品的核心主张是「没有一处是编的」、可溯源到具体文件，
+          那就不能拿工作区级清单冒充卡片级溯源。
+          工作区级清单本来就有正确的家：上传面板的「你的文件」（UploadPanel），
+          删掉这一节没有丢失任何信息。
+          要做**真的**逐卡溯源，那是后端契约变更（人卡/项目卡各自带 source 归属），
+          值得单开一票，别用一个前端过滤器假装。 */}
     </LiteModal>
   )
 }

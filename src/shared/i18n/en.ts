@@ -447,7 +447,6 @@ export const en = {
     detailProgress: 'Progress',
     detailBlockers: 'Worth a closer look',
     detailSignals: 'What the documents say',
-    detailSource: 'From your uploads',
     detailGone: 'This card is no longer in your uploads.',
 
     // ── Room advice card — the 8-field structured card rendered by LiteAdviceCard.tsx
@@ -1038,7 +1037,6 @@ export const en = {
     detailProgress: 'Progress',
     detailBlockers: 'Worth noting',
     detailSignals: 'What the documents say',
-    detailSource: 'From your uploads',
     detailGone: 'This card is no longer in your uploads.',
     // feat-055: the project overlay used to render `status` and `ownerName` straight from the
     // defaulted view model, so a project the documents never gave a status to read as "on-track".
