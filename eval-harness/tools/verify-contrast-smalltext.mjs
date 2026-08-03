@@ -109,6 +109,52 @@ async function driveShell({ label, url, storeSeam, screens }) {
   await ctx.close()
 }
 
+// ── 错误态世界（2026-08-03 新增）───────────────────────────────────────────────
+// 为什么要单独开一个世界：上面 driveShell 走的是「后端在场」的顺路，上传**永远成功**，
+// 于是 `.upload-error-label` 这一族从来没被采过样。这不是判据写错了，是判据**够不着**——
+// 一整个状态族躲在采样面之外，门再绿也证明不了它。
+// 2026-08-03 把 8137 停掉时偶然逼出这条路径，实测 paper 4.33 / aurora 3.85，**两皮都破 AA**
+// （已修：lite2.css / lite.css 把它切到 --terracotta-text，见同日注释）。
+// 这里用 route 拦截把「上传失败」变成可复现的常规判据，不依赖"把后端停掉"这种人工前置。
+// 🔴 先断言标签真的在场再量对比度：一个采不到样的采样器是恒绿的，那种绿最骗人。
+async function driveErrorState({ label, url, storeSeam, screens }) {
+  console.log(`\n═══ ${label} ═══`)
+  const boot = await bootPage({ browser, url, trackPageErrors: true })
+  browser = boot.browser
+  const { context: ctx, page, pageErrors } = boot
+  const tag = (n) => `[${label}] ${n}`
+
+  // 让 ingest 必失败——比停后端可复现，且不影响同批其它门。
+  await page.route('**/ingest', (route) => route.abort('failed'))
+
+  await page.evaluate(
+    async ({ doc, seam }) => {
+      const enc = new TextEncoder()
+      const f = new File([enc.encode(doc)], 'w33-weekly.md', { type: 'text/markdown' })
+      await window[seam].getState().uploadFiles([f]).catch(() => {})
+    },
+    { doc: SEED_DOC, seam: storeSeam },
+  )
+  await page.waitForFunction(
+    (seam) => window[seam].getState().ingestStatus === 'error',
+    storeSeam, { timeout: 30000 },
+  )
+
+  for (const sc of screens) {
+    await page.evaluate(({ seam, sc }) => window[seam].getState().goScreen(sc), { seam: storeSeam, sc })
+    await page.waitForTimeout(350)
+    // 采样面自证：这一屏上错误态标签必须真的渲染出来了，否则下面那条对比度判据是空跑。
+    const labelCount = await page.evaluate(() => document.querySelectorAll('.upload-error-label').length)
+    rec(tag(`${sc} 屏错误态标签在场（采样面自证，防空跑）`), labelCount > 0, `.upload-error-label × ${labelCount}`)
+    const bad = await page.evaluate(AUDIT_FN)
+    rec(tag(`${sc} 屏错误态全部文本 ≥ AA（小字 4.5 / 大字 3.0）`), bad.length === 0,
+      bad.length ? `${bad.length} 处低于线: ${bad.slice(0, 6).join(' · ')}` : '0 处')
+  }
+
+  rec(tag('无 pageerror'), pageErrors.length === 0, pageErrors.slice(0, 2).join(' | ') || '0 条')
+  await ctx.close()
+}
+
 // files-hub-0729/01 · 'files' 追加在末尾：这个数组是「哪些屏会被采样」的唯一名单，
 // 漏掉一屏不会红、只会**永远不采样它**（假绿）。资料库屏是 t.upload.* 那 38 个键在
 // 07-29 之后唯一的落屏点（上传面板已从团队屏撤走），漏了等于整族文案无人扫。
@@ -116,5 +162,12 @@ const V2_SCREENS = ['team', 'home', 'projects', 'room', 'followups', 'notes', 'c
 await driveShell({ label: 'v02·paper', url: `${UI}/?v=2&mode=live&look=paper&lang=zh`, storeSeam: '__lite2Store', screens: V2_SCREENS })
 await driveShell({ label: 'v02·aurora', url: `${UI}/?v=2&mode=live&look=aurora&lang=zh`, storeSeam: '__lite2Store', screens: V2_SCREENS })
 await driveShell({ label: 'v01', url: `${UI}/?v=1&mode=live&lang=zh`, storeSeam: '__liteStore', screens: ['team', 'room', 'notes', 'playbooks', 'vision'] })
+
+// 错误态只在「上传面板所在的屏」有意义：v02 是 home / files（07-29 之后上传面板已从团队屏
+// 撤走，见上面 V2_SCREENS 的注释），v01 仍在 team 屏。屏名写错不会红、只会永远采不到——
+// 所以上面每屏都配了「标签在场」的自证判据。
+await driveErrorState({ label: 'v02·paper·错误态', url: `${UI}/?v=2&mode=live&look=paper&lang=zh`, storeSeam: '__lite2Store', screens: ['home', 'files'] })
+await driveErrorState({ label: 'v02·aurora·错误态', url: `${UI}/?v=2&mode=live&look=aurora&lang=zh`, storeSeam: '__lite2Store', screens: ['home', 'files'] })
+await driveErrorState({ label: 'v01·错误态', url: `${UI}/?v=1&mode=live&lang=zh`, storeSeam: '__liteStore', screens: ['team'] })
 
 await finish(gateRec, { browser, label: '小字对比度' })

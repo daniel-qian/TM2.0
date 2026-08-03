@@ -1695,6 +1695,12 @@
   color: var(--sage-text, var(--sage));
 }
 
+/* 2026-08-03 补漏（与 lite2 同款，墙纪律：拷贝不 import）：上传状态三兄弟里 error
+   那个当年漏切，实测 v01 上 4.33 破 AA。漏因见 lite2.css 同位注释——门当年采不到错误态。 */
+.lite-shell .upload-error-label {
+  color: var(--terracotta-text, var(--terracotta));
+}
+
 .lite-shell .upload-ingesting {
   color: var(--honey-text, var(--honey));
 }

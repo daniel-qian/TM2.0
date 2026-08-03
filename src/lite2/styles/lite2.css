@@ -5426,6 +5426,15 @@
   color: var(--sage-text, var(--sage));
 }
 
+/* 2026-08-03 补漏：上传状态三兄弟里只有 error 那个当年漏了（ready→sage-text、
+   ingesting→honey-text 都切了，它还挂着装饰用的 --terracotta）。漏掉的原因不是眼花，
+   是**这条判据当年采不到样**——verify-contrast-smalltext 走的是后端在场的顺路，
+   错误态根本不渲染。实测（把 8137 停掉逼出错误态）：paper 4.33、aurora 3.85，两皮都破 AA。
+   门已补错误态采样（同票），这里不会再是暗区。 */
+.lite2-shell .upload-error-label {
+  color: var(--terracotta-text, var(--terracotta));
+}
+
 .lite2-shell .upload-ingesting {
   color: var(--honey-text, var(--honey));
 }
