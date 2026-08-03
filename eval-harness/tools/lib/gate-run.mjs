@@ -68,18 +68,42 @@
 //      以及 verify-switchers 额外多打印一段"失败项"逐条列名——这是本文件 `finish()`
 //      的 `listFailures` 选项的来历（默认 false，因为多数门没有这段）。
 //
-// ═══ 本票的迁移范围 ═══════════════════════════════════════════════════════════
-// 本波只迁了 3 道最具代表性、彼此 boot 模型不同的 A 区门（避开 C 区、避开上传型门
-// file-manifest-truth/onboarding-returning/context-switch——真上传会写脏共享 mock 后端
-// 的 context，born-red/born-green 反复跑本身就是一种"上传"）：
+// ═══ 迁移范围（分波推进；**别在这里写"还剩几道"**，那个数字没人维护就会烂）═══════
+// 权威口径是自查命令，不是本注释：
+//   已迁 = `grep -rl "lib/gate-run.mjs" eval-harness/tools/verify-*.mjs .issues/*/verify-*.mjs`
+//   未迁 = 同样两处里还 `grep -l "chromium.launch"` 的那些。
+//
+// 第一波（票 #16 落库那次）——挑的是彼此 boot 模型互不相同的三道，为的是把选项面撑开：
 //   · verify-skin-phases.mjs   —— 模式 ⑤(a)，且完全不装 pageerror（trackPageErrors:false）
 //   · verify-button-family.mjs —— 模式 ⑤(b)，Escape 延后到审完闸门页按钮之后
 //   · verify-status-truth.mjs —— 模式 ⑤(c)，每个"世界"一个新 context + 各自的 pageerror
-// 迁移只换了 boot 段（chromium.launch/goto/Escape 前奏那几行）与收尾段
-// （R/rec 声明、末尾汇总 + process.exit），**没有改动任何一条断言的判据**——
-// 逐条 rec(...) 调用连同它的字符串文案原样保留。
-// verify-aria-zh / verify-cr-alignment 本轮**不迁**：见上面 ⑥ 的理由（形状不兼容，
-// 硬套会丢语义），留给下一批单独设计选项。
+//
+// 第二波（2026-08-03）——五道，全部零判据改动，**迁前迁后输出逐字节相同**（见下「验收」）：
+//   · verify-home-skeleton.mjs        —— 模式 ⑤(b)
+//   · verify-room-nomaterial.mjs      —— 模式 ⑤(b)
+//   · verify-contrast-smalltext.mjs   —— 模式 ⑤(c)，driveShell 每个壳一个 context
+//   · verify-handoffs-empty-honesty.mjs —— 模式 ⑤(c)，同上
+//   · verify-switchers.mjs            —— 模式 ⑤(b)，但吃两个**非默认**选项：
+//       onboardWait:700（分歧③里 600/700 的那个 700 分支）+ finish 的 listFailures:true。
+//       它是 `listFailures` 落地以来第一个真实使用者；那段"失败项"逐条列名原本就是从
+//       这个文件抽走的，现在算是接回去了。
+//       ⚠ 它的 bootPage **不传 path/url**：`═══ ⓪ ...` 抬头必须印在首次导航之前，
+//       让 bootPage 代劳 goto 会把这一行挤到页面加载之后——判据不变但输出顺序会变。
+//
+// 迁移只换 boot 段（chromium.launch/goto/Escape 前奏那几行）与收尾段（R/rec 声明、
+// 末尾汇总 + process.exit），**不改动任何一条断言的判据**——逐条 rec(...) 调用连同它的
+// 字符串文案原样保留。
+//
+// ═══ 验收方式（迁移票唯一认的那种）═══════════════════════════════════════════════
+// born-red 对"迁移"是不够的（它只证明门还能红，不证明红/绿的**条件**没漂）。真验收是
+// **迁前跑一次、迁后跑一次、两份完整输出对拆**。第二波五道全部 `diff` 零差异（逐字节）。
+// 另外单独验了 finish() 的失败路径：往 verify-switchers 临时插一条恒假 rec →
+// exit=1、汇总行 `27 PASS · 1 FAIL`、"失败项"块正确印出该条 → 撤回探针。
+// （这一步值得做，是因为 makeRec 把行对象的字段从 `n` 改名成了 `name`，而 listFailures
+//  正是唯一读这个字段的地方——全绿的门永远走不到那段，光看绿是发现不了的。）
+//
+// verify-aria-zh / verify-cr-alignment 仍**未迁**：见上面 ⑥ 的理由（形状不兼容，硬套会
+// 丢语义）——要迁得先扩 makeRec 的形状（4 参数 future 语义 / 多累积数组模型）。
 
 import { chromium } from 'playwright'
 

@@ -17,23 +17,18 @@
 //
 // ## 怎么跑（纯前端，不需要后端——world B 直接 setState 注入 payload 形状）
 //   VERIFY_BASE=http://127.0.0.1:5173 node eval-harness/tools/verify-home-skeleton.mjs
-import { chromium } from 'playwright'
+//
+// 迁自票 #16：boot/上报/收尾管线搬进 lib/gate-run.mjs，断言判据一字未改。
+// 本门是分歧⑤(b) 的典型——一个 browser + 一个 context/page 从头用到尾，装 pageerror 监听。
+import { bootPage, makeRec, finish } from './lib/gate-run.mjs'
 
 const UI = process.env.VERIFY_BASE || 'http://127.0.0.1:5173'
-const R = []
-const rec = (n, ok, d) => { R.push({ n, ok }); console.log(`  [${ok ? 'PASS' : 'FAIL'}] ${n}${d ? ' — ' + d : ''}`) }
+const gateRec = makeRec()
+const rec = gateRec.rec
 
-const browser = await chromium.launch({ headless: true })
-const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } })
-const page = await ctx.newPage()
-const pageErrors = []
-page.on('pageerror', (e) => pageErrors.push(e.message))
-
-await page.goto(`${UI}/?v=2&mode=live&lang=zh`, { waitUntil: 'networkidle' })
-if (await page.locator('.lite-onboard').count()) {
-  await page.keyboard.press('Escape')
-  await page.waitForTimeout(600)
-}
+const { browser, context: ctx, page, pageErrors } = await bootPage({
+  base: UI, path: '/?v=2&mode=live&lang=zh', trackPageErrors: true,
+})
 
 // ── 世界 A：无 team → 指挥室骨架 ───────────────────────────────────────────────────
 const stateA = await page.evaluate(() => ({
@@ -136,9 +131,5 @@ rec('B·完成后今日列表移除该条', afterDone.todayItems === 0)
 rec('无 pageerror', pageErrors.length === 0, pageErrors.slice(0, 2).join(' | ') || '0 条')
 
 await ctx.close()
-await browser.close()
 
-const pass = R.filter((r) => r.ok).length
-const fail = R.length - pass
-console.log(`\n═══ 首页骨架+闭环：${pass} PASS · ${fail} FAIL ═══`)
-process.exit(fail ? 1 : 0)
+await finish(gateRec, { browser, label: '首页骨架+闭环' })

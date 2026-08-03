@@ -20,11 +20,12 @@
 //
 // ## 怎么跑（与 verify-room-usability.mjs 同一套前置）
 //   VERIFY_BASE=http://127.0.0.1:5173 node eval-harness/tools/verify-handoffs-empty-honesty.mjs
-import { chromium } from 'playwright'
+// 迁自票 #16：boot/上报/收尾管线搬进 lib/gate-run.mjs，断言判据一字未改。
+import { bootPage, makeRec, finish } from './lib/gate-run.mjs'
 
 const UI = process.env.VERIFY_BASE || 'http://127.0.0.1:5173'
-const R = []
-const rec = (n, ok, d) => { R.push({ n, ok }); console.log(`  [${ok ? 'PASS' : 'FAIL'}] ${n}${d ? ' — ' + d : ''}`) }
+const gateRec = makeRec()
+const rec = gateRec.rec
 
 const SEED_DOC = [
   '# 望江咨询 · 项目周报 W33',
@@ -37,21 +38,16 @@ const SEED_DOC = [
   '',
 ].join('\n')
 
-const browser = await chromium.launch({ headless: true })
+let browser
 
 async function driveShell({ label, url, storeSeam }) {
   console.log(`\n═══ ${label} ═══`)
-  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } })
-  const page = await ctx.newPage()
-  const pageErrors = []
-  page.on('pageerror', (e) => pageErrors.push(e.message))
+  // 分歧⑤(c)：每个"世界"一个新 context，各自 ctx.close()；browser 首次由 bootPage 新起、
+  // 之后传回去复用（与 verify-status-truth 同一模型）。
+  const boot = await bootPage({ browser, url, trackPageErrors: true })
+  browser = boot.browser
+  const { context: ctx, page, pageErrors } = boot
   const tag = (n) => `[${label}] ${n}`
-
-  await page.goto(url, { waitUntil: 'networkidle' })
-  if (await page.locator('.lite-onboard').count()) {
-    await page.keyboard.press('Escape')
-    await page.waitForTimeout(600)
-  }
 
   await page.evaluate(
     async ({ doc, seam }) => {
@@ -135,9 +131,4 @@ async function driveShell({ label, url, storeSeam }) {
 await driveShell({ label: 'v02', url: `${UI}/?v=2&mode=live&look=paper&lang=zh`, storeSeam: '__lite2Store' })
 await driveShell({ label: 'v01', url: `${UI}/?v=1&mode=live&lang=zh`, storeSeam: '__liteStore' })
 
-await browser.close()
-
-const pass = R.filter((r) => r.ok).length
-const fail = R.length - pass
-console.log(`\n═══ handoffs 空态诚实：${pass} PASS · ${fail} FAIL ═══`)
-process.exit(fail ? 1 : 0)
+await finish(gateRec, { browser, label: 'handoffs 空态诚实' })

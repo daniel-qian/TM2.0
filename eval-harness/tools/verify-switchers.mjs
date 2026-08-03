@@ -18,23 +18,16 @@
 //   1) 起前端（vite build + vite preview 或 dev server）
 //   2) node eval-harness/tools/verify-switchers.mjs
 //   （VERIFY_BASE 可覆盖默认 http://127.0.0.1:5173。）
-import { chromium } from 'playwright'
+// 迁自票 #16：boot/上报/收尾管线搬进 lib/gate-run.mjs，断言判据一字未改。
+// 本门是分歧③的 700ms 分支（多数门 600），所以 onboardWait 显式传 700——不吃默认值；
+// 也是分歧⑦ `listFailures` 选项第一个真实使用者（"失败项"逐条列名那段就是从这儿抽走的）。
+import { bootPage, dismissOnboard, makeRec, finish } from './lib/gate-run.mjs'
 
 const UI = process.env.VERIFY_BASE || 'http://127.0.0.1:5173'
-const R = []
-const rec = (n, ok, d) => {
-  R.push({ n, ok })
-  console.log(`  [${ok ? 'PASS' : 'FAIL'}] ${n}${d ? ' — ' + d : ''}`)
-}
+const gateRec = makeRec()
+const rec = gateRec.rec
 
-const browser = await chromium.launch({ headless: true })
-
-async function dismissOnboardIfAny(p) {
-  if (await p.locator('.lite-onboard').count()) {
-    await p.keyboard.press('Escape')
-    await p.waitForTimeout(700)
-  }
-}
+const dismissOnboardIfAny = (p) => dismissOnboard(p, { onboardWait: 700 })
 
 // 每次 goto 后 DOM 重置、菜单回到收起——要碰开关按钮前都得先开一次。
 async function openSettings(p) {
@@ -44,10 +37,9 @@ async function openSettings(p) {
 
 // ── ⓪①②③ · 次级菜单开合、开关存在、点击换 class + 立即生效、localStorage 写入 ──────
 // 同一个 context 全程复用（"记忆"判据靠同一份 localStorage 接力）。
-const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } })
-const page = await ctx.newPage()
-const pageErrors = []
-page.on('pageerror', (e) => pageErrors.push(e.message))
+// bootPage 不传 path/url：只开 browser+context+page，goto 时序留给下面自己控制——
+// 那个 `═══ ⓪ ...` 抬头必须印在首次导航**之前**（迁移前的输出顺序就是这样）。
+const { browser, context: ctx, page, pageErrors } = await bootPage({ trackPageErrors: true })
 
 console.log('\n═══ ⓪ 次级菜单 + ① 开关存在 + ② 点击换 class + ③ 写 localStorage ═══')
 
@@ -212,12 +204,5 @@ rec('⑥ restart 后：onboarding 闸门重弹', afterRestart.gate > 0, `onboard
 rec('全程无 pageerror', pageErrors.length === 0, pageErrors.slice(0, 3).join(' | ') || '0 条')
 
 await ctx.close()
-await browser.close()
 
-const fail = R.filter((r) => !r.ok).length
-console.log(`\n═══ 开关判据：${R.length - fail} PASS · ${fail} FAIL ═══`)
-if (fail) {
-  console.log('\n失败项：')
-  for (const r of R.filter((x) => !x.ok)) console.log(`  ✗ ${r.n}`)
-}
-process.exit(fail ? 1 : 0)
+await finish(gateRec, { browser, label: '开关判据', listFailures: true })
