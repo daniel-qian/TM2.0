@@ -114,8 +114,10 @@ export function LiteTopbar() {
   // 0721 对齐棒 · Danny 拍板 2C（主+副小字）：home/followups 换主名（指挥室/待办清单），
   // 原名降为副小字（sub）。副小字渲染成 .scene-tab-sub（display:block 的 10px 行，样式在
   // lite2.css 0721 段），门读主名走 .scene-tab-main。其余 7 tab 无 sub，DOM 形状不变。
-  // 0729 大白话命名（ADR-0031）：home 主名改回「今天/Today」，副小字取消（tabHomeSub 键保留
-  // 未用）；5 个 tab 主名换企业大白话，词表 Danny 07-29 审字通过。
+  // 0729 大白话命名（ADR-0031）：home 主名改回「今天/Today」，副小字取消；
+  // 5 个 tab 主名换企业大白话，词表 Danny 07-29 审字通过。
+  // （当年那句「tabHomeSub 键保留未用」已过期：2026-08-03 的 i18n 孤儿清理做完 git 考古 +
+  //  对抗复核，确认它是退役文案而非被吃掉的功能，键已删。同族的 tabFollowupsSub 仍在用，别一起删。）
   const tabs: { label: string; sub?: string; screen: LiteScreen }[] = [
     { label: t.lite2.tabHome, screen: 'home' },
     { label: t.lite2.tabTeam, screen: 'team' },

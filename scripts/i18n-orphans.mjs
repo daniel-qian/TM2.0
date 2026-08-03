@@ -75,16 +75,23 @@ for (const nsProp of enObjectLiteral.properties) {
   }
 }
 
-// 自检：真叶子键数量手数过是 885（787 单行 + 98 多行，9 个命名空间）。低于这个数说明 AST walk
-// 漏掉了一整批（比如又出现一种这里没认出来的写法），这时候必须报错退出，不能悄悄吐一份
-// 缺胳膊少腿的孤儿清单——那样"孤儿"列表里会混进一堆其实活着、只是没扫到的假孤儿。
-const MIN_EXPECTED_KEYS = 880
+// 自检：叶子键总数掉得太狠 = AST walk 漏掉了一整批（比如又出现一种这里没认出来的写法）。
+// 这时候必须报错退出，不能悄悄吐一份缺胳膊少腿的孤儿清单——那样"孤儿"列表里会混进一堆
+// 其实活着、只是没扫到的假孤儿，而照着那份清单删就是真删功能。
+//
+// 🔴 这个下限**每次合法删键都会失效一次**，所以它必须跟着一起改，且要留下账：
+//   2026-07-xx 手数真值 885（787 单行 + 98 多行，9 个命名空间），下限设 880
+//   2026-07-xx 删 lite2.roomCanvasHint / roomCanvasReset          → 883
+//   2026-08-03 票 #37 删 detailSource（lite + lite2 两处）         → 881
+//   2026-08-03 票 i18n-orphans 删 12 个（考古 + 对抗复核后全判"退役文案"）→ 869
+// 改这个数之前先问一句：**这次少的键，是我有意删的，还是 walker 突然瞎了？**
+// 前者才允许调低；后者去修 walker。判断方法：`git diff src/shared/i18n/en.ts` 数一下删了几行。
+const MIN_EXPECTED_KEYS = 865
 if (leaves.length < MIN_EXPECTED_KEYS) {
   console.error(
-    `[i18n-orphans] 只扫到 ${leaves.length} 个叶子键，预期 >= ${MIN_EXPECTED_KEYS}` +
-      `（写这个脚本时手数的真值是 885 = 787 单行 + 98 多行；本票删掉 lite2.roomCanvasHint/` +
-      `roomCanvasReset 两个孤儿后落到 883）。` +
-      `AST walk 大概率漏看了某个命名空间或某种值写法——去修 walker，不要调低这个数。`,
+    `[i18n-orphans] 只扫到 ${leaves.length} 个叶子键，预期 >= ${MIN_EXPECTED_KEYS}。` +
+      `如果你**刚刚有意删过键**，把上面的账续一行、把下限改对；` +
+      `否则 AST walk 大概率漏看了某个命名空间或某种值写法——去修 walker，别调低这个数。`,
   )
   process.exit(1)
 }

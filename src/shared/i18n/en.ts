@@ -16,8 +16,6 @@ export const en = {
     liveLabel: 'Live',
     storyHint: 'A scripted walkthrough — the same demo the room sees.',
     liveHint: 'Bring your own team in — upload a few files and ask.',
-    switchToLive: 'Try it with your team',
-    switchToStory: 'Back to the walkthrough',
     // avery-sync aria-zh: the mode-switch group's aria-label was a hardcoded English literal
     // in BOTH LiteTopbar twins (v01/v02 share the exact same widget + wording, unlike the
     // lite.*/lite2.* namespaces above which duplicate on purpose so copy can diverge — this one
@@ -148,7 +146,6 @@ export const en = {
 
   // ── Your team, live ───────────────────────────────────────────────────────
   team: {
-    liveEyebrow: 'From your uploads',
     emptyTitle: 'Your team will appear here',
     // 0721（B5）：补一句判断产出——空态不只承诺「长出人和项目」，还要说清读完之后
     // Avery 会给出什么（这才是产品，不是解析器）。
@@ -320,7 +317,6 @@ export const en = {
     notesCountMany: 'observations', // per-day group count (plural)
     notesToday: 'Today',
     notesSourcePrefix: 'From your question about', // + excerpt + " →"
-    notesOpenRoom: 'Open the room →',
     notesEmptyEyebrow: 'Nothing written yet',
     notesEmptyTitle: "Avery hasn't taken its first note",
     notesEmptyBody:
@@ -659,12 +655,8 @@ export const en = {
     authPasswordHint: 'At least 6 characters',
 
     // ── Team grouping view (feat-025 Q2: cluster people cards by department/role) ──
-    groupAllLabel: 'Grouped by team',
-    groupUngrouped: 'Everyone else',
     groupCollapse: 'Collapse',
     groupExpand: 'Expand',
-    groupCountOne: 'person',
-    groupCountMany: 'people',
 
     // 0729 画板退役：lite2 曾经也有自己的 pan/zoom canvas 一对键（roomCanvasHint/
     // roomCanvasReset），画板退役后 lite2 这侧再没人引用过——删了（i18n-orphans.mjs 扫出来的
@@ -767,7 +759,6 @@ export const en = {
     notesCountMany: 'observations', // per-day group count (plural)
     notesToday: 'Today',
     notesSourcePrefix: 'From your question about', // + excerpt + " →"
-    notesOpenRoom: 'Ask Avery →',
     notesEmptyEyebrow: 'Nothing written yet',
     notesEmptyTitle: "Avery hasn't taken its first note",
     notesEmptyBody:
@@ -930,7 +921,6 @@ export const en = {
     personReadListSeparator: ', ',
     personReadNone: 'On the team',
     personCardOpenAria: 'Open {name} — {read}',
-    groupOwns: 'Owns {project}',
 
     // feat-069 · the room's transcript copy — identical key names to the `lite` section above,
     // deliberately: scripts/i18n-zh-lite2-delta.mjs reuses the approved zh.lite translation
@@ -1156,7 +1146,6 @@ export const en = {
     directoryMoodAllAria: 'Show all moods',
     directoryMoodFilterAria: 'Show only people who self-reported {mood}',
     directoryEmptyFiltered: 'No one matches this filter yet.',
-    directoryReuploadEyebrow: 'Add more files',
 
     // ── Onboarding gate (feat-045, PRD F7; input-side-0721 — a full-screen gate page now, not
     // a floating dialog. Escape / "look around" pauses and resumes next visit. NO fake
@@ -1372,7 +1361,6 @@ export const en = {
     // （LiteTopbar 不再传 sub；tabHomeSub 键保留未用）。Nexus/现实差距维持锁定。
     // ⚠ 改 tab 主名同 commit 必须同步 assertV2Boots 期望数组。
     tabHome: 'Today',
-    tabHomeSub: 'Today',
     homeEyebrow: 'Today',
     homeTitle: 'What today asks of you',
     homeLede:

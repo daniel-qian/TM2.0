@@ -201,8 +201,6 @@ export const zh: Dict = {
     "liveLabel": "实用",
     "storyHint": "照着脚本走一遍，和现场看到的演示完全一样。",
     "liveHint": "带上你自己的团队——上传几份文件，开口问就行。",
-    "switchToLive": "用你的团队试试",
-    "switchToStory": "回到演示",
     "switchAria": "数据模式"
   },
   "upload": {
@@ -274,7 +272,6 @@ export const zh: Dict = {
     "collapse": "收起"
   },
   "team": {
-    "liveEyebrow": "从你上传的文件里",
     "emptyTitle": "你的团队会在这里长出来",
     "emptyBody": "把几个文件拖到右边——人和项目会从里头浮现，Avery 会带着一份能用的解读回来：哪里值得留意，哪里值得再看一眼。什么也不用配置。"
   },
@@ -360,7 +357,6 @@ export const zh: Dict = {
     "notesCountMany": "条观察",
     "notesToday": "今天",
     "notesSourcePrefix": "来自你的提问：",
-    "notesOpenRoom": "进议事室 →",
     "notesEmptyEyebrow": "还没有记录",
     "notesEmptyTitle": "Avery 还没写下第一条笔记",
     "notesEmptyBody": "去议事室问一个关于你团队的真实管理问题。当 Avery 注意到值得留存的东西——一个模式、一处风险、一条依赖——它就会记在这里。",
@@ -554,12 +550,8 @@ export const zh: Dict = {
     "authRestoreFailed": "取不到你名下的公司数据",
     "authRetry": "重试",
     "authPasswordHint": "至少 6 位",
-    "groupAllLabel": "按团队分组",
-    "groupUngrouped": "其他成员",
     "groupCollapse": "收起",
     "groupExpand": "展开",
-    "groupCountOne": "人",
-    "groupCountMany": "人",
     "followupsEyebrow": "跟进",
     "followupsTitle": "所有要跟进的事，收在一处",
     "followupsGroupToday": "今天",
@@ -616,7 +608,6 @@ export const zh: Dict = {
     "notesCountMany": "条观察",
     "notesToday": "今天",
     "notesSourcePrefix": "来自你的提问：",
-    "notesOpenRoom": "去问 Avery →",
     "notesEmptyEyebrow": "还没有记录",
     "notesEmptyTitle": "Avery 还没写下第一条笔记",
     "notesEmptyBody": "去问 Avery 一个关于你团队的真实管理问题。当 Avery 注意到值得留存的东西——一个模式、一处风险、一条依赖——它就会记在这里。",
@@ -697,7 +688,6 @@ export const zh: Dict = {
     "personReadListSeparator": "、",
     "personReadNone": "团队成员",
     "personCardOpenAria": "打开{name}——{read}",
-    "groupOwns": "负责：{project}",
     "streamNudgeRedline": "再核对一遍，只描述工作本身，不给任何人贴标签。",
     "streamNudgeChain": "先把回答落到证据上，再动手起草。",
     "streamAskDrafted": "一条快问已拟好，等你确认",
@@ -846,7 +836,6 @@ export const zh: Dict = {
     "directoryMoodAllAria": "显示全部情绪",
     "directoryMoodFilterAria": "只看自述{mood}的成员",
     "directoryEmptyFiltered": "没有符合该筛选的成员。",
-    "directoryReuploadEyebrow": "继续添加文件",
     "onboardEyebrow": "开始上手",
     "onboardCloseAria": "关闭 —— 下次会从上次停下的地方继续",
     "onboardSkip": "跳过设置",
@@ -984,7 +973,6 @@ export const zh: Dict = {
     // 永远走不通的动作上循环。两种成因的补救动作相反，而这份数据分不出是哪一种，
     // 所以两种都摊开讲，不替客户挑一个。
     "tabHome": "今天",
-    "tabHomeSub": "今天",
     "homeEyebrow": "今天",
     "homeTitle": "今天有几件事等你定",
     "homeLede": "都是从你上传的文件里读出来的。每一块都能点进去看细节。",
