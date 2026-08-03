@@ -1,106 +1,95 @@
-# ⟳ 2026-08-02 · sweep-promote-0802 菜单收官 + 下一棒 AFK 可跑性分档（★最新，从这里接）
+# ⟳ 2026-08-03 · AFK 一口气吃完交接 A 档（★最新，从这里接）
 
 > 接续只靠本文件 + `progress.md` + `feature_list.json` + git，不回放聊天。
-> 更早的逐棒 handoff 已从本文件清出（2026-08-01 换血）——考古用 `git log --follow session-handoff.md`。
+> 更早的逐棒 handoff 已从本文件清出——考古用 `git log --follow session-handoff.md`。
 
-**一句话**：`claude/codebase-architecture-improve-20b9eb` 12 提交已快进合 main 并全量上生产；
-文档保洁 19 条全部落地；第二轮 UI 扫拿到 20 条发现（REGRESSED 0）。`12282e8 → 70f72d9` 共 21 提交，
-`main` 与 `origin/main` 推平、工作树干净、无攒着的东西。**下一棒不需要先做整理，可以直接开工。**
+**一句话**：上一棒把 9 条按「能不能 AFK」分了三档，本棒把 **A 档整档吃完**（5→4→7→1，条目 2 的
+布局/文案类被 #34/#36/#37 覆盖），外加两个顺手挖出的真缺陷。`5e18e69 → a1f2652` 共 7 提交，
+全电池 **30/30**，i18n 孤儿 **0**。
 
-## 现在线上是什么
+## 🔴 下一棒第一件事：push
 
-- **前端** averylite.dannyqian.com = `origin/main`（Vercel 自动部署；**已核到产物层**，不是只看 200）。
-- **后端** avery.dannyqian.com = `avery-agent:main-20260802-113944`（回滚梯 `avery-prev-20260802-113944`）。
-- **生产库**：97 context / 224 doc，**原件缺失 0 条、向量缺失 0 条**。上线时那 9 条命中是 07-30
-  born-red 演示牺牲掉的 demo 克隆残骸，已被应用自带 GC 扫掉。回执 `.issues/sweep-promote-0802/receipt-deploy-0802.md`。
-- **账实**：电池 **28/28**（A22/B3/C3）· 裸 `pytest` **3473** · `needs_db` **65** · 像素基线 40 张本轮重冻过。
+**本棒唯一没做完的收尾**。`main` 领先 `origin/main` **7 个提交**，工作树干净、HEAD 在 main。
 
----
+```bash
+git push origin main
+```
 
-# 🔴 下一棒能不能 AFK 一口气跑完 progress.md 那 9 条？—— 不能，分三档
-
-这一节是本文件的正题。**不要把 9 条整包丢进一个 AFK 循环**——其中有真花钱的、有只能人做的、
-有已经拍板不做的。分档如下。
-
-## A 档 · 可以 AFK 自跑自验自修（建议按这个顺序）
-
-| # | 条目 | 为什么适合 AFK | 🔴 必须带的护栏 |
-|---|---|---|---|
-| 5 | **gate-run 迁移续做** | 验收是机械的：迁前迁后各跑一次、判据逐条 diff | 每 session 只迁几道；**不碰 C 区三道**（会换掉共享 dist）；`aria-zh`/`cr-alignment` 要先扩 makeRec 形状才能迁 |
-| 4 | **刷掉 snippet/gate.md 的「零后端/离线 stub」假前提** | 纯文档，零行为风险 | 顺带把 snippet 顶部 Usage 表的「10 相位/8 tabs」改成真值（11/9） |
-| 7 | **i18n 剩 10 个孤儿键** | 有扫描器了（`node scripts/i18n-orphans.mjs`） | **别直接删**：每个先做 git 考古，分清「退役文案」与「被合并吃掉的功能」。删错=把一个真 bug 藏起来 |
-| 1 | **#34 / #36 / #37 三条 hard-contract** | 复现路径、证据、根因都写在票里了 | 见下方「改这三条的专属陷阱」 |
-| 2 | **17 条未开票发现里的布局/文案类** | 同上 | EN locale 那条**不在此列**，见 B 档 |
-| 6 | 欠账里的 **#27**（上传实现合一）、**#31**（05b 重传合并） | 范围清楚、有既有门兜 | #28 前置是「给 SourceDocument 稳定 id」——那是 schema 决定，别顺手做 |
-
-### 改 #34 / #36 / #37 的专属陷阱（不写下来一定会踩）
-
-1. **这三条都改布局 → 像素基线会再漂一次。** 本轮实测：一个 `<html lang>` 的改动漂了 **26/40** 张。
-   而像素门**首处不匹配即中止**，一次红跑给的清单是不完整的——要拿全量得「`--update-snapshots`
-   重冻 + 前后 md5 对比」。重冻前必须真的把变了的图打开看一遍。
-2. **#34/#36 修完必须补一道门，否则必然回归。** 判据不能只算几何重叠，要用
-   `document.elementFromPoint(按钮中心)` **或真 `page.mouse.click()`** ——本轮就是靠真点击才
-   把「视觉遮挡」升级成「控件被劫持」。没有这道门，下次谁调一下 `bottom` 就又坏了。
-3. **#37 要先定语义再动手**：手打卡应该**不显示**「出处」这一节，还是显示「此卡无文档出处」？
-   后者更贴红线（不建假按钮 / 不替客户断言）。copy 归 agent 定稿（AGENTS.md act-first），
-   但中文走 M3。
-
-## B 档 · 可以做，但**先 grill 出口径再开工**（别让 AFK 循环顺手改了）
-
-- **2 里的 `home/en-locale-decision-grade-labels-stay-chinese`**：EN 用户拿到中英夹杂的核心决策面板。
-  根因在后端 `decision_grading.py` 三处硬编码 `LABEL_ZH`，函数签名不吃 locale。
-  修它要么给 `to_dict()` 加 locale 参数，要么**往 `/advise` 契约里加 locale 字段**——后者是跨前后端的
-  契约变更，且和下面那条同源。按 [[feedback-0729-three-verdicts]]：大战役先 grill 出 PRD 再换 session 开发。
-- **同源的一条（本轮 triage 挖出来的）**：`AdviseRequest` 根本没有 locale 字段，`transport.ts` 也不带
-  ——**判读正文用什么语言，现在压根不由用户控制**。这两条应该合成一票一起想。
-
-## C 档 · AFK **做不了**，或**不该做**
-
-| # | 条目 | 为什么 |
-|---|---|---|
-| 8 | **真机零覆盖（iOS Safari / 微信内置）** | 🔴 **只能 Danny 做**。本轮 375×812 是 headless Chromium 模拟，不是真机。而 #34/#36 恰恰是小屏专属问题，真机大概率更严重。在有人拿真手机打开过之前，「手机上能用」没有证据 |
-| 3 | **真 brain 分流取证** | 要在生产上真调 LLM = **真花钱**（AGENTS.md 花钱闸）。若要 AFK 做，得先给个明确口径：**上限几次调用、打 demo 克隆还是真 context、超了就停**。别让循环自己决定烧多少 |
-| 9 | **CRUD 50 秒（#30）** | **Danny 已拍板「先不管，等真实客户量再立」**。AFK 循环不该推翻已有拍板。留在 What's Next 只是记数（07-30 是 40–45s，本轮 50s，在变慢） |
-| 6 部分 | **#29**（needs-triage，等真用户反馈）、**#33**（ready-for-human，等 Danny 三选一） | 标签本身就是「在等人」 |
-
-## 建议的下一棒开法
-
-一个 AFK 循环只吃 **A 档**，按表里顺序（5 → 4 → 7 → 1 → 2 → 6）。理由：前三条零/低风险且能先把
-"门与文档可信"这件事垫稳，再动会改布局的 1、2。**B 档单独起一次 grilling**，C 档在报告里
-向 Danny 要口径，不自己开工。
+push 之后才会发生的事：① #34 / #36 / #37 三张 issue 被 commit message 的 `closes` 自动关闭；
+② 前端 Vercel 自动部署（averylite.dannyqian.com 跟 origin/main）。
+**后端不用重建**——本棒一行后端代码都没动（改的是 src/ 前端、eval-harness/tools/ 门、scripts/、文档）。
+push 后按老规矩核到产物层（`window.__AVERY_BUILD__.commit`），别只看 200。
 
 ---
 
-## 别再踩的坑（常青集在 AGENTS.md「易复发陷阱」段，这里只留本轮增量）
+## 本棒改了什么（7 提交，逐条可回滚）
 
-- 🔴 **`?transport=stub` 在 build+preview 下恒为死开关**（DEV 闸静态 false，`--mode development`
-  只改 MODE 不改 DEV）。上一轮 46 条走查发现里 **12 条是这个破口造成的假象**。要数据态走
-  `__lite2Store.uploadFiles()` + 真 mock 后端，现成驱动 `eval-harness/tools/sweep-r2-driver.mjs`。
-- 🔴 **没有机械 runner 的判定组 = 从来没被跑过**。给 snippet 的 B/C 组补 runner 第一次跑就挖出
-  `_clickTab('Follow-ups')` 自 0721 起永久失效——连带 gate.md 那套人工协议也一直是坏的。
-- 🔴 **新加任何门/扫描器必须 born-red**：造真违规看它红、撤掉看它回绿，两次输出都贴进证据。
-  迁移既有门时 born-red 不够，要**迁前迁后判据逐条 diff**。
-- **机器门一律白名单**（`:not(允许的那一种)`），别写黑名单——本轮 eslint 墙就漏在
-  `<Link to={常量}>` 上，而那恰恰是它要防的原始 bug 形状。
-- **注释里的计数会烂**：写「迁移前 39 处」这种不自失效的形式，别写现在时。
-  同理别在注释里写 `file:line`——本轮加两行注释就把自己写的三个行号顶漂了。
-- **commit message 带反引号/`$`/`()` 一律走 `-F -` + 单引号 heredoc**，别用 `-m "..."`（会被 shell
-  当命令替换吃掉）。且 `git commit --amend` 只认 HEAD，不认「我想修的那个」。
-- 上传型门现在是 **4 道**（+flow-gap-phases），全部绝不排在 C 区 bundle-privacy 之后。
-- `feature_list.json` 已瘦身——历史 done 的正文在 `feature_archive.json`。
-  **今后任何"扫全仓修引用/行号/链接"的保洁必须把它纳进扫描范围**，否则那是块扫不到的暗区。
+| commit | 做了什么 |
+|---|---|
+| `18c8e7a` | gate-run 迁移第二波 5 道，迁前迁后输出**逐字节相同** |
+| `b359f2e` | ROSTER 三道门 `backend:false` 是错的——它们真上传 |
+| `159ed4c` | 上传错误态标签破 AA（4.33/3.85）+ 给门补错误态采样面 |
+| `cdeca46` | snippet/gate.md 的「零后端·离线 stub」假前提 + 拆掉会漂的行号列 |
+| `0300ce4` | #37 详情浮层假溯源 → 删，并立门 |
+| `5debbe1` | #34/#36 屏底家具让位 → 抬滚动口边界 + 胶囊让位实测页脚高度，并立门 |
+| `a1f2652` | i18n 孤儿键 12 → 0（考古 + 对抗复核后才删） |
 
-## 站着别动的事（Danny 闸）
+## 🔴 这一棒学到的四条（会反复咬人，写门/改门前先看）
 
-- 凭据轮换 · 裸「风险：」词表 · `origin/p5-04-nexus-safe-zone` 处置 · 六个旧 worktree/分支清理（删除闸）。
-- 法律件对外风险归合伙人；合伙人旧口径「不打分不排名」由 Danny 亲自同步。
-- 生产库历史数据的任何修复/清理（本轮盘点只出清单，一个字节没动）。
-- 🔴 **`e535ec9` 的 commit message 是错的**（装 nudge 的代码、挂 lint 的正文，我 `--amend` 打偏且已 push）。
-  改写已 push 历史属人工闸，没自己动；真相记在 `03a9824` 这条 erratum commit。要不要 rebase 归 Danny。
+1. **「加一段注释」就能把一批 file:line 引用全顶漂，而且不会有任何东西变红。**
+   我给 snippet 头加了一段 READ FIRST，一次顶漂了 gate.md 相位表整整一列行号 + 另外七处
+   `头注释 NN,实现自带注释 NNNN-NNNN`。已全部改成函数名指路。
+   **今后别在跨文件引用里写行号**——写函数名/`grep -n` 命令。（gate-run.mjs、run-battery.mjs
+   头注释里各栽过一次，这是第三次。）
+
+2. **注释里的「本区共 N 道」每加一道门就烂一次。** run-battery.mjs 那行长期写 17 而实际 20，
+   之后 21、22、23……本棒直接把数字删了，改成写自查命令 `--only=A --dry-run`。
+   同族的还有 `i18n-orphans.mjs` 的「叶子键不得少于 880」守卫——那个守卫**每次合法删键都会
+   失效一次**，本棒被它拦下过；已改成带账本 + 报错文案直接问「是你有意删的还是 walker 瞎了」。
+
+3. **一道门可以从两个方向撒谎，我两个方向都撞了一次（同一道门，一小时内）。**
+   写 #34/#36 那道门时：第一版判据太宽（把 sticky 顶栏遮挡滚动内容也判红）→ **假红**，
+   而假红门的下场是被人关掉；改成"可达性"（滚到视口中部再看）后太松 → **对着已知有 bug 的
+   构建全绿**，比没有门更坏。
+   定稿判据：当前静止滚动位 + 只把「劫持者是屏底锚定 fixed/sticky 家具」判红（靠计算样式判断，
+   不写 class 黑名单）。**改判据之后必须两头都验：born-red 要红、born-green 要绿，缺一头都不算数。**
+
+4. **`getBoundingClientRect` 不管裁剪。** 修完 #34/#36 之后门还在红，红的却是**已经被
+   overflow 裁掉、根本没画出来**的按钮——它的 rect 照样报 y=714 这种"看起来在屏底"的坐标。
+   凡是用 rect + elementFromPoint 的门，审之前必须先剔除被祖先 overflow 裁掉的控件。
+
+## 判据够不着 ≠ 判据写错了（本棒两次都栽在这上面，值得单列）
+
+- **AA 对比度**：07-20 那波清扫漏了 `.upload-error-label`，不是眼花——门走的是后端在场的顺路，
+  **错误态根本不渲染**，那一整族文本从来没进过采样面。我是把 8137 停掉核别的事时偶然逼出来的。
+- **#34/#36**：上一轮 46 条走查扫不到，因为数据态当时结构性不可达（`?transport=stub` 被 DEV 闸 DCE），
+  而这两个组件在 `contextId=null` 时压根不挂载。
+
+→ 今后写门先问一句：**这条判据能不能采到样？** 采不到样的判据是恒绿的，而那种绿最骗人。
+本棒新加的两道门都带了**自证判据**（"工作区文件清单非空"/"浮层真开着且渲染了本卡内容"/
+"这一屏有可审控件"），专门防这个。
+
+## 下一棒建议怎么开
+
+1. **先 push**（见顶部）。
+2. **B 档单独起一次 grilling**：EN locale 中英夹杂 + `AdviseRequest` 没有 locale 字段是**同一票**，
+   跨前后端契约变更，按 [[feedback-0729-three-verdicts]] 先 grill 出 PRD 再换 session 开发。
+3. **C 档在报告里向 Danny 要口径，别自己开工**：真机覆盖（只能 Danny 做）、
+   真 brain 分流取证（真花钱，要先定"上限几次/打谁/超了就停"）、#30 已拍板不做。
+4. 想继续 AFK 的话，剩下的低风险活：gate-run 迁移续做（先扩 makeRec 才能吃 aria-zh/cr-alignment）、
+   r2 剩余未开票发现里的非布局类。
 
 ## 环境（收尾态）
 
-- 工作树干净，HEAD 在 `main` = `origin/main` = `70f72d9`（C 区门跑完查过没 detach）。
-- **mock 后端 8137（离线三件套）与 preview 5173 仍在跑**，`dist/` 是 `vite build --mode development`
-  的健康产物（apiBase 本地 8137）——下一棒可直接用，但**碰上传路径前仍要先验一次 apiBase**。
-- 本地 `avery-pg`（5433）容器留跑。走查产物 `.issues/sweep/2026-08-02-r2-shots/` 220 份（已进 .gitignore）。
+- 工作树干净，HEAD 在 `main`（C 区跑完查过没 detach）。
+- **mock 后端 8137 与 preview 5173 仍在跑**。后端起法（🔴 三件套缺一就真出网烧钱，
+  且 seed 目录**必须绝对路径**——相对路径会被解成 `eval-harness/eval-harness/...` 而静默失效，
+  症状是 `/demo/status` 报 `available:false`、onboard-gate 一条 FAIL）：
+
+  ```bash
+  cd /d/avery/eval-harness && AVERY_BRAIN=mock AVERY_EXTRACTOR=heuristic AVERY_EMBEDDINGS=keyword AVERY_DEMO_SEED_DIR="D:/avery/eval-harness/tests/fixtures/demo-seed" python -m uvicorn service.app:app --host 127.0.0.1 --port 8137
+  ```
+
+- `dist/` 是 `vite build --mode development` 的健康产物（apiBase 本地 8137，已验到 bundle 里）。
+  碰上传路径前仍要先验一次 apiBase。
+- 像素基线本轮重冻过（漂 4 张，都是 home，已人眼开图复核）。

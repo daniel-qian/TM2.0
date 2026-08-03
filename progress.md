@@ -3,83 +3,101 @@
 > 📢 本文件是**当前状态快照，整体重写不追加**。历史都在 git（`git log` + 各 `.issues/*/receipt*.md`），别在这儿堆编年史。
 > 启动路径见 `AGENTS.md` Startup Workflow：读本文件 + `feature_list.json`，跑 `./init.sh` 确认绿，再开工。
 
-**Last Updated:** 2026-08-02（sweep-promote-0802 全菜单收工：合并上线 + 文档保洁 19 条 + 第二轮 UI 扫）
+**Last Updated:** 2026-08-03（AFK 一口气吃完交接里的 A 档：门迁移 + 三票 hard-contract + i18n 清零）
 
 ## Current State
 
-- **git**：`main` 与 `origin/main` 推平、工作树干净。本轮从 `12282e8` 推到 `c255b87`，其中
-  `0884d49` 是 `claude/codebase-architecture-improve-20b9eb` 的 12 提交快进合入点。
-- **生产 = main**：前端 Vercel 自动部署（averylite.dannyqian.com，**已核到产物层**，不是只看 200）；
-  后端容器 **`avery-agent:main-20260802-113944`**（构建自 `origin/main` @ `0884d49`），
-  回滚梯 `avery-prev-20260802-113944` 保留。回执：`.issues/sweep-promote-0802/receipt-deploy-0802.md`。
-- **验证账实**：全电池 **28/28**（A22/B3/C3，本轮 +1 道 flow-gap-phases）；
-  裸 `pytest` **3473 passed**（pytest.ini 已把四 marker 反选做成默认，不再靠人记咒语）；
-  `-m needs_db` 对本地 avery-pg **65 passed**；像素基线 40 张（单机产物，gitignored，本轮重冻过）。
-- **生产库原件盘点：0 条**。上线时 9 条命中全部落在同一个 `ephemeral=true` 的 demo 克隆
-  （07-30 born-red 演示的被试残骸，三条独立证据），**不是客户数据**；未擅自补救，收尾复查时
-  已被应用自带的克隆 GC 扫掉，库从 108 context/269 doc 降到 97/224，查询归零。
-  `materials.embedding` 零 NULL——arch-4 顺手治的向量抹除同源病在生产上从未发作。
-- **feature_list.json 已瘦身**：77 条 done 的**完整记录**（description/dependencies/date/evidence）
-  整条搬进 `feature_archive.json`，原文件只留四字段指针。零丢失是拿旧本逐字段比对证出来的。
-  🔴 从此任何"扫全仓修引用/行号/链接"的保洁**必须把 feature_archive.json 纳进扫描范围**。
+- **git**：`main` 工作树干净。本轮 `5e18e69 → a1f2652` 共 **7 个提交**，全部是交接 A 档里的条目。
+- **验证账实**：全电池 **30/30**（**A 24** / B 3 / C 3）——本轮新增 2 道门（detail-provenance、
+  bottom-furniture）。像素基线 40 张，本轮漂 4 张、已人眼复核后重冻。
+- **i18n 孤儿键：0 个**（删前 12，不是票面写的 10）。
+- ⚠️ **尚未 push**：`main` 领先 `origin/main` 7 个提交。三张 issue 的 `closes #34/#36/#37`
+  要 push 之后才会真正关闭。生产也还是上一版（前端 Vercel 跟 origin/main 走，后端容器未重建）。
 
-## Active Feature
+## 本轮做完的（按交接 A 档的顺序）
 
-无 active 编码线。feat-019（酒店 vertical pack）名义 `in-progress` 但实为外置研究线，长期挂账。
-feat-002/003/013 为 6 月旧票 not-started。本轮补了 feat-094（naming-0729）/ feat-095（output-form-0729）
-两条缺账行，账目债已清。
+### 5 · gate-run 迁移第二波（5 道）
+home-skeleton / room-nomaterial / contrast-smalltext / handoffs-empty-honesty / switchers。
+验收用交接指定的方式：迁前迁后各跑一次、**完整输出逐字节 diff 零差异**（93 条判据）。
+另单独验了 `finish()` 的失败路径（往 switchers 插一条恒假 rec → exit 1 + "失败项"块正确打印 →
+撤回）——因为 makeRec 把行对象字段从 `n` 改名成 `name`，而 listFailures 是唯一读它的地方，
+全绿的门永远走不到那段。
+gate-run.mjs 头注释的「迁移范围」改写成分波台账 + 自查命令，不再写"还剩几道"。
 
-## 本轮做完的三件（sweep-promote-0802 菜单）
+### 顺手挖出并修掉的两个真缺陷（都不在交接清单上）
+1. **ROSTER 有三道门写着 `backend:false` 却真上传**（topbar-clearance / contrast-smalltext /
+   handoffs-empty-honesty）——与 08-02 status-truth 完全同一个错法。三道都在 A 区、位置一直安全，
+   但照那个字段以为能离线跑，或用 `--from` 拎到 C 区之后，就是往生产库写数据。
+   已改 true + 挂上传型标记，并在字段文档里写死自查命令（这个字段**不参与调度**，写错了不会有
+   任何东西报警——已经错过四次）。
+2. **上传错误态标签破 AA**：`.upload-error-label` 用装饰色 `--terracotta` 而非 `--terracotta-text`，
+   实测 paper 4.33 / aurora 3.85，两皮都低于本仓自己钉的 4.5 硬地板（v01 同病）。
+   07-20 那波 AA 清扫漏了它，**不是眼花是判据够不着**——门走的是后端在场的顺路，错误态根本不渲染。
+   已修 + 给 verify-contrast-smalltext 补了 `driveErrorState()` 世界（route 拦截逼出错误态），
+   判据从 28 涨到 41。
 
-1. **合并上线 + 生产盘点** —— 见上 Current State。
-2. **文档保洁 19 条全部落地**（架构报告未核验附录）。19 条经复核后 0 弃票，分三波、每票一提交。
-   两轮 opus 复核共开 11 条 fix-needed，**全部是真缺陷、全部已修**。副产物是三份新索引：
-   `.issues/README.md`（44 目录逐行 + do-not-archive/do-not-move 标注）、`docs/adr/README.md`
-   （33 篇 + 被取代图 + 0023 撞号消歧）、`eval-harness/db/migrations/README.md`（五条迁移纪律）。
-3. **第二轮 UI 扫**（`.issues/sweep/2026-08-02-r2.md`）—— **20 条，REGRESSED 0**。
-   上一轮 46 条里 12 条 hard-contract 被证明是同一个 harness 破口造成的假象，不是产品缺陷。
+### 4 · snippet / gate.md 的「零后端·离线 stub」假前提
+`?transport=stub` 由 `import.meta.env.DEV` 把关，`vite build` 静态求值成 false 并把整个
+stubTransport 模块 DCE 掉（`--mode development` 只保 apiBase，救不回来），而本仓门**一律
+build+preview**。实证：`grep -c stubTransport dist/assets/*.js` → 每个 chunk 都是 0。
+两份文件都加了集中更正段（**加更正不删参数**——参数无害，撒谎的是它周围那句"所以离线"）。
+同族三条：gate.md 步骤 2 还写 `npm run dev`（本机起不来且会 200 但不 boot）；
+Ask 卡那组"等阶段 C 落地再对真后端重跑"——阶段 C 07-14 就落地了，那个"届时"早到了；
+Usage 表的 10 phases / 8 tabs 改真值（11 相位 A–K / 9 tabs），补回漏收的相位 K。
+
+### 7 · i18n 孤儿键 12 → 0
+按交接的护栏做了：6 族各一个子 agent 做 git 考古，凡结论"可删"的再各配一个**对抗性复核者**
+尽力推翻。6 族全判"退役文案"，6 个复核者全部未能推翻。逐族结论见 `a1f2652` 提交正文。
+🔴 `lite2.group*` 只删 lite2 命名空间——`lite` 下同名键是 v01 TeamScreen 还在用的活键。
+顺手给 `i18n-orphans.mjs` 的「叶子键下限」守卫加了账本（每次合法删键都会让它失效一次）。
+
+### 1 · 三张 hard-contract 全部修完并各自立门
+- **#37**（详情浮层「出处」是工作区级全量清单）→ **删掉这一节**。定语义时查了契约：
+  `LivePersonCard`/`LiveProjectCard` **根本没有 source 字段**，逐卡溯源在契约里不存在，
+  所以"这张卡出自这些文件"对**任何**卡都说不出口，不只是手打的那些。
+  只给手打卡补一句"无文档出处"反而坐实了"其余卡片列的就是它们的出处"。范围比票大一点：v01 同病，一起改。
+  新门 verify-detail-provenance：born-red 14 PASS·8 FAIL（复现"三个人打印同一份 9 文件、含另外两人简历"），
+  born-green 22 PASS·0 FAIL。
+- **#34 / #36**（屏底家具劫持控件）→ **同一个根因**：滚动口 `inset:0` 铺到视口底边，内容从
+  fixed 家具底下穿过去。修法：`.lite2-shell` 下三个滚动口下边界抬起 120px；
+  胶囊 `bottom` 从写死 24px 改成 `calc(var(--lite2-footer-h) + 12px)`，变量由 Lite2Footer 用
+  ResizeObserver 发布**实测**页脚高度（窄屏实测 59px——原来那个 24 隐含的"页脚薄薄一条"假设正是根因，
+  再猜一个常数就是把同一个 bug 换个数字重犯）。
+  新门 verify-bottom-furniture-clearance：born-red 复现两票坐标逐字对上，修后 34 PASS·0 FAIL。
 
 ## What's Next（按优先级）
 
-1. **r2 的 3 条 hard-contract 已开票，等修**：[#34](https://github.com/daniel-qian/avery/issues/34)
-   悬浮问-Avery 胶囊在短视口**劫持可见控件**（真点击验过，不是遮挡）·
-   [#36](https://github.com/daniel-qian/avery/issues/36) 团队屏 composer 盖出永久死区 ·
-   [#37](https://github.com/daniel-qian/avery/issues/37) 详情浮层「出处」是工作区级全量清单，
-   纯手打卡也照列 9 份文档（与同面板「手动编辑」角标自相矛盾）。
-2. **r2 剩下 17 条（suspected 11 / feel 5 / KNOWN）未开票**，全在报告里，按屏分好了。
-   优先看 `home/en-locale-decision-grade-labels-stay-chinese`（EN 用户拿到中英夹杂的核心决策面板，
-   根因 `decision_grading.py` 三处硬编码 `LABEL_ZH`）。
-3. **真 brain 分流判据从未真跑**：生产 `llm_calls_remaining` 恒 2000 = 零次 LLM 调用；
-   分流（answer_direct/CHAIN_HINT）只有 mock 层被门钉死。上产后手动走一次真 brain 提问取证。
-4. **snippet + gate.md 的「零后端/离线 stub」整套前提是假的**（本轮实证）：
-   `?transport=stub` 在 `vite build` 产物里恒为死开关，而本仓门环境一律 build+preview。
-   snippet 头注释多处仍按「deterministic, offline, no real backend」描述整套人工协议。
-   值得单开一票把这个认知刷进 snippet 头 + gate.md，否则下一个人还会照抄"零后端"去写门。
-   同族：snippet 顶部 Usage 表的「10 phases / A-J / 8 tabs」也已陈旧（真值 11 相位 / 9 tabs），
-   gate.md 已加告警指明，但 snippet 自己没改。
-5. **gate-run 迁移继续**：本轮只迁 3 道。`verify-aria-zh` 与 `verify-cr-alignment` 刻意没迁
-   （上报模型不兼容，理由写在 gate-run.mjs 头注释），需要先扩 makeRec 的形状。其余每 session 迁几道，
-   **迁移前后各跑一次、判据逐条对照**——这是这张票唯一的验收方式。
-6. **files-hub 独立票 #26–#29（一张没开工）** · **换血抢救票 #31/#32** · **v01 退役成本账 #33**（ready-for-human）。
-7. **i18n 还剩 10 个孤儿键**（`node scripts/i18n-orphans.mjs` 自己跑，别抄数字）。本轮只删了证据最硬的 2 个。
-8. **UI 线开放项**：🔴 真机零覆盖（iOS Safari / 微信内置）优先级最高——本轮 375x812 是 headless 模拟，
-   不是真机；断点动物园（lite2.css 八断点）；像素基线 tracked 与否未拍板。
-9. **成本票 [#30](https://github.com/daniel-qian/avery/issues/30)**：手编一次 CRUD 仍要 **50 秒**
-   （本轮生产探针实测，07-30 是 40–45s）——`put()` 每次重嵌整个语料。Danny 已拍板「等真实客户量再立」。
+1. **push + 上生产**（本轮唯一没做完的收尾）。push 后 #34/#36/#37 自动关闭；
+   前端 Vercel 自动跟 origin/main；后端本轮**没动后端代码**，可不重建。
+2. **B 档（要先 grill 出口径，别顺手改）**：EN 用户拿到中英夹杂的核心决策面板
+   （根因 `decision_grading.py` 三处硬编码 `LABEL_ZH`），与「`AdviseRequest` 根本没有 locale 字段」
+   是同源的一张票，应合并成一票先 grill 出 PRD 再换 session 开发。
+3. **r2 剩下的未开票发现**（原 17 条，本轮消化掉布局/文案类里的三条 hard-contract；
+   其余在 `.issues/sweep/2026-08-02-r2.md`，按屏分好了）。
+4. **gate-run 迁移继续**：已迁 9 道（第一波 3 + 第二波 5 + flow-gap-phases 生来就用）。
+   `verify-aria-zh` / `verify-cr-alignment` 仍未迁——形状不兼容，要先扩 makeRec
+   （4 参数 future 语义 / 多累积数组模型）。**已迁/未迁一律用自查命令数，别抄数字。**
+5. **files-hub 独立票 #26–#29** · 换血抢救票 #31/#32 · v01 退役成本账 #33（ready-for-human）。
+6. **UI 线**：🔴 真机零覆盖（iOS Safari / 微信内置）优先级最高——本轮 375×812 仍是 headless 模拟。
+   #34/#36 恰恰是小屏专属问题，真机大概率更严重；断点动物园；像素基线 tracked 与否未拍板。
+7. **成本票 #30**（CRUD 50 秒）：Danny 已拍板等真实客户量再立，只记数。
+8. **真 brain 分流取证**：要真花钱，需要先给口径（上限几次调用/打 demo 克隆还是真 context/超了就停）。
 
 ## Blockers / Risks
 
-- 无硬 blocker。合伙人端到端试用反馈仍是最高优先中断源——一到就放下一切先处理。
-- 🔴 **`e535ec9` 的 commit message 是错的**（装的是 nudge 那票的代码，挂着 lint 那票的正文）——
-  `--amend` 打偏了，且已 push。改写已 push 的历史属人工闸，没自己动；
-  真相记在 `03a9824` 这条 erratum commit 里。要不要 rebase 修掉归 Danny。
-- 六个 worktree 仍挂着（`git worktree list`），分支停在更早 commit——删分支/worktree 属删除闸，归 Danny。
-- A 区上传型门现在是 **4 道**（+flow-gap-phases），每跑一次电池就在 mock 后端造 4 个 context。
-  本机 mock 是内存态、进程一停就没，不累积；但真库那头的 demo 克隆 GC 口径值得复看一眼。
+- 无硬 blocker。合伙人端到端试用反馈仍是最高优先中断源。
+- 🔴 **`e535ec9` 的 commit message 是错的**（装 nudge 的代码、挂 lint 的正文，已 push）。
+  改写已 push 历史属人工闸，没自己动；真相记在 `03a9824` 这条 erratum commit。要不要 rebase 归 Danny。
+- 六个 worktree 仍挂着，分支停在更早 commit——删分支/worktree 属删除闸，归 Danny。
+- A 区上传型门现在是 **8 道**（本轮把三道错标的认了出来，又新增两道）。每跑一次 A 区会在 mock
+  后端造几十个 context；本机 mock 是内存态、进程一停就没。真库那头的 demo 克隆 GC 口径值得复看。
+- ⚠️ 本轮观察到一次 **`verify-null-owner` 假红**：连跑多轮电池之后 `POST /ingest` 超时，
+  单独重跑即 15 PASS·0 FAIL。判定是 mock 后端在长时间高频上传下的偶发，不是回归——
+  但下次再见到它红，先单独重跑一次再当真。
 
 ## 站着别动的事（Danny 人工闸，agent 别代决）
 
-- 凭据轮换（07-20 生产 env 曾在会话明文出现一次）；裸「风险：」词表加宽；`origin/p5-04-nexus-safe-zone` 废弃分支处置。
-- 法律件三份对外风险（DPA 带谈判底牌 / 隐私件称境内而后端在法兰克福）——Danny 已定归合伙人，工程线不捡。
+- 凭据轮换；裸「风险：」词表加宽；`origin/p5-04-nexus-safe-zone` 废弃分支处置。
+- 法律件三份对外风险（DPA / 隐私件称境内而后端在法兰克福）——归合伙人，工程线不捡。
 - 合伙人对外仍讲「不打分不排名」旧口径——Danny 亲自同步（ADR-0025 后果节）。
-- 生产库历史数据的任何修复/清理（本轮盘点只出清单，一个字节没动）。
+- 生产库历史数据的任何修复/清理。
