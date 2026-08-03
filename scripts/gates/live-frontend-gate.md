@@ -11,41 +11,86 @@
 1. **起后端**(live 形态):
    `AVERY_BRAIN=minimax python -m uvicorn service.app:app --host 127.0.0.1 --port 8137 --app-dir eval-harness`
    健康检查 `GET :8137/health` → `brain:minimax`。跑前清残留 uvicorn(07-05 坑)。
-2. **起前端**:`npm run dev`(preview_start `dev`)→ 打开 `http://localhost:5173/?mode=live`。
+2. **起前端**:~~`npm run dev`~~ ⚠ **本机 `vite dev` 起不来**(共享 node_modules junction 缺 `@babel/*`)。
+   最阴的是它**能返回 200 但 app 不 boot**(`window.__lite2Store` undefined),看起来最像"门坏了"。
+   一律走 build+preview:
+
+   ```
+   node node_modules/typescript/bin/tsc -b
+   node node_modules/vite/bin/vite.js build --mode development
+   node node_modules/vite/bin/vite.js preview --host 127.0.0.1 --port 5173
+   ```
+
+   🔴 `--mode development` 不能省(省了 dist 的 apiBase 会落回 vite.config 默认)。
+   🔴 `--host 127.0.0.1` 不能省(vite 默认只绑 `::1`,而部分门写死 `127.0.0.1`,
+   表现为 ERR_CONNECTION_REFUSED 的假红)。
+   然后打开 `http://localhost:5173/?mode=live`。
+   ⚠ 走 build+preview 的直接后果就是 `?transport=stub` 失效——见本文件顶部 🔴 段。
 3. **注入断言包**:把 `live-frontend-gate.snippet.js` 全文 eval 进页面(preview_eval)。
 4. **按序跑相位**(每步返回 JSON,全部记进 evidence)。
    🔴 **判定口径一概不在本文件**——每条断言的阈值/名单/例外以
    `live-frontend-gate.snippet.js` 的函数头注释为准,这里只留**调用序 + 一句话这相位管什么**
    (够你决定"该不该跑它/它红了大概是哪块坏了",要改断言就去 snippet)。
-   括号里的数字是 snippet 顶部 Usage 表的行号。
+   🔴 **这张表以前带一列 snippet 行号,已全部删掉——那一列一直在撒谎。**
+   2026-08-03 往 snippet 头加了一段 READ FIRST,一次就把表里每一个行号顶漂了;
+   而漂掉的行号看起来和好的一模一样,没有任何东西会因此变红。
+   要定位就 `grep -n '<函数名>' scripts/gates/live-frontend-gate.snippet.js`——函数名是稳定的,
+   行号不是。(同一条教训在 gate-run.mjs / run-battery.mjs 头注释里也各栽过一次。)
 
-   | 序 | 调用 | 这相位管什么 | snippet |
-   |---|---|---|---|
-   | — | `defuseAnimations()` | headless 下 rAF 停摆,先把 transition 旁路掉 | :17 |
-   | A | `scanStoryNouns()` | 上传**前**空态:story 专有名词黑名单 | :18 |
-   | B | `await injectSeeds([{name,b64},…])` | 真 `<input>` 注入官方 seed → 真 POST /ingest | :19 |
-   | C | `assertTeamRendered()` | 人卡渲染出来了,且卡上零血条数字(红线) | :20 |
-   | D | `scanStoryNouns()` | 上传**后**再扫一次(同 A 的函数) | :21 |
-   | E | `await openPersonDetail(name)` | 点人卡开详情,显 live payload 而非兜底 | :22 |
-   | F1 | `composerCheck()` | composer 无 story 预填/引用(**静态**) | :23 |
-   | F2 | `await composerAskLive(q)` | 真提交 → /advise SSE 到帧(**动态**,真后端 1–3 分钟)。<br>🔴 verdict 的 `composerIsLive` = F1 **且** F2,漏跑 F2 = 红 | :24-26 |
-   | G | `assertTeamGrouped()` | 人栏是分组容器 + 折叠 toggle 真生效 | :27 |
-   | H | `assertRoomCanvas()` | 画布已**绝迹**(0729 翻转)+ composer 留滚动区外恒可点。<br>相位名/结果键仍叫 roomCanvas,别改(verdict 聚合认它) | :28 |
-   | I | `assertPlaybooksEmpty()` | Playbooks 空态形态 | :29 |
-   | J | `assertVisionSurface()` | Vision 三拍叙事 + mock 必带 preview/coming 标注;示例人零数字(红线) | :30 |
-   | K | `await assertNotesSurface()` | 笔记屏:常驻红线信任条 + 条目零人卡数字 + 只读。<br>**必须排在 F2 之后**(一次真 advise 才会写出笔记) | 函数头注释<br>1314-1321<br>(Usage 表漏收) | 
-   | — | `verdict()` | 11 相位聚合判定 | :31 |
+   | 序 | 调用 | 这相位管什么 |
+   |---|---|---|
+   | — | `defuseAnimations()` | headless 下 rAF 停摆,先把 transition 旁路掉 |
+   | A | `scanStoryNouns()` | 上传**前**空态:story 专有名词黑名单 |
+   | B | `await injectSeeds([{name,b64},…])` | 真 `<input>` 注入官方 seed → 真 POST /ingest |
+   | C | `assertTeamRendered()` | 人卡渲染出来了,且卡上零血条数字(红线) |
+   | D | `scanStoryNouns()` | 上传**后**再扫一次(同 A 的函数) |
+   | E | `await openPersonDetail(name)` | 点人卡开详情,显 live payload 而非兜底 |
+   | F1 | `composerCheck()` | composer 无 story 预填/引用(**静态**) |
+   | F2 | `await composerAskLive(q)` | 真提交 → /advise SSE 到帧(**动态**,真后端 1–3 分钟)。<br>🔴 verdict 的 `composerIsLive` = F1 **且** F2,漏跑 F2 = 红 |
+   | G | `assertTeamGrouped()` | 人栏是分组容器 + 折叠 toggle 真生效 |
+   | H | `assertRoomCanvas()` | 画布已**绝迹**(0729 翻转)+ composer 留滚动区外恒可点。<br>相位名/结果键仍叫 roomCanvas,别改(verdict 聚合认它) |
+   | I | `assertPlaybooksEmpty()` | Playbooks 空态形态 |
+   | J | `assertVisionSurface()` | Vision 三拍叙事 + mock 必带 preview/coming 标注;示例人零数字(红线) |
+   | K | `await assertNotesSurface()` | 笔记屏:常驻红线信任条 + 条目零人卡数字 + 只读。<br>**必须排在 F2 之后**(一次真 advise 才会写出笔记) |
+   | — | `verdict()` | 11 相位聚合判定 |
 
-   🔴 **"snippet 为准"有一个例外：snippet 自己的顶部 Usage 表已经陈旧。**
-   `snippet.js:31` 还写「aggregate (10 phases)」、`:71-72` 写「10-phase gate (phases A-J)」、
-   `:63` 写「8 tabs」——都是 feat-033（相位 K）与 files-hub-0729（第 9 个 tab）之后没同步的旧数。
-   **真相在函数体里**：`verdict()`（:1364-1383）实际聚合 **11** 个键；`assertV2Boots` 的 expected
-   数组（:1395-1426）实际断 **9** 个 tab。照 Usage 表跑会得出错的相位数和错的 tab 名单。
-   （同步 snippet 头注释本身是另一张票，不在本次改动范围内。）
+   ✅ **2026-08-03 已修：snippet 顶部 Usage 表当年的「10 phases / phases A-J / 8 tabs」旧数
+   已经同步成真值**（11 相位 A–K、9 tabs），相位 K 也补进了那张表，并在 snippet 头加了一段
+   「READ FIRST」把这类失效前提集中记档。
+   口径不变，仍然是**函数体为准**：`verdict()` 聚合的键数、`assertV2Boots` 的 `expected`
+   数组才是单一事实源——要数就去数它们，别数任何注释（包括本行）。
+   这类「注释里的现在时计数」烂掉过不止一次，所以两边现在都写成"去数函数体"而不是复述数字。
 5. **收尾**:停 dev server、杀 8137 uvicorn。verdict JSON 原样贴进
    `feature_list.json` evidence / progress.md。
 
+## 🔴 先读:本文件里所有「stub / 离线 / 零后端」的前提在当前门环境下都是**假的**(2026-08-03)
+
+下面多处协议写着"走 `?transport=stub`,全程离线,不需要真后端"。**在本仓实际的门环境里这条路是不通的**:
+
+- `?transport=stub` 由 `import.meta.env.DEV` 把关(`src/lite2/store.ts` 的 `stubSelected` /
+  `defaultTransport`,`src/lite/store.ts` 同形)。`vite build` 把 DEV 静态求值成 false,
+  Vite 连同整个 stubTransport 模块一起 DCE 掉——**`--mode development` 也救不回来**
+  (那个 flag 只保 apiBase)。
+- 而本仓的门**一律 build+preview**(`vite dev` 在本机起不来:共享 node_modules junction 缺 `@babel/*`)。
+- 所以带不带 `?transport=stub`,页面都在对 apiBase 发真请求。
+- 实证(2026-08-03):`grep -c stubTransport dist/assets/*.js` → 每个 chunk 都是 **0**;
+  带着 stub 参数加载,页面照样 boot 在 apiBase `127.0.0.1:8137` 上。
+
+**代价**:2026-08-01 那轮 46 条 UI 走查发现里,**12 条是这一个破口造出来的假象**,不是产品缺陷。
+
+**要数据态怎么办**:走无条件测试缝(`__lite2Store` / `__liteStore` / `__lite2Auth`)+ 真 mock 后端
+(`AVERY_BRAIN=mock AVERY_EXTRACTOR=heuristic AVERY_EMBEDDINGS=keyword`,缺一件就真出网烧钱)。
+现成驱动:`eval-harness/tools/sweep-r2-driver.mjs`。
+
+⚠ 别把下面的 `?transport=stub` 参数删掉——参数本身无害,**撒谎的是它周围那句"所以离线"**。
+真在 `vite dev` 下跑得起来时,这些协议依然成立。
+
+---
+
 ## Ask 卡相位(feat-034 阶段 B,独立聚合 `askVerdict()`)
+
+⚠ 本组的两种驱动方式**当前都不通**:stub 通道见上(已死);而"部署波拉真 8137 后去掉 stub 重跑"
+这件事——阶段 C 后端 2026-07-14 就落地了,那个"届时"**早就到了**,但这组断言一直没对着真后端重跑过。
 
 本组相位默认跑在**确定性 stub transport**下(离线回归/演示通道):
 `http://localhost:5175/?mode=live&transport=stub`(不占 5173/8137;stub 全程离线,
@@ -133,7 +178,9 @@ story 的 Wang 用其文案签名 "Wang has it steady" 代替(实跑抓到过此
 
 **出生即红**(2026-07-14,feat-035 实现前):无 `.lite2-shell`、无 `?v=` 开关——立门先于实现。
 全程 `?transport=stub`(离线确定性,不需要真后端;`src/lite2/stubTransport.ts`,同一
-LiveTransport seam,与 v01 stub 独立实例)。跨 3 次页面导航 + 1 次仓外 lint,驱动器
+LiveTransport seam,与 v01 stub 独立实例)。⚠ **"所以不需要真后端"这半句在 build+preview 下不成立**
+——见本文件顶部的 🔴 段;这组当年是在 `vite dev` 下立的门,今天照抄会得到一个连着真 apiBase 的页面。
+跨 3 次页面导航 + 1 次仓外 lint,驱动器
 (agent 会话)自己持有跨导航的 JSON 快照,不能全指望页内状态。
 
 跑法:
@@ -142,29 +189,29 @@ LiveTransport seam,与 v01 stub 独立实例)。跨 3 次页面导航 + 1 次仓
    起的 dev 端口),注入 snippet:
    - `__seedGate.defuseAnimations()`
    - `await __seedGate.assertV2Boots()`:见 live-frontend-gate.snippet.js 的 assertV2Boots
-     (头注释 63-64,tab 顺序权威清单见函数正上方 1395-1426);snippet 为准。
+     (tab 顺序的权威清单是该函数里的 `expected` 数组本身);snippet 为准。
    - `const before = __seedGate.readSkinSnapshot()`:见 live-frontend-gate.snippet.js 的
-     readSkinSnapshot(头注释 65,实现自带注释 1496-1499);snippet 为准。
+     readSkinSnapshot(实现自带注释);snippet 为准。
 2. 导航到同 URL 但 `&look=aurora`(整页刷新,重新注入 snippet——观感只在挂载时读一次 URL,
    见 `src/lite2/look.ts`):
    - `const after = __seedGate.readSkinSnapshot()`
    - `__seedGate.assertSkinTokens(before, after)`:见 live-frontend-gate.snippet.js 的
-     assertSkinTokens(头注释 68,实现自带注释 1511-1513);snippet 为准。
+     assertSkinTokens(实现自带注释);snippet 为准。
 3. 导航到 `?v=1&mode=live&transport=stub`——**先跑一遍既有 11 相位**(相位 A-K,同一 stub
    session,seed 内容任意字节即可)拿到 `verdict()`,再:
    - `__seedGate.assertV1Untouched(verdictResult.pass)`:见 live-frontend-gate.snippet.js 的
-     assertV1Untouched(头注释 73,`?v=1` 裁定出处见函数正上方 1461-1464);snippet 为准。
+     assertV1Untouched(`?v=1` 裁定出处见该函数正上方的注释);snippet 为准。
 4. 导航到 `?mode=story`:
    - `__seedGate.assertStoryUntouched()`:见 live-frontend-gate.snippet.js 的
-     assertStoryUntouched(头注释 75,实现自带注释 1476-1478);snippet 为准。
+     assertStoryUntouched(实现自带注释);snippet 为准。
 5. 仓外(不在浏览器里,snippet 管不到):对 4 个新墙方向各自实证"先红后绿"——
    `lite2→story` / `story→lite2` / `lite→lite2` / `lite2→lite`,每个方向:临时在对应文件
    追加一行违规 import → `npm run lint` 记 exit code(须为 1)→ 撤掉该行 → 复跑
    `npm run lint`(须为 0)→ `git diff --stat` 确认改动文件已归零。四个方向都验完后:
    - `__seedGate.recordWallRed({ pass: true, directions: { liteToLite2: {...}, ... } })`:
-     见 live-frontend-gate.snippet.js 的 recordWallRed(头注释 78,实现自带注释 1486-1490);
+     见 live-frontend-gate.snippet.js 的 recordWallRed(实现自带注释);
      snippet 为准。
-6. `__seedGate.v2Verdict()`:见 live-frontend-gate.snippet.js 的 v2Verdict(头注释 79);
+6. `__seedGate.v2Verdict()`:见 live-frontend-gate.snippet.js 的 v2Verdict(头注释);
    snippet 为准。
 
 **收尾**:JSON 原样贴进 `feature_list.json` evidence / progress.md,连同第 5 步 lint 的原始

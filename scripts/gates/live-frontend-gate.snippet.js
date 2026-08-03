@@ -13,6 +13,43 @@
  * Known trap: headless rAF stalls — every wait here polls the DOM (no animation frames), and
  * defuseAnimations() force-disables transitions (feat-014 evidence pattern).
  *
+ * ══════════════════════════════════════════════════════════════════════════════════════════
+ * 🔴 READ FIRST (2026-08-03) — two things below this line are WRONG. They stayed wrong for
+ * weeks because a comment nobody executes never goes red. Corrections, newest truth first:
+ *
+ * ① `?transport=stub` IS A DEAD SWITCH under this repo's gate environment. Every phase group
+ *    below that says "deterministic, offline — no real backend" is describing a world that
+ *    does not exist here.
+ *      Mechanism: the stub is gated on `import.meta.env.DEV` (src/lite2/store.ts `stubSelected`
+ *      / `defaultTransport`; src/lite/store.ts same shape). `vite build` evaluates DEV to a
+ *      static false and Vite dead-code-eliminates the whole stub branch — `--mode development`
+ *      does NOT save it (that flag only preserves the API base). This repo's gates are ALWAYS
+ *      build+preview (vite dev cannot boot here — shared node_modules junction is missing
+ *      @babel/*). So the parameter is silently ignored and the page talks to the real apiBase.
+ *      Evidence (2026-08-03): `grep -c stubTransport dist/assets/*.js` → 0 in every chunk;
+ *      loading `?v=2&mode=live&transport=stub` still boots against apiBase 127.0.0.1:8137.
+ *      Cost of believing it: the 2026-08-01 UI sweep filed 46 findings, of which 12 were
+ *      artifacts of this one broken premise — not product defects.
+ *    → What to do instead: drive real data state through the unconditional seams
+ *      (`__lite2Store` / `__liteStore` / `__lite2Auth`) against a real mock backend
+ *      (AVERY_BRAIN=mock + AVERY_EXTRACTOR=heuristic + AVERY_EMBEDDINGS=keyword on :8137).
+ *      Worked example: eval-harness/tools/sweep-r2-driver.mjs.
+ *      🔴 Do NOT "fix" this by deleting `?transport=stub` from the URLs below — the parameter
+ *      is harmless, the PROSE around it is what lies. Under `vite dev` (if it ever boots here)
+ *      the stub is real again, so these protocols are not wrong, just not reachable today.
+ *
+ * ② The counts in the Usage table below are stale. Authoritative values live in the function
+ *    bodies, not here — and when they disagree, the body wins:
+ *      · verdict() aggregates 11 phases (A–K), not 10. Phase K (assertNotesSurface, feat-033)
+ *        was added and never reached the table; it MUST run after F2 (one real advise is what
+ *        writes a note). The table below still omits it entirely — see live-frontend-gate.md,
+ *        whose call-order table does carry K.
+ *      · assertV2Boots() expects 9 tabs, not 8 (files-hub-0729 added "Files"). Its own
+ *        `expected` array is the single source of truth for tab order.
+ *    Both are corrected inline below. Don't re-derive these numbers from this comment either —
+ *    count the keys in verdict() / the entries in assertV2Boots()'s expected array.
+ * ══════════════════════════════════════════════════════════════════════════════════════════
+ *
  * Usage (agent, in order — each returns JSON):
  *   __seedGate.defuseAnimations()
  *   __seedGate.scanStoryNouns()                                   // phase A: pre-upload empty state
@@ -28,11 +65,21 @@
  *   await __seedGate.assertRoomCanvas()                           // phase H: room pan/zoom canvas (call AFTER askLive)
  *   await __seedGate.assertPlaybooksEmpty()                       // phase I: Playbooks honest empty state
  *   await __seedGate.assertVisionSurface()                        // phase J: Vision surface — narrative + labeled mock
- *   __seedGate.verdict()                                          // aggregate (10 phases)
+ *   await __seedGate.assertNotesSurface()                         // phase K: Avery's notes — standing red-line trust
+ *                                                                 // bar + zero person-card numbers + read-only.
+ *                                                                 // 🔴 MUST come after F2: only a real advise writes
+ *                                                                 // a note (feat-033; was missing from this table)
+ *   __seedGate.verdict()                                          // aggregate (11 phases, A–K)
  *
  * feat-034 stage B — Ask (Quick ask) card phases, SEPARATE aggregate (askVerdict below).
  * Driven with `?mode=live&transport=stub` (deterministic LiveTransport stub) until the ask
- * backend (stage C) exists; then re-run against the real service. Run AFTER composerAskLive
+ * backend (stage C) exists; then re-run against the real service.
+ * ⚠ 2026-08-03: stage C SHIPPED on 2026-07-14 (POST /ask · /ask/{id} · share · GET · revoke +
+ * the /r/{token} employee H5 — see .issues/ask-card-0713/stage-c-handoff.md), so the "until"
+ * clause has already expired: this group is supposed to be re-run against the real service now,
+ * and at that point the F2 phase must assert the offline label is ABSENT. Compounding it,
+ * `?transport=stub` no longer works under build+preview at all (READ FIRST ①) — so this
+ * group currently has neither of its two documented drive modes actually working. Run AFTER composerAskLive
  * (the stub advise stream carries a manifest{kind:'ask-draft'}):
  *   await __seedGate.assertAskDraft()          // K1: card mounts draft, verbatim edit works, 1..3 add/remove
  *   await __seedGate.assertAskShare()          // K2: confirm -> links == recipients, host avery.ima-read.com
@@ -55,12 +102,13 @@
  * feat-035 (lite-live-v02) — v2 shell + look infra phases, SEPARATE aggregate (v2Verdict below,
  * phase group A). GATE-FIRST: written and run red BEFORE the v02 shell existed (no .lite2-shell
  * anywhere, no `?v=` switch) — feat-035's implementation turns this green. Driven with
- * `?transport=stub` (deterministic, offline — no real backend). Spans THREE page loads plus one
+ * `?transport=stub` (deterministic, offline — no real backend ⚠ NOT under build+preview, see
+ * READ FIRST ①). Spans THREE page loads plus one
  * external lint run; the driver re-injects this snippet each navigation and carries JSON forward
  * (full protocol: scripts/gates/live-frontend-gate.md):
  *   [on `?v=2&mode=live&transport=stub&look=paper`]
  *   __seedGate.defuseAnimations()
- *   await __seedGate.assertV2Boots()                              // v2Boots: .lite2-shell + 8 tabs, PRD
+ *   await __seedGate.assertV2Boots()                              // v2Boots: .lite2-shell + 9 tabs, PRD
  *                                                                // order (feat-057 prepended "Today")
  *   const before = __seedGate.readSkinSnapshot()
  *   [navigate to `?v=2&mode=live&transport=stub&look=aurora`, re-inject snippet]
@@ -69,8 +117,8 @@
  *   [on `?v=1&mode=live&transport=stub` — 🔴 2026-07-19: `?v=1` is now REQUIRED here. The bare
  *    URL used to mean v01; Danny's ruling ① flipped resolveVersion()'s default to '2', so the
  *    bare URL now renders v02 and this phase would assert v02 against itself. Re-run the
- *    existing 10-phase gate here first (phases A-J above), take its verdict().pass, THEN:]
- *   __seedGate.assertV1Untouched(verdictResult.pass)               // v1Untouched: 0 .lite2-shell + v01 10-phase pass
+ *    existing 11-phase gate here first (phases A-K above), take its verdict().pass, THEN:]
+ *   __seedGate.assertV1Untouched(verdictResult.pass)               // v1Untouched: 0 .lite2-shell + v01 11-phase pass
  *   [on `?mode=story`]
  *   __seedGate.assertStoryUntouched()                              // storyUntouched: 0 .lite2-shell
  *   [outside the browser: npm run lint with each of the 4 new wall directions violated in turn,
@@ -1402,8 +1450,9 @@
     },
 
     // ── feat-035 (lite-live-v02) — v2Verdict, independent aggregate, phase group A ─────────────
-    // Driven with `?transport=stub` (deterministic, offline — no real backend needed). Unlike the
-    // 10-phase verdict()/askVerdict() above (which live inside a single `?mode=live` page), these
+    // Driven with `?transport=stub` (deterministic, offline — no real backend needed
+    // ⚠ NOT under build+preview: the stub is DCE'd there, see READ FIRST ① in the file header).
+    // Unlike the 11-phase verdict()/askVerdict() above (which live inside a single `?mode=live` page), these
     // phases span THREE separate page loads (`?v=1`, `?v=2`, `?mode=story`) plus one lint
     // run the browser can't do itself — so most of them take externally-computed evidence as
     // arguments rather than driving everything in-page. The driver session's job: navigate,
