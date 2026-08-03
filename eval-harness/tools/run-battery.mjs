@@ -82,6 +82,15 @@ const BASE = process.env.VERIFY_BASE || 'http://localhost:5173'
 //               'self'     = 门自己起服务器（不碰 5173）
 //               'rebuild'  = 门自己 spawn `vite build` —— **调包者**
 //   backend   是否需要 mock 后端 :8137（AVERY_BRAIN=mock 三件套）
+//             🔴 这个字段**不参与调度**，它只印在预检清单里给人看——所以它写错了不会有任何
+//             东西报警，只会把读它的人送去一个错误的结论。已经错过四次（2026-08-02 的
+//             status-truth，2026-08-03 的 topbar-clearance / contrast-smalltext /
+//             handoffs-empty-honesty），错法完全一样：门里有真 `uploadFiles` 却写着 false。
+//             改 ROSTER 时的自查（别靠眼睛看 note）：
+//               grep -l "uploadFiles" $(git ls-files "*verify-*.mjs")
+//             凡命中且不是注释/假 transport（verify-data-boundary 那种 setTransport(fake)
+//             不算）的，backend 必须为 true，且 note 里要挂 🔴 上传型门 + "绝不能排在 C 区之后"
+//             ——因为 C 区跑完 dist 指向生产域名，此后任何真上传都是往生产库写数据。
 //   dist      true = 跑完 dist 已被换掉（调包者）
 //   env       额外环境变量
 //   note      口径备注
@@ -89,17 +98,17 @@ const ROSTER = [
   // ── A 区 · 吃共享 preview:5173（22 道，先跑）────────────────────────────────
   //   ⚠ 这行数字长期是 17，实际 20 —— files-hub-0729/02 加 context-switch 之后是 21，
   //   票 #14 加 flow-gap-phases 之后是 22。注释里的计数没人维护就会变成假信息，顺手改对。
-  { zone: 'A', name: 'topbar-clearance',      cmd: ['eval-harness/tools/verify-topbar-clearance.mjs'],            host: 'preview', backend: false, dist: false, note: '九屏×两皮顶栏让位几何' },
+  { zone: 'A', name: 'topbar-clearance',      cmd: ['eval-harness/tools/verify-topbar-clearance.mjs'],            host: 'preview', backend: true,  dist: false, note: '九屏×两皮顶栏让位几何。🔴 上传型门（:141 真 uploadFiles 造"满世界"，两皮各一次＝每跑一遍造 2 个 context）；**绝不能排在 C 区之后**。⚠ 2026-08-03 修：此前写 backend:false —— 它排在 A1、位置一直安全所以没咬到人，但照那个字段以为它能离线跑就会拿到一份没有满态的假绿' },
   { zone: 'A', name: 'cr-alignment',          cmd: ['eval-harness/tools/verify-cr-alignment.mjs'],                host: 'preview', backend: true,  dist: false, note: '规格表逐行断言；吃 SPEC_STICK（row.stick > N 打 [FUTURE] 不计红）' },
   { zone: 'A', name: 'skin-phases',           cmd: ['eval-harness/tools/verify-skin-phases.mjs'],                 host: 'preview', backend: false, dist: false, note: '不碰后端——因为它的断言只读 CSS 计算值、从不 fetch。⚠ 不是因为 ?transport=stub 生效：那个参数在 `vite build` 产物里恒为死开关（store.ts:385 的 DEV 闸静态为 false），本仓门环境一律 build+preview，别照抄「走 stub 所以离线」这个理由去写新门（票 #14 实测）' },
   { zone: 'A', name: 'button-family',         cmd: ['eval-harness/tools/verify-button-family.mjs'],               host: 'preview', backend: true,  dist: false, note: '新按钮必须挂 .lite-btn 或进白名单；🔴 序错（dist 被调包）时这道必假红' },
-  { zone: 'A', name: 'contrast-smalltext',    cmd: ['eval-harness/tools/verify-contrast-smalltext.mjs'],          host: 'preview', backend: false, dist: false, note: 'AA 4.5 硬地板' },
+  { zone: 'A', name: 'contrast-smalltext',    cmd: ['eval-harness/tools/verify-contrast-smalltext.mjs'],          host: 'preview', backend: true,  dist: false, note: 'AA 4.5 硬地板。🔴 上传型门（driveShell 每壳一次真 uploadFiles，三壳＝每跑一遍造 3 个 context）；**绝不能排在 C 区之后**。⚠ 2026-08-03 修：此前写 backend:false —— 离线跑实测 23 PASS · 5 FAIL（上传失败落进错误态，`upload-error-label` 反而被采样并击穿 AA），是"看着像回归的假红"' },
   { zone: 'A', name: 'home-skeleton',         cmd: ['eval-harness/tools/verify-home-skeleton.mjs'],               host: 'preview', backend: false, dist: false, note: '空态骨架零数字' },
   { zone: 'A', name: 'status-truth',          cmd: ['eval-harness/tools/verify-status-truth.mjs'],                host: 'preview', backend: true,  dist: false, note: '🔴 上传型门（uploadAndGoTeam 真发 POST /ingest + route.fetch 真打后端）；absent ≠ none 的仲裁者；**绝不能排在 C 区之后**。⚠ 2026-08-02 修：此前 backend 字段写的是 false 且没挂上传型标记——排位一直安全所以没咬到人，但照那个字段以为它能离线跑、或用 --from 把它拎到 C 区之后，就是往生产库写数据' },
   { zone: 'A', name: 'room-nomaterial',       cmd: ['eval-harness/tools/verify-room-nomaterial.mjs'],             host: 'preview', backend: false, dist: false, note: '无材料 gate' },
   { zone: 'A', name: 'room-usability',        cmd: ['eval-harness/tools/verify-room-usability.mjs'],              host: 'preview', backend: true,  dist: false, note: '遮挡几何 + elementFromPoint' },
   { zone: 'A', name: 'answer-split',          cmd: ['eval-harness/tools/verify-answer-split-03.mjs'],             host: 'preview', backend: true,  dist: false, note: '0729/03 分流短答：事实问→气泡无卡、判断问→卡无气泡（宁漏勿错杀钉子）+ v01 镜像' },
-  { zone: 'A', name: 'handoffs-empty-honesty', cmd: ['eval-harness/tools/verify-handoffs-empty-honesty.mjs'],     host: 'preview', backend: false, dist: false, note: '空态不许编造交接' },
+  { zone: 'A', name: 'handoffs-empty-honesty', cmd: ['eval-harness/tools/verify-handoffs-empty-honesty.mjs'],     host: 'preview', backend: true,  dist: false, note: '空态不许编造交接。🔴 上传型门（driveShell 每壳一次真 uploadFiles，两壳＝每跑一遍造 2 个 context）；**绝不能排在 C 区之后**。⚠ 2026-08-03 修：此前写 backend:false —— 离线跑实测直接**未捕获异常崩掉**（briefing 为 null），不是 FAIL 而是压根没跑到断言' },
   { zone: 'A', name: 'switchers',             cmd: ['eval-harness/tools/verify-switchers.mjs'],                   host: 'preview', backend: false, dist: false, note: '顶栏右簇 皮/语/版 三切换器' },
   { zone: 'A', name: 'aria-zh',               cmd: ['eval-harness/tools/verify-aria-zh.mjs'],                     host: 'preview', backend: true,  dist: false, note: '扫 aria-label/title/alt（扫不到 placeholder）' },
   { zone: 'A', name: 'onboard-gate',          cmd: ['eval-harness/tools/verify-onboard-gate.mjs'],                host: 'preview', backend: true,  dist: false, note: '要 demo seed（AVERY_DEMO_SEED_DIR）；额外吃 VERIFY_API 默认 8137' },
