@@ -7680,3 +7680,38 @@
 .lite2-shell .lite-home-files-link:hover {
   color: var(--ink);
 }
+
+/* ═══ #34 / #36 · 屏底常驻家具的让位带（2026-08-03）═════════════════════════════
+   两张 hard-contract 票（悬浮「问 Avery」胶囊 z45 / 团队屏常驻 composer z25）是**同一个
+   根因**：滚动口是 `inset: 0`，一直铺到视口底边，于是内容从屏底 fixed 家具**底下穿过去**。
+   后果不是"看起来被挡住"，是控件被**劫持**——真点它的可见正中，触发的是家具而不是控件：
+     · 375×812 /home：「打开项目 →」@233,774 真点 → 展开 Ask Avery 面板，页面没跳转
+     · 375×812 /team：「今天先放放」@129,714 真点 → 无任何反应（命中 composer-main-row）
+   （两条都是 verify-bottom-furniture-clearance.mjs 用 elementFromPoint 机械复现的，
+    不是几何重叠推断——几何相交证明不了点不到，pointer-events/裁剪都能让相交无害。）
+
+   修法：把滚动口的下边界从视口底**抬起一条带**，家具就落在带里、内容永远进不去。
+   为什么不是"给内容加 padding-bottom"：padding 只在**滚到底**时有效，内容在中途滚动位
+   照样从家具底下穿过（票里实测 scrollTop=300 时换成另一枚按钮被同一条带吃掉）。
+   抬边界才是让"内容与家具不共享同一片像素"这件事在**所有**滚动位都成立。
+
+   为什么只在 .lite2-shell 下改：`.home-scroll` 是 shared 类，story 壳也在用且是冻结面。
+   带高取值：composer（含 16px 底距）实测占屏底 110px，胶囊占 68px，合规页脚窄屏会换行到
+   59px+ —— 取 120px 覆盖最厚的那一种。⚠ 这个数字没有门盯着"够不够"，
+   verify-bottom-furniture-clearance 盯的是结果（有没有控件被劫持），改布局后重跑它即可。 */
+.lite2-shell .home-scroll,
+.lite2-shell .lite-home-scroll,
+.lite2-shell .lite-followups-scroll {
+  bottom: var(--lite2-bottom-band, 120px);
+}
+
+/* #34 后半条：胶囊不许压穿常驻合规页脚（PRD F6 要求它常驻可读）。
+   原值写死 `bottom: 24px`，隐含假设是"页脚薄薄一条、够不到我"——375 窄屏文案换行到 59px+
+   之后假设就破了，实测胶囊纵向压穿页脚 35.1px、免责声明中间一行被腰斩
+   （elementFromPoint(187.5, 782.4) 命中的是胶囊而不是页脚文字）。
+   改成让位到页脚**实测高度**之上：`--lite2-footer-h` 由 Lite2Footer 用 ResizeObserver 发布
+   （见该组件注释：再猜一个常数就是把同一个 bug 换个数字重犯）。
+   兜底 56px 只在变量还没发布的第一帧生效，且比原来的 24 更保守。 */
+.lite2-shell .lite-ask-avery {
+  bottom: calc(var(--lite2-footer-h, 56px) + 12px);
+}
