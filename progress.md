@@ -11,8 +11,10 @@
 - **验证账实**：全电池 **30/30**（**A 24** / B 3 / C 3）——本轮新增 2 道门（detail-provenance、
   bottom-furniture）。像素基线 40 张，本轮漂 4 张、已人眼复核后重冻。
 - **i18n 孤儿键：0 个**（删前 12，不是票面写的 10）。
-- ⚠️ **尚未 push**：`main` 领先 `origin/main` 7 个提交。三张 issue 的 `closes #34/#36/#37`
-  要 push 之后才会真正关闭。生产也还是上一版（前端 Vercel 跟 origin/main 走，后端容器未重建）。
+- **已 push 并上生产**：`main` = `origin/main` = `21cff90`。**#34 / #36 / #37 三张 issue 已 CLOSED**。
+  前端 Vercel 已部署并**核到产物层**：线上 bundle 的 `commit` 戳与本地 HEAD 逐字相等，
+  三条修复（让位带 / AA 错误态色 / 胶囊让位页脚）在线上 CSS 里逐条验到。
+  **后端未重建**——本棒一行后端代码没动，生产镜像与回滚梯维持上一版。
 
 ## 本轮做完的（按交接 A 档的顺序）
 
@@ -67,21 +69,19 @@ Usage 表的 10 phases / 8 tabs 改真值（11 相位 A–K / 9 tabs），补回
 
 ## What's Next（按优先级）
 
-1. **push + 上生产**（本轮唯一没做完的收尾）。push 后 #34/#36/#37 自动关闭；
-   前端 Vercel 自动跟 origin/main；后端本轮**没动后端代码**，可不重建。
-2. **B 档（要先 grill 出口径，别顺手改）**：EN 用户拿到中英夹杂的核心决策面板
+1. **B 档（要先 grill 出口径，别顺手改）**：EN 用户拿到中英夹杂的核心决策面板
    （根因 `decision_grading.py` 三处硬编码 `LABEL_ZH`），与「`AdviseRequest` 根本没有 locale 字段」
    是同源的一张票，应合并成一票先 grill 出 PRD 再换 session 开发。
-3. **r2 剩下的未开票发现**（原 17 条，本轮消化掉布局/文案类里的三条 hard-contract；
+2. **r2 剩下的未开票发现**（原 17 条，本轮消化掉布局/文案类里的三条 hard-contract；
    其余在 `.issues/sweep/2026-08-02-r2.md`，按屏分好了）。
-4. **gate-run 迁移继续**：已迁 9 道（第一波 3 + 第二波 5 + flow-gap-phases 生来就用）。
+3. **gate-run 迁移继续**：已迁 9 道（第一波 3 + 第二波 5 + flow-gap-phases 生来就用）。
    `verify-aria-zh` / `verify-cr-alignment` 仍未迁——形状不兼容，要先扩 makeRec
    （4 参数 future 语义 / 多累积数组模型）。**已迁/未迁一律用自查命令数，别抄数字。**
-5. **files-hub 独立票 #26–#29** · 换血抢救票 #31/#32 · v01 退役成本账 #33（ready-for-human）。
-6. **UI 线**：🔴 真机零覆盖（iOS Safari / 微信内置）优先级最高——本轮 375×812 仍是 headless 模拟。
+4. **files-hub 独立票 #26–#29** · 换血抢救票 #31/#32 · v01 退役成本账 #33（ready-for-human）。
+5. **UI 线**：🔴 真机零覆盖（iOS Safari / 微信内置）优先级最高——本轮 375×812 仍是 headless 模拟。
    #34/#36 恰恰是小屏专属问题，真机大概率更严重；断点动物园；像素基线 tracked 与否未拍板。
-7. **成本票 #30**（CRUD 50 秒）：Danny 已拍板等真实客户量再立，只记数。
-8. **真 brain 分流取证**：要真花钱，需要先给口径（上限几次调用/打 demo 克隆还是真 context/超了就停）。
+6. **成本票 #30**（CRUD 50 秒）：Danny 已拍板等真实客户量再立，只记数。
+7. **真 brain 分流取证**：要真花钱，需要先给口径（上限几次调用/打 demo 克隆还是真 context/超了就停）。
 
 ## Blockers / Risks
 

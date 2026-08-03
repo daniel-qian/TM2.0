@@ -7,18 +7,23 @@
 布局/文案类被 #34/#36/#37 覆盖），外加两个顺手挖出的真缺陷。`5e18e69 → a1f2652` 共 7 提交，
 全电池 **30/30**，i18n 孤儿 **0**。
 
-## 🔴 下一棒第一件事：push
+## 收尾状态：已 push，三张票已关
 
-**本棒唯一没做完的收尾**。`main` 领先 `origin/main` **7 个提交**，工作树干净、HEAD 在 main。
+`main` 与 `origin/main` 已推平（`5e18e69 → 21cff90`，8 提交），工作树干净、HEAD 在 main。
+`closes` 生效，**#34 / #36 / #37 三张 issue 均已 CLOSED**（已复核）。
 
-```bash
-git push origin main
-```
+**后端没动**——本棒一行后端代码都没改（改的是 src/ 前端、eval-harness/tools/ 门、scripts/、文档），
+所以**不需要重建容器**，回滚梯与生产镜像维持上一版不变。
+**前端** Vercel 自动跟 origin/main 部署。
 
-push 之后才会发生的事：① #34 / #36 / #37 三张 issue 被 commit message 的 `closes` 自动关闭；
-② 前端 Vercel 自动部署（averylite.dannyqian.com 跟 origin/main）。
-**后端不用重建**——本棒一行后端代码都没动（改的是 src/ 前端、eval-harness/tools/ 门、scripts/、文档）。
-push 后按老规矩核到产物层（`window.__AVERY_BUILD__.commit`），别只看 200。
+### 生产核验（核到产物层，不是只看 200）
+
+- `averylite.dannyqian.com` 的 `index-*.js` 里 `commit:"21cff904a855e158de8cd045f97d3307ea0cb061"`
+  —— 与本地 HEAD **逐字相等**。
+- 三条修复在线上 CSS 里逐条验到：
+  · 让位带 `--lite2-bottom-band` 规则在场；
+  · `upload-error-label{color:var(--terracotta-text, var(--terracotta))}`（AA 修复，覆盖基线那条装饰色）；
+  · 胶囊 `calc(var(--lite2-footer-h, 56px) + 12px)`（让位实测页脚高度）。
 
 ---
 
