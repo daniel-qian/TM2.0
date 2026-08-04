@@ -11,8 +11,11 @@
 - **验证账实**：全电池 **31/31**（**A 25** / B 3 / C 3）——本轮新增 1 道门（locale-parity，48 判据）。
   后端 pytest **3513 passed**（新增 39 条：locale 契约 28 + 决策文案 i18n 对账 11，另有红线补漏 14）。
   像素基线 40 张**未动**（本轮没改布局，B 区 4/4 直接绿）。
-- **#38 已完成并 closes**。前端 Vercel 跟 origin/main 自动部署；
-  **后端有改动，生产容器需要重建**才能拿到 locale 契约（见 Blockers）。
+- **#38 已完成并 closes**，**契约切换的两半已同批上生产**（[部署回执](.issues/locale-contract-0803/receipt-deploy-0804.md)）：
+  前端 Vercel 构建 `89b36e4`（线上 bundle 的 commit 戳与本地 HEAD 逐字相等，
+  8 条判读文案逐条核到线上产物）；后端换容器到 `avery-agent:main-20260804-153841`
+  （从 main 构建，容器内纯 Python 断言核到 `grade_label` 已消失、命中带 `params`、
+  `locale` 在契约上）。回滚梯 `avery-prev-20260804-153841` 在位。
 
 ## 本轮做完的（#38 · ADR-0033 · [回执](.issues/locale-contract-0803/receipt.md)）
 
@@ -69,10 +72,9 @@
 
 ## What's Next（按优先级）
 
-1. **后端生产镜像重建**：本轮改了 `avery/`（locale/decision_grading/decision_rules/redline/skills）
-   与 `service/`（app/live_input），生产容器仍是上一版 = **仍在发 `grade_label`**。
-   前端已经改成查 i18n 表，所以**新前端 + 旧后端 = 判读卡上的档位词读不到**。
-   🔴 这是同批发的契约切换，前后端必须一起上（ADR-0033 后果节写明的前提就是"同仓同步发"）。
+1. **真 brain 的 `/advise` 生产端到端**（唯一没验的一段）：链路本身已在本机 mock 上端到端跑通
+   （门 48/0），prompt 那一段有 pytest 逐条断言；生产这一跑只回答**「真模型听不听那句话」**。
+   它是一次**真花钱**的调用，所以留给 Danny 拍板——命令写在部署回执末尾，一句就够。
 2. **`{'：'}` 写死在 JSX 里的还剩 6 处**（`grep -rn "{'：'}" src/`：DetailOverlay ×4 /
    ProjectsScreen / TeamScreen）。同病不同屏，且有像素基线覆盖，单开一票扫。
 3. **r2 剩下的未开票发现**（`.issues/sweep/2026-08-02-r2.md`，按屏分好了）。
@@ -87,7 +89,7 @@
 
 ## Blockers / Risks
 
-- **后端未重建**（见 What's Next 第 1 条）——这是本轮唯一的硬账。
+- 无硬 blocker。前后端已同批上生产并各自核到产物层。
 - 🔴 **`pkill -f "uvicorn service.app"` 在本机 Git Bash 下不生效，而且不报错。**
   本轮改完后端重启了一次，`ps` 只看到一个 python、日志也在正常收请求，跑门却仍拿到旧行为——
   排查了半天才发现旧进程根本没被杀掉。判断方法（比看 ps 靠谱）：发一个非法 locale，

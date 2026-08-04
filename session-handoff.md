@@ -20,42 +20,32 @@ PRD 的 11 条决议全部落地，另外顺手挖出并修掉三个真缺陷 + 
 
 ---
 
-## 🔴 收尾状态：**后端还没重建**（这是本棒唯一的硬账，下一棒第一件事）
+## 收尾状态：**前后端已同批上生产，两端各自核到产物层**
 
-前端 push 到 main 会被 Vercel 自动部署；**后端是手动换容器的，本棒改了后端**，
-所以线上会短暂处于「新前端 + 旧后端」。
+[部署回执](.issues/locale-contract-0803/receipt-deploy-0804.md)。ADR-0033 是一刀切、不做新旧并存，
+所以两半必须同批上——「新前端 + 旧后端」不崩，但 4 条带阈值的规则标题里占位符会渲染成空，
+且 `/advise` 的 locale 被忽略（＝回到"正文语言靠涌现"）。
 
-**这个组合坏成什么样（已逐条推过，不是猜的）**：不崩、不白屏，唯一可见的退化是
-`R-BLOCKER-STACK` / `R-DUE-SOON` / `R-PROGRESS-LOW` / `R-DUE-VS-PROGRESS` 这 4 条规则的标题里
-阈值占位符**渲染成空**（"「」天内到期"），因为旧后端不发 `matched_rules[].params`。
-其余全部兼容：`grade` / `rule_id` / `hit.grade` 旧后端都发；旧后端多发的 `grade_label`、
-中文 `reason` 前端一律不读（`reason_source==='rule'` 时走前端拼句）。
-`/advise` 的 locale 会被旧后端忽略——即回到本票之前的"正文语言靠涌现"。
+- **前端**：`c94a7e7..89b36e4` push → Vercel 自动构建。线上 `assets/index-CqAuE9zj.js` 里
+  `commit:"89b36e4f…"` 与本地 HEAD **逐字相等**；8 条判读文案（`By the rules this is` /
+  `Clear to proceed` / `Straight from your files` / `R-BLOCKER-STACK` / `按规则判为` / `看的字段` …）
+  逐条核到线上产物。
+- **后端**：`avery-agent:main-20260804-153841`，从 `/home/admin/build-zh` @ `89b36e4` 构建
+  （🔴 从 main，不挑子集）。8138 隔离预检（只走不写库的路径）→ `swap3.sh` 换容器 →
+  **SWAP SUCCESS**，健康闸 1×2s 过。预检容器已 `docker rm -f`。
+  回滚梯：`sudo docker rm -f avery && sudo docker rename avery-prev-20260804-153841 avery && sudo docker start avery`
+- 🔴 **「镜像里是不是新代码」是用容器内的纯 Python 断言验的，没打 `/advise`** ——
+  生产是真 brain（minimax），那是一次**真花钱**的调用。断言：`locale` 在 `AdviseRequest` 上 ·
+  `normalize_locale('zh-CN')` 回落并告警 · 载荷里 `grade_label` 已消失 · 命中键带 `params` ·
+  规则版 `reason` 为空串。
+- **本次部署全程零写库**（没有任何上传 / `/advise`）。
+- 一并带上生产的还有 4 条不属于本票、此前积压在 main 上的后端提交
+  （`1ce41aa` seam 清理 · `3d4c523` brain 超时告警 · 三条纯文档 + ADR 索引），
+  逐条列在部署回执里。
 
-**重建怎么做**（沿用 0802 那套，一步不删）：
-
-```bash
-ssh -i ~/.ssh/id_ed25519 admin@8.211.28.11
-# 构建目录 /home/admin/build-zh，git reset --hard origin/main（🔴 一律从 main 构建，不挑子集）
-# 镜像 avery-agent:main-<ts>；env 从在跑容器提取（只取 MINIMAX_/DASHSCOPE_/DEEPSEEK_/AVERY_/SUPABASE_ 前缀）
-# 🔴 隔离 8138 预检：只走不写库的路径（/health + /demo/status），预检容器连的是生产库
-# 换容器用 /tmp/swap3.sh（不是 swap2——swap2 会丢 demo-seed 挂载）
-# 预检容器跑完必须 docker rm -f；回滚梯记进回执
-```
-现跑镜像 = `avery-agent:main-20260802-113944`（= `0884d49`），回滚梯在它旁边。
-
-**换完之后加验一条本票专属的**（不需要写库）：
-
-```bash
-curl -s -X POST https://avery.dannyqian.com/advise -H 'Content-Type: application/json' \
-  -d '{"situation":"delivery is slipping, how do I talk to the lead?","stream":false,"locale":"zh"}' \
-  | python -c "import sys,json;print(json.load(sys.stdin)['advice']['summary'][:60])"
-```
-真 brain（minimax）在线时这句该回**中文**。回英文 = 语言指令没进 prompt 或镜像没换成功。
-另：发一个非法 locale（`"locale":"zh-CN"`）到日志里找 `unsupported locale` 那条 warning——
-**这是判断"跑的是不是新代码"最快的一招**（见下面的环境坑）。
-
----
+**唯一没验的一段**：真 brain 的 `/advise` 端到端——即「真模型听不听 prompt 里那句语言指令」。
+链路本身已在本机 mock 上跑通（门 48/0），prompt 那一段有 pytest 逐条断言。
+这一跑要花钱，命令写在部署回执末尾，归 Danny 拍板。
 
 ## 这一棒改了什么（三提交，逐条可回滚）
 
@@ -113,7 +103,9 @@ cd /d/avery/eval-harness && AVERY_BRAIN=mock AVERY_EXTRACTOR=heuristic AVERY_EMB
 
 # 🎯 下一棒的活（按优先级）
 
-1. **后端重建上线**（见上面那节，含本票专属的验收 curl）。这是唯一的硬账。
+1. **真 brain 的 `/advise` 生产端到端**（唯一没验的一段，见上面收尾状态那节）：
+   它回答的是「真模型听不听 prompt 里那句语言指令」，不是「代码通没通」（后者门和 pytest 已答）。
+   要花一次真调用，命令在部署回执末尾，**归 Danny 拍板**。
 2. **`{'：'}` 写死在 JSX 里的还剩 6 处**：`grep -rn "{'：'}" src/` →
    DetailOverlay ×4 / ProjectsScreen / TeamScreen。与本票同病（英文壳里的 CJK 标点），
    但都在**卡片详情面**不在判读链路，而且有像素基线覆盖（改宽度要重冻）。单开一票扫。
