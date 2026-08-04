@@ -70,9 +70,14 @@ Usage 表的 10 phases / 8 tabs 改真值（11 相位 A–K / 9 tabs），补回
 
 ## What's Next（按优先级）
 
-1. **B 档（要先 grill 出口径，别顺手改）**：EN 用户拿到中英夹杂的核心决策面板
-   （根因 `decision_grading.py` 三处硬编码 `LABEL_ZH`），与「`AdviseRequest` 根本没有 locale 字段」
-   是同源的一张票，应合并成一票先 grill 出 PRD 再换 session 开发。
+1. **#38 locale 契约（判读链路双语对等）—— PRD 已 grill 完，下一棒可直接开工**。
+   触发：原本不打算在境内找用户，现在要和三亚一家公司对接，中文第一次是真实客户需求。
+   PRD `.issues/locale-contract-0803/prd.md`（11 条决议逐条拍板）·
+   [ADR-0033](docs/adr/0033-locale-is-a-request-field-backend-stops-emitting-prose.md)
+   （含**反转**「前端不硬编码档位词」那条旧决策）· CONTEXT.md 新增「Language surface」词条。
+   🔴 开工前必读 PRD §0：票面说的"三处 `LABEL_ZH`"严重低估——后端 396 处中文字面量里，
+   **输入侧检测词表/正则（extract/redline/granularity）一个字都不许动**，
+   那是读中文文档 + 守红线的匹配模式，顺手双语化＝当场砸掉解析与红线。
 2. **r2 剩下的未开票发现**（原 17 条，本轮消化掉布局/文案类里的三条 hard-contract；
    其余在 `.issues/sweep/2026-08-02-r2.md`，按屏分好了）。
 3. **gate-run 迁移继续**：已迁 9 道（第一波 3 + 第二波 5 + flow-gap-phases 生来就用）。
