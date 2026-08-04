@@ -521,6 +521,12 @@
       "status": "done",
       "evidence": "补账行（2026-08-02，progress.md:31 记账：feature_list.json 此前缺这一战役行）。指针：.issues/output-form-0729/（kickoff.md、receipt.md）+ commit 08c82c3（01 画板退役）、c37b777（02 砍契约样板）、618c991（03 分流短答）。不编 evidence 散文，细节以对应 commit diff 与 receipt.md 为准。",
       "date": "2026-07-29"
+    },
+    {
+      "id": "feat-096",
+      "name": "locale 契约 · 判读链路双语对等（#38 / ADR-0033）",
+      "status": "done",
+      "evidence_ref": "feature_archive.json#feat-096"
     }
   ]
 }

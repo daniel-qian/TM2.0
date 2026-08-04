@@ -1,156 +1,129 @@
-# ⟳ 2026-08-03 · AFK 一口气吃完交接 A 档（★最新，从这里接）
+# ⟳ 2026-08-04 · #38 locale 契约（判读链路双语对等）（★最新，从这里接）
 
 > 接续只靠本文件 + `progress.md` + `feature_list.json` + git，不回放聊天。
 > 更早的逐棒 handoff 已从本文件清出——考古用 `git log --follow session-handoff.md`。
 
-**一句话**：上一棒把 9 条按「能不能 AFK」分了三档，本棒把 **A 档整档吃完**（5→4→7→1，条目 2 的
-布局/文案类被 #34/#36/#37 覆盖），外加两个顺手挖出的真缺陷。`5e18e69 → a1f2652` 共 7 提交，
-全电池 **30/30**，i18n 孤儿 **0**。
+**一句话**：把判读链路的语言从"涌现"变成**契约里的一个字段**——后端从此一句人话都不发，
+句子全部由前端按 locale 渲染，并立了一道 48 判据的双语门看着这条链。
+PRD 的 11 条决议全部落地，另外顺手挖出并修掉三个真缺陷 + 补了英文侧红线的四个漏。
 
-## 收尾状态：已 push，三张票已关
+- **票**：[#38](https://github.com/daniel-qian/avery/issues/38) · **PRD**：`.issues/locale-contract-0803/prd.md`
+- **ADR**：[ADR-0033](docs/adr/0033-locale-is-a-request-field-backend-stops-emitting-prose.md)
+- **回执（逐条对着 PRD §3 写的，细节看这份）**：`.issues/locale-contract-0803/receipt.md`
 
-`main` 与 `origin/main` 已推平（`5e18e69 → 21cff90`，8 提交），工作树干净、HEAD 在 main。
-`closes` 生效，**#34 / #36 / #37 三张 issue 均已 CLOSED**（已复核）。
+## 账实
 
-**后端没动**——本棒一行后端代码都没改（改的是 src/ 前端、eval-harness/tools/ 门、scripts/、文档），
-所以**不需要重建容器**，回滚梯与生产镜像维持上一版不变。
-**前端** Vercel 自动跟 origin/main 部署。
-
-### 生产核验（核到产物层，不是只看 200）
-
-- `averylite.dannyqian.com` 的 `index-*.js` 里 `commit:"21cff904a855e158de8cd045f97d3307ea0cb061"`
-  —— 与本地 HEAD **逐字相等**。
-- 三条修复在线上 CSS 里逐条验到：
-  · 让位带 `--lite2-bottom-band` 规则在场；
-  · `upload-error-label{color:var(--terracotta-text, var(--terracotta))}`（AA 修复，覆盖基线那条装饰色）；
-  · 胶囊 `calc(var(--lite2-footer-h, 56px) + 12px)`（让位实测页脚高度）。
+- 全电池 **31/31**（A 25 / B 3 / C 3）——新增 A 区 `verify-locale-parity`（**48 PASS · 0 FAIL**）。
+- 后端 pytest **3513 passed**（新增 39 条 + 红线补漏 14 条）。
+- 像素基线 **未动**（本轮没改布局，B 区 4/4 直接绿）。
+- HEAD 在 `main`，C 区跑完查过没 detach。
 
 ---
 
-## 本棒改了什么（7 提交，逐条可回滚）
+## 🔴 收尾状态：**后端还没重建**（这是本棒唯一的硬账，下一棒第一件事）
+
+前端 push 到 main 会被 Vercel 自动部署；**后端是手动换容器的，本棒改了后端**，
+所以线上会短暂处于「新前端 + 旧后端」。
+
+**这个组合坏成什么样（已逐条推过，不是猜的）**：不崩、不白屏，唯一可见的退化是
+`R-BLOCKER-STACK` / `R-DUE-SOON` / `R-PROGRESS-LOW` / `R-DUE-VS-PROGRESS` 这 4 条规则的标题里
+阈值占位符**渲染成空**（"「」天内到期"），因为旧后端不发 `matched_rules[].params`。
+其余全部兼容：`grade` / `rule_id` / `hit.grade` 旧后端都发；旧后端多发的 `grade_label`、
+中文 `reason` 前端一律不读（`reason_source==='rule'` 时走前端拼句）。
+`/advise` 的 locale 会被旧后端忽略——即回到本票之前的"正文语言靠涌现"。
+
+**重建怎么做**（沿用 0802 那套，一步不删）：
+
+```bash
+ssh -i ~/.ssh/id_ed25519 admin@8.211.28.11
+# 构建目录 /home/admin/build-zh，git reset --hard origin/main（🔴 一律从 main 构建，不挑子集）
+# 镜像 avery-agent:main-<ts>；env 从在跑容器提取（只取 MINIMAX_/DASHSCOPE_/DEEPSEEK_/AVERY_/SUPABASE_ 前缀）
+# 🔴 隔离 8138 预检：只走不写库的路径（/health + /demo/status），预检容器连的是生产库
+# 换容器用 /tmp/swap3.sh（不是 swap2——swap2 会丢 demo-seed 挂载）
+# 预检容器跑完必须 docker rm -f；回滚梯记进回执
+```
+现跑镜像 = `avery-agent:main-20260802-113944`（= `0884d49`），回滚梯在它旁边。
+
+**换完之后加验一条本票专属的**（不需要写库）：
+
+```bash
+curl -s -X POST https://avery.dannyqian.com/advise -H 'Content-Type: application/json' \
+  -d '{"situation":"delivery is slipping, how do I talk to the lead?","stream":false,"locale":"zh"}' \
+  | python -c "import sys,json;print(json.load(sys.stdin)['advice']['summary'][:60])"
+```
+真 brain（minimax）在线时这句该回**中文**。回英文 = 语言指令没进 prompt 或镜像没换成功。
+另：发一个非法 locale（`"locale":"zh-CN"`）到日志里找 `unsupported locale` 那条 warning——
+**这是判断"跑的是不是新代码"最快的一招**（见下面的环境坑）。
+
+---
+
+## 这一棒改了什么（三提交，逐条可回滚）
 
 | commit | 做了什么 |
 |---|---|
-| `18c8e7a` | gate-run 迁移第二波 5 道，迁前迁后输出**逐字节相同** |
-| `b359f2e` | ROSTER 三道门 `backend:false` 是错的——它们真上传 |
-| `159ed4c` | 上传错误态标签破 AA（4.33/3.85）+ 给门补错误态采样面 |
-| `cdeca46` | snippet/gate.md 的「零后端·离线 stub」假前提 + 拆掉会漂的行号列 |
-| `0300ce4` | #37 详情浮层假溯源 → 删，并立门 |
-| `5debbe1` | #34/#36 屏底家具让位 → 抬滚动口边界 + 胶囊让位实测页脚高度，并立门 |
-| `a1f2652` | i18n 孤儿键 12 → 0（考古 + 对抗复核后才删） |
+| 契约切换 | 后端停发人话 + locale 进契约 + LLM 语言指令 + 前端 i18n 表 + 4 道门改形 + 新门 |
+| 红线补漏 | 英文侧「打分/排名」四个漏 + 6+8 双向回归测试 |
+| 收尾 | progress / feature_list(feat-096) / archive / handoff / 回执 |
 
-## 🔴 这一棒学到的四条（会反复咬人，写门/改门前先看）
+细节全在回执里，这里只留**下一棒会踩的东西**。
 
-1. **「加一段注释」就能把一批 file:line 引用全顶漂，而且不会有任何东西变红。**
-   我给 snippet 头加了一段 READ FIRST，一次顶漂了 gate.md 相位表整整一列行号 + 另外七处
-   `头注释 NN,实现自带注释 NNNN-NNNN`。已全部改成函数名指路。
-   **今后别在跨文件引用里写行号**——写函数名/`grep -n` 命令。（gate-run.mjs、run-battery.mjs
-   头注释里各栽过一次，这是第三次。）
+## 🔴 这一棒学到的三条（写门/改后端前先看）
 
-2. **注释里的「本区共 N 道」每加一道门就烂一次。** run-battery.mjs 那行长期写 17 而实际 20，
-   之后 21、22、23……本棒直接把数字删了，改成写自查命令 `--only=A --dry-run`。
-   同族的还有 `i18n-orphans.mjs` 的「叶子键不得少于 880」守卫——那个守卫**每次合法删键都会
-   失效一次**，本棒被它拦下过；已改成带账本 + 报错文案直接问「是你有意删的还是 walker 瞎了」。
+1. **一把太宽的尺子可以让一条正确的判据对着真违规全绿。**
+   新门判据 ④「引文仍是中文」第一版用的是**宽口径 CJK 正则**（含全角标点）。born-red 探针
+   把 evidence 里的汉字全翻成英文之后，剩下的那个**全角逗号**照样让判据通过——屏幕上摆着的
+   「文档原文」已经一个字都不是原文，门却说验过了。
+   定稿：**拆成两把尺子**（壳残留用宽 CJK，必须逮得住全角冒号；引文用只认汉字的 `HAN`）
+   ＋主判据换成**「每行引文逐字出自上传语料」**——"两遍逐字相同"只逮得住"只在英文界面翻"
+   这一种写法，一个对两种语言都生效的翻译会让两边仍然相等。
 
-3. **一道门可以从两个方向撒谎，我两个方向都撞了一次（同一道门，一小时内）。**
-   写 #34/#36 那道门时：第一版判据太宽（把 sticky 顶栏遮挡滚动内容也判红）→ **假红**，
-   而假红门的下场是被人关掉；改成"可达性"（滚到视口中部再看）后太松 → **对着已知有 bug 的
-   构建全绿**，比没有门更坏。
-   定稿判据：当前静止滚动位 + 只把「劫持者是屏底锚定 fixed/sticky 家具」判红（靠计算样式判断，
-   不写 class 黑名单）。**改判据之后必须两头都验：born-red 要红、born-green 要绿，缺一头都不算数。**
+2. **自证判据这一轮兑现了三次，三次都是"判据够不着"，主判据一次都没吭声。**
+   ① advise 留在 home 屏问、而判读卡只在 room 屏渲染 → 采样为空、`[].every()` 恒真；
+   ② 只展开第一张决策卡 → 采样面从 19 行缩到 4 行，覆盖面缩水而不会有任何提示；
+   ③ 后端 pytest 里取错了响应键（`payload` 而实际是 `advice`）→ 取到空串。
+   三次都是"先断非空/先断真渲染"那一句先红。**新写的每一条语言判据前面都配了一条自证。**
 
-4. **`getBoundingClientRect` 不管裁剪。** 修完 #34/#36 之后门还在红，红的却是**已经被
-   overflow 裁掉、根本没画出来**的按钮——它的 rect 照样报 y=714 这种"看起来在屏底"的坐标。
-   凡是用 rect + elementFromPoint 的门，审之前必须先剔除被祖先 overflow 裁掉的控件。
+3. **文案搬家会顺手把守它的测试变成恒真，而且不报错。**
+   `_compose_reason` 搬到前端之后，后端那两条红线/禁词测试跑的是**空串**——`'' not in ...` 恒真。
+   处理方式是**跟着搬**（`tests/test_decision_i18n_contract.py` 用 Python 读 TS 文案表，
+   把同一张禁词表和同一个 `redline.validate` 对准前端那几十条真文案），原地各留一条哨兵。
+   🔴 那个解析器**故意脆**：解析不出预期条数就直接失败，绝不返回空字典让下面几十条断言"全绿"。
 
-## 判据够不着 ≠ 判据写错了（本棒两次都栽在这上面，值得单列）
+## 环境坑（本棒真被咬了一次，排查了半天）
 
-- **AA 对比度**：07-20 那波清扫漏了 `.upload-error-label`，不是眼花——门走的是后端在场的顺路，
-  **错误态根本不渲染**，那一整族文本从来没进过采样面。我是把 8137 停掉核别的事时偶然逼出来的。
-- **#34/#36**：上一轮 46 条走查扫不到，因为数据态当时结构性不可达（`?transport=stub` 被 DEV 闸 DCE），
-  而这两个组件在 `contextId=null` 时压根不挂载。
+🔴 **`pkill -f "uvicorn service.app"` 在本机 Git Bash 下不生效，而且不报错。**
+改完后端"重启"了一次，`ps` 只看到一个 python、日志也在正常收请求，跑门却仍拿到旧行为——
+旧进程根本没被杀掉，服务的是改动前的代码。**别信 ps，信行为**：发一个非法 locale，
+看日志里有没有 `unsupported locale` 那条 warning，没有就是旧代码。可靠杀法：
 
-→ 今后写门先问一句：**这条判据能不能采到样？** 采不到样的判据是恒绿的，而那种绿最骗人。
-本棒新加的两道门都带了**自证判据**（"工作区文件清单非空"/"浮层真开着且渲染了本卡内容"/
-"这一屏有可审控件"），专门防这个。
-
----
-
-# 🎯 下一棒（AFK）：#38 locale 契约 —— PRD 已 grill 完，可直接开工
-
-B 档本棒**已经 grill 完并落成文档**，不用再问 Danny，直接进开发。
-
-- **票**：[#38](https://github.com/daniel-qian/avery/issues/38)（`ready-for-agent`）
-- **PRD**：`.issues/locale-contract-0803/prd.md` —— 11 条决议逐条拍板，含范围边界与验收
-- **ADR**：[ADR-0033](docs/adr/0033-locale-is-a-request-field-backend-stops-emitting-prose.md)
-  —— 架构决议 + **它反转了一条既有决策**（见下）
-- **领域词**：CONTEXT.md 新增「Language surface（语言面）」条目
-
-## 开工前必须先读懂这三件事，否则会做错
-
-1. **票面严重低估范围。** 这不是"改三处 `LABEL_ZH`"。后端有 **396 处中文字符串字面量**，
-   分成**性质相反**的两类：输出侧文案（要改）vs **输入侧检测词表/正则**（`extract.py` 93、
-   `redline.py` 75、`granularity.py` 40……**一个字都不许动**）。
-   🔴 **最容易犯的错**：看到 `extract.py` 一排中文就顺手双语化。那是用来**读中文文档**的
-   匹配模式——客户文档是中文，词表就必须是中文，**即使界面切英文**。动了＝解析和红线当场瞎掉。
-   「文档语言」≠「界面语言」。
-
-2. **语言有四个互相独立的面**（界面壳 / 后端派生文案 / LLM 正文 / 引文），今天可以各说各话。
-   说"把产品翻译成英文"这句话之前先说清是哪个面。详见 CONTEXT.md 那条新词。
-
-3. **LLM 正文语言今天完全不受控**——prompt 里没有任何语言指令，输出语言是涌现的。
-   模板改得再对，正文照样可能不听话。所以 D3（locale 进 prompt）和验收判据③是配套的。
-
-## 已拍板、别再重开的决议（全文见 PRD §2）
-
-真双语对等 · locale 沿用前端解析链随请求下传（optional，缺省 `en`，非法值回落 en + 告警）·
-locale 写进 prompt · **引文永不翻译** · **后端不再产出人话**（只回机器键 + 结构化字段）·
-契约**一刀切换**不并存 · 输入侧词表不动 · 问卷 H5 文案单开一票。
-
-🔴 **ADR-0033 反转了一条既有决策**：`homeDerive.ts` / `HomeScreen.tsx` 里写着
-「前端不硬编码三个档位词，一律取后端 `grade_label`」。新方向要求前端出词。
-**保用意换载体**——那条规矩要的是"单一事实源"，不是"必须后端发"；改成后端发机器键、
-前端查唯一 i18n 表，事实源仍只有一份。看到那两条旧注释别以为是自己搞错了，
-连注释一起换掉，指向 ADR-0033。
-
-## 第一步就跑这个（一刀切的真实工作量清单）
-
-```bash
-grep -rn "grade_label" src/ eval-harness/ --include=*.ts --include=*.tsx --include=*.mjs --include=*.py
+```powershell
+Get-CimInstance Win32_Process -Filter "Name='python.exe'" | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
 ```
 
-它会列出所有必须**同批改完**的消费方：前端 3 处、**4 道门**（cr-alignment / home-skeleton /
-topbar-clearance / capture-align-board）、`tests/test_decision_grading.py`。
-少改一处，门会在最后一刻红给你看。
+其余环境照旧（🔴 后端三件套缺一就真出网烧钱，seed 必须**绝对路径**）：
 
-## 验收（PRD §4，别打折）
-
-新门 `verify-locale-parity.mjs`（A 区、🔴 上传型、**绝不能排在 C 区之后**）：
-同一份中文语料跑 zh/en 两遍，四条判据 —— ①界面壳无异语残留 ②后端派生文案语言正确
-③**LLM 正文语言 == 请求 locale** ④**evidence 仍是中文原样**。
-🔴 born-red **两头都要验**（本棒实测：一道门能从"太宽＝假红"和"太松＝对着坏构建全绿"
-两个方向各撒一次谎）；🔴 带**自证判据**防空跑；🔴 语料必须含真中文字节。
+```bash
+cd /d/avery/eval-harness && AVERY_BRAIN=mock AVERY_EXTRACTOR=heuristic AVERY_EMBEDDINGS=keyword AVERY_DEMO_SEED_DIR="D:/avery/eval-harness/tests/fixtures/demo-seed" python -m uvicorn service.app:app --host 127.0.0.1 --port 8137
+```
+前端：`tsc -b` → `vite build --mode development` → `vite preview --host 127.0.0.1 --port 5173`
+（`--mode development` 与 `--host 127.0.0.1` 都不能省）。门一律从**仓库根**跑
+（playwright 从 `node_modules` 解析，`cd eval-harness` 之后 `node eval-harness/tools/...` 会双拼路径）。
 
 ---
 
-## 其余待办
+# 🎯 下一棒的活（按优先级）
 
-- **C 档仍归 Danny，别自己开工**：真机覆盖（只能他做）、真 brain 分流取证（真花钱，
-  要先定"上限几次/打谁/超了就停"）、#30 已拍板不做。
-- 想穿插低风险活：gate-run 迁移续做（先扩 makeRec 才能吃 aria-zh/cr-alignment）、
-  r2 剩余未开票发现里的非布局类。
-
-## 环境（收尾态）
-
-- 工作树干净，HEAD 在 `main`（C 区跑完查过没 detach）。
-- **mock 后端 8137 与 preview 5173 仍在跑**。后端起法（🔴 三件套缺一就真出网烧钱，
-  且 seed 目录**必须绝对路径**——相对路径会被解成 `eval-harness/eval-harness/...` 而静默失效，
-  症状是 `/demo/status` 报 `available:false`、onboard-gate 一条 FAIL）：
-
-  ```bash
-  cd /d/avery/eval-harness && AVERY_BRAIN=mock AVERY_EXTRACTOR=heuristic AVERY_EMBEDDINGS=keyword AVERY_DEMO_SEED_DIR="D:/avery/eval-harness/tests/fixtures/demo-seed" python -m uvicorn service.app:app --host 127.0.0.1 --port 8137
-  ```
-
-- `dist/` 是 `vite build --mode development` 的健康产物（apiBase 本地 8137，已验到 bundle 里）。
-  碰上传路径前仍要先验一次 apiBase。
-- 像素基线本轮重冻过（漂 4 张，都是 home，已人眼开图复核）。
+1. **后端重建上线**（见上面那节，含本票专属的验收 curl）。这是唯一的硬账。
+2. **`{'：'}` 写死在 JSX 里的还剩 6 处**：`grep -rn "{'：'}" src/` →
+   DetailOverlay ×4 / ProjectsScreen / TeamScreen。与本票同病（英文壳里的 CJK 标点），
+   但都在**卡片详情面**不在判读链路，而且有像素基线覆盖（改宽度要重冻）。单开一票扫。
+3. **`R-NO-EVIDENCE` / `R-UNCLASSIFIED` 现在没有 evidence 行**——有意为之（证据面按定义为空），
+   但界面上这两条规则只剩标题和依据，看起来比别的规则"薄"。要不要补一句
+   「这条规则本来就没有可引的原文」是文案题不是契约题，留给下一轮 UI 走查判。
+4. **r2 剩下的未开票发现**（`.issues/sweep/2026-08-02-r2.md`，按屏分好了）。
+5. **gate-run 迁移继续**：`verify-aria-zh` / `verify-cr-alignment` 仍未迁（形状不兼容，
+   要先扩 makeRec：4 参数 future 语义 / 多累积数组模型）。**已迁/未迁一律用自查命令数。**
+6. **C 档仍归 Danny，别自己开工**：真机覆盖（只能他做）、真 brain 分流取证（真花钱，要先定
+   "上限几次/打谁/超了就停"）。
+   ⚠ 本票的语言指令**只在 mock 上验过链路、在 prompt 上验过字符串**；
+   「真模型是否真的听那句话」要等真 brain 取证那一步才能回答——门的判据③盯的是链路不是模型。
