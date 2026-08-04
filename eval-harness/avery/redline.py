@@ -353,7 +353,14 @@ _ALWAYS_SCORE = re.compile(
     r"|\bgive\s+(?:her|him|them)\s+a\s+red\b"
     r"|\bnps\b[^.\n]{0,24}\bon\s+(?:her|him|them)\b"
     r"|\bfailing\s+grade\b|\bgrade[\s-]?point\b"
-    r"|\bpeg(?:ged)?\s+(?:her|him|them|\w+)\s+(?:\w+\s+){0,2}at\s+(?:a\s+)?(?:one|two|three|four|five|six|seven|eight|nine|ten|\d)\b",
+    r"|\bpeg(?:ged)?\s+(?:her|him|them|\w+)\s+(?:\w+\s+){0,2}at\s+(?:a\s+)?(?:one|two|three|four|five|six|seven|eight|nine|ten|\d)\b"
+    # 票 #38 抽查补漏（PRD §3.3）：`(?:star|impact|performance) score` 是白名单式的三个词，
+    # 换个维度就绕过去了 ——"her ownership score dropped to 3" 此前全绿。
+    # 收法：人称所有格 + <维度> score + **数字落点**（有分数才算打分）。
+    # 🔴 ADR-0016 的不对称必须守住：公司/工作产物的量化是合法的（"our audit score was 9/10"
+    # 一直是过的，它用的是 our，本来就不落这一条）。再排掉一串明显属于工作面的名词，
+    # 免得 "their compliance score dropped to 3" 这种公司指标被误伤成人身评分。
+    r"|\b(?:her|his|their)\s+(?!audit|survey|nps|csat|test|quiz|exam|security|compliance|quality|health|uptime)\w+\s+score\s+(?:is|was|dropped|fell|slipped|rose|climbed|went)\s+(?:down\s+)?(?:to\s+)?(?:a\s+)?(?:one|two|three|four|five|six|seven|eight|nine|ten|\d)\b",
     re.I,
 )
 
@@ -365,7 +372,11 @@ _ALWAYS_LETTER = re.compile(
     r"|\b[ABCDF][- ]grade\s+(?:hire|employee|performer|talent|report|worker)\b"
     r"|\b[ABCDF][\s-]?(?:minus|plus)\b"
     r"|\bgentleman'?s\s+[ABCDF]\b|\b[ABCDF]\s+student\b"
-    r"|\bpeg(?:ged)?\s+(?:her|him|them)\s+at\s+(?:a\s+)?[ABCDF]\b",
+    r"|\bpeg(?:ged)?\s+(?:her|him|them)\s+at\s+(?:a\s+)?[ABCDF]\b"
+    # 票 #38 抽查补漏（PRD §3.3）：字母**量表**写法此前没人认——"grade each report A through F"
+    # 全绿（这里的 report 是"直接下属"，不是文档）。要求同句里有 grade 类动词，
+    # 所以"the postmortem scored A to F on rework"这种讲产物的句子不会被误伤。
+    r"|\b[Gg]rad(?:e|es|ed|ing)\b[^.\n]{0,40}\b[ABCDF]\s+(?:through|to)\s+[ABCDF]\b",
 )
 
 # "her grade is a C" / "graded a C" — person-anchored, so an ARTIFACT grade ("the postmortem
@@ -382,8 +393,12 @@ _ALWAYS_RISK = re.compile(
 _ALWAYS_TIER = re.compile(
     r"\b(?:low|under|poor|high|top|bottom|strong|weak)[\s-]?performer\b"
     r"|\b(?:low|bottom|high|top)[\s-]?tier\s+(?:performer|talent|employee|engineer|hire|player)\b"
-    r"|\bweak\s+link\b|\bdead\s+weight\b"
+    r"|\bweak(?:est)?\s+link\b|\bdead\s+weight\b"
     r"|\bstack[\s-]?rank\w*\b|\bdead\s+last\b"
+    # 票 #38 抽查补漏（PRD §3.3）：排名动词此前**只认垫底类宾语**（下一行），于是最直白的
+    # 那句 "rank her against the rest of the team" 整句漏网——它没说她垫底，它要的就是排名
+    # 本身，而"不给人排名"这条线禁的正是这个动作。比较介词一律收。
+    r"|\brank(?:s|ed|ing)?\s+(?:her|him|them)\s+(?:against|among|amongst|versus|vs\.?|relative\s+to)\b"
     r"|\brank(?:s|ed|ing)?\s+(?:her|him|them)\s+(?:dead\s+|near\s+the\s+bottom|bottom|last)\b"
     r"|\bbottom\s+(?:bucket|of\s+the\s+stack)\b"
     r"|\bproblem\s+(?:employee|hire|child|person|report)\b",

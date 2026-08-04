@@ -226,3 +226,54 @@ def test_uncited_number_is_secondary_not_gate():
     ok = redline.validate("She missed 40% of standups.",
                           cited_snippets=["she missed 40% of standups last month"])
     assert not ok.secondary, "a cited number should clear the secondary flag"
+
+
+# --- 票 #38 · 英文侧「打分/排名」覆盖抽查补漏（PRD §3.3）--------------------------------------
+#
+# ADR-0033 的 PRD 明写了一句开工自查：中文侧做过 round-2/3/4 的多层调和，英文侧没那么多层，
+# 「抽查一下英文侧对『打分/排名』的覆盖，不足就补」。2026-08-04 用 18 句常见写法实测：
+# 拦住 14 句，漏 4 句、零误伤。四句都不是边角写法，是**最直白的那种**：
+#
+#   Rank her against the rest of the team.   ← 排名动词此前只认"垫底类"宾语；这句要的就是排名本身
+#   He is our weakest link on the team.      ← 词表写的是 weak link，最高级就绕过去了
+#   Grade each report A through F.           ← 字母**量表**没人认（report=直接下属，不是文档）
+#   Her ownership score dropped to 3.        ← `<维度> score` 是白名单式三个词，换个维度即穿透
+#
+# 🔴 这四条是**输出侧**红线，和 ADR-0033 §5 说的"输入侧检测词表一个字不许动"是两回事，别搞混：
+# 那说的是 extract/granularity 里用来**读中文文档**的匹配模式。
+#
+# 每条补丁都配一句"必须仍然通过"的对照——红线的两种失败方式代价不对称（漏＝人身评分静默
+# 上屏；误伤＝一句正当建议被拒，很吵但看得见），但误伤照样会让人把闸关掉，所以两头都钉住。
+
+_EN_MUST_HARD_FAIL = [
+    "Rank her against the rest of the team.",
+    "Rank them among their peers by output.",
+    "He is our weakest link on the team.",
+    "Grade each report A through F this quarter.",
+    "Her ownership score dropped to 3.",
+    "His collaboration score fell to 2.",
+]
+
+_EN_MUST_STILL_PASS = [
+    # ADR-0016 的不对称：公司 / 工作产物的量化是**合法**的，一个都不许被这四条补丁带走。
+    "Our audit score was 9 out of 10.",
+    "Their compliance score dropped to 3 after the review.",
+    "Their uptime score went to 4 nines last month.",
+    "Team throughput ranks bottom 20% against last quarter.",
+    "Rank the projects against each other by deadline risk.",
+    "The postmortem is graded on rework, not on people.",
+    "She raised the weak point in the handover process.",
+    "Do not score her; talk to her instead.",
+]
+
+
+@pytest.mark.parametrize("text", _EN_MUST_HARD_FAIL)
+def test_en_scoring_and_ranking_gaps_are_closed(text):
+    res = redline.validate(text, cited_snippets=[])
+    assert not res.passed, f"英文侧漏了一句人身打分/排名：{text!r}"
+
+
+@pytest.mark.parametrize("text", _EN_MUST_STILL_PASS)
+def test_en_gap_patches_do_not_touch_work_or_company_quantification(text):
+    res = redline.validate(text, cited_snippets=[])
+    assert res.passed, f"补漏把一句合法的工作/公司量化误伤了：{text!r} / {res.summary()}"
