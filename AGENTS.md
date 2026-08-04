@@ -75,7 +75,11 @@ Before writing code:
 
 1. `./init.sh` 通过，输出摘要记入 `feature_list.json` 的 `evidence`。
 2. 行为经 `npm run dev` 目测确认（看了什么、结果如何，写进 evidence 或 `progress.md`）。
-3. Venus-facing 新 copy 由 agent 直接定稿并上线（EN 自写；中文走 M3，见记忆 [[chinese-copy-via-m3]]）——不再标 `待 Danny 审字`、不阻塞。定稿后 `progress.md` 记一行，Danny 事后可抽查。
+3. Venus-facing 新 copy 由 agent 直接定稿并上线——不再标 `待 Danny 审字`、不阻塞。定稿后 `progress.md` 记一行，Danny 事后可抽查。
+   **中英文都由当前 session 自己写**（2026-08-03 改口径）。~~中文走 M3~~ 已废止：当初绕道
+   MiniMax/DeepSeek 是为了躲开 SaaS 腔、写出"聪明"的文案，实测**效果反而更差**。
+   现在的口径是：**直接写大白话，SaaS 感可以接受**——把话说清楚比把话说巧重要。
+   红线不变（ADR-0018：不给人打分/不替客户断言/可溯源），那是内容约束，不是文风约束。
 4. `progress.md` 已更新。
 
 ## End of Session
