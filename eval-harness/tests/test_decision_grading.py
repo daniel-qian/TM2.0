@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import date
 from pathlib import Path
 
@@ -99,12 +100,19 @@ def test_ordering_is_severity_then_title():
 def test_every_decision_names_its_rules():
     """🔴 验收第二条：每条决策都能展开看到命中了哪条规则——matched_rules 永不为空，
     且每条都是规则表里真实存在的编号，带原文证据。"""
+    from avery.decision_grading import _EVIDENCE_FREE_RULES
     for d in grade_projects(PROJECTS, SIGNALS, as_of=TODAY):
         assert d.matched_rules, f"{d.subject_title} 没有任何命中规则"
         for hit in d.matched_rules:
             assert hit.rule_id in R.RULE_IDS, f"未知规则号 {hit.rule_id}"
-            assert hit.evidence, f"{hit.rule_id} 命中却没给证据"
-            assert hit.title and hit.basis
+            # ADR-0033：两条规则的证据面**按定义为空**（一条是"四个字段一个都没读到"，
+            # 一条是"跑完整张表都没命中"——都没有任何原文可引）。此前它们发的是后端编的
+            # 一句中文冒充原文，正好印在写着"下面是文档原文"的那一节里。现在发空。
+            if hit.rule_id in _EVIDENCE_FREE_RULES:
+                assert hit.evidence == (), f"{hit.rule_id} 的证据面按定义应为空"
+            else:
+                assert hit.evidence, f"{hit.rule_id} 命中却没给证据"
+            assert hit.title and hit.basis   # 仍喂 decision_grading_rules.md，只是不进载荷了
         # 最终等级必须真的由某条命中规则支撑（不是凭空来的）
         assert any(h.grade == d.rule_grade for h in d.matched_rules)
 
@@ -169,8 +177,16 @@ def test_unknown_fields_are_reported_for_the_frontend():
 
 
 def test_reason_flags_the_unknowns():
+    """ADR-0033 后这条测的是**结构**，不是句子。
+
+    以前断言的是那句 `（未读到：进度、到期日——未知不等于没风险。）`。后端不再拼这句话了：
+    它现在由前端 i18n 模板从 `unknown_fields` 渲染。所以这里守的是"那些字段确实被标成了未读到"
+    ——句子那一半由 `test_decision_i18n_contract.py` 接着守（模板必须在 zh/en 两边都在，
+    且措辞不许替客户断言）。🔴 两半缺一，这条链就有一段没人看着。
+    """
     d = grade_project(proj(id="p_y", title="半空项目", status="on-track"), [], as_of=TODAY)
-    assert "未读到" in d.reason and "未知不等于没风险" in d.reason
+    assert set(d.unknown_fields) == {"progress", "dueDate"}
+    assert d.reason == "" and d.reason_source == "rule", "规则版不许再产出人话"
 
 
 # --- 3b. 🔴 绝不对客户自己的文档作失实陈述（复核 finding 1 / 2 的回归门）----------------------
@@ -181,12 +197,11 @@ def test_a_written_but_unreadable_due_date_is_never_called_missing():
     """🔴 dueDate="8月15日" 写在周报上。系统可以说"我读不准"，绝不许说"文档未提及"。"""
     d = grade_project(proj(status="on-track", dueDate="8月底前"), [], as_of=TODAY)
     assert "dueDate" not in d.unknown_fields, "文档白纸黑字写了到期日，不许说没写"
-    assert "未提及" not in d.reason and "没写" not in d.reason
-    # 说得出它写的是什么 —— 经理拿原文一对就知道系统读的是同一份文件
-    assert "8月底前" in d.reason
     payload = d.to_dict()
-    assert payload["unparsed_fields"] == [
-        {"field": "dueDate", "field_label": "到期日", "raw": "8月底前"}]
+    # ADR-0033：只发机器键 + **文档原文**。`field_label`（「到期日」）搬去了前端 i18n；
+    # `raw` 留在这里而且永远原样——经理拿原件一对就知道系统读的是同一份文件，
+    # 这一句是整份说明书的可信度支点，翻译它就等于编（决定 4 ← ADR-0018）。
+    assert payload["unparsed_fields"] == [{"field": "dueDate", "raw": "8月底前"}]
 
 
 def test_missing_and_unreadable_are_two_different_fields():
@@ -455,10 +470,15 @@ def test_no_rule_asserts_what_the_customers_document_does_not_contain():
     for r in R.RULES:
         for bad in forbidden:
             assert bad not in r.title_zh, f"{r.id} 的措辞替客户断言了文档内容：{r.title_zh}"
-    # 兜底理由同样过这条线：拿一张什么都没有的卡（最容易说过头的情形）
-    bare = grade_project(proj(id="p_bare2", title="空卡"), [], as_of=TODAY).reason
-    for bad in forbidden:
-        assert bad not in bare, f"兜底理由替客户断言了文档内容：{bare}"
+    # 🔴 这条测试以前还有第二半：拿一张什么都没有的卡（最容易说过头的情形）跑一遍**兜底理由**，
+    # 断言那句话也不越线。ADR-0033 之后兜底理由不在后端了（`reason` 恒为空串），
+    # 那一半如果原样留着就变成了对空串断言——**恒真**，一条永远绿的假门。
+    # 已经搬到 `test_decision_i18n_contract.py::test_frontend_rule_copy_never_asserts_absence`，
+    # 对**前端 i18n 表里那几十条真文案**跑同一张禁词表。这里只留一条防回归的哨兵：
+    bare = grade_project(proj(id="p_bare2", title="空卡"), [], as_of=TODAY)
+    assert bare.reason == "", (
+        "后端又开始产出兜底理由了。要么是有人撤销了 ADR-0033，要么是加回来的时候没人注意到"
+        "——无论哪种，上面那半张禁词表得跟着搬回来，别让这句话没人看着就上屏。")
 
 
 def test_every_rule_has_exactly_one_matcher():
@@ -525,12 +545,17 @@ def test_parse_due_date_unknown(text):
 # --- 8. 红线：定级产物不得给人打分 --------------------------------------------------------------
 
 def test_composed_reasons_pass_the_red_line():
-    """机械拼装的理由要能过既有红线校验器——定级不许变成给人贴标签的后门。"""
+    """定级产出的**用户面文字**要能过红线校验器——定级不许变成给人贴标签的后门。
+
+    ADR-0033 把那句话搬到了前端，所以这里改成对**规则标题**（`decision_grading_rules.md` 的
+    同一份原文，也是前端 zh 文案的出处）跑红线。对 `d.reason` 跑就是对空串跑——恒绿。
+    前端那几十条真文案由 `test_decision_i18n_contract.py::test_frontend_rule_copy_passes_the_red_line`
+    过同一把尺。
+    """
     from avery import redline
-    for d in grade_projects(PROJECTS, SIGNALS, as_of=TODAY):
-        res = redline.validate(d.reason, cited_snippets=[e for h in d.matched_rules
-                                                         for e in h.evidence])
-        assert res.passed, f"定级理由触了红线：{d.reason} / {res}"
+    for r in R.RULES:
+        res = redline.validate(r.title_zh, cited_snippets=[])
+        assert res.passed, f"规则标题触了红线：{r.id} / {r.title_zh} / {res}"
 
 
 def test_decision_dict_has_no_person_score_keys():
@@ -545,22 +570,66 @@ def test_decision_dict_has_no_person_score_keys():
 # --- 9. 与 payload 的接缝（057 照着接的就是这个）-----------------------------------------------
 
 def test_payload_shape_for_feat_057():
-    """输出契约：字段齐、类型对。057 前端按这个形状接。"""
+    """输出契约：字段齐、类型对。057 前端按这个形状接。
+
+    🔴 ADR-0033 一刀切改形（2026-08-03）：`grade_label` / `rule_grade_label` /
+    命中里的 `title`+`basis` / `unparsed_fields[].field_label` **全部删掉**，不做新旧并存。
+    并存会留下"后端仍在产出中文"的破口，而那正是那一票要铲掉的东西。
+    """
     d = grade_project(PROJECTS[0], SIGNALS, as_of=TODAY).to_dict()
     assert set(d) == {
         "subject_type", "subject_id", "subject_title", "owner_name",
-        "grade", "grade_label", "severity", "rule_grade", "rule_grade_label", "rule_severity",
+        "grade", "severity", "rule_grade", "rule_severity",
         "matched_rules", "unknown_fields", "unparsed_fields", "reason", "reason_source",
         "escalated", "escalation_reason", "downgrade_blocked", "rejected_grade",
         "review_rejected",
     }
     assert isinstance(d["unparsed_fields"], list)
-    assert d["grade"] in R.GRADES and d["grade_label"] == R.LABEL_ZH[d["grade"]]
+    assert d["grade"] in R.GRADES
     hit = d["matched_rules"][0]
-    assert set(hit) == {"rule_id", "grade", "grade_label", "severity", "title", "basis",
-                        "evidence"}
-    assert isinstance(hit["evidence"], list)
+    assert set(hit) == {"rule_id", "grade", "severity", "params", "evidence"}
+    assert isinstance(hit["evidence"], list) and isinstance(hit["params"], dict)
     json.dumps(d, ensure_ascii=False)  # 必须可 JSON 序列化（要过 HTTP）
+
+
+def test_no_backend_prose_anywhere_in_the_payload():
+    """🔴 ADR-0033 的结构性护栏：载荷里除了**文档原文**，不许再有一个中文句子。
+
+    这条门是给"下一个人"写的：往 `to_dict()` 里加回一个 `grade_label`、给某条规则塞一句
+    中文说明、给 evidence 补一句中文注解——每一种都会让英文用户重新看到中英夹杂的判读面板，
+    而且都不会有别的东西变红。
+
+    允许出现 CJK 的只有三处，各有各的理由：
+      · `subject_title` / `owner_name` —— 客户文档里的名字，本来就该原样；
+      · `unparsed_fields[].raw` —— 文档原文，翻译＝编（决定 4）；
+      · `matched_rules[].evidence` —— 同上，逐字引用。
+    其余任何一个值出现 CJK 都判红。
+    """
+    verbatim_keys = {"subject_title", "owner_name"}
+    cjk = re.compile(r"[一-鿿　-〿＀-￯]")
+    offenders: list[str] = []
+    for d in grade_projects(PROJECTS, SIGNALS, as_of=TODAY):
+        payload = d.to_dict()
+        for key, value in payload.items():
+            if key in verbatim_keys:
+                continue
+            if key == "unparsed_fields":
+                for item in value:                       # 只放行 raw
+                    if cjk.search(str(item["field"])):
+                        offenders.append(f"unparsed_fields.field={item['field']!r}")
+                continue
+            if key == "matched_rules":
+                for hit in value:                        # 只放行 evidence
+                    for k, v in hit.items():
+                        if k == "evidence":
+                            continue
+                        if cjk.search(json.dumps(v, ensure_ascii=False)):
+                            offenders.append(f"matched_rules.{k}={v!r}")
+                continue
+            if cjk.search(json.dumps(value, ensure_ascii=False)):
+                offenders.append(f"{key}={value!r}")
+    assert not offenders, (
+        "载荷里出现了后端产出的中文（ADR-0033 明令不许）：" + " · ".join(offenders))
 
 
 def test_company_context_emits_decision_cards():

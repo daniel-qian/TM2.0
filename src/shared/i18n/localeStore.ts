@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { localeFromUrlParam, persistLocale, resolveLocale, type Locale } from './index'
+import { localeFromUrlParam, persistLocale, resolveLocale, setActiveLocale, type Locale } from './index'
 
 // open-loop-0720 · 语言开关的反应式落点。
 //
@@ -34,6 +34,10 @@ function initialLocale(): Locale {
   // 无参访问都会把 env/默认值错当"用户选择"焊死进 localStorage。
   if (localeFromUrlParam() === locale) persistLocale(locale)
   syncDocumentLang(locale)
+  // ADR-0033：本 store 是 locale 的唯一反应点，所以也由它给**非 React 路径**发布当前值
+  // （transport.ts 的 /advise locale 与错误文案都读 activeLocale()）。不发布的话，带 `?lang=`
+  // 的会话里点了开关，界面变了而请求还按 URL 那个语言发——英文界面 + 中文判读正文。
+  setActiveLocale(locale)
   return locale
 }
 
@@ -42,6 +46,7 @@ export const useLocaleStore = create<LocaleState>((set) => ({
   setLocale: (locale) => {
     persistLocale(locale)
     syncDocumentLang(locale)
+    setActiveLocale(locale)
     set({ locale })
   },
 }))

@@ -421,6 +421,19 @@ def _grade_the_weekly() -> dict:
     return cards[0]
 
 
+def _hit_titles(card: dict) -> str:
+    """命中规则的标题连成一串，供"那句会摆到经理面前的话"类断言用。
+
+    🔴 为什么绕这一道：ADR-0033 之后后端**不再发那句话**（`reason` 恒为空串，句子由前端 i18n
+    按 rule_id 渲染），所以原来「断言 reason 里有/没有某几个字」的写法会变成对空串断言——恒真，
+    一条永远绿的假门。改成从载荷里读**真正命中的规则**，再回后端规则表取它的中文标题：
+    那正是前端 zh 文案的出处，也是 decision_grading_rules.md 里给客户看的那一行。
+    🔴 rule_id 只作为**从载荷读出来的值**出现，绝不写成字面量——`test_no_rule_text_in_any_prompt`
+    全仓禁止规则号出现在这三个文件之外，本文件第一版就撞过。
+    """
+    return " / ".join(R.RULES_BY_ID[h["rule_id"]].title_zh for h in card["matched_rules"])
+
+
 def test_a_project_that_says_it_cannot_finish_reaches_the_manager_as_at_risk():
     """BORN RED，整条链，**这才是这条被定为 blocker 的原因**。
 
@@ -439,10 +452,10 @@ def test_a_project_that_says_it_cannot_finish_reaches_the_manager_as_at_risk():
     """
     card = _grade_the_weekly()
     assert card["grade"] != R.CAN_PROCEED, (
-        f"一个自述「本月无法完成」的项目被定级 可推进：{card.get('reason')!r}")
+        f"一个自述「本月无法完成」的项目被定级 可推进：{card['matched_rules']!r}")
     assert card["grade"] == R.NEEDS_CONFIRMATION, f"应为 需确认，实际 {card['grade']!r}"
-    assert "自报已完成" not in (card.get("reason") or ""), (
-        f"决策理由对客户的文档作了失实陈述：{card['reason']!r}\n"
+    assert "自报已完成" not in _hit_titles(card), (
+        f"决策命中了一条说「自报已完成」的规则：{_hit_titles(card)!r}\n"
         f"文档原话是「本月无法完成」。")
     evidence = [e for hit in card["matched_rules"] for e in hit["evidence"]]
     assert 'status="at-risk"' in evidence, (
@@ -463,8 +476,8 @@ def test_the_same_weekly_used_to_be_graded_can_proceed():
         assert card["grade"] == R.CAN_PROCEED, (
             f"修复前这份周报并不是被定级 可推进（{card['grade']!r}），"
             f"那么上一条测试并没有在守它自称守的东西。")
-        assert "自报已完成" in (card.get("reason") or ""), (
-            f"修复前的理由里没有「自报已完成」：{card.get('reason')!r} —— "
+        assert "自报已完成" in _hit_titles(card), (
+            f"修复前命中的规则里没有「自报已完成」那条：{_hit_titles(card)!r} —— "
             f"bug 报告的原文对不上，重新量。")
 
     assert _grade_the_weekly()["grade"] == R.NEEDS_CONFIRMATION, "突变没还原"

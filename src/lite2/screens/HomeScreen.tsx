@@ -10,7 +10,8 @@ import { useAuth } from '../auth/authStore'
 import { useDemo } from '../demoStore'
 import { deriveAttentionPeople, summarizeDecisions, type AttentionPerson } from '../homeDerive'
 import { gapClaimText, type GapCard } from '../gapDerive'
-import type { LiveDecisionCard } from '../transport'
+import type { LiveDecisionCard, LiveDecisionRuleHit } from '../transport'
+import type { Dict } from '../../shared/i18n'
 
 // feat-057（PRD G4 / decisions.md Q2「两个都极端 → 结合」）· 聚合首屏。
 //
@@ -24,7 +25,12 @@ import type { LiveDecisionCard } from '../transport'
 // 参考库那种问候统计句（"扫描了 186 条信号""距国庆还有 83 天"）是硬编码的，一个都不搬；
 // 我们没有的量（她的 5 张 KPI 指标条）本波不做（feat-066 才有推导工具）。
 //
-// 🔴 定级契约（feat-056）：等级、排序、理由**全归后端**。前端不判级、不重排、不改写 reason。
+// 🔴 定级契约（feat-056 + [ADR-0033](docs/adr/0033-locale-is-a-request-field-backend-stops-
+// emitting-prose.md)）：**等级和排序全归后端，句子全归前端。**
+// 前端不判级、不重排、不改写等级；但那些人话——三个档位词、规则标题、"按规则判为…"那一句、
+// 字段名——现在由本屏用 i18n 表按机器键渲染，zh/en 各一份。
+// 这条注释以前写的是「理由也归后端、前端不改写 reason」。ADR-0033 反转了它，**保用意换载体**：
+// 要的是单一事实源，不是"必须后端发"；后端发 `grade`/`rule_id`，前端查唯一那张表。
 // `decisions` 是 optional —— 老后端不发这个键，那时必须给**诚实空态**，不许造数据、不许崩。
 //
 // 🔴 「文档未提及」(unknown_fields) 与「读不准」(unparsed_fields) 是两件事，措辞永不混用：
@@ -36,6 +42,50 @@ type GapFilter = 'active' | 'resolved' | 'dismissed'
 
 function fill(template: string, vars: Record<string, string | number>): string {
   return template.replace(/\{(\w+)\}/g, (_, k: string) => String(vars[k] ?? ''))
+}
+
+// ── ADR-0033 · 后端发机器键，这里查表出句子 ──────────────────────────────────────────────
+//
+// 这四个 helper 是「后端不再产出人话」的落地点。它们**只查表、不发挥**：拿到的是
+// `high_risk` / `R-BLOCKER-STACK` / `dueDate` 这种机器键，出去的是 i18n 表里那一条。
+// 查不到就把机器键原样露出来——🔴 绝不编一个看起来像人话的兜底词。露出 `R-XYZ` 是一眼可见的
+// 缺表，编一个「其他风险」是查不出来的假话，后者贵得多。
+
+function gradeLabelOf(t: Dict, grade: string): string {
+  const table = t.lite2.decisionGrades as Record<string, string>
+  return table[grade] ?? grade
+}
+
+function fieldLabelOf(t: Dict, field: string): string {
+  if (field === 'status') return t.lite2.homeFieldStatus
+  if (field === 'progress') return t.lite2.homeFieldProgress
+  if (field === 'dueDate') return t.lite2.homeFieldDueDate
+  if (field === 'blockers') return t.lite2.homeFieldBlockers
+  return field
+}
+
+// 规则文案 = i18n 模板 + 命中自带的 params（阈值仍归后端配置，见 decision_rules.py::RULE_PARAMS）。
+function ruleTextOf(t: Dict, hit: LiveDecisionRuleHit): { title: string; basis: string } {
+  const table = t.lite2.decisionRules as Record<string, { title: string; basis: string }>
+  const entry = table[hit.rule_id]
+  if (!entry) return { title: hit.rule_id, basis: '' }
+  return {
+    title: fill(entry.title, hit.params ?? {}),
+    basis: entry.basis,
+  }
+}
+
+// 「按规则判为高风险：X；Y。」—— 后端此前拼好了整句发下来（写死中文），现在由这里拼。
+// 只取**与最终等级同档**的命中，与后端旧实现同口径（低档命中不进这句话，它们在展开区里）。
+function composeRuleReason(t: Dict, card: LiveDecisionCard): string {
+  const top = card.matched_rules
+    .filter((h) => h.grade === card.grade)
+    .map((h) => ruleTextOf(t, h).title)
+  const rules = top.length ? top.join(t.lite2.homeDecisionRuleJoin) : t.lite2.homeDecisionReasonNoRule
+  return fill(t.lite2.homeDecisionReasonByRule, {
+    grade: gradeLabelOf(t, card.grade),
+    rules,
+  })
 }
 
 function classNames(parts: Array<string | false | null | undefined>) {
@@ -329,13 +379,14 @@ export function HomeScreen() {
             ) : (
               <>
                 <div className="lite-home-grade-row">
-                  {/* 分级计数——label 取自 payload 的 grade_label，前端不自拟这三个词。 */}
+                  {/* 分级计数。ADR-0033：后端发机器键 `grade`，这三个词从唯一那张 i18n 表查
+                      （前端仍然不自拟，只是查表的位置从 payload 换成了 i18n）。 */}
                   {decisionSummary.buckets.map((bucket) => (
                     <span
                       key={bucket.grade}
                       className={`lite-home-grade-chip home-tone-${gradeTone(bucket.grade)}`}
                     >
-                      <strong>{bucket.count}</strong> {bucket.label}
+                      <strong>{bucket.count}</strong> {gradeLabelOf(t, bucket.grade)}
                     </span>
                   ))}
                   <span className="lite-home-order-note">{t.lite2.homeDecisionsOrderNote}</span>
@@ -588,14 +639,19 @@ function DecisionCard({
   const { t } = useDict()
   const [open, setOpen] = useState(false)
 
-  // 机器键 → 中文/英文字段名。后端 unknown_fields 只发机器键（'status'|'progress'|'dueDate'）；
-  // 认不出的键原样显示（宁可露出机器键，也不假装认识它）。
-  const fieldLabel = (field: string): string => {
-    if (field === 'status') return t.lite2.homeFieldStatus
-    if (field === 'progress') return t.lite2.homeFieldProgress
-    if (field === 'dueDate') return t.lite2.homeFieldDueDate
-    return field
-  }
+  // 机器键 → 中文/英文字段名。后端 unknown_fields / unparsed_fields 只发机器键
+  // （'status'|'progress'|'dueDate'|'blockers'）；认不出的键原样显示
+  // （宁可露出机器键，也不假装认识它——编一个字段名比露出 camelCase 难看得多）。
+  const fieldLabel = (field: string): string => fieldLabelOf(t, field)
+
+  // ADR-0033：规则版的那句话在这里成形。后端只发结构化事实（grade + 命中规则），
+  // 句子由 i18n 模板拼——同一句话两种语言，一个事实源。
+  // Avery 自己写的那句（reason_source==='avery'）原样显示：它的语言由请求 locale 决定，
+  // 已经写进 prompt 了（avery/locale.py::language_instruction）。
+  const reasonText =
+    card.reason_source === 'avery' && card.reason
+      ? card.reason
+      : composeRuleReason(t, card)
 
   return (
     <li
@@ -604,8 +660,8 @@ function DecisionCard({
       data-decision-severity={card.severity}
     >
       <div className="lite-home-decision-head">
-        {/* 用户面只显示 grade_label（后端发的中文档位），不显示 high_risk 这类机器键。 */}
-        <span className="lite-home-decision-grade">{card.grade_label}</span>
+        {/* 用户面只显示档位词，不显示 high_risk 这类机器键。ADR-0033 后词由 i18n 表出。 */}
+        <span className="lite-home-decision-grade">{gradeLabelOf(t, card.grade)}</span>
         <h3 className="lite-home-decision-title">{card.subject_title}</h3>
         {card.owner_name ? (
           <span className="lite-home-decision-owner">
@@ -614,7 +670,7 @@ function DecisionCard({
         ) : null}
       </div>
 
-      <p className="lite-home-decision-reason">{card.reason}</p>
+      <p className="lite-home-decision-reason">{reasonText}</p>
       <p className="lite-home-decision-source">
         {card.reason_source === 'avery'
           ? t.lite2.homeDecisionReasonAvery
@@ -630,15 +686,19 @@ function DecisionCard({
           必须把原文摆出来。绝不把后者说成「文档未提及」。 */}
       {card.unknown_fields.length > 0 ? (
         <p className="lite-home-decision-unknown">
-          {t.lite2.homeDecisionUnknownLabel}：{card.unknown_fields.map(fieldLabel).join('、')}
+          {t.lite2.homeDecisionUnknownLabel}
+          {t.lite2.labelSep}
+          {card.unknown_fields.map(fieldLabel).join(t.lite2.homeFieldJoin)}
         </p>
       ) : null}
       {card.unparsed_fields.length > 0 ? (
         <ul className="lite-home-decision-unparsed">
           {card.unparsed_fields.map((item) => (
             <li key={item.field}>
+              {/* ADR-0033：字段名从 i18n 表出（后端不再发 field_label）；
+                  `raw` 是文档原文，**永远原样**，不翻译。 */}
               {fill(t.lite2.homeDecisionUnparsed, {
-                field: item.field_label || fieldLabel(item.field),
+                field: fieldLabel(item.field),
                 raw: item.raw,
               })}
             </li>
@@ -677,19 +737,27 @@ function DecisionCard({
 
       {open ? (
         <ul className="lite-home-rule-list">
-          {card.matched_rules.map((hit) => (
+          {card.matched_rules.map((hit) => {
+            /* ADR-0033：规则的标题/依据由 i18n 表按 rule_id 出，阈值占位符用命中自带的 params 填。
+               `rule_id` 本身仍原样露出——它是给经理引用的编号，不是文案。 */
+            const ruleText = ruleTextOf(t, hit)
+            return (
             <li key={hit.rule_id} className="lite-home-rule">
               <div className="lite-home-rule-head">
                 <span className="lite-home-rule-id">{hit.rule_id}</span>
-                <span className="lite-home-rule-title">{hit.title}</span>
-                <span className="lite-home-rule-grade">{hit.grade_label}</span>
+                <span className="lite-home-rule-title">{ruleText.title}</span>
+                <span className="lite-home-rule-grade">{gradeLabelOf(t, hit.grade)}</span>
               </div>
               <p className="lite-home-rule-basis">
-                {t.lite2.homeDecisionRuleBasis}：{hit.basis}
+                {t.lite2.homeDecisionRuleBasis}
+                {t.lite2.labelSep}
+                {ruleText.basis}
               </p>
               {hit.evidence.length > 0 ? (
                 <>
-                  {/* 证据必须自报出处：下面这几行是文档原文，不是 Avery 的话。 */}
+                  {/* 证据必须自报出处：下面这几行是文档原文，不是 Avery 的话。
+                      🔴 原文语言 ≠ 界面语言：中文文档在英文界面下仍是中文原样，永不翻译
+                      （ADR-0033 决定 4 ← ADR-0018 可溯源红线）。 */}
                   <p className="lite-home-evidence-label">{t.lite2.homeDecisionEvidenceLabel}</p>
                   <ul className="lite-home-rule-evidence">
                     {hit.evidence.map((line, idx) => (
@@ -699,7 +767,8 @@ function DecisionCard({
                 </>
               ) : null}
             </li>
-          ))}
+            )
+          })}
         </ul>
       ) : null}
     </li>

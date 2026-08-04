@@ -34,10 +34,10 @@ from .decision_rules import (
     GRADES,
     HIGH_RISK,
     KEYWORD_FAMILIES,
-    LABEL_ZH,
     NEEDS_CONFIRMATION,
     PROGRESS_CRUNCH_PCT,
     PROGRESS_LOW_PCT,
+    RULE_PARAMS,
     RULES,
     SEVERITY,
     STATUS_AT_RISK,
@@ -307,7 +307,7 @@ def _m_blocker_one(s: _Subject) -> list[str]:
 
 def _m_overdue(s: _Subject, as_of: date) -> list[str]:
     if s.due is not None and s.due < as_of and s.status != STATUS_DONE:
-        return [f'dueDate="{s.due_raw}"（已过 {(as_of - s.due).days} 天）']
+        return [f'dueDate="{s.due_raw}"']
     return []
 
 
@@ -315,7 +315,7 @@ def _m_due_soon(s: _Subject, as_of: date) -> list[str]:
     if s.due is not None and s.status != STATUS_DONE:
         left = (s.due - as_of).days
         if 0 <= left <= DUE_SOON_DAYS:
-            return [f'dueDate="{s.due_raw}"（还剩 {left} 天）']
+            return [f'dueDate="{s.due_raw}"']
     return []
 
 
@@ -341,9 +341,14 @@ def _m_self_report_mismatch(s: _Subject) -> list[str]:
 
 
 def _m_no_evidence(s: _Subject) -> list[str]:
-    """🔴 关键字段全缺 → 需确认，**不是**可推进。"文档没说"不等于"没风险"。"""
+    """🔴 关键字段全缺 → 需确认，**不是**可推进。"文档没说"不等于"没风险"。
+
+    返回的是一个**机器记号**，不是要上屏的句子——这条规则的证据面按定义是空的（没读到任何
+    字段，就没有任何原文可引），记号只用来表达"命中了"。`_EVIDENCE_FREE_RULES` 会在建 RuleHit
+    时把它抹成空 evidence，所以前端拿到的是"这条规则没有证据行"，而不是一句冒充原文的后端造句。
+    """
     if not s.status and not s.blockers and not s.signals and s.progress is None and s.due is None:
-        return ["（status / blockers / progress / dueDate 全部缺失，且无关联信号）"]
+        return ["@matched"]
     return []
 
 
@@ -370,8 +375,25 @@ def _m_done(s: _Subject) -> list[str]:
 
 def _m_clear(s: _Subject) -> list[str]:
     if s.status in STATUS_STEADY and _risk_free(s):
-        return [f'status="{s.status}"（无阻塞、无风险信号）']
+        return [f'status="{s.status}"']
     return []
+
+
+# 🔴 ADR-0033 · evidence 面的语言纪律。
+# evidence 里只许有两种东西，两种都与界面语言无关：
+#   ① **文档原文**（信号原句 / 阻塞原句）—— 逐字引用，中文文档就是中文，英文界面下也不翻译
+#      （决定 4：翻译＝编，直接违反 ADR-0018 可溯源红线）；
+#   ② **字段读数**（`status="blocked"` / `dueDate="2026-07-10"` / `progress=30%`）—— 机器键 +
+#      文档原文值，语言中立。
+# 在此之前这里还有第三种：后端拼的中文注解（`（已过 12 天）`、`（无阻塞、无风险信号）`、
+# `（status / blockers / progress / dueDate 全部缺失…）`）。它们**既不是原文也不是读数**，
+# 却印在写着"下面这几行是文档原文，不是 Avery 的话"的那一节里——既是语言缺陷也是溯源缺陷。
+# 全部拆掉：能进规则标题的进标题（由前端 i18n 出两种语言），进不去的（"已过 N 天"）就不说了
+# ——到期日原样摆在那儿，经理自己会看日历。
+#
+# 这两条规则的证据面按定义为空（一条没读到任何字段，一条是"跑完整张表都没命中"），
+# 匹配器返回的 `@matched` 只是"命中了"的记号，在建 RuleHit 时抹掉。
+_EVIDENCE_FREE_RULES = frozenset({"R-NO-EVIDENCE", "R-UNCLASSIFIED"})
 
 
 # 需要"今天是几号"的规则单独一张表，好让 grade_project 显式把 as_of 传进去。
@@ -403,19 +425,28 @@ RULE_ORDER: dict[str, int] = {r.id: i for i, r in enumerate(RULES)}
 
 
 # --- 输出结构（feat-057 照着接）---------------------------------------------------------------
+#
+# 🔴 ADR-0033 一刀切：本层**只回机器键 + 结构化字段**，一个人话句子都不发。
+# 屏幕上那些句子（三档词、规则标题、"未读到：状态、进度"、"到期日写的是「月底前」"）
+# 全部由前端 i18n 表按 `grade` / `rule_id` / 字段机器键渲染，zh/en 各一份。
+# 删掉的字段：`grade_label` · `rule_grade_label` · 命中里的 `title`/`basis` ·
+# `unparsed_fields[].field_label` · 规则版 `reason` 的句子（改回空串）。
+# 不做新旧并存（D10）——并存等于留着"后端仍在产出中文"的破口，而那正是本票要铲掉的东西。
 
 @dataclass(frozen=True)
 class RuleHit:
     rule_id: str
     grade: str
     severity: int
-    title: str
-    basis: str
+    title: str          # 中文一行，**只喂 decision_grading_rules.md 那份客户口径说明书**，不进载荷
+    basis: str          # 同上
     evidence: tuple[str, ...]
 
     def to_dict(self) -> dict:
-        return {"rule_id": self.rule_id, "grade": self.grade, "grade_label": LABEL_ZH[self.grade],
-                "severity": self.severity, "title": self.title, "basis": self.basis,
+        # `params` = 这条规则的模板占位符实参（阈值归后端配置，句子归前端 i18n）。
+        # 没有占位符的规则发 `{}`，形状恒定，前端不用做 in 判断。
+        return {"rule_id": self.rule_id, "grade": self.grade, "severity": self.severity,
+                "params": dict(RULE_PARAMS.get(self.rule_id, {})),
                 "evidence": list(self.evidence)}
 
 
@@ -430,8 +461,8 @@ class Decision:
     matched_rules: tuple[RuleHit, ...]
     unknown_fields: tuple[str, ...]                     # 文档压根没写 → 057 显示「文档未提及」
     unparsed_fields: tuple[tuple[str, str], ...]        # 文档写了、读不准 → 显示原文 + 「读不准」
-    reason: str
-    reason_source: str = "rule"     # "rule"（机械拼装，可溯源）| "avery"（模型写的人话）
+    reason: str                     # 🔴 ADR-0033：`rule` 版恒为空串，句子归前端 i18n 拼
+    reason_source: str = "rule"     # "rule"（结构化事实，句子在前端）| "avery"（模型写的人话）
     escalated: bool = False
     escalation_reason: str = ""
     downgrade_blocked: bool = False
@@ -449,17 +480,14 @@ class Decision:
             "subject_title": self.subject_title,
             "owner_name": self.owner_name,
             "grade": self.grade,
-            "grade_label": LABEL_ZH[self.grade],
             "severity": self.severity,
             "rule_grade": self.rule_grade,
-            "rule_grade_label": LABEL_ZH[self.rule_grade],
             "rule_severity": SEVERITY[self.rule_grade],
             "matched_rules": [h.to_dict() for h in self.matched_rules],
             "unknown_fields": list(self.unknown_fields),
-            "unparsed_fields": [
-                {"field": f, "field_label": _FIELD_LABEL.get(f, f), "raw": raw}
-                for f, raw in self.unparsed_fields
-            ],
+            # 只发机器键 + 文档原文。字段名的人话（「到期日」/ "Due date"）归前端 i18n；
+            # `raw` 是客户文档里原本写的那几个字，**永远原样**（ADR-0033 决定 4）。
+            "unparsed_fields": [{"field": f, "raw": raw} for f, raw in self.unparsed_fields],
             "reason": self.reason,
             "reason_source": self.reason_source,
             "escalated": self.escalated,
@@ -470,31 +498,21 @@ class Decision:
         }
 
 
-_FIELD_LABEL = {"status": "状态", "progress": "进度", "dueDate": "到期日", "blockers": "阻塞"}
-
-
-def _compose_reason(subject: _Subject, grade: str, hits: tuple[RuleHit, ...]) -> str:
-    """机械拼装的兜底理由：只由等级 + 命中规则的标题构成，一个字都不是编的。
-
-    Avery 在线时会用一句更像人话的替换它（`apply_review`），但离线 / 无 key 时前端也必须
-    有话可显示——🔴 这里绝不允许出现 canned 的"看起来像分析"的句子。
-
-    🔴 措辞红线：这句话会**原样打到经理屏幕上**，所以它只许陈述"我读到了什么"，
-    绝不许替客户断言"你的文档里没有什么"。两者的差别在于：抽取层读不出来的时候，
-    前者仍然是真话，后者是当着客户的面否认他自己写过的字。
-    """
-    top = [h.title for h in hits if h.grade == grade]
-    body = "；".join(top) if top else "（无命中规则）"
-    text = f"按规则判为{LABEL_ZH[grade]}：{body}。"
-    notes: list[str] = []
-    if subject.unknown_fields:
-        missing = "、".join(_FIELD_LABEL.get(f, f) for f in subject.unknown_fields)
-        notes.append(f"未读到：{missing}")
-    for field, raw in subject.unparsed_fields:
-        notes.append(f"{_FIELD_LABEL.get(field, field)}写的是「{raw}」，无法确定具体日期")
-    if notes:
-        text += f"（{'；'.join(notes)}——未知不等于没风险。）"
-    return text
+# 🔴 ADR-0033 拆掉的两块，留个碑，别照着旧样子加回来：
+#
+# ① `_FIELD_LABEL = {"status": "状态", ...}` —— 字段名的人话。现在只发机器键
+#    （`unknown_fields` / `unparsed_fields[].field`），词表在 `src/shared/i18n/{en,zh}.ts`
+#    的 `lite2.homeFieldStatus` 那一族，前端 `fieldLabel()` 查表。
+#
+# ② `_compose_reason()` —— 机械拼装那句「按规则判为高风险：X；Y。（未读到：状态、进度——
+#    未知不等于没风险。）」。它本来就是**结构化事实的字符串拼接**：等级 + 命中规则标题 +
+#    未读到的字段 + 读不准的字段。ADR-0033 之后这四样全部以结构化形式随载荷发下去，
+#    句子由前端 `composeRuleReason()` 用 i18n 模板拼——同一句话，两种语言，一个事实源。
+#    规则版决策的 `reason` 因此是**空串**（`reason_source == "rule"`）；只有 Avery 真写了
+#    那句人话时 `reason` 才非空（`reason_source == "avery"`，语言由请求 locale 进 prompt 决定）。
+#
+# 🔴 措辞红线原地不动，只是搬了家：那句话仍然只许陈述"我读到/没读到什么"，绝不许替客户断言
+# "你的文档里没有什么"——现在这条线由前端文案和 `test_no_rule_asserts_...` 一起守。
 
 
 def grade_project(project: dict, signals: list[dict] | None = None, *,
@@ -514,8 +532,9 @@ def grade_project(project: dict, signals: list[dict] | None = None, *,
         evidence = (matcher(subject) if matcher
                     else _DATED_MATCHERS[r.id](subject, today))
         if evidence:
+            lines = () if r.id in _EVIDENCE_FREE_RULES else tuple(evidence)
             hits.append(RuleHit(rule_id=r.id, grade=r.grade, severity=SEVERITY[r.grade],
-                                title=r.title_zh, basis=r.basis, evidence=tuple(evidence)))
+                                title=r.title_zh, basis=r.basis, evidence=lines))
 
     if hits:
         rule_grade = max(hits, key=lambda h: h.severity).grade
@@ -533,7 +552,7 @@ def grade_project(project: dict, signals: list[dict] | None = None, *,
                             severity=SEVERITY[NEEDS_CONFIRMATION],
                             title=rule("R-UNCLASSIFIED").title_zh,
                             basis=rule("R-UNCLASSIFIED").basis,
-                            evidence=("（没有任何规则命中，按需确认处理）",)))
+                            evidence=()))   # 证据面按定义为空，见 _EVIDENCE_FREE_RULES
 
     hits.sort(key=lambda h: (-h.severity, RULE_ORDER[h.rule_id]))
     frozen = tuple(hits)
@@ -547,7 +566,9 @@ def grade_project(project: dict, signals: list[dict] | None = None, *,
         matched_rules=frozen,
         unknown_fields=subject.unknown_fields,
         unparsed_fields=subject.unparsed_fields,
-        reason=_compose_reason(subject, rule_grade, frozen),
+        # ADR-0033：规则版不产出句子。前端拿 grade + matched_rules + unknown/unparsed_fields
+        # 按 locale 拼出同一句话（`composeRuleReason()`）。见上面那块「拆掉的两块」的碑。
+        reason="",
         reason_source="rule",
     )
 

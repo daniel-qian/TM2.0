@@ -12,7 +12,7 @@
 
 // feat-068 · ZH-03：非 hook 的 i18n 取词路径（useDict 内部用的就是这两个纯函数）。
 // 🔴 只 import index.ts，绝不 import useDict.ts——那个才带 React，本模块必须保持零 React。
-import { getDict, resolveLocale } from '../shared/i18n'
+import { activeLocale, getDict, type Locale } from '../shared/i18n'
 
 // ── SSE 事件（feat-015 /advise 契约，见 service/engine.py::stream_advice）───────────────
 export type LiveAgentEventType =
@@ -60,6 +60,14 @@ export interface AdviseRequest {
   situation: string
   title?: string
   company_context_id?: string
+  // ADR-0033: 判读正文的语言。调用方不用填——`streamAdvise` 在传输层出口统一补上。
+  locale?: Locale
+}
+
+// 与 lite2/transport.ts 的 withLocale 同形同理由（一处补全，不让每个调用点各记一遍）。
+// v01 没有语言开关 UI，但它与 v02 共享同源 localStorage，所以 activeLocale() 对它同样是对的。
+function withLocale(req: AdviseRequest): AdviseRequest & { locale: Locale } {
+  return { ...req, locale: req.locale ?? activeLocale() }
 }
 
 // ── ingestion 契约（feat-016 registry.py 的 dict 形状，经 feat-018 HTTP 暴露）──────────────
@@ -327,7 +335,7 @@ export function apiBase(): string {
 //
 // ── 分层选择（本次的关键决定）─────────────────────────────────────────────────────────
 // transport.ts 是传输层不是组件，没有 useDict() 可用（hook 只能在 render 里跑）。这里走
-// useDict 自己内部就在用的那条**非 hook 路径**：getDict(resolveLocale())。
+// useDict 自己内部就在用的那条**非 hook 路径**：getDict(activeLocale())。
 //   · 两者都是纯函数，shared/i18n/index.ts 不 import React——本模块因此仍然零 React 依赖。
 //   · 和 useDict 同一条 locale 解析（?lang= > VITE_AVERY_LOCALE > en），传输层文案和界面
 //     文案不可能各说各的语言。
@@ -336,7 +344,7 @@ export function apiBase(): string {
 // （UploadPanel / OnboardWizard / RoomScreen / ask 链）各写一份 status→key 的 switch，四份
 // 拷贝迟早分叉。TransportError 把后者的**好处**单独拿了过来——见下。
 export function httpErrorMessage(res?: Response): string {
-  const t = getDict(resolveLocale()).transport
+  const t = getDict(activeLocale()).transport
   // 配错的构建：一切失败都先说这句。否则"打不通"会被一路误读成服务器故障。
   // env 变量名 / localhost 地址属开发者细节，留在 apiBase() 那声 console.error 里。
   if (apiBaseMisconfigured()) return t.misconfigured
@@ -480,7 +488,7 @@ export function createHttpTransport(base: string = apiBase()): LiveTransport {
               Accept: 'text/event-stream',
               ...authHeader(req.company_context_id), // feat-038: tenant token (header only)
             },
-            body: JSON.stringify({ ...req, stream: true }),
+            body: JSON.stringify({ ...withLocale(req), stream: true }),
             signal: controller.signal,
           })
           if (!res.ok || !res.body) {

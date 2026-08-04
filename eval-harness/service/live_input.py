@@ -20,6 +20,7 @@ from pathlib import Path
 
 from avery import memory
 from avery.cases import Case, load_case
+from avery.locale import DEFAULT_LOCALE
 
 
 @dataclass
@@ -29,6 +30,9 @@ class LiveSituation:
     title: str | None = None               # optional short label
     company_context_id: str | None = None  # feat-016 stub — ingested company RAG handle
     case_id: str | None = None             # optional stable id; else derived
+    # ADR-0033: 判读正文的语言，由请求带下来（前端 `?lang= > localStorage > env > en` 那条链）。
+    # 真 brain 从 system prompt 里的语言指令拿它；MockBrain 从下面的 MOCK 块拿它。
+    locale: str = DEFAULT_LOCALE
 
 
 def _slugify(text: str, fallback: str = "live-situation") -> str:
@@ -67,13 +71,67 @@ def _looks_factual(situation: str) -> bool:
     return bool(_FACTUAL_RE.search(situation or ""))
 
 
-def _default_mock_block(memory_dir: Path, situation: str) -> dict:
+# ── MockBrain 的罐头正文，按 locale 取（ADR-0033 决定 3）────────────────────────────────────
+#
+# 为什么罐头也要双语：真 brain 的语言由 system prompt 那段指令管，但**离线电池跑的是 mock**。
+# 罐头永远是英文的话，"正文语言 == 请求 locale"这条判据在 AFK 环境里根本采不到 zh 的样，
+# 于是这条判据恒绿——恰好是本仓反复栽的那种"采不到样的判据"（记忆 verifiers-that-lie）。
+#
+# 🔴 它读的必须是**同一个** locale 字段（随请求下传的那个），不许另开一个 mock 专用开关：
+# 门验的是「locale 从 URL 一路走到正文」这条链，中间任何一节换成别的输入，验的就不是那条链了。
+#
+# 🔴 红线（ADR-0018）在罐头上一视同仁：不给人打分/排名、不替客户断言"你文档里没有 X"、
+# 一切结论挂在被引用的那行原文上。中英两版说的是同一件事，不是互相翻译练习。
+_MOCK_ADVICE = {
+    "en": {
+        "read": ("Here is the situation as the evidence actually reads, not a judgment of "
+                 "the person: the pattern you describe is real and worth understanding, "
+                 "and nobody has yet heard the story behind it. Name the work and its "
+                 "effect on the team; keep the read on the situation, never on the person."),
+        "move": ("Have the direct conversation this week, in a 1:1, not over chat. Lead "
+                 "with the specific, observable pattern and its effect on the team, then "
+                 "genuinely ask what is going on and listen. Agree on what 'back on track' "
+                 "looks like and a near date to check it — supportive if there is a "
+                 "fixable cause, and still clear about what has to change either way."),
+        "framing": ("Open as a colleague who noticed, not a manager who is policing: "
+                    "'I've noticed the last few weeks have been bumpy, and that's not "
+                    "where you usually are. I'm not here to put you on the spot — I want "
+                    "to understand what's going on and help get you back to solid. Walk me "
+                    "through it.' Specific, owned, no surprises — and no scoring anyone."),
+    },
+    "zh": {
+        "read": ("先按文件里真实写着的东西说，这不是对人的评价：你描述的那个情况是真的，"
+                 "值得弄清楚，而到现在为止还没人听过背后的原委。把话说在这件事和它对团队的"
+                 "影响上，不要落到人身上。"),
+        "move": ("这周就当面谈一次，一对一，别在群里说。开场先说清楚你具体看到了什么、"
+                 "它对团队产生了什么影响，然后真的问一句「到底怎么回事」，并且听完。"
+                 "谈完约定「回到正轨」具体是什么样子，再定一个近期的时间点回看一次——"
+                 "如果原因是能解决的就给支持，但不管原因是什么，该变的地方都要说清楚。"),
+        "framing": ("用「同事注意到了」的姿态开口，别用「经理来查岗」的姿态：「这几周好像不太顺，"
+                    "跟你平时的状态不一样。我不是来问责的，是想知道发生了什么，"
+                    "看看怎么帮你缓过来。你跟我说说。」具体、认账、不搞突然袭击——"
+                    "也不给任何人打分。"),
+    },
+}
+
+_MOCK_SHORT_ANSWER = {
+    "en": ("Direct answer, grounded in the cited line — (mock backend: this canned sentence "
+           "demonstrates the short-answer path; a real brain reads the actual fact out of your "
+           "documents here)."),
+    "zh": ("直接回答，依据就是上面引的那一行——（mock 后端：这句罐头只是把「短答」这条出口"
+           "走通给你看；真 brain 在这里读的是你文档里那个实际的事实）。"),
+}
+
+
+def _default_mock_block(memory_dir: Path, situation: str, locale: str = DEFAULT_LOCALE) -> dict:
     """A minimal deterministic plan for MockBrain on the live path.
 
     Picks up to a few real facts.md lines related to the typed situation (via the same keyword
     recall the loop uses) and cites them, then drafts humane, red-line-clean advice grounded in
     the typed text. This keeps the AFK contract battery exercising the FULL path (cite gate + red
     line + 8-field projection) with no API key. RealBrain ignores this block.
+
+    `locale` picks which canned prose comes back — see `_MOCK_ADVICE` for why that matters.
     """
     hits = memory.recall(situation, memory_dir, limit=3)
     # Fall back to the always-present head lines if the keyword recall finds nothing.
@@ -91,17 +149,18 @@ def _default_mock_block(memory_dir: Path, situation: str) -> dict:
     # 🔴 判据刻意收窄：只认明确的「查数/查时间」词，宁可漏（漏=多给一张结构卡，无害）
     # 不可错杀（错杀=判断类问题被降成一句话）。「谁的项目最需要我搭把手」这类含疑问词
     # 但要判断的问题必须继续走 advice 路。
+    # 🔴 未知 locale 在这里**不静默兜底成一份空罐头**：取不到就退 DEFAULT_LOCALE 的那份。
+    # 服务层入口已经 normalize 过（app.py），这里是第二道保险——mock 罐头缺席会让门看到一段
+    # 空正文，而"空"最容易被误读成"语言判据没采到样"。
+    lang = locale if locale in _MOCK_ADVICE else DEFAULT_LOCALE
+
     if _looks_factual(situation):
         return {
             "prompt": situation.strip(),
             "avery": {
                 "recall_queries": recall_queries,
                 "cites": cites,
-                "answer": {
-                    "text": ("Direct answer, grounded in the cited line — (mock backend: this "
-                             "canned sentence demonstrates the short-answer path; a real brain "
-                             "reads the actual fact out of your documents here)."),
-                },
+                "answer": {"text": _MOCK_SHORT_ANSWER[lang]},
             },
         }
 
@@ -110,22 +169,7 @@ def _default_mock_block(memory_dir: Path, situation: str) -> dict:
         "avery": {
             "recall_queries": recall_queries,
             "cites": cites,
-            "advice": {
-                "read": ("Here is the situation as the evidence actually reads, not a judgment of "
-                         "the person: the pattern you describe is real and worth understanding, "
-                         "and nobody has yet heard the story behind it. Name the work and its "
-                         "effect on the team; keep the read on the situation, never on the person."),
-                "move": ("Have the direct conversation this week, in a 1:1, not over chat. Lead "
-                         "with the specific, observable pattern and its effect on the team, then "
-                         "genuinely ask what is going on and listen. Agree on what 'back on track' "
-                         "looks like and a near date to check it — supportive if there is a "
-                         "fixable cause, and still clear about what has to change either way."),
-                "framing": ("Open as a colleague who noticed, not a manager who is policing: "
-                            "'I've noticed the last few weeks have been bumpy, and that's not "
-                            "where you usually are. I'm not here to put you on the spot — I want "
-                            "to understand what's going on and help get you back to solid. Walk me "
-                            "through it.' Specific, owned, no surprises — and no scoring anyone."),
-            },
+            "advice": dict(_MOCK_ADVICE[lang]),
         },
     }
 
@@ -163,7 +207,7 @@ def build_live_case(sit: LiveSituation, memory_dir: Path, *, work_dir: Path | No
     body = "\n".join(parts)
 
     if with_mock:
-        mock = _default_mock_block(memory_dir, sit.situation)
+        mock = _default_mock_block(memory_dir, sit.situation, sit.locale)
         body += "\n\n<!-- MOCK\n" + json.dumps(mock, ensure_ascii=False, indent=2) + "\n-->\n"
 
     # Unique filename so concurrent requests never collide.

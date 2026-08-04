@@ -14,7 +14,7 @@ import { currentAccessToken } from './auth/authStore'
 
 // feat-068 · ZH-03：非 hook 的 i18n 取词路径（useDict 内部用的就是这两个纯函数）。
 // 🔴 只 import index.ts，绝不 import useDict.ts——那个才带 React，本模块必须保持零 React。
-import { getDict, resolveLocale } from '../shared/i18n'
+import { activeLocale, getDict, type Locale } from '../shared/i18n'
 
 // ── SSE 事件（feat-015 /advise 契约，见 service/engine.py::stream_advice）───────────────
 export type LiveAgentEventType =
@@ -66,6 +66,21 @@ export interface AdviseRequest {
   situation: string
   title?: string
   company_context_id?: string
+  // ADR-0033：判读正文的语言。调用方**不用填**——`streamAdvise` 自己从界面那条 locale 链补上
+  // （见下面 withLocale 的注释）。留在契约里是因为它确实是请求的一部分，后端按它写 prompt。
+  locale?: Locale
+}
+
+// 🔴 一处补全，不要在每个调用点各写一遍。
+// AdviseRequest 是从 RoomScreen / 决策卡「问问 Avery」/ v01 议事室等多个地方拼出来的；
+// 让每个调用点自己记得带 locale，就是给"哪天有人新加一个入口忘了带"留位置——而那个 bug 的
+// 症状是"英文界面偶尔回一段中文正文"，最难复现的那类。所以在传输层出口统一补。
+//
+// 语言取 activeLocale()：界面语言的当下真值（开关点过就是开关的选择，否则是 `?lang=` >
+// localStorage > env > en 那条链）。**与 useDict 同源**——界面语言和判读语言不可能各说各的。
+// 调用方显式传了就尊重它（测试/门可以指定），没传才补。
+function withLocale(req: AdviseRequest): AdviseRequest & { locale: Locale } {
+  return { ...req, locale: req.locale ?? activeLocale() }
 }
 
 // ── ingestion 契约（feat-016 registry.py 的 dict 形状，经 feat-018 HTTP 暴露）──────────────
@@ -281,23 +296,31 @@ export interface PersonWriteResult {
 // feat-056 决策定级契约。口径真源在后端 `eval-harness/avery/decision_rules.py`，
 // 人类可读说明在 `eval-harness/decision_grading_rules.md`（客户问"凭什么高风险"就给他看那份）。
 // 🔴 等级只由后端规则决定；前端不得自行判级、不得改写 grade。
+//
+// 🔴 ADR-0033 一刀切（2026-08-03）：后端**不再发任何人话**，只发机器键 + 结构化字段。
+// 删掉的字段：`grade_label` · `rule_grade_label` · 命中里的 `title`/`basis` ·
+// `unparsed_fields[].field_label` · 规则版的 `reason` 句子。它们的句子现在由前端
+// `src/shared/i18n/{en,zh}.ts` 的 `lite2.decisionGrades` / `lite2.decisionRules` 渲染，zh/en 各一份。
+// 不做新旧并存——并存等于留着"后端仍在产出中文"的破口，那正是这次要铲掉的东西。
 export type LiveDecisionGrade = 'high_risk' | 'needs_confirmation' | 'can_proceed'
 
 export interface LiveDecisionRuleHit {
-  rule_id: string // 如 'R-BLOCKER-STACK' —— 可引用编号，展开时逐条列给经理
+  rule_id: string // 如 'R-BLOCKER-STACK' —— 可引用编号；也是前端 i18n 查规则文案的键
   grade: LiveDecisionGrade
-  grade_label: string // 高风险 / 需确认 / 可推进
   severity: number // 3 / 2 / 1
-  title: string // 这条规则说的是什么（中文一行）
-  basis: string // 依据哪些字段（可审计）
-  evidence: string[] // 原文证据，verbatim —— 原样展示，不要转述
+  // 这条规则文案模板的占位符实参（如 { n: 2 } / { days: 7, pct: 60 }）。
+  // 阈值归后端配置（Danny 调 DUE_SOON_DAYS 就该跟着变），句子归前端 i18n —— 别把这些数字
+  // 抄进前端硬编码，那就是又开了一个会静默漂的事实源。没有占位符的规则发 `{}`。
+  params: Record<string, number>
+  // 原文证据，verbatim —— 原样展示，不要转述、**不要翻译**（ADR-0033 决定 4：翻译＝编）。
+  // 里面只有两种东西，都与界面语言无关：① 文档原句 ② 字段读数（`status="blocked"`）。
+  evidence: string[]
 }
 
 // 文档写了、但后端解析不出一个可比较的值的字段。raw 是**文档原文**，原样展示。
 export interface LiveDecisionUnparsedField {
-  field: string // 'dueDate' 等机器键
-  field_label: string // 中文字段名，如「到期日」——用户面显示这个
-  raw: string // 文档里原本写的那几个字，如「月底前」
+  field: string // 'dueDate' 等机器键 —— 人话字段名由前端 i18n 出
+  raw: string // 文档里原本写的那几个字，如「月底前」。永远原样，不翻译。
 }
 
 export interface LiveDecisionCard {
@@ -306,10 +329,8 @@ export interface LiveDecisionCard {
   subject_title: string
   owner_name: string
   grade: LiveDecisionGrade // 最终等级（= rule_grade，除非 Avery 合法上调）
-  grade_label: string
   severity: number // 排序键：3 高风险 / 2 需确认 / 1 可推进
   rule_grade: LiveDecisionGrade // 规则原判，永远保留，可对账
-  rule_grade_label: string
   rule_severity: number
   matched_rules: LiveDecisionRuleHit[] // 永不为空 —— 每条决策都能展开看到命中了哪条规则
   // 🔴 文档**确实没写**的字段（'status' | 'progress' | 'dueDate'）。界面必须显示「文档未提及」，
@@ -319,8 +340,11 @@ export interface LiveDecisionCard {
   // 界面必须把原文摆出来，例如「到期日写的是『月底前』，无法确定具体日期」——
   // 绝不能把这些说成「文档未提及」：客户手上就有原件，说他没写等于当场自证不可信。
   unparsed_fields: LiveDecisionUnparsedField[]
-  reason: string // 那句人话理由
-  reason_source: 'rule' | 'avery' // rule = 机械拼装可溯源；avery = 模型写的
+  // 🔴 ADR-0033：`reason_source === 'rule'` 时这里是**空串**——规则版的那句话由前端
+  // `composeRuleReason()` 用 i18n 模板从 grade + matched_rules + unknown/unparsed_fields 拼出来。
+  // 只有 Avery 真写了人话时才非空（此时它的语言由请求 locale 决定，进了 prompt）。
+  reason: string
+  reason_source: 'rule' | 'avery' // rule = 结构化事实，句子在前端；avery = 模型写的
   escalated: boolean // Avery 是否上调了等级
   escalation_reason: string // 上调必须写明为什么；未上调时为空串
   downgrade_blocked: boolean // Avery 试图下调、被硬拦（下调永不生效）
@@ -615,7 +639,7 @@ export function apiBase(): string {
 //
 // ── 分层选择（本次的关键决定）─────────────────────────────────────────────────────────
 // transport.ts 是传输层不是组件，没有 useDict() 可用（hook 只能在 render 里跑）。这里走
-// useDict 自己内部就在用的那条**非 hook 路径**：getDict(resolveLocale())。
+// useDict 自己内部就在用的那条**非 hook 路径**：getDict(activeLocale())。
 //   · 两者都是纯函数，shared/i18n/index.ts 不 import React——本模块因此仍然零 React 依赖。
 //   · 和 useDict 同一条 locale 解析（?lang= > VITE_AVERY_LOCALE > en），传输层文案和界面
 //     文案不可能各说各的语言。
@@ -624,7 +648,7 @@ export function apiBase(): string {
 // （UploadPanel / OnboardWizard / RoomScreen / ask 链）各写一份 status→key 的 switch，四份
 // 拷贝迟早分叉。TransportError 把后者的**好处**单独拿了过来——见下。
 export function httpErrorMessage(res?: Response): string {
-  const t = getDict(resolveLocale()).transport
+  const t = getDict(activeLocale()).transport
   // 配错的构建：一切失败都先说这句。否则"打不通"会被一路误读成服务器故障。
   // env 变量名 / localhost 地址属开发者细节，留在 apiBase() 那声 console.error 里。
   if (apiBaseMisconfigured()) return t.misconfigured
@@ -832,7 +856,7 @@ export function createHttpTransport(base: string = apiBase()): LiveTransport {
               Accept: 'text/event-stream',
               ...authHeader(req.company_context_id), // feat-047: tenant token (header only)
             },
-            body: JSON.stringify({ ...req, stream: true }),
+            body: JSON.stringify({ ...withLocale(req), stream: true }),
             signal: controller.signal,
           })
           if (!res.ok || !res.body) {

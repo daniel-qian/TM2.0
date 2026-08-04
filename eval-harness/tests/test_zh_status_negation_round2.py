@@ -438,6 +438,19 @@ def _grade_the_weekly() -> dict:
     return cards[0]
 
 
+def _hit_titles(card: dict) -> str:
+    """命中规则的标题连成一串，供"那句会摆到经理面前的话"类断言用。
+
+    🔴 为什么绕这一道：ADR-0033 之后后端**不再发那句话**（`reason` 恒为空串，句子由前端 i18n
+    按 rule_id 渲染），所以原来「断言 reason 里有/没有某几个字」的写法会变成对空串断言——恒真，
+    一条永远绿的假门。改成从载荷里读**真正命中的规则**，再回后端规则表取它的中文标题：
+    那正是前端 zh 文案的出处，也是 decision_grading_rules.md 里给客户看的那一行。
+    🔴 rule_id 只作为**从载荷读出来的值**出现，绝不写成字面量——`test_no_rule_text_in_any_prompt`
+    全仓禁止规则号出现在这三个文件之外。
+    """
+    return " / ".join(R.RULES_BY_ID[h["rule_id"]].title_zh for h in card["matched_rules"])
+
+
 def test_a_forced_postponement_reaches_the_manager_as_at_risk():
     """BORN RED，整条链，**这才是「不得不」被定为 blocker 的原因**。
 
@@ -451,8 +464,9 @@ def test_a_forced_postponement_reaches_the_manager_as_at_risk():
     一句说项目正常，一句说他什么都没写。
     """
     card = _grade_the_weekly()
-    assert "没读到状态" not in (card.get("reason") or ""), (
-        f"决策理由说没读到状态，而文档第三行就写着「不得不推迟上线」：{card['reason']!r}")
+    assert "没读到状态" not in _hit_titles(card), (
+        f"命中了那条说「没读到状态」的规则，而文档第三行就写着「不得不推迟上线」："
+        f"{_hit_titles(card)!r}")
     evidence = [e for hit in card["matched_rules"] for e in hit["evidence"]]
     assert 'status="at-risk"' in evidence, (
         f"命中的规则里没有一条是 at-risk 状态引出来的：{card['matched_rules']}")
@@ -497,6 +511,6 @@ def test_the_same_weekly_was_silently_dropped_at_round_one():
             "第一轮的项目卡上 status 键是存在的 —— 那么上面那条 wire 层的测试并没有在守它"
             "自称守的东西，重新量。")
         card = ctx.decision_cards(as_of=TODAY)[0]
-        assert "没读到状态" in (card.get("reason") or ""), (
-            f"第一轮的决策理由里没有「没读到状态」：{card.get('reason')!r} —— "
+        assert "没读到状态" in _hit_titles(card), (
+            f"第一轮命中的规则里没有「没读到状态」那条：{_hit_titles(card)!r} —— "
             f"bug 报告的原文对不上，重新量。")

@@ -25,6 +25,7 @@ validates a header-supplied token against it (404 on mismatch). The interactive 
 from __future__ import annotations
 
 import json
+import logging
 import os
 from pathlib import Path
 from typing import Any, Iterator
@@ -37,6 +38,7 @@ from sse_starlette.sse import EventSourceResponse
 
 from avery import skills
 from avery.env import load_dotenv
+from avery.locale import DEFAULT_LOCALE, normalize_locale  # ADR-0033: locale 是请求字段
 
 from . import account  # feat-053: verify a Supabase access token -> user id (header-only)
 from . import brain_factory, embedding_factory, extractor_factory, live_input, llm_budget, mem_sentinel
@@ -48,6 +50,8 @@ from .engine import stream_advice
 from .ingest_api import router as ingest_router  # feat-018: /ingest + /team/{id} (compose over feat-016)
 from .ingest_api import authorize_context, extract_owner_token  # feat-038: reuse the read-path gate
 from .upload_guard import IngestGuardMiddleware  # feat-039: edge rate-limit + total-body size cap
+
+logger = logging.getLogger(__name__)
 
 HERE = Path(__file__).resolve().parent.parent          # eval-harness/
 SKILLS_DIR = HERE / "skills"
@@ -121,10 +125,16 @@ class AdviseRequest(BaseModel):
     company_context_id: str | None = Field(
         None, description="feat-016 stub: handle for an ingested company RAG context.")
     stream: bool = Field(True, description="SSE stream (default) vs a single buffered JSON body.")
+    # ADR-0033: the language the manager reads the advice in. Optional and DELIBERATELY typed
+    # `str | None`, not `Literal['en','zh']` — a bad value must fall back to 'en' with a warning,
+    # never 422 a manager's advise turn (D11). Normalization lives in `avery.locale`.
+    locale: str | None = Field(
+        None, description="Reply language: 'en' (default) or 'zh'. Unknown values fall back to "
+                          "'en' with a server-side warning; they are never rejected.")
 
 
-def _system_prompt() -> str:
-    return skills.build_system_prompt(SKILLS_DIR, MEMORY_DIR, scaffold="full")
+def _system_prompt(locale: str = DEFAULT_LOCALE) -> str:
+    return skills.build_system_prompt(SKILLS_DIR, MEMORY_DIR, scaffold="full", locale=locale)
 
 
 def _resolve_memory_dir(company_context_id: str | None) -> Path:
@@ -170,7 +180,10 @@ def _run_events(sit: live_input.LiveSituation) -> tuple[Iterator[dict[str, Any]]
         return _err(), case
 
     events = stream_advice(
-        brain, case, _system_prompt(), agent_name=getattr(brain, "name", kind),
+        # ADR-0033: 语言指令随 locale 进 system prompt —— 真 brain 的正文语言从此是受控输入。
+        # （MockBrain 不看 system prompt，它的语言来自 build_live_case 埋进 case 的 MOCK 块，
+        #  同一个 sit.locale，两条路一个来源。）
+        brain, case, _system_prompt(sit.locale), agent_name=getattr(brain, "name", kind),
         scaffold="full", memory_dir=memory_dir, enforce_chain=True, enforce_redline=True,
         embedder=embedding_factory.make_embedder())  # None -> keyword recall (key stays server-side)
     return events, case
@@ -279,9 +292,14 @@ def advise(req: AdviseRequest,
         authorize_context(active_registry(), req.company_context_id,
                           extract_owner_token(x_avery_token, authorization),
                           account.resolve_account(x_avery_account))
+    # ADR-0033 · locale：缺省 en、非法回落 en 并告警（**不 422**，见 avery/locale.py 三条纪律）。
+    locale, locale_warning = normalize_locale(req.locale)
+    if locale_warning:
+        # normalize_locale 自己已经 log 过一条；这里再挂一条带 endpoint 身份的，方便按路由捞。
+        logger.warning("POST /advise: %s", locale_warning)
     sit = live_input.LiveSituation(
         situation=req.situation, title=req.title,
-        company_context_id=req.company_context_id)
+        company_context_id=req.company_context_id, locale=locale)
     events, case = _run_events(sit)
     events = _with_ask_frame(events, req)   # feat-034: maybe one ask-draft frame after the manifest
 

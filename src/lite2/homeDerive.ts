@@ -18,11 +18,18 @@ import type { LiveDecisionCard, LiveDecisionGrade, LiveTeamPayload } from './tra
 
 // ── ① 今天要决策的：分级计数 ────────────────────────────────────────────────
 // 🔴 decisions 数组的**顺序归后端**（feat-056 已按严重度排好序），这里只数数、不重排。
-// label 也一律取自 payload 自带的 `grade_label` —— 前端不硬编码「高风险/需确认/可推进」
-// 这三个词，后端换了措辞或换了语言，屏幕上跟着变，不会两处对不上。
+//
+// 🔴 这里以前写着：「label 一律取自 payload 自带的 `grade_label`，前端不硬编码
+// 「高风险/需确认/可推进」这三个词」。**[ADR-0033](docs/adr/0033-locale-is-a-request-field-
+// backend-stops-emitting-prose.md) 反转了那条决策**——但保留了它的用意。
+// 那条规矩真正要防的是「同一个档位，前后端各说各的词」，它要的是**单一事实源**，
+// 不是"必须由后端发"。双语之下旧写法反而做不到单一事实源：后端得为两种语言各存一份词，
+// 前端 i18n 表还得再存一份给别处用，那才是真会漂的形状。
+// 现在：后端只发机器键 `grade`，前端查**唯一**那张 i18n 表（`lite2.decisionGrades`）。
+// 事实源仍然只有一份，前端仍然不"自拟"——它是查表，不是发挥。
+// 所以本层只传 `grade` 机器键，**不带任何词**；词在渲染层查表。
 export interface DecisionBucket {
   grade: LiveDecisionGrade
-  label: string // 取自 payload 的 grade_label，前端不自拟
   severity: number
   count: number
 }
@@ -43,7 +50,6 @@ export function summarizeDecisions(decisions: LiveDecisionCard[] | undefined): D
     }
     byGrade.set(card.grade, {
       grade: card.grade,
-      label: card.grade_label,
       severity: card.severity,
       count: 1,
     })

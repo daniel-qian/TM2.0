@@ -310,10 +310,10 @@ for (const look of ['paper', 'aurora']) {
   await page.evaluate(() => {
     const decision = {
       subject_type: 'project', subject_id: 'p-gate-1', subject_title: '客户门户改版',
-      grade: 'high_risk', grade_label: '今天要决策', severity: 3,
-      reason: '截止日期已过而状态仍写推进中。', reason_source: 'rule',
+      grade: 'high_risk', severity: 3, rule_grade: 'high_risk', rule_severity: 3,
+      reason: '', reason_source: 'rule',
       escalated: false, escalation_reason: null, unknown_fields: [], unparsed_fields: [],
-      matched_rules: [{ rule_id: 'R1', title: '过期未更新', grade_label: '今天要决策', basis: '截止日早于今天', evidence: ['原文：预计 7 月 10 日交付'] }],
+      matched_rules: [{ rule_id: 'R-OVERDUE', grade: 'high_risk', severity: 3, params: {}, evidence: ['原文：预计 7 月 10 日交付'] }],
       owner_name: '陈静',
     }
     window.__lite2Store.setState({

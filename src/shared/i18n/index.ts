@@ -93,3 +93,29 @@ export function resolveLocale(search?: string): Locale {
 export function getDict(locale: Locale): Dict {
   return DICTS[locale]
 }
+
+// ── activeLocale：非 React 路径读到的**当前**语言（ADR-0033）─────────────────────────────
+//
+// 为什么 `resolveLocale()` 单独不够用：它是一个**纯解析**函数，URL 排第一位。语言开关
+// （localeStore.setLocale）写的是 localStorage，排第二位——所以一旦地址栏里带着 `?lang=zh`，
+// 用户点了 EN 开关之后：
+//   界面 = en（useDict 订阅 store，立刻重渲染）
+//   resolveLocale() = zh（URL 仍然赢）
+// 界面和传输层就此各说各话。这在 feat-068 只影响错误文案（读得懂就行），但 ADR-0033 之后
+// `/advise` 的 locale 也走这条路——那意味着**英文界面拿回一段中文判读正文**，正是本票要修的
+// 那个症状换了个触发方式。
+//
+// 修法不是"再解析一遍"，而是让**开关成为下游的唯一发布者**：store 每次落定就 setActiveLocale，
+// 传输层读 activeLocale()。首帧（store 还没 import 起来时）退回 resolveLocale()，与旧行为一致。
+// 🔴 仍然只有一条链：activeLocale 的初值就是 resolveLocale() 的结果，开关只是在它之后接管。
+let _activeLocale: Locale | null = null
+
+/** 语言开关的落点（localeStore 独家调用）。别在别处调——多一个发布者就多一条会漂的链。 */
+export function setActiveLocale(locale: Locale): void {
+  _activeLocale = locale
+}
+
+/** 传输层等非 React 路径读当前语言。store 还没发布过就现算一次（首帧安全）。 */
+export function activeLocale(): Locale {
+  return _activeLocale ?? resolveLocale()
+}

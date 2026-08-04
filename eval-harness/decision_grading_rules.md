@@ -169,6 +169,14 @@
 下调被拦时，**它那句理由也一并丢弃**，退回机械理由。因为那句话是为更低一档写的，
 贴在高一档上会自相矛盾——经理会看到「高风险」配一句「问题不大」。
 
+> **2026-08-03 起「机械理由」不再由后端出**（[ADR-0033](../docs/adr/0033-locale-is-a-request-field-backend-stops-emitting-prose.md)）。
+> 定级接口只回**机器键 + 结构化字段**（`grade` / `matched_rules[].rule_id` /
+> `unknown_fields` / `unparsed_fields`），那句「按规则判为高风险：…」由前端按界面语言渲染，
+> 中英各一份。`reason` 字段因此在 `reason_source="rule"` 时是**空串**，只有 Avery 真写了
+> 人话时才非空（那句话的语言由请求的 `locale` 决定，已写进 prompt）。
+> 本文件里这些**中文规则措辞仍是口径真源**——客户问「凭什么说这条高风险」，给他看的就是这一份；
+> 前端 zh 文案与它对齐，由 `tests/test_decision_i18n_contract.py` 逐条对账。
+
 `rule_grade` 字段**永远**保留规则原判，任何时候都能对账：规则说了什么、Avery 改了什么、为什么。
 
 ## 可复现性

@@ -1412,6 +1412,53 @@ export const en = {
     homeDecisionOwner: 'Owned by',
     homeDecisionReasonRule: 'By the rules',
     homeDecisionReasonAvery: "Avery's own read",
+    // ── ADR-0033 · the words the backend used to send ──────────────────────────────────────
+    // Until 2026-08-03 the backend shipped these sentences ready-made, in Chinese, and the front
+    // end was under written orders NOT to hold the three grade words itself. That rule wanted a
+    // SINGLE SOURCE of truth, and it got one — for exactly one language. In two languages the old
+    // shape cannot deliver what it was asking for: the backend would need a copy per language and
+    // this table would still need its own for everywhere else. So the source moved rather than
+    // multiplied — backend sends the machine key (`high_risk`, `R-BLOCKER-STACK`), this table is
+    // the one place the words live. The front end still does not make anything up; it looks it up.
+    decisionGrades: {
+      high_risk: 'High risk',
+      needs_confirmation: 'Needs confirming',
+      can_proceed: 'Clear to proceed',
+    },
+    // The composed "by the rules" sentence. The backend used to build this string; now it sends
+    // {grade, matched_rules[]} and this is where it becomes a sentence. Note there is no
+    // "unknown is not the same as no risk" tail any more — that caveat used to be duplicated
+    // inside this sentence AND rendered again by the two blocks right below the card.
+    homeDecisionReasonByRule: 'By the rules this is {grade}: {rules}.',
+    homeDecisionReasonNoRule: 'no rule matched',
+    homeDecisionRuleJoin: '; ',
+    // The rule wording, keyed by the rule id the backend sends. {n}/{days}/{pct} are filled from
+    // the hit's `params` — the THRESHOLDS stay backend config (`decision_rules.py`), only the
+    // sentence lives here. 🔴 Never hard-code those numbers into the sentence: that re-opens the
+    // exact drift this ADR closed, one layer down.
+    // 🔴 Wording red line (same one the backend carried, ADR-0018): say what WAS or WAS NOT READ,
+    // never assert what the customer's document does or does not contain. He is holding the
+    // original; telling him he never wrote something is how you lose him in one sentence.
+    decisionRules: {
+      'R-SIGNAL-ATTRITION': { title: 'A linked signal mentions attrition or someone leaving', basis: 'Signals + blockers' },
+      'R-SIGNAL-COMPLAINT': { title: 'A linked signal mentions a customer complaint or cancellation', basis: 'Signals + blockers' },
+      'R-SIGNAL-CONFLICT': { title: 'A linked signal mentions friction between people', basis: 'Signals + blockers' },
+      'R-SIGNAL-INCIDENT': { title: 'A linked signal mentions legal, safety or a work stoppage', basis: 'Signals + blockers' },
+      'R-STATUS-BLOCKED': { title: 'The project reports its own status as blocked', basis: 'Status' },
+      'R-BLOCKER-STACK': { title: '{n} or more unresolved blockers at the same time', basis: 'Blockers' },
+      'R-OVERDUE': { title: 'The due date has already passed', basis: 'Due date' },
+      'R-DUE-VS-PROGRESS': { title: 'Due within {days} days, with self-reported progress under {pct}%', basis: 'Due date + progress' },
+      'R-STATUS-AT-RISK': { title: 'The project reports its own status as at risk', basis: 'Status' },
+      'R-BLOCKER-ONE': { title: 'One unresolved blocker', basis: 'Blockers' },
+      'R-DUE-SOON': { title: 'Due within {days} days', basis: 'Due date' },
+      'R-PROGRESS-LOW': { title: 'Self-reported progress under {pct}% and not finished', basis: 'Progress' },
+      'R-SIGNAL-WATCH': { title: 'A linked signal mentions a delay, rework or being short-handed', basis: 'Signals + blockers' },
+      'R-SELF-REPORT-MISMATCH': { title: 'Reports itself on track while carrying an unresolved blocker', basis: 'Status + blockers' },
+      'R-NO-EVIDENCE': { title: 'None of status, blockers, progress or due date could be read — too little to treat as safe', basis: '(none of those fields could be read)' },
+      'R-UNCLASSIFIED': { title: 'What was read does not match any existing rule, so it needs a person to confirm', basis: '(no rule matched)' },
+      'R-DONE': { title: 'The project reports itself finished, with no risk signals', basis: 'Status' },
+      'R-CLEAR': { title: 'The project reports itself on track, with no blockers and no risk signals', basis: 'Status + blockers' },
+    },
     homeDecisionEscalated: 'Avery raised this grade',
     homeDecisionRulesToggle: 'The reasoning',
     homeDecisionRuleBasis: 'Read from',
@@ -1427,6 +1474,13 @@ export const en = {
     homeFieldStatus: 'Status',
     homeFieldProgress: 'Progress',
     homeFieldDueDate: 'Due date',
+    homeFieldBlockers: 'Blockers',
+    homeFieldJoin: ', ',
+    // 🔴 The label/value separator was a HARD-CODED full-width colon in the JSX
+    // (`{t.lite2.homeDecisionUnknownLabel}：{...}`), so the English shell rendered
+    // "Not mentioned in the files：Status" — a CJK character sitting in an English sentence.
+    // It is a dictionary entry now because punctuation is copy too.
+    labelSep: ': ',
 
     // Block 2 — closer-look summary. 棒D: three-state filter chips + her claim/observed grammar.
     // The "Active" chip label is the only new word — Settled / Set aside reuse gapResolvedBadge /

@@ -9,6 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from . import memory
+from .locale import DEFAULT_LOCALE, language_instruction
 
 # Which skill files belong to which scaffold level. Order is load order.
 _FULL = ["00-relational-model.md", "01-red-line.md", "02-kind-read-can-be-wrong.md"]
@@ -39,11 +40,16 @@ def _strip_html_comments(md: str) -> str:
     return "".join(out)
 
 
-def build_system_prompt(skills_dir: Path, memory_dir: Path, *, scaffold: str = "full") -> str:
+def build_system_prompt(skills_dir: Path, memory_dir: Path, *, scaffold: str = "full",
+                        locale: str = DEFAULT_LOCALE) -> str:
     """scaffold:
         'full'            -> Avery: all skills incl. the red line + kind-read discipline.
         'minus_redline'   -> baseline B: advisor framing + chain, but NO red-line skill.
         'none'            -> baseline A (raw): no skills at all, just a bare consultant ask.
+
+    locale (ADR-0033 决定 3): 判读正文的语言。**每一档 scaffold 都带这段指令**，baseline 也带
+    —— baseline 存在的意义是"除了红线那一层，别的都一样"，让它少一段语言指令就等于给对比组
+    偷偷换了变量。在此之前 prompt 里一句语言指令都没有，正文语言是涌现的（见模块 locale.py）。
     """
     parts: list[str] = []
 
@@ -65,6 +71,10 @@ def build_system_prompt(skills_dir: Path, memory_dir: Path, *, scaffold: str = "
 
     if scaffold != "none":
         parts.append("## The fixed chain\n" + CHAIN_HINT)
+
+    # 🔴 语言指令排在链之后、facts head 之前：facts head 是**中文文档原文**，让语言指令紧挨在
+    # 它前面，模型读到那堆中文时刚看过"引文照抄、正文用 X 语言"这句话，最不容易把两者搞混。
+    parts.append("## The language you answer in\n" + language_instruction(locale))
 
     facts_head = memory.load_facts_head(memory_dir)
     if facts_head:

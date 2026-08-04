@@ -999,6 +999,46 @@ export const zh: Dict = {
     "homeDecisionOwner": "负责人",
     "homeDecisionReasonRule": "按规则判定",
     "homeDecisionReasonAvery": "Avery 自己的判断",
+    // ⚠ HAND-WRITTEN, act-first（票 #38 · ADR-0033，2026-08-03）：以下 decisionGrades /
+    //  homeDecisionReasonByRule / homeDecisionReasonNoRule / homeDecisionRuleJoin / decisionRules
+    //  这一整块，是从后端搬过来的——在此之前这些句子由 decision_grading.py / decision_rules.py
+    //  写死成中文随载荷发下来，英文用户因此拿到中英夹杂的判读面板。ADR-0033 后后端只发机器键
+    //  （high_risk / R-BLOCKER-STACK），句子在这里出，zh/en 各一份。
+    //  🔴 没跑 i18n-zh.mjs / i18n-zh-delta.mjs：① 对象体里有 8 行 feat-057 红线注释，delta 的
+    //  JSON.stringify 写法会连它们一起抹掉；② 2026-08-03 口径已改成「中英文都由当前 session
+    //  自己写大白话」（AGENTS.md DoD 第 3 条），不再绕道 M3。源键在 en.ts（唯一源）。
+    //  🔴 措辞红线（ADR-0018，与后端原文一字不让）：只许说「读到 / 没读到什么」，绝不许替客户
+    //  断言「你的文档里没写 X」——他手上就有原件，一翻就露馅。
+    "decisionGrades": {
+      "high_risk": "高风险",
+      "needs_confirmation": "需确认",
+      "can_proceed": "可推进"
+    },
+    "homeDecisionReasonByRule": "按规则判为{grade}：{rules}。",
+    "homeDecisionReasonNoRule": "无命中规则",
+    "homeDecisionRuleJoin": "；",
+    // {n}/{days}/{pct} 由命中的 `params` 填 —— 阈值仍归后端配置（decision_rules.py），
+    // 这里只出句子。🔴 别把那几个数字写死进句子，那等于在下一层重开一个会静默漂的事实源。
+    "decisionRules": {
+      "R-SIGNAL-ATTRITION": { "title": "关联信号提到人员流失 / 离职", "basis": "关联信号 + 阻塞" },
+      "R-SIGNAL-COMPLAINT": { "title": "关联信号提到客户投诉 / 退订", "basis": "关联信号 + 阻塞" },
+      "R-SIGNAL-CONFLICT": { "title": "关联信号提到协作冲突", "basis": "关联信号 + 阻塞" },
+      "R-SIGNAL-INCIDENT": { "title": "关联信号提到法务 / 安全 / 停工", "basis": "关联信号 + 阻塞" },
+      "R-STATUS-BLOCKED": { "title": "项目自报状态为「已阻塞」", "basis": "状态" },
+      "R-BLOCKER-STACK": { "title": "同时挂着 {n} 条及以上未解阻塞", "basis": "阻塞" },
+      "R-OVERDUE": { "title": "到期日已过", "basis": "到期日" },
+      "R-DUE-VS-PROGRESS": { "title": "{days} 天内到期、但自报进度不足 {pct}%", "basis": "到期日 + 进度" },
+      "R-STATUS-AT-RISK": { "title": "项目自报状态为「有风险」", "basis": "状态" },
+      "R-BLOCKER-ONE": { "title": "挂着 1 条未解阻塞", "basis": "阻塞" },
+      "R-DUE-SOON": { "title": "{days} 天内到期", "basis": "到期日" },
+      "R-PROGRESS-LOW": { "title": "自报进度不足 {pct}% 且未完成", "basis": "进度" },
+      "R-SIGNAL-WATCH": { "title": "关联信号提到延期 / 返工 / 缺人等待办", "basis": "关联信号 + 阻塞" },
+      "R-SELF-REPORT-MISMATCH": { "title": "自报「正常」但挂着未解阻塞（自述与信号不一致）", "basis": "状态 + 阻塞" },
+      "R-NO-EVIDENCE": { "title": "没读到状态、阻塞、进度、到期日中的任何一项——信息不足，不能当作没风险", "basis": "（这四个字段都没读到）" },
+      "R-UNCLASSIFIED": { "title": "读到的字段没有落在任何一条现有规则的判据里，无法直接归类，需要人工确认", "basis": "（未命中任何规则）" },
+      "R-DONE": { "title": "项目自报已完成，且无风险信号", "basis": "状态" },
+      "R-CLEAR": { "title": "项目自报正常，无未解阻塞、无风险信号", "basis": "状态 + 阻塞" }
+    },
     "homeDecisionEscalated": "Avery 把等级往上调了",
     "homeDecisionRulesToggle": "判断依据",
     "homeDecisionRuleBasis": "看的字段",
@@ -1010,6 +1050,9 @@ export const zh: Dict = {
     "homeFieldStatus": "状态",
     "homeFieldProgress": "进度",
     "homeFieldDueDate": "到期日",
+    "homeFieldBlockers": "阻塞",
+    "homeFieldJoin": "、",
+    "labelSep": "：",
     "homeGapsTitle": "资料对不上的地方",
     "homeGapsCount": "{count} 处待看",
     "homeGapsEmpty": "现在没有自相矛盾的地方。",

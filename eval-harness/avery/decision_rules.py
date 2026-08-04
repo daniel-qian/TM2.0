@@ -23,7 +23,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 # --- 三档等级 ---------------------------------------------------------------------------------
-# 机器键稳定（前端 057 按它排序/分组），中文标签是唯一的用户面用词。
+# 机器键稳定（前端 057 按它排序/分组）。用户面的三个词由**前端 i18n 表**出
+# （ADR-0033：后端不再产出人话），后端只发这三个键。
 HIGH_RISK = "high_risk"
 NEEDS_CONFIRMATION = "needs_confirmation"
 CAN_PROCEED = "can_proceed"
@@ -33,6 +34,11 @@ GRADES: tuple[str, ...] = (HIGH_RISK, NEEDS_CONFIRMATION, CAN_PROCEED)
 # 数值越大越紧急 —— 「今天要决策的」的排序键，也是"只许上调不许下调"的比较依据。
 SEVERITY: dict[str, int] = {CAN_PROCEED: 1, NEEDS_CONFIRMATION: 2, HIGH_RISK: 3}
 
+# 🔴 ADR-0033 之后 LABEL_ZH **不再进任何 HTTP 载荷**。它只剩一个用途：`decision_grading_rules.md`
+# ——那份给客户当场看的中文口径说明书——里的三档词必须和这里一致（`test_rules_doc_in_sync`
+# 是唯一读它的地方）。用户面的三档词住在 `src/shared/i18n/{en,zh}.ts` 的
+# `lite2.decisionGrades`，zh/en 各一份，`test_frontend_i18n_covers_every_rule` 守它不缺项。
+# 谁要是在 `to_dict()` 里把它加回去，就等于把"后端发中文、英文用户看中英夹杂"整类缺陷复活。
 LABEL_ZH: dict[str, str] = {
     HIGH_RISK: "高风险",
     NEEDS_CONFIRMATION: "需确认",
@@ -174,6 +180,22 @@ RULES: tuple[Rule, ...] = (
 
 RULE_IDS: tuple[str, ...] = tuple(r.id for r in RULES)
 RULES_BY_ID: dict[str, Rule] = {r.id: r for r in RULES}
+
+# --- 规则展示参数（ADR-0033）-------------------------------------------------------------------
+# 上面 `title_zh` 里那几个 f-string 插值（"7 天内到期"、"同时挂着 2 条及以上"）在 ADR-0033 之后
+# **不再随载荷发中文句子**——句子由前端 i18n 表按 rule_id 渲染。但阈值本身是**后端配置**
+# （Danny 调 DUE_SOON_DAYS 就该跟着变），所以句子归前端、数字仍归后端：这张表随每条命中一起发，
+# 前端拿它填模板占位符。
+#
+# 🔴 别把这些数字抄进前端硬编码——那就是又开了一个会静默漂的事实源，正是本 ADR 要铲掉的东西。
+# 这里只放**静态阈值**；「已过 12 天」这类每次命中都不同的数不进来，它们的载体是 evidence
+# 里那行字段读数（`dueDate="2026-07-10"`），本来就是语言中立的。
+RULE_PARAMS: dict[str, dict[str, int]] = {
+    "R-BLOCKER-STACK": {"n": BLOCKER_STACK_N},
+    "R-DUE-SOON": {"days": DUE_SOON_DAYS},
+    "R-DUE-VS-PROGRESS": {"days": DUE_CRUNCH_DAYS, "pct": PROGRESS_CRUNCH_PCT},
+    "R-PROGRESS-LOW": {"pct": PROGRESS_LOW_PCT},
+}
 
 
 def rule(rule_id: str) -> Rule:
