@@ -78,6 +78,19 @@ Avery 自有的垂直领域专家知识层——跨 HR / Legal / PM / Finance / 
 _Surface label_（[ADR-0015](docs/adr/0015-product-tone-human-advisor-debrand-saas-naming.md)）：user-facing 一律用 **"Playbooks"**（资深前辈的词，温暖、有经验感）；"Capabilities" 仅作内部领域概念名 / type / 变量名保留，不进用户界面（含"the moat"等护城河自夸不进界面）。
 _Avoid_: CAPA（撞行业既有术语 Corrective-And-Preventive-Action，会让听众卡顿解码）、capabilities RAG（RAG 是检索机制，不是这个知识层本身）、专家能力库
 
+**Language surface（语言面）**（2026-08-03 新增，见 [ADR-0033](docs/adr/0033-locale-is-a-request-field-backend-stops-emitting-prose.md)）：
+说"产品是中文还是英文"这句话时，**必须先说清是哪个面**——它们互相独立，可以各说各话：
+① **界面壳文案**（`src/shared/i18n/`，前端 `?lang= > VITE_AVERY_LOCALE > en`）；
+② **后端派生文案**（规则推导出的句子——ADR-0033 后改为只回机器键，句子归前端）；
+③ **LLM 判读正文**（由请求 locale 写进 prompt 决定，不再涌现）；
+④ **引文 evidence**（**永远是原文语言**，跟界面语言无关——逐字引用，翻译＝编）。
+🔴 与上述四者**都不是一回事**的第五样东西：**输入侧检测词表/正则**
+（`extract.py` / `redline.py` / `granularity.py` 里那几百条中文）。那是用来**读中文文档**、
+守红线的匹配模式，**「文档语言」≠「界面语言」**——界面切英文时它们必须仍是中文。
+把它当"没本地化的文案"顺手双语化，会当场砸掉解析与红线。
+_Avoid_: 笼统说"把产品翻译成英文"（不指明面，必然有人误伤词表）；
+把 locale 当"UI 开关"（它现在是判读请求的输入，决定正文语言）
+
 ## Product surface（2026-07-05 圆桌新增，见 [ADR-0020](docs/adr/0020-avery-graduates-from-demo-only-to-live-lite-product.md) / [ADR-0021](docs/adr/0021-two-engine-core-vertical-packs-skins-dual-deploy.md)）
 
 **Avery Live**：

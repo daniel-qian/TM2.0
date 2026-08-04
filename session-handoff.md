@@ -74,15 +74,71 @@
 本棒新加的两道门都带了**自证判据**（"工作区文件清单非空"/"浮层真开着且渲染了本卡内容"/
 "这一屏有可审控件"），专门防这个。
 
-## 下一棒建议怎么开
+---
 
-1. **先 push**（见顶部）。
-2. **B 档单独起一次 grilling**：EN locale 中英夹杂 + `AdviseRequest` 没有 locale 字段是**同一票**，
-   跨前后端契约变更，按 [[feedback-0729-three-verdicts]] 先 grill 出 PRD 再换 session 开发。
-3. **C 档在报告里向 Danny 要口径，别自己开工**：真机覆盖（只能 Danny 做）、
-   真 brain 分流取证（真花钱，要先定"上限几次/打谁/超了就停"）、#30 已拍板不做。
-4. 想继续 AFK 的话，剩下的低风险活：gate-run 迁移续做（先扩 makeRec 才能吃 aria-zh/cr-alignment）、
-   r2 剩余未开票发现里的非布局类。
+# 🎯 下一棒（AFK）：#38 locale 契约 —— PRD 已 grill 完，可直接开工
+
+B 档本棒**已经 grill 完并落成文档**，不用再问 Danny，直接进开发。
+
+- **票**：[#38](https://github.com/daniel-qian/avery/issues/38)（`ready-for-agent`）
+- **PRD**：`.issues/locale-contract-0803/prd.md` —— 11 条决议逐条拍板，含范围边界与验收
+- **ADR**：[ADR-0033](docs/adr/0033-locale-is-a-request-field-backend-stops-emitting-prose.md)
+  —— 架构决议 + **它反转了一条既有决策**（见下）
+- **领域词**：CONTEXT.md 新增「Language surface（语言面）」条目
+
+## 开工前必须先读懂这三件事，否则会做错
+
+1. **票面严重低估范围。** 这不是"改三处 `LABEL_ZH`"。后端有 **396 处中文字符串字面量**，
+   分成**性质相反**的两类：输出侧文案（要改）vs **输入侧检测词表/正则**（`extract.py` 93、
+   `redline.py` 75、`granularity.py` 40……**一个字都不许动**）。
+   🔴 **最容易犯的错**：看到 `extract.py` 一排中文就顺手双语化。那是用来**读中文文档**的
+   匹配模式——客户文档是中文，词表就必须是中文，**即使界面切英文**。动了＝解析和红线当场瞎掉。
+   「文档语言」≠「界面语言」。
+
+2. **语言有四个互相独立的面**（界面壳 / 后端派生文案 / LLM 正文 / 引文），今天可以各说各话。
+   说"把产品翻译成英文"这句话之前先说清是哪个面。详见 CONTEXT.md 那条新词。
+
+3. **LLM 正文语言今天完全不受控**——prompt 里没有任何语言指令，输出语言是涌现的。
+   模板改得再对，正文照样可能不听话。所以 D3（locale 进 prompt）和验收判据③是配套的。
+
+## 已拍板、别再重开的决议（全文见 PRD §2）
+
+真双语对等 · locale 沿用前端解析链随请求下传（optional，缺省 `en`，非法值回落 en + 告警）·
+locale 写进 prompt · **引文永不翻译** · **后端不再产出人话**（只回机器键 + 结构化字段）·
+契约**一刀切换**不并存 · 输入侧词表不动 · 问卷 H5 文案单开一票。
+
+🔴 **ADR-0033 反转了一条既有决策**：`homeDerive.ts` / `HomeScreen.tsx` 里写着
+「前端不硬编码三个档位词，一律取后端 `grade_label`」。新方向要求前端出词。
+**保用意换载体**——那条规矩要的是"单一事实源"，不是"必须后端发"；改成后端发机器键、
+前端查唯一 i18n 表，事实源仍只有一份。看到那两条旧注释别以为是自己搞错了，
+连注释一起换掉，指向 ADR-0033。
+
+## 第一步就跑这个（一刀切的真实工作量清单）
+
+```bash
+grep -rn "grade_label" src/ eval-harness/ --include=*.ts --include=*.tsx --include=*.mjs --include=*.py
+```
+
+它会列出所有必须**同批改完**的消费方：前端 3 处、**4 道门**（cr-alignment / home-skeleton /
+topbar-clearance / capture-align-board）、`tests/test_decision_grading.py`。
+少改一处，门会在最后一刻红给你看。
+
+## 验收（PRD §4，别打折）
+
+新门 `verify-locale-parity.mjs`（A 区、🔴 上传型、**绝不能排在 C 区之后**）：
+同一份中文语料跑 zh/en 两遍，四条判据 —— ①界面壳无异语残留 ②后端派生文案语言正确
+③**LLM 正文语言 == 请求 locale** ④**evidence 仍是中文原样**。
+🔴 born-red **两头都要验**（本棒实测：一道门能从"太宽＝假红"和"太松＝对着坏构建全绿"
+两个方向各撒一次谎）；🔴 带**自证判据**防空跑；🔴 语料必须含真中文字节。
+
+---
+
+## 其余待办
+
+- **C 档仍归 Danny，别自己开工**：真机覆盖（只能他做）、真 brain 分流取证（真花钱，
+  要先定"上限几次/打谁/超了就停"）、#30 已拍板不做。
+- 想穿插低风险活：gate-run 迁移续做（先扩 makeRec 才能吃 aria-zh/cr-alignment）、
+  r2 剩余未开票发现里的非布局类。
 
 ## 环境（收尾态）
 
