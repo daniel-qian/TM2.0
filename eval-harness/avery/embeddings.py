@@ -38,6 +38,23 @@ class Embedder(Protocol):
 
 # --- Bailian / DashScope real embedder --------------------------------------------------------
 
+# 0805 走查修闸: the billable-embedding spend gate. The SERVICE owns the per-process spend counter
+# (service/llm_budget), but this core module must not import `service` (same one-way rule the
+# module docstring already lives by), and embedders are constructed from more than one place
+# (service/embedding_factory AND registry.active_registry's own make_embedder_from_env). So the
+# seam is injected: the service installs its gate here at import time, and DashScopeEmbedder
+# consults it before EVERY billable HTTP batch — whoever built the instance. None (the default,
+# and the offline suite's reality) = no gate, exactly the pre-existing behavior. Offline fakes
+# (HashingEmbedder) never touch this: only the real DashScope HTTP path is billable.
+_SPEND_GATE = None  # Callable[[int], None] — called with the batch size; raises to refuse the call
+
+
+def install_spend_gate(gate) -> None:
+    """Install (or clear, with None) the process-wide billable-embedding gate."""
+    global _SPEND_GATE
+    _SPEND_GATE = gate
+
+
 DASHSCOPE_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 DASHSCOPE_EMBED_MODEL = "text-embedding-v4"
 DASHSCOPE_EMBED_DIM = 1024
@@ -72,6 +89,8 @@ class DashScopeEmbedder:
         return f"dashscope:{self.model}/{self.dim}"
 
     def _embed_batch(self, texts: list[str]) -> list[list[float]]:
+        if _SPEND_GATE is not None:   # 0805 走查修闸: charge/refuse BEFORE the billable request
+            _SPEND_GATE(len(texts))
         body = json.dumps({
             "model": self.model,
             "input": texts,

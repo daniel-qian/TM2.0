@@ -161,8 +161,27 @@ def _run_events(sit: live_input.LiveSituation) -> tuple[Iterator[dict[str, Any]]
     with_mock = (kind == "mock")
     memory_dir = _resolve_memory_dir(sit.company_context_id)
     case = live_input.build_live_case(sit, memory_dir, with_mock=with_mock)
+
+    # 0805 走查修闸: /advise goes THROUGH the feat-039 spend gate. This was the actual
+    # denial-of-wallet hole the walkthrough smelled (and mis-attributed): one advise turn is an
+    # agentic loop of up to MAX_ITERS(12) uncharged model calls, while extractor and /ask drafting
+    # were already BudgetedBrain-wrapped. A spent budget short-circuits BEFORE the stream starts
+    # (clean error event, brain never built); a mid-loop exhaustion raises BudgetExceeded inside
+    # engine.stream_advice, whose catch-all already surfaces it as an honest `error` event. The
+    # mock brain is exempt (pure/local, no key, no cost) — the offline suite stays green.
+    if kind != "mock" and llm_budget.exhausted():
+        msg = (f"LLM call budget exhausted ({llm_budget.used()}/{llm_budget.budget()}) — "
+               "/advise is paused to protect spend")
+
+        def _budget_err() -> Iterator[dict[str, Any]]:
+            yield {"type": "error", "error": msg,
+                   "hint": "raise AVERY_LLM_CALL_BUDGET (or redeploy — the counter is per-process)."}
+        return _budget_err(), case
+
     try:
         brain = brain_factory.make_brain(case, kind)
+        if kind != "mock":
+            brain = llm_budget.BudgetedBrain(brain)
     except RuntimeError as e:
         # 🔴 `msg` must be bound HERE, not read inside the generator. Python 3 implicitly deletes
         # the `except ... as e` name when the except block exits, and this generator is lazy — it
@@ -271,6 +290,10 @@ def health() -> dict:
             "extraction_mode": extraction_mode,                  # effective now: llm / heuristic / degraded
             "memory": mem,                                        # {rss_mb, warn_mb, high, available}
             "llm_calls_remaining": llm_budget.remaining(),        # None = unlimited (gate disabled)
+            # 0805 走查修闸: embeddings burn on their OWN counter (AVERY_EMBED_CALL_BUDGET —
+            # DashScope batches are ~2 orders cheaper than a chat call; mixing them into
+            # llm_calls_remaining would corrupt the number Danny already watches in production).
+            "embed_calls_remaining": llm_budget.embed_remaining(),  # None = unlimited
             "degraded": bool(mem.get("high")) or extraction_degraded}  # operator-facing: needs attention
 
 

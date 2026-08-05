@@ -9,10 +9,20 @@ The frontend never sees any of this: it only ever receives SSE events.
 """
 from __future__ import annotations
 
+from avery import embeddings as _embeddings
 from avery.embeddings import make_embedder_from_env, resolve_embeddings_kind as _resolve_kind
+
+from . import llm_budget
 
 # feat-031: the gate itself now lives in avery.embeddings so the Postgres registry (avery.ingest) can
 # share it without importing `service`. This module stays the SERVICE-side entry point (unchanged API).
+
+# 0805 走查修闸: install the billable-embedding spend gate the moment the service side loads (app.py
+# imports this module at startup, before any request). Installing HERE — not per-instance in
+# make_embedder() — is what also covers the embedder `registry.active_registry()` builds for itself
+# via make_embedder_from_env (pg_registry's put()-fallback + pgvector query path): the hook lives
+# inside DashScopeEmbedder._embed_batch, so every construction path passes the same counter.
+_embeddings.install_spend_gate(llm_budget.embed_spend_gate)
 
 
 def resolve_embeddings_kind() -> str:

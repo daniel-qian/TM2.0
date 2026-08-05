@@ -255,7 +255,18 @@ class PostgresContextRegistry(ProjectWriteMixin):
                 return candidate
             vecs = candidate           # kept only to report its (wrong) dim if the embedder also fails
         if self._embedder is not None:
-            candidate = self._embedder.embed([m.text for m in mats])
+            # 0805 走查修闸: this fallback re-embed is billable too (and now passes the
+            # AVERY_EMBED_CALL_BUDGET spend gate). A failure — endpoint outage or the gate refusing
+            # the batch — must degrade to NULL embeddings (keyword retrieval at get()), never fail
+            # the whole put(): the manager's upload lands either way.
+            try:
+                candidate = self._embedder.embed([m.text for m in mats])
+            except Exception as e:
+                logger.warning(
+                    "embedding the material corpus failed (%s: %s) — storing NULL embeddings for "
+                    "context %s; retrieval degraded to keyword",
+                    type(e).__name__, str(e)[:200], ctx.context_id)
+                return None
             if _fits(candidate):
                 return candidate
             vecs = candidate

@@ -21,6 +21,8 @@ extractor (heuristic or LLM) that scored a person cannot poison the advisor's me
 """
 from __future__ import annotations
 
+import logging
+
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -34,6 +36,8 @@ from .registry import (
     CompanyContext, ContextRegistry, SourceDocument, active_registry, data_root, new_context_id,
     materialize_memory, _now_iso,
 )
+
+log = logging.getLogger("avery.ingest.pipeline")
 
 
 @dataclass
@@ -130,9 +134,19 @@ def ingest_docs(docs: list[ParsedDoc], *, extractor: Extractor | None = None,
     if not rl.ok and not person_scoring_allowed():
         return IngestReport(ok=False, context=None, redline=rl, parsed=docs, extraction=extraction)
 
-    # Build the RAG store and load material.
+    # Build the RAG store and load material. 0805 走查修闸: VectorStore.add embeds the whole corpus
+    # through a billable endpoint — an embedding failure there (DashScope outage, or the
+    # AVERY_EMBED_CALL_BUDGET spend gate refusing the batch) must degrade this ingest to the offline
+    # keyword store, never fail the upload: retrieval quality drops, the manager's context still
+    # lands. Same honesty rule as pg_registry._material_vectors (NULL vectors -> keyword at get()).
     store: RetrievalStore = build_store(embedder, prefer_vector=prefer_vector)
-    store.add(extraction.materials)
+    try:
+        store.add(extraction.materials)
+    except Exception as e:
+        log.warning("embedding the material corpus failed (%s: %s) — this context degrades to "
+                    "keyword retrieval", type(e).__name__, str(e)[:200])
+        store = build_store(None, prefer_vector=False)
+        store.add(extraction.materials)
 
     # Materialize facts.md/notes.md so the EXISTING loop recall + cite gate work over ingested data.
     # feat-030: the default base is a STABLE data dir (AVERY_DATA_DIR) when configured — the OS temp
