@@ -107,7 +107,8 @@
   **逐字编辑真生效**(native setter 注入后 value 回读);**1~3 内增删真生效**;
   诚实红线提示 `.ask-redline-note` 在 DOM(保存时才过服务端红线门,预览未跑,不假装已校验)。
 - `await __seedGate.assertAskShare()` — **相位 K2**:确认 → shared;链接数 = 选中受访者数;
-  每条 `https://avery.ima-read.com/r/{token}`(host/协议/路径逐条校验);每链接一个复制按钮,
+  每条 `https://avery.dannyqian.com/r/{token}`(host/协议/路径逐条校验;ADR-0024 唯一真域,
+  旧 avery.ima-read.com DNS 从未解析——2026-08-05 生产 P0);每链接一个复制按钮,
   点击不崩(clipboard 被拒也不崩)。
 - `__seedGate.assertAskOfflineNote()` — **相位 F2(阶段 C,demo 诚实性)**:在 shared/collecting
   态运行(K2 之后、K3 之前)。stub 通道(`?transport=stub`)下 `.ask-offline-note`

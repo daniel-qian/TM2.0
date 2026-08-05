@@ -289,7 +289,7 @@ def test_owner_token_never_appears_in_links(client):
 # ==============================================================================================
 
 def test_share_mints_one_link_per_recipient(client, monkeypatch):
-    monkeypatch.setenv("AVERY_PUBLIC_BASE", "https://avery.ima-read.com")
+    monkeypatch.setenv("AVERY_PUBLIC_BASE", "https://avery.dannyqian.com")
     cid, tok = _ingest(client)
     ask = _create(client, cid, tok)
     shared = _share(client, ask["id"], tok)
@@ -300,7 +300,7 @@ def test_share_mints_one_link_per_recipient(client, monkeypatch):
     assert all(t and len(t) >= 32 for t in tokens), "share tokens must be unguessable"
     assert len(set(tokens)) == 2, "one token PER recipient (one-person-one-link)"
     for r in recips:
-        assert r["link"] == f"https://avery.ima-read.com/r/{r['token']}"
+        assert r["link"] == f"https://avery.dannyqian.com/r/{r['token']}"
     # idempotent: a re-share returns the SAME links (a double click must not invalidate pasted links)
     again = _share(client, ask["id"], tok)
     assert [r["token"] for r in again["recipients"]] == tokens
@@ -312,6 +312,20 @@ def test_share_respects_public_base_env(client, monkeypatch):
     ask = _create(client, cid, tok)
     shared = _share(client, ask["id"], tok)
     assert shared["recipients"][0]["link"].startswith("https://staging.example.cn/r/")
+
+
+def test_share_default_base_is_a_live_domain(client, monkeypatch):
+    """2026-08-05 生产 P0: with AVERY_PUBLIC_BASE unset, links were minted on avery.ima-read.com —
+    a domain whose DNS never resolved, so every employee link 白屏ed. The unset-env default must
+    be the live origin (and NEVER regress to ima-read.com, which no test would otherwise catch
+    because the other share tests all SET the env)."""
+    monkeypatch.delenv("AVERY_PUBLIC_BASE", raising=False)
+    cid, tok = _ingest(client)
+    ask = _create(client, cid, tok)
+    shared = _share(client, ask["id"], tok)
+    for r in shared["recipients"]:
+        assert r["link"] == f"https://avery.dannyqian.com/r/{r['token']}"
+        assert "ima-read.com" not in r["link"]
 
 
 # ==============================================================================================

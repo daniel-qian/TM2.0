@@ -3,16 +3,28 @@
 > 📢 本文件是**当前状态快照，整体重写不追加**。历史都在 git（`git log` + 各 `.issues/*/receipt*.md`），别在这儿堆编年史。
 > 启动路径见 `AGENTS.md` Startup Workflow：读本文件 + `feature_list.json`，跑 `./init.sh` 确认绿，再开工。
 
-**Last Updated:** 2026-08-05（成本闸疑点核查：/advise 才是闸外通道，已修 + embeddings 独立预算）
+**Last Updated:** 2026-08-05（两线合账：快问死域 P0 已上产 + 成本闸核查修闸——/advise 才是闸外通道）
 
 ## Current State
 
-- **git**：`main` 已合入 spend-gate 修闸（worktree 分支 `claude/focused-panini-43ed82`），与 `origin/main` 推平。
-- **验证账实**：后端 pytest **3537 passed / 74 deselected / 4 xfailed**（新增 10 条
-  `test_spend_gate_coverage.py`，mock 层调用计数钉接线，含 born-red 反证 6 红）。
-  前端本轮未动（纯后端 + 文档），电池/像素基线均不受影响。
-- **生产**：前端 `b816d68`、后端容器 `main-20260804-153841` **未换**——本轮修闸已在 main，
-  等下次 swap 一并带上（正好与走查 P0 的 `AVERY_PUBLIC_BASE` 修复同批，都要重启容器）。
+- **git**：`main` 已合入 spend-gate 修闸（worktree 分支 `claude/focused-panini-43ed82`，
+  合并了 P0 那条线的 `4bc6085`），与 `origin/main` 推平。
+- **验证账实**：后端 pytest **3538 passed / 74 deselected / 4 xfailed**（两线合并后重跑：
+  +10 `test_spend_gate_coverage.py`（mock 层调用计数钉接线，born-red 反证 6 红）+1 快问默认域
+  回归锁）。全电池 **31/31**（P0 线跑的，spend-gate 线纯后端不碰门）。像素基线 40 张未动。
+- **🔥 0805 生产 P0 已修**（[回执](.issues/quickask-publicbase-0805/deploy-receipt.md)）：快问员工链接
+  曾拼在 DNS 从不解析的 `avery.ima-read.com`（生产 env 缺 `AVERY_PUBLIC_BASE` × 代码死默认值）。
+  代码默认值改真域 + env 补上 + 换容器 `avery-agent:main-20260805-134620`（从 main `4bc6085` 构建），
+  容器内 `public_base()` 实测 = `https://avery.dannyqian.com`，走查真 token `/r/…` 200。
+  回滚梯 `avery-prev-20260805-134620` 在位。**⚠ 顺手坐实：`~/avery.env` 曾比在跑容器少 5 个变量
+  （demo seed/限流、SUPABASE 两条）——已补齐，但换容器 env 快照永远以在跑容器提取为准。**
+- **⚠ spend-gate 修闸还没上生产**：在跑镜像 `main-20260805-134620` 基于 `4bc6085`，**不含**本轮
+  /advise+embeddings 入闸——生产的 /advise 目前仍在预算闸外。下次 swap 从 main 重建即带上。
+- **#38 已完成并 closes**，**契约切换的两半已同批上生产**（[部署回执](.issues/locale-contract-0803/receipt-deploy-0804.md)）：
+  前端 Vercel 构建 `89b36e4`（线上 bundle 的 commit 戳与本地 HEAD 逐字相等，
+  8 条判读文案逐条核到线上产物）；后端在 `avery-agent:main-20260804-153841` 验过
+  （从 main 构建，容器内纯 Python 断言核到 `grade_label` 已消失、命中带 `params`、
+  `locale` 在契约上），现被 0805 镜像逐级覆盖。
 
 ## 本轮做完的（0805 走查 P2 成本闸票 · [回执](.issues/spend-gate-0805/receipt.md)）
 
@@ -35,8 +47,8 @@
 
 ## What's Next（按优先级）
 
-1. **生产 swap 一批带两件**：本轮修闸 + `AVERY_PUBLIC_BASE=https://avery.dannyqian.com`
-   （走查 P0 快问死域）；顺手补 `AVERY_RATE_ADVISE_PER_MIN=30` + `AVERY_EMBED_CALL_BUDGET=2000`。
+1. **下次生产 swap 带上 spend-gate 修闸**（P0 已单独上产，别再等"同批"）；换容器时顺手补
+   env：`AVERY_RATE_ADVISE_PER_MIN=30` + `AVERY_EMBED_CALL_BUDGET=2000`（都已写进 .env.example）。
 2. **r2 剩下的未开票发现**（`.issues/sweep/2026-08-02-r2.md`，按屏分好了）。
 3. **gate-run 迁移继续**：`verify-aria-zh` / `verify-cr-alignment` 仍未迁（形状不兼容，
    要先扩 makeRec）。**已迁/未迁一律用自查命令数，别抄数字。**

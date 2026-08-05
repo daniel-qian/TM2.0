@@ -52,8 +52,9 @@
 
 ## 四、遗留（要 Danny 或下一棒）
 
-1. **生产还没换容器**——修复已合 main，下次 swap 时一并带上（正好和走查 P0 的
-   `AVERY_PUBLIC_BASE=https://avery.dannyqian.com` 同批：都要重启容器）。
+1. **生产还没带上本修复**——走查 P0（快问死域）当天已由另一条线单独上产（容器
+   `main-20260805-134620`，基于 `4bc6085`，**不含**本修闸），生产 /advise 目前仍在闸外；
+   修复已合 main，下次 swap 从 main 重建即带上。
 2. 生产 env 建议补 `AVERY_RATE_ADVISE_PER_MIN=30`（限流兜底）与
    `AVERY_EMBED_CALL_BUDGET`（建议 2000 起步，/health 看消耗再调）。
 3. 周末 demo 注意：换容器后 /advise 正式进 2000 预算——按走查实测每 advise 轮 1~12 次
