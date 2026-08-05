@@ -72,9 +72,11 @@
 
 ## What's Next（按优先级）
 
-1. **真 brain 的 `/advise` 生产端到端**（唯一没验的一段）：链路本身已在本机 mock 上端到端跑通
-   （门 48/0），prompt 那一段有 pytest 逐条断言；生产这一跑只回答**「真模型听不听那句话」**。
-   它是一次**真花钱**的调用，所以留给 Danny 拍板——命令写在部署回执末尾，一句就够。
+1. ~~真 brain 的 `/advise` 生产端到端~~ ✅ **2026-08-05 已验**（Danny 拍板批 10 次上限，实耗 1 次）：
+   `locale:"zh"` 打生产 `/advise`，200 / 77.7s；summary、recommended_actions、detected_signals、
+   conversation_script 全中文，evidence/cites 保持英文原文（契约「引文永不翻译」同时得证）；
+   `contract_ok` · `redline_passed` · `cite_gate_passed` 全真。**真模型听那句话。**
+   （备战三亚会议 session 顺手取证，产物在该 session scratchpad `advise_zh.json`。）
 2. **`{'：'}` 写死在 JSX 里的还剩 6 处**（`grep -rn "{'：'}" src/`：DetailOverlay ×4 /
    ProjectsScreen / TeamScreen）。同病不同屏，且有像素基线覆盖，单开一票扫。
 3. **r2 剩下的未开票发现**（`.issues/sweep/2026-08-02-r2.md`，按屏分好了）。
@@ -84,8 +86,7 @@
 6. **UI 线**：🔴 真机零覆盖（iOS Safari / 微信内置）优先级最高；断点动物园；像素基线 tracked 与否未拍板。
 7. **成本票 #30**（CRUD 50 秒）：Danny 已拍板等真实客户量再立，只记数。
 8. **真 brain 分流取证**：要真花钱，需要先给口径（上限几次调用/打 demo 克隆还是真 context/超了就停）。
-   ⚠ 本票新增的语言指令**只在 mock 上验过链路 + 在 prompt 上验过字符串**；
-   "真模型是否真的听那句话"要等这一步才能取证。
+   语言指令一段已于 2026-08-05 生产取证（见上第 1 条）；分流取证本身仍未跑。
 
 ## Blockers / Risks
 
