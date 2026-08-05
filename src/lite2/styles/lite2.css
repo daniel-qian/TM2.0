@@ -7768,3 +7768,39 @@
   bottom: calc(var(--lite2-footer-h, 56px) + 12px);
   width: min(828px, calc(100vw - 48px));
 }
+
+/* ═══ #48 · 卡面带上下文快问（2026-08-05）═══════════════════════════════════════════
+   项目卡/人员卡从「整卡一个 <button>」改成「div 容器 + 内部多按钮」（HTML 不许按钮嵌
+   按钮）：div onClick 保住整卡开详情的手感，键盘/读屏路径走 .lite-card-open 标题按钮，
+   「去问 Avery ↗」是卡面次级动作。 */
+.lite2-shell .lite-project-card,
+.lite2-shell .home-person-card {
+  cursor: pointer;
+}
+
+/* 标题按钮：继承卡内排版，不带按钮壳（它的职责是键盘可达，不是视觉分层）。 */
+.lite2-shell .lite-card-open {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: inherit;
+  cursor: pointer;
+}
+
+.lite2-shell .lite-card-open:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.lite2-shell .lite-card-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+
+.lite2-shell .lite-card-ask {
+  font-size: 12px;
+}

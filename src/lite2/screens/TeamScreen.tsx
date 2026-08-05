@@ -1,5 +1,6 @@
 import { useMemo, useState, type FormEvent } from 'react'
 import { useLite } from '../store'
+import { useFlow } from '../flowStore'
 import type { PersonAddInput } from '../transport'
 import { useDict } from '../../shared/i18n/useDict'
 import { localizeBriefing } from '../../shared/briefing'
@@ -100,35 +101,62 @@ function SelfReportRow({
 
 // 单张人卡（分组视图与兜底 flat 视图共用）。🔴 红线：定性为主；唯一的数字面是本人自述负载/情绪，
 // 且只在开关开时由后端投影、由 SelfReportRow 带出处渲染（见其注释）。
+// #48 · 整卡从单个 <button> 改成「容器 + 内部多按钮」：div onClick 保住整卡开详情的手感，
+// 键盘/读屏路径走姓名按钮（原整句 aria-label 原样搬），卡面加「去问 Avery ↗」次级动作。
+// 与 ProjectsScreen 的 ProjectCard 同一个结构（那边有更细的注释）。
 function PersonCard({
   person,
   onOpen,
+  onAsk,
 }: {
   person: LitePerson
   onOpen: (id: string) => void
+  onAsk: (person: LitePerson, read: string) => void
 }) {
   const { t } = useDict()
   // feat-068 · 读数在这里才成句（派生层只给语料原文 + owns 条目）。localizePersonRead 恒返回
   // 非空串——无信号时走 personReadNone 兜底，所以不再需要 person.read 的空值分支。
   const read = localizePersonRead(person, t.lite2)
   return (
-    <button
-      type="button"
+    <div
       className={classNames(['home-person-card', `home-tone-${person.tone}`])}
       onClick={() => onOpen(person.id)}
-      // feat-068 · aria-label 以前是 `Open ${name}` 的硬编码拼接——中文屏幕阅读器会念出英文
-      // 动词。整句模板 + 占位符，语序交给各语言自己定。
-      aria-label={fill(t.lite2.personCardOpenAria, { name: person.name, read })}
     >
       <InitialAvatar name={person.name} size={44} className="home-person-avatar" />
       <span className="home-person-body">
-        <h3>{person.name}</h3>
+        <h3>
+          <button
+            type="button"
+            className="lite-card-open"
+            onClick={(e) => {
+              e.stopPropagation()
+              onOpen(person.id)
+            }}
+            // feat-068 · aria-label 以前是 `Open ${name}` 的硬编码拼接——中文屏幕阅读器会念出英文
+            // 动词。整句模板 + 占位符，语序交给各语言自己定。
+            aria-label={fill(t.lite2.personCardOpenAria, { name: person.name, read })}
+          >
+            {person.name}
+          </button>
+        </h3>
         <p className="home-person-role">{person.role}</p>
         <p className="home-person-read">{read}</p>
         {/* rich-align-0722/03：本人自述负载/情绪。缺席（含开关关）即不渲染——人卡回到零数字。 */}
         {person.selfReport ? <SelfReportRow report={person.selfReport} t={t} /> : null}
+        <span className="lite-card-actions">
+          <button
+            type="button"
+            className="lite-btn lite-btn--ghost lite-card-ask"
+            onClick={(e) => {
+              e.stopPropagation()
+              onAsk(person, read)
+            }}
+          >
+            {t.lite2.triageTakeToRoomLabel} ↗
+          </button>
+        </span>
       </span>
-    </button>
+    </div>
   )
 }
 
@@ -158,10 +186,12 @@ function TeamDirectory({
   people,
   scoringEnabled,
   onOpen,
+  onAsk,
 }: {
   people: LitePerson[]
   scoringEnabled: boolean
   onOpen: (id: string) => void
+  onAsk: (person: LitePerson, read: string) => void
 }) {
   const { t } = useDict()
   const [groupFilter, setGroupFilter] = useState<string>(GROUP_ALL)
@@ -266,7 +296,7 @@ function TeamDirectory({
           aria-label={t.lite2.peopleLane}
         >
           {filtered.map((person) => (
-            <PersonCard key={person.id} person={person} onOpen={onOpen} />
+            <PersonCard key={person.id} person={person} onOpen={onOpen} onAsk={onAsk} />
           ))}
         </div>
       ) : (
@@ -280,6 +310,10 @@ export function TeamScreen() {
   const { t, locale } = useDict()
   const team = useLite((s) => s.team)
   const openDetail = useLite((s) => s.openDetail)
+  const goScreen = useLite((s) => s.goScreen)
+  // #48 · 人员卡「去问 Avery」：预填走 flowStore.composerDraft（与分诊卡同一条通道），
+  // 只预填不自动发。预填 = 姓名 + 读数句（localizePersonRead 的文档真派生，零编造）。
+  const setComposerDraft = useFlow((s) => s.setComposerDraft)
   // feat-050 · 会话不丢：空态下要分清"正在取回上次会话"和"真没有会话"。
   const restoring = useLite((s) => s.restoring)
   const restoreError = useLite((s) => s.restoreError)
@@ -402,6 +436,11 @@ export function TeamScreen() {
                 people={team.people}
                 scoringEnabled={team.scoringEnabled}
                 onOpen={(id) => openDetail('person', id)}
+                onAsk={(person, read) => {
+                  // 分隔符 " — "（composer 是 input[type=text]，换行会被剥掉——feat-044 同根）。
+                  setComposerDraft(`${person.name} — ${read}`)
+                  goScreen('room')
+                }}
               />
 
               {/* rich-align-0722/06：停用（软删）折叠区——目录网格之后。有停用成员才出；灰化卡 + 恢复键。 */}

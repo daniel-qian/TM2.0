@@ -1,9 +1,11 @@
 import { useMemo, useState, type FormEvent } from 'react'
 import { useLite } from '../store'
+import { useFlow } from '../flowStore'
 import { useDict } from '../../shared/i18n/useDict'
 import {
   buildProjectViews,
   groupProjects,
+  projectAskPrefill,
   projectCoverage,
   projectRiskLabel,
   projectStatusLabel,
@@ -19,6 +21,8 @@ import type { ProjectAddInput } from '../transport'
 function cardHasManual(view: ProjectView): boolean {
   return Object.values(view.provenance).some((p) => p.origin === 'manual')
 }
+
+// #48 · 预填文本 projectAskPrefill 收在 projectView.ts（项目屏卡面与详情浮层共用一份）。
 
 // feat-055（PRD G9）· lite2 屏 8：项目屏（整屏新建）。
 //
@@ -108,15 +112,26 @@ function FactRow({
   )
 }
 
-function ProjectCard({ view, onOpen }: { view: ProjectView; onOpen: (id: string) => void }) {
+function ProjectCard({
+  view,
+  onOpen,
+  onAsk,
+}: {
+  view: ProjectView
+  onOpen: (id: string) => void
+  onAsk: (view: ProjectView) => void
+}) {
   const { t } = useDict()
   const l = t.lite2
   const tone = statusTone(view.statusKey)
   const blockerCount = view.blockers.length
 
   return (
-    <button
-      type="button"
+    // #48 · 整卡从单个 <button> 改成「容器 + 内部多按钮」（HTML 不许按钮嵌按钮）：
+    // div 的 onClick 保住「点卡面任意处开详情」的既有手感；键盘/读屏路径走标题按钮
+    // （原 aria-label 原样搬过去）；卡面新增「去问 Avery ↗」次级动作（stopPropagation
+    // 防止冒泡开详情）。同批改的 TeamScreen PersonCard 是同一个结构。
+    <div
       className={classNames([
         'lite-project-card',
         statusEdgeClass(view.statusKey),
@@ -124,10 +139,21 @@ function ProjectCard({ view, onOpen }: { view: ProjectView; onOpen: (id: string)
       ])}
       data-project-id={view.id}
       onClick={() => onOpen(view.id)}
-      aria-label={fill(l.projectsOpenAria, { title: view.title })}
     >
       <span className="lite-project-card-head">
-        <h3 className="lite-project-title">{view.title}</h3>
+        <h3 className="lite-project-title">
+          <button
+            type="button"
+            className="lite-card-open"
+            onClick={(e) => {
+              e.stopPropagation()
+              onOpen(view.id)
+            }}
+            aria-label={fill(l.projectsOpenAria, { title: view.title })}
+          >
+            {view.title}
+          </button>
+        </h3>
         <span className={classNames(['lite-project-status', view.statusKey === 'unknown' && 'is-unknown'])}>
           <span className={classNames(['status-dot', tone])} aria-hidden="true" />
           {projectStatusLabel(view, l)}
@@ -215,7 +241,22 @@ function ProjectCard({ view, onOpen }: { view: ProjectView; onOpen: (id: string)
           <span className="lite-project-blocker-first">{view.blockers[0]}</span>
         </span>
       ) : null}
-    </button>
+
+      {/* #48 · 带着这个项目去问 Avery——composerDraft 预填 + 跳议事室，只预填不自动发。
+          文案复用分诊卡同一动作的同一个词（triageTakeToRoomLabel）。 */}
+      <span className="lite-card-actions">
+        <button
+          type="button"
+          className="lite-btn lite-btn--ghost lite-card-ask"
+          onClick={(e) => {
+            e.stopPropagation()
+            onAsk(view)
+          }}
+        >
+          {l.triageTakeToRoomLabel} ↗
+        </button>
+      </span>
+    </div>
   )
 }
 
@@ -228,6 +269,8 @@ export function ProjectsScreen() {
   const rawTeam = useLite((s) => s.rawTeam)
   const openDetail = useLite((s) => s.openDetail)
   const goScreen = useLite((s) => s.goScreen)
+  // #48 · 卡面快问：预填走 flowStore.composerDraft（与分诊卡「去问 Avery」同一条通道）。
+  const setComposerDraft = useFlow((s) => s.setComposerDraft)
   // feat-050 · 会话不丢：空态要分清「正在取回上次会话」和「真没有会话」（与 TeamScreen 同口径）。
   const restoring = useLite((s) => s.restoring)
   const restoreError = useLite((s) => s.restoreError)
@@ -335,6 +378,10 @@ export function ProjectsScreen() {
                       key={view.id}
                       view={view}
                       onOpen={(id) => openDetail('project', id)}
+                      onAsk={(v) => {
+                        setComposerDraft(projectAskPrefill(v))
+                        goScreen('room')
+                      }}
                     />
                   ))}
                 </div>

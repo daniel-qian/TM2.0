@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useLite } from './store'
+import { useFlow } from './flowStore'
 import { useRouteDetail } from './routes'
 import { useDict } from '../shared/i18n/useDict'
+import { localizePersonRead } from '../shared/handoffCopy'
 import { InitialAvatar } from './InitialAvatar'
 import { LiteModal } from './LiteModal'
 import {
   buildProjectViews,
   isManualField,
   milestoneStatusLabel,
+  projectAskPrefill,
   projectRiskLabel,
   projectStatusLabel,
   type ProjectView,
@@ -181,6 +184,15 @@ function ProjectDetailBody({
   const busy = useLite((s) => s.projectWriteBusy)
   const error = useLite((s) => s.projectWriteError)
   const resetProjectWrite = useLite((s) => s.resetProjectWrite)
+  // #48 · 带着这个项目去问 Avery：composerDraft 预填（projectAskPrefill 与项目屏卡面
+  // 共用一份）+ 关浮层 + 跳议事室。只预填不自动发。
+  const goScreen = useLite((s) => s.goScreen)
+  const setComposerDraft = useFlow((s) => s.setComposerDraft)
+  const askAvery = () => {
+    setComposerDraft(projectAskPrefill(project))
+    closeDetail()
+    goScreen('room')
+  }
 
   const [editing, setEditing] = useState(false)
   const [dTitle, setDTitle] = useState(project.title)
@@ -466,8 +478,16 @@ function ProjectDetailBody({
         </section>
       ) : null}
 
-      {/* rich-align-0722/05a：页脚操作区。活动卡→编辑·归档（软删可逆）；归档卡→恢复回主网格。 */}
+      {/* rich-align-0722/05a：页脚操作区。活动卡→编辑·归档（软删可逆）；归档卡→恢复回主网格。
+          #48：两种状态都给「去问 Avery ↗」（问一个已归档项目也是正当问题）。 */}
       <div className="lite-detail-actions lite-detail-actions--footer">
+        <button
+          type="button"
+          className="lite-btn lite-btn--ghost lite-detail-ask"
+          onClick={askAvery}
+        >
+          {l.triageTakeToRoomLabel} ↗
+        </button>
         {archived ? (
           <button
             type="button"
@@ -526,6 +546,15 @@ function PersonDetailBody({
   const busy = useLite((s) => s.projectWriteBusy)
   const error = useLite((s) => s.projectWriteError)
   const resetProjectWrite = useLite((s) => s.resetProjectWrite)
+  // #48 · 带着这个人去问 Avery：预填 = 姓名 + 读数句（localizePersonRead 的文档真派生，
+  // 与人员卡同一份预填口径）。只预填不自动发。
+  const goScreen = useLite((s) => s.goScreen)
+  const setComposerDraft = useFlow((s) => s.setComposerDraft)
+  const askAvery = () => {
+    setComposerDraft(`${person.name} — ${localizePersonRead(person, l)}`)
+    closeDetail()
+    goScreen('room')
+  }
 
   const [editing, setEditing] = useState(false)
   const [dName, setDName] = useState(person.name)
@@ -717,8 +746,16 @@ function PersonDetailBody({
         </section>
       ) : null}
 
-      {/* rich-align-0722/06：页脚操作区。活动成员→编辑·停用（软删可逆）；停用成员→恢复回目录。 */}
+      {/* rich-align-0722/06：页脚操作区。活动成员→编辑·停用（软删可逆）；停用成员→恢复回目录。
+          #48：两种状态都给「去问 Avery ↗」。 */}
       <div className="lite-detail-actions lite-detail-actions--footer">
+        <button
+          type="button"
+          className="lite-btn lite-btn--ghost lite-detail-ask"
+          onClick={askAvery}
+        >
+          {l.triageTakeToRoomLabel} ↗
+        </button>
         {archived ? (
           <button type="button" className="lite-btn lite-btn--soft lite-detail-restore" onClick={restore} disabled={busy}>
             {l.projectsArchivedRestore}

@@ -286,3 +286,14 @@ export function projectCoverage(views: readonly ProjectView[]): ProjectCoverage 
     missingStatus: views.filter((v) => v.statusKey === 'unknown').length,
   }
 }
+
+/**
+ * #48 · 「带着这个项目去问 Avery」的预填文本。🔴 只拼文档真值（标题 + 第一条阻塞/
+ * 风险原因/摘要，按信息量取第一个有的），什么都没有就只带标题——零编造。分隔符必须
+ * " — " 而非换行：composer 是 <input type="text">（feat-044 同根 bug）。
+ * 项目屏卡面与详情浮层共用这一份——同一个项目两处预填必须一致。
+ */
+export function projectAskPrefill(view: ProjectView): string {
+  const detailBit = view.blockers[0] ?? view.riskReason ?? view.summary ?? ''
+  return detailBit ? `${view.title} — ${detailBit}` : view.title
+}
