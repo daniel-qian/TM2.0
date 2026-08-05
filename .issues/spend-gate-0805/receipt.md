@@ -50,13 +50,25 @@
   六条接线断言；复原后 10/10 绿。测试验的是部件本身，不是自考自答。
 - 未跑 `needs_db`（pg_registry 改动是纯增量 try/except，不动 schema/列读写路径）。
 
-## 四、遗留（要 Danny 或下一棒）
+## 四、部署回执（2026-08-05 16:06，Danny 拍板「把两个 env 补上」后即换）
 
-1. **生产还没带上本修复**——走查 P0（快问死域）当天已由另一条线单独上产（容器
-   `main-20260805-134620`，基于 `4bc6085`，**不含**本修闸），生产 /advise 目前仍在闸外；
-   修复已合 main，下次 swap 从 main 重建即带上。
-2. 生产 env 建议补 `AVERY_RATE_ADVISE_PER_MIN=30`（限流兜底）与
-   `AVERY_EMBED_CALL_BUDGET`（建议 2000 起步，/health 看消耗再调）。
-3. 周末 demo 注意：换容器后 /advise 正式进 2000 预算——按走查实测每 advise 轮 1~12 次
-   调用，demo 当天余量完全够，但 /health 的 `llm_calls_remaining` 会开始因 advise 下降，
-   **别再按「只有抽取扣数」的旧直觉读那个数**。
+- **镜像**：`avery-agent:main-20260805-160609`（从 main `4c1ffe0` 构建）；回滚梯
+  `avery-prev-20260805-160609` 在位（前一级 = P0 那次的 `main-20260805-134620`）。
+- **env**：快照按纪律从在跑容器 `docker inspect` 提取（33→去重 31 个变量），追加
+  `AVERY_EMBED_CALL_BUDGET=2000`；`AVERY_RATE_ADVISE_PER_MIN=30` **在跑容器里已有**
+  （P0 那条线当天顺手设过，本次只是确认在位）。`~/avery.env` 已同步补齐
+  （备份 `~/avery.env.bak-20260805-160609`）。
+- **预检（8138，只读路径，跑完已 rm -f）**：/health ok、`embed_calls_remaining:2000`
+  （该字段只有本构建才有——新代码+新 env 双证）、`/demo/status` `{"available":true,"ready":true}`。
+- **swap 日志**：NEW HEALTHY after 1x2s，SWAP SUCCESS。
+- **外部验证**：`https://avery.dannyqian.com/health` → 200 且 `embed_calls_remaining:2000`、
+  `llm_calls_remaining:2000`（新进程计数归零重置）；`/demo/status` available:true。
+- **没做**：生产真打一次 /advise 看计数器下降（要真烧钱；接线已由离线 born-red 测试钉死，
+  且 `embed_calls_remaining` 字段在场已证明跑的就是修闸构建）。下次真实使用时看一眼
+  /health 即是免费的端到端确认。
+
+## 五、周末 demo 注意
+
+- /advise 正式进 2000 预算——每 advise 轮 1~12 次调用，demo 当天余量完全够,但
+  `llm_calls_remaining` 从此会因 advise 下降，**别再按「只有抽取扣数」的旧直觉读那个数**。
+- 预算是**每进程**计数,换容器即归零(本次 swap 后已回满 2000)。

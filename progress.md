@@ -18,8 +18,12 @@
   容器内 `public_base()` 实测 = `https://avery.dannyqian.com`，走查真 token `/r/…` 200。
   回滚梯 `avery-prev-20260805-134620` 在位。**⚠ 顺手坐实：`~/avery.env` 曾比在跑容器少 5 个变量
   （demo seed/限流、SUPABASE 两条）——已补齐，但换容器 env 快照永远以在跑容器提取为准。**
-- **⚠ spend-gate 修闸还没上生产**：在跑镜像 `main-20260805-134620` 基于 `4bc6085`，**不含**本轮
-  /advise+embeddings 入闸——生产的 /advise 目前仍在预算闸外。下次 swap 从 main 重建即带上。
+- **✅ spend-gate 修闸已上生产**（同日第二次 swap，Danny 拍板补 env 后即换）：容器
+  `avery-agent:main-20260805-160609`（从 main `4c1ffe0` 构建），env 追加
+  `AVERY_EMBED_CALL_BUDGET=2000`（`AVERY_RATE_ADVISE_PER_MIN=30` 在跑容器里已有）。
+  外部实测 `/health` 带 `embed_calls_remaining:2000`（该字段只有修闸构建才有）+
+  `/demo/status` available:true。回滚梯 `avery-prev-20260805-160609` 在位。
+  部署细节见 [回执](.issues/spend-gate-0805/receipt.md) §四。
 - **#38 已完成并 closes**，**契约切换的两半已同批上生产**（[部署回执](.issues/locale-contract-0803/receipt-deploy-0804.md)）：
   前端 Vercel 构建 `89b36e4`（线上 bundle 的 commit 戳与本地 HEAD 逐字相等，
   8 条判读文案逐条核到线上产物）；后端在 `avery-agent:main-20260804-153841` 验过
@@ -47,8 +51,7 @@
 
 ## What's Next（按优先级）
 
-1. **下次生产 swap 带上 spend-gate 修闸**（P0 已单独上产，别再等"同批"）；换容器时顺手补
-   env：`AVERY_RATE_ADVISE_PER_MIN=30` + `AVERY_EMBED_CALL_BUDGET=2000`（都已写进 .env.example）。
+1. ~~生产 swap 带上 spend-gate 修闸 + 补 env~~ ✅ **2026-08-05 已完成**（见 Current State）。
 2. **r2 剩下的未开票发现**（`.issues/sweep/2026-08-02-r2.md`，按屏分好了）。
 3. **gate-run 迁移继续**：`verify-aria-zh` / `verify-cr-alignment` 仍未迁（形状不兼容，
    要先扩 makeRec）。**已迁/未迁一律用自查命令数，别抄数字。**
