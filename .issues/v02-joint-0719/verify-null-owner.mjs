@@ -66,7 +66,11 @@ async function injectOwnerlessProject(route) {
 
 const browser = await chromium.launch({ headless: true })
 
-async function run(shellQuery, seam) {
+// #46（ADR-0034，2026-08-05）：v02 团队屏项目卡带退役——v02 的项目卡面搬到项目屏
+// （.lite-project-card / .lite-project-facts），v01 冻结壳原地。断言判据一字未改，
+// 只有采样面跟着真部件走（同批修的 verify-status-truth.mjs 是同款）。
+async function run(shellQuery, seam, surface) {
+  const { screen, cardSel, metaSel, openSel } = surface
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } })
   const p = await ctx.newPage()
   const errs = []
@@ -81,26 +85,26 @@ async function run(shellQuery, seam) {
     await window[seam].getState().uploadFiles([new File([text], 'w30.md', { type: 'text/markdown' })])
     await new Promise((r) => setTimeout(r, 2200))
   }, { text: DOC, seam })
-  await p.evaluate((seam) => window[seam].getState().goScreen('team'), seam)
+  await p.evaluate(({ seam, screen }) => window[seam].getState().goScreen(screen), { seam, screen })
   await p.waitForTimeout(1000)
 
-  const cards = await p.evaluate(() =>
-    [...document.querySelectorAll('.home-project-card')].map((el) => ({
+  const cards = await p.evaluate(({ cardSel, metaSel }) =>
+    [...document.querySelectorAll(cardSel)].map((el) => ({
       title: el.querySelector('h3')?.innerText ?? '',
-      meta: el.querySelector('.home-project-meta')?.innerText ?? '',
-    })),
-  )
+      meta: el.querySelector(metaSel)?.innerText ?? '',
+    })), { cardSel, metaSel })
   // 派生层实际拿到了什么（证明确实是 owner 缺失分支，不是别的路径顺手填了个值）
   const derived = await p.evaluate((seam) =>
     (window[seam].getState().team?.projects ?? []).map((x) => ({
       title: x.title, ownerName: x.ownerName, ownerNameRaw: x.ownerNameRaw ?? '(无此字段)',
     })), seam)
 
-  // 详情浮层：同一个项目在两处显示，说法必须一致
+  // 详情浮层：同一个项目在两处显示，说法必须一致。
+  // #48 后 v02 卡是 div 容器，开详情的键盘按钮是 .lite-card-open——openSel 指定点哪。
   let overlay = ''
-  const target = p.locator('.home-project-card', { hasText: CLONE_TITLE }).first()
+  const target = p.locator(cardSel, { hasText: CLONE_TITLE }).first()
   if (await target.count()) {
-    await target.click()
+    await (openSel ? target.locator(openSel).first() : target).click()
     await p.waitForTimeout(700)
     overlay = await p.evaluate(() => document.querySelector('.lite-detail-card')?.innerText ?? '')
     await p.keyboard.press('Escape')
@@ -122,27 +126,27 @@ async function run(shellQuery, seam) {
   if (await p.locator('.lang-switch-btn').count()) {
     const readSurfaces = async () => {
       const cardMeta = await p.evaluate(
-        (title) =>
-          [...document.querySelectorAll('.home-project-card')]
+        ({ title, cardSel, metaSel }) =>
+          [...document.querySelectorAll(cardSel)]
             .filter((el) => (el.querySelector('h3')?.innerText ?? '').includes(title))
-            .map((el) => el.querySelector('.home-project-meta')?.innerText ?? '')[0] ?? '',
-        CLONE_TITLE,
+            .map((el) => el.querySelector(metaSel)?.innerText ?? '')[0] ?? '',
+        { title: CLONE_TITLE, cardSel, metaSel },
       )
       let overlayText = ''
-      const card = p.locator('.home-project-card', { hasText: CLONE_TITLE }).first()
+      const card = p.locator(cardSel, { hasText: CLONE_TITLE }).first()
       if (await card.count()) {
-        await card.click()
+        await (openSel ? card.locator(openSel).first() : card).click()
         await p.waitForTimeout(600)
         overlayText = await p.evaluate(() => document.querySelector('.lite-detail-card')?.innerText ?? '')
         await p.keyboard.press('Escape')
         await p.waitForTimeout(400)
       }
       const controlMeta = await p.evaluate(
-        (title) =>
-          [...document.querySelectorAll('.home-project-card')]
+        ({ title, cardSel, metaSel }) =>
+          [...document.querySelectorAll(cardSel)]
             .filter((el) => !(el.querySelector('h3')?.innerText ?? '').includes(title))
-            .map((el) => el.querySelector('.home-project-meta')?.innerText ?? ''),
-        CLONE_TITLE,
+            .map((el) => el.querySelector(metaSel)?.innerText ?? ''),
+        { title: CLONE_TITLE, cardSel, metaSel },
       )
       const raws = await p.evaluate(
         (s) =>
@@ -178,12 +182,18 @@ async function run(shellQuery, seam) {
 // 就会在 v01 分支直接炸成 `window.__liteStore` … `Cannot read properties of undefined`。
 // `__liteStore` 是 src/lite/store.ts:350 的无条件测试缝（同一先例见 verify-status-truth.mjs /
 // verify-aria-zh.mjs），两个环境都挂着，换这一个词其余断言零改动、15 条全绿（已跑过验证）。
-for (const [q, seam, label] of [
-  ['v=2', '__lite2Store', 'v02（裸链默认壳）'],
-  ['v=1', '__liteStore', 'v01（?v=1 逃生门）'],
+for (const [q, seam, label, surface] of [
+  // #46：v02 的项目卡面在项目屏（团队屏项目卡带已退役）。
+  ['v=2', '__lite2Store', 'v02（裸链默认壳）', {
+    screen: 'projects', cardSel: '.lite-project-card', metaSel: '.lite-project-facts',
+    openSel: '.lite-card-open',
+  }],
+  ['v=1', '__liteStore', 'v01（?v=1 逃生门）', {
+    screen: 'team', cardSel: '.home-project-card', metaSel: '.home-project-meta', openSel: null,
+  }],
 ]) {
-  console.log(`\n═══ ${label} · 团队屏项目卡 ═══`)
-  const { cards, derived, overlay, body, errs, langSwitch } = await run(q, seam)
+  console.log(`\n═══ ${label} · 项目卡面（${surface.screen} 屏）═══`)
+  const { cards, derived, overlay, body, errs, langSwitch } = await run(q, seam, surface)
   for (const c of cards) console.log(`         卡片 ${JSON.stringify(c)}`)
   for (const d of derived) console.log(`         派生 ${JSON.stringify(d)}`)
 

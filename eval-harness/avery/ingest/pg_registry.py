@@ -56,8 +56,8 @@ from .extract import (
 )
 from .redline_extract import validate_extraction
 from .registry import (
-    CompanyContext, CompanyNote, ProjectWriteMixin, SourceDocument, data_root, gate_note_red_line,
-    materialize_memory, new_note_id,
+    AdviseRun, CompanyContext, CompanyNote, ProjectWriteMixin, SourceDocument, data_root,
+    gate_note_red_line, materialize_memory, new_note_id, new_run_id,
 )
 from .store import Embedder, KeywordStore, PgVectorStore, VectorStore, _vec_literal
 
@@ -626,6 +626,42 @@ class PostgresContextRegistry(ProjectWriteMixin):
                 "WHERE context_id = %s ORDER BY seq DESC", (context_id,)).fetchall()
         return [CompanyNote(id=nid, created_at=ca.isoformat(), text=txt, source_excerpt=se or "")
                 for nid, ca, txt, se in rows]
+
+    # --- issue #49: advise-run history — the postgres twin of the registry run seam ---------------
+
+    def append_advise_run(self, context_id: str, question: str, *, title: str = "",
+                          locale: str = "en", advice: dict | None = None,
+                          answer: str = "") -> AdviseRun:
+        """Persist one completed room Q&A to avery.advise_runs. No content gate BY DESIGN (see the
+        in-memory twin's docstring: the service hook only calls this for redline_passed manifests,
+        and the question is self-facing). The FK to avery.contexts refuses unknown contexts by
+        construction; the ON DELETE CASCADE ties a run's lifetime to its context (ephemeral GC)."""
+        from psycopg.types.json import Jsonb
+        self._ensure_schema()
+        run_id = new_run_id()
+        with self._connect() as conn, conn.transaction():
+            row = conn.execute(
+                "INSERT INTO avery.advise_runs (id, context_id, question, title, locale, advice, answer) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING created_at",
+                (run_id, context_id, question, title or None, locale or "en",
+                 Jsonb(advice) if advice is not None else None, answer or None)).fetchone()
+        created_at = row[0]
+        return AdviseRun(id=run_id, created_at=created_at.isoformat(), question=question,
+                         title=title or "", locale=locale or "en", advice=advice,
+                         answer=answer or "")
+
+    def list_advise_runs(self, context_id: str, limit: int = 50) -> list[AdviseRun]:
+        """This company's persisted Q&A, NEWEST FIRST, capped (ORDER BY seq DESC — same
+        deterministic ordering rationale as list_notes)."""
+        self._ensure_schema()
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT id, created_at, question, title, locale, advice, answer "
+                "FROM avery.advise_runs WHERE context_id = %s ORDER BY seq DESC LIMIT %s",
+                (context_id, max(1, int(limit)))).fetchall()
+        return [AdviseRun(id=rid, created_at=ca.isoformat(), question=q, title=t or "",
+                          locale=loc or "en", advice=adv, answer=ans or "")
+                for rid, ca, q, t, loc, adv, ans in rows]
 
     # --- feat-034: Ask ("Quick ask") storage — the postgres twin of the registry ask seam --------
 

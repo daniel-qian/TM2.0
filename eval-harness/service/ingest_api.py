@@ -402,6 +402,23 @@ def team_notes(context_id: str,
     return {"context_id": context_id, "notes": [asdict(n) for n in reg.list_notes(context_id)]}
 
 
+@router.get("/team/{context_id}/advise-runs")
+def team_advise_runs(context_id: str,
+                     x_avery_token: str | None = Header(None),
+                     authorization: str | None = Header(None),
+                     x_avery_account: str | None = Header(None)) -> dict:
+    """issue #49 — 议事室历史：这家公司持久化的问答（问题 + 投影后的建议卡/短答），NEWEST
+    FIRST，上限 50 条。只读面（v1 无删除）。每条落库时都过了 redline_passed 判据（service
+    的 _persist_advise_run），历史里不会出现被红线拦下的建议内容。
+
+    门与 notes 同一张：owner_token（header）或持有账号——否则 404，无存在性 oracle。"""
+    reg = active_registry()
+    authorize_context(reg, context_id, extract_owner_token(x_avery_token, authorization),
+                      account.resolve_account(x_avery_account))
+    return {"context_id": context_id,
+            "runs": [asdict(r) for r in reg.list_advise_runs(context_id)]}
+
+
 class NoteIn(BaseModel):
     """input-side-0721 · 8A：onboarding 闸门页采集的「公司现状」口述。上限收紧（4000 字）——
     这是一段自我介绍，不是文件上传通道；大材料走 /ingest。"""

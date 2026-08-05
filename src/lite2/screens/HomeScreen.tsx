@@ -182,7 +182,9 @@ export function HomeScreen() {
     () => selectTriageSetAside(team, triageMarks).map(localizeH),
     [team, triageMarks, localizeH],
   )
-  const totalHandoffs = team?.handoffs.length ?? 0
+  // `?.length` 双保险：selectTriage* / briefingRiskCount 对缺 handoffs/briefing 的形状都是
+  // 防御式（?? []），这里对齐——auth 门的换身份 fixture 摆的就是不带 handoffs 的部分 team。
+  const totalHandoffs = team?.handoffs?.length ?? 0
 
   // feat-068 · 入参是 HandoffDisplay：composer 预填 / 跟进标题 / 草稿正文用的都是
   // **已本地化**的 action + evidence。

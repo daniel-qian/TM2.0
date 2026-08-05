@@ -267,6 +267,44 @@ def _post_advise_note(company_context_id: str | None, situation: str, manifest: 
         pass
 
 
+def _persist_advise_run(company_context_id: str | None, situation: str, title: str | None,
+                        locale: str, manifest: dict) -> None:
+    """issue #49 post-advise hook: persist this room Q&A (question + projected advice card / short
+    answer) so the room's history survives a refresh. Rides the SAME manifest moment as the notes
+    hook. Best-effort — a persistence problem never affects the advise response.
+
+    🔴 只落 redline_passed 的 manifest（与 notes hook 同一判据）——被红线拦下的建议内容
+    永远不进历史。无 context 不落（demo 默认公司没有历史归属可言）。"""
+    if not company_context_id:
+        return
+    if manifest.get("redline_passed") is not True:
+        return
+    advice = manifest.get("advice") if isinstance(manifest.get("advice"), dict) else None
+    answer = ""
+    if manifest.get("answer_kind") == "answer":   # 0729/03 分流短答：与 advice 互斥
+        a = manifest.get("answer")
+        if isinstance(a, dict) and isinstance(a.get("text"), str):
+            answer = a["text"]
+        advice = None
+    if advice is None and not answer:
+        return   # 没有可回看的产出（异常收尾）——不落空行
+    try:
+        from avery.ingest.registry import active_registry
+        active_registry().append_advise_run(company_context_id, situation,
+                                            title=title or "", locale=locale,
+                                            advice=advice, answer=answer)
+    except Exception:   # lazy import / registry problems must not surface to the caller
+        pass
+
+
+def _post_advise_hooks(company_context_id: str | None, situation: str, title: str | None,
+                       locale: str, manifest: dict) -> None:
+    """The one post-advise assembly point: notes (feat-033) + run history (issue #49). Each hook
+    swallows its own failures — one must never starve the other."""
+    _post_advise_note(company_context_id, situation, manifest)
+    _persist_advise_run(company_context_id, situation, title, locale, manifest)
+
+
 @app.get("/health")
 def health() -> dict:
     kind = brain_factory.resolve_brain_kind()
@@ -328,7 +366,8 @@ def advise(req: AdviseRequest,
 
     if req.stream:
         return _sse(events, case,
-                    on_manifest=lambda m: _post_advise_note(req.company_context_id, req.situation, m))
+                    on_manifest=lambda m: _post_advise_hooks(
+                        req.company_context_id, req.situation, req.title, locale, m))
 
     # Buffered: drain to the terminal manifest (or error) and return one JSON body.
     try:
@@ -339,9 +378,9 @@ def advise(req: AdviseRequest,
     # ask-draft frame (which is also a type=='manifest' event, discriminated by `kind`).
     manifest = next((e for e in reversed(collected)
                      if e["type"] == "manifest" and e.get("kind") in (None, "advice")), None)
-    # feat-033: write Avery's observation to the company notebook (write-side red line inside).
+    # feat-033 notes + issue #49 run history: the same post-advise assembly point as the SSE path.
     if manifest is not None:
-        _post_advise_note(req.company_context_id, req.situation, manifest)
+        _post_advise_hooks(req.company_context_id, req.situation, req.title, locale, manifest)
     if manifest is None:
         err = next((e for e in collected if e["type"] == "error"), None)
         return JSONResponse(status_code=502,

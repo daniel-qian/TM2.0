@@ -7804,3 +7804,101 @@
 .lite2-shell .lite-card-ask {
   font-size: 12px;
 }
+
+/* ═══ issue #49 · 议事室历史（advise_runs 只读回看抽屉）═══════════════════════════════
+   入口与面板都 absolute 挂在 .lite-room 场景层——刻意不进 .lite-room-board / .nexus-empty
+   两棵门锚树。面板内滚,底沿让位到 composer 之上（同 room 滚动口的让位式）。 */
+.lite2-shell .lite-room-history-toggle {
+  position: absolute;
+  top: var(--lite2-clear-top, 96px);
+  right: 24px;
+  /* 44：压过空态卡（.nexus-empty z40），让位悬浮胶囊 45 / 顶栏 50。 */
+  z-index: 44;
+}
+
+.lite2-shell .lite-room-history-panel {
+  position: absolute;
+  top: calc(var(--lite2-clear-top, 96px) + 46px);
+  right: 24px;
+  bottom: max(var(--lite2-bottom-band, 120px), calc(var(--lite2-footer-h, 56px) + 76px));
+  /* 680：判读卡的 clamp 字号按 board 宽设计,440 会挤成一列大字——抽屉给到接近 board 的读宽。 */
+  width: min(680px, calc(100vw - 48px));
+  overflow-y: auto;
+  padding: 12px;
+  border: 1px solid var(--rule);
+  border-radius: 14px;
+  background: rgba(var(--lite2-surface-rgb), 0.96);
+  box-shadow: var(--shadow);
+  z-index: 44;
+}
+
+.lite2-shell .lite-room-history-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lite2-shell .lite-room-history-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.lite2-shell .lite-room-history-head:hover,
+.lite2-shell .lite-room-history-head:focus-visible {
+  border-color: var(--rule-strong, var(--ink));
+  outline: none;
+}
+
+.lite2-shell .lite-room-history-q {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lite2-shell .lite-room-history-list li.is-open .lite-room-history-q {
+  white-space: normal;
+}
+
+.lite2-shell .lite-room-history-date {
+  flex: none;
+  color: var(--ink-faint);
+  font-size: 11px;
+}
+
+.lite2-shell .lite-room-history-body {
+  padding: 10px 4px 4px;
+  overflow-x: hidden;
+}
+
+/* 回放的判读卡与 board 同款「解除 story 绝对定位」（board 段 848 的同规格抄本——
+   抽屉不在 .lite-room-board 里,吃不到那条,不解除就会内部元素互叠+横向溢出,截图实测）。 */
+.lite2-shell .lite-room-history-body .lite-room-card {
+  position: static;
+  inset: auto;
+  width: 100%;
+  min-width: 0;
+  max-height: none;
+  overflow: visible;
+}
+
+.lite2-shell .lite-room-history-body > * {
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}

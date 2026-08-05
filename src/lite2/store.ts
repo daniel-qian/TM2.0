@@ -3,6 +3,7 @@ import type {
   AskDraft,
   AskQuestionKind,
   LiveFileEntry,
+  LiveAdviseRunEntry,
   LiveNoteEntry,
   LiveTeamPayload,
   LiveTransport,
@@ -268,6 +269,9 @@ interface LiteState {
   notes: LiveNoteEntry[]
   // advise 完成且后端确认新笔记落库 → Room 内出一次 nudge（丢弃则不出）。切屏即消。
   noteJustAdded: boolean
+  // issue #49 · 议事室历史（只读、新→旧、重启后仍在）。null=尚未拉取/通道不可用（stub），
+  // []=拉过确实为空——UI 据此区分「不渲染」与「诚实空态」。
+  adviseRuns: LiveAdviseRunEntry[] | null
 
   // feat-050：正在按存下的 contextId 取回上次会话（首帧即 true，避免"空态闪一下再冒出团队"
   // 让人以为数据丢了）。取回结束（成功或降级）必须落回 false——绝不留无限 loading。
@@ -343,6 +347,9 @@ interface LiteState {
   refreshTeam: () => Promise<void>
   refreshFiles: () => Promise<void>
   refreshNotes: () => Promise<void>
+  // issue #49 · 拉取议事室历史。transport.fetchAdviseRuns 可选（stub 无）——判空即无操作，
+  // adviseRuns 停在 null，历史区整块不渲染（不出假空态）。
+  refreshAdviseRuns: () => Promise<void>
   // ── 项目手编 CRUD（rich-align-0722 · issue 05a）。写端点已就绪（f1ca46d）；action 写后
   // refreshTeam() 从权威 /team 重新派生网格（含 archived_projects + 逐字段 provenance），
   // 不做易漂移的乐观拼装（archive/restore 要跨 active↔archived 两个数组，单条回执拼不全）。
@@ -435,6 +442,7 @@ export const useLite = create<LiteState>((set, get) => ({
   files: [],
   notes: [],
   noteJustAdded: false,
+  adviseRuns: null,
   // 有锚点才算"正在恢复"——没有锚点是干净首访，直接进上传引导，不该转圈。
   restoring: restoredContextId !== null,
   restoreError: null,
@@ -642,6 +650,7 @@ export const useLite = create<LiteState>((set, get) => ({
           rawTeam: null,
           files: [],
           notes: [],
+          adviseRuns: null,
           ingestStatus: 'idle',
           restoring: false,
           restoreError: null,
@@ -663,7 +672,8 @@ export const useLite = create<LiteState>((set, get) => ({
       restoreError: null,
       // 换了 context 就不能留着上一个 context 的数据（换账号数据串是 feat-053 的红线）。
       ...(contextId !== get().contextId
-        ? { team: null, rawTeam: null, files: [], notes: [], ingestStatus: 'idle' as IngestStatus }
+        ? { team: null, rawTeam: null, files: [], notes: [], adviseRuns: null,
+            ingestStatus: 'idle' as IngestStatus }
         : {}),
     })
   },
@@ -798,6 +808,19 @@ export const useLite = create<LiteState>((set, get) => ({
       set({ notes: payload.notes })
     } catch {
       // 笔记是次要只读视图——拉取失败不该打断主流程。
+    }
+  },
+
+  // issue #49 · 议事室历史——与 refreshNotes 同骨架（contextId 收口 + stillOn 闸 + 静默降级）。
+  refreshAdviseRuns: async () => {
+    const { contextId, transport } = get()
+    if (!contextId || !transport.fetchAdviseRuns) return
+    try {
+      const payload = await transport.fetchAdviseRuns(contextId)
+      if (!stillOn(get, contextId)) return
+      set({ adviseRuns: payload.runs })
+    } catch {
+      // 历史是次要只读视图——拉取失败不该打断主流程（adviseRuns 停在上一次的值）。
     }
   },
 
@@ -986,6 +1009,7 @@ export function resetLiteCompanyData(): void {
     files: [],
     notes: [],
     noteJustAdded: false,
+    adviseRuns: null,   // issue #49：历史是公司域数据，换账号/重开必清
     ingestStatus: 'idle',
     ingestError: null,
     knownContexts: [],

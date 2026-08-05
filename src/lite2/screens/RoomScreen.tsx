@@ -7,6 +7,7 @@ import type { Dict } from '../../shared/i18n'
 import { LiteAdviceCard } from '../LiteAdviceCard'
 import { AskCard } from '../AskCard'
 import { localizeStreamLine } from '../../shared/streamCopy'
+import { coerceAdvice } from '../streamSource'
 import type {
   LiteStreamLine,
   LiteSpeaker,
@@ -251,6 +252,80 @@ function LiteAskComposer({
   )
 }
 
+// ── issue #49 · 议事室历史：后端 advise_runs 的只读回看面（新→旧）─────────────────────
+// 右上一枚「之前问过的 · N」入口 + 内滚抽屉面板——刻意不进 .lite-room-board / .nexus-empty
+// 的既有 DOM（好几道门锚在那两棵树上），空态与对话态都可达（F5 后 run 回 idle、历史必须
+// 还够得着，这正是本功能要解决的丢失面）。
+// 渲染门槛：adviseRuns 为 null（stub 通道/未拉取）或空数组时整块不出——历史不该在没有
+// 历史的第一天就摆一个空抽屉，stub 下零渲染保住离线门的 DOM 现状。
+function LiteRoomHistory() {
+  const adviseRuns = useLite((s) => s.adviseRuns)
+  const { t, locale } = useDict()
+  const [open, setOpen] = useState(false)
+  const [openId, setOpenId] = useState<string | null>(null)
+  if (!adviseRuns || adviseRuns.length === 0) return null
+  const stampOf = (iso: string) => {
+    const d = new Date(iso)
+    if (Number.isNaN(d.getTime())) return ''
+    return d.toLocaleString(locale === 'zh' ? 'zh-CN' : 'en-US', {
+      month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+    })
+  }
+  return (
+    <>
+      <button
+        type="button"
+        className="lite-btn lite-btn--ghost lite-room-history-toggle"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+      >
+        {t.lite2.roomHistoryTitle} · {adviseRuns.length}
+      </button>
+      {open ? (
+        <section className="lite-room-history-panel" aria-label={t.lite2.roomHistoryTitle}>
+          <ol className="lite-room-history-list">
+            {adviseRuns.map((run) => {
+              const expanded = openId === run.id
+              // 展开才 coerce——列表滚动时不为收着的条目做形状归一。
+              const advice = expanded ? coerceAdvice(run.advice) : null
+              return (
+                <li key={run.id} className={expanded ? 'is-open' : undefined}>
+                  <button
+                    type="button"
+                    className="lite-room-history-head"
+                    aria-expanded={expanded}
+                    onClick={() => setOpenId(expanded ? null : run.id)}
+                  >
+                    <span className="lite-room-history-q">{run.question}</span>
+                    <span className="lite-room-history-date">{stampOf(run.created_at)}</span>
+                    <span aria-hidden="true">{expanded ? '▴' : '▾'}</span>
+                  </button>
+                  {expanded ? (
+                    <div className="lite-room-history-body">
+                      {advice ? (
+                        /* .lite-room-card 包裹与 board 同款——它承担「解除 story 绝对定位」
+                           的职责（lite2.css board 段 + history 段各一份同规格规则）。 */
+                        <div className="lite-room-card">
+                          <LiteAdviceCard advice={advice} />
+                        </div>
+                      ) : run.answer ? (
+                        <section className="lite-room-answer-card" aria-label={t.lite2.roomAnswerLabel}>
+                          <p className="eyebrow">{t.lite2.roomAnswerLabel}</p>
+                          <p className="lite-room-answer-text">{run.answer}</p>
+                        </section>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </li>
+              )
+            })}
+          </ol>
+        </section>
+      ) : null}
+    </>
+  )
+}
+
 // feat-045（PRD F5）· 空态建议问题 chips——4 个泛化开场问（不预设语料内容），点击即发问
 // （直接走同一个 askLive，不经 composer 预填——"点击即发问"是拍板原文）。稳定 data-chip-id
 // 供门相位（chipsAsk）断言；文案在 en.ts lite2.roomChip*。
@@ -295,6 +370,16 @@ export function RoomScreen() {
   useEffect(() => {
     clearNoteNudge()
   }, [pathname, search, clearNoteNudge])
+
+  // issue #49 · 历史拉取：挂载/换公司拉一次；一次 run 完成后再拉（服务端在 manifest 时刻
+  // 已落库，complete 时刷新即可把刚问的这条带进列表）。stub/无 context 下是无操作。
+  const refreshAdviseRuns = useLite((s) => s.refreshAdviseRuns)
+  useEffect(() => {
+    void refreshAdviseRuns()
+  }, [refreshAdviseRuns, contextId])
+  useEffect(() => {
+    if (run.status === 'complete') void refreshAdviseRuns()
+  }, [run.status, refreshAdviseRuns])
 
   const running = run.status === 'running'
   const hasStarted = run.status !== 'idle'
@@ -425,6 +510,9 @@ export function RoomScreen() {
           </div>
         </section>
       )}
+      {/* issue #49 · 历史入口+抽屉：absolute 定位，不进 board/empty 两棵门锚树；
+          对话态与空态都渲染（F5 后历史必须仍可达）。无历史/stub 下自身返回 null。 */}
+      <LiteRoomHistory />
     </section>
   )
 }

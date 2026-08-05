@@ -412,6 +412,46 @@ def test_notes_qualitative_observation_passes(impl, tmp_path):
 
 
 # ==============================================================================================
+# issue #49 — advise-run history (the room's persisted Q&A). SHARED contract: both registries
+# honor the same append/list seam; the pg durability twin is under @needs_db below. No content
+# gate here BY DESIGN (see AdviseRun docstring): the service hook only persists redline_passed
+# manifests, and the question is the manager's own words echoed to the same manager.
+# ==============================================================================================
+
+_RUN_ADVICE = {
+    "summary": "The onboarding backlog is a load problem, not a person problem.",
+    "detected_signals": ["two handoffs bounced"], "diagnosis_hypotheses": [],
+    "evidence": ["W33 weekly: the backlog landed on one squad twice"],
+    "recommended_actions": ["rebalance the intake rotation"],
+    "metrics_to_track": [], "conversation_script": "",
+}
+
+
+def test_advise_runs_append_then_list_new_to_old(impl, tmp_path):
+    reg, cid, _ = _ingest(impl, tmp_path / "mem")
+    assert reg.list_advise_runs(cid) == [], "a fresh context has no run history"
+    r1 = reg.append_advise_run(cid, "How do I rebalance the onboarding backlog?",
+                               title="onboarding", locale="en", advice=_RUN_ADVICE)
+    r2 = reg.append_advise_run(cid, "谁的项目这周最需要我搭把手？", locale="zh",
+                               answer="从文件看，二期市政配套对接卡在审批，最需要你出面。")
+    got = reg.list_advise_runs(cid)
+    assert [r.question for r in got] == [r2.question, r1.question], "runs must list new->old"
+    assert got[0].answer and got[0].advice is None, "short-answer run: answer set, advice absent"
+    assert got[1].advice == _RUN_ADVICE and got[1].answer == "", "advice run round-trips the payload"
+    assert got[1].title == "onboarding" and got[1].locale == "en"
+    assert all(r.id and r.created_at for r in got) and got[0].id != got[1].id
+
+
+def test_advise_runs_list_caps_at_limit(impl, tmp_path):
+    """The history drawer is a recency surface — the reader caps, oldest falls off the page."""
+    reg, cid, _ = _ingest(impl, tmp_path / "mem")
+    for i in range(5):
+        reg.append_advise_run(cid, f"question {i}", answer=f"answer {i}")
+    got = reg.list_advise_runs(cid, limit=3)
+    assert [r.question for r in got] == ["question 4", "question 3", "question 2"]
+
+
+# ==============================================================================================
 # feat-033 POLICY PIVOT (2026-07-13) — the AVERY_ALLOW_PERSON_SCORING switch, tested BIDIRECTIONALLY
 # at the storage door. The in-memory and Postgres registries share ONE gate (gate_note_red_line), so
 # these prove BOTH honor the switch — the pg case (@needs_db) rules out a memory-only bypass. OFF (the
@@ -558,6 +598,25 @@ def test_pg_source_documents_survive_a_new_registry_instance(pg, tmp_path):
     # the bytes are still there, byte-for-byte, on a fresh instance (the restart claim).
     assert reg_b.source_document_bytes(cid, 0) == HANDBOOK.read_bytes()
     assert reg_b.source_document_bytes(cid, 1) == ROSTER.read_bytes()
+
+
+@needs_db
+def test_pg_advise_runs_survive_a_new_registry_instance(pg, tmp_path):
+    """issue #49 the restart story for the room's history: runs appended by one registry instance
+    are read back (new->old, payload intact) by a BRAND-NEW instance — the F5/redeploy claim that
+    motivated the whole feature."""
+    reg_a, cid, _ = _ingest(pg, tmp_path / "mem")
+    reg_a.append_advise_run(cid, "How do I rebalance the onboarding backlog?",
+                            title="onboarding", locale="en", advice=_RUN_ADVICE)
+    reg_a.append_advise_run(cid, "谁的项目这周最需要我搭把手？", locale="zh",
+                            answer="二期市政配套对接卡在审批，最需要你出面。")
+    reg_b = pg.fresh()
+    got = reg_b.list_advise_runs(cid)
+    assert [r.question for r in got] == ["谁的项目这周最需要我搭把手？",
+                                         "How do I rebalance the onboarding backlog?"], (
+        "run history vanished/reordered across a new registry instance")
+    assert got[1].advice == _RUN_ADVICE, "the stored advice payload must survive the restart intact"
+    assert got[0].answer.startswith("二期"), "the short answer must survive the restart intact"
 
 
 @needs_db

@@ -88,6 +88,27 @@ def new_note_id() -> str:
     return "note_" + uuid.uuid4().hex[:16]
 
 
+@dataclass
+class AdviseRun:
+    """issue #49 — one persisted room Q&A: the manager's question + Avery's final projected
+    advice card (or the short-answer text; the two are mutually exclusive, mirroring the
+    manifest contract). History surface reads new->old. `advice` is the contract-projected
+    manifest.advice payload (service/contract.py) — NOT the raw transcript; the service hook
+    only persists runs whose manifest carried redline_passed=True, so no gated content can
+    land here. The question is the manager's own text echoed back to the same manager."""
+    id: str
+    created_at: str          # ISO8601 UTC
+    question: str
+    title: str = ""
+    locale: str = "en"
+    advice: dict | None = None
+    answer: str = ""
+
+
+def new_run_id() -> str:
+    return "run_" + uuid.uuid4().hex[:16]
+
+
 # rich-align-0722/05a · 真 CRUD 项目（手编赢 + 逐字段出处，ADR-0028）.
 # provenance side-car source 对手编字段一律这句系统自证式短语（值本身仍活在实体字段，不双存）。
 MANUAL_SOURCE = "手动编辑"
@@ -716,6 +737,7 @@ class ContextRegistry(ProjectWriteMixin):
     def __init__(self) -> None:
         self._by_id: dict[str, CompanyContext] = {}
         self._notes: dict[str, list[CompanyNote]] = {}   # feat-033: agent-written notes, per context
+        self._advise_runs: dict[str, list[AdviseRun]] = {}  # issue #49: persisted room Q&A, per context
         self._asks: dict[str, object] = {}               # feat-034: ask_id -> Ask (deep-copied)
         self._ask_tokens: dict[str, tuple[str, int]] = {}  # share_token -> (ask_id, recipient idx)
         self._account_contexts: dict[str, list[str]] = {}  # feat-053: user_id -> [context_id]
@@ -742,6 +764,32 @@ class ContextRegistry(ProjectWriteMixin):
     def list_notes(self, context_id: str) -> list[CompanyNote]:
         """This company's notes, NEWEST FIRST (the notebook reads new->old)."""
         return list(reversed(self._notes.get(context_id, [])))
+
+    # --- issue #49: advise-run history (the room's persisted Q&A) ------------------------------
+
+    def append_advise_run(self, context_id: str, question: str, *, title: str = "",
+                          locale: str = "en", advice: dict | None = None,
+                          answer: str = "") -> AdviseRun:
+        """Persist one completed room Q&A. No content gate here BY DESIGN (unlike append_note /
+        put_ask): the advice payload already passed the advisor red line (the service hook only
+        calls this for redline_passed manifests), and the question is the manager's own words
+        shown back to the same manager — the surfaces that ship content to OTHER eyes (notes,
+        asks) keep their storage-door scans unchanged. In-memory holds runs for the process;
+        the Postgres twin persists them across restarts (same duck-typed API)."""
+        import copy
+        run = AdviseRun(id=new_run_id(), created_at=_now_iso(), question=question,
+                        title=title or "", locale=locale or "en",
+                        advice=copy.deepcopy(advice) if advice is not None else None,
+                        answer=answer or "")
+        self._advise_runs.setdefault(context_id, []).append(run)
+        return copy.deepcopy(run)
+
+    def list_advise_runs(self, context_id: str, limit: int = 50) -> list[AdviseRun]:
+        """This company's persisted Q&A, NEWEST FIRST, capped at `limit` (the history drawer
+        is a recency surface, not an archive export)."""
+        import copy
+        runs = self._advise_runs.get(context_id, [])
+        return [copy.deepcopy(r) for r in list(reversed(runs))[: max(1, int(limit))]]
 
     # --- feat-034: Ask ("Quick ask") storage — the same seam style as notes ---------------------
 
@@ -957,6 +1005,12 @@ class ContextRegistryProtocol(Protocol):
     # Avery's notes (write side)
     def append_note(self, context_id: str, text: str, source_excerpt: str = "") -> CompanyNote: ...
     def list_notes(self, context_id: str) -> list[CompanyNote]: ...
+
+    # advise-run history (issue #49)
+    def append_advise_run(self, context_id: str, question: str, *, title: str = "",
+                          locale: str = "en", advice: dict | None = None,
+                          answer: str = "") -> AdviseRun: ...
+    def list_advise_runs(self, context_id: str, limit: int = 50) -> list[AdviseRun]: ...
 
     # ask cards
     def put_ask(self, ask): ...

@@ -465,6 +465,25 @@ export interface LiveNotesPayload {
   notes: LiveNoteEntry[]
 }
 
+// ── 议事室历史（issue #49：GET /team/{id}/advise-runs 契约）─────────────────────────────
+// 每次成功 /advise 服务端落一行「问题 + 契约投影后的建议卡/短答」；F5/换设备不再丢。
+// 只读、新→旧、上限 50。🔴 服务端只落 redline_passed 的 manifest——历史里不会出现被
+// 红线拦下的建议内容。advice 与 answer 互斥（同 manifest 契约）。
+export interface LiveAdviseRunEntry {
+  id: string
+  created_at: string // ISO8601 UTC
+  question: string // 经理的提问原文（只回显给本人）
+  title: string
+  locale: string
+  advice: Record<string, unknown> | null // manifest.advice 投影——回放时经 coerceAdvice 归一
+  answer: string // 0729/03 分流短答（与 advice 互斥）
+}
+
+export interface LiveAdviseRunsPayload {
+  context_id: string
+  runs: LiveAdviseRunEntry[]
+}
+
 // ── 端点分歧台账（wire-contract-duplicated-endpoint-asymmetry-unledgered）──────────────────
 // 两壳各自持一份 LiveTransport（src/lite/transport.ts vs 本文件），端点早就不对称了。
 // 区分信息只活在 commit message 里，代码与 AGENTS.md 均无痕迹——本台账把它挖出来钉在这里，
@@ -535,6 +554,10 @@ export interface LiveTransport {
 
   // feat-047 移植：按 context_id 拉取「Avery's notes」累积笔记（feat-033；只读、新→旧、重启后仍在）。
   fetchNotes: (contextId: string) => Promise<LiveNotesPayload>
+
+  // issue #49 · 议事室历史（只读、新→旧）。可选：stub 通道无持久层，判空即整块不渲染
+  //（与 fetchAccountContexts 同款降级纪律）。
+  fetchAdviseRuns?: (contextId: string) => Promise<LiveAdviseRunsPayload>
 
   // ── 账号（feat-053）。可选实现：stub transport 不提供，调用方须判空 ──────────────────
   // 🔴 可选（`?:`）是刻意的——LiveTransport 有第二个实现（stubTransport，AFK 门/离线演示），
@@ -1116,6 +1139,15 @@ export function createHttpTransport(base: string = apiBase()): LiveTransport {
       })
       if (!res.ok) throw transportError('notes', res)
       return (await res.json()) as LiveNotesPayload
+    },
+
+    // issue #49 · 议事室历史——同上 header-only 纪律（owner_token 缺/错一律 404）。
+    async fetchAdviseRuns(contextId) {
+      const res = await send('history', `${base}/team/${encodeURIComponent(contextId)}/advise-runs`, {
+        headers: authHeader(contextId),
+      })
+      if (!res.ok) throw transportError('history', res)
+      return (await res.json()) as LiveAdviseRunsPayload
     },
 
     // ── 账号（feat-053）────────────────────────────────────────────────────────────────

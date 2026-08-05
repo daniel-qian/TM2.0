@@ -1519,6 +1519,8 @@ export const en = {
     adviceEyebrow: "Avery's analysis",
     // 0729/03 分流短答：事实查询的一段话直答气泡（与判读卡互斥）。
     roomAnswerLabel: "Avery's answer",
+    // issue #49 · 议事室历史（advise_runs 只读回看面）的入口/抽屉标题。
+    roomHistoryTitle: 'Asked before',
     adviceReadTitle: 'The read',
     adviceSignOff: 'Yours to sign off',
     adviceSummaryAria: 'Summary — the read',
