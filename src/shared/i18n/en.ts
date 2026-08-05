@@ -1162,6 +1162,9 @@ export const en = {
     onboardSkip: 'Skip the setup',
     onboardBack: 'Back',
     onboardNext: 'Next',
+    // Last numbered step: the header says "step 5 of 5", so a button that still says "Next"
+    // reads as if a sixth step exists. What follows is the wrap-up, so say that.
+    onboardSeeSummary: 'See the summary',
     onboardFinish: 'Step in',
     onboardStepsAria: 'Setup steps',
     onboardStepOf: 'step {n} of {total}',
@@ -1426,6 +1429,36 @@ export const en = {
     onboardAccountTitle: 'Create your manager account',
     onboardAccountBody:
       'An account ties this workspace to you, so signing in on another device brings it back. You can skip it and stay a guest — nothing here stops working.',
+    onboardAccountSummaryAria: 'What you have set up so far',
+    onboardAccountSummaryTables: '{n} tables filled in',
+    // 🔴 NOT "connected tools". The tools step said, on the same screen as the cards, that no
+    // connection exists yet; a summary that then says "connected" contradicts it two screens
+    // later. The partner mockup says 已连接; the mockup is wrong about our product, so we don't
+    // copy it.
+    onboardAccountSummaryTools: '{n} tools noted',
+    onboardAccountSummaryFrameworks: '{n} frameworks picked',
+    onboardAccountEmailLabel: 'Email',
+    onboardAccountEmailPlaceholder: 'you@company.com',
+    onboardAccountPasswordLabel: 'Password',
+    onboardAccountPasswordPlaceholder: 'At least 6 characters',
+    onboardAccountCreate: 'Create the account',
+    onboardAccountCreating: 'Creating…',
+    onboardAccountLater: 'Later — keep going as a guest',
+    // Email-confirmation branch: Supabase returned a user but no session. Say so plainly; the
+    // topbar account panel is the standing way to claim once they have signed in.
+    onboardAccountPending: 'Check your inbox — there is a confirmation link waiting.',
+    onboardAccountPendingHow:
+      'Once you have confirmed and signed in, the account menu in the top bar will offer to tie this workspace to you.',
+    onboardAccountSignedIn: 'Signed in as {email}.',
+    onboardAccountClaiming: 'Tying this workspace to your account…',
+    onboardAccountClaimed:
+      'Done — this workspace is tied to your account. Signing in on another device brings it back.',
+    onboardAccountClaimAction: 'Tie this workspace to my account',
+    onboardAccountClaimRetry: 'Try again',
+    onboardAccountClaimFailed:
+      "The account is created, but tying this workspace to it didn't go through. You can retry here, or from the account menu in the top bar later.",
+    onboardAccountNothingToClaim:
+      'Nothing to tie yet — go back to the first step to bring your data in, and it will follow this account from then on.',
 
     onboardDoneTitle: "You're set",
     onboardDoneGreeting: 'Good to meet you, {name}.',

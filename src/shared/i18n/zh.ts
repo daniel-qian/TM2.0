@@ -841,6 +841,9 @@ export const zh: Dict = {
     "onboardSkip": "跳过设置",
     "onboardBack": "上一步",
     "onboardNext": "下一步",
+    // 末一个编号步：抬头写着「第 5 步，共 5 步」，脚下再说「下一步」就像还有第 6 步。
+    // 后面那一屏是总结页，如实这么叫。
+    "onboardSeeSummary": "看看总结",
     "onboardFinish": "进入",
     "onboardStepsAria": "设置步骤",
     "onboardStepOf": "第 {n} 步，共 {total} 步",
@@ -986,6 +989,30 @@ export const zh: Dict = {
     // 硬性产品要求。这份部署没有账号能力时整步隐去——绝不出死按钮。
     "onboardAccountTitle": "创建管理者账号",
     "onboardAccountBody": "有账号，这份工作区就归到你名下——换台设备登录也能找回来。跳过也行，当游客一样用，什么都不会少。",
+    "onboardAccountSummaryAria": "你目前设置了什么",
+    "onboardAccountSummaryTables": "已填 {n} 张表",
+    // 🔴 **不叫「已连接工具」**。第②步同屏刚说过「目前还没有开通任何连接」，两屏之后再说
+    // "已连接"就是自己打自己脸。合伙人静态稿上写的是「已连接」——稿子在这一点上与我们的产品
+    // 现实不符，不抄。
+    "onboardAccountSummaryTools": "{n} 个已登记的工具",
+    "onboardAccountSummaryFrameworks": "{n} 个管理框架",
+    "onboardAccountEmailLabel": "邮箱",
+    "onboardAccountEmailPlaceholder": "you@company.com",
+    "onboardAccountPasswordLabel": "密码",
+    "onboardAccountPasswordPlaceholder": "至少 6 位",
+    "onboardAccountCreate": "创建账号",
+    "onboardAccountCreating": "正在创建…",
+    "onboardAccountLater": "稍后再说，先当游客用",
+    // 邮箱确认分支：Supabase 回了 user 但没有 session。如实说去收信，绝不假装已登录。
+    "onboardAccountPending": "去收件箱看看——有一封确认邮件在等你点。",
+    "onboardAccountPendingHow": "确认并登录之后，顶栏的账号菜单里会出现把这份工作区绑到你名下的入口。",
+    "onboardAccountSignedIn": "已登录为 {email}。",
+    "onboardAccountClaiming": "正在把这份工作区绑到你的账号…",
+    "onboardAccountClaimed": "好了——数据已经绑到你的账号，换台设备登录也能找回来。",
+    "onboardAccountClaimAction": "把这份工作区绑到我的账号",
+    "onboardAccountClaimRetry": "再试一次",
+    "onboardAccountClaimFailed": "账号已经建好了，只是这份工作区没绑上。可以在这儿再试一次，也可以之后从顶栏的账号菜单里绑。",
+    "onboardAccountNothingToClaim": "现在还没有工作区可绑——回第一步把数据交进来，之后它就会跟着这个账号走。",
     "onboardDoneTitle": "准备好了",
     "onboardDoneGreeting": "{name}，很高兴见到你。",
     "onboardDoneGreetingNoName": "很高兴见到你。",

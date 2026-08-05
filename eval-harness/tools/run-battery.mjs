@@ -139,6 +139,7 @@ const ROSTER = [
   // ── C 区 · 🔴 dist 调包者，殿后且独占跑（3 道）────────────────────────────
   { zone: 'C', name: 'auth-capability',       cmd: ['eval-harness/tools/verify-auth-capability.mjs'],             host: 'rebuild', backend: false, dist: true,  note: 'spawn(vite build) 带假 Supabase key + VITE_AVERY_API_BASE=127.0.0.1:8281，自起 preview 5281；**不还原 dist**' },
   { zone: 'C', name: 'auth-form',             cmd: ['eval-harness/tools/verify-auth-form.mjs'],                   host: 'rebuild', backend: false, dist: true,  note: '同款，端口 5291 / API 8291；**不还原 dist**' },
+  { zone: 'C', name: 'onboard-account',       cmd: ['eval-harness/tools/verify-onboard-account.mjs'],             host: 'rebuild', backend: false, dist: true,  note: 'onboarding-accounts-0805 ④ · 向导第⑤步的五分支（注册成功→**自动**认领 / 邮箱确认不假装已登录 / 注册失败人话 / 跳过后游客路径完好 / 未配置整步隐去）。与 auth-form 同族：**自己 spawn 两次 vite build**（一份带假 Supabase key、一份不带），端口 5295+5296 / API 8295；**不还原 dist**。真凭据链路不在这儿，归 .issues/onboarding-accounts-0805/verify-account-e2e.mjs（needs_keys 性质，不进默认电池）' },
   { zone: 'C', name: 'bundle-privacy',        cmd: ['eval-harness/tools/verify-bundle-privacy.mjs'],              host: 'rebuild', backend: false, dist: true,  note: '🔴 最毒：execFileSync(vite build) **不带 api base** → dist 落回 vite.config.ts 默认 = 生产域名' },
 ]
 

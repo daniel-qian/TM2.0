@@ -3336,6 +3336,95 @@
   }
 }
 
+/* ── onboarding-accounts-0805 ④ · 账号步 ─────────────────────────────────────────────── */
+.lite2-shell .lite-onboard-account-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 14px;
+  padding: 0;
+  list-style: none;
+}
+
+.lite2-shell .lite-onboard-account-summary .lite-badge {
+  padding: 3px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  color: var(--ink-soft);
+}
+
+/* 输入框收窄到 380px 是刻意的（一个邮箱框铺满 1080px 卡片很怪），但**按钮行不跟**：
+   英文的「Later — keep going as a guest」比中文长得多，跟着 380px 就被挤到第二行，
+   与中文的并排布局对不上（checker 逮到）。让按钮行用满卡片宽度。 */
+.lite2-shell .lite-onboard-account-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.lite2-shell .lite-onboard-account-form .lite-onboard-field {
+  max-width: 380px;
+}
+
+.lite2-shell .lite-onboard-account-form input {
+  padding: 9px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 9px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+}
+
+.lite2-shell .lite-onboard-account-form input:focus-visible {
+  border-color: var(--sage);
+  outline: none;
+}
+
+.lite2-shell .lite-onboard-account-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.lite2-shell .lite-onboard-account-state {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 460px;
+}
+
+.lite2-shell .lite-onboard-account-who,
+.lite2-shell .lite-onboard-account-pending {
+  margin: 0;
+  font-size: 14px;
+  color: var(--ink);
+}
+
+.lite2-shell .lite-onboard-account-note,
+.lite2-shell .lite-onboard-account-claimed {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--ink-soft);
+}
+
+.lite2-shell .lite-onboard-account-claimed {
+  padding: 7px 11px;
+  border-left: 3px solid var(--sage);
+  border-radius: 0 8px 8px 0;
+  background: var(--lite2-glass);
+  color: var(--ink);
+}
+
+.lite2-shell .lite-onboard-account-error {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--danger, #b3261e);
+}
+
 /* onboarding-accounts-0805 ③：诚实标注行（连接工具步「暂未开通连接」/ 偏好步「只存本地」）。
    🔴 刻意不做成小字脚注：它与卡片同屏、同一视觉层级，因为点击就发生在旁边。 */
 .lite2-shell .lite-onboard-honesty {

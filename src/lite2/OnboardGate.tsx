@@ -248,8 +248,11 @@ export function OnboardGate() {
               </button>
             ) : null}
             {step !== 'done' ? (
+              // 末一个编号步上不能还叫「下一步」：抬头写着「第 5 步，共 5 步」，脚下却说
+              // 「下一步」，读起来像还有第 6 步（checker 逮到）。后面那一屏是总结页，不是
+              // 第 6 步，所以按钮如实说它是什么。
               <button type="button" className="lite-btn lite-btn--primary lite-onboard-next" onClick={goNext}>
-                {l.onboardNext}
+                {steps[stepIndex + 1] === 'done' ? l.onboardSeeSummary : l.onboardNext}
               </button>
             ) : (
               <button type="button" className="lite-btn lite-btn--primary lite-onboard-finish" onClick={onFinish}>
@@ -752,14 +755,190 @@ function StepPrefs() {
   )
 }
 
-// ── ⑤ 创建管理者账号 —— 票 #43 实装（占位步：本票只搭壳，不做半个注册表单）。────────────
+// ── ⑤ 创建管理者账号（ADR-0034 拍板 5）───────────────────────────────────────────────
+// 账号系统是**真的**（feat-053 的 Supabase GoTrue，生产实探 /account/status 200）。本步只做
+// 两件事：把注册搬进向导 + 注册成功后自动认领当前 context。认领架构一个字没动。
+//
+// 🔴 三条不许动的边界：
+//   ① **可跳过**。游客路径是硬性产品要求（authStore 文件头的第 2 条硬性质），不是将就。
+//      「稍后再说」与走完向导等价——跳过之后一切照常能用。
+//   ② **邮箱确认分支必须做**。Supabase 项目若开了 email confirmation，signUp 拿不到 session
+//      （authStore 的 pendingVerification）。此时绝不能假装已登录，要如实说去收信，并告诉他
+//      登录之后顶栏还能认领——AuthPanel 那个入口是现成兜底，不是新做一条路。
+//      🔴 别假设配置：两个分支都在，探测不到就都别猜。
+//   ③ **不造第二套状态机**。注册走的是 authStore.signUp，认领走的是 transport.claimContext，
+//      与顶栏 AuthPanel 同一条链——向导只是同一个状态机的第二个入口。
 function StepAccount() {
   const { t } = useDict()
   const l = t.lite2
+
+  const status = useAuth((s) => s.status)
+  const email = useAuth((s) => s.email)
+  const busy = useAuth((s) => s.busy)
+  const error = useAuth((s) => s.error)
+  const pendingVerification = useAuth((s) => s.pendingVerification)
+  const signUp = useAuth((s) => s.signUp)
+
+  const contextId = useLite((s) => s.contextId)
+  const ownerToken = useLite((s) => s.ownerToken)
+  const rawTeam = useLite((s) => s.rawTeam)
+  const transport = useLite((s) => s.transport)
+
+  const preview = useOnboard((s) => s.preview)
+  const goStep = useOnboard((s) => s.goStep)
+  const tools = useOnboard((s) => s.tools)
+  const frameworks = useOnboard((s) => s.frameworks)
+  const rows = useIntake((s) => s.rows)
+
+  const [emailInput, setEmailInput] = useState('')
+  const [password, setPassword] = useState('')
+  const [claim, setClaim] = useState<'idle' | 'claiming' | 'claimed' | 'failed'>('idle')
+  // 自动认领只跑一次（每个 context 一次）。ref 而不是 state：它是"这一发做过没有"的账本，
+  // 不该引起重渲染，也不该在 claim 失败后被 setState 的时序绕回来再打一次。
+  const claimedFor = useRef<string | null>(null)
+
+  const authed = status === 'authed'
+  // 已经绑好了：后端在已登录上传时当场就绑了（/ingest 回 account_linked），或者本步刚认领成功。
+  // 🔴 不看这一条的话，面板会对着一份**已经归属**的数据说"还没绑"——AuthPanel 修过同一个 bug。
+  const alreadyLinked = rawTeam?.account_linked === true || claim === 'claimed'
+  const canClaim = authed && Boolean(contextId) && Boolean(ownerToken) && !alreadyLinked
+
+  const doClaim = async () => {
+    const claimContext = transport.claimContext
+    if (!claimContext || !contextId || !ownerToken) return
+    setClaim('claiming')
+    try {
+      await claimContext.call(transport, contextId, ownerToken)
+      setClaim('claimed')
+    } catch {
+      // 认领失败**不是**注册失败：账号已经建好了，只是这份数据还没绑上。顶栏 AuthPanel 的
+      // 认领入口仍然可用，文案要如实这么说，别把两件事混成一句"出错了"。
+      setClaim('failed')
+    }
+  }
+
+  // 注册成功且拿到 session → 自动认领当前 context（拍板 5）。
+  useEffect(() => {
+    if (preview) return                       // 预览态不发请求
+    if (!canClaim) return
+    if (claimedFor.current === contextId) return
+    claimedFor.current = contextId
+    void doClaim()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canClaim, contextId, preview])
+
+  const filledTables = Object.values(rows).filter((list) =>
+    list.some((r) => Object.values(r).some((v) => v.trim() !== ''))).length
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (busy !== 'idle' || preview) return
+    void signUp(emailInput, password)
+  }
+
   return (
-    <div className="lite-onboard-step" data-account-step="placeholder">
+    <div className="lite-onboard-step" data-account-step={authed ? 'authed' : pendingVerification ? 'pending' : 'form'}>
       <h2>{l.onboardAccountTitle}</h2>
       <p className="lite-onboard-step-body">{l.onboardAccountBody}</p>
+
+      {/* 步顶摘要 chips（静态稿）。🔴 中间那颗**不叫「已连接工具」**：第②步同屏刚说过
+          「目前还没有开通任何连接」，总结里再说"已连接"就是自己打自己脸。叫「已登记」。 */}
+      <ul className="lite-onboard-account-summary" aria-label={l.onboardAccountSummaryAria}>
+        <li className="lite-badge" data-summary="tables">{fill(l.onboardAccountSummaryTables, { n: filledTables })}</li>
+        <li className="lite-badge" data-summary="tools">{fill(l.onboardAccountSummaryTools, { n: tools.length })}</li>
+        <li className="lite-badge" data-summary="frameworks">{fill(l.onboardAccountSummaryFrameworks, { n: frameworks.length })}</li>
+      </ul>
+
+      {authed ? (
+        <div className="lite-onboard-account-state">
+          <p className="lite-onboard-account-who">
+            {fill(l.onboardAccountSignedIn, { email: email ?? '' })}
+          </p>
+          {alreadyLinked ? (
+            <p className="lite-onboard-account-claimed" data-claim="done">{l.onboardAccountClaimed}</p>
+          ) : !contextId ? (
+            // 还没有工作区可绑（跳过了第①步）。诚实说明，不出一颗点了没反应的按钮。
+            <p className="lite-onboard-account-note" data-claim="nothing">{l.onboardAccountNothingToClaim}</p>
+          ) : claim === 'claiming' ? (
+            <p className="lite-onboard-account-note" data-claim="claiming">{l.onboardAccountClaiming}</p>
+          ) : (
+            <div className="lite-onboard-account-claim">
+              {claim === 'failed' ? (
+                <p className="lite-onboard-account-error" role="alert" data-claim="failed">
+                  {l.onboardAccountClaimFailed}
+                </p>
+              ) : null}
+              <button
+                type="button"
+                className="lite-btn lite-btn--primary lite-onboard-account-claimbtn"
+                onClick={() => void doClaim()}
+                disabled={preview}
+              >
+                {claim === 'failed' ? l.onboardAccountClaimRetry : l.onboardAccountClaimAction}
+              </button>
+            </div>
+          )}
+        </div>
+      ) : pendingVerification ? (
+        // 邮箱确认分支：有 user、没 session。绝不假装已登录。
+        <div className="lite-onboard-account-state">
+          <p className="lite-onboard-account-pending" data-account-branch="pending">
+            {l.onboardAccountPending}
+          </p>
+          <p className="lite-onboard-account-note">{l.onboardAccountPendingHow}</p>
+        </div>
+      ) : (
+        <form className="lite-onboard-account-form" onSubmit={submit}>
+          <label className="lite-onboard-field">
+            <span>{l.onboardAccountEmailLabel}</span>
+            <input
+              type="email"
+              autoComplete="email"
+              className="lite-onboard-account-email"
+              value={emailInput}
+              placeholder={l.onboardAccountEmailPlaceholder}
+              onChange={(e) => setEmailInput(e.target.value)}
+              disabled={preview}
+            />
+          </label>
+          <label className="lite-onboard-field">
+            <span>{l.onboardAccountPasswordLabel}</span>
+            <input
+              type="password"
+              autoComplete="new-password"
+              className="lite-onboard-account-password"
+              value={password}
+              placeholder={l.onboardAccountPasswordPlaceholder}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={preview}
+            />
+          </label>
+          {error ? (
+            <p className="lite-onboard-account-error" role="alert">{error}</p>
+          ) : null}
+          <div className="lite-onboard-account-actions">
+            {/* 🔴 6 位是**同一个框的占位符自己写着的**要求（也是 Supabase 的默认下限）。
+                首版只判非空，于是填一个字符按钮就亮了——屏幕在自己打自己的脸，而且点下去必然
+                换回一次「密码太短了」的往返（checker 逮到）。校验与承诺对齐，不是加严。 */}
+            <button
+              type="submit"
+              className="lite-btn lite-btn--primary lite-onboard-account-create"
+              disabled={busy !== 'idle' || preview || !emailInput.trim() || password.length < 6}
+              aria-busy={busy === 'signing-up'}
+            >
+              {busy === 'signing-up' ? l.onboardAccountCreating : l.onboardAccountCreate}
+            </button>
+            {/* 拍板 5：可跳过。它与「下一步」并列，不藏在角落——跳过是一条正当的路。 */}
+            <button
+              type="button"
+              className="lite-btn lite-btn--ghost lite-onboard-account-later"
+              onClick={() => goStep('done')}
+            >
+              {l.onboardAccountLater}
+            </button>
+          </div>
+        </form>
+      )}
     </div>
   )
 }
