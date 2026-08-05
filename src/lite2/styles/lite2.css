@@ -7712,8 +7712,30 @@
    verify-bottom-furniture-clearance 盯的是结果（有没有控件被劫持），改布局后重跑它即可。 */
 .lite2-shell .home-scroll,
 .lite2-shell .lite-home-scroll,
-.lite2-shell .lite-followups-scroll {
+.lite2-shell .lite-followups-scroll,
+.lite2-shell .lite-projects-scroll {
   bottom: var(--lite2-bottom-band, 120px);
+}
+
+/* #45 · 当年名单漏了 projects 和 room 两个滚动口（内容够长时家具照样劫持点击）。
+   projects 归上面同一条带；room 单列：它的屏底家具是追问 composer（比胶囊厚，
+   52px 本体 + 页脚让位），120px 常数在 375 窄屏页脚换行到 59px+ 时只差 3px 就穿——
+   跟页脚实测高度走（--lite2-footer-h 由 Lite2Footer ResizeObserver 发布），不再猜常数。 */
+.lite2-shell .lite-room-scroll {
+  bottom: max(var(--lite2-bottom-band, 120px), calc(var(--lite2-footer-h, 56px) + 76px));
+}
+
+/* #45 后半条 · 带边界的「白容器」错觉：滚动口在带上沿把内容**硬切**（卡片拦腰截断、
+   下面凭空一条空带），胶囊看起来像装在独立容器里；当年 projects 不在带名单，内容从胶囊
+   底下穿过去，反而是用户想要的「悬浮」观感——把硬切换成渐隐，家具浮在淡出的内容上方，
+   防劫持的带一寸不让。mask 只吃滚动口自己（背景透明，不碰 aurora）。 */
+.lite2-shell .home-scroll,
+.lite2-shell .lite-home-scroll,
+.lite2-shell .lite-followups-scroll,
+.lite2-shell .lite-projects-scroll,
+.lite2-shell .lite-room-scroll {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 44px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 44px), transparent);
 }
 
 /* #34 后半条：胶囊不许压穿常驻合规页脚（PRD F6 要求它常驻可读）。
@@ -7725,4 +7747,21 @@
    兜底 56px 只在变量还没发布的第一帧生效，且比原来的 24 更保守。 */
 .lite2-shell .lite-ask-avery {
   bottom: calc(var(--lite2-footer-h, 56px) + 12px);
+}
+
+/* ═══ #45 · 议事室 run 态追问 composer 归位（2026-08-05）═══════════════════════════
+   0729 画板退役把议事室换成纵向文档流，设计意图是「composer 屏底常驻」（RoomScreen
+   307-310 注释、board 底 padding 注释都这么说），但它复用的 .nexus-followup-composer
+   在 55-ask-composer.css 里还是 v01 无限画布时代的「左下角 440px 小浮标」
+   （absolute left:16 bottom:20）。空态分支有 .nexus-empty-composer-wrap 拉回正常流
+   （本文件 482），run 态分支漏了——于是有对话后 composer 掉回左下角孤零零一小条。
+   基类是 story/v1 共用的冻结面，不动 55-ask-composer.css，只在 lite2 壳内覆盖。
+   选择器用 `>`：run 态 composer 是 .lite-room 直接子元素（滚动区外，门盯着这个结构），
+   空态的在 .nexus-empty 里层级更深，不受此规则影响。
+   宽度对齐 board 内容列（900px - 2×36 padding），让位页脚与胶囊同式。 */
+.lite2-shell .lite-room > .nexus-followup-composer {
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(var(--lite2-footer-h, 56px) + 12px);
+  width: min(828px, calc(100vw - 48px));
 }
