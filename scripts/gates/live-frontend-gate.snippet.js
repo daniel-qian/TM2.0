@@ -1635,7 +1635,9 @@
       // team.handoffs, itself derived from real project blockers — teamData.ts liveHandoffs()),
       // each with a done check + a discard control + a take-to-room control, and zero person-
       // number leak inside the triage DOM (red line, same BLOOD_BAR_RE as v01 person cards).
-      this._clickTab('Team');
+      // #46 (ADR-0034, 2026-08-05): the triage block moved from Your team to the Today screen
+      // (Team is people-only now) — the probe follows the real component.
+      this._clickTab('Today');
       try {
         await poll(() => ($$('.home-handoff').length > 0 ? true : null), 8000, 'triage cards to render');
       } catch (e) { /* fall through — assertions below report absence */ }
@@ -1667,7 +1669,8 @@
       // order (restored between steps via the drawer's undo button) — see the note above
       // assertTriageRenders on why the corpus now yields two triage cards (feat-044) and why
       // this phase always targets the first.
-      this._clickTab('Team');
+      // #46: triage lives on Today now (see assertTriageRenders).
+      this._clickTab('Today');
       try {
         await poll(() => ($$('.home-handoff').length > 0 ? true : null), 8000, 'a triage card to act on');
       } catch (e) { /* report below */ }
@@ -1792,8 +1795,8 @@
       } catch (e) { /* fall through */ }
       const beforeIds = await collectAllIds();
 
-      // 1) Add from the first triage card.
-      this._clickTab('Team');
+      // 1) Add from the first triage card. #46: triage lives on Today now.
+      this._clickTab('Today');
       try {
         await poll(() => ($$('.home-handoff').length > 0 ? true : null), 8000, 'triage cards present');
       } catch (e) { /* fall through */ }

@@ -63,6 +63,10 @@ const WHITELIST = [
   '.home-person-card', '.home-people-group-head', '.home-check', '.home-map-card-link',
   '.home-drawer-toggle', '.home-project-card',
   '.lite-project-card', '.lite-followup-check', '.lite-followups-subtab',
+  // #48 · 卡片标题按钮：整卡从单 <button> 改「div 容器+内部多按钮」后，键盘/读屏的开详情
+  // 路径落在这个刻意无壳的标题按钮上（继承卡内排版,专属语法=focus-visible 描边）。
+  // 原 .lite-project-card/.home-person-card 白名单条目描述的"整卡即按钮"形态已由它接棒。
+  '.lite-card-open',
   '.lite-flow-toggle', '.lite-flow-cites-toggle', '.lite-room-chip',
   '.lite-gap-project-link', '.lite-gap-history-toggle',
   '.lite-notes-entry-source', '.lite-notes-group-head',

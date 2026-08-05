@@ -101,7 +101,7 @@ async function injectStatuslessProject(route) {
 
 let sharedBrowser
 
-async function uploadAndGoTeam(page, seam) {
+async function uploadAndGo(page, seam, screen) {
   await page.route('**/ingest', injectStatuslessProject)
   await page.route('**/team/*', injectStatuslessProject)
 
@@ -109,38 +109,41 @@ async function uploadAndGoTeam(page, seam) {
     await window[seam].getState().uploadFiles([new File([text], 'w31.md', { type: 'text/markdown' })])
     await new Promise((r) => setTimeout(r, 2200))
   }, { text: DOC, seam })
-  await page.evaluate((seam) => window[seam].getState().goScreen('team'), seam)
+  await page.evaluate(({ seam, screen }) => window[seam].getState().goScreen(screen),
+    { seam, screen })
   await page.waitForTimeout(1000)
 }
 
-// ── 团队屏（首页项目道）：v01 与 v02 共用同一套断言 ─────────────────────────────
-async function runTeamScreen(shellQuery, seam) {
+// ── 项目卡面：v01 = 团队屏项目道；v02 = 项目屏（#46/ADR-0034 后 v02 团队屏项目卡带
+//    已退役，项目屏是 v02 唯一的项目卡面——尺子跟着真部件走，断言判据一字未改）。
+async function runCardsScreen({ shellQuery, seam, screen, cardSel, statusSel, openSel }) {
   const { browser, context: ctx, page: p, pageErrors: errs } = await bootPage({
     browser: sharedBrowser, base: UI, path: `/?${shellQuery}&mode=live&look=paper&lang=zh`,
     trackPageErrors: true, onboardWait: 700,
   })
   sharedBrowser = browser
 
-  await uploadAndGoTeam(p, seam)
+  await uploadAndGo(p, seam, screen)
 
-  const cards = await p.evaluate(() =>
-    [...document.querySelectorAll('.home-project-card')].map((el) => ({
+  const cards = await p.evaluate(({ cardSel, statusSel }) =>
+    [...document.querySelectorAll(cardSel)].map((el) => ({
       title: el.querySelector('h3')?.innerText ?? '',
-      statusText: el.querySelector('.home-project-status')?.innerText ?? '',
+      statusText: el.querySelector(statusSel)?.innerText ?? '',
       cardClass: el.className,
       dotClass: el.querySelector('.status-dot')?.className ?? '',
-    })),
-  )
+    })), { cardSel, statusSel })
   const derived = await p.evaluate((seam) =>
     (window[seam].getState().team?.projects ?? []).map((x) => ({
       title: x.title, status: x.status, statusRaw: x.statusRaw ?? '(无此字段/v01不带)',
     })), seam)
 
-  // 详情浮层：同一个项目在两处显示，说法必须一致
+  // 详情浮层：同一个项目在两处显示，说法必须一致。
+  // #48 后 v02 卡是 div 容器，开详情的键盘按钮是 .lite-card-open——openSel 指定点哪。
   let overlay = ''
-  const target = p.locator('.home-project-card', { hasText: CLONE_TITLE }).first()
+  const target = p.locator(cardSel, { hasText: CLONE_TITLE }).first()
   if (await target.count()) {
-    await target.click()
+    const opener = openSel ? target.locator(openSel).first() : target
+    await opener.click()
     await p.waitForTimeout(700)
     overlay = await p.evaluate(() => document.querySelector('.lite-detail-card')?.innerText ?? '')
     await p.keyboard.press('Escape')
@@ -152,18 +155,27 @@ async function runTeamScreen(shellQuery, seam) {
   return { cards, derived, overlay, body, errs }
 }
 
-for (const [q, seam, label] of [
-  ['v=2', '__lite2Store', 'v02（裸链默认壳）'],
+for (const [q, seam, label, surface] of [
+  // #46（ADR-0034）：v02 团队屏回归纯人员目录，项目卡带退役——v02 的卡面在项目屏。
+  ['v=2', '__lite2Store', 'v02（裸链默认壳）', {
+    screen: 'projects', cardSel: '.lite-project-card', statusSel: '.lite-project-status',
+    openSel: '.lite-card-open',
+  }],
   // 🔴 用 `__liteStore` 取 v01 句柄，不用 `__AVERY_LITE__`：后者挂在 src/main.tsx 的
   // `import.meta.env.DEV` 闸后面，`vite build`（即便 `--mode development`）里 DEV 恒为
   // false，会被摇树摇掉——本门跑在 build+preview（dev serve 因共享 node_modules 缺
   // @babel/* 而不可用），用 `__AVERY_LITE__` 会在 v01 分支直接炸。`__liteStore` 是
   // `src/lite/store.ts` 自己挂的、不挂 DEV 闸的验收缝（`__lite2Store` 同款先例，
   // eval-harness/tools/verify-aria-zh.mjs 已踩过这个坑并留了同款注释）。
-  ['v=1', '__liteStore', 'v01（?v=1 逃生门）'],
+  ['v=1', '__liteStore', 'v01（?v=1 逃生门）', {
+    screen: 'team', cardSel: '.home-project-card', statusSel: '.home-project-status',
+    openSel: null,
+  }],
 ]) {
-  console.log(`\n═══ ${label} · 团队屏项目卡 ═══`)
-  const { cards, derived, overlay, body, errs } = await runTeamScreen(q, seam)
+  console.log(`\n═══ ${label} · 项目卡面（${surface.screen} 屏）═══`)
+  const { cards, derived, overlay, body, errs } = await runCardsScreen({
+    shellQuery: q, seam, ...surface,
+  })
   for (const c of cards) console.log(`         卡片 ${JSON.stringify(c)}`)
   for (const d of derived) console.log(`         派生 ${JSON.stringify(d)}`)
 
@@ -222,9 +234,7 @@ for (const [q, seam, label] of [
   })
   sharedBrowser = browser
 
-  await uploadAndGoTeam(p, '__lite2Store')
-  await p.evaluate(() => window.__lite2Store.getState().goScreen('projects'))
-  await p.waitForTimeout(700)
+  await uploadAndGo(p, '__lite2Store', 'projects')
 
   const subjectCard = p.locator('.lite-project-card', { hasText: CLONE_TITLE }).first()
   const found = (await subjectCard.count()) > 0

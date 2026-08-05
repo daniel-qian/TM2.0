@@ -354,9 +354,9 @@
       "screen": "home",
       "selector": ".lite2-shell .lite-home-row > *:first-child > section",
       "probe": "count",
-      "expected": "2",
+      "expected": "3",
       "tolerance": "exact",
-      "note": "【棒B'·结构闸】左柱装 ①今天要决策的 + ①½今日待办两块（她左柱是 section-label + 决策卡流）。与 homeDecisionsColWidth 配对：一个管『装对了东西』，一个管『柱宽对』。"
+      "note": "【棒B'·结构闸】左柱装 ①今天要决策的 + ①¼今日提醒 + ①½今日待办三块。①¼ 是 issue #46（ADR-0034，2026-08-05）从团队屏迁入的晨间分诊——推翻 ADR-0017 后团队屏只留人员，分诊与决策卡相邻。原值 2 是迁入前的形态。与 homeDecisionsColWidth 配对：一个管『装对了东西』，一个管『柱宽对』。"
     },
     {
       "key": "projects.riskBadgeCount",
