@@ -1,0 +1,651 @@
+// 本文件由 `python scripts/gen-intake-schema.py` 生成 —— 请勿手改。
+// 真源是 `scripts/make-intake-xlsx.py` 的 FORMS/WHEN/INTAKE（发给客户的 xlsx 空白件用的同一份）。
+// 漂移门：eval-harness/tests/test_structured_intake_contract.py（重新生成后逐字节比对）。
+//
+// 表头、下拉词表、填写提示一律**中文原文**：它们是发给客户的 xlsx 上印着的字，也是后端按列名
+// 认列的键（`avery/ingest/structured.py`）。英文壳里也照原样显示——把它们翻译掉等于让屏幕上的
+// 表和用户手里的模板对不上，也等于把后端的列键改掉。界面外壳（按钮/说明/校验提示）走 i18n。
+
+export interface IntakeColumn {
+  /** 稳定键：表头去掉必填星号。行对象、后端映射、校验规则三处共用。 */
+  key: string
+  /** 表头原文（含 ` *`）——网格表头照它渲染，与 xlsx 一眼对得上。 */
+  header: string
+  required: boolean
+  /** xlsx 列宽，用作网格列宽的相对权重。 */
+  width: number
+  /** xlsx 表头批注原文（填写提示）。空串 = 这列没有提示。 */
+  hint: string
+  /** 下拉词表（顺序即 xlsx 顺序）。空数组 = 自由文本列。 */
+  options: string[]
+}
+
+export interface IntakeForm {
+  /** "01" … "07" */
+  id: string
+  /** xlsx 的 sheet 名（表的正式全名，含编号） */
+  sheet: string
+  /** 去掉编号的表名 */
+  title: string
+  purpose: string
+  /** 核心必填 / 建议补充 */
+  tier: string
+  when: string
+  /** 「Avery 现在吃到哪一层」——逐张说实话 */
+  intake: string
+  columns: IntakeColumn[]
+}
+
+export const INTAKE_SCHEMA_VERSION = 1
+
+export const INTAKE_FORMS: IntakeForm[] = [
+  {
+    "id": "01",
+    "sheet": "01 组织与人员名册",
+    "title": "组织与人员名册",
+    "purpose": "建立组织范围、汇报关系与职责边界。每位纳入范围的员工一行。",
+    "tier": "核心必填",
+    "when": "开始使用前，每位员工一行",
+    "intake": "直接成人卡（姓名 / 部门 / 岗位 / 核心职责 / 汇报关系）",
+    "columns": [
+      {
+        "key": "姓名",
+        "header": "姓名 *",
+        "required": true,
+        "width": 14,
+        "hint": "必须是第一列，Avery 靠它认人。按数据处理协议约定，姓名与工号的对照关系由贵司保管；若贵司选择不提供姓名，本表就只会进材料库、不会长出人卡（见「00 读我」）。",
+        "options": []
+      },
+      {
+        "key": "岗位",
+        "header": "岗位 *",
+        "required": true,
+        "width": 18,
+        "hint": "岗位名称，非职级。",
+        "options": []
+      },
+      {
+        "key": "部门",
+        "header": "部门 *",
+        "required": true,
+        "width": 18,
+        "hint": "完整部门名称。",
+        "options": []
+      },
+      {
+        "key": "司龄",
+        "header": "司龄",
+        "required": false,
+        "width": 12,
+        "hint": "如「2 年」「8 个月」，选填。这一栏合伙人的 .docx 原件里没有，是表格版补的——有了它，人卡上才有「在这家公司多久了」这条上下文。",
+        "options": []
+      },
+      {
+        "key": "主要负责",
+        "header": "主要负责 *",
+        "required": true,
+        "width": 46,
+        "hint": "对应 .docx 原件表 01 的「核心职责」。写主要负责什么就行，不用罗列全部工作内容。例如「负责华东区渠道投放的方案与执行，对投放 ROI 负责」。多项之间用「、」或分号隔开。",
+        "options": []
+      },
+      {
+        "key": "人员ID",
+        "header": "人员ID *",
+        "required": true,
+        "width": 16,
+        "hint": "工号，全表不可重复。建议直接用贵司现有工号，例如 MKT-001。这个编号在其他所有表里都要用到，一旦定了就不要改。",
+        "options": []
+      },
+      {
+        "key": "直属上级ID",
+        "header": "直属上级ID",
+        "required": false,
+        "width": 16,
+        "hint": "须为本表已有的工号。",
+        "options": []
+      },
+      {
+        "key": "任职状态",
+        "header": "任职状态 *",
+        "required": true,
+        "width": 14,
+        "hint": "",
+        "options": [
+          "在职",
+          "试用期",
+          "待离职"
+        ]
+      },
+      {
+        "key": "入职日期",
+        "header": "入职日期",
+        "required": false,
+        "width": 16,
+        "hint": "一律写成 2026-07-24 这样的格式，不要写「7月底」「下周」「近期」。",
+        "options": []
+      }
+    ]
+  },
+  {
+    "id": "02",
+    "sheet": "02 项目台账",
+    "title": "项目台账",
+    "purpose": "统一项目名称、负责人、阶段与时间边界。每个在管项目一行。",
+    "tier": "核心必填",
+    "when": "开始使用前，每个在管项目一行",
+    "intake": "直接成项目卡（状态 / 进度 / 目标 / 负责人）",
+    "columns": [
+      {
+        "key": "项目ID",
+        "header": "项目ID *",
+        "required": true,
+        "width": 20,
+        "hint": "如 PRJ-2026-01，全表不可重复。",
+        "options": []
+      },
+      {
+        "key": "项目名称",
+        "header": "项目名称 *",
+        "required": true,
+        "width": 26,
+        "hint": "与内部通用叫法一致——请用团队日常沟通时的叫法，不要用立项文件里的全称，否则后续更新记录对不上。",
+        "options": []
+      },
+      {
+        "key": "负责人ID",
+        "header": "负责人ID *",
+        "required": true,
+        "width": 18,
+        "hint": "须来自 01 表的工号。",
+        "options": []
+      },
+      {
+        "key": "当前状态",
+        "header": "当前状态 *",
+        "required": true,
+        "width": 14,
+        "hint": "Avery 读得懂「进行中」「已暂停」「已完成」。「未开始」是计划态、不是健康度，Avery 会如实留空并把卡片归到「状态未知」——这是有意的，不是没读到。",
+        "options": [
+          "未开始",
+          "进行中",
+          "已暂停",
+          "已完成"
+        ]
+      },
+      {
+        "key": "开始日期",
+        "header": "开始日期 *",
+        "required": true,
+        "width": 16,
+        "hint": "YYYY-MM-DD。",
+        "options": []
+      },
+      {
+        "key": "计划完成日期",
+        "header": "计划完成日期 *",
+        "required": true,
+        "width": 18,
+        "hint": "YYYY-MM-DD。",
+        "options": []
+      },
+      {
+        "key": "完成进度",
+        "header": "完成进度 *",
+        "required": true,
+        "width": 16,
+        "hint": "0-100 的整数，只填数字不带百分号。按贵司现有口径填即可，只要前后一致。",
+        "options": []
+      },
+      {
+        "key": "项目目标",
+        "header": "项目目标 *",
+        "required": true,
+        "width": 46,
+        "hint": "这个项目要达成什么，尽量写成可以判断达成与否的表述。「提升品牌影响力」无法判断，「秋季新品发布会覆盖 3 家行业媒体、留资 500 条」可以判断。",
+        "options": []
+      }
+    ]
+  },
+  {
+    "id": "03",
+    "sheet": "03 目标与指标",
+    "title": "目标与指标",
+    "purpose": "明确被衡量对象、统计周期、目标与当前值。每个在跟踪的指标一行。",
+    "tier": "核心必填",
+    "when": "开始使用前，每个在跟踪的指标一行",
+    "intake": "进材料库，Avery 回答时会引用；暂不成独立指标卡",
+    "columns": [
+      {
+        "key": "指标ID",
+        "header": "指标ID *",
+        "required": true,
+        "width": 18,
+        "hint": "如 KPI-001，全表不可重复。",
+        "options": []
+      },
+      {
+        "key": "指标名称",
+        "header": "指标名称 *",
+        "required": true,
+        "width": 22,
+        "hint": "如「渠道留资量」。",
+        "options": []
+      },
+      {
+        "key": "关联对象",
+        "header": "关联对象 *",
+        "required": true,
+        "width": 14,
+        "hint": "",
+        "options": [
+          "人员",
+          "项目",
+          "部门"
+        ]
+      },
+      {
+        "key": "关联对象ID",
+        "header": "关联对象ID *",
+        "required": true,
+        "width": 20,
+        "hint": "对应的工号（来自 01 表）或项目ID（来自 02 表）。",
+        "options": []
+      },
+      {
+        "key": "统计周期",
+        "header": "统计周期 *",
+        "required": true,
+        "width": 14,
+        "hint": "",
+        "options": [
+          "周",
+          "月",
+          "季度",
+          "年"
+        ]
+      },
+      {
+        "key": "单位",
+        "header": "单位 *",
+        "required": true,
+        "width": 16,
+        "hint": "如 万元、条、次、%。目标值和当前值只填数字，单位单独填在这一栏，否则系统无法比较。",
+        "options": []
+      },
+      {
+        "key": "目标值",
+        "header": "目标值 *",
+        "required": true,
+        "width": 14,
+        "hint": "只填数字。",
+        "options": []
+      },
+      {
+        "key": "当前值",
+        "header": "当前值 *",
+        "required": true,
+        "width": 14,
+        "hint": "只填数字。",
+        "options": []
+      },
+      {
+        "key": "数据截止日",
+        "header": "数据截止日 *",
+        "required": true,
+        "width": 18,
+        "hint": "数据统计到哪一天。很重要——同一个指标不同人报的数可能截止到不同日期，不写清楚会得出错误结论。",
+        "options": []
+      },
+      {
+        "key": "数据来源",
+        "header": "数据来源 *",
+        "required": true,
+        "width": 34,
+        "hint": "哪个系统或哪份文件，必须具体到能查到的程度。「后台数据」不合格，「巨量引擎后台－秋季发布会计划－7月周报」合格。",
+        "options": []
+      }
+    ]
+  },
+  {
+    "id": "04",
+    "sheet": "04 项目进度更新",
+    "title": "项目进度更新",
+    "purpose": "记录每次更新中已完成、下一步、阻塞事项与需要决策的事项。每次更新一行。",
+    "tier": "建议补充",
+    "when": "每次项目有进展时填",
+    "intake": "「当前阻塞」进项目卡的阻塞项；其余进材料库",
+    "columns": [
+      {
+        "key": "更新ID",
+        "header": "更新ID *",
+        "required": true,
+        "width": 20,
+        "hint": "如 UPD-20260724-01。",
+        "options": []
+      },
+      {
+        "key": "项目ID",
+        "header": "项目ID *",
+        "required": true,
+        "width": 18,
+        "hint": "须来自 02 表。",
+        "options": []
+      },
+      {
+        "key": "更新日期",
+        "header": "更新日期 *",
+        "required": true,
+        "width": 16,
+        "hint": "YYYY-MM-DD。",
+        "options": []
+      },
+      {
+        "key": "责任人ID",
+        "header": "责任人ID *",
+        "required": true,
+        "width": 18,
+        "hint": "须来自 01 表。",
+        "options": []
+      },
+      {
+        "key": "下次截止日",
+        "header": "下次截止日",
+        "required": false,
+        "width": 16,
+        "hint": "YYYY-MM-DD。",
+        "options": []
+      },
+      {
+        "key": "本期完成",
+        "header": "本期完成 *",
+        "required": true,
+        "width": 40,
+        "hint": "只写已经做完的事，正在做的写到「下期动作」里。这两栏混在一起，进度就失真了。避免「推进了」「跟进了」「基本完成」这类表述。",
+        "options": []
+      },
+      {
+        "key": "下期动作",
+        "header": "下期动作 *",
+        "required": true,
+        "width": 40,
+        "hint": "下一步具体做什么、谁做。",
+        "options": []
+      },
+      {
+        "key": "当前阻塞",
+        "header": "当前阻塞",
+        "required": false,
+        "width": 40,
+        "hint": "卡在哪里、卡了多久、在等谁。这是全表最有价值的一栏，也是唯一直接进项目卡的一栏——卡了多久、在等谁这两个信息一定要写，Avery 主要靠它判断风险。",
+        "options": []
+      },
+      {
+        "key": "需管理者决策",
+        "header": "需管理者决策",
+        "required": false,
+        "width": 34,
+        "hint": "需要经理拍板的事，没有就留空。",
+        "options": []
+      }
+    ]
+  },
+  {
+    "id": "05",
+    "sheet": "05 风险与事项",
+    "title": "风险与事项",
+    "purpose": "记录风险、阻塞、冲突、待决和客户反馈。每件事一行。",
+    "tier": "建议补充",
+    "when": "发现风险、阻塞或待决事项时填",
+    "intake": "「风险」「阻塞」两类进项目卡；其余三类进材料库",
+    "columns": [
+      {
+        "key": "事项ID",
+        "header": "事项ID *",
+        "required": true,
+        "width": 18,
+        "hint": "如 ISS-001，全表不可重复。",
+        "options": []
+      },
+      {
+        "key": "事项类型",
+        "header": "事项类型 *",
+        "required": true,
+        "width": 16,
+        "hint": "只有「风险」「阻塞」两类会进项目卡（成为风险等级与阻塞项）；「冲突」「待决」「客户反馈」进材料库，Avery 回答时会引用。",
+        "options": [
+          "风险",
+          "阻塞",
+          "冲突",
+          "待决",
+          "客户反馈"
+        ]
+      },
+      {
+        "key": "优先级",
+        "header": "优先级 *",
+        "required": true,
+        "width": 12,
+        "hint": "",
+        "options": [
+          "高",
+          "中",
+          "低"
+        ]
+      },
+      {
+        "key": "关联项目ID",
+        "header": "关联项目ID",
+        "required": false,
+        "width": 18,
+        "hint": "如与项目相关，须来自 02 表。",
+        "options": []
+      },
+      {
+        "key": "发现日期",
+        "header": "发现日期 *",
+        "required": true,
+        "width": 16,
+        "hint": "YYYY-MM-DD。",
+        "options": []
+      },
+      {
+        "key": "处理截止日",
+        "header": "处理截止日",
+        "required": false,
+        "width": 16,
+        "hint": "YYYY-MM-DD。",
+        "options": []
+      },
+      {
+        "key": "责任人ID",
+        "header": "责任人ID",
+        "required": false,
+        "width": 18,
+        "hint": "须来自 01 表。",
+        "options": []
+      },
+      {
+        "key": "处理状态",
+        "header": "处理状态 *",
+        "required": true,
+        "width": 14,
+        "hint": "",
+        "options": [
+          "待处理",
+          "处理中",
+          "已关闭"
+        ]
+      },
+      {
+        "key": "事实描述",
+        "header": "事实描述 *",
+        "required": true,
+        "width": 44,
+        "hint": "只写已确认的事实，不写推测和评价，不要出现对人的评价。「小李配合度差」不合格，「主视觉终稿自 6 月 10 日起无更新，6 月 12 日群内说明在等设计定稿」合格。写冲突类事项时只记录发生了什么，不记录任何一方的动机判断。",
+        "options": []
+      },
+      {
+        "key": "证据来源",
+        "header": "证据来源 *",
+        "required": true,
+        "width": 32,
+        "hint": "哪份文件、哪次会议、哪条记录。不能空，也不能写「口头沟通」——必须能被第三方查到，例如「7 月 15 日项目周会纪要第 3 条」。",
+        "options": []
+      }
+    ]
+  },
+  {
+    "id": "06",
+    "sheet": "06 周报与述职事实",
+    "title": "周报与述职事实",
+    "purpose": "沉淀述职、自检和管理汇报中可核验的事实。每人每周期一行。",
+    "tier": "建议补充",
+    "when": "每个汇报周期填",
+    "intake": "进材料库；可能形成人身情境信号（只描述在扛什么，不评判）",
+    "columns": [
+      {
+        "key": "记录ID",
+        "header": "记录ID *",
+        "required": true,
+        "width": 22,
+        "hint": "如 RPT-20260724-001。",
+        "options": []
+      },
+      {
+        "key": "人员ID",
+        "header": "人员ID *",
+        "required": true,
+        "width": 18,
+        "hint": "须来自 01 表。",
+        "options": []
+      },
+      {
+        "key": "述职周期",
+        "header": "述职周期 *",
+        "required": true,
+        "width": 20,
+        "hint": "如 2026-W30 或 2026-07。",
+        "options": []
+      },
+      {
+        "key": "提交日期",
+        "header": "提交日期 *",
+        "required": true,
+        "width": 16,
+        "hint": "YYYY-MM-DD。",
+        "options": []
+      },
+      {
+        "key": "已完成事实",
+        "header": "已完成事实 *",
+        "required": true,
+        "width": 44,
+        "hint": "具体做完的事，尽量带上数字和日期。「完成了 3 场直播，累计观看 1.2 万」比「直播工作顺利推进」有用得多。",
+        "options": []
+      },
+      {
+        "key": "未达成及原因",
+        "header": "未达成及原因 *",
+        "required": true,
+        "width": 40,
+        "hint": "哪些没做完、为什么。写客观情况，不用自我检讨——写清楚是资源不够、被别的事挤了，还是外部原因没到位。",
+        "options": []
+      },
+      {
+        "key": "下一周期目标",
+        "header": "下一周期目标 *",
+        "required": true,
+        "width": 36,
+        "hint": "下个周期要做完什么。",
+        "options": []
+      },
+      {
+        "key": "需要支持",
+        "header": "需要支持",
+        "required": false,
+        "width": 34,
+        "hint": "需要谁配合、需要什么资源。经常被留空，但这一栏最能帮到你——写下来，经理才知道该在哪儿使劲。",
+        "options": []
+      }
+    ]
+  },
+  {
+    "id": "07",
+    "sheet": "07 评议与反馈",
+    "title": "评议与反馈",
+    "purpose": "记录主管或评议小组的事实反馈与改进约定，仅用于沟通、辅导与职责优化，不用于绩效评分。",
+    "tier": "建议补充",
+    "when": "每次评议沟通后填",
+    "intake": "进材料库。见下方红线提醒",
+    "columns": [
+      {
+        "key": "评议ID",
+        "header": "评议ID *",
+        "required": true,
+        "width": 20,
+        "hint": "如 REV-2026Q3-001。",
+        "options": []
+      },
+      {
+        "key": "被评议人员ID",
+        "header": "被评议人员ID *",
+        "required": true,
+        "width": 20,
+        "hint": "须来自 01 表。",
+        "options": []
+      },
+      {
+        "key": "评议人ID",
+        "header": "评议人ID *",
+        "required": true,
+        "width": 18,
+        "hint": "须来自 01 表。",
+        "options": []
+      },
+      {
+        "key": "评议周期",
+        "header": "评议周期 *",
+        "required": true,
+        "width": 16,
+        "hint": "如 2026Q3。",
+        "options": []
+      },
+      {
+        "key": "评议日期",
+        "header": "评议日期 *",
+        "required": true,
+        "width": 16,
+        "hint": "YYYY-MM-DD。",
+        "options": []
+      },
+      {
+        "key": "确认的优势",
+        "header": "确认的优势 *",
+        "required": true,
+        "width": 40,
+        "hint": "写具体做成的事，不写「能力强」「态度好」这类性格评价。",
+        "options": []
+      },
+      {
+        "key": "需改进事项",
+        "header": "需改进事项 *",
+        "required": true,
+        "width": 40,
+        "hint": "写具体行为和场景，不写性格。「三次跨部门协调都等到周会才提出」是行为，「沟通主动性不足」是评价。⚠️ 本栏不要写分数、百分比、等级或排名——写了会导致整发上传被拒绝，详见「00 读我」。",
+        "options": []
+      },
+      {
+        "key": "沟通后约定动作",
+        "header": "沟通后约定动作 *",
+        "required": true,
+        "width": 40,
+        "hint": "双方谈完后定下来做什么，带具体时间点。必须是双方谈过之后共同确认的，这一栏是本表最重要的部分。",
+        "options": []
+      }
+    ]
+  }
+]
+
+export function intakeFormById(id: string): IntakeForm | undefined {
+  return INTAKE_FORMS.find((f) => f.id === id)
+}

@@ -95,7 +95,8 @@ def ingest_docs(docs: list[ParsedDoc], *, extractor: Extractor | None = None,
                 registry: ContextRegistry | None = None, work_dir: Path | None = None,
                 name: str = "company", context_id: str | None = None,
                 source_documents: list[SourceDocument] | None = None,
-                owner_token: str = "") -> IngestReport:
+                owner_token: str = "",
+                extra_extraction: ExtractionResult | None = None) -> IngestReport:
     """Ingest already-parsed docs. Runs extract -> red-line gate -> store -> CompanyContext.
 
     prefer_vector=False (default) uses the offline KeywordStore so the AFK gate needs no embedding
@@ -111,10 +112,24 @@ def ingest_docs(docs: list[ParsedDoc], *, extractor: Extractor | None = None,
     to the uploader; it is stamped onto the CompanyContext and persisted so every read path can
     validate a caller. Empty (the default for direct callers/tests) => no auth is required for that
     context (v1 back-compat).
+
+    extra_extraction (onboarding-accounts-0805 ①, ADR-0034 拍板 3): entities produced OUTSIDE the
+    document extractor — today, the 7 标准表 rows the structured-intake endpoint maps deterministically
+    (`avery/ingest/structured.py`). They are merged into the document extraction BEFORE the red-line
+    gate, so a table submitted alongside files lands in ONE context and is held to the SAME gate as
+    everything else. None (the default) leaves every existing caller byte-identical.
+
+    🔴 The merge is a plain concat — NO cross-source dedup. A colleague who appears both in the
+    roster table and in an uploaded resume gets two cards, each carrying its own provenance. That is
+    deliberate: `_person_key` matches on the NAME alone, and merging on a name is a judgement about
+    identity that nothing here is entitled to make (Chinese homonyms are common). Ticket #40's
+    acceptance criterion states the same rule from the outside: 人数 = 行人数 + 文件抽取人数.
     """
     registry = registry if registry is not None else active_registry()
 
     extraction = extract_docs(docs, extractor=extractor)
+    if extra_extraction is not None:
+        extraction = extraction.merge(extra_extraction)
 
     # THE HARD GATE — a person-scoring extraction never becomes a context.
     #
@@ -157,7 +172,8 @@ def ingest_paths(paths: list[str | Path], *, extractor: Extractor | None = None,
                  registry: ContextRegistry | None = None, work_dir: Path | None = None,
                  name: str = "company", context_id: str | None = None,
                  source_documents: list[SourceDocument] | None = None,
-                 owner_token: str = "") -> IngestReport:
+                 owner_token: str = "",
+                 extra_extraction: ExtractionResult | None = None) -> IngestReport:
     """Ingest files from disk: parse each (skipping unparseable ones), then `ingest_docs`."""
     docs: list[ParsedDoc] = []
     errors: list[str] = []
@@ -170,11 +186,17 @@ def ingest_paths(paths: list[str | Path], *, extractor: Extractor | None = None,
     # pre-fix code fell through and registered a context with 0 people/projects/materials AND kept
     # the unparseable bytes, so /ingest answered 200 for a batch it could not read at all. Now the ok
     # =False report reaches the handler's 422 branch ("no parseable content"); the bytes are dropped.
-    if paths and not docs:
+    #
+    # onboarding-accounts-0805 ①: a mixed submission whose FILES all failed to parse still has the
+    # table rows, and those rows are perfectly good data — refusing the whole batch would throw away
+    # a filled-in roster because one PDF was corrupt. So the refusal now also requires that no
+    # structured rows came in; the per-file parse errors still ride out on the report either way.
+    if paths and not docs and extra_extraction is None:
         empty_rl = validate_extraction(ExtractionResult())   # ok=True, no violations (empty input)
         return IngestReport(ok=False, context=None, redline=empty_rl, parsed=[], parse_errors=errors)
     report = ingest_docs(docs, extractor=extractor, embedder=embedder, prefer_vector=prefer_vector,
                          registry=registry, work_dir=work_dir, name=name, context_id=context_id,
-                         source_documents=source_documents, owner_token=owner_token)
+                         source_documents=source_documents, owner_token=owner_token,
+                         extra_extraction=extra_extraction)
     report.parse_errors = errors
     return report

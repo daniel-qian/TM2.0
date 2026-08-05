@@ -48,6 +48,10 @@ from .auth_api import router as auth_router  # feat-053: /account/status|context
 from .demo import router as demo_router  # input-side-0721: /demo/status|claim（一键示例团队）
 from .engine import stream_advice
 from .ingest_api import router as ingest_router  # feat-018: /ingest + /team/{id} (compose over feat-016)
+# onboarding-accounts-0805 ① (ADR-0034): POST /ingest/structured —— 7 张标准表的行直接确定性
+# 映射进同一个 CompanyContext，整条 LLM/启发式抽取被跳过（秒级、零损）。红线、owner_token、
+# 响应形状全部与 /ingest 同一份代码。
+from .structured_api import router as structured_router
 from .ingest_api import authorize_context, extract_owner_token  # feat-038: reuse the read-path gate
 from .upload_guard import IngestGuardMiddleware  # feat-039: edge rate-limit + total-body size cap
 
@@ -97,6 +101,10 @@ app.add_middleware(
 # feat-018: the ingestion HTTP surface (upload → Your team). Thin wrapper over feat-016's
 # ingest_paths + registry; nothing in the engine changes. Endpoints: POST /ingest, GET /team/{id}.
 app.include_router(ingest_router)
+
+# onboarding-accounts-0805 ①: POST /ingest/structured —— 表格行的确定性入口。第二个写入口，
+# 与 /ingest 共用红线门/租户铸 token/响应形状（service/structured_api.py 是薄壳，语义不复述）。
+app.include_router(structured_router)
 
 # feat-034 stage C: the Ask ("Quick ask") surface — manager endpoints (POST /ask · /ask/{id} ·
 # /ask/{id}/share · GET /ask/{id} · /ask/{id}/revoke, all owner_token-gated) + the employee H5

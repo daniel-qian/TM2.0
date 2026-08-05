@@ -221,6 +221,65 @@ def _person_text_fields(p: PersonEntity) -> list[str]:
     return [p.name, p.role, p.tenure, p.team, *p.owns, *p.collaboration]
 
 
+def rating_number_hit(fld: str) -> bool:
+    """Does this ONE string carry a rating-shaped number? (structural ruler #1b, extracted.)
+
+    Lifted VERBATIM out of `_scan_person_value`'s loop body — same three patterns in the same order,
+    same two suppressions — so the /ingest gate's behaviour is byte-identical. It is a module-level
+    function rather than an inlined loop because onboarding-accounts-0805 ① needs THE SAME RULER on
+    a single cell of the 07 review table (`avery/ingest/structured.py`), and a hand-copied second
+    copy of a red-line ruler is precisely the drift AGENTS.md keeps warning about.
+
+    Tenures/counts ("18 months", "9 change requests") do NOT match, so they pass; a bare N/M, a
+    percent, or a scoring-word-next-to-a-number does not.
+    """
+    if _RATING_NUMBER.search(fld) or _SCORE_WORD_NEAR_NUM_EN.search(fld):
+        return True
+    # ZH: a score topic word next to a score-shaped number, UNLESS it is bound to a work
+    # artifact (parity with the advice gate's work-suppression) or the "number" is an
+    # IDENTIFIER (KPI-001). Iterate so a suppressed first match ('排名算法…3', 'KPI-001…')
+    # doesn't mask a later genuine one.
+    for zm in _ZH_SCORE_NEAR_NUM.finditer(fld):
+        if _zh_score_num_is_work(fld, zm) or _zh_score_num_is_identifier(fld, zm):
+            continue
+        return True
+    return False
+
+
+def scan_person_free_text(who: str, text: str) -> list[ExtractionViolation]:
+    """BOTH rulers over ONE free-text string that is ABOUT a named person.
+
+    onboarding-accounts-0805 ① (ADR-0034 拍板 2). The structured-intake endpoint has a table whose
+    entire subject is a colleague — 表07 评议与反馈 — but whose rows deliberately become MATERIAL,
+    not PersonEntity fields (拍板 1: no new entity kinds). `validate_extraction` only ever scans
+    people and person-directed signals, so 07 would otherwise sail past the gate that the xlsx we
+    MAIL TO CUSTOMERS promises will stop it ("写了会导致整发上传被拒绝", make-intake-xlsx.py 的
+    「00 读我」). This function is how that promise is kept, and it keeps it with the SAME two
+    rulers `validate_extraction` uses rather than a second lexicon:
+
+      1. `rating_number_hit` — the structural rating-number scan (shared code, above).
+      2. `redline.validate` over a PERSON-ANCHORED blob — identical anchoring to
+         `validate_extraction`, so the full person-scoring lexicon fires with the same
+         work-vs-person asymmetry (ADR-0016: a company's 9/10 audit score still passes).
+
+    The returned violations use the SAME `ExtractionViolation` shape and the same two `kind` values
+    the /ingest 422 already emits, so the HTTP body stays one contract for both endpoints.
+    """
+    out: list[ExtractionViolation] = []
+    if not text or not text.strip():
+        return out
+    if rating_number_hit(text):
+        out.append(ExtractionViolation(
+            kind="person-score-value", person=who,
+            detail=f"rating-shaped number in a person field: «{text[:80]}»"))
+    anchored = f"This teammate ({who}), she: {text}"
+    for v in redline.validate(anchored).violations:
+        out.append(ExtractionViolation(
+            kind="person-score-text", person=who,
+            detail=f"{v.rule_id}: «{v.snippet}»", rule_id=v.rule_id))
+    return out
+
+
 def _scan_person_value(p: PersonEntity) -> list[ExtractionViolation]:
     """Structural check #1b: a rating-shaped number inside any person free-text field.
 
@@ -231,18 +290,7 @@ def _scan_person_value(p: PersonEntity) -> list[ExtractionViolation]:
     for fld in _person_text_fields(p):
         if not fld:
             continue
-        hit = bool(_RATING_NUMBER.search(fld) or _SCORE_WORD_NEAR_NUM_EN.search(fld))
-        if not hit:
-            # ZH: a score topic word next to a score-shaped number, UNLESS it is bound to a work
-            # artifact (parity with the advice gate's work-suppression) or the "number" is an
-            # IDENTIFIER (KPI-001). Iterate so a suppressed first match ('排名算法…3', 'KPI-001…')
-            # doesn't mask a later genuine one.
-            for zm in _ZH_SCORE_NEAR_NUM.finditer(fld):
-                if _zh_score_num_is_work(fld, zm) or _zh_score_num_is_identifier(fld, zm):
-                    continue
-                hit = True
-                break
-        if hit:
+        if rating_number_hit(fld):
             out.append(ExtractionViolation(
                 kind="person-score-value", person=p.name,
                 detail=f"rating-shaped number in a person field: «{fld[:80]}»"))

@@ -31,7 +31,12 @@ log = logging.getLogger("service.upload_guard")
 # Guarded write paths -> the rate-limit "route" key (separate buckets/limits per route).
 # input-side-0721: /demo/claim 也是无鉴权写面（每次 claim 都往库里落一份克隆）——给它自己的
 # 表盘（AVERY_RATE_DEMO_PER_MIN，默认关，ECS runbook 调）。
-_GUARDED: dict[str, str] = {"/ingest": "ingest", "/advise": "advise", "/demo/claim": "demo"}
+# onboarding-accounts-0805 ①: /ingest/structured 是第二个无鉴权写面，**必须**登记在这里。
+# `_route_for` 是精确匹配（`_GUARDED.get(path)`），漏登记的后果不是"少一层"而是两层全无：
+# 总体积上限（ASGI 边缘那道）与 /ingest 的限流桶都只在 route 非 None 时才生效。共用 'ingest'
+# 桶是刻意的——一个人一分钟里用哪个入口往库里写并不改变"往库里写"这件事的成本。
+_GUARDED: dict[str, str] = {"/ingest": "ingest", "/ingest/structured": "ingest",
+                            "/advise": "advise", "/demo/claim": "demo"}
 
 
 # ── fixB/M2: the limits speak in units a person retypes ──────────────────────────────────────────
