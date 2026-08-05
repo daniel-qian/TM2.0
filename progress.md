@@ -9,8 +9,9 @@
 
 - **git**：`main` 工作树干净、与 `origin/main` 推平。
 - **验证账实**：全电池 **31/31**（**A 25** / B 3 / C 3）——本轮新增 1 道门（locale-parity，48 判据）。
-  后端 pytest **3513 passed**（新增 39 条：locale 契约 28 + 决策文案 i18n 对账 11，另有红线补漏 14）。
-  像素基线 40 张**未动**（本轮没改布局，B 区 4/4 直接绿）。
+  后端 pytest **3527 passed**（新增 53 条：locale 契约 28 + 决策文案 i18n 对账 11 + 红线补漏 14）。
+  像素基线 40 张**未动**（本轮没改布局；像素门跑的是 `lang=zh`，而 CJK 标点清扫只改英文侧渲染，
+  中文侧逐字不变——B 区 4/4 直接绿）。
 - **#38 已完成并 closes**，**契约切换的两半已同批上生产**（[部署回执](.issues/locale-contract-0803/receipt-deploy-0804.md)）：
   前端 Vercel 构建 `89b36e4`（线上 bundle 的 commit 戳与本地 HEAD 逐字相等，
   8 条判读文案逐条核到线上产物）；后端换容器到 `avery-agent:main-20260804-153841`
@@ -40,8 +41,14 @@
    所以点了 EN 开关之后界面是英文而传输层仍按 zh 发——ADR-0033 之后这意味着**英文界面拿回一段
    中文判读正文**，正是本票要修的症状换了个触发方式。修法不是再解析一遍，而是让开关成为下游
    唯一发布者（`setActiveLocale`/`activeLocale`）。链仍然只有一条。
-2. **判读卡里写死在 JSX 里的全角冒号**：英文壳渲染出 `Not mentioned in the files：Status`。
-   标点也是文案，进字典（`labelSep`）。
+2. **写死在 JSX 里的全角标点**：英文壳渲染出 `Not mentioned in the files：Status`。
+   标点也是文案，进字典（`labelSep`）。判读卡改完后**全仓扫了一遍同族**，又清掉 7 处：
+   6 处 `{'：'}`（DetailOverlay ×4 / ProjectsScreen / TeamScreen，全是「写失败」提示的
+   `{标签}：{错误}`）+ 1 处 `owns` 编辑框把数组拼回文本时写死的 `、`
+   （英文壳里是 `A、B、C` 这种半中半英的输入值）。
+   连接符键顺手从 `homeFieldJoin` 改名 `listJoin`——它连的不只是字段名。
+   `owns` 的往返安全：拆分侧本来就吃 `[,，、]` 三种，只换拼接侧不会破。
+   自查：`grep -rn "{'：'}" src/` → 0；`grep -rn "join('、')" src/` → 0。
 3. **evidence 里混着后端拼的中文注解**（`（已过 12 天）`/`（无阻塞、无风险信号）`）——它们
    既不是文档原文也不是字段读数，却印在写着「下面这几行是文档原文」的那一节里，
    **既是语言缺陷也是溯源缺陷**。全部拆掉；现在 evidence 里只剩两种东西，都与界面语言无关。
@@ -77,15 +84,13 @@
    conversation_script 全中文，evidence/cites 保持英文原文（契约「引文永不翻译」同时得证）；
    `contract_ok` · `redline_passed` · `cite_gate_passed` 全真。**真模型听那句话。**
    （备战三亚会议 session 顺手取证，产物在该 session scratchpad `advise_zh.json`。）
-2. **`{'：'}` 写死在 JSX 里的还剩 6 处**（`grep -rn "{'：'}" src/`：DetailOverlay ×4 /
-   ProjectsScreen / TeamScreen）。同病不同屏，且有像素基线覆盖，单开一票扫。
-3. **r2 剩下的未开票发现**（`.issues/sweep/2026-08-02-r2.md`，按屏分好了）。
-4. **gate-run 迁移继续**：`verify-aria-zh` / `verify-cr-alignment` 仍未迁（形状不兼容，
+2. **r2 剩下的未开票发现**（`.issues/sweep/2026-08-02-r2.md`，按屏分好了）。
+3. **gate-run 迁移继续**：`verify-aria-zh` / `verify-cr-alignment` 仍未迁（形状不兼容，
    要先扩 makeRec）。**已迁/未迁一律用自查命令数，别抄数字。**
-5. **files-hub 独立票 #26–#29** · 换血抢救票 #31/#32 · v01 退役成本账 #33（ready-for-human）。
-6. **UI 线**：🔴 真机零覆盖（iOS Safari / 微信内置）优先级最高；断点动物园；像素基线 tracked 与否未拍板。
-7. **成本票 #30**（CRUD 50 秒）：Danny 已拍板等真实客户量再立，只记数。
-8. **真 brain 分流取证**：要真花钱，需要先给口径（上限几次调用/打 demo 克隆还是真 context/超了就停）。
+4. **files-hub 独立票 #26–#29** · 换血抢救票 #31/#32 · v01 退役成本账 #33（ready-for-human）。
+5. **UI 线**：🔴 真机零覆盖（iOS Safari / 微信内置）优先级最高；断点动物园；像素基线 tracked 与否未拍板。
+6. **成本票 #30**（CRUD 50 秒）：Danny 已拍板等真实客户量再立，只记数。
+7. **真 brain 分流取证**：要真花钱，需要先给口径（上限几次调用/打 demo 克隆还是真 context/超了就停）。
    语言指令一段已于 2026-08-05 生产取证（见上第 1 条）；分流取证本身仍未跑。
 
 ## Blockers / Risks
@@ -102,6 +107,10 @@
 - A 区上传型门现在是 **9 道**（本轮新增 locale-parity，它一遍跑造 2 个 context）。
   每跑一次 A 区会在 mock 后端造几十个 context；本机 mock 是内存态、进程一停就没。
 - ⚠️ `verify-null-owner` 偶发假红（连跑多轮后 `/ingest` 超时）。红了先单独重跑一次再当真。
+- ⚠️ **`owns` 编辑框的往返是有损的，而且是老账**（清扫全角标点时顺手量到的，不是本轮引入）：
+  拆分侧是 `owns.split(/[,，、]/)`，所以任何**本身含逗号或顿号的 owns 条目**存回去就被劈成几条。
+  真语料里就有（`习惯用专题协调会把销售、餐饮、房务与工程…`）。中英两侧一样，与语言无关。
+  修它要动数据形状（换分隔符 / 改成多行输入 / 加转义），不是文案题——单开一票。
 
 ## 站着别动的事（Danny 人工闸，agent 别代决）
 

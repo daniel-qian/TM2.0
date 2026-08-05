@@ -2,7 +2,7 @@
 
 - 日期：2026-08-04
 - PRD：[prd.md](prd.md)（11 条决议）· ADR：[ADR-0033](../../docs/adr/0033-locale-is-a-request-field-backend-stops-emitting-prose.md)
-- 结果：**11 条决议全部落地**，全电池 **31/31 绿**（A 25 / B 3 / C 3），后端 pytest **3513 passed**。
+- 结果：**11 条决议全部落地**，全电池 **31/31 绿**（A 25 / B 3 / C 3），后端 pytest **3527 passed**。
 
 ---
 
@@ -81,7 +81,7 @@ ADR-0033 之后 `/advise` 的 locale 也走这条路，那就是**英文界面�
 `src/shared/i18n/{en,zh}.ts` 新增（两边同构）：`decisionGrades`（三个档位词）·
 `decisionRules`（18 条规则的 title + basis，带 `{n}/{days}/{pct}` 占位符）·
 `homeDecisionReasonByRule` / `homeDecisionReasonNoRule` / `homeDecisionRuleJoin` ·
-`homeFieldBlockers` / `homeFieldJoin` / `labelSep`。
+`homeFieldBlockers` / `listJoin` / `labelSep`。
 中英**都是本 session 自己写的大白话**（2026-08-03 改口径，不再走 M3）。
 
 `homeDerive.ts` / `HomeScreen.tsx` 里那两条「前端不硬编码三个档位词、一律取后端 `grade_label`」
@@ -89,8 +89,19 @@ ADR-0033 之后 `/advise` 的 locale 也走这条路，那就是**英文界面�
 
 **顺手修掉的第二个真缺陷**：`labelSep`。判读卡里 `{标签}：{值}` 的那个冒号是**写死在 JSX 里的
 全角冒号**，于是英文壳渲染出 `Not mentioned in the files：Status`——一个 CJK 字符坐在英文句子中间。
-标点也是文案，进字典。（同族的 `{'：'}` 在 DetailOverlay / ProjectsScreen / TeamScreen 还有 4 处，
-**不在本票范围**，见 §4 遗留。）
+标点也是文案，进字典。
+
+判读卡改完之后**全仓扫了一遍同族**（Danny 当场追加，原本要单开一票），又清掉 7 处：
+
+| 处 | 形态 |
+|---|---|
+| `DetailOverlay.tsx` ×4 · `ProjectsScreen.tsx` · `TeamScreen.tsx` | `{l.projectsWriteFailed}{'：'}{error}` —— 六处逐字同一行代码：「写失败」提示 |
+| `DetailOverlay.tsx` ×2（同一个 state 的初值与重置） | `owns` 编辑框把数组拼回一行文本时写死的 `、` —— 英文壳里是 `A、B、C` 这种半中半英的**输入值** |
+
+连接符键顺手从 `homeFieldJoin` 改名 `listJoin`：它连的不只是字段名。
+🔴 `owns` 的往返安全性是**先量后改**的：拆分侧本来就吃 `[,，、]` 三种，所以只换拼接侧不会破。
+实测两侧渲染 —— zh：`未能保存：…` / `A、B、C`；en：`Could not save: …` / `A, B, C`。
+自查：`grep -rn "{'：'}" src/` → 0；`grep -rn "join('、')" src/` → 0。
 
 ---
 
@@ -165,10 +176,10 @@ PRD §5 的四项原样不动：英文文档解析（输入侧词表）· `ask_a
 
 本轮新增两条遗留：
 
-1. **`{'：'}` 写死在 JSX 里的还有 6 处**（自查：`grep -rn "{'：'}" src/`）：
-   `DetailOverlay.tsx` ×4 · `ProjectsScreen.tsx` ×1 · `TeamScreen.tsx` ×1。
-   与本票同病（英文壳里的 CJK 标点），但都在**卡片详情面**不在判读链路，且它们有像素基线覆盖，
-   改宽度就要重冻。单开一票扫一遍。
+1. 🔴 **`owns` 编辑框的往返是有损的**（清扫拼接符时顺手量到的老账，**不是本轮引入**）：
+   拆分侧是 `owns.split(/[,，、]/)`，所以任何**本身含逗号或顿号的 owns 条目**存回去就被劈成几条。
+   真语料里就有（`习惯用专题协调会把销售、餐饮、房务与工程…`）。中英两侧一样，与语言无关。
+   修它要动数据形状（换分隔符 / 改成多行输入 / 加转义），是数据题不是文案题。单开一票。
 2. **`R-NO-EVIDENCE` / `R-UNCLASSIFIED` 现在没有 evidence 行**——这是有意的（证据面按定义为空），
    但界面上这两条规则只剩标题和依据，看起来比别的规则"薄"。视觉上要不要给它一句
    「这条规则本来就没有可引的原文」，是文案题不是契约题，留给下一轮 UI 走查判。

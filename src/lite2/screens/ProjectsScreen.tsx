@@ -496,7 +496,7 @@ function AddProjectForm({ onDone }: { onDone: () => void }) {
       {error ? (
         <p className="lite-project-form-error" aria-live="polite">
           {l.projectsWriteFailed}
-          {'：'}
+          {l.labelSep}
           {error}
         </p>
       ) : null}

@@ -688,7 +688,7 @@ function DecisionCard({
         <p className="lite-home-decision-unknown">
           {t.lite2.homeDecisionUnknownLabel}
           {t.lite2.labelSep}
-          {card.unknown_fields.map(fieldLabel).join(t.lite2.homeFieldJoin)}
+          {card.unknown_fields.map(fieldLabel).join(t.lite2.listJoin)}
         </p>
       ) : null}
       {card.unparsed_fields.length > 0 ? (

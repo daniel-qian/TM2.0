@@ -1051,7 +1051,7 @@ export const zh: Dict = {
     "homeFieldProgress": "进度",
     "homeFieldDueDate": "到期日",
     "homeFieldBlockers": "阻塞",
-    "homeFieldJoin": "、",
+    "listJoin": "、",
     "labelSep": "：",
     "homeGapsTitle": "资料对不上的地方",
     "homeGapsCount": "{count} 处待看",

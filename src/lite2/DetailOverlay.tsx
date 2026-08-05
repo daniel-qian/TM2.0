@@ -348,7 +348,7 @@ function ProjectDetailBody({
         {error ? (
           <p className="lite-project-form-error" aria-live="polite">
             {l.projectsWriteFailed}
-            {'：'}
+            {l.labelSep}
             {error}
           </p>
         ) : null}
@@ -496,7 +496,7 @@ function ProjectDetailBody({
       {error ? (
         <p className="lite-project-form-error" aria-live="polite">
           {l.projectsWriteFailed}
-          {'：'}
+          {l.labelSep}
           {error}
         </p>
       ) : null}
@@ -532,7 +532,7 @@ function PersonDetailBody({
   const [dRole, setDRole] = useState(person.role)
   const [dTeam, setDTeam] = useState(person.team ?? '')
   const [dTenure, setDTenure] = useState(person.tenure ?? '')
-  const [dOwns, setDOwns] = useState((person.owns ?? []).join('、'))
+  const [dOwns, setDOwns] = useState((person.owns ?? []).join(l.listJoin))
 
   useEffect(() => {
     if (!open) setEditing(false)
@@ -544,7 +544,7 @@ function PersonDetailBody({
     setDRole(person.role)
     setDTeam(person.team ?? '')
     setDTenure(person.tenure ?? '')
-    setDOwns((person.owns ?? []).join('、'))
+    setDOwns((person.owns ?? []).join(l.listJoin))
     setEditing(true)
   }
 
@@ -646,7 +646,7 @@ function PersonDetailBody({
         {error ? (
           <p className="lite-project-form-error" aria-live="polite">
             {l.projectsWriteFailed}
-            {'：'}
+            {l.labelSep}
             {error}
           </p>
         ) : null}
@@ -737,7 +737,7 @@ function PersonDetailBody({
       {error ? (
         <p className="lite-project-form-error" aria-live="polite">
           {l.projectsWriteFailed}
-          {'：'}
+          {l.labelSep}
           {error}
         </p>
       ) : null}

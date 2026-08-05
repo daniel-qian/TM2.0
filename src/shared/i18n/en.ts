@@ -1475,7 +1475,10 @@ export const en = {
     homeFieldProgress: 'Progress',
     homeFieldDueDate: 'Due date',
     homeFieldBlockers: 'Blockers',
-    homeFieldJoin: ', ',
+    // 通用列表连接符。不叫 homeFieldJoin 了——它连的不只是字段名：`owns` 编辑框把数组拼回
+    // 一行文本时用的也是它（DetailOverlay），而那一处此前写死 `、`，英文壳里就成了
+    // `Onboarding、Payroll` 这种半中半英的输入值。
+    listJoin: ', ',
     // 🔴 The label/value separator was a HARD-CODED full-width colon in the JSX
     // (`{t.lite2.homeDecisionUnknownLabel}：{...}`), so the English shell rendered
     // "Not mentioned in the files：Status" — a CJK character sitting in an English sentence.
