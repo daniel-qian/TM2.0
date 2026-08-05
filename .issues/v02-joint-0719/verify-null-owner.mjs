@@ -25,7 +25,12 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
-const UI = 'http://127.0.0.1:5173'
+// 默认值不变（5173），只是**允许**被 VERIFY_BASE 覆盖 —— run-battery 的 ROSTER 注释一直记着
+// 「它其实写死打共享 5173，无 VERIFY_BASE」这条口径。写死在一台开着好几个 worktree 的机器上
+// 是真会咬人的：5173 上跑的可能是**另一份 worktree 的构建**，这道门于是对着别人的产物给出
+// 全绿或全红，两种都不是关于本分支的答案（onboarding-accounts-0805 实测撞到）。
+// 覆盖是**加法**：不传 VERIFY_BASE 时行为与此前逐字节相同，电池默认跑法不受影响。
+const UI = process.env.VERIFY_BASE || 'http://127.0.0.1:5173'
 const R = []
 const rec = (n, ok, d) => { R.push({ n, ok }); console.log(`  [${ok ? 'PASS' : 'FAIL'}] ${n}${d ? ' — ' + d : ''}`) }
 
