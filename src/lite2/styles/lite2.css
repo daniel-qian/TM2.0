@@ -2632,8 +2632,13 @@
   overflow: hidden;
 }
 
+/* 三列 grid，不是 flex 行（checker 第二轮的根因诊断）：badge 要居**卡片中轴**，而 flex 只会
+   把它居"剩余空间"的中——左边的 eyebrow 一变长（`第 3 步，共 4 步` 比 doors 步的空串宽）、
+   或者右边的按钮一消失（预览态），badge 就横向游走，实测在同一条流程里漂了 148px。
+   `1fr auto 1fr` 让两侧列恒等宽，中列因此恒在中轴上，与两侧内容宽度无关。 */
 .lite2-shell .lite-onboard-head {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: 14px;
   padding: 14px 18px 10px;
@@ -2642,27 +2647,72 @@
 
 .lite2-shell .lite-onboard-eyebrow {
   margin: 0;
-  flex: 0 0 auto;
+  justify-self: start;
+  min-width: 0;
 }
 
-.lite2-shell .lite-onboard-dots {
-  display: flex;
-  gap: 6px;
-  flex: 1 1 auto;
+/* onboarding-accounts-0805 ③：头部 badge（「只接受结构化的管理信息」）。
+   它占据的是原来那排小圆点的位置——进度指示整体下移到了底部 chips（静态稿口径）。
+   flex:1 1 auto + min-width:0 让它在窄屏里自己收窄而不是把右边的「先随便看看」挤出去。
+
+   🔴 截断为什么要落在**内层 span** 上，不是 badge 自己（checker 子 agent 逮到，12 张 en 截图）：
+   aurora 皮给 `.lite-badge` 的是 `display: inline-flex`（pill 几何），而 flex 容器上
+   `text-overflow: ellipsis` **完全不生效**——文本被 overflow:hidden 从**词中间硬切**，
+   连省略号都没有，屏幕上读作「Structured management informatior」。
+   实测 clientWidth=220 / scrollWidth=262。
+   把 overflow 三件套挪进内层 span（它是 flex item，会被 blockify 成 block）就恢复正常了，
+   同时 pill 几何原样留给外层。文案本身也一并收短到放得下（en.ts/zh.ts 同棒改）——两头都补，
+   将来任何一次文案变长都只会退化成一个真的省略号，而不是半个单词。 */
+.lite2-shell .lite-gate-badge {
+  min-width: 0;
+  max-width: 100%;
+  justify-self: center;
   justify-content: center;
+  text-align: center;
 }
 
-.lite2-shell .lite-onboard-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--rule-strong);
-  opacity: 0.55;
+.lite2-shell .lite-gate-badge-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.lite2-shell .lite-onboard-dot.is-active {
-  background: var(--sage);
-  opacity: 1;
+/* 预览模式横幅（ADR-0034 拍板 8）。常驻在头与内容之间，flex:0 0 auto 不参与滚动——
+   它是"你现在在预览"的唯一可见证据，滚出视口等于没有。 */
+.lite2-shell .lite-gate-preview-banner {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 18px;
+  border-bottom: 1px solid var(--rule);
+  background: var(--lite2-glass);
+}
+
+.lite2-shell .lite-gate-preview-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+
+.lite2-shell .lite-gate-preview-exit {
+  flex: 0 0 auto;
+  padding: 5px 11px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.lite2-shell .lite-gate-preview-exit:hover,
+.lite2-shell .lite-gate-preview-exit:focus-visible {
+  border-color: var(--sage);
+  outline: none;
 }
 
 .lite2-shell .lite-onboard-close {
@@ -2772,12 +2822,30 @@
   gap: 5px;
 }
 
-.lite2-shell .lite-onboard-field span {
+/* 🔴 `> span:first-child` 而不是后代 `span` —— 修一个**旧缺陷**（feat-045 `8419291`
+   2026-07-14 起就在，不是本轮引入；onboarding-accounts-0805 ③ 的 checker 子 agent 在
+   截图里逮到）。`.lite-onboard-field` 是一个 <label>，里面除了字段名那个 span，还有
+   input-side-0721 加进来的**提示 span**（`.lite-onboard-field-hint`，一整句话）。后代
+   选择器把整句话也 uppercase 了，于是英文壳里那句诚实说明变成两行全大写喊话
+   （THIS BOX GOES TO AVERY TOGETHER WITH YOUR FILES — …），中文壳里则把品牌名压成
+   「AVERY 该怎么称呼你？」，与同屏正文里的 Avery 自相矛盾。
+   字段名要 uppercase 是排版意图，一整句说明不是。 */
+.lite2-shell .lite-onboard-field > span:first-child {
   font-size: 11.5px;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--ink-faint);
+}
+
+/* 中文壳里关掉 uppercase —— 这不是口味，是它在中文壳里**只剩坏处**：`text-transform`
+   对汉字是空操作，唯一真正被它改写的是标签里夹着的西文，也就是品牌名。于是
+   「Avery 该怎么称呼你？」被压成「AVERY 该怎么称呼你？」，与同屏正文里的 Avery 自相矛盾
+   （checker 第二轮复核逮到；第一轮只把 hint span 摘出去，标签本身这一半漏了）。
+   `:lang(zh)` 认的是 localeStore 写在 <html lang> 上的 zh-CN——那个属性本来就是为读屏器
+   写的，这里顺带成了"这是中文壳"的唯一真源，不必再造第二个标记。 */
+.lite2-shell:lang(zh) .lite-onboard-field > span:first-child {
+  text-transform: none;
 }
 
 .lite2-shell .lite-onboard-field input {
@@ -2795,13 +2863,30 @@
   outline: none;
 }
 
-/* 选 playbooks 步 */
+/* onboarding-accounts-0805 ③：诚实标注行（连接工具步「暂未开通连接」/ 偏好步「只存本地」）。
+   🔴 刻意不做成小字脚注：它与卡片同屏、同一视觉层级，因为点击就发生在旁边。 */
+.lite2-shell .lite-onboard-honesty {
+  margin: 0 0 14px;
+  padding: 8px 12px;
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--rule-strong);
+  border-radius: 10px;
+  background: var(--lite2-glass);
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+/* 选择网格（连接工具 / 管理框架两步共用）。与下面的 playbook 卡同形——两者是同一种控件
+   （多选卡片），共享一套盒模型比各写一套更不容易漂。 */
+.lite2-shell .lite-onboard-choice-grid,
 .lite2-shell .lite-onboard-playbook-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 
+.lite2-shell .lite-onboard-choice,
 .lite2-shell .lite-onboard-playbook {
   display: flex;
   flex-direction: column;
@@ -2814,24 +2899,29 @@
   cursor: pointer;
 }
 
+.lite2-shell .lite-onboard-choice:hover,
+.lite2-shell .lite-onboard-choice:focus-visible,
 .lite2-shell .lite-onboard-playbook:hover,
 .lite2-shell .lite-onboard-playbook:focus-visible {
   border-color: var(--rule-strong);
   outline: none;
 }
 
+.lite2-shell .lite-onboard-choice.is-on,
 .lite2-shell .lite-onboard-playbook.is-on {
   border-color: var(--sage);
   box-shadow: inset 3px 0 0 var(--sage);
   background: var(--lite2-glass);
 }
 
+.lite2-shell .lite-onboard-choice-title,
 .lite2-shell .lite-onboard-playbook-title {
   font-size: 13px;
   font-weight: 700;
   color: var(--ink);
 }
 
+.lite2-shell .lite-onboard-choice-body,
 .lite2-shell .lite-onboard-playbook-body {
   font-size: 12px;
   line-height: 1.45;
@@ -2871,6 +2961,92 @@
   margin: 0;
   color: var(--ink-faint);
   font-size: 12.5px;
+}
+
+/* onboarding-accounts-0805 ③：底部步骤 chips（静态稿）。已完成绿勾 / 当前高亮 / 未到灰。
+   🔴 显示值与判据值分开（ownerNameRaw 模式的旧账）：状态住在 `data-chip-state` 上，
+   勾号只是它的视觉表现——门断言属性，不去数勾号，改一次图标判据就不会瞎。
+   预览模式下 chips 是 <button>（自由步进），其余时候是 <span>（纯进度指示）；两种标签共用
+   同一套盒模型，所以选择器里不写元素名。 */
+.lite2-shell .lite-onboard-chips {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 22px;
+  border-top: 1px solid var(--rule);
+}
+
+.lite2-shell .lite-onboard-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-faint);
+  font-size: 11.5px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+/* button 版本才要手型；span 版本不该假装可点。 */
+.lite2-shell button.lite-onboard-chip {
+  cursor: pointer;
+}
+
+.lite2-shell button.lite-onboard-chip:hover,
+.lite2-shell button.lite-onboard-chip:focus-visible {
+  border-color: var(--rule-strong);
+  color: var(--ink);
+  outline: none;
+}
+
+.lite2-shell .lite-onboard-chip-mark {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--rule-strong);
+  opacity: 0.55;
+}
+
+.lite2-shell .lite-onboard-chip.is-done {
+  color: var(--ink-soft);
+  border-color: var(--sage);
+}
+
+/* 绿勾：用 ::after 画对勾而不是塞一个字符，字符会进 innerText 干扰扫文案的门。 */
+.lite2-shell .lite-onboard-chip.is-done .lite-onboard-chip-mark {
+  position: relative;
+  background: var(--sage);
+  opacity: 1;
+  width: 10px;
+  height: 10px;
+}
+
+.lite2-shell .lite-onboard-chip.is-done .lite-onboard-chip-mark::after {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 1px;
+  width: 3px;
+  height: 6px;
+  border: solid var(--lite2-surface);
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg);
+}
+
+.lite2-shell .lite-onboard-chip.is-current {
+  color: var(--ink);
+  border-color: var(--sage);
+  background: var(--lite2-glass);
+  font-weight: 700;
+}
+
+.lite2-shell .lite-onboard-chip.is-current .lite-onboard-chip-mark {
+  background: var(--sage);
+  opacity: 1;
 }
 
 /* 向导底部导航 */
@@ -3146,8 +3322,38 @@
 }
 
 @media (max-width: 720px) {
+  .lite2-shell .lite-onboard-choice-grid,
   .lite2-shell .lite-onboard-playbook-grid {
     grid-template-columns: 1fr;
+  }
+
+  /* 窄屏里 badge 会把头部三件（eyebrow / badge / 「先随便看看」）挤成一行三段，
+     每段都读不全。badge 是三者里唯一可省的（它是立场，不是导航），先让它让位。 */
+  .lite2-shell .lite-gate-badge {
+    display: none;
+  }
+}
+
+/* 矮视口（uiux-viewport-height-is-the-blind-axis 的旧账：让位余量是高度的函数，
+   en 比 zh 先塌）。头 + 预览横幅 + chips + 底部导航都是固定高度的家具，视口一矮，
+   正文区先被吃光。这里把家具的纵向内边距收一收，把余量还给 .lite-onboard-body。
+   ⚠ 卡片本身的高度上限**不在这里**——闸门态下它被 `.lite-gate-layer .lite-onboard`
+   覆盖成 none（那是刻意的整页滚动设计），所以矮视口的封顶必须写在那条规则之后、
+   用同样的选择器，否则写在这里是一条永远不生效的死规则。见文件尾 §闸门层 那一节。 */
+@media (max-height: 760px) {
+  .lite2-shell .lite-onboard-body {
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+
+  .lite2-shell .lite-onboard-chips {
+    padding-top: 7px;
+    padding-bottom: 7px;
+  }
+
+  .lite2-shell .lite-gate-preview-banner {
+    padding-top: 6px;
+    padding-bottom: 6px;
   }
 }
 
@@ -5740,13 +5946,42 @@
   margin: 0 auto;
 }
 
+/* ── 矮视口：把 max-height:none 收回来（onboarding-accounts-0805 ③，checker 逮到）──────
+   `max-height: none` 上面那行是刻意的——"整页世界允许纵向滚动"。它在向导只有四步、正文很短
+   的时候没问题；五步重组之后正文长了、底部又多了一排 chips，1280×640 实测卡片高 670（zh）
+   / 702（en），于是 **chips 与「上一步/下一步」整条掉到折线以下，屏幕上没有任何"下面还有
+   东西"的暗示**——用户以为这一步没有下一步按钮。（en 比 zh 高 32px，又一次是 en 先塌。）
+   修法不是把内容改短，是让**卡片自己封顶、正文区内部滚动**：`.lite-onboard` 本来就是
+   flex 列 + `overflow:hidden`，`.lite-onboard-body` 本来就是 `overflow-y:auto`——一旦有了
+   高度上限，头/横幅/chips/导航就自动钉住，正文自己滚。整页滚动的设计在高视口下原样保留。
+   两行 max-height 是渐进增强：不支持 dvh 的浏览器吃第一行，支持的吃第二行（移动端地址栏
+   收缩时 vh 会说谎）。声明无效时整条被丢弃，所以这样写而不是 min(100vh,100dvh)。 */
+@media (max-height: 760px) {
+  .lite2-shell .lite-modal-layer.lite-gate-layer {
+    padding: 14px 16px 18px;
+  }
+
+  .lite2-shell .lite-gate-layer .lite-onboard {
+    max-height: calc(100vh - 32px);
+    max-height: calc(100dvh - 32px);
+  }
+}
+
 .lite2-shell .lite-gate-step-count {
   color: var(--ink-faint);
   letter-spacing: 0.04em;
 }
 
+/* 预览态下顶掉「先自己逛逛」那颗按钮的空位。三列 grid 已经把 badge 的横向位置钉死了，
+   所以这里只剩一件事：撑住行高，让进/出预览时头部不跳一下（实测按钮行盒 27px）。 */
+.lite2-shell .lite-gate-head-spacer {
+  justify-self: end;
+  min-height: 27px;
+}
+
 /* 右上「先自己逛逛 →」：闸门的可见退路（pause 语义），字色收灰、悬停亮起。 */
 .lite2-shell .lite-gate-browse {
+  justify-self: end;
   border: 0;
   background: none;
   padding: 4px 6px;

@@ -198,14 +198,41 @@ if (reopenBtnCount === 1) {
 const reopenedCount = await onboardOpenCount(page)
 rec('点了之后向导真的打开了（.lite-onboard 在 DOM 里）', reopenedCount === 1, `采到 ${reopenedCount} 个`)
 
-const reopenedStep = await page
-  .evaluate(() => document.querySelector('.lite-onboard')?.getAttribute('data-onboard-step'))
-  .catch(() => null)
-// input-side-0721：重看也从三扇门起——重看的人里恰有想试示例团队的老客户（onboardStore.reopen）。
-rec('重新打开落在第 0 步（doors）——"重看"是完整再走一遍，不是接着旧进度', reopenedStep === 'doors', `data-onboard-step="${reopenedStep}"`)
+const reopened = await page
+  .evaluate(() => {
+    const gate = document.querySelector('.lite-onboard')
+    return {
+      step: gate?.getAttribute('data-onboard-step') ?? null,
+      preview: gate?.getAttribute('data-onboard-preview') ?? null,
+      banner: document.querySelectorAll('.lite-gate-preview-banner').length,
+      exit: document.querySelectorAll('.lite-gate-preview-exit').length,
+    }
+  })
+  .catch(() => ({ step: null, preview: null, banner: 0, exit: 0 }))
+// ── onboarding-accounts-0805 ③（ADR-0034 拍板 8）：这条判据**换了**，记下换的理由 ──────────
+// 旧口径（input-side-0721）：重看从三扇门起，"重看"是完整再走一遍。
+// 新口径：重看进的是**预览模式**。因为点这个按钮的人按定义是**已经有数据的老客户**
+// （这个入口只在 Playbooks 屏上，而他能走到那儿说明工作区已经建好了）。让他重走一遍真向导，
+// 等于给一个正在生产使用的工作区开一条随手覆盖的口子——第①步一提交就是新 context。
+// 预览模式给的是同一件事的安全版本：所有步骤都能看，什么都不会被改。
+rec('重看进的是预览模式（老客户的安全回访口）', reopened.preview === 'on', `data-onboard-preview="${reopened.preview}"`)
+rec('重看落在第①步（预览要看的是门后面那五步，不是门厅）', reopened.step === 'intake', `data-onboard-step="${reopened.step}"`)
+rec('预览横幅与退出按钮都在（不保存这件事必须写在脸上）', reopened.banner === 1 && reopened.exit === 1,
+  JSON.stringify(reopened))
 
 rec('点开之后 store 里团队数据仍在（重看没把已加载的数据冲掉）',
   (await page.evaluate(() => window.__lite2Store.getState().team !== null)))
+
+// 🔴 老客户这条路径与全新访客那条**退出行为不同**，两条都要量：他 hadContextOnLoad 为真，
+// selectWizardOpen 恒假 → 退出预览应当直接收门，把他还给自己的工作区（而不是留在门厅）。
+await page.click('.lite-gate-preview-exit')
+await page.waitForTimeout(500)
+const afterExit = await page.evaluate(() => ({
+  gate: document.querySelectorAll('.lite-onboard').length,
+  team: window.__lite2Store.getState().team !== null,
+}))
+rec('老客户退出预览即收门（回到自己的工作区，不是回门厅）', afterExit.gate === 0, JSON.stringify(afterExit))
+rec('退出预览没有动他的数据', afterExit.team)
 
 const reopenErrors = []
 page.on('pageerror', (e) => reopenErrors.push(e.message))

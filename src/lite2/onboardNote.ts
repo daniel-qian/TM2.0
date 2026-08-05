@@ -23,6 +23,11 @@ function fill(template: string, vars: Record<string, string>): string {
 
 export async function flushCompanyNote(): Promise<void> {
   const onboard = useOnboard.getState()
+  // ADR-0034 拍板 8 · 预览模式「不落库、不发请求」的兑现处之一。横幅上写着「未填写的数据
+  // 不会保存，也不会用于分析」——这条送出线是唯一会把向导里的字**送到后端**的通道，所以
+  // 它必须在这里认预览态。放在 flushCompanyNote 里而不是各个调用点，是因为它有两个触发源
+  // （finish 时补一脚 + contextId 变化的订阅线），漏掉任何一个这句承诺就破了。
+  if (onboard.preview) return
   const note = onboard.companyNote.trim()
   if (!note) return
   const { contextId, transport } = useLite.getState()

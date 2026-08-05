@@ -1,13 +1,17 @@
 import { useEffect, useRef, type ChangeEvent } from 'react'
 import { loadStoredContextId, useLite } from './store'
 import {
-  ONBOARD_STEPS,
-  PLAYBOOK_CATALOG,
+  FRAMEWORK_CATALOG,
+  TOOL_CATALOG,
+  WIZARD_STEPS,
   selectWizardOpen,
   useOnboard,
+  visibleSteps,
   type OnboardStep,
 } from './onboardStore'
 import { useDemo } from './demoStore'
+import { useAuth } from './auth/authStore'
+import { authConfigured } from './auth/supabaseClient'
 import { paperworkHref } from './routes'
 import { flushCompanyNote, wireCompanyNoteFlush } from './onboardNote'
 import { useDict } from '../shared/i18n/useDict'
@@ -15,63 +19,58 @@ import { clearIngestStart, useIngestElapsedSeconds } from '../shared/ingestClock
 import { LiteModal } from './LiteModal'
 
 // input-side-0721（Danny 拍板）· onboarding 从浮层对话框改成**全屏闸门页**——对齐合伙人
-// command-room 版藏在 /companyinput 的独立 onboarding 页（其 layout 就是 fixed inset-0 全屏盖）。
-// 新访客先过这道门再进指挥室；有数据的回头客照旧永不见门（hadContextOnLoad 判定原样）。
+// command-room 版藏在 /companyinput 的独立 onboarding 页。新访客先过这道门再进指挥室；
+// 有数据的回头客照旧永不见门（hadContextOnLoad 判定原样）。
 //
-// 形态变了，**底座没换**：仍站在 LiteModal 上（Escape=pause、body 滚动锁、焦点圈、层栈——
-// 全屏盖底下的 shell 仍在 DOM 里，焦点圈是键盘用户不 Tab 进"被盖住的世界"的那道墙；对读屏
-// 用户 aria-modal 也仍是诚实描述）。整页观感由 layerClassName="lite-gate-layer" 的 CSS 承担：
-// 背景不再是半透明压暗而是整幅不透明底，面板变成页面居中卡片。点背景关闭**关掉**
-// （closeOnBackdrop=false）：整页世界里"背景"是页面本身，误触不该关门；键盘退路归 Escape，
-// 可见退路归右上「先自己逛逛」（同一个 pause 语义：进度保留、下次续跑）。
+// 形态变了，**底座没换**：仍站在 LiteModal 上（Escape=pause、body 滚动锁、焦点圈、层栈）。
+// 点背景关闭**关掉**（closeOnBackdrop=false）：整页世界里"背景"是页面本身，误触不该关门；
+// 键盘退路归 Escape，可见退路归右上「先自己逛逛」（同一个 pause 语义）。
 //
-// 步骤从四步变五步——第 0 步「三扇门」（Danny：一键示例团队放进前置 onboarding）：
-//   ⓪ 三扇门——①示例团队（真打 POST /demo/claim 克隆预铸母本；能力探测不到就不出这扇门）
-//      ②上传自己的材料（走完整步进）③右上「先自己逛逛」（pause）。
-//   ① 上传资料——真调 store.uploadFiles（与 UploadPanel 同一条 ingest 路径）。
-//   ② 团队信息——问候字段照旧只存本机；8A 新增「公司现状」口述**会送后端**
-//      （onboardNote.ts → POST /team/{id}/notes → company_notes，文案与机制同棒对齐）。
-//   ③ 选 playbooks——8 项候选默认勾 3。
-//   ④ 完成页——所选摘要 + 进入。
+// ── onboarding-accounts-0805 ③（ADR-0034 拍板 7/8/9/10）：五步向导 ─────────────────────
+//   ⓪ 三扇门（**保留**，拍板 7）——示例团队是唯一零成本尝鲜路径，砍掉等于让所有访客直面
+//      五步向导。第三扇「先看看每一步」进的是预览模式。
+//   ① 录入标准数据包——7 张表 + 文件上传并存，一发提交 = 一个 context（票 #41 接手表格侧）。
+//   ② 连接日常工作工具——六张卡，点选**只登记意向**，同屏明说「暂未开通连接」（拍板 9）。
+//   ③ 确认管理范围——公司/部门/人数/称呼/岗位；「公司现状」口述仍**会送后端**（8A 机制不动）。
+//   ④ 选择管理偏好——合伙人的 5 个管理框架，只存本地、界面如实标注（拍板 9）。
+//   ⑤ 创建管理者账号——可跳过（游客路径是硬性产品要求）；未配置 Supabase 时整步隐去。
+//   ⑥ 完成页——所选摘要 + 进入。
 //
-// 🔴 红线：全程零人卡、零数字读数；不做假"连接工具"/假"创建账号"步（合伙人版那步是纯假
-// toggle，不抄）；示例团队按钮只在后端真有 demo 时出现（不出假按钮）。门相位按稳定 data-id
-// 断言：.lite-onboard[data-onboard-step] / .lite-onboard-playbook[data-playbook-id] /
-// .lite-onboard-summary-item[data-playbook-id] —— 三个选择器继续原样保留。
+// 🔴 红线的措辞随事实更新了，约束没松：以前这里写「不做假『连接工具』/假『创建账号』步」。
+// 现在两步都真的做了，但②只登记意向、不造连接态，⑤接的是真 Supabase。红线从来不是
+// 「不许有这一步」，而是「屏幕上不许出现假的状态」。全程仍是零人卡、零人身数字读数。
+//
+// 门相位按稳定 data-id 断言，本轮的清单（新门写判据照这个抄，别照行号）：
+//   .lite-onboard[data-onboard-step] · [data-onboard-preview]
+//   .lite-gate-door[data-gate-door="demo|upload|preview"]
+//   .lite-onboard-chip[data-step-id][data-chip-state="done|current|todo"]
+//   .lite-onboard-tool[data-tool-id] · .lite-onboard-framework[data-framework-id]
+//   .lite-gate-preview-banner（预览横幅）· .lite-gate-preview-exit（退出预览）
 
-// 0721 对齐棒：与 UploadPanel.tsx 的 ACCEPT 保持一字不差——fixB1 当时只修了 UploadPanel，
-// 这里仍列 .doc/.xls（后端 415 必拒）且漏 .tsv，首访用户走向导挑中旧格式必然撞墙。
-// 「多列一种格式是撒谎」（UploadPanel fixB1 注释）同样适用于向导。
+// 0721 对齐棒：与 UploadPanel.tsx 的 ACCEPT 保持一字不差——「多列一种格式是撒谎」。
 const ACCEPT = '.pdf,.docx,.xlsx,.csv,.tsv,.md,.markdown,.txt'
 
 // 07-20 · 返回客户判定（Danny 拍板「已经有数据就不弹」）——模块顶层只读一次 localStorage
-// 的 contextId 锚点，不做响应式订阅。同 store.ts 自己的 `restoredContextId` 一个套路：
-// 这个常量在模块求值时（页面这次加载的一瞬间，早于任何一次 React 渲染）就已经定死，
-// 所以 `open` 从第一帧起就已经把它算进去了——不存在"restoreSession 那个网络请求回来
-// 之前先露一下脸、拿到结果才关掉"的窗口。若改成响应式读 useLite 的 contextId，向导
-// 自己的①上传步一成功、contextId 落地，会在全新用户正走②③④步时被这条新规则回头
-// 把向导关掉——用一次性快照就没有这个问题（详见 onboardStore.ts selectWizardOpen 上的
-// 调用方契约注释）。
+// 的 contextId 锚点，不做响应式订阅。这个常量在模块求值时就已经定死，所以 `open` 从第一帧
+// 起就把它算进去了。若改成响应式读 useLite 的 contextId，向导自己①录入步一成功、contextId
+// 落地，会在全新用户正走②③④步时被这条新规则回头把向导关掉（详见 onboardStore.ts
+// selectWizardOpen 上的调用方契约注释）。
 const hadContextOnLoad = loadStoredContextId() !== null
 
 function fill(template: string, vars: Record<string, string | number>): string {
   return template.replace(/\{(\w+)\}/g, (_, k: string) => String(vars[k] ?? ''))
 }
 
-// feat-068 · 活的秒表。ingest 真实耗时 100–120s（后端法兰克福 / LLM 国内，跨境往返）。
-// 向导是首访 v02 用户的主上传路径，这两分钟里必须有可见证据说明"没冻"——否则用户判定卡死、
-// 去戳按钮，就落进下面 StepUpload 注释里那条数据毁灭链。
-//
-// 刻意不做百分比进度条：服务端 /ingest 不吐任何进度信号，假进度条只会卡在 90% 一动不动。
-//
-// 🔴 feat-068 修正——本组件是这个 bug 最严重的现场。onboardUploadHint 明写「这期间可以先
-// 进行下一步」，而"下一步"在向导里就是 StepUpload **unmount**。秒表原先是组件局部 state，
-// 用户完全照提示做 → t=100s 切回上传步 → 屏幕写「已用时 4 秒」。产品亲口教用户走的那条路，
-// 恰好是唯一能把秒表打回 0 的路；而秒表存在的唯一理由是证明"没冻"，归零反而像"上传自己
-// 重来了一遍"。锚点已移进 shared/ingestClock，跟着这一发 ingest 活、不跟着组件活。
-//
-// 生命周期收口在那个 hook 里：向导被 × / Escape / Skip 关掉、换步、ingest 结束——三条路
-// 共用同一个 cleanup，不留悬挂定时器（与上面 Escape 监听器的注销纪律同源）。
+/** 这份部署到底有没有账号能力 —— 与 AuthPanel 的**双闸**判据逐字同源（票 #43）。
+ *
+ * 两道闸缺一不可：`authConfigured()` 说的是"前端配了 Supabase key 没有"，
+ * `accountCapability === 'supported'` 说的是"这份后端到底挂没挂账号路由"。07-20 生产实测
+ * 过 key 配了但 `/account/status` 404 的组合——只看第一道，用户会走到一个能填、能注册进
+ * Supabase、然后处处 404 的步骤。不确定就不出这一步（'unknown' 与 'unsupported' 同处理）。 */
+function useAccountStepAvailable(): boolean {
+  const capability = useAuth((s) => s.accountCapability)
+  return authConfigured() && capability === 'supported'
+}
 
 export function OnboardGate() {
   const { t } = useDict()
@@ -79,51 +78,52 @@ export function OnboardGate() {
 
   const step = useOnboard((s) => s.step)
   const status = useOnboard((s) => s.status)
-  // 向导是否该露面（原先由 Lite2App 条件挂载判定；feat-052 移进来——组件常驻挂载，
-  // 用 open 开关，出场动画才有机会跑完）。07-20 起再叠一层：hasStoredContext
-  // （hadContextOnLoad）由这里传给 selectWizardOpen——老客户已经有数据就不自动弹
-  // （Danny 拍板，见 onboardStore.ts 的选择器注释）。
-  //
-  // open-loop-0720：`forceOpen` 单独 `||` 进来，不改 selectWizardOpen 本身——那个函数的
-  // 契约只管"要不要自动弹"，手动重看是另一件事，两条判据不该纠缠在同一个函数里
-  // （改错一处，另一处也可能被带歪）。见 onboardStore.ts 里 forceOpen 上的调用方契约注释：
-  // 这是让「重看上手引导」（Playbooks 屏）对已有数据的老客户也真正打得开的那个开关。
+  const preview = useOnboard((s) => s.preview)
+  // 向导是否该露面。open-loop-0720：`forceOpen` 单独 `||` 进来，不改 selectWizardOpen 本身
+  // ——那个函数的契约只管"要不要自动弹"，手动重看/预览是另一件事。
   const open = useOnboard((s) => s.forceOpen || selectWizardOpen(s, hadContextOnLoad))
   const begin = useOnboard((s) => s.begin)
   const goStep = useOnboard((s) => s.goStep)
   const pause = useOnboard((s) => s.pause)
   const skip = useOnboard((s) => s.skip)
   const finish = useOnboard((s) => s.finish)
+  const exitPreview = useOnboard((s) => s.exitPreview)
+  const initAuth = useAuth((s) => s.init)
+
+  const accountAvailable = useAccountStepAvailable()
+  const steps = visibleSteps(accountAvailable)
 
   // 首访：挂载即把 unseen 落成 in-progress（持久化）——从此刻起进度可续。
-  // （status==='unseen' ⇒ selectWizardOpen 为真，所以"常驻挂载后才 begin"与原先"开着才挂载、
-  //  挂载即 begin"等价，没有提前把 unseen 吃掉。）
   useEffect(() => {
     if (status === 'unseen') begin()
-    // input-side-0721 · 8A：接上「公司现状」的延迟送出线（contextId 每落一个新值送一次，
-    // 幂等账本在 onboardStore）。挂在常驻组件的一次性 effect 里，模块求值期不做副作用。
+    // input-side-0721 · 8A：接上「公司现状」的延迟送出线（contextId 每落一个新值送一次）。
     wireCompanyNoteFlush()
+    // 账号能力探测：AuthPanel 也会 init()（模块级 guard 幂等），但闸门可能先它一步需要
+    // 答案——第⑤步出不出场就是这个探测的结果，等不到就少一步。
+    initAuth()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Escape = pause（进度保留、下次续跑）——对抗验证打回（2026-07-14）：aria-modal 弹层
-  // 必须可键盘退出，否则键盘用户被困。feat-052 起由 LiteModal 基座统一提供（onClose =
-  // pause），本组件不再自挂 window 监听。背景**不可点**（closeOnBackdrop=false，整页闸门
-  // 不是可随手拍掉的浮窗）；ui-sweep-0802 起基座在该配置下渲染 aria-hidden 纯遮罩，
-  // 不再是挂着关闭标签却无为的假按钮。
+  // 站在一个**已经不存在**的步骤上（探测回来说这份部署没有账号能力，而用户恰好停在第⑤步、
+  // 或旧持久状态指着它）→ 落到完成页。不这么做的话，body 会渲染一个 chips 上没有的幽灵步，
+  // 而 Back/Next 的下标算在一条不含它的序上，按钮会跳得莫名其妙。
+  useEffect(() => {
+    if (!steps.includes(step)) goStep('done')
+  }, [steps, step, goStep])
 
-  const stepIndex = ONBOARD_STEPS.indexOf(step)
+  const stepIndex = Math.max(0, steps.indexOf(step))
   const goNext = () => {
-    const next = ONBOARD_STEPS[stepIndex + 1]
+    const next = steps[stepIndex + 1]
     if (next) goStep(next)
   }
   const goBack = () => {
-    const prev = ONBOARD_STEPS[stepIndex - 1]
+    const prev = steps[stepIndex - 1]
     if (prev) goStep(prev)
   }
 
-  // 完成 = 关门 + 立刻尝试送出「公司现状」（此刻若已有 context——上传成功/示例领取——订阅
+  // 完成 = 关门 + 立刻尝试送出「公司现状」（此刻若已有 context——录入成功/示例领取——订阅
   // 线不会再触发，得在这里补一脚；没有 context 则由订阅线在未来落地时送）。
+  // 预览态里 finish() 只是退出预览，flushCompanyNote 自己也认预览态（双保险，见彼处注释）。
   const onFinish = () => {
     finish()
     void flushCompanyNote()
@@ -137,56 +137,100 @@ export function OnboardGate() {
       backdropLabel={l.onboardCloseAria}
       layerClassName="lite-gate-layer"
       panelClassName="lite-onboard lite-gate"
-      panelData={{ 'data-onboard-step': step }}
+      panelData={{ 'data-onboard-step': step, 'data-onboard-preview': preview ? 'on' : 'off' }}
       closeOnBackdrop={false}
     >
       <header className="lite-onboard-head">
         <p className="eyebrow lite-onboard-eyebrow">
           {l.onboardEyebrow}
-          <span className="lite-gate-step-count">
-            {' · '}
-            {fill(l.onboardStepOf, { n: stepIndex + 1, total: ONBOARD_STEPS.length })}
-          </span>
+          {step !== 'doors' && step !== 'done' ? (
+            <span className="lite-gate-step-count">
+              {' · '}
+              {fill(l.onboardStepOf, {
+                n: stepIndex,
+                total: steps.length - 2, // doors 与 done 不是编号步
+              })}
+            </span>
+          ) : null}
         </p>
-        <div className="lite-onboard-dots" aria-label={l.onboardStepsAria}>
-          {ONBOARD_STEPS.map((s) => (
-            <span
-              key={s}
-              className={`lite-onboard-dot${s === step ? ' is-active' : ''}`}
-              aria-hidden="true"
-            />
-          ))}
-        </div>
+        {/* 静态稿的头部 badge。它是一句**产品立场**：Avery 只吃结构化的管理信息，不吃
+            截图、聊天记录、自由格式文档——与 xlsx 说明页第一段逐字同一个口径。 */}
+        {/* 内层 span 不是多余的：截断三件套必须落在**非 flex 容器**上才生效，
+            而 aurora 皮把 .lite-badge 做成了 inline-flex 的 pill（见 lite2.css 该处注释）。 */}
+        <span className="lite-badge lite-gate-badge">
+          <span className="lite-gate-badge-text">{l.onboardStructuredBadge}</span>
+        </span>
         {/* 整页闸门没有 ×（它不是可随手拍掉的弹窗）；可见退路是这句诚实的话——pause 语义
-            与 Escape 完全一致：进度保留、下次续跑。 */}
-        <button
-          type="button"
-          className="lite-btn lite-btn--ghost lite-gate-browse"
-          title={l.onboardCloseAria}
-          onClick={pause}
-        >
-          {l.onboardBrowse} →
-        </button>
+            与 Escape 完全一致：进度保留、下次续跑。
+            预览态下**藏起来**（checker 逮到）：那时横幅右侧已经有「退出页面预览」，两个措辞
+            相近的出口上下贴着 40px，用户得先分辨哪个是"离开预览"哪个是"离开向导"。预览的
+            出口只留一个，语义就不必分辨了。 */}
+        {!preview ? (
+          <button
+            type="button"
+            className="lite-btn lite-btn--ghost lite-gate-browse"
+            title={l.onboardCloseAria}
+            onClick={pause}
+          >
+            {l.onboardBrowse} →
+          </button>
+        ) : (
+          // 🔴 占位不是补丁，是保持三段式头部的**列结构**（checker 第二轮逮到两条，同一个根因）：
+          // 直接把按钮摘掉之后，居中的 badge 是"居剩余空间的中"而不是居卡片中轴——它会向右
+          // 漂 113px；同时那颗按钮本来在撑行高，一走头部矮 7px，进/出预览时整块内容跳一下。
+          // 一个 aria-hidden 的空位把两件事一起按住，比给 badge 算绝对定位便宜也稳。
+          <span className="lite-gate-head-spacer" aria-hidden="true" />
+        )}
       </header>
+
+      {/* ── 预览模式横幅（ADR-0034 拍板 8）。常驻、不可关——它是这个模式的**唯一**可见证据，
+          可关的话用户会在一个自己以为在填真表的界面里输入半小时。 */}
+      {preview ? (
+        <div className="lite-gate-preview-banner" role="status">
+          <span className="lite-gate-preview-text">{l.onboardPreviewBanner}</span>
+          <button
+            type="button"
+            className="lite-btn lite-btn--ghost lite-gate-preview-exit"
+            onClick={exitPreview}
+          >
+            {l.onboardPreviewExit}
+          </button>
+        </div>
+      ) : null}
 
       <div className="lite-onboard-body">
         {step === 'doors' ? (
           <StepDoors />
-        ) : step === 'upload' ? (
-          <StepUpload />
-        ) : step === 'team' ? (
-          <StepTeam />
-        ) : step === 'playbooks' ? (
-          <StepPlaybooks />
+        ) : step === 'intake' ? (
+          <StepIntake />
+        ) : step === 'tools' ? (
+          <StepTools />
+        ) : step === 'scope' ? (
+          <StepScope />
+        ) : step === 'prefs' ? (
+          <StepPrefs />
+        ) : step === 'account' ? (
+          <StepAccount />
         ) : (
-          <StepDone />
+          <StepDone accountAvailable={accountAvailable} />
         )}
       </div>
+
+      {/* ── 底部步骤 chips（静态稿）：已完成绿勾 / 当前高亮 / 未到灰 ────────────────────── */}
+      {step !== 'doors' ? (
+        <StepChips
+          steps={steps}
+          current={step}
+          currentIndex={stepIndex}
+          interactive={preview}
+          onPick={goStep}
+        />
+      ) : null}
 
       <footer className="lite-onboard-nav">
         {step !== 'done' ? (
           <button type="button" className="lite-btn lite-btn--ghost lite-onboard-skip" onClick={skip}>
-            {l.onboardSkip}
+            {preview ? l.onboardPreviewExit : l.onboardSkip}
           </button>
         ) : (
           <span />
@@ -205,7 +249,7 @@ export function OnboardGate() {
               </button>
             ) : (
               <button type="button" className="lite-btn lite-btn--primary lite-onboard-finish" onClick={onFinish}>
-                {l.onboardFinish}
+                {preview ? l.onboardPreviewExit : l.onboardFinish}
               </button>
             )}
           </div>
@@ -215,7 +259,67 @@ export function OnboardGate() {
   )
 }
 
-// ── ⓪ 三扇门——闸门页第一眼（input-side-0721）。────────────────────────────────────
+// ── 底部步骤 chips ────────────────────────────────────────────────────────────────────────
+// 🔴 显示值与判据值分开（ownerNameRaw 模式的旧账）：状态走 `data-chip-state`，绿勾只是它的
+// 视觉表现。门断言 data-chip-state，不去数勾号——文字/图标改一次判据就瞎了。
+//
+// interactive 只在**预览模式**下为真。这不是抠门：横幅答应的是「可以直接查看全部步骤」，
+// 自由步进是那句话的兑现物；正常填表时 chips 是进度指示，跳步的退路是 Back/Next。
+// 两种模式下的可点性不同，本身就是"我现在在哪个模式"的第二个可见证据。
+function StepChips({
+  steps, current, currentIndex, interactive, onPick,
+}: {
+  steps: OnboardStep[]
+  current: OnboardStep
+  currentIndex: number
+  interactive: boolean
+  onPick: (step: OnboardStep) => void
+}) {
+  const { t } = useDict()
+  const l = t.lite2
+  const labels: Record<string, string> = {
+    intake: l.onboardChipIntake,
+    tools: l.onboardChipTools,
+    scope: l.onboardChipScope,
+    prefs: l.onboardChipPrefs,
+    account: l.onboardChipAccount,
+  }
+  const numbered = steps.filter((s) => (WIZARD_STEPS as string[]).includes(s))
+
+  return (
+    <nav className="lite-onboard-chips" aria-label={l.onboardStepsAria}>
+      {numbered.map((s, i) => {
+        const index = steps.indexOf(s)
+        const state = s === current ? 'current' : index < currentIndex ? 'done' : 'todo'
+        const label = `${i + 1}. ${labels[s] ?? s}`
+        const shared = {
+          className: `lite-onboard-chip is-${state}`,
+          'data-step-id': s,
+          'data-chip-state': state,
+        }
+        return interactive ? (
+          <button
+            key={s}
+            type="button"
+            {...shared}
+            aria-current={state === 'current' ? 'step' : undefined}
+            onClick={() => onPick(s)}
+          >
+            <span className="lite-onboard-chip-mark" aria-hidden="true" />
+            {label}
+          </button>
+        ) : (
+          <span key={s} {...shared} aria-current={state === 'current' ? 'step' : undefined}>
+            <span className="lite-onboard-chip-mark" aria-hidden="true" />
+            {label}
+          </span>
+        )
+      })}
+    </nav>
+  )
+}
+
+// ── ⓪ 三扇门——闸门页第一眼（input-side-0721 + 拍板 7/8）。──────────────────────────
 function StepDoors() {
   const { t } = useDict()
   const l = t.lite2
@@ -226,6 +330,7 @@ function StepDoors() {
   const claimDemoTeam = useLite((s) => s.claimDemoTeam)
   const goStep = useOnboard((s) => s.goStep)
   const finish = useOnboard((s) => s.finish)
+  const enterPreview = useOnboard((s) => s.enterPreview)
 
   // 能力探测在这一步第一次渲染时打（进程内缓存，重复挂载不重复打）。
   useEffect(() => {
@@ -247,8 +352,7 @@ function StepDoors() {
     <div className="lite-onboard-step lite-gate-doors" data-gate-doors="">
       <h2>{l.onboardDoorsTitle}</h2>
       {/* ui-sweep-0802：正文与门数联动——示例团队门被能力闸藏起时（探测失败/离线），还念
-          「两条路」就是向首访用户许诺一个屏上不存在的选项（7 屏走查同批实锤）。与下面
-          demo 门的渲染判据同一条：availability==='yes' 才是两扇门。 */}
+          「两条路」就是向首访用户许诺一个屏上不存在的选项。 */}
       <p className="lite-onboard-step-body">
         {availability === 'yes' ? l.onboardDoorsBody : l.onboardDoorsBodySolo}
       </p>
@@ -273,10 +377,21 @@ function StepDoors() {
           type="button"
           className="lite-gate-door lite-gate-door-upload"
           data-gate-door="upload"
-          onClick={() => goStep('upload')}
+          onClick={() => goStep('intake')}
         >
           <span className="lite-gate-door-title">{l.onboardDoorUploadTitle}</span>
           <span className="lite-gate-door-body">{l.onboardDoorUploadBody}</span>
+        </button>
+        {/* 拍板 8 的入口：先看看每一步。这扇门永远在——它不依赖任何后端能力，也正因如此
+            它是"探测全挂了"时仍然存在的那条路。 */}
+        <button
+          type="button"
+          className="lite-gate-door lite-gate-door-preview"
+          data-gate-door="preview"
+          onClick={() => enterPreview()}
+        >
+          <span className="lite-gate-door-title">{l.onboardDoorPreviewTitle}</span>
+          <span className="lite-gate-door-body">{l.onboardDoorPreviewBody}</span>
         </button>
       </div>
       {claimError ? (
@@ -288,23 +403,26 @@ function StepDoors() {
   )
 }
 
-// ── ① 上传资料——真调 store.uploadFiles（与 Your team 的 UploadPanel 同一条路径）。──
-function StepUpload() {
+// ── ① 录入标准数据包 ──────────────────────────────────────────────────────────────────
+// 票 #42 的范围内这一步仍是**文件上传面板**（真调 store.uploadFiles，与 UploadPanel 同一
+// 条 ingest 路径）；票 #41 在它左边接上 7 张表的录入网格，两侧合一发提交。
+function StepIntake() {
   const { t } = useDict()
   const l = t.lite2
+  const preview = useOnboard((s) => s.preview)
   const uploadFiles = useLite((s) => s.uploadFiles)
   const ingestStatus = useLite((s) => s.ingestStatus)
   const ingestError = useLite((s) => s.ingestError)
   const inputRef = useRef<HTMLInputElement | null>(null)
 
-  // feat-068 · ingesting 期间这一步整体上锁。
-  const busy = ingestStatus === 'ingesting'
-  const elapsed = useIngestElapsedSeconds(busy)
+  // feat-068 · ingesting 期间这一步整体上锁。预览态同样上锁——那是"不发请求"的兑现。
+  const busy = ingestStatus === 'ingesting' || preview
+  const elapsed = useIngestElapsedSeconds(ingestStatus === 'ingesting')
 
   const onPick = (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? [])
-    // feat-068 · 发车前先松锚，保证这一发从 0 起算（理由见 lite/UploadPanel 同处注释）。
-    if (files.length > 0) {
+    // feat-068 · 发车前先松锚，保证这一发从 0 起算。
+    if (files.length > 0 && !preview) {
       clearIngestStart()
       void uploadFiles(files)
     }
@@ -312,18 +430,10 @@ function StepUpload() {
   }
 
   // feat-068 · 🔴 重入闸——这不是打磨，是数据毁灭级的 correctness 修复。
-  //
-  // 事发链：/ingest 真的要 100–120s；在此之前这两分钟屏幕上只有一行静态字，用户判定卡死 →
-  // 再点一次"选择文件"。这颗按钮既没有 disabled、也不在 .lite-onboard 的任何 busy 遮罩下
-  // （UploadPanel 的 .upload-dropzone.is-busy{pointer-events:none} 只覆盖那边的 dropzone，
-  // 管不到向导），store.uploadFiles 也没有重入保护——于是每一次点击都真的再打一发 POST /ingest。
-  //
-  // 后果：每发各自新铸一个 context_id 和一个 owner_token；后落地的那发覆盖 store，先前那个
-  // owner_token 服务端只返一次、客户端已被覆盖 = 永久丢失，那份公司数据从此无人能认领。
-  // 一分钟点四下还会撞穿 10/min burst-3 限流吃 429。
-  //
-  // 本波只在 UI 层封口（store.ts 归他人所有，本 feature 不碰）：disabled 挡住鼠标和键盘两条
-  // 触发路径，openPicker 再兜一层——即使将来有人拆了 disabled，也打不出第二发。
+  // /ingest 真的要 100–120s；在此之前用户判定卡死 → 再点一次"选择文件" → 每发各自新铸一个
+  // context_id 和 owner_token，后落地的那发覆盖 store，先前那个 owner_token 服务端只返一次、
+  // 客户端已被覆盖 = 永久丢失，那份公司数据从此无人能认领。disabled 挡鼠标和键盘两条触发
+  // 路径，openPicker 再兜一层——即使将来有人拆了 disabled，也打不出第二发。
   const openPicker = () => {
     if (busy) return
     inputRef.current?.click()
@@ -331,8 +441,8 @@ function StepUpload() {
 
   return (
     <div className="lite-onboard-step">
-      <h2>{l.onboardUploadTitle}</h2>
-      <p className="lite-onboard-step-body">{l.onboardUploadBody}</p>
+      <h2>{l.onboardIntakeTitle}</h2>
+      <p className="lite-onboard-step-body">{l.onboardIntakeBody}</p>
       <input
         ref={inputRef}
         type="file"
@@ -352,11 +462,13 @@ function StepUpload() {
       >
         {l.onboardUploadChoose}
       </button>
-      {/* feat-068 · 诚实的等待态：预期在前（onboardUploadHint）+ 活的秒表 + 一条不定量动效。
+      {/* feat-068 · 诚实的等待态：预期在前 + 活的秒表 + 一条不定量动效。
           🔴 秒表与动效整块 aria-hidden：外层是 aria-live="polite"，每秒变一次的数字若进无障碍
           树，读屏会被每秒播报刷屏两分钟；"在忙"这件事由按钮的 aria-busy 表达即可。 */}
       <div className="lite-onboard-upload-status" aria-live="polite">
-        {ingestStatus === 'ingesting' ? (
+        {preview ? (
+          <p className="lite-onboard-upload-idle">{l.onboardPreviewStepNote}</p>
+        ) : ingestStatus === 'ingesting' ? (
           <div className="lite-onboard-upload-waiting">
             <p className="lite-onboard-upload-reading">
               <span className="lite-onboard-upload-dot" aria-hidden="true" />
@@ -382,9 +494,7 @@ function StepUpload() {
         )}
         {/* partner-docs-0728 · 首访者第一次面对「传什么」就在这一步，这条链接最该在这儿。
             🔴 用裸 <a target="_blank"> 而不是 <Link>：闸门是覆盖全屏的 modal，站内导航只会把
-            /paperwork 渲染在**它底下**——用户以为自己离开了向导，实际什么都没发生，进度还卡
-            在原地。新标签页打开，闸门原样留着。href 仍要带粘性 query（丢 `?v=2` 会掉回 v01，
-            而 v01 没有这条路由）。rel 补 noreferrer：新标签拿不到 window.opener。 */}
+            /paperwork 渲染在**它底下**——用户以为自己离开了向导，实际什么都没发生。 */}
         <p className="lite-onboard-upload-forms">
           <a href={paperworkHref()} target="_blank" rel="noopener noreferrer">
             {l.onboardUploadFormsLink}
@@ -395,8 +505,46 @@ function StepUpload() {
   )
 }
 
-// ── ② 团队信息——问候字段只存本机；8A「公司现状」口述会送后端（诚实分界逐字段标明）。──
-function StepTeam() {
+// ── ② 连接日常工作工具（拍板 9：纯登记意向，诚实说明）────────────────────────────────
+function StepTools() {
+  const { t } = useDict()
+  const l = t.lite2
+  const tools = useOnboard((s) => s.tools)
+  const toggleTool = useOnboard((s) => s.toggleTool)
+
+  return (
+    <div className="lite-onboard-step">
+      <h2>{l.onboardToolsTitle}</h2>
+      <p className="lite-onboard-step-body">{l.onboardToolsBody}</p>
+      {/* 🔴 这句话与卡片同屏、同等字号级别，不是脚注。它是这一步唯一能让它诚实的东西：
+          点亮一张卡什么都没连上，屏幕必须当场说清楚。 */}
+      <p className="lite-onboard-honesty" data-honesty="tools">
+        {l.onboardToolsHonesty}
+      </p>
+      <div className="lite-onboard-choice-grid">
+        {TOOL_CATALOG.map((entry) => {
+          const on = tools.includes(entry.id)
+          return (
+            <button
+              key={entry.id}
+              type="button"
+              className={`lite-onboard-choice lite-onboard-tool${on ? ' is-on' : ''}`}
+              data-tool-id={entry.id}
+              aria-pressed={on}
+              onClick={() => toggleTool(entry.id)}
+            >
+              <span className="lite-onboard-choice-title">{entry.title(l)}</span>
+              <span className="lite-onboard-choice-body">{entry.body(l)}</span>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ── ③ 确认管理范围——问候字段只存本机；8A「公司现状」口述会送后端（诚实分界逐字段标明）。──
+function StepScope() {
   const { t } = useDict()
   const l = t.lite2
   const company = useOnboard((s) => s.company)
@@ -406,14 +554,21 @@ function StepTeam() {
   const yourRole = useOnboard((s) => s.yourRole)
   const companyNote = useOnboard((s) => s.companyNote)
   const setField = useOnboard((s) => s.setField)
+  const preview = useOnboard((s) => s.preview)
   // 「公司现状」的去向提示按真实状态二选一：已有工作区 → 「会存进你团队的笔记」；
   // 还没有 → 「等你的材料就位后一起交给 Avery」。两句都是真话，没有第三句。
+  // 预览态是第三种真话：这一格哪儿也不会去。
   const hasContext = useLite((s) => s.contextId !== null)
+  const noteHint = preview
+    ? l.onboardPreviewFieldNote
+    : hasContext
+      ? l.onboardCompanyNoteHint
+      : l.onboardCompanyNoteHintLater
 
   return (
     <div className="lite-onboard-step">
-      <h2>{l.onboardTeamTitle}</h2>
-      <p className="lite-onboard-step-body">{l.onboardTeamBody}</p>
+      <h2>{l.onboardScopeTitle}</h2>
+      <p className="lite-onboard-step-body">{l.onboardScopeBody}</p>
       <div className="lite-onboard-fields">
         <label className="lite-onboard-field">
           <span>{l.onboardCompanyLabel}</span>
@@ -445,8 +600,6 @@ function StepTeam() {
             onChange={(e) => setField('yourName', e.target.value)}
           />
         </label>
-        {/* input-side-0721 · 8A：对齐 cr /companyinput 的团队信息步（人数/职位），仍属本机
-            问候配置——不送后端。 */}
         <div className="lite-onboard-field-row">
           <label className="lite-onboard-field">
             <span>{l.onboardTeamCountLabel}</span>
@@ -481,8 +634,11 @@ function StepTeam() {
             placeholder={l.onboardCompanyNotePlaceholder}
             onChange={(e) => setField('companyNote', e.target.value)}
           />
-          <span className="lite-onboard-field-hint" data-note-hint={hasContext ? 'now' : 'later'}>
-            {hasContext ? l.onboardCompanyNoteHint : l.onboardCompanyNoteHintLater}
+          <span
+            className="lite-onboard-field-hint"
+            data-note-hint={preview ? 'preview' : hasContext ? 'now' : 'later'}
+          >
+            {noteHint}
           </span>
         </label>
       </div>
@@ -490,31 +646,35 @@ function StepTeam() {
   )
 }
 
-// ── ③ 选 playbooks——8 项候选，默认勾 3；勾选真写 onboardStore（持久化）。────────
-function StepPlaybooks() {
+// ── ④ 选择管理偏好——合伙人的 5 个管理框架（拍板 9）。────────────────────────────────
+function StepPrefs() {
   const { t } = useDict()
   const l = t.lite2
-  const playbooks = useOnboard((s) => s.playbooks)
-  const togglePlaybook = useOnboard((s) => s.togglePlaybook)
+  const frameworks = useOnboard((s) => s.frameworks)
+  const toggleFramework = useOnboard((s) => s.toggleFramework)
 
   return (
     <div className="lite-onboard-step">
-      <h2>{l.onboardPlaybooksTitle}</h2>
-      <p className="lite-onboard-step-body">{l.onboardPlaybooksBody}</p>
-      <div className="lite-onboard-playbook-grid">
-        {PLAYBOOK_CATALOG.map((entry) => {
-          const on = playbooks.includes(entry.id)
+      <h2>{l.onboardPrefsTitle}</h2>
+      <p className="lite-onboard-step-body">{l.onboardPrefsBody}</p>
+      {/* 拍板 9 明写「选择只存本地、不影响分析——界面如实标注」。这句就是那个标注。 */}
+      <p className="lite-onboard-honesty" data-honesty="prefs">
+        {l.onboardPrefsHonesty}
+      </p>
+      <div className="lite-onboard-choice-grid">
+        {FRAMEWORK_CATALOG.map((entry) => {
+          const on = frameworks.includes(entry.id)
           return (
             <button
               key={entry.id}
               type="button"
-              className={`lite-onboard-playbook${on ? ' is-on' : ''}`}
-              data-playbook-id={entry.id}
+              className={`lite-onboard-choice lite-onboard-framework${on ? ' is-on' : ''}`}
+              data-framework-id={entry.id}
               aria-pressed={on}
-              onClick={() => togglePlaybook(entry.id)}
+              onClick={() => toggleFramework(entry.id)}
             >
-              <span className="lite-onboard-playbook-title">{entry.title(l)}</span>
-              <span className="lite-onboard-playbook-body">{entry.body(l)}</span>
+              <span className="lite-onboard-choice-title">{entry.title(l)}</span>
+              <span className="lite-onboard-choice-body">{entry.body(l)}</span>
             </button>
           )
         })}
@@ -523,13 +683,29 @@ function StepPlaybooks() {
   )
 }
 
-// ── ④ 完成页——问候 + 所选摘要 + 进入。──────────────────────────────────────────
-function StepDone() {
+// ── ⑤ 创建管理者账号 —— 票 #43 实装（占位步：本票只搭壳，不做半个注册表单）。────────────
+function StepAccount() {
+  const { t } = useDict()
+  const l = t.lite2
+  return (
+    <div className="lite-onboard-step" data-account-step="placeholder">
+      <h2>{l.onboardAccountTitle}</h2>
+      <p className="lite-onboard-step-body">{l.onboardAccountBody}</p>
+    </div>
+  )
+}
+
+// ── ⑥ 完成页——问候 + 所选摘要 + 进入。────────────────────────────────────────────────
+function StepDone({ accountAvailable }: { accountAvailable: boolean }) {
   const { t } = useDict()
   const l = t.lite2
   const yourName = useOnboard((s) => s.yourName)
-  const playbooks = useOnboard((s) => s.playbooks)
-  const chosen = PLAYBOOK_CATALOG.filter((entry) => playbooks.includes(entry.id))
+  const tools = useOnboard((s) => s.tools)
+  const frameworks = useOnboard((s) => s.frameworks)
+  const chosenTools = TOOL_CATALOG.filter((entry) => tools.includes(entry.id))
+  const chosenFrameworks = FRAMEWORK_CATALOG.filter((entry) => frameworks.includes(entry.id))
+  // 账号步整步隐去时，摘要里也不该出现它——否则总结在替一个屏上不存在的步骤说话。
+  void accountAvailable
 
   return (
     <div className="lite-onboard-step">
@@ -539,20 +715,39 @@ function StepDone() {
           ? fill(l.onboardDoneGreeting, { name: yourName.trim() })
           : l.onboardDoneGreetingNoName}
       </p>
-      {chosen.length > 0 ? (
+      {chosenFrameworks.length > 0 || chosenTools.length > 0 ? (
         <div className="lite-onboard-summary">
-          <p className="eyebrow lite-onboard-summary-lead">{l.onboardDoneSummaryLead}</p>
-          <ul className="lite-onboard-summary-list">
-            {chosen.map((entry) => (
-              <li
-                key={entry.id}
-                className="lite-onboard-summary-item"
-                data-playbook-id={entry.id}
-              >
-                {entry.title(l)}
-              </li>
-            ))}
-          </ul>
+          {chosenFrameworks.length > 0 ? (
+            <>
+              <p className="eyebrow lite-onboard-summary-lead">{l.onboardDoneFrameworksLead}</p>
+              <ul className="lite-onboard-summary-list">
+                {chosenFrameworks.map((entry) => (
+                  <li
+                    key={entry.id}
+                    className="lite-onboard-summary-item"
+                    data-framework-id={entry.id}
+                  >
+                    {entry.title(l)}
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
+          {chosenTools.length > 0 ? (
+            <>
+              <p className="eyebrow lite-onboard-summary-lead">{l.onboardDoneToolsLead}</p>
+              <ul className="lite-onboard-summary-list">
+                {chosenTools.map((entry) => (
+                  <li key={entry.id} className="lite-onboard-summary-item" data-tool-id={entry.id}>
+                    {entry.title(l)}
+                  </li>
+                ))}
+              </ul>
+              <p className="lite-onboard-honesty" data-honesty="done-tools">
+                {l.onboardToolsHonesty}
+              </p>
+            </>
+          ) : null}
         </div>
       ) : (
         <p className="lite-onboard-summary-none">{l.onboardDoneNoPicks}</p>

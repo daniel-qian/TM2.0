@@ -47,6 +47,10 @@ const WHITELIST = [
   '.scene-tab', '.lite-settings-toggle', '.lang-switch-btn', '.look-switch-btn', '.mode-switch-btn',
   '.lite-bell-toggle', '.lite-auth-toggle', '.lite-notif-item',
   '.lite-modal-backdrop', '.lite-gate-door', '.lite-onboard-playbook',
+  // onboarding-accounts-0805 ③：向导②④两步的多选卡（连接工具 / 管理框架）与 .lite-onboard-playbook
+  // 是同一族——同一套盒模型、aria-pressed 切换态、专属 is-on 语法，不是普通动作按钮。
+  // 底部步骤 chip 在**预览模式**下才是 <button>（自由步进），归"筛选/切换 chip"那一类目。
+  '.lite-onboard-choice', '.lite-onboard-chip',
   '.ask-recipient-chip', '.icon-button', '.composer-add-button',
   '.lite-composer-filter', '.lite-composer-option', '.lite-composer-remove',
   '.lite-search-option',

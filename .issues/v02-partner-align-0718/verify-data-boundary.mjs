@@ -112,7 +112,7 @@ function record(name, pass, detail) {
 const KEY_CONTEXT = 'lite2:contextId:v1'
 const KEY_TOKENS = 'lite2:ownerTokens:v1'
 const KEY_FLOW = 'lite2:flow:v1'
-const KEY_ONBOARD = 'lite2:onboard:v1'
+const KEY_ONBOARD = 'lite2:onboard:v2'
 const KEY_NOTIFY = 'lite2:notify:v1'
 const KEY_KNOWN = 'lite2:knownContexts:v1'
 

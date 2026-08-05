@@ -1148,9 +1148,15 @@ export const en = {
     directoryEmptyFiltered: 'No one matches this filter yet.',
 
     // ── Onboarding gate (feat-045, PRD F7; input-side-0721 — a full-screen gate page now, not
-    // a floating dialog. Escape / "look around" pauses and resumes next visit. NO fake
-    // connect-tools step, NO fake create-account step — every step is real wiring: upload
-    // really ingests, the sample-team door really claims a backend clone, picks really persist.) ──
+    // a floating dialog. Escape / "look around" pauses and resumes next visit.
+    //
+    // onboarding-accounts-0805 ③ (ADR-0034): five numbered steps between the doors and the
+    // summary — intake / tools / scope / preferences / account. The old copy here said "NO fake
+    // connect-tools step, NO fake create-account step"; both steps now exist, and the rule they
+    // were protecting is intact rather than dropped: the tools step REGISTERS INTEREST and says
+    // so on the same screen (no connected-state, no fake OAuth), and the account step is the real
+    // Supabase one (feat-053). The red line was never "no such step" — it is "nothing on screen
+    // may be fake".) ──
     onboardEyebrow: 'Getting set up',
     onboardCloseAria: 'Close — it picks up where you left off next time',
     onboardSkip: 'Skip the setup',
@@ -1162,6 +1168,26 @@ export const en = {
     // The gate's visible way out (same pause semantics as Escape: progress kept, resumes next
     // visit). A full-page gate has no × — a gate is not a popup you swat away.
     onboardBrowse: 'Just look around first',
+    // The header badge from the partner mockup. It states a product stance, not a feature:
+    // Avery reads structured management information — not screenshots, not chat logs, not
+    // free-form documents. Same wording the standard-forms workbook opens with.
+    // 🔴 KEEP IT SHORT. It shares one header row with the step counter and the "look around"
+    // button; the long version ("Structured management information only", 38 chars) measured
+    // 262px into a 220px slot and got sliced mid-word. The full sentence lives in step 1's body,
+    // which is where someone reading for meaning actually is.
+    onboardStructuredBadge: 'Structured input only',
+
+    // ── Preview mode (ADR-0034 拍板 8). Free stepping, no validation, and — the part that has
+    // to be true rather than merely written — NOTHING is stored and NOTHING is sent. The banner
+    // is permanent and cannot be dismissed: it is the only visible evidence you are in this mode,
+    // and a dismissable one would let someone type for half an hour into a form that keeps
+    // nothing. Doubles as the safe way back in for a returning manager who already has data. ──
+    onboardPreviewBanner:
+      'Preview mode: you can step through every screen. Nothing you type here is saved, and none of it is used for analysis.',
+    onboardPreviewExit: 'Leave preview',
+    onboardPreviewStepNote:
+      'Preview — uploading is off here. Leave preview when you want to bring your own material in.',
+    onboardPreviewFieldNote: 'Preview — this box goes nowhere.',
 
     // ── Step 0 · the doors (input-side-0721 — Danny: the one-click sample team lives here) ──
     onboardDoorsTitle: 'How do you want to start?',
@@ -1180,12 +1206,24 @@ export const en = {
     onboardDoorDemoErrorLead: "Couldn't fetch the sample team —",
     onboardDoorUploadTitle: 'Start with your own files',
     onboardDoorUploadBody:
-      "Hand Avery a roster, a plan, a weekly note — it reads them into a working picture. About three steps.",
+      "Hand Avery a roster, a plan, a weekly note — it reads them into a working picture. Five short steps.",
+    // The third door (ADR-0034 拍板 8). It depends on no backend capability at all, which is
+    // exactly why it is the one that survives when every probe fails.
+    onboardDoorPreviewTitle: 'Walk through the steps first',
+    onboardDoorPreviewBody:
+      'See all five screens without filling anything in. Nothing is saved and nothing is sent — you can start for real afterwards.',
 
-    onboardUploadTitle: 'Start with a few files',
-    // 0721（B5）：同 upload.caption 的重心修正——产出是管理判断，不只是「长出团队」。
-    onboardUploadBody:
-      "Hand Avery what you'd hand a new manager on day one — a roster, a project plan, a weekly note. It reads them into a working picture: people, projects, and what needs your eye. Fine to skip; you can upload later from Team.",
+    // ── Bottom step chips (partner mockup) ──
+    onboardChipIntake: 'Your data pack',
+    onboardChipTools: 'Work tools',
+    onboardChipScope: 'What you manage',
+    onboardChipPrefs: 'How you manage',
+    onboardChipAccount: 'Your account',
+
+    // ── Step 1 · the standard data pack ──
+    onboardIntakeTitle: 'Bring in your standard data pack',
+    onboardIntakeBody:
+      "Fill the standard tables in here, or hand Avery the files you'd give a new manager on day one — a roster, a project plan, a weekly note. Either way it becomes one working picture: people, projects, and what needs your eye.",
     onboardUploadChoose: 'Choose files',
     onboardUploadReading: 'Reading your files…',
     // feat-068 — 同 upload.ingestingHint 的理由（真等 100–120s）。向导版多一句"可以先进行
@@ -1201,12 +1239,36 @@ export const en = {
     // 用户以为自己离开了向导，实际进度还卡在原地。
     onboardUploadFormsLink: 'Not sure what to send? Get the standard forms',
 
-    onboardTeamTitle: 'A little about you',
+    // ── Step 2 · connect your everyday work tools (ADR-0034 拍板 9) ──
+    // 🔴 The honesty line is NOT a footnote and must stay on the same screen as the cards:
+    // lighting up a card connects nothing, and the screen has to say so where the clicking
+    // happens. A checkbox that registers interest is honest; a toggle that reads "Connected"
+    // is a lie, and lies on this line all get paid for later.
+    onboardToolsTitle: 'Which tools does the work actually live in?',
+    onboardToolsBody:
+      'Tell Avery where the messages, approvals and numbers already are. It shapes what gets built first.',
+    onboardToolsHonesty:
+      'No connection is available yet — picking one only registers your interest, and it stays in this browser. Nothing is read from these tools today.',
+    onboardToolWecomTitle: 'WeCom',
+    onboardToolWecomBody: 'Messages and the signals that travel with them.',
+    onboardToolFeishuTitle: 'Feishu / Lark',
+    onboardToolFeishuBody: 'Documents, approvals and calendars.',
+    onboardToolDingtalkTitle: 'DingTalk',
+    onboardToolDingtalkBody: 'Attendance, approvals and messages.',
+    onboardToolOaTitle: 'Your OA system',
+    onboardToolOaBody: 'Process approvals and notices.',
+    onboardToolBiTitle: 'BI / data platform',
+    onboardToolBiBody: 'Operating numbers and reports.',
+    onboardToolCrmTitle: 'CRM',
+    onboardToolCrmBody: 'Customer records and follow-ups.',
+
+    // ── Step 3 · what you manage (was "a little about you") ──
+    onboardScopeTitle: 'What are you managing?',
     // input-side-0721 · 8A — the honesty line moved from "nothing is sent anywhere" (no longer
     // true: the company-situation box below IS sent) to a per-field boundary: name fields stay
     // local, the note goes to Avery. 🔴 Do not copy the old absolute back; the per-field hints
     // below are the single source of "what goes where".
-    onboardTeamBody:
+    onboardScopeBody:
       'The fields here are for greetings around the product and stay in this browser — except the last box, which goes to Avery so its readings start from your reality.',
     onboardCompanyLabel: 'Company',
     onboardCompanyPlaceholder: 'e.g. Harbor & Co.',
@@ -1235,15 +1297,39 @@ export const en = {
     // The skeleton home's second-chance demo slot (primary entry is the gate's doors step).
     homeDemoNote: 'Real anonymized material, read in already — your own private copy, one click.',
 
-    onboardPlaybooksTitle: 'Pick the plays that fit how you run things',
-    onboardPlaybooksBody:
-      'Your picks shape the Playbooks tab — it shows where each one will grow once Avery is wired into your own SOPs. Nothing is connected yet, and it says so.',
+    // ── Step 4 · how you manage — the partner's five frameworks (ADR-0034 拍板 9) ──
+    // These sit beside the eight plays on the Playbooks tab rather than replacing them: the plays
+    // are "what your SOPs will grow into", these are "which management language you already use".
+    onboardPrefsTitle: 'How do you like to manage?',
+    onboardPrefsBody:
+      'Pick the frames you already think in. Avery uses your words when it writes things down.',
+    // 拍板 9 requires this said plainly: the picks are local and change nothing about the analysis.
+    onboardPrefsHonesty:
+      'These picks stay in this browser and do not change how Avery reads your material — they only shape the language it uses back at you.',
+    onboardFrameworkGoalTitle: 'Breaking goals down and keeping them aligned',
+    onboardFrameworkGoalBody: 'OKR/KPI breakdowns, and a floor-and-stretch view of a target.',
+    onboardFrameworkCoachingTitle: '1:1s and coaching',
+    onboardFrameworkCoachingBody: 'Regular one-on-one time, used for growth rather than status.',
+    onboardFrameworkFairnessTitle: 'Fairness and motivation',
+    onboardFrameworkFairnessBody: 'Whether effort and reward feel proportionate across the team.',
+    onboardFrameworkRaciTitle: 'RACI and the edges between people',
+    onboardFrameworkRaciBody: 'Who decides, who does, who is kept in the loop.',
+    onboardFrameworkGapTitle: 'Spotting the gap with reality',
+    onboardFrameworkGapBody: 'When what gets reported drifts from what the data shows.',
+
+    // ── Step 5 · the manager account (feat-053 auth, wired in ticket #43). Skippable by design:
+    // the guest path is a hard product requirement, not a nicety. Hidden entirely when this
+    // deployment has no account capability — never a dead button. ──
+    onboardAccountTitle: 'Create your manager account',
+    onboardAccountBody:
+      'An account ties this workspace to you, so signing in on another device brings it back. You can skip it and stay a guest — nothing here stops working.',
 
     onboardDoneTitle: "You're set",
     onboardDoneGreeting: 'Good to meet you, {name}.',
     onboardDoneGreetingNoName: 'Good to meet you.',
-    onboardDoneSummaryLead: 'The plays you picked:',
-    onboardDoneNoPicks: 'No plays picked — the Playbooks tab keeps its general preview.',
+    onboardDoneFrameworksLead: 'How you like to manage:',
+    onboardDoneToolsLead: 'Tools you told us about:',
+    onboardDoneNoPicks: 'Nothing picked — you can change any of this later.',
 
     // ── Playbook candidates (feat-045 — eight plays, each a title + one plain line; memo
     // voice, no framework name-dropping. Semantics reference the partner build; copy rewritten.) ──
