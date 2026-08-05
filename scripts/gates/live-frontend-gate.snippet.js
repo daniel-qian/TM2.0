@@ -82,7 +82,7 @@
  * group currently has neither of its two documented drive modes actually working. Run AFTER composerAskLive
  * (the stub advise stream carries a manifest{kind:'ask-draft'}):
  *   await __seedGate.assertAskDraft()          // K1: card mounts draft, verbatim edit works, 1..3 add/remove
- *   await __seedGate.assertAskShare()          // K2: confirm -> links == recipients, host avery.ima-read.com
+ *   await __seedGate.assertAskShare()          // K2: confirm -> links == recipients, host avery.dannyqian.com
  *   await __seedGate.assertAskCollect(2)       // K3: pull-refresh -> partial chip -> closed
  *   __seedGate.assertAskReceipts('multi')      // K4: qualitative summary, NO cross-person score rows
  *   (re-run composerAskLive -> fresh draft)
@@ -1034,7 +1034,8 @@
 
     async assertAskShare() {
       // Phase K2: confirm -> SHARED: one link per selected recipient, every link
-      // https://avery.ima-read.com/r/{token}, one copy button per link (manual share = human gate).
+      // https://avery.dannyqian.com/r/{token} (the live /r origin — ADR-0024; ima-read.com never
+      // resolved, 2026-08-05 P0), one copy button per link (manual share = human gate).
       const card = $('.lite-ask-card');
       if (!card) return (results.askShare = { pass: false, error: 'no .lite-ask-card' });
       const expected = $$('.ask-recipient-chip[aria-pressed="true"]', card).length ||
@@ -1054,7 +1055,7 @@
       for (const l of links) {
         let u = null;
         try { u = new URL(l); } catch (e) { /* invalid */ }
-        if (!u || u.protocol !== 'https:' || u.host !== 'avery.ima-read.com' ||
+        if (!u || u.protocol !== 'https:' || u.host !== 'avery.dannyqian.com' ||
             !u.pathname.startsWith('/r/') || u.pathname.length <= 3) {
           hostOk = false; badLinks.push(l);
         }

@@ -58,9 +58,15 @@ SHARE_TOKEN_BYTES = 32     # same entropy class as the owner_token (~256 bits, u
 
 
 def public_base() -> str:
-    """The public origin employee links are minted under (PRD Q11: avery.ima-read.com v1)."""
+    """The public origin employee links are minted under.
+
+    Default = the LIVE backend origin (ADR-0024 single-target Frankfurt; it superseded PRD Q11's
+    avery.ima-read.com, whose DNS never went live — a link minted on it 白屏s in the IM webview,
+    2026-08-05 生产 P0). The default must always be a domain that actually serves /r/{token};
+    deployments that front the service elsewhere set AVERY_PUBLIC_BASE explicitly.
+    """
     import os
-    return (os.environ.get("AVERY_PUBLIC_BASE") or "https://avery.ima-read.com").rstrip("/")
+    return (os.environ.get("AVERY_PUBLIC_BASE") or "https://avery.dannyqian.com").rstrip("/")
 
 
 # ── request bodies (a superset of the frontend AskDraft — unknown fields are ignored) ───────────
