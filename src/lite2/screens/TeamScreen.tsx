@@ -8,7 +8,6 @@ import { localizePersonRead } from '../../shared/handoffCopy'
 import { Link } from 'react-router-dom'
 import { filesHref } from '../routes'
 import { InitialAvatar } from '../InitialAvatar'
-import { LiteComposer } from '../LiteComposer'
 import {
   deriveGroupFacets,
   deriveMoodFacets,
@@ -427,8 +426,9 @@ export function TeamScreen() {
           )}
         </div>
       </div>
-
-      <LiteComposer />
+      {/* #47 · LiteComposer 退役（Danny 拍板统一形态）：本屏提问入口 = 全局悬浮
+          AskAveryLauncher 胶囊（Lite2App 挂载,不再对 team 收起）。@引用选人/选项目
+          的场景由人员/项目卡面的「去问 Avery」接替（#48）。 */}
     </section>
   )
 }

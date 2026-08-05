@@ -619,8 +619,16 @@
     composerCheck() {
       // Phase F1 (static): the live composer must not carry story prefill / story references
       // (the TeamComposer leak: HERO_QUESTION prefill + fixture @-references).
-      const composer = $('.composer-card');
-      if (!composer) return (results.composer = { pass: false, error: 'no .composer-card' });
+      // #47 (2026-08-05): v02 retired the Team-screen LiteComposer (.composer-card) — the ask
+      // surface there is now the global AskAveryLauncher pill + the room composer. On v02,
+      // navigate to the room and audit .nexus-followup-composer instead; v01 (frozen shell)
+      // still renders .composer-card and takes the original path.
+      let composer = $('.composer-card');
+      if (!composer && window.__lite2Store) {
+        window.__lite2Store.getState().goScreen('room');
+        composer = $('.lite-room .nexus-followup-composer');
+      }
+      if (!composer) return (results.composer = { pass: false, error: 'no .composer-card / room composer' });
       const text = composer.innerText || '';
       // Main ask input first (.composer-main-row) — `input[type="text"]` alone misses inputs
       // with no explicit type attribute (caught live on the S2 gate run, 2026-07-08).
@@ -643,9 +651,17 @@
       const closeBtn = $('.lite-detail-close');
       if (closeBtn) closeBtn.click();
 
-      const composer = $('.composer-card');
+      // #47 (2026-08-05): v02 has no Team-screen composer any more — drive the room composer
+      // (same askLive path the retired LiteComposer called; downstream assertions already
+      // read room DOM). v01 keeps the original .composer-card drive.
+      let composer = $('.composer-card');
+      if (!composer && window.__lite2Store) {
+        window.__lite2Store.getState().goScreen('room');
+        await poll(() => ($('.lite-room .nexus-followup-composer') ? true : null), 6000, 'room composer to mount');
+        composer = $('.lite-room .nexus-followup-composer');
+      }
       const input =
-        composer && composer.querySelector('.composer-main-row input, textarea, input[type="text"]');
+        composer && composer.querySelector('.composer-main-row input, textarea, input[type="text"], input');
       const form = input ? input.closest('form') : null;
       if (!input || !form) {
         return (results.composerLive = { pass: false, error: 'no composer input/form to drive' });

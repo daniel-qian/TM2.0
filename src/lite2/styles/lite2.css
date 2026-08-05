@@ -3267,13 +3267,8 @@
   background: rgba(var(--lite2-surface-rgb), 0.95); /* 40-nexus-empty: rgba(255,253,248,.95) */
 }
 
-.lite2-shell .composer-reference-chip {
-  background: rgba(var(--lite2-surface-rgb), 0.7); /* 00-base: rgba(255,253,248,.7) */
-}
-
-.lite2-shell .composer-reference-picker {
-  background: rgba(var(--lite2-surface-rgb), 0.96); /* rgba(255,253,248,.96) */
-}
+/* （#47 · .composer-reference-chip/.composer-reference-picker 的 lite2 配色覆盖已随
+    LiteComposer 退役删除——v02 不再渲染这些类；00-base.css 的基类是 v01 冻结面，不动。） */
 
 .lite2-shell .suggestion-row button {
   background: rgba(var(--lite2-surface-rgb), 0.7); /* rgba(255,253,248,.7) */

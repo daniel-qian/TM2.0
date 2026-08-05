@@ -991,16 +991,14 @@ export const en = {
       "Avery hasn't read any of your team's files, so there are no facts to ground a judgment in — and it won't invent one. Bring in a roster, a project plan, or a weekly note first.",
     roomNoMaterialCta: 'Go add materials',
 
-    // Composer references (live corpus only)
-    refAll: 'All',
+    // refPeople/refProjects：曾是 LiteComposer 引用菜单的词——#47（2026-08-05）该组件退役后，
+    // 由顶栏搜索的分组标题继续消费。refAll/refAdd/refSearch/refEmpty/composer*Aria 四件套
+    // 已随组件删除（孤儿键是红旗，AGENTS.md 陷阱条）。
     refPeople: 'People',
     refProjects: 'Projects',
-    refAdd: 'Add a reference',
-    refSearch: 'Reference a person or project',
-    refEmpty: 'Upload a few files first — people and projects appear here.',
 
     // 棒E · Topbar search (pure in-memory retrieval; ≥1280 only). searchEmpty is ZERO MATCHES —
-    // deliberately distinct from refEmpty (ZERO DATA). Group headings reuse refPeople/refProjects.
+    // deliberately distinct from the retired refEmpty (ZERO DATA). Group headings reuse refPeople/refProjects.
     // 🔴 aria-label is mandatory: placeholder is invisible to both zh-purity and aria-zh gates.
     searchPlaceholder: 'Search people, projects…',
     searchAria: 'Search people and projects',
@@ -1558,10 +1556,7 @@ export const en = {
     // wording can diverge later even though it doesn't today).
     topbarAria: 'Avery controls',
     screenNavAria: 'Screen',
-    composerAskAria: 'Ask about your team',
-    composerRefsAria: 'Composer references',
-    composerRemoveRefAria: 'Remove {label}',
-    composerFilterAria: 'Filter references',
+    // composer*Aria 四键随 LiteComposer 退役删除（#47）——v01 的 lite.composer*Aria 不动。
     roomBoardAria: 'Ask Avery — output', // 0729 画板退役：board→纵向输出区（output-form-0729/01）
     roomAskAria: 'Ask your team',
     roomLiveQuestionAria: 'Live question',
