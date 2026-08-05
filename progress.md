@@ -16,6 +16,9 @@
   容器内 `public_base()` 实测 = `https://avery.dannyqian.com`，走查真 token `/r/…` 200。
   回滚梯 `avery-prev-20260805-134620` 在位。**⚠ 顺手坐实：`~/avery.env` 曾比在跑容器少 5 个变量
   （demo seed/限流、SUPABASE 两条）——已补齐，但换容器 env 快照永远以在跑容器提取为准。**
+  **同族清尾（当天第二票，Danny 点名）**：src 里五处 ima-read 假链接/注释全换真域（grep=0）+
+  补上 lite2 壳漏渲染的 F2 `.ask-offline-note`（feat-068 只搬了声明没搬渲染行）——dev+stub
+  真集成层验过 + Playwright 截图人眼过，生产行为零变化（标记仅 stub 通道渲染）。
 - **#38 已完成并 closes**，**契约切换的两半已同批上生产**（[部署回执](.issues/locale-contract-0803/receipt-deploy-0804.md)）：
   前端 Vercel 构建 `89b36e4`（线上 bundle 的 commit 戳与本地 HEAD 逐字相等，
   8 条判读文案逐条核到线上产物）；后端在 `avery-agent:main-20260804-153841` 验过

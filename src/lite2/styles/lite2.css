@@ -1744,6 +1744,17 @@
   cursor: default;
 }
 
+/* F2 demo 诚实性：stub 通道的假链接标注（0805 从 lite 壳补齐） */
+.lite2-shell .lite-ask-card .ask-offline-note {
+  margin: 0;
+  padding: 8px 12px;
+  border-left: 3px solid var(--terracotta);
+  background: rgba(178, 84, 43, 0.08);
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .lite2-shell .lite-ask-card .ask-links {
   display: flex;
   flex-direction: column;

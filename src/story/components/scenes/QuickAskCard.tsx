@@ -21,7 +21,7 @@ const QUICK_ASK_RECIPIENT_ID = 'u_fred'
 // Copy link 是真的——把虚构演示链接写进剪贴板（与 lite 侧 stub 链接同域同形状）。
 // 🔴 ADR-0023：分享排只谈"把问题递到 Fred 手边"，零打分/评价语义。
 // "企业微信"以官方英文名 WeCom 出卡（story demo 全英文是 ADR-0015 钉死约束）。
-const QUICK_ASK_SHARE_LINK = 'https://avery.ima-read.com/r/fred-demo'
+const QUICK_ASK_SHARE_LINK = 'https://avery.dannyqian.com/r/fred-demo'
 const QUICK_ASK_SHARE_TARGETS = ['WeCom', 'Teams', 'Slack', 'Email'] as const
 
 // 两个生成问句（问"事"）：主语是 hand-off / 所需材料，不是 Fred 这个人。

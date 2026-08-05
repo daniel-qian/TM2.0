@@ -158,7 +158,7 @@ export interface AskRecipient {
   id: string
   name: string // 当前 team 花名册的具名人（PRD Q4：一人一链，答案天然归属到人）
   token?: string // share 后由服务端发（不可猜）；前端永不自造
-  link?: string // https://avery.ima-read.com/r/{token}（服务端拼好整链，域名归属后端）
+  link?: string // https://avery.dannyqian.com/r/{token}（服务端拼好整链，域名归属后端）
   receipt?: AskReceipt
 }
 
