@@ -1,7 +1,8 @@
 # 「Your team」改为卡片式今日主页，空间地图降级为页内全景子视图
 
 > 修订 [ADR-0012](0012-pannable-zoomable-canvas-rail-derived-camera.md) 的"地图 = Dashboard 主形态"前提；不动 canvas / rail-camera 交互机器本身。语言与红线仍受 [ADR-0015](0015-product-tone-human-advisor-debrand-saas-naming.md) / [ADR-0016](0016-avery-decisive-in-both-directions.md) 约束。
-> **状态：** Accepted（Danny 拍板 2026-07-03）
+> **状态：** Superseded by [ADR-0034](0034-team-screen-people-only-triage-moves-home.md)（2026-08-05）——决策 2/3 被推翻：feat-057 聚合首屏接走「进门第一眼」后，团队页回归纯人员目录，分诊迁入今日主页，项目卡带退役。原文如下，仅存档。
+> ~~**状态：** Accepted（Danny 拍板 2026-07-03）~~
 
 ## 背景
 

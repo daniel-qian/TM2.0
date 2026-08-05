@@ -5998,6 +5998,14 @@
 /* （0729 画板退役：.lite-room-canvas 的 top 让位规则随画布删除；room 的顶距并入下面
     消费者清单——.lite-room-board 吃 var(--lite2-clear-top)。） */
 
+/* #46 · Team 屏回归纯人员目录（ADR-0034 推翻 0017）：分诊/项目迁走后左脊柱只剩 briefing 头，
+   38/62 双列会空一根柱——单列纵排，目录网格吃满宽。锁 .lite2-shell：v01/story 的
+   .home-frame（仍是三合一布局）一像素不动。 */
+.lite2-shell .home-frame.home-frame--people {
+  grid-template-columns: 1fr;
+  max-width: 1180px;
+}
+
 /* 锚点跳转/聚焦滚动不钻顶栏（我们的滚动全在内滚容器，不在 html——她的
    html{scroll-padding-top:120px} 翻译到内滚层）。 */
 .lite2-shell .lite-home-scroll,

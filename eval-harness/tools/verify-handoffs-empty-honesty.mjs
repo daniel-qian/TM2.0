@@ -1,7 +1,9 @@
 // handoffs 空态诚实门（UIUX 棒 2026-07-20 晚 · F4）。
+// #46（ADR-0034，2026-08-05）：v02 分诊区迁到「今天」屏，本门 v02 分支跟着去 home 采样；
+// v01 冻结壳仍在 team。判据一字未改。
 //
 // ## 缺陷是什么
-// Team 屏「今天值得你留意」区在 handoffs 清单为空时固定渲染 handoffsEmpty：
+// （写门时在 Team 屏；现 v02 在今天屏）「今日提醒」区在 handoffs 清单为空时固定渲染 handoffsEmpty：
 // 「暂时没有需要你出面的事——文件读起来一切平稳。」判据只看 team.handoffs.length，
 // **完全无视风险信号计数**。而同一屏顶部的简报 subhead 刚说完「其中 {n} 处值得多看一眼」
 // ——同一个屏幕、同一份数据，上半句「9 处值得多看」、下半句「一切平稳」。
@@ -61,7 +63,12 @@ async function driveShell({ label, url, storeSeam }) {
     (seam) => ['ready', 'error'].includes(window[seam].getState().ingestStatus),
     storeSeam, { timeout: 30000 },
   )
-  await page.evaluate((seam) => window[seam].getState().goScreen('team'), storeSeam)
+  // #46（ADR-0034）：v02 的分诊区（含 .lite-handoffs-empty）整块迁到聚合首屏「今天」，
+  // 尺子跟着真部件走——v02 去 home 采样；v01 冻结壳原地不动，仍在 team。
+  await page.evaluate(
+    ({ seam, screen }) => window[seam].getState().goScreen(screen),
+    { seam: storeSeam, screen: label === 'v01' ? 'team' : 'home' },
+  )
   await page.waitForTimeout(500)
 
   // ── 世界 A：handoffs 空 + 3 处风险信号 ─────────────────────────────────────────────

@@ -1,7 +1,23 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useLite } from '../store'
-import { useFlow, selectGapsActive, selectGapsResolved, selectGapsDismissed } from '../flowStore'
+import {
+  useFlow,
+  selectGapsActive,
+  selectGapsResolved,
+  selectGapsDismissed,
+  selectTriagePending,
+  selectTriageHandled,
+  selectTriageSetAside,
+} from '../flowStore'
 import { useDict } from '../../shared/i18n/useDict'
+// #46（ADR-0034）· 晨间分诊从 TeamScreen 整块迁来，与「今天要决策的」相邻。
+// 数据/文案/持久化三层原封不动：liveHandoffs 派生（teamData.ts）→ triageMarks 分桶
+//（flowStore localStorage）→ localizeHandoff 成句（handoffCopy.ts）。
+import { localizeHandoff, type HandoffDisplay } from '../../shared/handoffCopy'
+import { briefingRiskCount } from '../../shared/briefing'
+import { draftFromHandoff } from '../draftLinks'
+import { useDraft } from '../draftStore'
+import type { LiteHandoff } from '../teamData'
 import { Link } from 'react-router-dom'
 import { UploadPanel } from '../UploadPanel'
 import { filesHref } from '../routes'
@@ -101,7 +117,7 @@ function gradeTone(grade: LiveDecisionCard['grade']): string {
 }
 
 export function HomeScreen() {
-  const { t } = useDict()
+  const { t, locale } = useDict()
   const team = useLite((s) => s.team)
   const rawTeam = useLite((s) => s.rawTeam)
   const files = useLite((s) => s.files)
@@ -137,6 +153,54 @@ export function HomeScreen() {
   // 今日待办（B4）：flowStore 真数据——dueGroup==='today' 且未完成。首页只列前 5 条，
   // 细节/编辑仍归待办清单屏（feat-057 拍板：聚合做入口，不承载细节）。
   const todayFollowups = followups.filter((item) => !item.done && item.dueGroup === 'today')
+
+  // ── #46 · 晨间分诊（自 TeamScreen 迁入，ADR-0034）────────────────────────────
+  const triageMarks = useFlow((s) => s.triageMarks)
+  const markTriageDone = useFlow((s) => s.markTriageDone)
+  const discardTriage = useFlow((s) => s.discardTriage)
+  const restoreTriage = useFlow((s) => s.restoreTriage)
+  const setComposerDraft = useFlow((s) => s.setComposerDraft)
+  // feat-058 · 应用内草稿框（弹层本体常驻挂在壳层 Lite2App，这里只负责开框）。
+  const openDraft = useDraft((s) => s.openDraft)
+  const [triageDrawerOpen, setTriageDrawerOpen] = useState(false)
+  // 决策卡的 followupAddedKeys 是另一套键（cardKey），分诊条目用自己的 id 集合，别混桶。
+  const [handoffFollowupIds, setHandoffFollowupIds] = useState<ReadonlySet<string>>(new Set())
+
+  // feat-068 · 分诊条目的文案层（ZH-02）。teamData.ts 的 liveHandoffs() 只吐结构化信号，
+  // 成句在这里按当前字典拼——详见 src/shared/handoffCopy.ts 顶部。
+  // 三条 list 都要过这一层：pending 渲染卡片，handled/setAside 进"今天已照料"抽屉。
+  const localizeH = useMemo(() => (h: LiteHandoff) => localizeHandoff(h, t.lite2), [t])
+  const triagePending = useMemo(
+    () => selectTriagePending(team, triageMarks).map(localizeH),
+    [team, triageMarks, localizeH],
+  )
+  const triageHandled = useMemo(
+    () => selectTriageHandled(team, triageMarks).map(localizeH),
+    [team, triageMarks, localizeH],
+  )
+  const triageSetAside = useMemo(
+    () => selectTriageSetAside(team, triageMarks).map(localizeH),
+    [team, triageMarks, localizeH],
+  )
+  const totalHandoffs = team?.handoffs.length ?? 0
+
+  // feat-068 · 入参是 HandoffDisplay：composer 预填 / 跟进标题 / 草稿正文用的都是
+  // **已本地化**的 action + evidence。
+  function handleTakeToRoom(handoff: HandoffDisplay) {
+    // 分隔符用 " — " 而非换行：composer 是 <input type="text">，换行被剥掉后两段文字会
+    // 连成一坨不可读（feat-044 对抗验证发现的同根 bug，见 CloserLookScreen 同款注释）。
+    setComposerDraft(`${handoff.action} — ${handoff.evidence}`)
+    goScreen('room')
+  }
+
+  function handleHandoffFollowup(handoff: HandoffDisplay) {
+    addFollowup({ title: handoff.action, source: 'triage', dueGroup: 'today', note: handoff.evidence })
+    setHandoffFollowupIds((prev) => {
+      const next = new Set(prev)
+      next.add(handoff.id)
+      return next
+    })
+  }
 
   // ── 空态：还没有团队数据 ──────────────────────────────────────────────────
   // 0721 对齐棒 · Danny 拍板 4A（合伙人反馈 B1）：空态第一眼从「整屏上传面板」改为
@@ -431,6 +495,145 @@ export function HomeScreen() {
                 </ol>
               </>
             )}
+          </section>
+
+          {/* ── ①¼ 今日提醒（#46 · 自 TeamScreen 迁入，ADR-0034）──────────────────
+              与「今天要决策的」相邻：决策卡是后端定级引擎的产出，分诊条目是前端从项目
+              blockers 的真派生（liveHandoffs，零捏造）——两套数据源，两个区块，不合并列表。
+              三动作真接线原样：done/搁置 → 抽屉；去问 Avery → composer 预填不自动发；
+              加到待办 → flowStore；起草消息 → 应用内草稿框。 */}
+          <section className="lite-home-block lite-home-handoffs" aria-label={t.lite2.handoffsTitle}>
+            <div className="lite-home-block-head">
+              <h2>{t.lite2.handoffsTitle}</h2>
+              {totalHandoffs > 0 && triagePending.length > 0 ? (
+                <span className="lite-home-count" aria-live="polite">
+                  {fill(t.lite2.triageRemaining, { pending: triagePending.length, total: totalHandoffs })}
+                </span>
+              ) : null}
+            </div>
+
+            {triagePending.length > 0 ? (
+              <ol className="home-handoff-list">
+                {triagePending.map((handoff) => (
+                  <li
+                    key={handoff.id}
+                    className={classNames(['home-handoff', `home-tone-${handoff.tone}`])}
+                  >
+                    <button
+                      type="button"
+                      className="home-check"
+                      aria-label={fill(t.lite2.triageDoneAria, { action: handoff.action })}
+                      onClick={() => markTriageDone(handoff.id)}
+                    >
+                      <span className="lite-triage-checkmark" aria-hidden="true">
+                        ✓
+                      </span>
+                    </button>
+                    <div className="home-handoff-body">
+                      {/* feat-068 · is-cjk：基线样式给这行加了 text-transform:uppercase +
+                          0.14em 字距（英文小标签的排版语言）。中文没有大小写，宽字距只会
+                          读成"喊话"，所以中文构建下关掉大写、收紧字距。 */}
+                      <span
+                        className={classNames([
+                          'lite-badge',
+                          'home-handoff-tone',
+                          locale === 'zh' && 'is-cjk',
+                        ])}
+                      >
+                        {handoff.toneLabel}
+                      </span>
+                      <h3>{handoff.action}</h3>
+                      <p>{handoff.evidence}</p>
+                      <div className="home-handoff-links">
+                        <button
+                          type="button"
+                          className="home-map-card-link"
+                          onClick={() => openDetail('project', handoff.projectIds[0])}
+                        >
+                          {t.lite2.handoffOpen} →
+                        </button>
+                        <button
+                          type="button"
+                          className="lite-btn lite-btn--ghost lite-triage-room"
+                          onClick={() => handleTakeToRoom(handoff)}
+                        >
+                          {t.lite2.triageTakeToRoomLabel} ↗
+                        </button>
+                        <button
+                          type="button"
+                          className="lite-btn lite-btn--soft lite-triage-addfollowup"
+                          disabled={handoffFollowupIds.has(handoff.id)}
+                          onClick={() => handleHandoffFollowup(handoff)}
+                        >
+                          {handoffFollowupIds.has(handoff.id)
+                            ? t.lite2.followupAdded
+                            : t.lite2.triageAddFollowupLabel}
+                        </button>
+                        {/* feat-058：这里曾是一条裸 mailto: 链接（点一下人就被甩进系统
+                            邮件客户端，草稿正文根本没露过面）。现在开应用内草稿框。 */}
+                        <button
+                          type="button"
+                          className="lite-btn lite-btn--ghost lite-triage-draftmail"
+                          onClick={() => openDraft(draftFromHandoff(handoff, team))}
+                        >
+                          {t.lite2.triageDraftMailLabel}
+                        </button>
+                        <button
+                          type="button"
+                          className="lite-btn lite-btn--ghost home-discard"
+                          onClick={() => discardTriage(handoff.id)}
+                        >
+                          {t.lite2.triageDiscardLabel}
+                        </button>
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <p className="lite-handoffs-empty">
+                {totalHandoffs > 0
+                  ? t.lite2.triageAllDone
+                  : briefingRiskCount(team?.briefing) > 0
+                    ? fill(t.lite2.handoffsEmptyButLook, { count: briefingRiskCount(team.briefing) })
+                    : t.lite2.handoffsEmpty}
+              </p>
+            )}
+
+            {triageHandled.length + triageSetAside.length > 0 ? (
+              <section className="home-drawer">
+                <button
+                  type="button"
+                  className="home-drawer-toggle"
+                  aria-expanded={triageDrawerOpen}
+                  onClick={() => setTriageDrawerOpen((open) => !open)}
+                >
+                  {t.lite2.triageDrawerLabel} · {triageHandled.length}
+                  {triageSetAside.length > 0 ? ` · ${triageSetAside.length} ${t.lite2.triageSetAsideLabel}` : ''}
+                  <span aria-hidden="true">{triageDrawerOpen ? '▴' : '▾'}</span>
+                </button>
+                {triageDrawerOpen ? (
+                  <ul className="home-drawer-list">
+                    {triageHandled.map((handoff) => (
+                      <li key={handoff.id}>
+                        <span className="home-drawer-item">{handoff.action}</span>
+                        <button type="button" className="lite-btn lite-btn--ghost" onClick={() => restoreTriage(handoff.id)}>
+                          {t.lite2.triageRestoreLabel}
+                        </button>
+                      </li>
+                    ))}
+                    {triageSetAside.map((handoff) => (
+                      <li key={handoff.id} className="is-set-aside">
+                        <span className="home-drawer-item">{handoff.action}</span>
+                        <button type="button" className="lite-btn lite-btn--ghost" onClick={() => restoreTriage(handoff.id)}>
+                          {t.lite2.triageRestoreLabel}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </section>
+            ) : null}
           </section>
 
           {/* ── ①½ 今日待办（0721 · B4 闭环）：flowStore 真数据，只列 today 组未完成前 5 条。

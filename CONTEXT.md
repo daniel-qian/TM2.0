@@ -19,7 +19,7 @@ _Avoid_: 把人情味当产品自我定义来写（它是红线与风格，不�
 _Avoid_: 给人打分/量化成数值（人不该有血条）；没有真人评分就上 eval scorecard
 
 **Dashboard**：
-进门第一面（surface label "Team"／「团队」，0729 大白话命名 [ADR-0031](docs/adr/0031-plain-speak-naming-pass.md) 前为 "Your team"）——回答"**今天该把心思花在哪**"：分析浏览区（人与项目双轨卡片）+ 今日 Handoff checklist 区，分区混排、概念不混。（live mode 下这些卡片由 **Ingestion** 从上传文件填充，story mode 下由 `fixtures`；见 [ADR-0020](docs/adr/0020-avery-graduates-from-demo-only-to-live-lite-product.md)。）它是**观察 + 轻照料面**：看清处境、勾掉/搁置今天的小事；重的编排仍去 Nexus。地图不再是这一面的主形态，退为页内的全景子视图（见 Team map）。见 [ADR-0017](docs/adr/0017-card-home-demotes-team-map.md)。
+「团队」分区（surface label "Team"，0729 大白话命名 [ADR-0031](docs/adr/0031-plain-speak-naming-pass.md) 前为 "Your team"）——自 [ADR-0034](docs/adr/0034-team-screen-people-only-triage-moves-home.md)（2026-08-05）起是**纯人员目录**：briefing 头 + 筛选目录（部门/情绪 chip）+ 添加成员/停用抽屉，回答"**我的人都是谁、谁自述吃紧**"。「进门第一眼 + 今日 Handoff checklist」的职责已移交聚合首屏「今天」（feat-057，checklist 与「今天要决策的」相邻）；项目卡带退役归项目屏。（live mode 下人卡由 **Ingestion** 从上传文件填充，story mode 下由 `fixtures`；见 [ADR-0020](docs/adr/0020-avery-graduates-from-demo-only-to-live-lite-product.md)。）地图仍是页内全景子视图（见 Team map）。沿革：[ADR-0017](docs/adr/0017-card-home-demotes-team-map.md)（已被 0034 推翻其三合一布局）。
 _Avoid_: home、canvas（canvas 是视觉手法，不是这个概念本身）、PM 仪表盘语言（P0 徽章 / 统计数字 chips / capacity 读数——SaaS 腔，违反 [ADR-0015](docs/adr/0015-product-tone-human-advisor-debrand-saas-naming.md)）
 
 **Team map**：
@@ -70,7 +70,7 @@ _Avoid_: discrepancy、conflict
 _Avoid_: output（output 窄指结构化报告这一种产物）、artifacts（泛指、丢失"经链条显形"的语义）
 
 **Handoff**：
-agent 产出的、落在 Dashboard / 详情页表面上**可直接执行**的单条行动（checklist 形式，可 done / discard，部分可一键飞回 Nexus 深挖）。是"建议"与"已确认派出的 Task"之间的中间态：人确认后才经 dispatchTask 变成 Task。自 [ADR-0017](docs/adr/0017-card-home-demotes-team-map.md) 起，Dashboard 的今日 Handoff checklist 区是进门第一眼的主体之一；完成感是安静的（勾掉、收进"今天已照料"），不游戏化。
+agent 产出的、落在表面上**可直接执行**的单条行动（checklist 形式，可 done / discard，部分可一键飞回 Nexus 深挖）。是"建议"与"已确认派出的 Task"之间的中间态：人确认后才经 dispatchTask 变成 Task。今日 Handoff checklist 区自 [ADR-0034](docs/adr/0034-team-screen-people-only-triage-moves-home.md) 起住在聚合首屏「今天」（与「今天要决策的」相邻；此前按 [ADR-0017](docs/adr/0017-card-home-demotes-team-map.md) 在 Dashboard）；完成感是安静的（勾掉、收进"今天已照料"），不游戏化。
 _Avoid_: action item、todo（会跟已派出的 Task 混淆）
 
 **Capabilities**：
