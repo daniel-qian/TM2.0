@@ -186,6 +186,17 @@ PRD §5 的四项原样不动：英文文档解析（输入侧词表）· `ask_a
 
 ---
 
+## 4.5 · 后记：真 brain 那一段已补验（2026-08-05，不是本 session 做的）
+
+本回执定稿时，「真模型听不听 prompt 里那句语言指令」还没在生产上取过证——只验到了链路
+（门 48/0）和字符串（pytest）。2026-08-05 由备战三亚会议那条线顺手补上（Danny 拍板批 10 次
+上限、实耗 1 次，commit `0d1be01`）：`locale:"zh"` 打生产 `/advise` → 200 / 77.7s，
+summary / recommended_actions / detected_signals / conversation_script **全中文**，
+evidence / cites **保持原文**——D3「正文跟 locale」与 D4「引文永不翻译」一次同时得证；
+`contract_ok` · `redline_passed` · `cite_gate_passed` 全真。**真模型听那句话。**
+
+---
+
 ## 5 · 环境坑（下一棒会踩，写在这里）
 
 🔴 **`pkill -f "uvicorn service.app"` 在本机 Git Bash 下不生效，而且不报错。**

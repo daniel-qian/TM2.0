@@ -70,8 +70,11 @@ sudo docker rm -f avery && sudo docker rename avery-prev-20260804-153841 avery &
 
 ## 没做、留给下一次的
 
-- **真 brain 的 `/advise` 端到端没在生产上跑**——那是一次真花钱的调用，且属于"对外/花钱"闸。
-  想验的时候一句就够（会消耗一次 MiniMax 调用）：
+- **真 brain 的 `/advise` 端到端当时没在生产上跑**——那是一次真花钱的调用，属于"对外/花钱"闸。
+  ✅ **2026-08-05 已补验**（备战三亚会议那条线顺手取的证，Danny 拍板批 10 次上限、实耗 1 次，
+  落在 `0d1be01`）：200 / 77.7s，正文全中文而 evidence/cites 保持原文，
+  `contract_ok` · `redline_passed` · `cite_gate_passed` 全真。**真模型听那句话。**
+  下面这条命令留着，供以后重验（每跑一次消耗一次 MiniMax 调用）：
 
   ```bash
   curl -s -X POST https://avery.dannyqian.com/advise -H 'Content-Type: application/json' \
@@ -81,5 +84,5 @@ sudo docker rm -f avery && sudo docker rename avery-prev-20260804-153841 avery &
   该回**中文**。回英文 = 语言指令没进 prompt。
   链路本身已在本机 mock 上端到端验过（`verify-locale-parity` 48/0），
   prompt 那一段由 `test_locale_contract.py` 逐条断言——生产这一跑只为回答
-  「真模型听不听那句话」，不是回答「代码通没通」。
+  「真模型听不听那句话」，不是回答「代码通没通」。0805 那次的答案是：**听**。
 - **生产库零写入**：本次部署全程没有任何上传/`/advise`/写库操作。
