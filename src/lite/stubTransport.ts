@@ -329,7 +329,7 @@ export function createStubTransport(): LiveTransport {
         recipients: st.draft.recipients.map((r, i) => ({
           ...r,
           token: `tok_${askId}_r${i + 1}`,
-          link: `https://avery.ima-read.com/r/tok_${askId}_r${i + 1}`,
+          link: `https://avery.dannyqian.com/r/tok_${askId}_r${i + 1}`,
         })),
       }
       asks.set(askId, { draft: shared, revealed: 0 })

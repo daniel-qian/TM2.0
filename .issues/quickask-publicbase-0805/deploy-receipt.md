@@ -49,10 +49,20 @@ PORT/PATH 等镜像自带项）+ 追加本次新变量；`~/avery.env` 已同步
 - 新铸链接的完整端到端（真发起一次快问）**没做**——那要往生产库写测试数据（0720 红线）。
   链路上唯一的域名源就是 `public_base()`，容器内实测 + 单测锁死，判定够。
 
-## 没顺手修的同族（记账，按 scope 纪律不动）
+## 同族清尾（0805 当天第二票，Danny 点名"连 F2 一并清"）
 
-- `src/lite/stubTransport.ts:332`、`src/lite2/stubTransport.ts:358`、
-  `src/story/components/scenes/QuickAskCard.tsx:24` 仍铸 `ima-read.com` 假链接——全是
-  **DEV-only stub / story 道具**（stub 在 build+preview 下整段死代码），不影响生产；
-  且 F2 相位要求 stub 链接必须带"离线预览"标记，假链接挂死域反而无害。
-  `src/lite*/transport.ts` 注释里的示例域同理。要清可以连着 F2 一票清。
+- **五处 `ima-read.com` 全清**：lite/lite2 两个 stubTransport 的假链接、story
+  `QuickAskCard` 的演示链接、lite/lite2 transport.ts 注释示例域 → 全换
+  `avery.dannyqian.com`。`grep -rn ima-read src/` = **0**。
+- **F2 真正的缺口顺带补上**：lite2 壳的 AskCard **漏渲染 `.ask-offline-note`**——
+  feat-068 只搬了 `offlinePreview` 声明和红线提示分流，离线标记那行没搬（lite 壳 :234 有、
+  lite2 没有）。已从 lite 壳补齐（TSX 渲染行 + lite2.css 同款样式）。生产行为零变化：
+  该标记只在 `transport.offlinePreview`（stub 通道）下渲染，真 HTTP transport 恒缺省。
+- **验证**（stub 是 DEV-only，build+preview 采不到——按 dev+stub 真集成层验）：
+  `npm run build` 绿；dev(5175) + `?mode=live&transport=stub` 下经 `__lite2Store`
+  seam 走 uploadFiles → askLive → confirmAsk 真链路，`.ask-offline-note` 在、可见
+  （34px 高、3px terracotta 左边框）、文案「离线预览——这些链接只是示意，点不开。」，
+  两条 stub 链接均为 `https://avery.dannyqian.com/r/tok_ask_stub_1_r*`；
+  Playwright 整页截图人眼过（卡片布局零破相）。
+  ⚠ 过程中踩了两个 memory 已挂号的坑：Browser pane 截图超时（退本地 Playwright）、
+  element 截图采到空区 + onboarding 闸门页盖脸（整页截图 + 先点「跳过设置」）。

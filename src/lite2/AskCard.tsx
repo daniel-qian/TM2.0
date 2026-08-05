@@ -226,6 +226,9 @@ export function AskCard() {
       {collecting ? (
         <>
           <p className="ask-lede">{t.ask.sharedLede}</p>
+          {/* 阶段 C F2：stub 通道的链接是演示用假链接——诚实标注，接真后端此标自然消失。
+              （0805 从 lite 壳补齐：此前 lite2 只搬了 offlinePreview 声明、漏了这行渲染。） */}
+          {offlinePreview ? <p className="ask-offline-note">{t.ask.offlinePreview}</p> : null}
           <div className="ask-links">
             {ask.recipients.map((r) => (
               <div key={r.id} className="ask-link-row">
