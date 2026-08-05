@@ -379,7 +379,15 @@ def _materials(form: dict, rows: list[dict], out: StructuredIntake) -> None:
 # 01 里真正长成 PersonEntity 自由文本的那几列（= `_person_text_fields` 的表格侧对应物）。
 _PERSON_TEXT_COLS = ("姓名", "岗位", "部门", "司龄", "主要负责")
 # 07 的自由文本列：三列都是写给一位具名同事的评议正文。
-_REVIEW_TEXT_COLS = ("确认的优势", "需改进事项", "沟通后约定动作")
+# 🔴 **从表定义里取**，不在这里手抄一份列名。前端的单元格级拦截（票 #41）读的是同一个
+# `redline: "hard"` 标记——手抄的话，两侧对"哪几格算红线"的理解会静默分家，而这条线上
+# 分家的症状是最糟的那种：前端标红说"会被拒绝"、后端放行，或者反过来。
+def _redline_cols(form_id: str, level: str) -> tuple[str, ...]:
+    form = FORM_BY_ALIAS[form_id]
+    return tuple(c["key"] for c in form["columns"] if c.get("redline") == level)
+
+
+_REVIEW_TEXT_COLS = _redline_cols("07", "hard")
 
 
 def scan_roster_rows(rows: list[dict], out: StructuredIntake) -> None:

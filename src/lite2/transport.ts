@@ -124,6 +124,17 @@ export interface LiveTeamPayload {
   // 🔴 缺席 = 没有 SOP 方法（absent≠none：playbook_cards() 为空时整键不发）。前端 playbooks 屏
   // `?? []` 收敛——缺席维持 coming-soon 诚实空态，绝不为凑网格造空卡墙（踩 absent≠none）。
   playbooks?: LivePlaybookCard[]
+  // onboarding-accounts-0805 ①：/ingest/structured 首帧自报这一发**真正用了什么**。
+  // 'structured' = 一个模型都没调用（纯表格，秒级）；混合发时报文件侧真正走的那条路
+  // （llm / heuristic / degraded，与 /ingest 同一张词表）。前端的等待态按它分支：
+  // 纯表格不该出那个「通常两三分钟」的秒表。/ingest 也发这个键（feat-039 起）。
+  extraction_mode?: string
+  // 表格入口独有：映射时记下的黄色提醒（悬空引用 / 读不懂的值 / 重复 ID）。
+  // 🔴 它们**不拒**这一发（absent≠none：一条都没有时整键不发），但用户有权知道哪几格
+  // 没能长成卡片——静默丢掉一列数据是这条线上最不该犯的错。
+  intake_warnings?: StructuredCellViolation[]
+  // 这一发收下了多少行表格（纯文件提交时是 0）。
+  intake_rows?: number
 }
 
 // input-side-0721 · 3A：GET /demo/status 的能力探测契约（无鉴权、无副作用）。
@@ -500,6 +511,18 @@ export interface LiveTransport {
   // 上传文件 → ingestion → context_id + 首帧 Your team 结构。
   ingest: (files: File[]) => Promise<LiveTeamPayload>
 
+  // ── 结构化录入（onboarding-accounts-0805 ①②；后端 service/structured_api.py）───────────
+  // 7 张标准表的**行**直接确定性映射进 context，跳过整条 LLM/启发式抽取（秒级、零损）。
+  // 表格行与附带文件**合一发**（拍板 3：一次提交 = 一个 context），所以签名是两个入参而不是
+  // 两个方法——拆成两发就等于两个 context，正是那条拍板明令否决的。
+  //
+  // 🔴 可选（`?:`）与 claimContext/demoClaim 同理：stub transport 是离线演示通道，没有后端可打。
+  // 调用方判空降级（表格提交入口在 stub 下本就不该出现）。
+  //
+  // 抛错姿态与 ingest 一致：非 2xx → transportError（大声失败，绝不静默回落）。422 的 body 里
+  // 带 violations + cells（格坐标），调用方要把它映射回具体的表/行/格。
+  ingestStructured?: (tables: StructuredTables, files: File[]) => Promise<LiveTeamPayload>
+
   // 按 context_id 重新拉取 Your team（上传后填充/刷新）。
   fetchTeam: (contextId: string) => Promise<LiveTeamPayload>
 
@@ -578,6 +601,29 @@ export interface LiveTransport {
   archivePerson?: (contextId: string, personId: string) => Promise<PersonWriteResult>
   restorePerson?: (contextId: string, personId: string) => Promise<PersonWriteResult>
 }
+
+// ── 结构化录入契约（onboarding-accounts-0805 ①②）────────────────────────────────────────
+// `{表编号: [行, …]}`，行的键是**表定义里的列键**（`src/shared/intakeSchema.ts`，由
+// `scripts/gen-intake-schema.py` 从 make-intake-xlsx.py 的 FORMS 编译而来）。
+// 🔴 前端不发明第三套键名——后端认的就是这一套（票 #40 的硬约束），漂移门在
+// eval-harness/tests/test_structured_intake_contract.py（生成产物逐字节比对）。
+export type StructuredTables = Record<string, Record<string, string>[]>
+
+/** 422 里的格坐标（加法字段，只有结构化入口发得出）。行号 1 起，与界面网格上的号同一个。 */
+export interface StructuredCellViolation {
+  table: string
+  row: number
+  column: string
+  detail: string
+  kind: string
+  rule_id: string
+}
+
+/** 映射时记下的黄色提醒（悬空引用 / 读不懂的值 / 重复 ID）。**不拒**这一发。 */
+export type StructuredIntakeWarning = StructuredCellViolation
+
+// （`StructuredRedlineError` 定义在 TransportError 之后 —— class 声明不提升，写在这儿会
+//   报 "used before its declaration"。见下方 §传输错误 一节。）
 
 // ── 账号契约（feat-053；后端 service/auth_api.py）────────────────────────────────────────
 // GET /account/contexts —— 只回本账号拥有的 context id，不回 owner_token
@@ -694,6 +740,23 @@ export class TransportError extends Error {
     this.name = 'TransportError'
     this.endpoint = endpoint
     this.status = status
+  }
+}
+
+/**
+ * 结构化提交被红线整发拒时抛的错（onboarding-accounts-0805 ②）。
+ *
+ * 为什么要一个专门的错误类型而不是复用 TransportError：调用方要把 `cells` 映射回网格上具体
+ * 的格并标红（票 #41 的「422 violations 映射回具体表/行/格」），而 TransportError 只带一句
+ * 人话。它仍然**是** TransportError 的子类，所以既有的"按 name/status 出文案"那条路一个字
+ * 都不用改，`instanceof TransportError` 的判断也照旧成立。
+ */
+export class StructuredRedlineError extends TransportError {
+  readonly cells: StructuredCellViolation[]
+  constructor(message: string, cells: StructuredCellViolation[], status?: number) {
+    super(message, 'structured ingest', status)
+    this.name = 'StructuredRedlineError'
+    this.cells = cells
   }
 }
 
@@ -907,6 +970,43 @@ export function createHttpTransport(base: string = apiBase()): LiveTransport {
       if (!res.ok) throw transportError('ingest', res)
       const payload = (await res.json()) as LiveTeamPayload
       // feat-047: store this company's owner_token so every later read/advise can present it.
+      rememberToken(payload.context_id, payload.owner_token)
+      return payload
+    },
+
+    // ── 结构化录入（onboarding-accounts-0805 ①②；POST /ingest/structured）──────────────
+    // multipart：`tables` 是一个 **JSON 字符串 part**（不是 body——同一发里还要带文件），
+    // `files` 与 /ingest 逐字同名同形。一次提交 = 一个 context（拍板 3）。
+    async ingestStructured(tables, files) {
+      const form = new FormData()
+      form.append('tables', JSON.stringify(tables))
+      for (const f of files) form.append('files', f, f.name)
+      // 账号 header 与 /ingest 同理：**不要求**登录（游客路径是硬要求），已登录则顺手绑账号。
+      const res = await send('structured ingest', `${base}/ingest/structured`, {
+        method: 'POST',
+        body: form,
+        headers: accountHeader(),
+      })
+      if (!res.ok) {
+        // 422 带格坐标时抛专用错误，让调用方能把红标打回具体的格（票 #41）。
+        // 🔴 读 body 失败也不能把一次真失败吞成成功：任何异常都退回普通 transportError。
+        if (res.status === 422) {
+          try {
+            const body = (await res.clone().json()) as { detail?: { cells?: StructuredCellViolation[] } }
+            const cells = body?.detail?.cells
+            if (Array.isArray(cells) && cells.length > 0) {
+              console.debug('[avery] structured ingest refused by the red line:', cells)
+              return Promise.reject(
+                new StructuredRedlineError(httpErrorMessage(res), cells, res.status))
+            }
+          } catch {
+            /* body 不是预期形状 —— 落到下面的通用错误 */
+          }
+        }
+        throw transportError('structured ingest', res)
+      }
+      const payload = (await res.json()) as LiveTeamPayload
+      // 与 ingest 同款收尾：记 token，调用方走完全相同的落地路径（adoptContext 收口）。
       rememberToken(payload.context_id, payload.owner_token)
       return payload
     },

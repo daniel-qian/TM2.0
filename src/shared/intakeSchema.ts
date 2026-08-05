@@ -6,6 +6,18 @@
 // 认列的键（`avery/ingest/structured.py`）。英文壳里也照原样显示——把它们翻译掉等于让屏幕上的
 // 表和用户手里的模板对不上，也等于把后端的列键改掉。界面外壳（按钮/说明/校验提示）走 i18n。
 
+export type IntakeColumnKind = 'text' | 'date' | 'number' | 'percent'
+
+/** 红线扫描面。`hard` = 后端整发拒（当场标红 + 说清后果）；`warn` = 只提醒、不拒。 */
+export type IntakeRedline = 'hard' | 'warn'
+
+export interface IntakeColumnRef {
+  /** 被引用的表号，如 "01" */
+  form: string
+  /** 被引用的列键，如 "人员ID" */
+  column: string
+}
+
 export interface IntakeColumn {
   /** 稳定键：表头去掉必填星号。行对象、后端映射、校验规则三处共用。 */
   key: string
@@ -18,6 +30,12 @@ export interface IntakeColumn {
   hint: string
   /** 下拉词表（顺序即 xlsx 顺序）。空数组 = 自由文本列。 */
   options: string[]
+  /** 值的形状，校验器据此判日期格式 / 数字范围。 */
+  kind: IntakeColumnKind
+  /** 红线扫描面。缺席 = 这一列不在任何红线尺子下。 */
+  redline?: IntakeRedline
+  /** 跨表引用。缺席 = 这一列不指向别的表。 */
+  ref?: IntakeColumnRef
 }
 
 export interface IntakeForm {
@@ -36,7 +54,7 @@ export interface IntakeForm {
   columns: IntakeColumn[]
 }
 
-export const INTAKE_SCHEMA_VERSION = 1
+export const INTAKE_SCHEMA_VERSION = 2
 
 export const INTAKE_FORMS: IntakeForm[] = [
   {
@@ -54,7 +72,8 @@ export const INTAKE_FORMS: IntakeForm[] = [
         "required": true,
         "width": 14,
         "hint": "必须是第一列，Avery 靠它认人。按数据处理协议约定，姓名与工号的对照关系由贵司保管；若贵司选择不提供姓名，本表就只会进材料库、不会长出人卡（见「00 读我」）。",
-        "options": []
+        "options": [],
+        "kind": "text"
       },
       {
         "key": "岗位",
@@ -62,7 +81,8 @@ export const INTAKE_FORMS: IntakeForm[] = [
         "required": true,
         "width": 18,
         "hint": "岗位名称，非职级。",
-        "options": []
+        "options": [],
+        "kind": "text"
       },
       {
         "key": "部门",
@@ -70,7 +90,8 @@ export const INTAKE_FORMS: IntakeForm[] = [
         "required": true,
         "width": 18,
         "hint": "完整部门名称。",
-        "options": []
+        "options": [],
+        "kind": "text"
       },
       {
         "key": "司龄",
@@ -78,7 +99,8 @@ export const INTAKE_FORMS: IntakeForm[] = [
         "required": false,
         "width": 12,
         "hint": "如「2 年」「8 个月」，选填。这一栏合伙人的 .docx 原件里没有，是表格版补的——有了它，人卡上才有「在这家公司多久了」这条上下文。",
-        "options": []
+        "options": [],
+        "kind": "text"
       },
       {
         "key": "主要负责",
@@ -86,7 +108,8 @@ export const INTAKE_FORMS: IntakeForm[] = [
         "required": true,
         "width": 46,
         "hint": "对应 .docx 原件表 01 的「核心职责」。写主要负责什么就行，不用罗列全部工作内容。例如「负责华东区渠道投放的方案与执行，对投放 ROI 负责」。多项之间用「、」或分号隔开。",
-        "options": []
+        "options": [],
+        "kind": "text"
       },
       {
         "key": "人员ID",
@@ -94,7 +117,8 @@ export const INTAKE_FORMS: IntakeForm[] = [
         "required": true,
         "width": 16,
         "hint": "工号，全表不可重复。建议直接用贵司现有工号，例如 MKT-001。这个编号在其他所有表里都要用到，一旦定了就不要改。",
-        "options": []
+        "options": [],
+        "kind": "text"
       },
       {
         "key": "直属上级ID",
@@ -102,7 +126,12 @@ export const INTAKE_FORMS: IntakeForm[] = [
         "required": false,
         "width": 16,
         "hint": "须为本表已有的工号。",
-        "options": []
+        "options": [],
+        "kind": "text",
+        "ref": {
+          "form": "01",
+          "column": "人员ID"
+        }
       },
       {
         "key": "任职状态",
@@ -114,7 +143,8 @@ export const INTAKE_FORMS: IntakeForm[] = [
           "在职",
           "试用期",
           "待离职"
-        ]
+        ],
+        "kind": "text"
       },
       {
         "key": "入职日期",
@@ -122,7 +152,8 @@ export const INTAKE_FORMS: IntakeForm[] = [
         "required": false,
         "width": 16,
         "hint": "一律写成 2026-07-24 这样的格式，不要写「7月底」「下周」「近期」。",
-        "options": []
+        "options": [],
+        "kind": "date"
       }
     ]
   },
@@ -141,7 +172,8 @@ export const INTAKE_FORMS: IntakeForm[] = [
         "required": true,
         "width": 20,
         "hint": "如 PRJ-2026-01，全表不可重复。",
-        "options": []
+        "options": [],
+        "kind": "text"
       },
       {
         "key": "项目名称",
@@ -149,7 +181,8 @@ export const INTAKE_FORMS: IntakeForm[] = [
         "required": true,
         "width": 26,
         "hint": "与内部通用叫法一致——请用团队日常沟通时的叫法，不要用立项文件里的全称，否则后续更新记录对不上。",
-        "options": []
+        "options": [],
+        "kind": "text"
       },
       {
         "key": "负责人ID",
@@ -157,7 +190,12 @@ export const INTAKE_FORMS: IntakeForm[] = [
         "required": true,
         "width": 18,
         "hint": "须来自 01 表的工号。",
-        "options": []
+        "options": [],
+        "kind": "text",
+        "ref": {
+          "form": "01",
+          "column": "人员ID"
+        }
       },
       {
         "key": "当前状态",
@@ -170,7 +208,8 @@ export const INTAKE_FORMS: IntakeForm[] = [
           "进行中",
           "已暂停",
           "已完成"
-        ]
+        ],
+        "kind": "text"
       },
       {
         "key": "开始日期",
@@ -178,7 +217,8 @@ export const INTAKE_FORMS: IntakeForm[] = [
         "required": true,
         "width": 16,
         "hint": "YYYY-MM-DD。",
-        "options": []
+        "options": [],
+        "kind": "date"
       },
       {
         "key": "计划完成日期",
@@ -186,7 +226,8 @@ export const INTAKE_FORMS: IntakeForm[] = [
         "required": true,
         "width": 18,
         "hint": "YYYY-MM-DD。",
-        "options": []
+        "options": [],
+        "kind": "date"
       },
       {
         "key": "完成进度",
@@ -194,7 +235,8 @@ export const INTAKE_FORMS: IntakeForm[] = [
         "required": true,
         "width": 16,
         "hint": "0-100 的整数，只填数字不带百分号。按贵司现有口径填即可，只要前后一致。",
-        "options": []
+        "options": [],
+        "kind": "percent"
       },
       {
         "key": "项目目标",
@@ -202,7 +244,8 @@ export const INTAKE_FORMS: IntakeForm[] = [
         "required": true,
         "width": 46,
         "hint": "这个项目要达成什么，尽量写成可以判断达成与否的表述。「提升品牌影响力」无法判断，「秋季新品发布会覆盖 3 家行业媒体、留资 500 条」可以判断。",
-        "options": []
+        "options": [],
+        "kind": "text"
       }
     ]
   },
@@ -221,7 +264,8 @@ export const INTAKE_FORMS: IntakeForm[] = [
         "required": true,
         "width": 18,
         "hint": "如 KPI-001，全表不可重复。",
-        "options": []
+        "options": [],
+        "kind": "text"
       },
       {
         "key": "指标名称",
@@ -229,7 +273,8 @@ export const INTAKE_FORMS: IntakeForm[] = [
         "required": true,
         "width": 22,
         "hint": "如「渠道留资量」。",
-        "options": []
+        "options": [],
+        "kind": "text"
       },
       {
         "key": "关联对象",
@@ -241,7 +286,8 @@ export const INTAKE_FORMS: IntakeForm[] = [
           "人员",
           "项目",
           "部门"
-        ]
+        ],
+        "kind": "text"
       },
       {
         "key": "关联对象ID",
@@ -249,7 +295,8 @@ export const INTAKE_FORMS: IntakeForm[] = [
         "required": true,
         "width": 20,
         "hint": "对应的工号（来自 01 表）或项目ID（来自 02 表）。",
-        "options": []
+        "options": [],
+        "kind": "text"
       },
       {
         "key": "统计周期",
@@ -262,7 +309,8 @@ export const INTAKE_FORMS: IntakeForm[] = [
           "月",
           "季度",
           "年"
-        ]
+        ],
+        "kind": "text"
       },
       {
         "key": "单位",
@@ -270,7 +318,8 @@ export const INTAKE_FORMS: IntakeForm[] = [
         "required": true,
         "width": 16,
         "hint": "如 万元、条、次、%。目标值和当前值只填数字，单位单独填在这一栏，否则系统无法比较。",
-        "options": []
+        "options": [],
+        "kind": "text"
       },
       {
         "key": "目标值",
@@ -278,7 +327,8 @@ export const INTAKE_FORMS: IntakeForm[] = [
         "required": true,
         "width": 14,
         "hint": "只填数字。",
-        "options": []
+        "options": [],
+        "kind": "number"
       },
       {
         "key": "当前值",
@@ -286,7 +336,8 @@ export const INTAKE_FORMS: IntakeForm[] = [
         "required": true,
         "width": 14,
         "hint": "只填数字。",
-        "options": []
+        "options": [],
+        "kind": "number"
       },
       {
         "key": "数据截止日",
@@ -294,7 +345,8 @@ export const INTAKE_FORMS: IntakeForm[] = [
         "required": true,
         "width": 18,
         "hint": "数据统计到哪一天。很重要——同一个指标不同人报的数可能截止到不同日期，不写清楚会得出错误结论。",
-        "options": []
+        "options": [],
+        "kind": "date"
       },
       {
         "key": "数据来源",
@@ -302,7 +354,8 @@ export const INTAKE_FORMS: IntakeForm[] = [
         "required": true,
         "width": 34,
         "hint": "哪个系统或哪份文件，必须具体到能查到的程度。「后台数据」不合格，「巨量引擎后台－秋季发布会计划－7月周报」合格。",
-        "options": []
+        "options": [],
+        "kind": "text"
       }
     ]
   },
@@ -321,7 +374,8 @@ export const INTAKE_FORMS: IntakeForm[] = [
         "required": true,
         "width": 20,
         "hint": "如 UPD-20260724-01。",
-        "options": []
+        "options": [],
+        "kind": "text"
       },
       {
         "key": "项目ID",
@@ -329,7 +383,12 @@ export const INTAKE_FORMS: IntakeForm[] = [
         "required": true,
         "width": 18,
         "hint": "须来自 02 表。",
-        "options": []
+        "options": [],
+        "kind": "text",
+        "ref": {
+          "form": "02",
+          "column": "项目ID"
+        }
       },
       {
         "key": "更新日期",
@@ -337,7 +396,8 @@ export const INTAKE_FORMS: IntakeForm[] = [
         "required": true,
         "width": 16,
         "hint": "YYYY-MM-DD。",
-        "options": []
+        "options": [],
+        "kind": "date"
       },
       {
         "key": "责任人ID",
@@ -345,7 +405,12 @@ export const INTAKE_FORMS: IntakeForm[] = [
         "required": true,
         "width": 18,
         "hint": "须来自 01 表。",
-        "options": []
+        "options": [],
+        "kind": "text",
+        "ref": {
+          "form": "01",
+          "column": "人员ID"
+        }
       },
       {
         "key": "下次截止日",
@@ -353,7 +418,8 @@ export const INTAKE_FORMS: IntakeForm[] = [
         "required": false,
         "width": 16,
         "hint": "YYYY-MM-DD。",
-        "options": []
+        "options": [],
+        "kind": "date"
       },
       {
         "key": "本期完成",
@@ -361,7 +427,8 @@ export const INTAKE_FORMS: IntakeForm[] = [
         "required": true,
         "width": 40,
         "hint": "只写已经做完的事，正在做的写到「下期动作」里。这两栏混在一起，进度就失真了。避免「推进了」「跟进了」「基本完成」这类表述。",
-        "options": []
+        "options": [],
+        "kind": "text"
       },
       {
         "key": "下期动作",
@@ -369,7 +436,8 @@ export const INTAKE_FORMS: IntakeForm[] = [
         "required": true,
         "width": 40,
         "hint": "下一步具体做什么、谁做。",
-        "options": []
+        "options": [],
+        "kind": "text"
       },
       {
         "key": "当前阻塞",
@@ -377,7 +445,8 @@ export const INTAKE_FORMS: IntakeForm[] = [
         "required": false,
         "width": 40,
         "hint": "卡在哪里、卡了多久、在等谁。这是全表最有价值的一栏，也是唯一直接进项目卡的一栏——卡了多久、在等谁这两个信息一定要写，Avery 主要靠它判断风险。",
-        "options": []
+        "options": [],
+        "kind": "text"
       },
       {
         "key": "需管理者决策",
@@ -385,7 +454,8 @@ export const INTAKE_FORMS: IntakeForm[] = [
         "required": false,
         "width": 34,
         "hint": "需要经理拍板的事，没有就留空。",
-        "options": []
+        "options": [],
+        "kind": "text"
       }
     ]
   },
@@ -404,7 +474,8 @@ export const INTAKE_FORMS: IntakeForm[] = [
         "required": true,
         "width": 18,
         "hint": "如 ISS-001，全表不可重复。",
-        "options": []
+        "options": [],
+        "kind": "text"
       },
       {
         "key": "事项类型",
@@ -418,7 +489,8 @@ export const INTAKE_FORMS: IntakeForm[] = [
           "冲突",
           "待决",
           "客户反馈"
-        ]
+        ],
+        "kind": "text"
       },
       {
         "key": "优先级",
@@ -430,7 +502,8 @@ export const INTAKE_FORMS: IntakeForm[] = [
           "高",
           "中",
           "低"
-        ]
+        ],
+        "kind": "text"
       },
       {
         "key": "关联项目ID",
@@ -438,7 +511,12 @@ export const INTAKE_FORMS: IntakeForm[] = [
         "required": false,
         "width": 18,
         "hint": "如与项目相关，须来自 02 表。",
-        "options": []
+        "options": [],
+        "kind": "text",
+        "ref": {
+          "form": "02",
+          "column": "项目ID"
+        }
       },
       {
         "key": "发现日期",
@@ -446,7 +524,8 @@ export const INTAKE_FORMS: IntakeForm[] = [
         "required": true,
         "width": 16,
         "hint": "YYYY-MM-DD。",
-        "options": []
+        "options": [],
+        "kind": "date"
       },
       {
         "key": "处理截止日",
@@ -454,7 +533,8 @@ export const INTAKE_FORMS: IntakeForm[] = [
         "required": false,
         "width": 16,
         "hint": "YYYY-MM-DD。",
-        "options": []
+        "options": [],
+        "kind": "date"
       },
       {
         "key": "责任人ID",
@@ -462,7 +542,12 @@ export const INTAKE_FORMS: IntakeForm[] = [
         "required": false,
         "width": 18,
         "hint": "须来自 01 表。",
-        "options": []
+        "options": [],
+        "kind": "text",
+        "ref": {
+          "form": "01",
+          "column": "人员ID"
+        }
       },
       {
         "key": "处理状态",
@@ -474,7 +559,8 @@ export const INTAKE_FORMS: IntakeForm[] = [
           "待处理",
           "处理中",
           "已关闭"
-        ]
+        ],
+        "kind": "text"
       },
       {
         "key": "事实描述",
@@ -482,7 +568,9 @@ export const INTAKE_FORMS: IntakeForm[] = [
         "required": true,
         "width": 44,
         "hint": "只写已确认的事实，不写推测和评价，不要出现对人的评价。「小李配合度差」不合格，「主视觉终稿自 6 月 10 日起无更新，6 月 12 日群内说明在等设计定稿」合格。写冲突类事项时只记录发生了什么，不记录任何一方的动机判断。",
-        "options": []
+        "options": [],
+        "kind": "text",
+        "redline": "warn"
       },
       {
         "key": "证据来源",
@@ -490,7 +578,8 @@ export const INTAKE_FORMS: IntakeForm[] = [
         "required": true,
         "width": 32,
         "hint": "哪份文件、哪次会议、哪条记录。不能空，也不能写「口头沟通」——必须能被第三方查到，例如「7 月 15 日项目周会纪要第 3 条」。",
-        "options": []
+        "options": [],
+        "kind": "text"
       }
     ]
   },
@@ -509,7 +598,8 @@ export const INTAKE_FORMS: IntakeForm[] = [
         "required": true,
         "width": 22,
         "hint": "如 RPT-20260724-001。",
-        "options": []
+        "options": [],
+        "kind": "text"
       },
       {
         "key": "人员ID",
@@ -517,7 +607,12 @@ export const INTAKE_FORMS: IntakeForm[] = [
         "required": true,
         "width": 18,
         "hint": "须来自 01 表。",
-        "options": []
+        "options": [],
+        "kind": "text",
+        "ref": {
+          "form": "01",
+          "column": "人员ID"
+        }
       },
       {
         "key": "述职周期",
@@ -525,7 +620,8 @@ export const INTAKE_FORMS: IntakeForm[] = [
         "required": true,
         "width": 20,
         "hint": "如 2026-W30 或 2026-07。",
-        "options": []
+        "options": [],
+        "kind": "text"
       },
       {
         "key": "提交日期",
@@ -533,7 +629,8 @@ export const INTAKE_FORMS: IntakeForm[] = [
         "required": true,
         "width": 16,
         "hint": "YYYY-MM-DD。",
-        "options": []
+        "options": [],
+        "kind": "date"
       },
       {
         "key": "已完成事实",
@@ -541,7 +638,9 @@ export const INTAKE_FORMS: IntakeForm[] = [
         "required": true,
         "width": 44,
         "hint": "具体做完的事，尽量带上数字和日期。「完成了 3 场直播，累计观看 1.2 万」比「直播工作顺利推进」有用得多。",
-        "options": []
+        "options": [],
+        "kind": "text",
+        "redline": "warn"
       },
       {
         "key": "未达成及原因",
@@ -549,7 +648,9 @@ export const INTAKE_FORMS: IntakeForm[] = [
         "required": true,
         "width": 40,
         "hint": "哪些没做完、为什么。写客观情况，不用自我检讨——写清楚是资源不够、被别的事挤了，还是外部原因没到位。",
-        "options": []
+        "options": [],
+        "kind": "text",
+        "redline": "warn"
       },
       {
         "key": "下一周期目标",
@@ -557,7 +658,9 @@ export const INTAKE_FORMS: IntakeForm[] = [
         "required": true,
         "width": 36,
         "hint": "下个周期要做完什么。",
-        "options": []
+        "options": [],
+        "kind": "text",
+        "redline": "warn"
       },
       {
         "key": "需要支持",
@@ -565,7 +668,9 @@ export const INTAKE_FORMS: IntakeForm[] = [
         "required": false,
         "width": 34,
         "hint": "需要谁配合、需要什么资源。经常被留空，但这一栏最能帮到你——写下来，经理才知道该在哪儿使劲。",
-        "options": []
+        "options": [],
+        "kind": "text",
+        "redline": "warn"
       }
     ]
   },
@@ -584,7 +689,8 @@ export const INTAKE_FORMS: IntakeForm[] = [
         "required": true,
         "width": 20,
         "hint": "如 REV-2026Q3-001。",
-        "options": []
+        "options": [],
+        "kind": "text"
       },
       {
         "key": "被评议人员ID",
@@ -592,7 +698,12 @@ export const INTAKE_FORMS: IntakeForm[] = [
         "required": true,
         "width": 20,
         "hint": "须来自 01 表。",
-        "options": []
+        "options": [],
+        "kind": "text",
+        "ref": {
+          "form": "01",
+          "column": "人员ID"
+        }
       },
       {
         "key": "评议人ID",
@@ -600,7 +711,12 @@ export const INTAKE_FORMS: IntakeForm[] = [
         "required": true,
         "width": 18,
         "hint": "须来自 01 表。",
-        "options": []
+        "options": [],
+        "kind": "text",
+        "ref": {
+          "form": "01",
+          "column": "人员ID"
+        }
       },
       {
         "key": "评议周期",
@@ -608,7 +724,8 @@ export const INTAKE_FORMS: IntakeForm[] = [
         "required": true,
         "width": 16,
         "hint": "如 2026Q3。",
-        "options": []
+        "options": [],
+        "kind": "text"
       },
       {
         "key": "评议日期",
@@ -616,7 +733,8 @@ export const INTAKE_FORMS: IntakeForm[] = [
         "required": true,
         "width": 16,
         "hint": "YYYY-MM-DD。",
-        "options": []
+        "options": [],
+        "kind": "date"
       },
       {
         "key": "确认的优势",
@@ -624,7 +742,9 @@ export const INTAKE_FORMS: IntakeForm[] = [
         "required": true,
         "width": 40,
         "hint": "写具体做成的事，不写「能力强」「态度好」这类性格评价。",
-        "options": []
+        "options": [],
+        "kind": "text",
+        "redline": "hard"
       },
       {
         "key": "需改进事项",
@@ -632,7 +752,9 @@ export const INTAKE_FORMS: IntakeForm[] = [
         "required": true,
         "width": 40,
         "hint": "写具体行为和场景，不写性格。「三次跨部门协调都等到周会才提出」是行为，「沟通主动性不足」是评价。⚠️ 本栏不要写分数、百分比、等级或排名——写了会导致整发上传被拒绝，详见「00 读我」。",
-        "options": []
+        "options": [],
+        "kind": "text",
+        "redline": "hard"
       },
       {
         "key": "沟通后约定动作",
@@ -640,7 +762,9 @@ export const INTAKE_FORMS: IntakeForm[] = [
         "required": true,
         "width": 40,
         "hint": "双方谈完后定下来做什么，带具体时间点。必须是双方谈过之后共同确认的，这一栏是本表最重要的部分。",
-        "options": []
+        "options": [],
+        "kind": "text",
+        "redline": "hard"
       }
     ]
   }

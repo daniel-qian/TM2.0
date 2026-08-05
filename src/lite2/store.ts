@@ -10,6 +10,7 @@ import type {
   PersonPatchInput,
   ProjectAddInput,
   ProjectPatchInput,
+  StructuredTables,
 } from './transport'
 import { isStubTransportSelected, resolveTransport } from './stubTransport'
 import { createHttpTransport, storedOwnerToken, TransportError } from './transport'
@@ -319,6 +320,13 @@ interface LiteState {
   clearNoteNudge: () => void
   setTransport: (transport: LiveTransport) => void // AFK 门注入确定性 stub
   uploadFiles: (files: File[]) => Promise<void>
+  // onboarding-accounts-0805 ②：7 张标准表的行 + 可选附带文件，**合一发**打
+  // POST /ingest/structured（拍板 3：一次提交 = 一个 context）。落地路径与 uploadFiles 完全
+  // 同构（adoptContext 收口 → 团队入 state → 名册 → files/notes），差别只有两处：
+  //   ① 纯表格提交是秒级的，不该走 ingest 的百秒秒表（notifyStore 只认 ingesting→ready 那一跳，
+  //      这里照样走，因为它确实是一次真上传；秒表文案由调用方按 extraction_mode 分支）；
+  //   ② 红线 422 带**格坐标**，要原样交回调用方去标红——所以错误不吞，原样 reject。
+  submitIntake: (tables: StructuredTables, files: File[]) => Promise<void>
   // input-side-0721 · 3A：领一份示例团队（后端克隆预铸母本 → 本访客私有副本）。
   // 落地路径与 uploadFiles 完全同构（adoptContext 收口 → 团队入 state → 名册 → files/notes）。
   claimDemoTeam: () => Promise<void>
@@ -528,6 +536,55 @@ export const useLite = create<LiteState>((set, get) => ({
         ingestStatus: 'error',
         ingestError: err instanceof Error ? err.message : String(err),
       })
+    }
+  },
+
+  // onboarding-accounts-0805 ②：表格行 + 文件合一发。
+  // 🔴 收尾逐字复用 uploadFiles 的那一套（adoptContext 收口 → team/rawTeam → 名册 → files/notes）
+  // ——那一段注释里记着的两个真 bug（漏清 notes 导致 A 公司笔记挂在 B 公司名下；漏记名册导致
+  // 第二次提交后"数据凭空消失"）与入口无关，换一个入口就重犯一遍。
+  submitIntake: async (tables, files) => {
+    const submit = get().transport.ingestStructured
+    if (!submit) {
+      // stub / 老后端没有这个端点。诚实报错，绝不假装提交成功。
+      set({ ingestStatus: 'error', ingestError: 'structured intake is not available on this transport' })
+      return
+    }
+    if (get().ingestStatus === 'ingesting') return   // 重入闸，理由同 uploadFiles
+    set({ ingestStatus: 'ingesting', ingestError: null })
+    try {
+      const payload = await submit.call(get().transport, tables, files)
+      get().adoptContext(payload.context_id, payload.owner_token ?? null)
+      set({
+        ingestStatus: 'ready',
+        team: liteTeamFromPayload(payload),
+        rawTeam: payload,
+        restoring: false,
+        restoreError: null,
+        switchError: null,
+      })
+      if (!stubSelected) {
+        set({
+          knownContexts: rememberKnownContext({
+            id: payload.context_id,
+            // 名册上要认得出这一份是什么。纯表格提交没有文件名可记，用行数说话。
+            files: files.length > 0
+              ? files.map((f) => f.name)
+              : [`${payload.intake_rows ?? 0} rows`],
+            at: new Date().toISOString(),
+          }),
+        })
+      }
+      void get().refreshFiles()
+      void get().refreshNotes()
+    } catch (err) {
+      set({
+        ingestStatus: 'error',
+        ingestError: err instanceof Error ? err.message : String(err),
+      })
+      // 🔴 原样抛回：红线 422 带着格坐标，调用方要拿它把网格上具体的格标红。
+      // 在这里吞掉的话，用户只会看到一句"上传被拒绝"，而不知道是哪一格。
+      throw err
     }
   },
 

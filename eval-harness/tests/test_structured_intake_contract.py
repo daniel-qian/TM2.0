@@ -119,6 +119,38 @@ def test_form_ids_are_the_seven_sheets():
     assert structured.FORM_IDS == ("01", "02", "03", "04", "05", "06", "07")
 
 
+def test_the_hard_redline_surface_comes_from_the_schema_not_a_hand_copy():
+    """后端扫哪几格 = 前端标红哪几格 —— 同一个 `redline: "hard"` 标记，不是两份手抄的列名。
+
+    分家的症状是这条线上最糟的一种：前端当场标红说「写了会被整发拒绝」而后端放行（我们对
+    用户撒了谎），或者反过来（用户被一条界面上从没提示过的规则拒掉一整发）。
+    """
+    from avery.ingest import structured
+
+    assert set(structured._REVIEW_TEXT_COLS) == {"确认的优势", "需改进事项", "沟通后约定动作"}
+    for form in structured.FORMS:
+        hard = {c["key"] for c in form["columns"] if c.get("redline") == "hard"}
+        if form["id"] == "07":
+            assert hard == set(structured._REVIEW_TEXT_COLS)
+        else:
+            assert not hard, f"表 {form['id']} 冒出了硬红线列 {sorted(hard)}，后端扫描面没跟上"
+
+
+def test_column_semantics_are_declared_for_every_column():
+    """每一列都必须有 kind（缺省 text）——加了新列却忘了声明形状时，它会静默按纯文本处理。"""
+    from avery.ingest import structured
+
+    allowed = {"text", "date", "number", "percent"}
+    for form in structured.FORMS:
+        for col in form["columns"]:
+            assert col.get("kind") in allowed, f"{form['id']}/{col['key']} 的 kind 不合法"
+            ref = col.get("ref")
+            if ref:
+                target = next(f for f in structured.FORMS if f["id"] == ref["form"])
+                assert ref["column"] in {c["key"] for c in target["columns"]}, (
+                    f"{form['id']}/{col['key']} 指向了 {ref['form']} 里不存在的列 {ref['column']}")
+
+
 def test_table_and_column_aliases_all_resolve():
     """一张表三种点名法、一列两种写法——都必须通向同一份真源（票 #40：不许有第三套键名）。"""
     from avery.ingest import structured

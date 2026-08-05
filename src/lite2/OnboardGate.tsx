@@ -1,5 +1,9 @@
-import { useEffect, useRef, type ChangeEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import { loadStoredContextId, useLite } from './store'
+import { IntakeTables } from './intake/IntakeTables'
+import { useIntake } from './intake/intakeStore'
+import { blockingIssues, countRows, pruneTables, validateTables } from './intake/validate'
+import { StructuredRedlineError, type StructuredCellViolation } from './transport'
 import {
   FRAMEWORK_CATALOG,
   TOOL_CATALOG,
@@ -403,95 +407,92 @@ function StepDoors() {
   )
 }
 
-// ── ① 录入标准数据包 ──────────────────────────────────────────────────────────────────
-// 票 #42 的范围内这一步仍是**文件上传面板**（真调 store.uploadFiles，与 UploadPanel 同一
-// 条 ingest 路径）；票 #41 在它左边接上 7 张表的录入网格，两侧合一发提交。
+// ── ① 录入标准数据包（ADR-0034 拍板 1/2/3/4）────────────────────────────────────────────
+// 表格与文件**并存**，提交时打包成一发 multipart 打 POST /ingest/structured —— 一次提交 =
+// 一个 context（拍板 3）。不做两个割裂工作区，也不碰 append 难题（后端传旧 context_id 是
+// 重建并覆盖，会就地毁掉第一份数据——store.switchContext 上面记着这条）。
 function StepIntake() {
   const { t } = useDict()
   const l = t.lite2
   const preview = useOnboard((s) => s.preview)
-  const uploadFiles = useLite((s) => s.uploadFiles)
+  const submitIntake = useLite((s) => s.submitIntake)
   const ingestStatus = useLite((s) => s.ingestStatus)
   const ingestError = useLite((s) => s.ingestError)
+  const rawTeam = useLite((s) => s.rawTeam)
+  const rows = useIntake((s) => s.rows)
   const inputRef = useRef<HTMLInputElement | null>(null)
+  // 选中的文件留在本步的 state 里，等提交时与表格行一起发出去——这是"合一发"的实现处。
+  // 选完就发（旧行为）会各自建一个 context，正是拍板 3 否决的形状。
+  const [files, setFiles] = useState<File[]>([])
+  const [serverCells, setServerCells] = useState<StructuredCellViolation[]>([])
 
-  // feat-068 · ingesting 期间这一步整体上锁。预览态同样上锁——那是"不发请求"的兑现。
-  const busy = ingestStatus === 'ingesting' || preview
-  const elapsed = useIngestElapsedSeconds(ingestStatus === 'ingesting')
+  const issues = useMemo(() => validateTables(rows), [rows])
+  const blocking = blockingIssues(issues)
+  const rowCount = countRows(rows)
+  const busy = ingestStatus === 'ingesting'
+  const elapsed = useIngestElapsedSeconds(busy)
+  // 等待态分两种（票 #41）：纯表格提交是秒级的，不该出那句「通常两三分钟」的秒表——
+  // 它会把一次一秒钟的操作说成两分钟，用户等到第三秒就开始怀疑是不是卡了。
+  const willBeSlow = files.length > 0
 
   const onPick = (event: ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(event.target.files ?? [])
-    // feat-068 · 发车前先松锚，保证这一发从 0 起算。
-    if (files.length > 0 && !preview) {
-      clearIngestStart()
-      void uploadFiles(files)
-    }
+    setFiles(Array.from(event.target.files ?? []))
     event.target.value = ''
   }
 
-  // feat-068 · 🔴 重入闸——这不是打磨，是数据毁灭级的 correctness 修复。
-  // /ingest 真的要 100–120s；在此之前用户判定卡死 → 再点一次"选择文件" → 每发各自新铸一个
-  // context_id 和 owner_token，后落地的那发覆盖 store，先前那个 owner_token 服务端只返一次、
-  // 客户端已被覆盖 = 永久丢失，那份公司数据从此无人能认领。disabled 挡鼠标和键盘两条触发
-  // 路径，openPicker 再兜一层——即使将来有人拆了 disabled，也打不出第二发。
-  const openPicker = () => {
-    if (busy) return
-    inputRef.current?.click()
+  const canSubmit = !preview && !busy && blocking.length === 0 && (rowCount > 0 || files.length > 0)
+
+  const onSubmit = async () => {
+    if (!canSubmit) return
+    setServerCells([])
+    // feat-068 · 发车前先松锚，保证这一发从 0 起算。
+    clearIngestStart()
+    try {
+      await submitIntake(pruneTables(rows), files)
+    } catch (err) {
+      // 红线整发拒：把格坐标交给网格去标红（票 #41 的「422 violations 映射回具体表/行/格」）。
+      // 其余错误已由 store 落进 ingestError，这里不再重复展示。
+      if (err instanceof StructuredRedlineError) setServerCells(err.cells)
+    }
   }
 
+  const warnings = rawTeam?.intake_warnings ?? []
+
   return (
-    <div className="lite-onboard-step">
+    <div className="lite-onboard-step lite-onboard-step--intake">
       <h2>{l.onboardIntakeTitle}</h2>
       <p className="lite-onboard-step-body">{l.onboardIntakeBody}</p>
-      <input
-        ref={inputRef}
-        type="file"
-        multiple
-        accept={ACCEPT}
-        className="lite-onboard-upload-input"
-        onChange={onPick}
-        aria-hidden="true"
-        tabIndex={-1}
-      />
-      <button
-        type="button"
-        className={`lite-btn lite-btn--primary lite-onboard-upload-choose${busy ? ' is-busy' : ''}`}
-        disabled={busy}
-        aria-busy={busy}
-        onClick={openPicker}
-      >
-        {l.onboardUploadChoose}
-      </button>
-      {/* feat-068 · 诚实的等待态：预期在前 + 活的秒表 + 一条不定量动效。
-          🔴 秒表与动效整块 aria-hidden：外层是 aria-live="polite"，每秒变一次的数字若进无障碍
-          树，读屏会被每秒播报刷屏两分钟；"在忙"这件事由按钮的 aria-busy 表达即可。 */}
-      <div className="lite-onboard-upload-status" aria-live="polite">
-        {preview ? (
-          <p className="lite-onboard-upload-idle">{l.onboardPreviewStepNote}</p>
-        ) : ingestStatus === 'ingesting' ? (
-          <div className="lite-onboard-upload-waiting">
-            <p className="lite-onboard-upload-reading">
-              <span className="lite-onboard-upload-dot" aria-hidden="true" />
-              {l.onboardUploadReading}
-            </p>
-            <p className="lite-onboard-upload-hint">{l.onboardUploadHint}</p>
-            <p className="lite-onboard-upload-elapsed" aria-hidden="true">
-              {fill(l.onboardUploadElapsed, { seconds: elapsed })}
-            </p>
-            <div className="lite-onboard-upload-bar" aria-hidden="true">
-              <span />
-            </div>
-          </div>
-        ) : ingestStatus === 'ready' ? (
-          <p className="lite-onboard-upload-ready">{l.onboardUploadReady}</p>
-        ) : ingestStatus === 'error' ? (
-          <p className="lite-onboard-upload-error">
-            {l.onboardUploadError}
-            {ingestError ? <span className="lite-onboard-upload-error-detail"> {ingestError}</span> : null}
-          </p>
-        ) : (
-          <p className="lite-onboard-upload-idle">{l.onboardUploadIdle}</p>
-        )}
+
+      <IntakeTables serverCells={serverCells} readOnly={preview} />
+
+      {/* ── 文件侧：与表格并存，同一发提交 ─────────────────────────────────────────── */}
+      <div className="lite-intake-files">
+        <p className="lite-intake-files-lead">{l.intakeFilesLead}</p>
+        <input
+          ref={inputRef}
+          type="file"
+          multiple
+          accept={ACCEPT}
+          className="lite-onboard-upload-input"
+          onChange={onPick}
+          aria-hidden="true"
+          tabIndex={-1}
+        />
+        <button
+          type="button"
+          className="lite-btn lite-btn--ghost lite-onboard-upload-choose"
+          disabled={busy || preview}
+          onClick={() => { if (!busy && !preview) inputRef.current?.click() }}
+        >
+          {l.onboardUploadChoose}
+        </button>
+        {files.length > 0 ? (
+          <ul className="lite-intake-file-list">
+            {files.map((f) => (
+              <li key={f.name} className="lite-intake-file">{f.name}</li>
+            ))}
+          </ul>
+        ) : null}
         {/* partner-docs-0728 · 首访者第一次面对「传什么」就在这一步，这条链接最该在这儿。
             🔴 用裸 <a target="_blank"> 而不是 <Link>：闸门是覆盖全屏的 modal，站内导航只会把
             /paperwork 渲染在**它底下**——用户以为自己离开了向导，实际什么都没发生。 */}
@@ -500,6 +501,74 @@ function StepIntake() {
             {l.onboardUploadFormsLink}
           </a>
         </p>
+      </div>
+
+      {/* ── 提交 + 等待态 ─────────────────────────────────────────────────────────── */}
+      <div className="lite-intake-submit-bar">
+        <button
+          type="button"
+          className="lite-btn lite-btn--primary lite-intake-submit"
+          disabled={!canSubmit}
+          aria-busy={busy}
+          onClick={() => void onSubmit()}
+        >
+          {fill(l.intakeSubmit, { rows: rowCount, files: files.length })}
+        </button>
+        {blocking.length > 0 ? (
+          <p className="lite-intake-blocked" role="status" data-blocking={blocking.length}>
+            {fill(l.intakeBlocked, { n: blocking.length })}
+          </p>
+        ) : null}
+      </div>
+
+      <div className="lite-onboard-upload-status" aria-live="polite">
+        {preview ? (
+          <p className="lite-onboard-upload-idle">{l.onboardPreviewStepNote}</p>
+        ) : busy ? (
+          <div className="lite-onboard-upload-waiting">
+            <p className="lite-onboard-upload-reading">
+              <span className="lite-onboard-upload-dot" aria-hidden="true" />
+              {willBeSlow ? l.onboardUploadReading : l.intakeSubmitting}
+            </p>
+            {/* feat-068 的秒表只在**真的会慢**的时候出。🔴 整块 aria-hidden：外层是
+                aria-live="polite"，每秒变一次的数字若进无障碍树，读屏会被刷屏两分钟；
+                "在忙"这件事由按钮的 aria-busy 表达即可。 */}
+            {willBeSlow ? (
+              <>
+                <p className="lite-onboard-upload-hint">{l.onboardUploadHint}</p>
+                <p className="lite-onboard-upload-elapsed" aria-hidden="true">
+                  {fill(l.onboardUploadElapsed, { seconds: elapsed })}
+                </p>
+              </>
+            ) : null}
+            <div className="lite-onboard-upload-bar" aria-hidden="true">
+              <span />
+            </div>
+          </div>
+        ) : ingestStatus === 'ready' ? (
+          <p className="lite-onboard-upload-ready">{l.onboardUploadReady}</p>
+        ) : ingestStatus === 'error' ? (
+          <p className="lite-onboard-upload-error">
+            {serverCells.length > 0 ? l.intakeRedlineRejected : l.onboardUploadError}
+            {ingestError && serverCells.length === 0 ? (
+              <span className="lite-onboard-upload-error-detail"> {ingestError}</span>
+            ) : null}
+          </p>
+        ) : (
+          <p className="lite-onboard-upload-idle">{l.onboardUploadIdle}</p>
+        )}
+        {/* 后端映射时记下的黄色提醒（悬空引用 / 读不懂的值 / 重复 ID）。**不拒**这一发，
+            但用户有权知道哪几格没能长成卡片——静默丢一列数据是这条线上最不该犯的错。 */}
+        {warnings.length > 0 ? (
+          <ul className="lite-intake-warnings" data-warning-count={warnings.length}>
+            {warnings.map((w, i) => (
+              <li key={i} className="lite-intake-warning" data-kind={w.kind}>
+                {fill(l.intakeWarningAt, { table: w.table, row: w.row, column: w.column })}
+                {w.detail}
+              </li>
+            ))}
+          </ul>
+        ) : null}
       </div>
     </div>
   )

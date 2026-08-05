@@ -1225,6 +1225,109 @@ export const en = {
     onboardIntakeBody:
       "Fill the standard tables in here, or hand Avery the files you'd give a new manager on day one — a roster, a project plan, a weekly note. Either way it becomes one working picture: people, projects, and what needs your eye.",
     onboardUploadChoose: 'Choose files',
+
+    // ── The seven standard tables, filled in here (ADR-0034 拍板 1/2/4) ──
+    // 🔴 Column names, dropdown values and per-column hints are NOT in this dictionary and must
+    // never be: they are the contract the backend reads columns by, and they are printed on the
+    // workbook we mail to customers. They live in `src/shared/intakeSchema.ts` (generated from
+    // `scripts/make-intake-xlsx.py`) and stay in Chinese in both shells. Only the chrome is here.
+    intakeNavAria: 'The seven standard tables',
+    intakeRowCount: '{n} rows',
+    intakeRowCountOne: '1 row',
+    intakeRowsEmpty: 'empty',
+    // 🔴 THE ENGLISH-ONLY OVERRIDE, and the reason it exists rather than a second copy of the
+    // Chinese: three fields on each table are DESCRIPTIONS (tier / purpose / what Avery does with
+    // it) and they ship from `make-intake-xlsx.py`'s FORMS in Chinese, because that is the
+    // workbook we mail to customers. Column names, dropdown values and per-column hints stay
+    // Chinese in both shells — they are the keys the backend reads columns by. Descriptions are
+    // not, and leaving them Chinese meant the honesty line ("table 03 only reaches the material
+    // library, it does not become cards") was never actually said to an English reader.
+    // The zh dictionary keeps this map EMPTY on purpose: Chinese always reads the schema, so
+    // there is exactly one Chinese source and nothing to drift. A missing entry here falls back
+    // to the Chinese — visible, rather than silently wrong.
+    intakeMetaOverride: {
+      '01': {
+        tier: 'Core — required',
+        purpose: 'Sets the scope, the reporting lines and who owns what. One row per person.',
+        intake: 'Becomes person cards directly (name / team / role / what they own / who they report to)',
+      },
+      '02': {
+        tier: 'Core — required',
+        purpose: 'One name, one owner, one stage per project. One row per live project.',
+        intake: 'Becomes project cards directly (status / progress / goal / owner)',
+      },
+      '03': {
+        tier: 'Core — required',
+        purpose: 'What is measured, over what period, target versus current. One row per metric.',
+        intake: 'Goes to the material library and gets cited in answers; no metric card of its own yet',
+      },
+      '04': {
+        tier: 'Good to add',
+        purpose: 'What got done, what is next, what is blocked. One row per update.',
+        intake: '"What is blocked" becomes a blocker on the project card; the rest goes to the material library',
+      },
+      '05': {
+        tier: 'Good to add',
+        purpose: 'Risks, blockers, conflicts, open decisions and customer feedback. One row each.',
+        intake: 'Rows typed 风险 (risk) or 阻塞 (blocked) reach the project card; the other three go to the material library',
+      },
+      '06': {
+        tier: 'Good to add',
+        purpose: 'Verifiable facts from check-ins and reviews. One row per person per period.',
+        intake: 'Goes to the material library; may form situation signals (what someone is carrying, never a judgement)',
+      },
+      '07': {
+        tier: 'Good to add',
+        purpose: 'Factual feedback and the agreements that came out of it. For coaching, never for rating.',
+        intake: 'Goes to the material library. Read the red-line note below',
+      },
+    } as Record<string, { tier: string; purpose: string; intake: string }>,
+    intakeReachLabel: 'What Avery does with it: ',
+    intakeAddRow: '+ Add a row',
+    intakeDownloadTemplate: 'Download the blank Excel workbook',
+    intakeRowNumberAria: 'Row',
+    intakeRemoveRowAria: 'Remove this row',
+    intakePickOne: '— pick one —',
+    // Paste from Excel. A textarea rather than a page-wide paste listener: a page listener would
+    // also fire when someone pastes a phrase into a single cell, turning ordinary typing into a
+    // whole-table overwrite. Focus in this box is an explicit intent.
+    intakePasteTitle: 'Paste from Excel',
+    intakePasteHint:
+      'Select the rows in your spreadsheet, copy, then paste into the box below. The header row is dropped if it comes along.',
+    intakePastePlaceholder: 'Paste here…',
+    intakePasteSummary: '{rows} rows, {cols} columns each — this table has {expected}.',
+    intakePasteHeaderDropped: 'The header row was dropped.',
+    intakePasteWidthMismatch:
+      "The column count doesn't match ({expected} expected). Check the preview below — if the values are in the wrong columns, re-copy without the row-number column.",
+    intakePasteReplace: 'Replace this table',
+    intakePasteAppend: 'Add to the end',
+    intakePasteCancel: 'Cancel',
+    // Cell-level validation. The red-line message states the CONSEQUENCE, because that is the
+    // part the person filling the form cannot guess (make-intake-xlsx.py's readme says the same).
+    intakeIssueRequired: 'Required.',
+    intakeIssueDate: 'Use YYYY-MM-DD.',
+    intakeIssueNumber: 'Numbers only.',
+    intakeIssuePercent: 'A whole number from 0 to 100, no percent sign.',
+    intakeIssueOption: 'Pick one of the listed values — Avery reads this column by that list.',
+    // Where the issue is. The messages live in a full-width list under the grid, not inside the
+    // cell: in a horizontally scrolling grid a message in the cell is either clipped to half a
+    // sentence or scrolled out of sight entirely, and the one that matters most (the red line)
+    // landed in the narrowest column. So each entry has to say which row and column it is about.
+    intakeIssueAt: 'Row {row} · {column} — ',
+    intakeIssuesAria: 'Cells that need attention',
+    intakeIssueRedlineHard:
+      '"{snippet}" reads as a score on a person. Written here it will get the whole submission rejected — the other tables in it fail too. Describe the behaviour and the situation instead.',
+    intakeIssueRedlineWarn:
+      '"{snippet}" reads as a judgement of a person. Facts and behaviour belong here; scores about people do not.',
+    intakeIssueRef: "No row in table {form} has this {column} yet — fine for now, the card just won't link up.",
+    intakeFilesLead:
+      'Have files as well? Add them here — tables and files go in together and become one workspace.',
+    intakeSubmit: 'Hand it to Avery ({rows} rows, {files} files)',
+    intakeSubmitting: 'Reading the tables…',
+    intakeBlocked: '{n} cells still need fixing before this can go.',
+    intakeRedlineRejected:
+      'Rejected: a score on a person was in the submission, so none of it was taken. The cells are marked above.',
+    intakeWarningAt: 'Table {table}, row {row}, {column}: ',
     onboardUploadReading: 'Reading your files…',
     // feat-068 — 同 upload.ingestingHint 的理由（真等 100–120s）。向导版多一句"可以先进行
     // 下一步"：Next/Skip 在 ingest 期间不禁用，读取在 store 里继续跑，这句是真的。

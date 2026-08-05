@@ -875,6 +875,54 @@ export const zh: Dict = {
     "onboardIntakeTitle": "录入你的标准数据包",
     "onboardIntakeBody": "在这里直接填标准表，或者把你会交给一位新上任经理的第一份材料给 Avery——花名册、项目计划、一份周报。两种都会汇成同一张能用的图：人、项目、需要你过目的事。",
     "onboardUploadChoose": "选择文件",
+    // 7 张标准表的录入外壳（ADR-0034 拍板 1/2/4）。🔴 列名、下拉词表、逐列填写提示**不在字典里**，
+    // 它们是后端认列的键、也是印在我们发出去的 xlsx 上的字，住在 src/shared/intakeSchema.ts。
+    "intakeNavAria": "七张标准表",
+    "intakeRowCount": "{n} 行",
+    "intakeRowCountOne": "1 行",
+    "intakeRowsEmpty": "空",
+    // 🔴 **故意留空**。分层/用途/「Avery 吃到哪一层」这三项的中文真源是
+    // scripts/make-intake-xlsx.py 的 FORMS（发给客户的那张表上印的就是这些字），
+    // 经 gen-intake-schema.py 编译进 src/shared/intakeSchema.ts。在这儿再抄一份中文
+    // = 第二个会漂的地方。中文壳恒读表定义，这个覆盖表只服务英文壳。
+    "intakeMetaOverride": {},
+    "intakeReachLabel": "Avery 会拿它做什么：",
+    "intakeAddRow": "+ 新增一行",
+    "intakeDownloadTemplate": "下载 Excel 空模板",
+    "intakeRowNumberAria": "行号",
+    "intakeRemoveRowAria": "删掉这一行",
+    "intakePickOne": "— 请选择 —",
+    "intakePasteTitle": "从 Excel 粘贴",
+    "intakePasteHint": "在表格软件里选中要粘的行，复制，然后粘到下面的框里。带上表头也没关系，会自动去掉。",
+    "intakePastePlaceholder": "粘到这里…",
+    "intakePasteSummary": "{rows} 行，每行 {cols} 列——这张表有 {expected} 列。",
+    "intakePasteHeaderDropped": "表头行已去掉。",
+    "intakePasteWidthMismatch": "列数对不上（这张表是 {expected} 列）。看一眼下面的预览：如果值填错了列，多半是复制时带上了行号列，重新复制一次。",
+    "intakePasteReplace": "替换这张表",
+    "intakePasteAppend": "追加到末尾",
+    "intakePasteCancel": "取消",
+    // 单元格级校验。红线那条**必须把后果说出来**——填表的人猜不到"写了会怎样"，
+    // 而我们发出去的 xlsx 说明页里写的就是这句话。
+    "intakeIssueRequired": "这一格必填。",
+    "intakeIssueDate": "写成 YYYY-MM-DD。",
+    "intakeIssueNumber": "只填数字。",
+    "intakeIssuePercent": "填 0–100 的整数，不要带百分号。",
+    "intakeIssueOption": "从给出的几个词里选一个——Avery 按那套词表读这一列。",
+    // 位置前缀：说明本体在网格下方的整宽清单里（塞在格子底下会被格宽切成半句、或者随横滚
+    // 整条滚出视野），所以每条得自报是第几行哪一列。
+    "intakeIssueAt": "第 {row} 行 · {column} —— ",
+    "intakeIssuesAria": "需要处理的格子",
+    // ⚠ 不许写 markdown 星号：这里的文案是**纯文本**渲染的，`**…**` 会原样印在屏幕上
+    //（checker 逮到：屏幕上真的显示了「传被拒绝**，」）。要强调就靠句子本身。
+    "intakeIssueRedlineHard": "「{snippet}」是在给人打分。写在这里会导致整发上传被拒绝——同一批里的其他表也会一起失败。改成写行为和场景。",
+    "intakeIssueRedlineWarn": "「{snippet}」像是在评价人。这一栏只写事实和行为，不写对人的分数。",
+    "intakeIssueRef": "表 {form} 里还没有这个{column}——现在这样也行，只是卡片暂时连不起来。",
+    "intakeFilesLead": "还有文件？一起加进来——表格和文件同发一次，汇成同一个工作区。",
+    "intakeSubmit": "交给 Avery（{rows} 行 · {files} 个文件）",
+    "intakeSubmitting": "正在读取表格…",
+    "intakeBlocked": "还有 {n} 格要先改好才能提交。",
+    "intakeRedlineRejected": "被拒绝了：这一发里出现了对人的打分，所以整批都没有收下。出问题的格子已经在上面标出来了。",
+    "intakeWarningAt": "表 {table} 第 {row} 行「{column}」：",
     "onboardUploadReading": "正在读取文件…",
     "onboardUploadHint": "正在逐页通读，通常需要两三分钟，期间可以先进行下一步。",
     "onboardUploadElapsed": "已用时 {seconds} 秒",

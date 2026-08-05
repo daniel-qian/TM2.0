@@ -16,6 +16,7 @@ import { useLook } from '../lookStore'
 import { useFlow, resetFlowCompanyScope } from '../flowStore'
 import { useNotify, resetNotifyCompanyScope } from '../notifyStore'
 import { useOnboard, resetOnboardCompanyScope } from '../onboardStore'
+import { resetIntakeCompanyScope } from '../intake/intakeStore'
 
 // feat-053 · 账号入口（顶栏，LiteBell 旁）。
 //
@@ -108,6 +109,10 @@ function resetLite2MemoryStores(): void {
   resetFlowCompanyScope()
   resetNotifyCompanyScope()
   resetOnboardCompanyScope()
+  // onboarding-accounts-0805 ②：录入网格里装的是花名册、项目台账、风险事项——
+  // 这条线上装得最满的一份公司数据。漏了它，换账号之后 B 的经理打开向导第①步，
+  // 看到的是 A 公司整张名册。
+  resetIntakeCompanyScope()
 }
 
 export function clearCompanyScope(): void {
