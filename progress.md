@@ -3,20 +3,24 @@
 > 📢 本文件是**当前状态快照，整体重写不追加**。历史都在 git（`git log` + 各 `.issues/*/receipt*.md`），别在这儿堆编年史。
 > 启动路径见 `AGENTS.md` Startup Workflow：读本文件 + `feature_list.json`，跑 `./init.sh` 确认绿，再开工。
 
-**Last Updated:** 2026-08-04（#38 locale 契约：判读链路双语对等，一票吃完四层 + 一道新双语门）
+**Last Updated:** 2026-08-05（生产 P0：快问员工链接拼在死域 ima-read.com——两半修复已上生产）
 
 ## Current State
 
-- **git**：`main` 工作树干净、与 `origin/main` 推平。
-- **验证账实**：全电池 **31/31**（**A 25** / B 3 / C 3）——本轮新增 1 道门（locale-parity，48 判据）。
-  后端 pytest **3527 passed**（新增 53 条：locale 契约 28 + 决策文案 i18n 对账 11 + 红线补漏 14）。
-  像素基线 40 张**未动**（本轮没改布局；像素门跑的是 `lang=zh`，而 CJK 标点清扫只改英文侧渲染，
-  中文侧逐字不变——B 区 4/4 直接绿）。
+- **git**：`main` 工作树干净、与 `origin/main` 推平（`4bc6085`）。
+- **验证账实**：全电池 **31/31**（**A 25** / B 3 / C 3）——门本身未增减，K2 host 断言换真域。
+  后端 pytest **3528 passed**（+1：快问默认域回归锁）。像素基线 40 张未动（没改布局）。
+- **🔥 0805 生产 P0 已修**（[回执](.issues/quickask-publicbase-0805/deploy-receipt.md)）：快问员工链接
+  曾拼在 DNS 从不解析的 `avery.ima-read.com`（生产 env 缺 `AVERY_PUBLIC_BASE` × 代码死默认值）。
+  代码默认值改真域 + env 补上 + 换容器 `avery-agent:main-20260805-134620`（从 main `4bc6085` 构建），
+  容器内 `public_base()` 实测 = `https://avery.dannyqian.com`，走查真 token `/r/…` 200。
+  回滚梯 `avery-prev-20260805-134620` 在位。**⚠ 顺手坐实：`~/avery.env` 曾比在跑容器少 5 个变量
+  （demo seed/限流、SUPABASE 两条）——已补齐，但换容器 env 快照永远以在跑容器提取为准。**
 - **#38 已完成并 closes**，**契约切换的两半已同批上生产**（[部署回执](.issues/locale-contract-0803/receipt-deploy-0804.md)）：
   前端 Vercel 构建 `89b36e4`（线上 bundle 的 commit 戳与本地 HEAD 逐字相等，
-  8 条判读文案逐条核到线上产物）；后端换容器到 `avery-agent:main-20260804-153841`
+  8 条判读文案逐条核到线上产物）；后端在 `avery-agent:main-20260804-153841` 验过
   （从 main 构建，容器内纯 Python 断言核到 `grade_label` 已消失、命中带 `params`、
-  `locale` 在契约上）。回滚梯 `avery-prev-20260804-153841` 在位。
+  `locale` 在契约上），现被 0805 镜像逐级覆盖。
 
 ## 本轮做完的（#38 · ADR-0033 · [回执](.issues/locale-contract-0803/receipt.md)）
 
