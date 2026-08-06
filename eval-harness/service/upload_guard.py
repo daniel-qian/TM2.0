@@ -64,6 +64,10 @@ def _route_for(path: str) -> str | None:
         return "ask"
     if path.startswith("/r/"):
         return "share"
+    # T1: 常驻表单的员工页（/f/{token} + 提交 POST）与快问员工页是同一张公开、无鉴权的脸，
+    # 共用同一个 'share' 表盘 —— 公开面的限流不该因为多开一个入口就多一份配置。
+    if path.startswith("/f/"):
+        return "share"
     return None
 
 

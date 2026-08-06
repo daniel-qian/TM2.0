@@ -47,6 +47,7 @@ from .ask_api import router as ask_router   # feat-034: /ask manager endpoints +
 from .auth_api import router as auth_router  # feat-053: /account/status|contexts|claim
 from .demo import router as demo_router  # input-side-0721: /demo/status|claim（一键示例团队）
 from .engine import stream_advice
+from .form_api import router as form_router  # T1: 常驻表单 manager 端点 + /f/{token} 员工 H5
 from .ingest_api import router as ingest_router  # feat-018: /ingest + /team/{id} (compose over feat-016)
 from .ingest_api import authorize_context, extract_owner_token  # feat-038: reuse the read-path gate
 from .upload_guard import IngestGuardMiddleware  # feat-039: edge rate-limit + total-body size cap
@@ -116,6 +117,12 @@ app.include_router(auth_router)
 # 成访客私有副本）。未配置 AVERY_DEMO_SEED_DIR 时整个面 404/false —— 与 auth 层同一"不配置
 # 即不存在"姿态。机制与合约见 service/demo.py 模块注释。
 app.include_router(demo_router)
+
+# T1 · form-backend-a1a 常驻表单：经理端点（GET /team/{id}/forms · POST /team/{id}/forms/{tpl}/links
+# · GET /team/{id}/forms/submissions，与 notes 同一张 owner_token/账号门）+ 员工侧免登录 H5
+# （GET /f/{token} · POST /f/{token}/submit —— share token 骑 URL，与快问 /r/{token} 同一条契约）。
+# 🔴 表单只是与上传文件平权的又一路数据源：本层只做到提交落库，「提交进资料」是 T2 的活。
+app.include_router(form_router)
 
 
 class AdviseRequest(BaseModel):

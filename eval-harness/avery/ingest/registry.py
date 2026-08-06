@@ -428,8 +428,17 @@ class CompanyContext:
         when the doc stated it; risk 4-dims / reportedStatus are left absent (R2 don't invent).
         rich-align-0722/05a: archived (soft-deleted) projects are EXCLUDED here — they go to the
         collapse drawer via archived_project_cards()."""
-        return [self._one_project_card(pr) for pr in self.extraction.projects
-                if not getattr(pr, "archived", False)]
+        return [self._one_project_card(pr) for pr in self._active_projects()]
+
+    def _active_projects(self) -> list:
+        """rich-align-0722/05a 软删（archived）的**唯一**过滤点。`project_cards()` 与
+        `_decision_subjects()` 都从这里取。
+
+        🔴 为什么收成一处：这条业务不变量抄第二份就一定会漂——而漂掉的后果是用户已经扔进
+        折叠抽屉的项目，从今天页和「N 个值得多看一眼」里爬回来。收成一处之后，
+        `test_project_crud_05a` 对 `project_cards()` 的既有门就**传递性**地守住了定级那条路。
+        """
+        return [pr for pr in self.extraction.projects if not getattr(pr, "archived", False)]
 
     def archived_project_cards(self) -> list[dict]:
         """rich-align-0722/05a: soft-deleted projects for the 'archived' collapse drawer (restorable).
@@ -522,10 +531,38 @@ class CompanyContext:
         return p
 
     def signal_cards(self) -> list[dict]:
-        """Doc-derived signals. Person-directed ones stay at situation (gated upstream)."""
+        """Doc-derived signals. Person-directed ones stay at situation (gated upstream).
+
+        🔴 NAMING TRAP (gap-design-0805 · B1): the key literally called `source` here is
+        `SignalEntity.source_kind` — a CATEGORY ('doc' / 'figma' / 'feedback'), NOT the
+        `'<source_key>:<line>'` document pointer. `SignalEntity.source` (the real pointer) is
+        NOT projected. Anything joining a card back to its uploaded document must NOT read
+        `card["source"]`; the decision path passes the pointer under a distinct `sourceRef`
+        key (see `_decision_subjects`) precisely so a type word can never be silently
+        mistaken for a document key — that mistake raises no error and turns no gate red.
+        """
         return [{"id": s.id, "source": s.source_kind, "subjectType": s.subjectType,
                  "subjectId": s.subjectRef, "summary": s.summary, "tag": s.tag}
                 for s in self.extraction.signals]
+
+    def _decision_subjects(self) -> list[dict]:
+        """gap-design-0805 · B1 —— 喂给定级引擎的项目卡：`project_cards()` 原样 + 一个
+        `sourceRef`（实体的 `'<source_key>:<line>'` 出处）。
+
+        为什么单开一条投影、不直接给 `_one_project_card` 加键：`sourceRef` 是**定级内部**要用的
+        join key，前端 `LiveProjectCard` 一个消费者都没有。放进 `project_cards()` 等于把一个
+        内部键塞进 /team 回帧的公开契约，以后想改就是破坏性变更。
+        """
+        return [{**self._one_project_card(pr), **({"sourceRef": pr.source} if pr.source else {})}
+                for pr in self._active_projects()]
+
+    def doc_timeline(self):
+        """gap-design-0805 · B1 —— 这份 context 的资料上传时间轴（source_key → uploaded_at）。
+        `decision_cards()` 与 `briefing()` **都**要吃它：两者共用同一张规则表，只喂一边会让
+        今天页的卡片和它上面那句「N 个值得多看一眼」对不上——那正是 `briefing()` 那段长注释
+        记着的旧伤（两套规则 = 同一屏自相矛盾）。"""
+        from ..decision_grading import build_doc_timeline
+        return build_doc_timeline(self.source_documents)
 
     def decision_cards(self, as_of=None) -> list[dict]:
         """feat-056 决策定级：给每个项目算一个 高风险/需确认/可推进，按严重度排好序。
@@ -539,8 +576,8 @@ class CompanyContext:
         `as_of` 不传则取今天——时间类规则（到期日）以它为准，显式传入即可复现。
         """
         from ..decision_grading import grade_projects
-        return [d.to_dict() for d in grade_projects(self.project_cards(), self.signal_cards(),
-                                                    as_of=as_of)]
+        return [d.to_dict() for d in grade_projects(self._decision_subjects(), self.signal_cards(),
+                                                    as_of=as_of, timeline=self.doc_timeline())]
 
     def briefing(self, as_of=None) -> dict:
         """A calm, HONEST 'organization weather' briefing. Counts are real (people/projects); it
@@ -597,7 +634,10 @@ class CompanyContext:
 
         signals = self.signal_cards()
         projects = self.project_cards()
-        decisions = grade_projects(projects, signals, as_of=as_of)
+        # 🔴 定级用的是带 `sourceRef` 的那份投影 + 时间轴，必须与 `decision_cards()` 逐字同口径；
+        # 下面的 `_signals_no_decision_covers` 仍吃不带 sourceRef 的 `projects`（它只做信号归属）。
+        decisions = grade_projects(self._decision_subjects(), signals,
+                                   as_of=as_of, timeline=self.doc_timeline())
         flagged = [d for d in decisions if d.grade != CAN_PROCEED]
         loose_signals = self._signals_no_decision_covers(projects, signals, flagged)
         n_flagged, n_loose = len(flagged), len(loose_signals)
@@ -742,6 +782,9 @@ class ContextRegistry(ProjectWriteMixin):
         self._advise_runs: dict[str, list[AdviseRun]] = {}  # issue #49: persisted room Q&A, per context
         self._asks: dict[str, object] = {}               # feat-034: ask_id -> Ask (deep-copied)
         self._ask_tokens: dict[str, tuple[str, int]] = {}  # share_token -> (ask_id, recipient idx)
+        self._form_templates: dict[str, dict[str, object]] = {}  # T1: ctx -> {tpl_id -> FormTemplate}
+        self._form_submissions: dict[str, object] = {}   # T1: submission_id -> FormSubmission
+        self._form_tokens: dict[str, str] = {}           # T1: share_token -> submission_id
         self._account_contexts: dict[str, list[str]] = {}  # feat-053: user_id -> [context_id]
         self._context_owner: dict[str, str] = {}           # feat-053: context_id -> user_id (1:1)
         self._ephemeral_at: dict[str, datetime] = {}       # gc-demo-clones-0724: clone_id -> created (UTC)
@@ -853,6 +896,88 @@ class ContextRegistry(ProjectWriteMixin):
             ask.status = "closed" if done >= len(ask.recipients) else "collecting"
         return "ok"
 
+    # --- T1 · form-backend-a1a: 常驻表单（模板 + 单人单链提交）—— 与 ask 同一条 seam style -----
+    # ⚠ 这两组方法存的是「表单这个采集器」（模板长什么样、链接发给了谁、谁交了），**不是**资料的
+    # 第二条存储通道：一次提交最终会变成一份与上传文件平权的 SourceDocument（T2 的活）。
+
+    def put_form_template(self, template):
+        """存一张模板快照（新建或覆盖）。写侧红线门 FIRST（题面给人打分就 ValueError，什么都不落），
+        与 put_ask/append_note 同一道存储门。两头 deep-copy，调用方之后再改对象也污染不了库里的。"""
+        import copy
+        from .form import gate_form_red_line
+        gate_form_red_line(template)
+        snapshot = copy.deepcopy(template)
+        self._form_templates.setdefault(snapshot.context_id, {})[snapshot.id] = snapshot
+        return copy.deepcopy(snapshot)
+
+    def get_form_template(self, context_id: str, template_id: str):
+        import copy
+        tpl = self._form_templates.get(context_id, {}).get(template_id)
+        return copy.deepcopy(tpl) if tpl is not None else None
+
+    def list_form_templates(self, context_id: str) -> list:
+        """这家公司的模板，铸出顺序（内置的先铸，所以恒在前）。停用的也返回——经理要看得见它，
+        「不再发新链接」和「从库里消失」不是一回事。"""
+        import copy
+        return [copy.deepcopy(t) for t in self._form_templates.get(context_id, {}).values()]
+
+    def put_form_submission(self, submission):
+        """存一条提交快照（铸链时建行，answers=None）。存储安全门 FIRST（NUL），但**不**扫红线——
+        答案是员工本人的话（ADR-0023），保证在落点：它永不挂 avery.entities。"""
+        import copy
+        from .form import gate_submission_storage_safety
+        gate_submission_storage_safety(submission)
+        snapshot = copy.deepcopy(submission)
+        self._form_submissions[snapshot.id] = snapshot
+        # token 索引只跟当前快照走（重铸链干净替换）
+        self._form_tokens = {t: sid for t, sid in self._form_tokens.items()
+                             if sid != snapshot.id}
+        if snapshot.share_token:
+            self._form_tokens[snapshot.share_token] = snapshot.id
+        return copy.deepcopy(snapshot)
+
+    def get_form_submission(self, submission_id: str):
+        import copy
+        sub = self._form_submissions.get(submission_id)
+        return copy.deepcopy(sub) if sub is not None else None
+
+    def get_form_submission_by_token(self, share_token: str):
+        """一条员工链接 -> 那一份提交，或 None（未知 token → 大声 404）。token 就是全部凭据，
+        没有枚举面。"""
+        import copy
+        sid = self._form_tokens.get(share_token or "")
+        if sid is None:
+            return None
+        sub = self._form_submissions.get(sid)
+        return copy.deepcopy(sub) if sub is not None else None
+
+    def list_form_submissions(self, context_id: str, template_id: str | None = None,
+                              limit: int = 200) -> list:
+        """这家公司的提交，NEWEST FIRST，可按模板过滤。「谁交了/谁没交」的唯一真相就是这张表——
+        铸链即建行，所以没交的人在这里是 answers=None 的行，不是缺席。"""
+        import copy
+        rows = [s for s in self._form_submissions.values()
+                if s.context_id == context_id
+                and (template_id is None or s.template_id == template_id)]
+        rows.sort(key=lambda s: (s.created_at or "", s.id), reverse=True)
+        return [copy.deepcopy(s) for s in rows[: max(1, int(limit))]]
+
+    def record_form_answers(self, share_token: str, answers: list,
+                            submitted_at: str) -> str:
+        """答一次锁：首答落地返回 'ok'，重复提交返回 'already'（**不覆盖**——证据必须稳得住，
+        与 ask 回执同一条 PRD Q8 纪律），从未铸过的 token 返回 'unknown'。"""
+        sid = self._form_tokens.get(share_token or "")
+        if sid is None:
+            return "unknown"
+        sub = self._form_submissions.get(sid)
+        if sub is None:
+            return "unknown"
+        if sub.submitted_at:
+            return "already"
+        sub.answers = list(answers)
+        sub.submitted_at = submitted_at
+        return "ok"
+
     # --- feat-053: the account seam (Supabase user id <-> context ownership) -------------------
     # ABOVE feat-038, never instead of it: owner_token stays the lower-layer credential and this map
     # is a SECOND, durable way to prove ownership of a context you already own. A context with no
@@ -935,10 +1060,21 @@ class ContextRegistry(ProjectWriteMixin):
         store = KeywordStore()
         store.add(extraction.materials)
         mem_dir = materialize_memory(extraction, data_root() / new_context_id)
+        # 🔴 副本的 `uploaded_at` 重打成**此刻**（gap-design-0805 · B1）。母本是内容寻址的、
+        # 一次铸成就常驻（`service/demo.py::_master_id`，sweep 明令不碰母本），所以它的上传时间
+        # 冻在这台部署第一次铸母本那天。逐字继承会让「资料多久没更新」这条时间轴规则，在母本
+        # 满 45 天之后，对每一位**三秒前刚领到示例团队、一个文件都没传过**的访客说
+        # 「手上最新的一份资料也是 45 天以前上传的」——整块看板变黄，且他无论做什么都消不掉。
+        # 对这位访客来说，这些文件确实是此刻才进他的工作区的。
+        # （笔记的 `created_at` 仍逐字保留：那是「实时数据缺位」那段叙事的时间线，是内容不是元数据。）
+        docs = copy.deepcopy(src.source_documents)
+        stamped = _now_iso()
+        for sd in docs:
+            sd.uploaded_at = stamped
         twin = CompanyContext(
             context_id=new_context_id, extraction=extraction, store=store, memory_dir=mem_dir,
             name=src.name, source_files=list(src.source_files),
-            source_documents=copy.deepcopy(src.source_documents),
+            source_documents=docs,
             owner_token=new_owner_token)
         self._by_id[new_context_id] = twin
         self._notes[new_context_id] = [replace(n, id=new_note_id())
@@ -963,6 +1099,13 @@ class ContextRegistry(ProjectWriteMixin):
             self._by_id.pop(cid, None)
             self._notes.pop(cid, None)
             self._ephemeral_at.pop(cid, None)
+            # T1: 表单跟着 context 走 —— pg 侧靠 0013 的 FK ON DELETE CASCADE，这里手工对齐。
+            # （老的 _asks / _advise_runs 在这里没被清是本票之前就有的分歧，不在本票范围内动它。）
+            for sid in [s.id for s in self._form_submissions.values() if s.context_id == cid]:
+                sub = self._form_submissions.pop(sid, None)
+                if sub is not None and getattr(sub, "share_token", ""):
+                    self._form_tokens.pop(sub.share_token, None)
+            self._form_templates.pop(cid, None)
         return len(victims)
 
     def __contains__(self, context_id: str) -> bool:
@@ -973,6 +1116,9 @@ class ContextRegistry(ProjectWriteMixin):
         self._notes.clear()
         self._asks.clear()
         self._ask_tokens.clear()
+        self._form_templates.clear()
+        self._form_submissions.clear()
+        self._form_tokens.clear()
         self._account_contexts.clear()
         self._context_owner.clear()
         self._ephemeral_at.clear()
@@ -1020,6 +1166,18 @@ class ContextRegistryProtocol(Protocol):
     def get_ask_by_token(self, share_token: str): ...
     def record_answer(self, share_token: str, answers: list, comment: str,
                       answered_at: str) -> str: ...
+
+    # 常驻表单（T1 · form-backend-a1a）: 模板 + 单人单链提交
+    def put_form_template(self, template): ...
+    def get_form_template(self, context_id: str, template_id: str): ...
+    def list_form_templates(self, context_id: str) -> list: ...
+    def put_form_submission(self, submission): ...
+    def get_form_submission(self, submission_id: str): ...
+    def get_form_submission_by_token(self, share_token: str): ...
+    def list_form_submissions(self, context_id: str, template_id: str | None = None,
+                              limit: int = 200) -> list: ...
+    def record_form_answers(self, share_token: str, answers: list,
+                            submitted_at: str) -> str: ...
 
     # account <-> context binding (feat-038 / feat-053)
     def link_account_context(self, user_id: str, context_id: str) -> bool: ...

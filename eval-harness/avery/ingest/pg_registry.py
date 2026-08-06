@@ -546,11 +546,16 @@ class PostgresContextRegistry(ProjectWriteMixin):
                 "SELECT %s, filename, content FROM avery.memory_files WHERE context_id = %s",
                 (new_context_id, src_context_id))
             conn.execute(
+                # 🔴 uploaded_at 重打成 now()，不逐字继承（gap-design-0805 · B1，与内存版
+                # ContextRegistry.clone_context 同口径——那边有完整理由）：母本内容寻址、一次
+                # 铸成就常驻，逐字继承会让「资料多久没更新」在母本满 45 天后，对每一位刚领到
+                # 示例团队、一个文件都没传过的访客整块判「需确认」。列顺序与上面的列表一一对应，
+                # 改这里必须同时数两行。
                 "INSERT INTO avery.source_documents "
                 "(context_id, idx, filename, source_key, mime, size_bytes, doc_kind, status, "
                 " content, storage_ref, uploaded_at) "
                 "SELECT %s, idx, filename, source_key, mime, size_bytes, doc_kind, status, "
-                " content, storage_ref, uploaded_at "
+                " content, storage_ref, now() "
                 "FROM avery.source_documents WHERE context_id = %s",
                 (new_context_id, src_context_id))
             notes = conn.execute(
@@ -789,6 +794,164 @@ class PostgresContextRegistry(ProjectWriteMixin):
                 "UPDATE avery.asks SET status = %s "
                 "WHERE id = %s AND status IN ('shared', 'collecting')",
                 ("closed" if done >= total else "collecting", ask_id))
+        return "ok"
+
+    # --- T1 · form-backend-a1a: 常驻表单存储 —— registry 表单 seam 的 postgres 双胞胎 -------------
+    # 表在 db/migrations/0013_form_templates.sql。⚠ 这两组方法存的是「表单这个采集器」，**不是**
+    # 资料的第二条存储通道：一次提交最终会变成一份与上传文件平权的 SourceDocument（T2 的活）。
+
+    _FORM_TPL_COLS = "context_id, id, title, fields, active, created_at"
+    _FORM_SUB_COLS = ("id, context_id, template_id, person_id, person_name, period, "
+                      "share_token, answers, submitted_at, created_at, expires_at")
+
+    @staticmethod
+    def _form_template_from_row(row):
+        from .form import FormField, FormTemplate
+        context_id, tid, title, fields, active, created_at = row
+        known = set(FormField.__dataclass_fields__)
+        return FormTemplate(
+            context_id=context_id, id=tid, title=title or "",
+            fields=[FormField(**{k: v for k, v in f.items() if k in known})
+                    for f in (fields or []) if isinstance(f, dict)],
+            active=bool(active),
+            created_at=created_at.isoformat() if created_at is not None else "")
+
+    @staticmethod
+    def _form_submission_from_row(row):
+        from .form import FormSubmission
+        (sid, context_id, template_id, person_id, person_name, period, share_token,
+         answers, submitted_at, created_at, expires_at) = row
+        return FormSubmission(
+            id=sid, context_id=context_id, template_id=template_id,
+            person_id=person_id or "", person_name=person_name or "", period=period or "",
+            share_token=share_token or "",
+            answers=list(answers) if answers is not None else None,
+            submitted_at=submitted_at.isoformat() if submitted_at is not None else "",
+            created_at=created_at.isoformat() if created_at is not None else "",
+            expires_at=expires_at.isoformat() if expires_at is not None else "")
+
+    def put_form_template(self, template):
+        """Persist one template snapshot (create or update). The write-side red-line gate runs BEFORE
+        any INSERT (a person-scoring 题面 raises ValueError — nothing touches the DB), same storage-door
+        discipline as put_ask. Fields ride as one jsonb document (the 字段描述 the renderer reads)."""
+        from dataclasses import asdict
+        from psycopg.types.json import Jsonb
+        from .form import gate_form_red_line
+        gate_form_red_line(template)
+        self._ensure_schema()
+        fields = [asdict(f) for f in template.fields]
+        with self._connect() as conn, conn.transaction():
+            conn.execute(
+                "INSERT INTO avery.form_templates (context_id, id, title, fields, active, "
+                " created_at) "
+                "VALUES (%s, %s, %s, %s, %s, COALESCE(%s::timestamptz, now())) "
+                "ON CONFLICT (context_id, id) DO UPDATE SET "
+                "  title = EXCLUDED.title, fields = EXCLUDED.fields, active = EXCLUDED.active",
+                (template.context_id, template.id, template.title, Jsonb(fields),
+                 bool(template.active), template.created_at or None))
+        return self.get_form_template(template.context_id, template.id)
+
+    def get_form_template(self, context_id: str, template_id: str):
+        self._ensure_schema()
+        with self._connect() as conn:
+            row = conn.execute(
+                f"SELECT {self._FORM_TPL_COLS} FROM avery.form_templates "
+                "WHERE context_id = %s AND id = %s", (context_id, template_id)).fetchone()
+        return self._form_template_from_row(row) if row is not None else None
+
+    def list_form_templates(self, context_id: str) -> list:
+        """This company's templates, oldest first (built-ins are minted first, so they lead).
+        Inactive ones are INCLUDED — 「不再发新链接」和「从库里消失」不是一回事。"""
+        self._ensure_schema()
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"SELECT {self._FORM_TPL_COLS} FROM avery.form_templates "
+                "WHERE context_id = %s ORDER BY created_at, id", (context_id,)).fetchall()
+        return [self._form_template_from_row(r) for r in rows]
+
+    def put_form_submission(self, submission):
+        """Persist one submission snapshot (minted link, or a re-put). Storage-safety gate only —
+        answers are the employee's OWN words and are deliberately NOT red-line scanned (ADR-0023);
+        the guarantee is placement: they hang off (template, submission), never off avery.entities."""
+        from psycopg.types.json import Jsonb
+        from .form import gate_submission_storage_safety
+        gate_submission_storage_safety(submission)
+        self._ensure_schema()
+        with self._connect() as conn, conn.transaction():
+            conn.execute(
+                "INSERT INTO avery.form_submissions (id, context_id, template_id, person_id, "
+                " person_name, period, share_token, answers, submitted_at, created_at, expires_at) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s::timestamptz, "
+                "        COALESCE(%s::timestamptz, now()), "
+                "        COALESCE(%s::timestamptz, now() + interval '7 days')) "
+                "ON CONFLICT (id) DO UPDATE SET "
+                "  template_id = EXCLUDED.template_id, person_id = EXCLUDED.person_id, "
+                "  person_name = EXCLUDED.person_name, period = EXCLUDED.period, "
+                "  share_token = EXCLUDED.share_token, answers = EXCLUDED.answers, "
+                "  submitted_at = EXCLUDED.submitted_at, expires_at = EXCLUDED.expires_at",
+                (submission.id, submission.context_id, submission.template_id,
+                 submission.person_id or "", submission.person_name,
+                 submission.period or "", submission.share_token or None,
+                 Jsonb(submission.answers) if submission.answers is not None else None,
+                 submission.submitted_at or None,
+                 submission.created_at or None, submission.expires_at or None))
+        return self.get_form_submission(submission.id)
+
+    def get_form_submission(self, submission_id: str):
+        self._ensure_schema()
+        with self._connect() as conn:
+            row = conn.execute(
+                f"SELECT {self._FORM_SUB_COLS} FROM avery.form_submissions WHERE id = %s",
+                (submission_id,)).fetchone()
+        return self._form_submission_from_row(row) if row is not None else None
+
+    def get_form_submission_by_token(self, share_token: str):
+        """Resolve one employee link -> that submission, or None. One indexed lookup — the token is
+        the whole credential (no enumeration path)."""
+        if not share_token:
+            return None
+        self._ensure_schema()
+        with self._connect() as conn:
+            row = conn.execute(
+                f"SELECT {self._FORM_SUB_COLS} FROM avery.form_submissions WHERE share_token = %s",
+                (share_token,)).fetchone()
+        return self._form_submission_from_row(row) if row is not None else None
+
+    def list_form_submissions(self, context_id: str, template_id: str | None = None,
+                              limit: int = 200) -> list:
+        """This company's submissions, NEWEST FIRST, optionally one template's. 「谁交了/谁没交」的
+        唯一真相：铸链即建行，所以没交的人是 answers IS NULL 的行，不是缺席。"""
+        self._ensure_schema()
+        sql = (f"SELECT {self._FORM_SUB_COLS} FROM avery.form_submissions WHERE context_id = %s")
+        params: list = [context_id]
+        if template_id is not None:
+            sql += " AND template_id = %s"
+            params.append(template_id)
+        sql += " ORDER BY created_at DESC, id DESC LIMIT %s"
+        params.append(max(1, int(limit)))
+        with self._connect() as conn:
+            rows = conn.execute(sql, tuple(params)).fetchall()
+        return [self._form_submission_from_row(r) for r in rows]
+
+    def record_form_answers(self, share_token: str, answers: list,
+                            submitted_at: str) -> str:
+        """The answer-once lock, ATOMIC in SQL: the UPDATE lands only where submitted_at IS NULL, so
+        two racing submits can never both write ('ok' / 'already' / 'unknown'). Same shape as
+        record_answer — 证据必须稳得住，重复提交不覆盖首答（PRD Q8 的同一条纪律）。"""
+        from psycopg.types.json import Jsonb
+        if not share_token:
+            return "unknown"
+        self._ensure_schema()
+        with self._connect() as conn, conn.transaction():
+            row = conn.execute(
+                "UPDATE avery.form_submissions SET answers = %s, submitted_at = %s::timestamptz "
+                "WHERE share_token = %s AND submitted_at IS NULL RETURNING id",
+                (Jsonb(list(answers)), submitted_at, share_token)).fetchone()
+            if row is None:
+                exists = conn.execute(
+                    "SELECT 1 FROM avery.form_submissions WHERE share_token = %s",
+                    (share_token,)).fetchone()
+                return "already" if exists else "unknown"
         return "ok"
 
     # --- feat-053: the account seam (Supabase user id <-> context ownership) ----------------------
