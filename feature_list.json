@@ -539,6 +539,12 @@
       "name": "time-rules-b1 · 资料时间轴 + R-STALE-EVIDENCE（差距战役 T4 / #51）",
       "status": "done",
       "evidence_ref": "feature_archive.json#feat-098"
+    },
+    {
+      "id": "feat-099",
+      "name": "conflicts-rule-b2b · 冲突上今天页（差距战役 T7 / #56）",
+      "status": "done",
+      "evidence_ref": "feature_archive.json#feat-099"
     }
   ]
 }
