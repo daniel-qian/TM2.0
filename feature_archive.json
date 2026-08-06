@@ -534,5 +534,16 @@
     "status": "done",
     "evidence": "2026-08-06 · 分支 claude/nostalgic-curie-5f7b32（worktree）。门：后端离线全套 3573 passed / 77 deselected / 4 xfailed（AVERY_BRAIN=mock AVERY_EXTRACTOR=heuristic AVERY_EMBEDDINGS=keyword，四个 deselect 齐）；其中新增 28 条时间轴门（test_decision_grading.py 第 10/11 节）。init.sh 全绿（lint 0 errors / 5 pre-existing warnings + typecheck + vite build）；i18n-orphans 孤儿键 0。🔴 反假绿取证分两轮：① 把 decision_cards 与 briefing 的 timeline 接线各断一次，两条可达性门分别变红；② 收尾跑 8 个变异（判据改用项目自己那份/印一个比另一个/去掉 archived 过滤/去掉 filename 回退/evidence 印 source_key/join key 改 filename 优先/克隆不重打时间戳/不跳过解析失败文件/撤销手加卡与 done 豁免），全部被门抓到——首轮其中两条曾被放过（语料里最新那份恰好 filename==source_key），补语料后才真抓到。三视角对抗复审（假绿/诚实性/契约）报 17 条、反驳后 6 条成立，全部已修并各配门：手加卡被误判陈旧、newest_material 点名解析失败的文件、demo 母本上传日被克隆继承致 45 天后访客整块变黄、done 项目未享时间豁免、archived 过滤被抄第二份无人守、en 文案在恰好第 45 天当天为假。人眼过：打印真 decision_cards 载荷 + 两种语言 composeRuleReason 成句，确认原「可推进」卡被抬成「需确认」、手加卡与 done 卡不受影响、解析失败的文件不被引用。详见 .issues/gap-design-0805/session-handoff-t4.md。",
     "date": "2026-08-06"
+  },
+  "feat-099": {
+    "id": "feat-099",
+    "name": "T2 表单提交进资料 · 统一数据契约 + 向量只嵌增量（差距战役 T2 / #53）",
+    "description": "gap-design-0805 §A1 第二棒：员工在 /f/{token} 交表那一刻，提交被渲染成一份与上传文件完全平权的 md 资料文档并 append 进公司 context——资料库多一行「周报-{姓名}-{周}.md」（ingested、可下载），facts.md 当天可被议事室 recall 引用。渲染契约（avery/ingest/form_append.py）：字段名=06 表表头逐字（weekly_template 的 label 本来就是表头原文）、系统四列（记录ID/人员ID/述职周期/提交日期）进文档头元数据行、自由文本区与自述行分节、自由文本里的｜/|一律转义成 ¦（_selfreport_from_lines 按 [｜|] 切格且要求 ≥2 格，转义后模仿行结构上不可解析——T5 的模仿攻击门地基）、自述行用解析层认得的原语法 {姓名}｜负载自述：{n}｜情绪自述：{词}。通道：get(ctx)→原地 append(SourceDocument+MaterialChunk+source_files)→validate_extraction+红线→materialize_memory→put(ctx)，文件头注释钉死「绝不新造 CompanyContext」（arch-0802 回填只补 NULL 单元补不回缺失行）。source_key=<filename>#<submission.id>（逐份唯一 + 幂等判据）；uploaded_at=员工提交那一刻（把资料时间轴拉开的数据源，§B1）。同批修成本命门：pg_registry._material_vectors 的 isinstance(store, VectorStore) 判据对 get() 重建的 PgVectorStore 恒假（独立类、add() 是 no-op），修前每次 append-put 全语料重嵌计费；现在先按 (chunk_id,text) 查库里已有向量的键，已有的块落 NULL 占位交给事务内 _prior_mat_vecs 回填（向量全程不出库），只对新增块调 embedder，返回值改 per-row Optional。append 失败不回滚提交：员工看 thanks_pending 诚实文案（不说「已经进了资料」这句此刻不真的话），经理凭新端点 POST /team/{ctx}/forms/{id}/ingest 补灌（幂等）。",
+    "dependencies": [
+        "feat-097"
+    ],
+    "status": "done",
+    "evidence": "2026-08-06 · 分支 claude/dazzling-lewin-b9a13f（worktree），commit 9b9e6f5。门：后端离线全套 3728 passed / 105 deselected / 4 xfailed（AVERY_BRAIN=mock AVERY_EXTRACTOR=heuristic AVERY_EMBEDDINGS=keyword，四个 deselect 齐）；@needs_db 全套 96 passed（本地 pgvector/pg17 throwaway 库 avery_t2_test）——其中 T2 新门钉死：append 后旧文档字节逐字仍在（source_document_bytes==原件）、旧向量在库里原样非 NULL（事务内回填，不是重算）、计数 embedder 流水账==新增块文本一条不多（首灌只嵌一遍、两次 append 各只嵌自己的增量）、新实例 get() 重物化的 facts.md 含表单原句且 memory.recall 命中、模仿自述行转义后对 _selfreport_from_lines 不可解析（只解析出真自述行的周雅/72）。init.sh 全绿（typecheck+vite build，前端零改动）。🔴 反假绿变异取证 5/5 被咬：M1 撤向量复用（prior 恒空）→ 真库增量门红（全语料重嵌被抓）；M2 撤｜转义 → 模仿攻击门红；M3 撤 materialize_memory → facts/recall 门红；M4 撤 source_files.append → briefing 口径门红；M5 撤幂等判 → 幂等门红。HTTP 面（TestClient 离线）：提交即入库+定稿文案、append 挂掉走 pending 文案且补灌端点修复成功、补灌门与 notes 同张（无 token 同体 404、未提交 409、未知提交 404）。详见 .issues/gap-design-0805/session-handoff-T2.md。",
+    "date": "2026-08-06"
   }
 }

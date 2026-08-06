@@ -898,7 +898,8 @@ class ContextRegistry(ProjectWriteMixin):
 
     # --- T1 · form-backend-a1a: 常驻表单（模板 + 单人单链提交）—— 与 ask 同一条 seam style -----
     # ⚠ 这两组方法存的是「表单这个采集器」（模板长什么样、链接发给了谁、谁交了），**不是**资料的
-    # 第二条存储通道：一次提交最终会变成一份与上传文件平权的 SourceDocument（T2 的活）。
+    # 第二条存储通道：一次提交在提交那一刻被 form_append.append_submission_to_context 渲染成
+    # 一份与上传文件平权的 SourceDocument append 进 context（T2）。
 
     def put_form_template(self, template):
         """存一张模板快照（新建或覆盖）。写侧红线门 FIRST（题面给人打分就 ValueError，什么都不落），

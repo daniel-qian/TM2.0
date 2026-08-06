@@ -22,9 +22,10 @@ COMPOSE, not modify（feat-018 纪律）：这个 router 骑的全是既有的�
 🔴 渲染是**字段描述驱动**的（`_FIELD_RENDERERS`：kind → 渲染函数）。这不是风格偏好——这是后续票
 （A2 回流人卡、A3 周期实例）不用重写渲染层的唯一前提。加题型 = 往表里加一项，改不到别处。
 
-🔴 头号纪律（0805 拍板 #5）：表单只是与上传文件平权的又一路数据源。本票**只**做到「提交落库」；
-把提交渲染成一份真正的资料文档、append 进 context（走与上传文件完全相同的 chunk/出处/引用契约）
-是 T2 的活。这里**不许**为表单开任何通往资料层的旁路。
+🔴 头号纪律（0805 拍板 #5）：表单只是与上传文件平权的又一路数据源。T2 · form-append-a1b 起，
+提交落库后会被渲染成一份真正的资料文档 append 进 context（`avery.ingest.form_append`，走与
+上传文件完全相同的 chunk/出处/引用契约——get→原地 mutate→put，绝不新造 CompanyContext）。
+那是资料的**正门**，不是旁路；除它之外这里仍不许有任何通往资料层的通道。
 """
 from __future__ import annotations
 
@@ -45,6 +46,7 @@ from avery.ingest.form import (
     new_submission_id, new_template_id, now_iso, parse_submitted_answers,
     validate_template_shape,
 )
+from avery.ingest.form_append import append_submission_to_context
 from avery.ingest.registry import active_registry
 
 from . import account, h5
@@ -259,6 +261,9 @@ _COPY = {
         "submitted_at": "提交时间",
         "thanks_title": "已收到，谢谢！",
         "thanks_body": "这份内容已经进了你们公司的资料，负责人那边看得到。已锁定，不用再填一次。",
+        "thanks_pending_title": "已收到，谢谢！",
+        "thanks_pending_body": "你的回答已经存好并锁定，不用再填一次。转成公司资料的那一步这次"
+                               "没走完，负责人稍后能补上——你这边不用再做什么。",
         "expired_title": "这条链接已过期",
         "expired_body": "链接超过了有效期（7 天）。如果还需要你填，请让负责人重新发一条。",
         "unknown_title": "链接不存在",
@@ -291,6 +296,11 @@ _COPY = {
         "thanks_title": "Got it — thank you!",
         "thanks_body": "This is now part of your company's records and your manager can read it. "
                        "It's locked; no need to fill it again.",
+        "thanks_pending_title": "Got it — thank you!",
+        "thanks_pending_body": "Your answers are saved and locked; no need to fill it again. "
+                               "Filing them into your company's records didn't complete this "
+                               "time — your manager can finish that step later. Nothing more "
+                               "needed from you.",
         "expired_title": "This link expired",
         "expired_body": "It outlived its window (seven days). Ask your manager for a fresh one "
                         "if they still need it.",
@@ -468,8 +478,11 @@ async def form_submit(token: str, request: Request, lang: str | None = None):
     """收下这一份，只收一次。锁在服务端且是原子的（registry 的 record_form_answers 只落在
     `submitted_at IS NULL` 的那一行）——重复提交拿到 409 的「已交过」页，**首答原封不动**。
 
-    ⚠ 本票到此为止：提交落库。把它渲染成一份与上传文件平权的资料文档、append 进 context，是 T2
-    的活 —— 这里不许开旁路。"""
+    T2 · form-append-a1b：落库拿到首答锁之后，同一请求内把这份提交渲染成一份与上传文件平权的
+    资料文档 append 进公司 context（`avery.ingest.form_append`）。append 失败**不回滚提交**——
+    答案已经安全落地、锁已经拿到，重走一遍只会撞 409；资料层由经理侧
+    `POST /team/{context_id}/forms/{submission_id}/ingest` 补灌，员工页则换一份不撒谎的文案
+    （thanks_pending：不说「已经进了资料」这句此刻不真的话）。"""
     L = _lang(lang)
     resolved = _resolve_link(token, L)
     if isinstance(resolved, HTMLResponse):
@@ -488,4 +501,54 @@ async def form_submit(token: str, request: Request, lang: str | None = None):
         return _status_page(L, "submitted", 409)
     if outcome == "unknown":
         return _status_page(L, "unknown", 404)
-    return _status_page(L, "thanks", 200)
+    filed = False
+    try:
+        fresh = reg.get_form_submission_by_token(token)   # 库里的定稿行：answers + submitted_at 已盖章
+        if fresh is not None:
+            append_submission_to_context(reg, template, fresh)
+            filed = True
+    except Exception:
+        # token 是凭据，日志只留提交 id（可定位、不可冒用）。
+        logger.exception(
+            "T2: appending submission %s into context %s failed — the answers ARE saved; "
+            "POST /team/{context_id}/forms/{submission_id}/ingest re-files it", sub.id,
+            sub.context_id)
+    return _status_page(L, "thanks" if filed else "thanks_pending", 200)
+
+
+@router.post("/team/{context_id}/forms/{submission_id}/ingest")
+def refile_submission(context_id: str, submission_id: str,
+                      x_avery_token: str | None = Header(None),
+                      authorization: str | None = Header(None),
+                      x_avery_account: str | None = Header(None)) -> dict:
+    """T2 —— 把一份已提交的表单（重新）灌进资料库。正常路径不需要它：员工提交那一刻就 append 了。
+    它是修复面：提交时 append 失败（员工看到 thanks_pending 那一版文案）后，经理凭这支端点补灌。
+
+    幂等：这份提交已在资料库里 → `appended: false`，绝不落第二份（判据是铸进 source_key 里的
+    提交 id）。门与 notes / forms 同一张：owner_token 或持有账号，否则同体 404 无枚举。"""
+    reg = active_registry()
+    authorize_context(reg, context_id, extract_owner_token(x_avery_token, authorization),
+                      account.resolve_account(x_avery_account))
+    sub = reg.get_form_submission(submission_id)
+    if sub is None or sub.context_id != context_id:
+        raise HTTPException(status_code=404, detail=f"unknown form submission: {submission_id}")
+    if sub.answers is None:
+        raise HTTPException(status_code=409, detail={
+            "error": "not submitted yet",
+            "reason": "this link has not been filled in — there is nothing to file"})
+    template = reg.get_form_template(context_id, sub.template_id)
+    if template is None:   # 与员工页 _resolve_link 的 410 同一姿态：模板被撤，说撤了
+        raise HTTPException(status_code=410, detail={
+            "error": "template withdrawn",
+            "reason": f"form template {sub.template_id} no longer exists for this company"})
+    try:
+        sd, appended = append_submission_to_context(reg, template, sub)
+    except KeyError:   # authorize 之后 context 理论上恒在；防御性同体 404（无存在性 oracle）
+        raise HTTPException(status_code=404,
+                            detail=f"unknown company_context_id: {context_id}")
+    except ValueError as e:
+        raise HTTPException(status_code=422,
+                            detail={"error": "append rejected", "reason": str(e)})
+    return {"context_id": context_id, "submission_id": submission_id, "appended": appended,
+            "file": {"filename": sd.filename, "source_key": sd.source_key,
+                     "status": sd.status, "uploaded_at": sd.uploaded_at}}
