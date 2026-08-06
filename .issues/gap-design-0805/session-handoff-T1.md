@@ -141,6 +141,13 @@ ephemeral 行）就会串味。**修法**：给子查询补一个确定性排序
   `avery_pristine_probe`）已 drop。
 - 8147 上的 uvicorn 已按 progress.md 的可靠杀法清掉
   （`Get-NetTCPConnection -LocalPort 8147 -State Listen` → `Stop-Process`）。
+- ⚠ **5173 上有一个 node 进程（pid 1740）不是本 session 的**：它 2026-08-05 09:48 就起了，
+  比本 session（08-06 20:19）早一天多，本票是纯后端、从没起过 dev server。**没有动它**——
+  那是别的线的。谁认领谁清。
+- ⚠ 复核阶段的子 agent 为了验门真伪，在源文件上做过变异实验并自行还原。合 main 前已逐点核对
+  全部变异位（红线门 `outbound` 两行、四处上限判据、number 上下界）均回到正确状态，且全量离线
+  电池 3609 全绿、工作区只剩本票改动。**下次再让子 agent 做变异实验，收工必须像这样逐点复核**——
+  它们是并发的，一个 agent 的「我已还原」不代表另一个 agent 没在同一个文件上留下东西。
 - ⚠ **本机 curl 会把 argv 里的中文按 GBK 编**（实测「如常」→ `%C8%E7%B3%A3`，UTF-8 应是
   `%E5%A6%82%E5%B8%B8`）。第一版取证脚本因此拿到一片 422 —— **那是脚本在撒谎，服务端拒得对**。
   `curl-chain-T1.sh` 里的写法是：中文只走 heredoc（stdin 不过代码页转换），预先 percent-encode 成
