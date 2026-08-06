@@ -1073,3 +1073,283 @@ def test_company_context_emits_decision_cards():
     assert [c["subject_id"] for c in cards] == ["p_a", "p_b"]
     assert cards[0]["grade"] == R.HIGH_RISK and cards[1]["grade"] == R.CAN_PROCEED
     assert cards[0]["matched_rules"]
+
+
+# --- 12. 跨资料冲突上卡（gap-design-0805 · B2b / #56）-----------------------------------------
+#
+# T6 让归并把丢弃的读数记进 `ExtractionResult.conflicts`，本节验两条规则把它送上今天页。
+# 判据函数纯离线：鸭子构造几条冲突记录即可（定级层按 T6 交接口径只读六个属性），
+# 零模型调用、零真库。🔴 语料沿用本文件纪律：中文文件名 + 中文读数必须真进判据。
+
+def reading(value: str, source: str) -> SimpleNamespace:
+    """一个被记下来的读数。doc_key 的切法与 `extract.doc_key_of` 逐字一致（rsplit 最后一个冒号）。"""
+    return SimpleNamespace(value=value, source=source,
+                           doc_key=source.rsplit(":", 1)[0] if ":" in source else source)
+
+
+def conflict(kind: str, ref: str, fname: str, *values) -> SimpleNamespace:
+    return SimpleNamespace(subject_kind=kind, subject_ref=ref, field=fname, values=list(values))
+
+
+# 两份资料：花名册先传（6-28）、周报后传（7-10）。都在 45 天窗口内，R-STALE-EVIDENCE 不搅局。
+ROSTER_DAY, WEEKLY_DAY = "2026-06-28", "2026-07-10"
+
+
+def _two_doc_timeline():
+    return build_doc_timeline([doc("花名册.xlsx", f"{ROSTER_DAY}T02:00:00+00:00"),
+                               doc("周报-8月6日.md", f"{WEEKLY_DAY}T09:30:00+00:00")])
+
+
+def test_cross_doc_conflict_puts_both_readings_with_their_docs_and_days_on_the_card():
+    """票面那张双引文卡的后端半张：每个读数一行 evidence——字段 + verbatim 原值 + 文件名 +
+    上传日，按上传日从旧到新排。🔴 断言**逐字整行**：行的形状就是前端双栏渲染的契约，
+    也顺带钉死「印的日期 = 比较用的日期」（印一个比另一个是本仓最经典的假话面）。
+
+    语料故意用 T6 钉过的已知假阳性（同一个日期两种写法）——它正是「可能只是叫法不同」
+    dismiss 出口存在的理由，规则命中它是**设计内**行为，不是 bug。
+    """
+    c = conflict("project", "p_c", "dueDate",
+                 reading("2026年9月30日", "花名册.xlsx:3"),
+                 reading("2026-09-30", "周报-8月6日.md:7"))
+    d = grade_project(proj(id="p_c", status="on-track", dueDate="2026-09-30"),
+                      [], as_of=TODAY, timeline=_two_doc_timeline(), conflicts=[c])
+    hit = next(h for h in d.matched_rules if h.rule_id == "R-CROSS-DOC-CONFLICT")
+    assert list(hit.evidence) == [
+        f'dueDate="2026年9月30日" doc="花名册.xlsx" uploaded_at="{ROSTER_DAY}"',
+        f'dueDate="2026-09-30" doc="周报-8月6日.md" uploaded_at="{WEEKLY_DAY}"',
+    ]
+    # 本来 R-CLEAR 可推进的卡，因为两份资料对不上抬到需确认——第②句对客承诺的最小可证形状。
+    assert d.rule_grade == R.NEEDS_CONFIRMATION
+
+
+def test_owner_profile_conflict_reaches_the_owned_project_only():
+    """票面头号例子：《花名册》读到周雅婷在前厅部、《周报》读到她在传菜组。person 型冲突
+    只在指向**项目负责人**时作为项目证据进场（与 person 信号同一条红线，本引擎不给人打分），
+    字段机器键带 `owner.` 前缀——卡上才分得清 status 是项目的、team 是负责人的。
+    别人的项目（负责人不是她）一条都不沾。
+    """
+    c = conflict("person", "u_zhou", "team",
+                 reading("前厅部", "花名册.xlsx:5"),
+                 reading("传菜组", "周报-8月6日.md:2"))
+    hers = grade_project(proj(id="p_h", title="前厅排班改版", ownerId="u_zhou",
+                              ownerName="周雅婷", status="on-track"),
+                         [], as_of=TODAY, timeline=_two_doc_timeline(), conflicts=[c])
+    hit = next(h for h in hers.matched_rules if h.rule_id == "R-CROSS-DOC-CONFLICT")
+    assert list(hit.evidence) == [
+        f'owner.team="前厅部" doc="花名册.xlsx" uploaded_at="{ROSTER_DAY}"',
+        f'owner.team="传菜组" doc="周报-8月6日.md" uploaded_at="{WEEKLY_DAY}"',
+    ]
+    others = grade_project(proj(id="p_o", title="泳池翻新", ownerId="u_wang", ownerName="王磊",
+                                status="on-track"),
+                           [], as_of=TODAY, timeline=_two_doc_timeline(), conflicts=[c])
+    assert not [h for h in others.matched_rules
+                if h.rule_id in ("R-CROSS-DOC-CONFLICT", "R-FRESH-CONTRADICTS-STALE")]
+
+
+def test_a_disagreement_inside_one_document_is_not_called_cross_doc():
+    """T6 钉过：两个读数可能来自**同一份**文档（花名册把同一个人列了两行）。规则号叫
+    CROSS-DOC、文案说「不同资料」——对同一份文档内部的分歧说这句话就是撒谎，v1 明写不覆盖。"""
+    c = conflict("person", "u_zhou", "team",
+                 reading("前厅部", "花名册.xlsx:5"),
+                 reading("传菜组", "花名册.xlsx:19"))
+    d = grade_project(proj(id="p_h", ownerId="u_zhou", status="on-track"),
+                      [], as_of=TODAY, timeline=_two_doc_timeline(), conflicts=[c])
+    assert not [h for h in d.matched_rules
+                if h.rule_id in ("R-CROSS-DOC-CONFLICT", "R-FRESH-CONTRADICTS-STALE")]
+    assert d.rule_grade == R.CAN_PROCEED
+
+
+def test_fresh_contradicts_stale_owns_the_time_directed_conflict():
+    """T4 移交的第二条规则：两份上传日一早一晚、更新那份读到的状态更糟 → 归它，且**只**归它
+    ——同一条冲突不在 R-CROSS-DOC-CONFLICT 里再印一遍（一份证据两张卡是给经理出阅读理解题）。"""
+    c = conflict("project", "p_c", "status",
+                 reading("on-track", "花名册.xlsx:3"),
+                 reading("blocked", "周报-8月6日.md:7"))
+    d = grade_project(proj(id="p_c", status="on-track"),
+                      [], as_of=TODAY, timeline=_two_doc_timeline(), conflicts=[c])
+    ids = [h.rule_id for h in d.matched_rules]
+    assert "R-FRESH-CONTRADICTS-STALE" in ids and "R-CROSS-DOC-CONFLICT" not in ids
+    hit = next(h for h in d.matched_rules if h.rule_id == "R-FRESH-CONTRADICTS-STALE")
+    assert list(hit.evidence) == [
+        f'status="on-track" doc="花名册.xlsx" uploaded_at="{ROSTER_DAY}"',
+        f'status="blocked" doc="周报-8月6日.md" uploaded_at="{WEEKLY_DAY}"',
+    ]
+    assert d.rule_grade == R.NEEDS_CONFIRMATION
+
+
+def test_same_day_uploads_never_claim_a_time_direction():
+    """🔴 同批上传彼此只差微秒，谁先谁后是文件遍历顺序给的、不是事实给的（T4 交接红线：
+    日期比较一律天粒度）。同一天的两份资料读数再糟也只报「对不上」，不报「新的更糟」。"""
+    tl = build_doc_timeline([doc("花名册.xlsx", f"{WEEKLY_DAY}T02:00:00+00:00"),
+                             doc("周报-8月6日.md", f"{WEEKLY_DAY}T02:00:01+00:00")])
+    c = conflict("project", "p_c", "status",
+                 reading("on-track", "花名册.xlsx:3"),
+                 reading("blocked", "周报-8月6日.md:7"))
+    d = grade_project(proj(id="p_c", status="on-track"), [], as_of=TODAY, timeline=tl,
+                      conflicts=[c])
+    ids = [h.rule_id for h in d.matched_rules]
+    assert "R-CROSS-DOC-CONFLICT" in ids and "R-FRESH-CONTRADICTS-STALE" not in ids
+
+
+@pytest.mark.parametrize("old_val,new_val", [
+    ("blocked", "on-track"),     # 新的更好：方向不成立
+    ("on-track", "已搁置"),       # 新读数没被归一：查表得 0，绝不猜方向
+    ("at-risk", "at-risk2"),     # 同上，词表外的变体
+])
+def test_fresh_contradicts_requires_the_newer_reading_to_be_provably_worse(old_val, new_val):
+    """方向判断只认 `STATUS_BADNESS`（blocked > at-risk > 其余）。新读数更好、或压根读不懂，
+    都退回不看时间的 R-CROSS-DOC-CONFLICT——对着读不懂的词断言「更糟」比漏报这个方向贵。"""
+    c = conflict("project", "p_c", "status",
+                 reading(old_val, "花名册.xlsx:3"),
+                 reading(new_val, "周报-8月6日.md:7"))
+    d = grade_project(proj(id="p_c", status="on-track"),
+                      [], as_of=TODAY, timeline=_two_doc_timeline(), conflicts=[c])
+    ids = [h.rule_id for h in d.matched_rules]
+    assert "R-CROSS-DOC-CONFLICT" in ids and "R-FRESH-CONTRADICTS-STALE" not in ids
+
+
+def test_due_date_and_team_conflicts_never_claim_a_time_direction():
+    """「更糟」只对项目状态有排序：dueDate 是自由文本、team 没有方向。哪怕上传日一早一晚，
+    这两类字段的冲突也只报「对不上」。"""
+    for c in (conflict("project", "p_c", "dueDate",
+                       reading("8月15日", "花名册.xlsx:3"),
+                       reading("9月30日", "周报-8月6日.md:7")),
+              conflict("person", "u_zhou", "team",
+                       reading("前厅部", "花名册.xlsx:5"),
+                       reading("传菜组", "周报-8月6日.md:2"))):
+        d = grade_project(proj(id="p_c", ownerId="u_zhou", status="on-track"),
+                          [], as_of=TODAY, timeline=_two_doc_timeline(), conflicts=[c])
+        ids = [h.rule_id for h in d.matched_rules]
+        assert "R-CROSS-DOC-CONFLICT" in ids and "R-FRESH-CONTRADICTS-STALE" not in ids
+
+
+def test_a_reading_we_cannot_date_still_reaches_the_card_without_a_time_claim():
+    """时间轴里定位不到那份资料（元数据缺失 / 没时间轴）→ 读数照样上卡（冲突是真的），
+    只是那一行不带 uploaded_at、也永远进不了「新的更糟」——不知道多新绝不能变成"更新"。"""
+    c = conflict("project", "p_c", "status",
+                 reading("on-track", "花名册.xlsx:3"),
+                 reading("blocked", "没入库的扫描件.pdf:1"))
+    d = grade_project(proj(id="p_c", status="on-track"),
+                      [], as_of=TODAY, timeline=_two_doc_timeline(), conflicts=[c])
+    hit = next(h for h in d.matched_rules if h.rule_id == "R-CROSS-DOC-CONFLICT")
+    assert list(hit.evidence) == [
+        f'status="on-track" doc="花名册.xlsx" uploaded_at="{ROSTER_DAY}"',
+        'status="blocked" doc="没入库的扫描件.pdf"',
+    ]
+    assert not [h for h in d.matched_rules if h.rule_id == "R-FRESH-CONTRADICTS-STALE"]
+
+
+def test_conflict_evidence_prints_the_display_filename_not_the_join_key():
+    """🔴 evidence 印的是**给人看的文件名**（时间轴里的 filename），不是 join 用的 source_key。
+    两者在生产里真的会不同（同批同名上传走 `_unique_parse_names` 改 key 不改显示名）。
+    T4 的变异验证栽过这个坑：语料里两者恰好相等，「印错了哪个」的变异全绿通过——
+    所以这条语料**必须**让它们不同，否则本节对 M6 类变异结构上是瞎的。"""
+    tl = build_doc_timeline([doc("花名册.xlsx", f"{ROSTER_DAY}T02:00:00+00:00"),
+                             doc("周报(1).md", f"{WEEKLY_DAY}T09:30:00+00:00",
+                                 filename="周报.md")])
+    c = conflict("project", "p_c", "dueDate",
+                 reading("8月15日", "花名册.xlsx:3"),
+                 reading("9月30日", "周报(1).md:7"))
+    d = grade_project(proj(id="p_c", status="on-track"), [], as_of=TODAY, timeline=tl,
+                      conflicts=[c])
+    hit = next(h for h in d.matched_rules if h.rule_id == "R-CROSS-DOC-CONFLICT")
+    assert hit.evidence[1] == f'dueDate="9月30日" doc="周报.md" uploaded_at="{WEEKLY_DAY}"'
+
+
+def test_no_conflicts_argument_means_the_rules_simply_do_not_run():
+    """不传 conflicts = 没有冲突记录，两条规则一条都不命中——老调用方原样不受影响。"""
+    d = grade_project(proj(id="p_c", status="on-track"), [], as_of=TODAY,
+                      timeline=_two_doc_timeline())
+    assert not [h for h in d.matched_rules
+                if h.rule_id in ("R-CROSS-DOC-CONFLICT", "R-FRESH-CONTRADICTS-STALE")]
+    assert d.rule_grade == R.CAN_PROCEED
+
+
+def test_the_two_conflict_rules_share_one_grade():
+    """🔴 T4 交接明令：两条一起定级，别一高一低——「新文档白纸黑字推翻旧读数」不能显得比
+    「关键词族信号」更轻或更重却说不出为什么。定案：同为需确认（理由见 decision_rules.py）。"""
+    assert R.rule("R-CROSS-DOC-CONFLICT").grade == R.NEEDS_CONFIRMATION
+    assert R.rule("R-FRESH-CONTRADICTS-STALE").grade == R.NEEDS_CONFIRMATION
+
+
+def test_conflict_payload_stays_free_of_backend_prose():
+    """🔴 ADR-0033：中文只许走 evidence（客户自己的读数和文件名），params 恒空（这两条规则
+    没有静态阈值），其余键一个 CJK 字都不许有。文档名图省事塞进 params 的路在 T4 就被堵过。"""
+    cjk = re.compile(r"[一-鿿]")
+    c = conflict("project", "p_c", "status",
+                 reading("进行中", "花名册.xlsx:3"),
+                 reading("已阻塞", "周报-8月6日.md:7"))
+    d = grade_project(proj(id="p_c", status="on-track"),
+                      [], as_of=TODAY, timeline=_two_doc_timeline(), conflicts=[c]).to_dict()
+    hit = next(h for h in d["matched_rules"] if h["rule_id"] == "R-CROSS-DOC-CONFLICT")
+    assert hit["params"] == {}
+    for key, value in hit.items():
+        if key == "evidence":
+            continue
+        assert not cjk.search(json.dumps(value, ensure_ascii=False)), (key, value)
+    assert cjk.search(" ".join(hit["evidence"]))   # 中文确实走了 evidence 这条合法通道
+
+
+def test_conflict_grading_is_reproducible():
+    """同一份输入连跑两次逐字节一致——冲突归属/排序不引入任何迭代序依赖。"""
+    c = conflict("project", "p_c", "dueDate",
+                 reading("8月15日", "花名册.xlsx:3"),
+                 reading("9月30日", "周报-8月6日.md:7"))
+    card = proj(id="p_c", status="on-track")
+    assert (grade_project(card, [], as_of=TODAY, timeline=_two_doc_timeline(),
+                          conflicts=[c]).to_dict()
+            == grade_project(card, [], as_of=TODAY, timeline=_two_doc_timeline(),
+                             conflicts=[c]).to_dict())
+
+
+# --- 12b. 🔴 可达性：conflicts 在**真链路**上到得了今天页吗 ------------------------------------
+#
+# 上面全部直接喂 grade_project()。CompanyContext 那层忘了把 conflicts 传下去的话，
+# 纯函数门全绿、线上一次都不命中（T4 那节的同款教训，"判据够不着 = 恒绿"）。
+# 下面从 CompanyContext 进、decision_cards()/briefing() 出，中间一步不跳。
+
+def _ctx_with_conflict():
+    """票面头号例子的真实体版：周雅婷的部门在两份资料里对不上，她名下有一个项目。"""
+    from avery.ingest.extract import ConflictValue, ExtractionResult, FieldConflict, ProjectEntity
+    from avery.ingest.registry import CompanyContext, SourceDocument
+
+    class _NullStore:
+        def query(self, q, limit=8):
+            return []
+
+    ext = ExtractionResult(
+        projects=[ProjectEntity(id="p_h", title="前厅排班改版", ownerId="u_zhou",
+                                ownerName="周雅婷", status="on-track")],
+        conflicts=[FieldConflict(
+            subject_kind="person", subject_ref="u_zhou", field="team",
+            values=[ConflictValue(value="前厅部", source="花名册.xlsx:5", doc_key="花名册.xlsx"),
+                    ConflictValue(value="传菜组", source="周报-8月6日.md:2",
+                                  doc_key="周报-8月6日.md")])])
+    return CompanyContext(
+        context_id="c_conf", extraction=ext, store=_NullStore(), memory_dir=Path("."),
+        source_documents=[
+            SourceDocument(filename="花名册.xlsx", source_key="花名册.xlsx",
+                           uploaded_at=f"{ROSTER_DAY}T02:00:00+00:00"),
+            SourceDocument(filename="周报-8月6日.md", source_key="周报-8月6日.md",
+                           uploaded_at=f"{WEEKLY_DAY}T09:30:00+00:00")])
+
+
+def test_decision_cards_really_carry_the_conflicts_through():
+    """🔴 真链路可达性：CompanyContext（带 extraction.conflicts + source_documents）→
+    decision_cards() 必须真的命中，证据行带文件名与上传日。这条一红 = registry 没喂 conflicts。"""
+    cards = _ctx_with_conflict().decision_cards(as_of=TODAY)
+    assert cards[0]["grade"] == R.NEEDS_CONFIRMATION
+    hit = next(h for h in cards[0]["matched_rules"] if h["rule_id"] == "R-CROSS-DOC-CONFLICT")
+    assert hit["evidence"] == [
+        f'owner.team="前厅部" doc="花名册.xlsx" uploaded_at="{ROSTER_DAY}"',
+        f'owner.team="传菜组" doc="周报-8月6日.md" uploaded_at="{WEEKLY_DAY}"',
+    ]
+
+
+def test_briefing_and_decision_cards_agree_about_conflicts():
+    """🔴 briefing 与 decision_cards 共用同一张规则表，conflicts 只喂一边就会让今天页的卡片
+    和「N 个值得多看一眼」对不上——B1 时间轴接线时的同款旧伤，别用新规则复发一次。"""
+    ctx = _ctx_with_conflict()
+    assert [c["grade"] for c in ctx.decision_cards(as_of=TODAY)] == [R.NEEDS_CONFIRMATION]
+    look = [m for m in ctx.briefing(as_of=TODAY)["metrics"] if m["label"] == "need a look"]
+    assert look and look[0]["value"] == "1", ctx.briefing(as_of=TODAY)["metrics"]

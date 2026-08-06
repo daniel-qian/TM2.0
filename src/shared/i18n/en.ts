@@ -1453,12 +1453,20 @@ export const en = {
       'R-SIGNAL-WATCH': { title: 'A linked signal mentions a delay, rework or being short-handed', basis: 'Signals + blockers' },
       'R-SELF-REPORT-MISMATCH': { title: 'Reports itself on track while carrying an unresolved blocker', basis: 'Status + blockers' },
       'R-STALE-EVIDENCE': { title: 'Even the newest file on hand was uploaded {days} or more days ago, and nothing newer has been read since', basis: 'When the files were uploaded' },
+      'R-CROSS-DOC-CONFLICT': { title: 'Different files read differently on the same thing — needs a person to confirm which one to go by', basis: 'The same field across files' },
+      'R-FRESH-CONTRADICTS-STALE': { title: 'On the same thing, the more recently uploaded file reads worse — the older reading may be out of date', basis: 'The same field across files + upload times' },
       'R-NO-EVIDENCE': { title: 'None of status, blockers, progress or due date could be read — too little to treat as safe', basis: '(none of those fields could be read)' },
       'R-UNCLASSIFIED': { title: 'What was read does not match any existing rule, so it needs a person to confirm', basis: '(no rule matched)' },
       'R-DONE': { title: 'The project reports itself finished, with no risk signals', basis: 'Status' },
       'R-CLEAR': { title: 'The project reports itself on track, with no blockers and no risk signals', basis: 'Status + blockers' },
     },
     homeDecisionEscalated: 'Avery raised this grade',
+    // B2b (#56) · the close-out on conflict hits. Same red line as everywhere (ADR-0018): this is
+    // a confirmation request, never an error message — both readings are the customer's own words.
+    // Setting it aside only affects this manager's board; the grade and the files stay untouched.
+    homeConflictDismiss: 'Might just be different wording',
+    homeConflictDismissedNote: 'Set aside as likely different wording. The readings stay in your files — restore anytime.',
+    homeConflictRestore: 'Restore',
     homeDecisionRulesToggle: 'The reasoning',
     homeDecisionRuleBasis: 'Read from',
     homeDecisionEvidenceLabel: 'Straight from your files',

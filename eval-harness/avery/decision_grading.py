@@ -44,6 +44,7 @@ from .decision_rules import (
     SEVERITY,
     STALE_EVIDENCE_DAYS,
     STATUS_AT_RISK,
+    STATUS_BADNESS,
     STATUS_BLOCKED,
     STATUS_DONE,
     STATUS_STEADY,
@@ -253,6 +254,133 @@ def build_doc_timeline(source_documents) -> DocTimeline:
     return DocTimeline(stamps=tuple(stamps))
 
 
+# --- 跨资料字段冲突（gap-design-0805 · B2b）----------------------------------------------------
+# T6（conflicts-record-b2a）让归并把它自己丢弃的读数记进 `ExtractionResult.conflicts`。
+# 🔴 本模块照旧不认识那个类型（鸭子类型：subject_kind / subject_ref / field /
+# values[].value/source/doc_key 六个属性即可）——与 SourceDocument 同一条纪律，
+# 定级层保持纯数据进出、离线可测。
+
+@dataclass(frozen=True)
+class _ConflictReading:
+    """冲突里的一个读数：verbatim 原值 + 读自哪份资料 + 那份资料哪天上传。
+
+    `day is None` = 时间轴里定位不到那份资料（没时间轴、或元数据缺失）——照样上卡，
+    只是 evidence 行不带 uploaded_at、也不参与任何时间方向判断。
+    """
+    value: str
+    filename: str
+    day: date | None
+
+
+@dataclass(frozen=True)
+class _SubjectConflict:
+    """归到某个决策主体头上的一条字段冲突。evidence 行直接照 readings 渲染。"""
+    field: str                            # 机器键；负责人档案的冲突带 `owner.` 前缀
+    readings: tuple[_ConflictReading, ...]
+
+
+def _conflicts_for(project: dict, conflicts, timeline: "DocTimeline | None"
+                   ) -> tuple[_SubjectConflict, ...]:
+    """把 `ExtractionResult.conflicts` 里属于这个项目的条目归一成规则好读的形状。
+
+    两条归属通道，与 `_match_signals` 的纪律同源：
+      · `subject_kind == 'project'` 且 `subject_ref` 等于项目 id —— 项目自己的字段冲突；
+      · `subject_kind == 'person'` 且 `subject_ref` 等于项目负责人 id —— 负责人档案（部门等）
+        在资料间对不上，作为**项目**证据参与（本模块不给人打分，person 型读数只在指向
+        负责人时进来，与信号同一条红线）。字段机器键加 `owner.` 前缀，evidence 上才分得清
+        `status` 是项目的、`owner.team` 是负责人的。
+    🔴 已知盲区（与 `_match_signals` 同款，宁可漏）：不指向任何在场项目/负责人的冲突
+    （比如某个不管项目的员工的部门对不上）**不会算到任何卡头上**。
+
+    两道**不进场**的闸，都是"这句话对这条记录不成立"：
+      · 读数不足两个非空值 —— 不构成"对不上"；
+      · 所有读数出自**同一份**文档（`doc_key` 集合大小 < 2）—— T6 钉过这种形状真实存在
+        （一份花名册把同一个人列两行）。规则号叫 CROSS-DOC、文案说"不同资料"，
+        对同一份文档内部的分歧说这句话就是撒谎。v1 明写不覆盖，不硬塞。
+
+    readings 按上传日升序排（旧在前、新在后，定位不到的排最后），排序稳定——
+    卡面读起来就是票面那句「《旧》里读到…《新》里读到…」的顺序。
+    🔴 排序丢掉了 values[0]=胜出值 的信息，是故意的：哪个值胜出，项目卡自己那格写着，
+    不在证据里重复一遍（少一处口径漂移）。
+    """
+    pid = _norm_text(project.get("id"))
+    owner_id = _norm_text(project.get("ownerId"))
+    out: list[_SubjectConflict] = []
+    for c in conflicts or []:
+        kind = _norm_text(getattr(c, "subject_kind", ""))
+        ref = _norm_text(getattr(c, "subject_ref", ""))
+        if not ref:
+            continue
+        if kind == "project" and ref == pid:
+            prefix = ""
+        elif kind == "person" and owner_id and ref == owner_id:
+            prefix = "owner."
+        else:
+            continue
+        readings: list[_ConflictReading] = []
+        doc_keys: set[str] = set()
+        for v in getattr(c, "values", None) or []:
+            value = _norm_text(getattr(v, "value", ""))
+            if not value:
+                continue
+            doc_key = _norm_text(getattr(v, "doc_key", ""))
+            stamp = timeline.stamp_for(_norm_text(getattr(v, "source", ""))) \
+                if timeline is not None else None
+            readings.append(_ConflictReading(
+                value=value,
+                # 展示名走时间轴里的 filename（与 R-STALE-EVIDENCE 的 evidence 同一口径，
+                # 那边有"印 source_key 而非 filename"的变异教训）；定位不到才退回 doc_key。
+                filename=(stamp.filename if stamp is not None else doc_key),
+                day=stamp.day if stamp is not None else None))
+            doc_keys.add(doc_key)
+        if len(readings) < 2 or len(doc_keys) < 2:
+            continue
+        readings.sort(key=lambda r: (r.day is None, r.day or date.min))
+        out.append(_SubjectConflict(field=prefix + _norm_text(getattr(c, "field", "")),
+                                    readings=tuple(readings)))
+    return tuple(out)
+
+
+def _conflict_evidence(c: _SubjectConflict) -> list[str]:
+    """一条冲突 → 每个读数一行 evidence：`<字段>="<原值>" doc="<文件名>" uploaded_at="<上传日>"`。
+
+    与本文件既有 evidence 纪律逐条对齐：机器键 + verbatim 原值（①②类）+ 我们自己的入库日（③类，
+    B1 开的那道口子，边界原文见 `_EVIDENCE_FREE_RULES` 上方那段碑文）。
+    🔴 这里印的 uploaded_at 必须**就是** `_fresh_contradicts` 比较过的那个 `day`——
+    印一个、比另一个是本仓最经典的假话面（R-STALE-EVIDENCE 同款红线）。
+    🔴 刻意**不带** `:<行号>` 出处：T6 钉死了实体出处的行号是块级兜底、可能指向标题行
+    （`test_KNOWN_LIMITATION_project_source_is_BLOCK_level_not_field_level`）。印一个行号
+    就是请经理去翻一行可能什么都没写的字——文档名 + 上传日是我们今天能背书的全部。
+    """
+    lines: list[str] = []
+    for r in c.readings:
+        line = f'{c.field}="{r.value}" doc="{r.filename}"'
+        if r.day is not None:
+            line += f' uploaded_at="{r.day.isoformat()}"'
+        lines.append(line)
+    return lines
+
+
+def _fresh_contradicts(c: _SubjectConflict) -> bool:
+    """这条冲突够不够得着「更新的那份读到更糟」——够得着归 R-FRESH-CONTRADICTS-STALE，
+    其余全部归 R-CROSS-DOC-CONFLICT（一条冲突只上一条规则，同一份证据不印两遍）。
+
+    v1 只认最窄的、每一步都背得住的形状，四个条件缺一即让位给不看时间的那条：
+      · 字段是**项目状态**——唯一有"更糟"排序的字段（`STATUS_BADNESS`，词表归一是
+        `_norm_status` 的产出）。dueDate 是自由文本、team 没有方向，都排不出糟不糟；
+      · 恰好**两个**读数——三份资料各说各话时，"新的那份"指谁就不唯一了；
+      · 两份都定位得到上传日，且**天粒度**上严格一早一晚——同批上传彼此只差微秒，
+        用原始时间戳等于让文件遍历顺序当判据（T4 交接红线）；
+      · 新读数按 `STATUS_BADNESS` 严格更糟——没归一的词查表得 0，不猜方向。
+    """
+    if c.field != "status" or len(c.readings) != 2:
+        return False
+    old, new = c.readings                    # _conflicts_for 已按上传日升序排好
+    if old.day is None or new.day is None or old.day == new.day:
+        return False
+    return STATUS_BADNESS.get(new.value, 0) > STATUS_BADNESS.get(old.value, 0)
+
+
 # --- 输入归一 ---------------------------------------------------------------------------------
 
 @dataclass(frozen=True)
@@ -278,6 +406,8 @@ class _Subject:
     newest_doc: DocStamp | None = None
     own_doc: DocStamp | None = None
     own_source_ref: str = ""
+    # --- B2b 跨资料冲突（缺席 = 这个 context 没有冲突记录，两条冲突规则一律闭嘴）---
+    conflicts: tuple[_SubjectConflict, ...] = ()
 
 
 def _norm_text(v) -> str:
@@ -317,7 +447,8 @@ def _match_signals(project: dict, signals: list[dict]) -> tuple[dict, ...]:
 
 
 def _to_subject(project: dict, signals: list[dict], as_of: date,
-                timeline: "DocTimeline | None" = None) -> _Subject:
+                timeline: "DocTimeline | None" = None,
+                conflicts=None) -> _Subject:
     status = _norm_text(project.get("status")).lower()
     progress = project.get("progress")
     if not isinstance(progress, int) or isinstance(progress, bool):
@@ -362,6 +493,7 @@ def _to_subject(project: dict, signals: list[dict], as_of: date,
         newest_doc=timeline.newest() if timeline is not None else None,
         own_doc=own_doc,
         own_source_ref=source_ref if own_doc is not None else "",
+        conflicts=_conflicts_for(project, conflicts, timeline),
     )
 
 
@@ -496,6 +628,37 @@ def _m_stale_evidence(s: _Subject, as_of: date) -> list[str]:
     return lines
 
 
+def _m_cross_doc_conflict(s: _Subject) -> list[str]:
+    """gap-design-0805 · B2b：不同资料对同一件事读数对不上 → 需确认。
+
+    进场闸（读数≥2、跨≥2 份文档、归属这张卡）全部在 `_conflicts_for`；这里只做一件事：
+    把够得着时间方向的冲突让给 `R-FRESH-CONTRADICTS-STALE`（`_fresh_contradicts`），
+    其余逐条铺 evidence。一条冲突只上一条规则——同一份证据印两遍是给经理出阅读理解题。
+    """
+    lines: list[str] = []
+    for c in s.conflicts:
+        if _fresh_contradicts(c):
+            continue
+        lines.extend(_conflict_evidence(c))
+    return lines
+
+
+def _m_fresh_contradicts_stale(s: _Subject) -> list[str]:
+    """gap-design-0805 · B2b（T4 移交）：更新上传的那份资料读到了更糟的状态 → 需确认。
+
+    与 R-CROSS-DOC-CONFLICT **同级**（T4 交接明令「别一高一低」，理由见 decision_rules.py
+    那两条规则头上的注释）。🔴 刻意**不做** done 豁免：另外几条时间规则豁免 done 是因为
+    「时间流逝不会把做完变回没做完」，而这条的触发根本不是时间流逝——是一份**更新的资料
+    白纸黑字读出了更糟的状态**。卡面写着 done、最新资料读到 blocked，正是最该被确认的形状；
+    方向判断交给 `STATUS_BADNESS`（done 排 0，新读数是 done 时永远判不出「更糟」）。
+    """
+    lines: list[str] = []
+    for c in s.conflicts:
+        if _fresh_contradicts(c):
+            lines.extend(_conflict_evidence(c))
+    return lines
+
+
 def _m_self_report_mismatch(s: _Subject) -> list[str]:
     """自报「正常」却挂着阻塞——和前端 gapDerive.ts「多看一眼」同一个口径。"""
     if s.status in STATUS_STEADY and s.blockers:
@@ -582,6 +745,8 @@ _MATCHERS = {
     "R-BLOCKER-ONE": _m_blocker_one,
     "R-PROGRESS-LOW": _m_progress_low,
     "R-SELF-REPORT-MISMATCH": _m_self_report_mismatch,
+    "R-CROSS-DOC-CONFLICT": _m_cross_doc_conflict,
+    "R-FRESH-CONTRADICTS-STALE": _m_fresh_contradicts_stale,
     "R-NO-EVIDENCE": _m_no_evidence,
     "R-UNCLASSIFIED": _m_unclassified,
     "R-DONE": _m_done,
@@ -691,8 +856,10 @@ class Decision:
 
 def grade_project(project: dict, signals: list[dict] | None = None, *,
                   as_of: date | None = None,
-                  timeline: DocTimeline | None = None) -> Decision:
-    """给一个项目卡定级。纯函数：同样的 (project, signals, as_of, timeline) → 同样的结果，永远。
+                  timeline: DocTimeline | None = None,
+                  conflicts=None) -> Decision:
+    """给一个项目卡定级。纯函数：同样的 (project, signals, as_of, timeline, conflicts)
+    → 同样的结果，永远。
 
     `project` 是 `CompanyContext.project_cards()` 的一项（定级这一路还额外带上 `sourceRef`，
     见 `_to_subject`），`signals` 是 `signal_cards()` 全量（本函数自己挑出与该项目相关的）。
@@ -700,9 +867,12 @@ def grade_project(project: dict, signals: list[dict] | None = None, *,
 
     `timeline`（B1）是这份 context 的资料时间轴，由 `build_doc_timeline(ctx.source_documents)`
     建。**不传 = 没有时间轴**，时间轴类规则一条都不命中——它仍然是纯函数，只是判据面少一块。
+
+    `conflicts`（B2b）是 `ExtractionResult.conflicts` 全量（本函数自己挑出归这张卡的，见
+    `_conflicts_for`）。**不传 = 没有冲突记录**，两条冲突规则一条都不命中，老调用方原样不受影响。
     """
     today = as_of or date.today()
-    subject = _to_subject(project, signals or [], today, timeline)
+    subject = _to_subject(project, signals or [], today, timeline, conflicts)
 
     hits: list[RuleHit] = []
     for r in RULES:
@@ -753,14 +923,16 @@ def grade_project(project: dict, signals: list[dict] | None = None, *,
 
 def grade_projects(projects: list[dict], signals: list[dict] | None = None, *,
                    as_of: date | None = None,
-                   timeline: DocTimeline | None = None) -> list[Decision]:
+                   timeline: DocTimeline | None = None,
+                   conflicts=None) -> list[Decision]:
     """批量定级 + 排序。顺序即前端 057「今天要决策的」的展示顺序：
 
     先按等级从高到低，同级按标题字典序（稳定、可复现，绝不用 dict/set 迭代序）。
-    `timeline` 语义同 `grade_project`：不传则时间轴类规则不参评。
+    `timeline` / `conflicts` 语义同 `grade_project`：不传则对应规则不参评。
     """
     today = as_of or date.today()
-    out = [grade_project(p, signals, as_of=today, timeline=timeline) for p in (projects or [])]
+    out = [grade_project(p, signals, as_of=today, timeline=timeline, conflicts=conflicts)
+           for p in (projects or [])]
     out.sort(key=lambda d: (-d.severity, d.subject_title, d.subject_id))
     return out
 

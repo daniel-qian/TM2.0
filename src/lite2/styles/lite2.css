@@ -4061,6 +4061,45 @@
   margin-top: 4px;
 }
 
+/* B2b（#56）· 冲突类命中（跨资料读数对照）的双栏证据面：每个读数一格、左右并排，
+   照差距卡 claim/observed 的对照语法（.lite-home-gap-side 一族）收窄到规则展开区。
+   数据仍是同一个 evidence: string[]，双栏只是排版——超过两格（三份资料各说各话）自动换行。 */
+.lite2-shell .lite-home-rule-evidence--split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 0;
+  border-left: none;
+  background: none;
+}
+
+.lite2-shell .lite-home-rule-evidence--split li {
+  padding: 6px 10px;
+  border-left: 2px solid var(--rule-strong);
+  border-radius: 0 6px 6px 0;
+  background: rgba(var(--lite2-ink-rgb), 0.035);
+  overflow-wrap: anywhere; /* 值/文件名都是客户原文，长中文名不许把栅格顶破 */
+}
+
+.lite2-shell .lite-home-rule-evidence--split li + li {
+  margin-top: 0;
+}
+
+/* 冲突出口按钮与「已收起」说明行 */
+.lite2-shell .lite-home-conflict-dismiss {
+  margin-top: 6px;
+  font-size: 11.5px;
+}
+
+.lite2-shell .lite-home-conflict-setaside {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0 0;
+  color: var(--ink-faint);
+  font-size: 11.5px;
+}
+
 /* 空态。两种"空"必须长得不一样也说得不一样：
    absent = 后端根本没发 decisions 这个键；none = 发了、但今天确实没有要定的事。 */
 .lite2-shell .lite-home-empty {

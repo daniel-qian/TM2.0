@@ -576,8 +576,12 @@ class CompanyContext:
         `as_of` 不传则取今天——时间类规则（到期日）以它为准，显式传入即可复现。
         """
         from ..decision_grading import grade_projects
+        # gap-design-0805 · B2b：conflicts（T6 归并记下的落败读数）与时间轴一样，decision_cards
+        # 与 briefing() **两边都要喂**——只喂一边，今天页的卡片和「N 个值得多看一眼」就会对不上。
         return [d.to_dict() for d in grade_projects(self._decision_subjects(), self.signal_cards(),
-                                                    as_of=as_of, timeline=self.doc_timeline())]
+                                                    as_of=as_of, timeline=self.doc_timeline(),
+                                                    conflicts=getattr(self.extraction,
+                                                                      "conflicts", None))]
 
     def briefing(self, as_of=None) -> dict:
         """A calm, HONEST 'organization weather' briefing. Counts are real (people/projects); it
@@ -634,10 +638,12 @@ class CompanyContext:
 
         signals = self.signal_cards()
         projects = self.project_cards()
-        # 🔴 定级用的是带 `sourceRef` 的那份投影 + 时间轴，必须与 `decision_cards()` 逐字同口径；
-        # 下面的 `_signals_no_decision_covers` 仍吃不带 sourceRef 的 `projects`（它只做信号归属）。
+        # 🔴 定级用的是带 `sourceRef` 的那份投影 + 时间轴 + 冲突记录，必须与 `decision_cards()`
+        # 逐字同口径；下面的 `_signals_no_decision_covers` 仍吃不带 sourceRef 的 `projects`
+        # （它只做信号归属）。
         decisions = grade_projects(self._decision_subjects(), signals,
-                                   as_of=as_of, timeline=self.doc_timeline())
+                                   as_of=as_of, timeline=self.doc_timeline(),
+                                   conflicts=getattr(self.extraction, "conflicts", None))
         flagged = [d for d in decisions if d.grade != CAN_PROCEED]
         loose_signals = self._signals_no_decision_covers(projects, signals, flagged)
         n_flagged, n_loose = len(flagged), len(loose_signals)

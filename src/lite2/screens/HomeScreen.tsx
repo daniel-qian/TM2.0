@@ -108,6 +108,11 @@ function classNames(parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(' ')
 }
 
+// gap-design-0805 · B2b（#56）· 跨资料冲突类命中。这两条规则的证据是「每个读数一行」的对照
+// （后端按上传日旧→新排好），渲染成双栏对照面 + 「可能只是叫法不同」的关闭出口。
+// 机器键在这里出现是**分支判据**不是文案（文案仍在 i18n 表按 rule_id 查）。
+const CONFLICT_RULE_IDS = new Set(['R-CROSS-DOC-CONFLICT', 'R-FRESH-CONTRADICTS-STALE'])
+
 // 等级 → 语气温度（与全壳 home-tone-* 同族：terracotta 今天需要你 · honey 值得一看 ·
 // sage 安稳）。🔴 只做视觉分档，不参与判级——判级是后端的活。
 function gradeTone(grade: LiveDecisionCard['grade']): string {
@@ -843,6 +848,12 @@ function DecisionCard({
 }) {
   const { t } = useDict()
   const [open, setOpen] = useState(false)
+  // B2b（#56）· 冲突命中的「可能只是叫法不同」出口。🔴 零新状态机制：直接复用 gapMarks 那本
+  // 分桶账（flowStore 的 dismiss/restore + resetFlowCompanyScope 清扫全部免费继承）；
+  // 键带 `conflict_` 前缀，与差距卡的 `gap_` 前缀天然不撞。
+  const gapMarks = useFlow((s) => s.gapMarks)
+  const dismissGap = useFlow((s) => s.dismissGap)
+  const restoreGap = useFlow((s) => s.restoreGap)
 
   // 机器键 → 中文/英文字段名。后端 unknown_fields / unparsed_fields 只发机器键
   // （'status'|'progress'|'dueDate'|'blockers'）；认不出的键原样显示
@@ -946,6 +957,16 @@ function DecisionCard({
             /* ADR-0033：规则的标题/依据由 i18n 表按 rule_id 出，阈值占位符用命中自带的 params 填。
                `rule_id` 本身仍原样露出——它是给经理引用的编号，不是文案。 */
             const ruleText = ruleTextOf(t, hit)
+            /* B2b（#56）· 冲突类命中：证据行是「每个读数一行」（verbatim 原值 + 文件名 + 上传日，
+               后端按上传日旧→新排好），渲染成双栏对照——照抄差距卡 claim/observed 的双栏语法，
+               不发明新载荷形状（数据仍走 LiveDecisionRuleHit.evidence: string[]）。
+               dismiss 键从证据内容派生：读数真变了（新上传改了说法）键就变，冲突自动重新浮出——
+               与 gapDerive 的 id 纪律同款（"reappears if the source material genuinely changed"）。 */
+            const isConflict = CONFLICT_RULE_IDS.has(hit.rule_id)
+            const conflictKey = isConflict
+              ? `conflict_${card.subject_id}_${hit.rule_id}_${hit.evidence.join('|')}`
+              : ''
+            const conflictSetAside = isConflict && gapMarks[conflictKey] === 'dismissed'
             return (
             <li key={hit.rule_id} className="lite-home-rule">
               <div className="lite-home-rule-head">
@@ -958,18 +979,48 @@ function DecisionCard({
                 {t.lite2.labelSep}
                 {ruleText.basis}
               </p>
-              {hit.evidence.length > 0 ? (
+              {hit.evidence.length > 0 && !conflictSetAside ? (
                 <>
                   {/* 证据必须自报出处：下面这几行是文档原文，不是 Avery 的话。
                       🔴 原文语言 ≠ 界面语言：中文文档在英文界面下仍是中文原样，永不翻译
                       （ADR-0033 决定 4 ← ADR-0018 可溯源红线）。 */}
                   <p className="lite-home-evidence-label">{t.lite2.homeDecisionEvidenceLabel}</p>
-                  <ul className="lite-home-rule-evidence">
+                  <ul
+                    className={classNames([
+                      'lite-home-rule-evidence',
+                      isConflict && 'lite-home-rule-evidence--split',
+                    ])}
+                  >
                     {hit.evidence.map((line, idx) => (
                       <li key={`${hit.rule_id}_${idx}`}>{line}</li>
                     ))}
                   </ul>
                 </>
+              ) : null}
+              {isConflict ? (
+                conflictSetAside ? (
+                  /* 收起 ≠ 消灭：等级是后端规则算的，前端绝不因此改档（下调无门，含前门）。
+                     这里只收起证据面 + 记一笔经理的判断，原文一字未动、随时可恢复。 */
+                  <p className="lite-home-conflict-setaside">
+                    {t.lite2.homeConflictDismissedNote}
+                    <button
+                      type="button"
+                      className="lite-btn lite-btn--ghost lite-home-conflict-restore"
+                      onClick={() => restoreGap(conflictKey)}
+                    >
+                      {t.lite2.homeConflictRestore}
+                    </button>
+                  </p>
+                ) : (
+                  /* ADR-0018 措辞：这不是错误提示，是请经理确认——绝不说「你写错了」。 */
+                  <button
+                    type="button"
+                    className="lite-btn lite-btn--ghost lite-home-conflict-dismiss"
+                    onClick={() => dismissGap(conflictKey)}
+                  >
+                    {t.lite2.homeConflictDismiss}
+                  </button>
+                )
               ) : null}
             </li>
             )
