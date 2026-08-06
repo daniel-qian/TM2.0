@@ -173,18 +173,26 @@ def test_the_LOSING_reading_and_its_source_vanish_without_trace_B2A():
     assert WEEKLY_TEAM not in whole and "本周周报.md:9" not in whole
 
 
-def test_TODAY_the_result_carries_no_conflict_record_at_all_B2A():
-    """今天 `ExtractionResult` 上**没有**任何装冲突的地方。
+def test_the_discarded_reading_is_now_RECORDED_in_conflicts_B2A():
+    """**跳闸开关已跳闸**（T6 第二步落地）。
 
-    🔴 这一条是给第二步准备的**跳闸开关**：T6 第二步给 `ExtractionResult` 加上
-    `conflicts: list[FieldConflict]` 的那一刻，本条会变红，而那个红就是"功能真的落地了"的证据
-    （red-first，本仓库的门纪律）。**到那一步再改这一条，不许提前改。**
+    这一条在第一步的 commit（51cb2de）里写的是 `assert not hasattr(res, "conflicts")` —— 一个刻意
+    留给第二步的红。第二步给 `ExtractionResult` 加上 `conflicts` 的那一刻它变红，那个红就是"功能
+    真的落地了"的 red-first 证据。现在把它翻成正向断言：**上面
+    test_the_LOSING_reading_and_its_source_vanish_without_trace_B2A 拍下来的那个蒸发现场，
+    从此有了收容所** —— 输家不再进人卡（那条断言依然全绿，实体上确实没有它），而是进 conflicts。
     """
-    res = _dedupe(people=[_person(team=ROSTER_TEAM), _person(team=WEEKLY_TEAM)])
-    assert not hasattr(res, "conflicts"), (
-        "ExtractionResult 已经长出 conflicts 了 —— 如果这是 T6 第二步干的，把本条改成正向断言"
-        "（断言两条读数都在 conflicts 里、各带 source 与 doc_key）；如果不是，说明有人偷偷加了字段。"
-    )
+    res = _dedupe(people=[
+        _person(team=ROSTER_TEAM, source="员工花名册.md:4"),
+        _person(team=WEEKLY_TEAM, source="本周周报.md:9"),
+    ])
+    assert len(res.conflicts) == 1
+    c = res.conflicts[0]
+    assert (c.subject_kind, c.field) == ("person", "team")
+    assert c.subject_ref == res.people[0].id, "subject_ref 应当是活下来那条实体的 id"
+    assert [v.value for v in c.values] == [ROSTER_TEAM, WEEKLY_TEAM], "values[0] 恒为胜出的读数"
+    assert [v.source for v in c.values] == ["员工花名册.md:4", "本周周报.md:9"]
+    assert [v.doc_key for v in c.values] == ["员工花名册.md", "本周周报.md"]
 
 
 def test_person_role_tenure_source_collide_the_same_way():
