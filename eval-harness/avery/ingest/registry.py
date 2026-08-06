@@ -521,10 +521,38 @@ class CompanyContext:
         return p
 
     def signal_cards(self) -> list[dict]:
-        """Doc-derived signals. Person-directed ones stay at situation (gated upstream)."""
+        """Doc-derived signals. Person-directed ones stay at situation (gated upstream).
+
+        🔴 NAMING TRAP (gap-design-0805 · B1): the key literally called `source` here is
+        `SignalEntity.source_kind` — a CATEGORY ('doc' / 'figma' / 'feedback'), NOT the
+        `'<source_key>:<line>'` document pointer. `SignalEntity.source` (the real pointer) is
+        NOT projected. Anything joining a card back to its uploaded document must NOT read
+        `card["source"]`; the decision path passes the pointer under a distinct `sourceRef`
+        key (see `_decision_subjects`) precisely so a type word can never be silently
+        mistaken for a document key — that mistake raises no error and turns no gate red.
+        """
         return [{"id": s.id, "source": s.source_kind, "subjectType": s.subjectType,
                  "subjectId": s.subjectRef, "summary": s.summary, "tag": s.tag}
                 for s in self.extraction.signals]
+
+    def _decision_subjects(self) -> list[dict]:
+        """gap-design-0805 · B1 —— 喂给定级引擎的项目卡：`project_cards()` 原样 + 一个
+        `sourceRef`（实体的 `'<source_key>:<line>'` 出处）。
+
+        为什么单开一条投影、不直接给 `_one_project_card` 加键：`sourceRef` 是**定级内部**要用的
+        join key，前端 `LiveProjectCard` 一个消费者都没有。放进 `project_cards()` 等于把一个
+        内部键塞进 /team 回帧的公开契约，以后想改就是破坏性变更。
+        """
+        return [{**self._one_project_card(pr), **({"sourceRef": pr.source} if pr.source else {})}
+                for pr in self.extraction.projects if not getattr(pr, "archived", False)]
+
+    def doc_timeline(self):
+        """gap-design-0805 · B1 —— 这份 context 的资料上传时间轴（source_key → uploaded_at）。
+        `decision_cards()` 与 `briefing()` **都**要吃它：两者共用同一张规则表，只喂一边会让
+        今天页的卡片和它上面那句「N 个值得多看一眼」对不上——那正是 `briefing()` 那段长注释
+        记着的旧伤（两套规则 = 同一屏自相矛盾）。"""
+        from ..decision_grading import build_doc_timeline
+        return build_doc_timeline(self.source_documents)
 
     def decision_cards(self, as_of=None) -> list[dict]:
         """feat-056 决策定级：给每个项目算一个 高风险/需确认/可推进，按严重度排好序。
@@ -538,8 +566,8 @@ class CompanyContext:
         `as_of` 不传则取今天——时间类规则（到期日）以它为准，显式传入即可复现。
         """
         from ..decision_grading import grade_projects
-        return [d.to_dict() for d in grade_projects(self.project_cards(), self.signal_cards(),
-                                                    as_of=as_of)]
+        return [d.to_dict() for d in grade_projects(self._decision_subjects(), self.signal_cards(),
+                                                    as_of=as_of, timeline=self.doc_timeline())]
 
     def briefing(self, as_of=None) -> dict:
         """A calm, HONEST 'organization weather' briefing. Counts are real (people/projects); it
@@ -596,7 +624,10 @@ class CompanyContext:
 
         signals = self.signal_cards()
         projects = self.project_cards()
-        decisions = grade_projects(projects, signals, as_of=as_of)
+        # 🔴 定级用的是带 `sourceRef` 的那份投影 + 时间轴，必须与 `decision_cards()` 逐字同口径；
+        # 下面的 `_signals_no_decision_covers` 仍吃不带 sourceRef 的 `projects`（它只做信号归属）。
+        decisions = grade_projects(self._decision_subjects(), signals,
+                                   as_of=as_of, timeline=self.doc_timeline())
         flagged = [d for d in decisions if d.grade != CAN_PROCEED]
         loose_signals = self._signals_no_decision_covers(projects, signals, flagged)
         n_flagged, n_loose = len(flagged), len(loose_signals)

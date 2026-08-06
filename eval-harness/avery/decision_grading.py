@@ -6,8 +6,10 @@ Danny 拍板 a+b：**等级归规则、文字归 Avery；Avery 只许上调、�
 `eval-harness/decision_grading_rules.md`。本文件只做三件事：
 
 1. `grade_project()` —— 纯函数、零 LLM、零网络、零随机：同一份 payload + 同一个 `as_of`
-   进去，等级和命中规则**逐字节一致**。时间类规则（到期日）显式吃 `as_of` 参数，
-   所以"同一份文件连跑两次结果一致"是结构上成立的，不是碰运气。
+   + 同一条 `timeline` 进去，等级和命中规则**逐字节一致**。时间类规则（到期日、资料新旧）
+   显式吃 `as_of` / `timeline` 参数，所以"同一份文件连跑两次结果一致"是结构上成立的，
+   不是碰运气。`timeline`（gap-design-0805 · B1）是这份 context 的资料上传时间轴，
+   由 `build_doc_timeline()` 从 `source_documents` 建；不传则时间轴类规则不参评。
 2. `apply_review()` —— 把 Avery 的一句人话理由贴上去，并**硬拦下调**：
    - 上调（severity 更高）+ 写明理由 → 采纳，标 `escalated`；
    - 上调但没写理由 → 拒绝（`escalation_rejected="missing_reason"`）；
@@ -23,7 +25,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, replace
-from datetime import date
+from datetime import date, datetime, timezone
 
 from .decision_rules import (
     BLOCKER_STACK_N,
@@ -40,6 +42,7 @@ from .decision_rules import (
     RULE_PARAMS,
     RULES,
     SEVERITY,
+    STALE_EVIDENCE_DAYS,
     STATUS_AT_RISK,
     STATUS_BLOCKED,
     STATUS_DONE,
@@ -48,8 +51,8 @@ from .decision_rules import (
 )
 
 __all__ = [
-    "AveryReview", "Decision", "RuleHit",
-    "grade_project", "grade_projects", "apply_review", "parse_due_date",
+    "AveryReview", "Decision", "DocStamp", "DocTimeline", "RuleHit",
+    "build_doc_timeline", "grade_project", "grade_projects", "apply_review", "parse_due_date",
 ]
 
 
@@ -146,6 +149,100 @@ def parse_due_date(text: str, *, as_of: date | None = None) -> date | None:
     return None
 
 
+# --- 资料时间轴（gap-design-0805 · B1）--------------------------------------------------------
+# 「这条判断读自多久以前的资料」不需要任何新表、新字段：实体的 `source` 是 `"<source_key>:<line>"`
+# （`ingest/extract.py` 拼的），而 `source_key` 正是 `SourceDocument` 的 join key，那张表上就带着
+# `uploaded_at`。所以时间轴是一个字符串前缀 join，和 `registry._chunks_per_file()` 数 chunk 用的
+# 是同一把切法（`rsplit(":", 1)`，source_key 自己含冒号也切不错）。
+#
+# 🔴 本模块不认识 `SourceDocument` 这个类型（鸭子类型：只要有 source_key / filename / uploaded_at
+# 三个属性即可）。这样定级层仍然是**纯数据进、纯数据出**，离线可测，不把 ingest 层拖进来。
+
+@dataclass(frozen=True)
+class DocStamp:
+    """一份上传资料在时间轴上的位置。`day` 是 `uploaded_at` 归一到 UTC 之后的**日期**。"""
+    source_key: str
+    filename: str
+    day: date
+
+
+def _uploaded_day(uploaded_at: str) -> date | None:
+    """把 `SourceDocument.uploaded_at`（ISO8601，通常带 UTC 时区和微秒）折成一个 UTC 日期。
+
+    🔴 全模块**只有这一处**做时间归一，谁要算资料年龄都得走它。理由是这是本文件第一条跨
+    date/datetime 边界的规则：`as_of` 是服务端本地的 naive `date`（生产恒为 `date.today()`），
+    而 `uploaded_at` 是带时区的瞬间。两处各归一一次，早晚会归出两个不同的日子。
+
+    认不出来（空串、被截断、不是 ISO）→ `None` = **不知道**，绝不兜底成 `today` 或 `date.min`：
+    前者让每份资料永远新鲜、后者让每份资料永远陈旧，两种假话各错一边。
+    """
+    text = str(uploaded_at or "").strip()
+    if not text:
+        return None
+    try:
+        moment = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if moment.tzinfo is not None:
+        moment = moment.astimezone(timezone.utc)
+    return moment.date()
+
+
+@dataclass(frozen=True)
+class DocTimeline:
+    """`source_key → DocStamp` 的只读时间轴。由 `build_doc_timeline()` 从一份 context 的
+    `source_documents` 建出来，喂给定级；本身零 IO、零时钟，可离线构造。"""
+    stamps: tuple[DocStamp, ...] = ()
+
+    def newest(self) -> DocStamp | None:
+        """手上**最新**的一份资料。同一天上传的多份按 source_key 取定（确定性优先于"哪份更像
+        主文档"——本模块的可复现承诺不允许任何依赖字典/集合迭代序的选择）。"""
+        if not self.stamps:
+            return None
+        return max(self.stamps, key=lambda s: (s.day, s.source_key))
+
+    def stamp_for(self, source: str) -> DocStamp | None:
+        """把一条实体出处（`"<source_key>:<line>"`）折回它那份资料；找不到 → `None`。
+
+        找不到是**正常**情形，不是异常：手加的项目卡没有出处，历史 context 也可能没有
+        `source_documents`。调用方据此不引这条出处，而不是引一个悬空的指针。
+        """
+        text = str(source or "").strip()
+        if not text:
+            return None
+        by_key = {stamp.source_key: stamp for stamp in self.stamps}
+        # 🔴 先按整串精确匹配，再退回"砍掉最后一段冒号"（`registry._chunks_per_file()` 的口径）。
+        # 顺序不能反：客户真会把文件命名成 `2026:上半年:复盘.md`，而实体出处按构造总带 `:<行号>`
+        # 后缀——先切再找，遇到这种文件名就会把 `:复盘.md` 当成行号砍掉，静默认不出这份资料。
+        # 精确匹配在前是既有口径的**严格超集**：带行号的正常出处走的仍是同一条回退分支。
+        if text in by_key:
+            return by_key[text]
+        if ":" in text:
+            return by_key.get(text.rsplit(":", 1)[0])
+        return None
+
+
+def build_doc_timeline(source_documents) -> DocTimeline:
+    """从 `CompanyContext.source_documents` 建时间轴。
+
+    join key 用 `source_key or filename`，与 `registry.file_cards()` 数 chunk 的回退口径逐字一致
+    （pre-032 的行没有 source_key）。读不出上传时间的行**整行跳过**——那是我们自己的元数据缺失，
+    不该变成关于客户资料的任何断言。
+    """
+    stamps: list[DocStamp] = []
+    for sd in source_documents or []:
+        day = _uploaded_day(getattr(sd, "uploaded_at", ""))
+        if day is None:
+            continue
+        key = _norm_text(getattr(sd, "source_key", "")) or _norm_text(getattr(sd, "filename", ""))
+        if not key:
+            continue
+        stamps.append(DocStamp(source_key=key,
+                               filename=_norm_text(getattr(sd, "filename", "")) or key,
+                               day=day))
+    return DocTimeline(stamps=tuple(stamps))
+
+
 # --- 输入归一 ---------------------------------------------------------------------------------
 
 @dataclass(frozen=True)
@@ -165,6 +262,12 @@ class _Subject:
     # 每项是 (字段名, 文档原文)。分成两个字段是因为把它们混作一谈 = 对着客户自己的文件说
     # "文档未提及"，而他翻开周报白纸黑字写着——这份说明书的全部说服力就建立在"当场把表给他看"。
     unparsed_fields: tuple[tuple[str, str], ...]
+    # --- B1 时间轴（缺席 = 这个 context 没有可用的上传时间，时间类新规则一律闭嘴）---
+    # newest_doc：手上**最新**一份资料（全 context，不是这个项目自己那份，理由见 _m_stale_evidence）。
+    # own_doc：这个项目读自的那份资料——**已经在时间轴里核过存在**，所以引它的出处不会是悬空指针。
+    newest_doc: DocStamp | None = None
+    own_doc: DocStamp | None = None
+    own_source_ref: str = ""
 
 
 def _norm_text(v) -> str:
@@ -203,7 +306,8 @@ def _match_signals(project: dict, signals: list[dict]) -> tuple[dict, ...]:
     return tuple(out)
 
 
-def _to_subject(project: dict, signals: list[dict], as_of: date) -> _Subject:
+def _to_subject(project: dict, signals: list[dict], as_of: date,
+                timeline: "DocTimeline | None" = None) -> _Subject:
     status = _norm_text(project.get("status")).lower()
     progress = project.get("progress")
     if not isinstance(progress, int) or isinstance(progress, bool):
@@ -232,6 +336,12 @@ def _to_subject(project: dict, signals: list[dict], as_of: date) -> _Subject:
         else:
             unknown.append("dueDate")
 
+    # 🔴 出处键叫 `sourceRef` 不叫 `source`，是**故意**的：`signal_cards()` 里字面叫 "source"
+    # 的键装的是 `source_kind`（'doc' / 'figma' 这种类型词，不是文档引用）。两种 dict 都流进
+    # 本函数，重名会让"拿一个类型词去当日期比"变成一个不报错、门也全绿的静默错误。
+    source_ref = _norm_text(project.get("sourceRef"))
+    own_doc = timeline.stamp_for(source_ref) if timeline is not None else None
+
     return _Subject(
         subject_id=_norm_text(project.get("id")) or _norm_text(project.get("title")),
         title=_norm_text(project.get("title")),
@@ -239,6 +349,9 @@ def _to_subject(project: dict, signals: list[dict], as_of: date) -> _Subject:
         status=status, progress=progress, due_raw=due_raw, due=due,
         blockers=blockers, signals=matched, unknown_fields=tuple(unknown),
         unparsed_fields=tuple(unparsed),
+        newest_doc=timeline.newest() if timeline is not None else None,
+        own_doc=own_doc,
+        own_source_ref=source_ref if own_doc is not None else "",
     )
 
 
@@ -333,6 +446,38 @@ def _m_progress_low(s: _Subject) -> list[str]:
     return []
 
 
+def _m_stale_evidence(s: _Subject, as_of: date) -> list[str]:
+    """gap-design-0805 · B1：撑着这张卡的资料已经太久没更新了 → 需确认。
+
+    🔴 判据取的是**全 context 最新一份**资料的上传日，不是这个项目自己那份。这一刀是为了
+    可证伪性：归并是「首个非空槽胜出」（`ingest/extract.py::_dedupe_entities`），同一个项目的
+    status 与 dueDate 完全可能读自两份不同的资料，而实体身上只留得下**一个** `source`。
+    所以「关于这个项目、之后没读到更新的」这句话我们今天证不了——按项目自己那份算，一份
+    昨晚刚传、只是没提到这个项目的周报，会让我们说出一句可当场证伪的假话。
+    而「我们手上最新的一份资料也这么老了」与归并怎么洗无关，恒为真。宁可说一句证得住的话。
+    （代价是命中面变粗：全 context 齐命中或齐不命中。等 T2 表单线把时间轴按人按周拉开、
+    T6 让归并留下落败读数之后，这条才有条件收窄到按项目算。）
+
+    🔴 拿不到任何上传时间（老 context、元数据缺失）→ 不命中。"不知道资料多新"绝不能变成
+    "资料很旧"——那是拿我们自己的元数据缺失去给客户的文档定性。
+    """
+    if s.newest_doc is None:
+        return []
+    if (as_of - s.newest_doc.day).days < STALE_EVIDENCE_DAYS:
+        return []
+    lines: list[str] = []
+    # 这个项目读自哪儿（ADR-0028 的出处契约，`<文档名>:<行号>`，客户可当场翻到那一行核对）。
+    # 只在时间轴里真的找得到那份资料时才引——不引悬空指针。
+    if s.own_source_ref:
+        lines.append(f'source="{s.own_source_ref}"')
+    # 判据本身：最新那份的**名字 + 上传日**。
+    # 🔴 这里印的日期必须**就是**上面比较过的那个 `day`，绝不在这里再从 uploaded_at 推一次
+    #    ——印一个、比另一个是本仓最经典的假话面。
+    lines.append(f'newest_material="{s.newest_doc.filename}" '
+                 f'uploaded_at="{s.newest_doc.day.isoformat()}"')
+    return lines
+
+
 def _m_self_report_mismatch(s: _Subject) -> list[str]:
     """自报「正常」却挂着阻塞——和前端 gapDerive.ts「多看一眼」同一个口径。"""
     if s.status in STATUS_STEADY and s.blockers:
@@ -418,6 +563,7 @@ _DATED_MATCHERS = {
     "R-OVERDUE": _m_overdue,
     "R-DUE-SOON": _m_due_soon,
     "R-DUE-VS-PROGRESS": _m_due_vs_progress,
+    "R-STALE-EVIDENCE": _m_stale_evidence,
 }
 
 # 命中规则的展示顺序 = 规则表顺序（同级内），保证输出稳定、可 diff。
@@ -516,15 +662,19 @@ class Decision:
 
 
 def grade_project(project: dict, signals: list[dict] | None = None, *,
-                  as_of: date | None = None) -> Decision:
-    """给一个项目卡定级。纯函数：同样的 (project, signals, as_of) → 同样的结果，永远。
+                  as_of: date | None = None,
+                  timeline: DocTimeline | None = None) -> Decision:
+    """给一个项目卡定级。纯函数：同样的 (project, signals, as_of, timeline) → 同样的结果，永远。
 
-    `project` 是 `CompanyContext.project_cards()` 的一项，`signals` 是 `signal_cards()` 全量
-    （本函数自己挑出与该项目相关的）。`as_of` 不传则取 `date.today()` —— 传进来才是可复现的用法，
-    测试和批量调用一律显式传。
+    `project` 是 `CompanyContext.project_cards()` 的一项（定级这一路还额外带上 `sourceRef`，
+    见 `_to_subject`），`signals` 是 `signal_cards()` 全量（本函数自己挑出与该项目相关的）。
+    `as_of` 不传则取 `date.today()` —— 传进来才是可复现的用法，测试和批量调用一律显式传。
+
+    `timeline`（B1）是这份 context 的资料时间轴，由 `build_doc_timeline(ctx.source_documents)`
+    建。**不传 = 没有时间轴**，时间轴类规则一条都不命中——它仍然是纯函数，只是判据面少一块。
     """
     today = as_of or date.today()
-    subject = _to_subject(project, signals or [], today)
+    subject = _to_subject(project, signals or [], today, timeline)
 
     hits: list[RuleHit] = []
     for r in RULES:
@@ -574,13 +724,15 @@ def grade_project(project: dict, signals: list[dict] | None = None, *,
 
 
 def grade_projects(projects: list[dict], signals: list[dict] | None = None, *,
-                   as_of: date | None = None) -> list[Decision]:
+                   as_of: date | None = None,
+                   timeline: DocTimeline | None = None) -> list[Decision]:
     """批量定级 + 排序。顺序即前端 057「今天要决策的」的展示顺序：
 
     先按等级从高到低，同级按标题字典序（稳定、可复现，绝不用 dict/set 迭代序）。
+    `timeline` 语义同 `grade_project`：不传则时间轴类规则不参评。
     """
     today = as_of or date.today()
-    out = [grade_project(p, signals, as_of=today) for p in (projects or [])]
+    out = [grade_project(p, signals, as_of=today, timeline=timeline) for p in (projects or [])]
     out.sort(key=lambda d: (-d.severity, d.subject_title, d.subject_id))
     return out
 

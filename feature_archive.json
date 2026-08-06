@@ -519,5 +519,14 @@
     "dependencies": [],
     "date": "2026-08-04",
     "evidence": "全电池 run-battery 31/31 绿（A 25 / B 3 / C 3，含本票新增 A 区 verify-locale-parity 48 PASS·0 FAIL）；后端 pytest -m 'not smoke and not seedgate and not needs_keys and not needs_db' → 3513 passed / 4 xfailed。新门 born-red 三个方向各造一次真违规、各自撤回验回绿：① 传输层不再补 locale → 43·1（判据③红）；② 档位词退回写死中文 → 39·5（①与四条②全红）；③ 渲染时翻掉引文 → 46·2。🔴 探针③ 第一次跑是全绿的——判据太松：宽 CJK 正则把残留的全角逗号当成'还是中文'。已收紧为两把尺子（壳用宽 CJK 逮全角冒号，引文用只认汉字的 HAN）+ 主判据换成'每行引文逐字出自上传语料'（'两遍逐字相同'只逮得住单侧翻译）。另有两处空跑被自证判据当场逮住：advise 留在 home 屏问导致 .report-section-label 采样为空、[].every() 恒真；只展开第一张卡导致采样面从 19 行缩到 4 行。后端新增 tests/test_locale_contract.py（28 条）+ tests/test_decision_i18n_contract.py（11 条，Python 读 TS 文案表做完整性/占位符/红线三重对账，解析器故意脆——条数对不上直接失败，不返回空字典）。两条会静默变成恒真的既有测试已就地改掉而非删除（兜底理由禁词表搬去前端文案表；红线改对规则标题跑）。回执 .issues/locale-contract-0803/receipt.md。"
+  },
+  "feat-097": {
+    "id": "feat-097",
+    "name": "time-rules-b1 · 资料时间轴 + R-STALE-EVIDENCE（差距战役 T4 / #51）",
+    "description": "gap-design-0805 差距战役 T4：把「判断读自多久以前的资料」做成确定性、零 LLM、零新表的定级规则。时间轴是纯 join——实体 source 的 '<source_key>:<line>' 前缀 × source_documents.uploaded_at；新增 decision_grading.DocStamp/DocTimeline/build_doc_timeline/_uploaded_day（全仓唯一一处 UTC 归一），CompanyContext 新增 _decision_subjects()（project_cards + 定级内部用的 sourceRef，不进 /team 公开契约）与 doc_timeline()，decision_cards() 与 briefing() 同口径吃它。新规则 R-STALE-EVIDENCE（需确认级，阈值 STALE_EVIDENCE_DAYS=45）四处同步：decision_rules.py / zh.ts / en.ts / decision_grading_rules.md。⚠ 票面第二条规则 R-FRESH-CONTRADICTS-STALE **未做，已裁决移交 T7**——两份读数在 _dedupe_entities 首个非空槽胜出时就没了（T6 才补），且每次 /ingest 铸新 context 导致同批资料同刻、判据恒假；理由与移交细节写在 tickets.md T4/T7 节。",
+    "dependencies": [],
+    "status": "done",
+    "evidence": "2026-08-06 · 分支 claude/nostalgic-curie-5f7b32（worktree）。门：后端离线全套 3565 passed / 77 deselected / 4 xfailed（AVERY_BRAIN=mock AVERY_EXTRACTOR=heuristic AVERY_EMBEDDINGS=keyword，四个 deselect 齐）；其中新增 18 条时间轴门（test_decision_grading.py 第 10/11 节）。init.sh 全绿（lint + typecheck + vite build）；i18n-orphans 孤儿键 0。🔴 反假绿取证：故意把 decision_cards 与 briefing 的 timeline 接线各断一次，test_decision_cards_really_carry_the_timeline_through 与 test_briefing_and_decision_cards_agree_about_staleness 分别变红，证明可达性门不是恒绿（两处接线各自 load-bearing）。两条实现 bug 由新门当场抓到并修：① stamp_for 对含冒号文件名在无行号后缀时切错（改为先精确匹配再回退）；② 手编标记那条初版门是黑名单式假门，改成考真接缝（sourceRef 恒取 pr.source、从不读 provenance）。人眼过：打印真 decision_cards 载荷 + 两种语言的 composeRuleReason 成句，确认原「可推进」卡被抬成「需确认」、中文句子无 SaaS 腔、英文无中英夹杂。详见 .issues/gap-design-0805/session-handoff-t4.md。",
+    "date": "2026-08-06"
   }
 }

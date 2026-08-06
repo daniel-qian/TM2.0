@@ -527,6 +527,12 @@
       "name": "locale 契约 · 判读链路双语对等（#38 / ADR-0033）",
       "status": "done",
       "evidence_ref": "feature_archive.json#feat-096"
+    },
+    {
+      "id": "feat-097",
+      "name": "time-rules-b1 · 资料时间轴 + R-STALE-EVIDENCE（差距战役 T4 / #51）",
+      "status": "done",
+      "evidence_ref": "feature_archive.json#feat-097"
     }
   ]
 }
