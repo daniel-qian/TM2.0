@@ -1,8 +1,9 @@
 # T4 · time-rules-b1 交接（本线专用）
 
-> 分支 `claude/nostalgic-curie-5f7b32`（worktree），基线 `main@c517975`。
+> 分支 `claude/nostalgic-curie-5f7b32`（worktree）。起点 `main@c517975`；收尾前并入了
+> 期间合进 main 的 **T1 常驻表单后端**（feature 记账因此让号：T1 占 feat-097，本线改为 feat-098）。
 > 根 `progress.md` / 根 `session-handoff.md` 归主检出的集成者，本文件只记本线。
-> feature 记账：`feature_list.json#feat-097` → `feature_archive.json#feat-097`。
+> feature 记账：`feature_list.json#feat-098` → `feature_archive.json#feat-098`。
 
 ## 一句话
 
@@ -110,7 +111,7 @@ evidence 印 source_key 而非 filename / join key 改 filename 优先 / 克隆�
 cd eval-harness && AVERY_BRAIN=mock AVERY_EXTRACTOR=heuristic AVERY_EMBEDDINGS=keyword \
   python -m pytest -m "not smoke and not seedgate and not needs_keys and not needs_db" -q
 ```
-→ **3565 passed / 77 deselected / 4 xfailed**。新增 18 条时间轴门在
+→ **3646 passed / 99 deselected / 4 xfailed**（已含并进来的 T1）。新增 28 条时间轴门在
 `tests/test_decision_grading.py` 第 10、11 节（新测试**必须**写在这个文件里：
 `test_no_rule_text_in_any_prompt` 的白名单只有四个文件，另起文件写规则号就触门）。
 
@@ -144,5 +145,8 @@ init.sh + i18n-orphans + 后端契约门已覆盖这次改动的全部面。
 ## 下一步
 
 - 本线完。T7 开工时先读 `tickets.md` 的 T4 收尾框 + T7 范围节（第二条规则的所有权已写明）。
-- 主检出集成者：本线可合 main，无跨线冲突（只碰 decision_* / registry.py 的两个新方法 /
-  两个 i18n 文件各一行 / 票册 / feature 记账）。
+- 本线已自行合入 main（AGENTS.md 先斩后奏）。与 T1 的唯一交叉是 `registry.py` / `pg_registry.py`
+  与两个 feature 记账 JSON：代码侧 git 自动并干净，JSON 侧两条线都取了 feat-097，已让号解决。
+- ⚠ T1 的交接里记了一条**与本票无关但会影响 needs_db 轮**的既有红：
+  `sweep_ephemeral` 子查询的 LIMIT 没有 ORDER BY。本票动了 `clone_context`（给副本重打
+  `uploaded_at`），跑 needs_db 时别把那条红算到这次头上。

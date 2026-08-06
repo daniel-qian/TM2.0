@@ -780,6 +780,9 @@ class ContextRegistry(ProjectWriteMixin):
         self._advise_runs: dict[str, list[AdviseRun]] = {}  # issue #49: persisted room Q&A, per context
         self._asks: dict[str, object] = {}               # feat-034: ask_id -> Ask (deep-copied)
         self._ask_tokens: dict[str, tuple[str, int]] = {}  # share_token -> (ask_id, recipient idx)
+        self._form_templates: dict[str, dict[str, object]] = {}  # T1: ctx -> {tpl_id -> FormTemplate}
+        self._form_submissions: dict[str, object] = {}   # T1: submission_id -> FormSubmission
+        self._form_tokens: dict[str, str] = {}           # T1: share_token -> submission_id
         self._account_contexts: dict[str, list[str]] = {}  # feat-053: user_id -> [context_id]
         self._context_owner: dict[str, str] = {}           # feat-053: context_id -> user_id (1:1)
         self._ephemeral_at: dict[str, datetime] = {}       # gc-demo-clones-0724: clone_id -> created (UTC)
@@ -889,6 +892,88 @@ class ContextRegistry(ProjectWriteMixin):
         if ask.status in ("shared", "collecting"):
             done = sum(1 for r in ask.recipients if r.answered_at)
             ask.status = "closed" if done >= len(ask.recipients) else "collecting"
+        return "ok"
+
+    # --- T1 · form-backend-a1a: 常驻表单（模板 + 单人单链提交）—— 与 ask 同一条 seam style -----
+    # ⚠ 这两组方法存的是「表单这个采集器」（模板长什么样、链接发给了谁、谁交了），**不是**资料的
+    # 第二条存储通道：一次提交最终会变成一份与上传文件平权的 SourceDocument（T2 的活）。
+
+    def put_form_template(self, template):
+        """存一张模板快照（新建或覆盖）。写侧红线门 FIRST（题面给人打分就 ValueError，什么都不落），
+        与 put_ask/append_note 同一道存储门。两头 deep-copy，调用方之后再改对象也污染不了库里的。"""
+        import copy
+        from .form import gate_form_red_line
+        gate_form_red_line(template)
+        snapshot = copy.deepcopy(template)
+        self._form_templates.setdefault(snapshot.context_id, {})[snapshot.id] = snapshot
+        return copy.deepcopy(snapshot)
+
+    def get_form_template(self, context_id: str, template_id: str):
+        import copy
+        tpl = self._form_templates.get(context_id, {}).get(template_id)
+        return copy.deepcopy(tpl) if tpl is not None else None
+
+    def list_form_templates(self, context_id: str) -> list:
+        """这家公司的模板，铸出顺序（内置的先铸，所以恒在前）。停用的也返回——经理要看得见它，
+        「不再发新链接」和「从库里消失」不是一回事。"""
+        import copy
+        return [copy.deepcopy(t) for t in self._form_templates.get(context_id, {}).values()]
+
+    def put_form_submission(self, submission):
+        """存一条提交快照（铸链时建行，answers=None）。存储安全门 FIRST（NUL），但**不**扫红线——
+        答案是员工本人的话（ADR-0023），保证在落点：它永不挂 avery.entities。"""
+        import copy
+        from .form import gate_submission_storage_safety
+        gate_submission_storage_safety(submission)
+        snapshot = copy.deepcopy(submission)
+        self._form_submissions[snapshot.id] = snapshot
+        # token 索引只跟当前快照走（重铸链干净替换）
+        self._form_tokens = {t: sid for t, sid in self._form_tokens.items()
+                             if sid != snapshot.id}
+        if snapshot.share_token:
+            self._form_tokens[snapshot.share_token] = snapshot.id
+        return copy.deepcopy(snapshot)
+
+    def get_form_submission(self, submission_id: str):
+        import copy
+        sub = self._form_submissions.get(submission_id)
+        return copy.deepcopy(sub) if sub is not None else None
+
+    def get_form_submission_by_token(self, share_token: str):
+        """一条员工链接 -> 那一份提交，或 None（未知 token → 大声 404）。token 就是全部凭据，
+        没有枚举面。"""
+        import copy
+        sid = self._form_tokens.get(share_token or "")
+        if sid is None:
+            return None
+        sub = self._form_submissions.get(sid)
+        return copy.deepcopy(sub) if sub is not None else None
+
+    def list_form_submissions(self, context_id: str, template_id: str | None = None,
+                              limit: int = 200) -> list:
+        """这家公司的提交，NEWEST FIRST，可按模板过滤。「谁交了/谁没交」的唯一真相就是这张表——
+        铸链即建行，所以没交的人在这里是 answers=None 的行，不是缺席。"""
+        import copy
+        rows = [s for s in self._form_submissions.values()
+                if s.context_id == context_id
+                and (template_id is None or s.template_id == template_id)]
+        rows.sort(key=lambda s: (s.created_at or "", s.id), reverse=True)
+        return [copy.deepcopy(s) for s in rows[: max(1, int(limit))]]
+
+    def record_form_answers(self, share_token: str, answers: list,
+                            submitted_at: str) -> str:
+        """答一次锁：首答落地返回 'ok'，重复提交返回 'already'（**不覆盖**——证据必须稳得住，
+        与 ask 回执同一条 PRD Q8 纪律），从未铸过的 token 返回 'unknown'。"""
+        sid = self._form_tokens.get(share_token or "")
+        if sid is None:
+            return "unknown"
+        sub = self._form_submissions.get(sid)
+        if sub is None:
+            return "unknown"
+        if sub.submitted_at:
+            return "already"
+        sub.answers = list(answers)
+        sub.submitted_at = submitted_at
         return "ok"
 
     # --- feat-053: the account seam (Supabase user id <-> context ownership) -------------------
@@ -1012,6 +1097,13 @@ class ContextRegistry(ProjectWriteMixin):
             self._by_id.pop(cid, None)
             self._notes.pop(cid, None)
             self._ephemeral_at.pop(cid, None)
+            # T1: 表单跟着 context 走 —— pg 侧靠 0013 的 FK ON DELETE CASCADE，这里手工对齐。
+            # （老的 _asks / _advise_runs 在这里没被清是本票之前就有的分歧，不在本票范围内动它。）
+            for sid in [s.id for s in self._form_submissions.values() if s.context_id == cid]:
+                sub = self._form_submissions.pop(sid, None)
+                if sub is not None and getattr(sub, "share_token", ""):
+                    self._form_tokens.pop(sub.share_token, None)
+            self._form_templates.pop(cid, None)
         return len(victims)
 
     def __contains__(self, context_id: str) -> bool:
@@ -1022,6 +1114,9 @@ class ContextRegistry(ProjectWriteMixin):
         self._notes.clear()
         self._asks.clear()
         self._ask_tokens.clear()
+        self._form_templates.clear()
+        self._form_submissions.clear()
+        self._form_tokens.clear()
         self._account_contexts.clear()
         self._context_owner.clear()
         self._ephemeral_at.clear()
@@ -1069,6 +1164,18 @@ class ContextRegistryProtocol(Protocol):
     def get_ask_by_token(self, share_token: str): ...
     def record_answer(self, share_token: str, answers: list, comment: str,
                       answered_at: str) -> str: ...
+
+    # 常驻表单（T1 · form-backend-a1a）: 模板 + 单人单链提交
+    def put_form_template(self, template): ...
+    def get_form_template(self, context_id: str, template_id: str): ...
+    def list_form_templates(self, context_id: str) -> list: ...
+    def put_form_submission(self, submission): ...
+    def get_form_submission(self, submission_id: str): ...
+    def get_form_submission_by_token(self, share_token: str): ...
+    def list_form_submissions(self, context_id: str, template_id: str | None = None,
+                              limit: int = 200) -> list: ...
+    def record_form_answers(self, share_token: str, answers: list,
+                            submitted_at: str) -> str: ...
 
     # account <-> context binding (feat-038 / feat-053)
     def link_account_context(self, user_id: str, context_id: str) -> bool: ...
