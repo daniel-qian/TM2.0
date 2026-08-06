@@ -1031,12 +1031,20 @@ export const zh: Dict = {
       "R-SIGNAL-WATCH": { "title": "关联信号提到延期 / 返工 / 缺人等待办", "basis": "关联信号 + 阻塞" },
       "R-SELF-REPORT-MISMATCH": { "title": "自报「正常」但挂着未解阻塞（自述与信号不一致）", "basis": "状态 + 阻塞" },
       "R-STALE-EVIDENCE": { "title": "手上最新的一份资料也是 {days} 天以前上传的，之后没再读到新的", "basis": "资料上传时间" },
+      "R-CROSS-DOC-CONFLICT": { "title": "同一件事在不同资料里读到了对不上的读数——需要确认以哪份为准", "basis": "跨资料同一字段的读数" },
+      "R-FRESH-CONTRADICTS-STALE": { "title": "同一件事上，更新上传的那份资料读到了更糟的读数——旧读数可能已经过时", "basis": "跨资料同一字段的读数 + 资料上传时间" },
       "R-NO-EVIDENCE": { "title": "没读到状态、阻塞、进度、到期日中的任何一项——信息不足，不能当作没风险", "basis": "（这四个字段都没读到）" },
       "R-UNCLASSIFIED": { "title": "读到的字段没有落在任何一条现有规则的判据里，无法直接归类，需要人工确认", "basis": "（未命中任何规则）" },
       "R-DONE": { "title": "项目自报已完成，且无风险信号", "basis": "状态" },
       "R-CLEAR": { "title": "项目自报正常，无未解阻塞、无风险信号", "basis": "状态 + 阻塞" }
     },
     "homeDecisionEscalated": "Avery 把等级往上调了",
+    // B2b（#56）· 冲突卡的关闭出口。🔴 措辞红线（ADR-0018）：这不是错误提示，是请经理确认
+    // ——两份都是他自己的资料，绝不说「你写错了」，也不替他断定哪份是对的。
+    // 收起只影响他自己的看板（前端分桶），等级与资料原文一字不动。
+    "homeConflictDismiss": "可能只是叫法不同",
+    "homeConflictDismissedNote": "已按「可能只是叫法不同」收起。读数还在资料里，随时可以恢复。",
+    "homeConflictRestore": "恢复",
     "homeDecisionRulesToggle": "判断依据",
     "homeDecisionRuleBasis": "看的字段",
     "homeDecisionEvidenceLabel": "文件原文",

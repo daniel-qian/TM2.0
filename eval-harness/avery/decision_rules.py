@@ -129,6 +129,12 @@ STATUS_AT_RISK = "at-risk"
 STATUS_DONE = "done"
 STATUS_STEADY: frozenset[str] = frozenset({"on-track", "steady"})
 
+# gap-design-0805 · B2b：状态「更糟」的唯一排序（R-FRESH-CONTRADICTS-STALE 的判据）。
+# 只给 `_norm_status` 词表里的两个坏词定序；其余（on-track/steady/done/没归一的原文词）一律 0。
+# 🔴 不认识的词绝不猜方向：对着一个读不懂的词断言「新的更糟」，比把这条恶化漏给同级的
+# R-CROSS-DOC-CONFLICT 兜着（它不看时间方向，照样上卡）贵得多。
+STATUS_BADNESS: dict[str, int] = {STATUS_AT_RISK: 1, STATUS_BLOCKED: 2}
+
 
 # --- 规则表 -----------------------------------------------------------------------------------
 
@@ -175,6 +181,21 @@ RULES: tuple[Rule, ...] = (
     Rule("R-STALE-EVIDENCE", NEEDS_CONFIRMATION,
          f"手上最新的一份资料也是 {STALE_EVIDENCE_DAYS} 天以前上传的，之后没再读到新的",
          "资料上传时间"),
+    # gap-design-0805 · B2b：跨资料对照（T6 让归并把丢弃的读数记进 conflicts，这两条把它上卡）。
+    # 🔴 两条**同为需确认**，T4 交接明令「别一高一低」。为什么不是高风险：
+    #   ① 冲突的形状本来就是「哪份为准需要人确认」，不是一条已证实的坏消息；
+    #   ② 已知假阳性面（同一日期两种写法、同义不同写——T6 有门钉着）配着「可能只是叫法不同」
+    #     的关闭出口——「高风险」卡上挂一个「可能没事」按钮是自相矛盾的卡面；
+    #   ③ 坏读数真胜出时自有 R-STATUS-BLOCKED 等高风险规则接手，Avery 也可带理由上调。
+    # 🔴 措辞（ADR-0018）：只说「读到…读到…对不上」，绝不「你写错了」——两份都是客户自己的字，
+    # 判谁对谁错不是我们的事。一条冲突只上**其中一条**规则：够得着时间方向的归第二条，
+    # 其余归第一条——同一份证据印两遍是给经理出阅读理解题。
+    Rule("R-CROSS-DOC-CONFLICT", NEEDS_CONFIRMATION,
+         "同一件事在不同资料里读到了对不上的读数——需要确认以哪份为准",
+         "跨资料同一字段的读数"),
+    Rule("R-FRESH-CONTRADICTS-STALE", NEEDS_CONFIRMATION,
+         "同一件事上，更新上传的那份资料读到了更糟的读数——旧读数可能已经过时",
+         "跨资料同一字段的读数 + 资料上传时间"),
     # 🔴 措辞：说的是"我没读到"，不是"文档没写"。抽取层读不出来（中文标签、非常规排版）时，
     # 后者是当着客户的面否认他自己写过的字——这句话会原样打到经理屏幕上。
     Rule("R-NO-EVIDENCE", NEEDS_CONFIRMATION,
