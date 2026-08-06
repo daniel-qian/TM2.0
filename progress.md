@@ -77,11 +77,21 @@ LiteComposer 退役 `7b03982` · 卡面快问 `a69a405` · 问答持久化 `9990
   `avery_run49_test` / `avery_t1form_test` / `avery_sweep_probe` / `avery_pristine_probe` 均已
   drop，`teammaster-postgres-1` 容器留在运行态。
 - ⚠ `verify-null-owner` 偶发假红条目保留观察；0805 那轮真红是采样面搬家，已修门后 15/15。
-- 🔴 **`test_sweep_respects_the_batch_limit[postgres]` 在整轮 needs_db 里红，且是既有问题**
-  （已用 `git archive HEAD` 干净副本同条件复现做归属判定，非 T1 引入）。根因：
-  `sweep_ephemeral` 子查询 `SELECT ... LIMIT %s` 没有 `ORDER BY`（`pg_registry.py:576-584`），
-  库里有多条 ephemeral 候选时删哪几条由 PG 自由决定，而该测试假定删的正是它刚造的那三个克隆。
-  单跑（空库）恒绿、整轮跑就串味。修法：子查询补确定性排序，或让测试只在自己的前缀里断言。
+- ✅ **`test_sweep_respects_the_batch_limit[postgres]` 已修**（整轮 needs_db 现在 91 passed / 0 failed）。
+  ⚠ **上一版 progress 写的根因是错的**（「缺 `ORDER BY`」），在此纠正：真因是
+  **本机 Docker 容器的时钟会来回跳 ~115 秒**（实测抓到：连续采样里 delta 在 −0.25s 与 +115s
+  之间反复横跳）。在「跳到未来」那个窗口里建的行拿到未来的 `created_at`，`created_at < now()`
+  恒假，于是它对 sweep 隐身 ~115 秒 → `sweep(limit=50)` 返回 0。
+  纯逻辑上也能证伪旧假说：无序 `LIMIT 50` 只要有合格行就必删至少一条，**返回 0 只能是 WHERE
+  一条都没匹配** —— 那是过滤问题，不是排序问题。
+  修法：那几条 sweep 测试原本隐含地赌「刚建好的行已经比 now() 旧」，现在改成先把克隆的创建时刻
+  往前拨一小时（`_backdate_clone`，两个实现各拨各的那份真相），±115 秒的跳动再也影响不到判据，
+  测的还是同一件事。**产品代码在这件事上本来就没问题。**
+- 🔴 **本机 Docker 容器时钟会来回跳 ~115 秒**（2026-08-06 实测抓到，见上一条）。凡是判据形如
+  `created_at < now()`、又依赖「刚写的行已经比现在旧」的测试，都会**间歇假红**；跑得越久越容易撞上
+  （三分钟的 needs_db 轮次里必中，十秒的单跑几乎不中——这正是「单跑绿、整轮红」的由来）。
+  自查：`docker exec teammaster-postgres-1 psql -U postgres -t -A -c "SELECT now()"` 与宿主机时间
+  连采几次比差值。写测试时**别赌墙上时钟**：要「够旧」就显式把时间拨回去。
 - ⚠ **本机 curl 把 argv 里的中文按 GBK 编**（实测「如常」→ `%C8%E7%B3%A3`，UTF-8 应是
   `%E5%A6%82%E5%B8%B8`）。用 curl 打中文表单/JSON 时，中文只走 heredoc（stdin 不过代码页转换），
   预先 percent-encode 成纯 ASCII 后才允许进 argv——写法照抄

@@ -994,10 +994,35 @@ def _demo_clone(impl, master_cid: str, *, ephemeral: bool = True) -> str:
     return new
 
 
+def _backdate_clone(impl, cid: str, *, hours: float) -> None:
+    """把一条 ephemeral 克隆的「创建时刻」往前拨 —— 两个实现各拨各的那份真相
+    （pg 是 `avery.contexts.created_at`，内存是 `_ephemeral_at`）。
+
+    🔴 为什么这些 sweep 测试非拨不可（2026-08-06 实测，别把它当装饰删掉）：
+    `older_than_hours=0` 判的是 `created_at < now()`，于是「刚建好的行已经比现在旧」成了隐含前提。
+    这个前提**依赖墙上时钟单调**，而本机 Docker 容器的时钟会**来回跳 ~115 秒**：跑一轮 needs_db
+    的三分钟里，恰好在「跳到未来」窗口内建的那条克隆会拿到未来的 `created_at`，于是
+    `created_at < now()` 恒假、它对 sweep 隐身 ~115 秒，`test_sweep_respects_the_batch_limit`
+    就在 `sweep(limit=50) == 1` 上红成 `0 == 1`。产品代码没问题，是这条测试借了一个它根本不需要的
+    前提。往前拨一小时之后，±115 秒的跳动再也影响不到判据 —— 测的还是同一件事（批量上限），
+    只是不再赌时钟。"""
+    reg = impl.fresh()
+    if impl.name == "postgres":
+        with reg._connect() as conn:
+            conn.execute(
+                "UPDATE avery.contexts SET created_at = now() - make_interval(secs => %s) "
+                "WHERE context_id = %s", (float(hours) * 3600.0, cid))
+        return
+    from datetime import datetime, timedelta, timezone
+    reg._ephemeral_at[cid] = datetime.now(timezone.utc) - timedelta(hours=hours)
+
+
 def test_sweep_collects_only_old_unlinked_ephemeral_clones(impl, tmp_path):
     reg, master, _ = _ingest(impl, tmp_path / "mem", owner_token="token-master")
     guest = _demo_clone(impl, master)             # an anonymous demo guest clone
     linked = _demo_clone(impl, master)            # a guest who then signs in
+    for c in (guest, linked):                     # 见 _backdate_clone：别赌墙上时钟
+        _backdate_clone(impl, c, hours=1)
     assert reg.link_account_context("user_signed_in", linked)
 
     # a generous TTL collects nothing — none of these clones is old enough yet.
@@ -1016,10 +1041,38 @@ def test_sweep_respects_the_batch_limit(impl, tmp_path):
     opportunistic claim-time GC is a small, cheap delete, never an unbounded one on the hot path."""
     reg, master, _ = _ingest(impl, tmp_path / "mem", owner_token="token-master")
     clones = [_demo_clone(impl, master) for _ in range(3)]
+    for c in clones:                              # 见 _backdate_clone：别赌墙上时钟
+        _backdate_clone(impl, c, hours=1)
     assert reg.sweep_ephemeral(older_than_hours=0, limit=2) == 2
     assert len([c for c in clones if c in reg]) == 1, "batch 上限没生效（应留 1 份给下次 claim 扫）"
     assert reg.sweep_ephemeral(older_than_hours=0, limit=50) == 1
     assert all(c not in reg for c in clones)
+
+
+def test_a_bounded_sweep_collects_the_oldest_first(impl, tmp_path):
+    """有上限就意味着「这一批收哪几个」是个**选择**，两个实现必须做同一个选择：**最旧的先收**。
+
+    内存孪生一直是这个语义（`sorted(self._ephemeral_at...)`）；pg 侧此前是无序 `LIMIT`，删哪几条
+    由规划器自由决定 —— 同一条被合约套双跑的缝，两边可以给出不同答案。这条把语义钉死。
+
+    ⚠ 判据是**故意反着造**的：三个克隆按「最新 → 最旧」的顺序插入，所以物理/插入顺序与年龄顺序
+    正好相反。无序 `LIMIT 1` 走顺序扫描会拿到物理上第一条（最年轻的那个），只有真的按
+    `created_at` 排序才会拿到最旧的。顺着造就会「碰巧全绿」，量不出东西。"""
+    reg, master, _ = _ingest(impl, tmp_path / "mem", owner_token="token-master")
+    young = _demo_clone(impl, master)
+    mid = _demo_clone(impl, master)
+    old = _demo_clone(impl, master)
+    _backdate_clone(impl, young, hours=1)
+    _backdate_clone(impl, mid, hours=5)
+    _backdate_clone(impl, old, hours=10)
+
+    assert reg.sweep_ephemeral(older_than_hours=0, limit=1) == 1
+    assert old not in reg, "有上限的 sweep 没有先收最旧的那一个"
+    assert mid in reg and young in reg, "只该收走一个"
+
+    assert reg.sweep_ephemeral(older_than_hours=0, limit=1) == 1
+    assert mid not in reg, "第二轮该收次旧的"
+    assert young in reg, "最年轻的应该留到最后"
 
 
 def test_a_non_ephemeral_clone_is_never_swept(impl, tmp_path):

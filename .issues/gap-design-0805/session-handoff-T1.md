@@ -91,7 +91,11 @@ POST /f/{token}/submit                        提交（答一次锁）
    复核者实测把 outbound 削到只剩 label，整套门依旧全绿。已把那条测试参数化成四例，
    另加一条反向自证（直接问检测器：语料本身确实违规），防止四条在量空气。
 
-### ⚠ 一条既有的红，**不是本票引入的**（已做归属判定）
+### ⚠ 一条既有的红，**不是本票引入的**（已做归属判定）—— 后续更正见文末
+
+> **2026-08-06 更正**：下面这一节把根因写成了「`sweep_ephemeral` 缺 `ORDER BY`」。**那是错的**，
+> 后来的取证推翻了它。真因是**本机 Docker 容器时钟来回跳 ~115 秒**。归属判定（不是本票引入）
+> 依然成立，只有根因换了。完整证据与修法见本文件末尾的「更正」一节。
 
 `tests/test_registry_contract.py::test_sweep_respects_the_batch_limit[postgres]` 在整轮
 `-m needs_db` 里红。判定方法：用 `git archive HEAD` 导出一份**未含本票任何改动**的干净副本，
@@ -152,3 +156,76 @@ ephemeral 行）就会串味。**修法**：给子查询补一个确定性排序
   `%E5%A6%82%E5%B8%B8`）。第一版取证脚本因此拿到一片 422 —— **那是脚本在撒谎，服务端拒得对**。
   `curl-chain-T1.sh` 里的写法是：中文只走 heredoc（stdin 不过代码页转换），预先 percent-encode 成
   纯 ASCII 之后才允许进 argv。后面几票要在本机用 curl 打中文，照抄那个 `encode_body`。
+
+---
+
+## 更正（2026-08-06 晚）：那条既有的红，根因换了
+
+上面「一条既有的红」一节把 `test_sweep_respects_the_batch_limit[postgres]` 的根因写成
+「`sweep_ephemeral` 的子查询 `LIMIT` 没有 `ORDER BY`」。**那是一条没验证就写下的假说，是错的。**
+按票复核时先做了复现取证，结论如下。
+
+### 真因：本机 Docker 容器的时钟会来回跳 ~115 秒
+
+连续采样宿主机与容器时钟（间隔 4-5 秒）当场抓到：
+
+```
+#0 delta=+115.08s   #1 +115.07s   #2 +115.07s
+#3 delta=-0.24s     ← 跳回同步
+#4 +114.90s         #5 +115.06s   ← 又跳走
+```
+
+在测试里装探针，拍到了行级证据（同一张表，两个时钟）：
+
+```
+MASTER created=14:34:07  older_than_now=True
+clone1 created=14:34:09  older_than_now=True
+clone2 created=14:34:11  older_than_now=True
+clone3 created=14:36:05  older_than_now=False   ← 比其它行超前 115 秒
+now()          =14:34:12
+```
+
+`sweep_ephemeral` 的谓词是 `created_at < now() - make_interval(hours => %s)`。恰好在「跳到未来」
+那个窗口里建的那条克隆，`created_at` 落在库的未来 → 谓词恒假 → 它对 sweep **隐身 ~115 秒** →
+`sweep(limit=50)` 返回 0 → 断言 `0 == 1` 失败。
+
+跑得越久越容易撞上：三分钟的 needs_db 轮次里必中，十秒的空库单跑几乎不中 —— 这正是
+「单跑绿、整轮红」的真实来源（此前被误读成「前面的测试留下了 ephemeral 残留」）。
+
+### 旧假说的纯逻辑反证
+
+不需要任何环境证据也能推翻它：**无序 `LIMIT 50` 只要还有合格行，就必然删掉至少一条。**
+返回 **0** 只能说明 `WHERE` 一条都没匹配上 —— 那是**过滤**问题，不是**排序**问题。
+排序决定「删哪几条」，永远不决定「删不删得到」。这一步当初漏了。
+
+### 改了什么
+
+1. **测试不再赌墙上时钟**（`_backdate_clone`）：那几条 `older_than_hours=0` 的 sweep 测试原本
+   隐含地依赖「刚建好的行已经比 now() 旧」。现在先把克隆的创建时刻显式往前拨一小时（pg 拨
+   `contexts.created_at`，内存拨 `_ephemeral_at`），±115 秒的跳动再也影响不到判据。
+   **测的还是同一件事**（批量上限），只是不再借一个它根本不需要的前提。
+2. **顺带修掉一条真实的双胞胎语义分歧**（与这次的红**无关**，是独立发现）：内存孪生一直是
+   **最旧优先**（`sorted(self._ephemeral_at...)`），pg 侧是无序 `LIMIT`，删哪几条由规划器自由决定
+   —— 同一条被合约套双跑的缝，两边可以给出不同答案。pg 侧补上 `ORDER BY c.created_at, c.context_id`。
+   实测（5000 行，`EXPLAIN (COSTS OFF)`）排序直接走 0011 的部分索引
+   `contexts_ephemeral_created_idx`，只为 tie-break 增量排一下：
+
+   ```
+   Limit -> Incremental Sort (Presorted Key: c.created_at)
+          -> Nested Loop Anti Join
+               -> Index Scan using contexts_ephemeral_created_idx
+   ```
+
+3. **新增 `test_a_bounded_sweep_collects_the_oldest_first`** 把这条语义钉死，两个实现同跑。
+   判据是**故意反着造**的：三个克隆按「最新 → 最旧」插入，所以物理顺序与年龄顺序相反 ——
+   无序 `LIMIT 1` 走顺序扫描会拿到物理第一条（最年轻的），只有真按 `created_at` 排序才拿到最旧的。
+   顺着造就会「碰巧全绿」。**变异验证过**：摘掉 `ORDER BY` → 这条精确打红（`有上限的 sweep 没有
+   先收最旧的那一个`），其余三条 sweep 测试仍绿；还原后 4 条全绿。
+
+### 账
+
+- 整轮 `-m needs_db`：**91 passed / 0 failed**（此前 85 passed + 1 failed）。
+- 离线全量：**3610 passed** / 100 deselected / 4 xfailed。
+- 生产影响：`sweep_ephemeral` 从「任意挑」变成「最旧优先」。这是**好的**改变（GC 语义本该如此，
+  且与内存孪生对齐），已写进该函数的 docstring。时钟谓词**没有改** —— 生产上时钟向前跳一步，
+  那一步内建的克隆会短暂 GC 隐身、之后自动恢复，而 TTL 是 48h 量级，无害。

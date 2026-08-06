@@ -566,7 +566,28 @@ class PostgresContextRegistry(ProjectWriteMixin):
         NEVER touches a demo master (ctx_demo_*, built via put() -> ephemeral=false) or an
         account-linked context (the NOT EXISTS guard, belt-and-suspenders with link_account_context's
         ephemeral -> false). Runs under its own short lock_timeout/statement_timeout and a bounded
-        LIMIT, so an opportunistic call on the /demo/claim path can never stall the claim."""
+        LIMIT, so an opportunistic call on the /demo/claim path can never stall the claim.
+
+        **OLDEST FIRST**（`ORDER BY created_at`）—— 一个有上限的 sweep 必须回答「这一批收哪几个」，
+        而这是个**语义选择**，不该交给规划器。三条理由：
+          ① 双胞胎对齐：内存孪生一直就是最旧优先（`registry.py` 的 `sorted(self._ephemeral_at...)`），
+             pg 侧此前是无序 LIMIT —— 同一条被合约套双跑的缝，两边给的答案可以不同；
+          ② GC 语义本来就该先收最旧的：积压时新克隆不该插队，回收顺序可预期；
+          ③ 几乎免费：0011 的部分索引正是 `(created_at) WHERE ephemeral`，排序直接走它。
+             实测（5000 行 ephemeral，`EXPLAIN (COSTS OFF)`）：
+                 Limit -> Incremental Sort (Presorted Key: c.created_at)
+                        -> Nested Loop Anti Join
+                             -> Index Scan using contexts_ephemeral_created_idx
+             索引同时承担过滤与排序；`context_id` 的 tie-break 只在 created_at 相等的那一小撮里
+             增量排一下，代价可忽略。它保证「同一刻创建的两条」也有确定顺序 —— 不留任何一处
+             「实际上不会发生所以无所谓」的缝，本条修的就是这种缝。
+
+        ⚠ 这**不是** 2026-08-06 那次 `test_sweep_respects_the_batch_limit[postgres]` 变红的原因。
+        那次的真因是**本机 Docker 容器时钟会来回跳 ~115 秒**：在「跳到未来」的窗口里建的行拿到
+        未来的 `created_at`，`created_at < now()` 恒假，于是它对 sweep 隐身 ~115 秒。逻辑上也对得
+        上：无序 LIMIT 只要有合格行就必删至少一条，返回 0 只能是 WHERE 一条都没匹配。排序与过滤是
+        两件事，别把它们混成一条。（生产上同样成立：时钟向前跳一步，那一步之内建的克隆会短暂
+        GC 隐身，之后自动恢复 —— TTL 是 48h 量级，无害，故不改这条谓词。）"""
         self._ensure_schema()
         hours = max(0, int(older_than_hours))
         batch = max(1, int(limit))
@@ -580,6 +601,7 @@ class PostgresContextRegistry(ProjectWriteMixin):
                 "    AND c.created_at < now() - make_interval(hours => %s)"
                 "    AND NOT EXISTS (SELECT 1 FROM avery.account_contexts a"
                 "                    WHERE a.context_id = c.context_id)"
+                "  ORDER BY c.created_at, c.context_id"
                 "  LIMIT %s)",
                 (hours, batch))
             return cur.rowcount
