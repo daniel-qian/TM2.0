@@ -537,11 +537,16 @@ class PostgresContextRegistry(ProjectWriteMixin):
                 "SELECT %s, filename, content FROM avery.memory_files WHERE context_id = %s",
                 (new_context_id, src_context_id))
             conn.execute(
+                # 🔴 uploaded_at 重打成 now()，不逐字继承（gap-design-0805 · B1，与内存版
+                # ContextRegistry.clone_context 同口径——那边有完整理由）：母本内容寻址、一次
+                # 铸成就常驻，逐字继承会让「资料多久没更新」在母本满 45 天后，对每一位刚领到
+                # 示例团队、一个文件都没传过的访客整块判「需确认」。列顺序与上面的列表一一对应，
+                # 改这里必须同时数两行。
                 "INSERT INTO avery.source_documents "
                 "(context_id, idx, filename, source_key, mime, size_bytes, doc_kind, status, "
                 " content, storage_ref, uploaded_at) "
                 "SELECT %s, idx, filename, source_key, mime, size_bytes, doc_kind, status, "
-                " content, storage_ref, uploaded_at "
+                " content, storage_ref, now() "
                 "FROM avery.source_documents WHERE context_id = %s",
                 (new_context_id, src_context_id))
             notes = conn.execute(

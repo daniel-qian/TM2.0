@@ -533,6 +533,12 @@
       "name": "T1 常驻表单后端 · 模板+单人单链+员工 H5（gap-design-0805 §A1）",
       "status": "done",
       "evidence_ref": "feature_archive.json#feat-097"
+    },
+    {
+      "id": "feat-098",
+      "name": "time-rules-b1 · 资料时间轴 + R-STALE-EVIDENCE（差距战役 T4 / #51）",
+      "status": "done",
+      "evidence_ref": "feature_archive.json#feat-098"
     }
   ]
 }

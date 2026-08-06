@@ -1030,6 +1030,7 @@ export const zh: Dict = {
       "R-PROGRESS-LOW": { "title": "自报进度不足 {pct}% 且未完成", "basis": "进度" },
       "R-SIGNAL-WATCH": { "title": "关联信号提到延期 / 返工 / 缺人等待办", "basis": "关联信号 + 阻塞" },
       "R-SELF-REPORT-MISMATCH": { "title": "自报「正常」但挂着未解阻塞（自述与信号不一致）", "basis": "状态 + 阻塞" },
+      "R-STALE-EVIDENCE": { "title": "手上最新的一份资料也是 {days} 天以前上传的，之后没再读到新的", "basis": "资料上传时间" },
       "R-NO-EVIDENCE": { "title": "没读到状态、阻塞、进度、到期日中的任何一项——信息不足，不能当作没风险", "basis": "（这四个字段都没读到）" },
       "R-UNCLASSIFIED": { "title": "读到的字段没有落在任何一条现有规则的判据里，无法直接归类，需要人工确认", "basis": "（未命中任何规则）" },
       "R-DONE": { "title": "项目自报已完成，且无风险信号", "basis": "状态" },
