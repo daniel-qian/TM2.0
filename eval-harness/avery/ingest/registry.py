@@ -30,6 +30,7 @@ from .extract import (
     PersonEntity,
     ProjectEntity,
     ProjectMilestone,
+    doc_key_of,
     ProjectRisk,
     norm_milestone_status,
     norm_risk_level,
@@ -745,8 +746,9 @@ class CompanyContext:
         (feat-032 P1). Same cite seam the advisor uses."""
         counts: dict[str, int] = {}
         for m in self.extraction.materials:
-            src = m.source or ""
-            key = src.rsplit(":", 1)[0] if ":" in src else src
+            # T6/B2a — 这行原本是手抄的 rsplit 表达式；提成 extract.doc_key_of 后改调它（ONE RULER：
+            # 冲突卡引用的文档必须和这里数块数的文档是同一个口径）。行为逐字符不变。
+            key = doc_key_of(m.source)
             if key:
                 counts[key] = counts.get(key, 0) + 1
         return counts

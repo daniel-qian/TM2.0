@@ -29,7 +29,7 @@ from pathlib import Path
 from avery.scoring_policy import person_scoring_allowed
 
 from .parse import ParsedDoc, parse_file, ParseError
-from .extract import ExtractionResult, extract_docs, Extractor
+from .extract import ExtractionResult, extract_docs, doc_key_of, Extractor
 from .redline_extract import validate_extraction, ExtractionRedlineResult, ExtractionViolation
 from .store import RetrievalStore, Embedder, build_store
 from .registry import (
@@ -73,8 +73,7 @@ def _finalize_source_documents(source_documents: list[SourceDocument] | None,
     # material chunks per document key (same '<key>:<line>' prefix the manifest counts on).
     chunk_counts: dict[str, int] = {}
     for m in (extraction.materials if extraction else []):
-        src = m.source or ""
-        key = src.rsplit(":", 1)[0] if ":" in src else src
+        key = doc_key_of(m.source)      # T6/B2a — ONE RULER，见 extract.doc_key_of 的 docstring
         if key:
             chunk_counts[key] = chunk_counts.get(key, 0) + 1
     for sd in src_docs:

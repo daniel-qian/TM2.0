@@ -52,7 +52,8 @@ from dataclasses import asdict
 from pathlib import Path
 
 from .extract import (
-    ExtractionResult, MaterialChunk, MethodCard, PersonEntity, ProjectEntity, SignalEntity,
+    ExtractionResult, FieldConflict, MaterialChunk, MethodCard, PersonEntity, ProjectEntity,
+    SignalEntity,
 )
 from .redline_extract import validate_extraction
 from .registry import (
@@ -87,13 +88,14 @@ _PERSON_FIELDS = {f.name for f in dataclasses.fields(PersonEntity)}
 _PROJECT_FIELDS = {f.name for f in dataclasses.fields(ProjectEntity)}
 _SIGNAL_FIELDS = {f.name for f in dataclasses.fields(SignalEntity)}
 _PLAYBOOK_FIELDS = {f.name for f in dataclasses.fields(MethodCard)}  # rich-align-0722/08
+_CONFLICT_FIELDS = {f.name for f in dataclasses.fields(FieldConflict)}   # T6/B2a
 
 # The entity `kind` column values put() writes — the SINGLE source of truth the DB `entities_kind_check`
 # CHECK (migration 0001 + 0010) must match. Add a kind here WITHOUT extending that CHECK and real
 # Postgres rejects the write in prod, invisible to the offline suite (`not needs_db` never hits the
 # CHECK) — exactly how 08's "playbook" kind shipped and only failed on the prod demo cast. The offline
 # guard test_entities_kind_check_covers_written_kinds asserts the two never drift again.
-_ENTITY_KINDS = ("person", "project", "signal", "playbook")   # rich-align-0722/08 added "playbook"
+_ENTITY_KINDS = ("person", "project", "signal", "playbook", "conflict")   # T6/B2a added "conflict"
 
 
 def _entity(cls, fields: set[str], payload: dict):
@@ -297,6 +299,10 @@ class PostgresContextRegistry(ProjectWriteMixin):
         projects = [asdict(p) for p in ctx.extraction.projects]
         signals = [asdict(s) for s in ctx.extraction.signals]
         playbooks = [asdict(p) for p in getattr(ctx.extraction, "playbooks", [])]  # rich-align-0722/08
+        # T6/B2a — 归并丢弃的读数必须**随 context 落库**。反面教材就在同一个类里：
+        # `ExtractionResult.granularity` 也是顶层列表，但 get() 从不重建它（见下面的 ExtractionResult(...)），
+        # 于是它在真库往返里静默丢失——离线套用的是 in-memory registry，永远考不到这件事。
+        conflicts = [asdict(c) for c in getattr(ctx.extraction, "conflicts", [])]
 
         # The materialized memory FULL TEXT is what a restart re-materializes from. If the caller
         # somehow hands a context whose files are not on disk yet, materialize first — the DB row
@@ -369,7 +375,7 @@ class PostgresContextRegistry(ProjectWriteMixin):
                 # kind -> its rows; iterate _ENTITY_KINDS (the set entities_kind_check allows) so the
                 # constant is the one place a new entity kind must be registered.
                 by_kind = {"person": people, "project": projects,
-                           "signal": signals, "playbook": playbooks}
+                           "signal": signals, "playbook": playbooks, "conflict": conflicts}
                 cur.executemany(
                     "INSERT INTO avery.entities (context_id, kind, idx, payload) "
                     "VALUES (%s, %s, %s, %s)",
@@ -459,6 +465,9 @@ class PostgresContextRegistry(ProjectWriteMixin):
             signals=[_entity(SignalEntity, _SIGNAL_FIELDS, pl) for k, pl in ents if k == "signal"],
             # rich-align-0722/08: SOP 方法卡随 context 往返（否则 pg-backed 生产 demo get() 会丢卡）。
             playbooks=[_entity(MethodCard, _PLAYBOOK_FIELDS, pl) for k, pl in ents if k == "playbook"],
+            # T6/B2a: 冲突随 context 往返（否则 pg-backed 生产 get() 回来冲突全没了，而离线全绿）。
+            conflicts=[_entity(FieldConflict, _CONFLICT_FIELDS, pl) for k, pl in ents
+                       if k == "conflict"],
             materials=[MaterialChunk(id=cid, text=text, source=src, doc_kind=dk)
                        for cid, text, src, dk in mats])
 
