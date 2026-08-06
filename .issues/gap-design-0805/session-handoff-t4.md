@@ -111,7 +111,7 @@ evidence 印 source_key 而非 filename / join key 改 filename 优先 / 克隆�
 cd eval-harness && AVERY_BRAIN=mock AVERY_EXTRACTOR=heuristic AVERY_EMBEDDINGS=keyword \
   python -m pytest -m "not smoke and not seedgate and not needs_keys and not needs_db" -q
 ```
-→ **3646 passed / 99 deselected / 4 xfailed**（已含并进来的 T1）。新增 28 条时间轴门在
+→ **3638 passed / 99 deselected / 4 xfailed**（已含并进来的 T1）。新增 28 条时间轴门在
 `tests/test_decision_grading.py` 第 10、11 节（新测试**必须**写在这个文件里：
 `test_no_rule_text_in_any_prompt` 的白名单只有四个文件，另起文件写规则号就触门）。
 
