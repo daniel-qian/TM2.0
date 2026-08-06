@@ -1727,7 +1727,7 @@ def extract_docs(docs: list[ParsedDoc], extractor: Extractor | None = None,
     return out
 
 
-def _note_conflicts(res: ExtractionResult, kind: str, cur, incoming, key: str,
+def _note_conflicts(res: ExtractionResult, index: dict, kind: str, cur, incoming, key: str,
                     held_src: dict[tuple[str, str], str]) -> None:
     """T6/B2a — 在 `cur` 吸收 `incoming` **之前**，把这一轮将要被丢弃的读数记下来。
 
@@ -1754,29 +1754,43 @@ def _note_conflicts(res: ExtractionResult, kind: str, cur, incoming, key: str,
             continue
         if held == new:
             continue
-        _append_conflict(res, kind, cur.id, fname,
+        _append_conflict(res, index, kind, key, cur.id, fname,
                          held, held_src.get((key, fname), cur.source), new, incoming.source)
 
 
-def _append_conflict(res: ExtractionResult, kind: str, ref: str, fname: str,
+def _append_conflict(res: ExtractionResult, index: dict, kind: str, key: str, ref: str, fname: str,
                      held: str, held_source: str, new: str, new_source: str) -> None:
     """一个 (主体, 字段) 只长**一条** FieldConflict，第三份、第四份资料往 `values` 上追加。
 
     ⚠ 出处为什么不能直接用 `cur.source`：`cur.source` 自己也是 keep-first 的**整条**出处，而某个
     格子的值完全可能是后来某份文档补上的（enrichment）。拿 cur.source 当那个格子的出处，就会在卡
     上引用一份**从没说过这件事**的文档——比不报冲突更糟。所以逐 (主体,字段) 记 `held_src`。
+
+    🔴 ONE RULER —— `index` 的键必须是**归并用的那把身份尺**（`key` = `_person_key`/`_project_key`
+    的产物），**绝不能**用 `cur.id`。第一版用了 `cur.id`，是个真 bug，复现过：`_slug` 会折叠标点
+    并在 32 字符处截断，而 `_project_key` 只折叠空白与 `_ -`。于是
+    「别墅套餐推广（八月）」与「别墅套餐推广(八月)」（全角/半角括号，中文文档里再普通不过的排版差异）
+    是**两个不同的项目卡**（_project_key 不同、各自独立存在），却**共用一个 id**。用 id 当索引键，
+    两张卡各自的冲突会被**融成一条**：第一张卡凭空多出一条别的项目才有的读数，第二张卡自己的冲突
+    整条消失。身份判据只能有一把尺子——就是归并本身用的那把。
+    钉在 test_two_projects_sharing_a_slug_id_do_not_fuse_their_conflicts。
+
+    `ref`（写进 `subject_ref` 给前端 join 卡片）仍然是 `cur.id`，因为卡就是按 id 渲染的；
+    它只是**载荷**，不是索引键。
     """
-    for c in res.conflicts:
-        if (c.subject_kind, c.subject_ref, c.field) == (kind, ref, fname):
-            c.values.append(ConflictValue(value=new, source=new_source,
-                                          doc_key=doc_key_of(new_source)))
-            return
-    res.conflicts.append(FieldConflict(
+    hit = index.get((kind, key, fname))
+    if hit is not None:
+        hit.values.append(ConflictValue(value=new, source=new_source,
+                                        doc_key=doc_key_of(new_source)))
+        return
+    fresh = FieldConflict(
         subject_kind=kind, subject_ref=ref, field=fname,
         values=[
             ConflictValue(value=held, source=held_source, doc_key=doc_key_of(held_source)),
             ConflictValue(value=new, source=new_source, doc_key=doc_key_of(new_source)),
-        ]))
+        ])
+    index[(kind, key, fname)] = fresh
+    res.conflicts.append(fresh)
 
 
 def _dedupe_entities(res: ExtractionResult) -> None:
@@ -1819,6 +1833,9 @@ def _dedupe_entities(res: ExtractionResult) -> None:
     people: dict[str, PersonEntity] = {}
     # T6/B2a — (身份key, 字段) -> 当前那个值**是哪份文档给的**。见 _append_conflict 的 ⚠。
     people_src: dict[tuple[str, str], str] = {}
+    # T6/B2a — (kind, 身份key, 字段) -> 已开的那条 FieldConflict。键**必须**是归并用的身份尺，
+    # 不是实体 id（_slug 会折叠标点+截断，两个不同主体可以撞 id）。见 _append_conflict 的 🔴。
+    conflict_index: dict[tuple[str, str, str], FieldConflict] = {}
     for p in res.people:
         key = _person_key(p.name)
         cur = people.get(key)
@@ -1828,7 +1845,7 @@ def _dedupe_entities(res: ExtractionResult) -> None:
                 if getattr(p, fname, ""):
                     people_src[(key, fname)] = p.source
             continue
-        _note_conflicts(res, "person", cur, p, key, people_src)   # T6/B2a: 必须在合并前
+        _note_conflicts(res, conflict_index, "person", cur, p, key, people_src)   # T6/B2a: 必须在合并前
         cur.role = cur.role or p.role
         cur.team = cur.team or p.team
         cur.tenure = cur.tenure or p.tenure
@@ -1864,7 +1881,7 @@ def _dedupe_entities(res: ExtractionResult) -> None:
                 if getattr(pr, fname, ""):
                     projects_src[(key, fname)] = pr.source
             continue
-        _note_conflicts(res, "project", cur, pr, key, projects_src)   # T6/B2a: 必须在合并前
+        _note_conflicts(res, conflict_index, "project", cur, pr, key, projects_src)   # T6/B2a: 必须在合并前
         cur.ownerId = cur.ownerId or pr.ownerId
         cur.ownerName = cur.ownerName or pr.ownerName
         cur.status = cur.status or pr.status

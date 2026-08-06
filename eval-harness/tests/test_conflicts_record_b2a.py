@@ -39,6 +39,7 @@ from avery.ingest.extract import (
     PersonEntity,
     ProjectEntity,
     _dedupe_entities,
+    _slug,
     doc_key_of,
 )
 
@@ -118,12 +119,23 @@ def test_employment_status_still_has_no_home():
     「回 extract.py 的 `_CONFLICT_FIELD_ALLOWLIST`，把 'person' 那一行补上，然后来改这条门。」
     """
     assert _CONFLICT_FIELD_WITHOUT_A_HOME == "人员在职状态"
+    # ⚠ 这条只是**提醒**，不是拦网 —— 别把它当成"新字段一定跑不掉"的保证。
+    #
+    # 真正 name-agnostic 的那道网在别处、而且已经存在：
+    # `test_registry_contract.py::test_person_keys_allowlist_covers_exactly_person_fields`
+    # 拿 `dataclasses.fields(PersonEntity)` 与迁移 0009 的 allowlist 做**对称差**，所以 PersonEntity
+    # 无论新增什么名字的字段（status / duty / hireState / 随便什么）都会当场红，逼加字段的人回去动
+    # 迁移。第四个字段**不可能**悄悄有家。
+    #
+    # 也正因为有那道网，这里刻意**不再抄一份 PersonEntity 的字段清单**当快照：那会是这个仓库反复吃
+    # 亏的"同一份真相两份抄本"，而且抄本注定漂移。下面的子串检查只负责在最可能的命名上多说一句
+    # 「记得回来接 T6」。
     names = {f.name for f in fields(PersonEntity)}
     suspects = [n for n in names
                 if "status" in n.lower() or "employ" in n.lower() or "active" in n.lower()]
     assert not suspects, (
         f"PersonEntity 长出了 {suspects} —— 如果其中之一是任职状态，说明 T6 v1 的第四个字段终于有家了："
-        f"去 extract.py 的 _CONFLICT_FIELD_ALLOWLIST['person'] 补上它，再回来改这条门。"
+        f"去 extract.py 的 `_CONFLICT_FIELD_ALLOWLIST['person']` 补上它，再回来改这条门。"
     )
 
 
@@ -248,6 +260,57 @@ def test_project_status_and_dueDate_each_get_their_own_conflict():
     assert [v.value for v in by_field["dueDate"].values] == ["2026-09-30", "2026-10-15"]
 
 
+def test_two_projects_sharing_a_slug_id_do_not_fuse_their_conflicts():
+    """回归门：冲突的累加索引用**归并那把身份尺**（`_project_key`/`_person_key`），不是实体 id。
+
+    第一版用 `cur.id` 当索引键。`_slug` 折叠标点并在 32 字符处截断，而 `_project_key` 只折叠空白
+    与 `_ -`，于是「别墅套餐推广（八月）」与「别墅套餐推广(八月)」——全角/半角括号，中文文档里
+    再普通不过的排版差异——是**两个独立存在的项目卡**，却**共用一个 id**。用 id 当键：
+
+      修复前实测：conflicts == 1，values == [on-track(a), blocked(b), at-risk(d)]
+        → 一条记录里混进了**两个不同项目**的读数（at-risk 来自 d.md，那份文档谈的是另一个项目），
+          直接违反 FieldConflict 自己的契约（"values[0] 是胜出读数，其后是**同一主体**被丢弃的读数"）。
+      修复后：两条记录，各自 [胜出, 被丢弃] 配对正确。
+
+    ⚠ **这条修的是分组，不是 id 碰撞本身**——诚实说清楚，免得下一票以为这里已经解决了：
+    两条记录的 `subject_ref` **仍然相同**（因为那两个项目确实共用一个 `_slug` id）。id 碰撞是
+    `_slug` 的既有限制，本票没动也不该动。给 T7 的实际影响：按 `subject_ref` 查卡时，**一个 id
+    可能对应多于一条冲突记录**，而且极端情况下对应的是不同的项目。要根治得让 `_slug` 产出唯一 id
+    （或让实体 id 直接派生自身份尺），那是独立一票。
+    """
+    t1, t2 = "别墅套餐推广（八月）", "别墅套餐推广(八月)"
+    assert _slug(t1, "p") == _slug(t2, "p"), "前提失效：这两个标题不再撞 id 了，本门失去意义"
+
+    res = _dedupe(projects=[
+        ProjectEntity(id=_slug(t1, "p"), title=t1, status="on-track", source="a.md:1"),
+        ProjectEntity(id=_slug(t1, "p"), title=t1, status="blocked", source="b.md:2"),
+        ProjectEntity(id=_slug(t2, "p"), title=t2, status="done", source="c.md:3"),
+        ProjectEntity(id=_slug(t2, "p"), title=t2, status="at-risk", source="d.md:4"),
+    ])
+    assert len(res.projects) == 2, "前提失效：这两个标题应当是两个独立项目"
+    assert len(res.conflicts) == 2, f"两张卡的冲突被融成了一条：{res.conflicts}"
+    got = sorted([[(v.value, v.doc_key) for v in c.values] for c in res.conflicts])
+    assert got == sorted([
+        [("on-track", "a.md"), ("blocked", "b.md")],
+        [("done", "c.md"), ("at-risk", "d.md")],
+    ]), f"两张卡的读数串味了：{got}"
+
+
+def test_two_people_sharing_a_slug_id_do_not_fuse_their_conflicts():
+    """人员侧的同一条规则（`_person_key` 不折叠标点，`_slug` 折叠）。"""
+    n1, n2 = "周雅婷·前厅", "周雅婷-前厅"
+    if _slug(n1, "u") != _slug(n2, "u"):
+        pytest.skip("这两个名字在当前 _slug 下不撞 id —— 换语料才有意义")
+    res = _dedupe(people=[
+        PersonEntity(id=_slug(n1, "u"), name=n1, team="市场推广部", source="a.md:1"),
+        PersonEntity(id=_slug(n1, "u"), name=n1, team="前厅部", source="b.md:2"),
+        PersonEntity(id=_slug(n2, "u"), name=n2, team="餐饮部", source="c.md:3"),
+        PersonEntity(id=_slug(n2, "u"), name=n2, team="客房部", source="d.md:4"),
+    ])
+    assert len(res.people) == 2
+    assert len(res.conflicts) == 2, f"两个人的冲突被融成了一条：{res.conflicts}"
+
+
 def test_person_and_project_sharing_a_name_do_not_cross_contaminate():
     """一个人叫「宴会」、一个项目也叫「宴会」：两本出处账必须分开。
 
@@ -328,6 +391,72 @@ def test_doc_key_is_ONE_RULER_shared_with_the_file_manifest():
             f"{mod.__name__} 里又出现了手抄的 rsplit 切法 —— 应当调 extract.doc_key_of"
         )
         assert "doc_key_of" in src
+
+
+# === 6b · 落库侧的两处"第二副本"守卫 ============================================================
+# 都是**离线**静态守卫（不需要真库），补的是 _ENTITY_KINDS 那条注释声称"只有一处"、而实际有三处
+# 的缺口。三处必须同时改：_ENTITY_KINDS / put() 的 by_kind / 迁移 0010（它自己内部还有两处）。
+
+def test_put_by_kind_covers_exactly_the_entity_kinds():
+    """`put()` 里的 `by_kind` 字面量是 `_ENTITY_KINDS` 的**第二副本**，必须逐字对齐。
+
+    少一个 key → `by_kind[kind]` 直接 KeyError，**每一次 put 全挂**（不是降级，是整个写路径死）。
+    多一个 key → 那一路的行永远不会被写（`for kind in _ENTITY_KINDS` 遍历不到它），静默丢数据。
+    `_ENTITY_KINDS` 上方的注释写着"the one place a new entity kind must be registered"，
+    那句话在加 by_kind 之后就不完全成立了；这条门把它变成真的。
+    """
+    import inspect
+    import re
+
+    from avery.ingest import pg_registry
+
+    src = inspect.getsource(pg_registry.PostgresContextRegistry.put)
+    m = re.search(r"by_kind\s*=\s*\{(.*?)\}", src, re.S)
+    assert m, "put() 里找不到 by_kind 字面量了 —— 结构变了，请更新本门"
+    keys = set(re.findall(r"[\"']([a-z_]+)[\"']\s*:", m.group(1)))
+    assert keys == set(pg_registry._ENTITY_KINDS), (
+        f"by_kind 与 _ENTITY_KINDS 漂移了：by_kind={sorted(keys)} "
+        f"_ENTITY_KINDS={sorted(pg_registry._ENTITY_KINDS)}"
+    )
+
+
+def test_migration_0010_guard_literal_matches_its_own_ADD():
+    """迁移 0010 内部**自己有两处** kind 列表，既有的漂移门只看得见其中一处。
+
+    0010 是"先比对再 ALTER"的守卫式迁移：`want` 是拿来和库里现状比对的**期望值**，下面的
+    `ADD CONSTRAINT` 才是真正执行的语句。`test_entities_kind_check_covers_written_kinds`
+    （test_registry_contract.py）只正则扫 `ADD CONSTRAINT ... ARRAY[...]`，**不看 `want`**。
+
+    后果很具体：下一个人加第六个 kind 时，照着那条门的报错信息「Edit the kind-check migration
+    IN PLACE」只改了 ADD，`want` 仍是五个。于是引导时 `have`(库里五个) 与 `want`(五个) 比对**相等**
+    → 整个 IF 分支跳过 → 那条六 kind 的 ADD **永远不执行** → 库里 CHECK 停在五个 → 新 kind 的行
+    被真 Postgres 拒收，而所有离线门全绿。这正是 08 的 playbook kind 当年翻车的同一种形状。
+
+    本门把 `want` 也纳进来。（T6 加 'conflict' 时两处都改了，这条门就是那次改动的保险。）
+    """
+    import re
+    from pathlib import Path
+
+    from avery.ingest.pg_registry import _ENTITY_KINDS
+
+    sql = (Path(__file__).resolve().parent.parent / "db" / "migrations"
+           / "0010_entities_kind_playbook.sql").read_text(encoding="utf-8")
+    body = re.sub(r"--[^\n]*", "", sql)
+
+    want = re.search(r"want\s+text\s*:=\s*(.*?);", body, re.S)
+    assert want, "0010 的 want 字面量不见了 —— 迁移结构变了，请更新本门"
+    want_kinds = set(re.findall(r"''([a-z_]+)''", want.group(1)))
+
+    add = re.search(r"ADD\s+CONSTRAINT\s+entities_kind_check\b.*?ARRAY\s*\[([^\]]*)\]", body, re.S)
+    assert add, "0010 的 ADD CONSTRAINT 不见了"
+    add_kinds = set(re.findall(r"'([^']+)'", add.group(1)))
+
+    assert want_kinds == add_kinds == set(_ENTITY_KINDS), (
+        f"0010 内部漂移了 —— want={sorted(want_kinds)} ADD={sorted(add_kinds)} "
+        f"_ENTITY_KINDS={sorted(_ENTITY_KINDS)}。\n"
+        f"三者必须完全一致：want 只用来比对，ADD 才真执行；want 落后会让 ALTER 整段被跳过，"
+        f"库里 CHECK 停在旧集合，新 kind 的行被真库拒收而离线门全绿。"
+    )
 
 
 # === 7 · asdict 往返（持久化那条路的形状） ======================================================
@@ -466,6 +595,103 @@ def test_the_real_offline_pipeline_records_the_conflict_end_to_end():
     assert [v.doc_key for v in c.values] == ["roster_a.md", "roster_b.md"]
     assert all(v.source.startswith(v.doc_key + ":") for v in c.values), (
         "source 必须是 <文档名>:<行> 形状，doc_key 是它的前缀 —— T7 join uploaded_at 靠这个"
+    )
+
+
+_LEDGER_DOC = """# 项目台账
+
+项目：别墅套餐推广
+负责人：周雅婷
+状态：进行中
+截止：2026-09-30
+"""
+
+_LEDGER_LATER_DOC = """# 十月项目台账
+
+项目：别墅套餐推广
+负责人：周雅婷
+状态：受阻
+截止：2026-10-15
+"""
+
+
+def test_project_conflicts_are_REACHABLE_through_the_real_extractor():
+    """项目侧的**可达性**确认：真中文台账走完整条路，断言的是抽取器**自己产出的归一化值**。
+
+    为什么加：本节以外的项目断言都手搓实体，而手搓用的 `status="进行中"` 真抽取器根本产不出来
+    —— `_norm_status` 把中文状态词映射成 on-track / at-risk / blocked / done。手搓语料和真语料
+    对不上，是"判据够不着"型假绿的经典入口。
+
+    ⚠ 措辞要诚实：这**不是**在补一个已经漏掉的洞。复核时实测过，项目冲突在改动前就已经能通过真
+    管道命中——`_note_conflicts` 是**字段泛型**的（`for fname in _CONFLICT_FIELD_ALLOWLIST[kind]`
+    + getattr + 纯字符串比较），没有任何分支看 value 的内容，所以 "进行中" 与 "on-track" 走的是
+    逐字节相同的代码。这条门的价值是把"真语料上确实命中、且归一化词表没变"钉住，不是修 bug。
+    """
+    res = _pipeline(("台账_9月.md", _LEDGER_DOC), ("台账_10月.md", _LEDGER_LATER_DOC))
+    assert len(res.projects) == 1, f"项目没合成一条：{[(p.title, p.status) for p in res.projects]}"
+
+    by_field = {c.field: c for c in res.conflicts if c.subject_kind == "project"}
+    assert "status" in by_field, f"真管道上没记到状态冲突：{res.conflicts}"
+    assert "dueDate" in by_field, f"真管道上没记到到期日冲突：{res.conflicts}"
+
+    status_vals = [v.value for v in by_field["status"].values]
+    assert status_vals == ["on-track", "blocked"], (
+        f"状态值不是抽取器的归一化词表产物：{status_vals} —— 手搓语料和真语料对不上了"
+    )
+    assert [v.value for v in by_field["dueDate"].values] == ["2026-09-30", "2026-10-15"]
+    assert [v.doc_key for v in by_field["status"].values] == ["台账_9月.md", "台账_10月.md"]
+    assert by_field["status"].subject_ref == res.projects[0].id
+
+
+def test_KNOWN_FALSE_POSITIVE_same_date_written_two_ways_reports_as_a_disagreement():
+    """已知假阳性，**按现状钉住**：同一个日期两种写法会被报成"对不上"。
+
+    `dueDate` 是 verbatim 存的，v1 判据只有"完全不相等"，不做任何归一化。所以
+    `2026年9月30日` 与 `2026-09-30` —— 同一天 —— 会生成一条冲突。
+
+    这属于设计里**已经预见并接受**的那一类（design-options §B2：假阳性来源是同义不同写，v1 只报
+    完全不相等，卡上给「这不是错，可能只是叫法不同」的关闭出口，沿用 flowStore 的 dismiss 分桶）。
+    日期格式差异和「传菜组 / 传菜 / 前厅-传菜」是同一类，不是新问题。
+
+    ⚠ 但 T7 必须知道它存在：卡面文案不能写成"两份资料矛盾"这种断言口吻，dismiss 出口不是可选的。
+    真要消掉，得先决定日期归一化口径（那会改变"读到什么"的语义），是独立一票，不在 T6。
+    """
+    res = _pipeline(
+        ("台账_a.md", "# 台账\n\n项目：别墅套餐推广\n状态：进行中\n截止：2026年9月30日\n"),
+        ("台账_b.md", "# 台账\n\n项目：别墅套餐推广\n状态：进行中\n截止：2026-09-30\n"),
+    )
+    due = [c for c in res.conflicts if c.field == "dueDate"]
+    assert len(due) == 1, "假阳性行为变了 —— 如果是有意加了日期归一化，改这条门并记进票尾"
+    assert [v.value for v in due[0].values] == ["2026年9月30日", "2026-09-30"]
+    assert not [c for c in res.conflicts if c.field == "status"], "状态两份一样，不该报冲突"
+
+
+def test_KNOWN_LIMITATION_project_source_is_BLOCK_level_not_field_level():
+    """🔴 给 T7 的警告，钉成可执行的：`ConflictValue.source` 的行号是**项目块的**行号，不是那个
+    字段所在的行号；而且状态可以是**整篇推断**出来的，不需要文档里真有一行「状态：」。
+
+    实测（真管道）：台账写明「状态：进行中」，周报**一个字都没提状态**、只有散文
+    「摄影师档期迟迟没定下来…推进不了」，抽取器的整篇兜底把它读成 `blocked`，出处记作
+    `周报.md:1` —— 那一行是标题 `# 本周周报`，不是证据所在。
+
+    这不是 T6 引进的：`ProjectEntity.source` 本来就是实体级出处，T6 只是如实转述它。
+    但它决定了 **T7 不能把 `source` 当成「逐字引用这一行」的凭据**：照那行取原文会引到标题。
+    T7 要做双引文卡，得先解决字段级出处（那是改抽取器，独立一票）。
+
+    ADR-0018 口径下这仍然是诚实的——我们确实"读到"了 blocked，卡面说"读到"没有撒谎；
+    撒谎的是**指着标题行说这就是原句**。
+    """
+    res = _pipeline(
+        ("台账.md", "# 项目台账\n\n项目：别墅套餐推广\n状态：进行中\n"),
+        ("周报.md", "# 本周周报\n\n项目：别墅套餐推广\n摄影师档期迟迟没定下来，场地也卡住了，推进不了。\n"),
+    )
+    st = [c for c in res.conflicts if c.field == "status"]
+    assert len(st) == 1, f"整篇推断出来的状态没进冲突：{res.conflicts}"
+    vals = [(v.value, v.source) for v in st[0].values]
+    assert vals[1][0] == "blocked", f"周报的推断状态变了：{vals}"
+    assert vals[1][1].endswith(":1"), (
+        f"出处不再指向块首行了：{vals[1][1]} —— 若是改成了字段级出处，那是好事，"
+        f"请删掉这段限制说明并通知 T7"
     )
 
 
