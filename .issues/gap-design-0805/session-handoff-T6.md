@@ -147,11 +147,41 @@ cd eval-harness && AVERY_DB_URL="postgresql://postgres:dev@127.0.0.1:5432/teamma
   python -m pytest tests/test_conflicts_record_b2a.py -m needs_db -q
 ```
 
-## 记账口径的一处诚实说明
+## 合并后的门（在 main 的新基线上重量过）
 
-**没有**给 T6 造 `feature_list.json` 条目。0805 差距战役的 T1–T7 全部以票册（`tickets.md`）为账本，
-`feature_list.json` 里一条都没有；只给 T6 单独补一条会造成半迁移的不一致。整合者若决定把这场战役
-并进 feature_list，应当七票一起补，而不是从这一票开始。
+合 main 时 main 已经吃进了 T1（#50）与 T4（#51），且 T1 同时动了 `pg_registry.py` / `registry.py`
+（我这票也动了这两个文件）。git 说无冲突，但**文本不冲突不等于语义不冲突**，所以合完重跑了两套：
+
+- 离线电池 **3713 全绿**（102 deselected / 4 xfailed / 74s）
+- `@needs_db` 真 Postgres **全套 93 条**（不是只跑自己那 3 条）——T1 新加的 `0013_form_templates.sql`
+  与我这票就地改的 `0010` 一起重放，没打架；`by_kind` 守卫也证明 T1 没有偷偷加 kind。
+
+### ⚠ 一条**既有**的真库 flake（不是本票引入，别记到 T6 头上）
+
+`test_registry_contract.py` 的 GC sweep 那两条
+（`test_sweep_collects_only_old_unlinked_ephemeral_clones` / `test_sweep_respects_the_batch_limit`）
+在**跑全套 needs_db** 时会有一条红，断言都是同一句
+`sweep_ephemeral(older_than_hours=0, limit=50) == 1` 实得 0。
+
+已定位为**既有且不确定性**的，证据三条：
+1. 单条跑 **绿**；整个 `test_registry_contract.py` 跑 **绿**（45 条）；只有全套 needs_db 才红。
+2. 在 **main（6baf6a0，不含本票任何改动）** 的临时 worktree 上跑同一套，**同样红**。
+3. 两次红的**不是同一条测试**（main 上是 batch_limit，本线上是 unlinked_clones）——同一套件两次跑
+   红在不同测试 = 不确定性，不是确定性 bug。
+
+猜测方向（没深挖，留给认领 GC 的人）：`older_than_hours=0` 落到 `created_at < now()` 的边界上，
+而 `now()` 在 Postgres 里是**事务开始时刻**且事务内恒定；全套跑到那里时的时序与单跑不同。
+共用同一个本地库的跨文件测试也可能互相留状态。
+
+**本票不修**（不在范围内，且是别人家的门）。记在这里是为了下一个跑全套 needs_db 的人不要以为是自己
+弄坏的——我为了排除这一点，专门在 main 上开了个临时 worktree 对跑了一遍。
+
+## 记账口径
+
+本票对应 **GitHub issue #52**（`T6 conflicts-record-b2a: 归并不再吃掉矛盾读数`）。
+按 AGENTS.md，issue 是正源；0805 差距战役七票 = issues #50–#56，票册 `tickets.md` 是底稿。
+**没有**给 T6 造 `feature_list.json` 条目——这场战役里 T1（#50）、T4（#51）合 main 时都没造，
+只给 T6 单独补一条会造成半迁移的不一致。
 
 ## 本票**不做**（T7 的活）
 
