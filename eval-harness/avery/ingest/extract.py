@@ -375,6 +375,82 @@ class MethodCard:
     source: str = ""
 
 
+# 差距战役 T6/B2a · 跨文档字段冲突 —— 归并不再吃掉矛盾。
+#
+# 病灶（design-options.md §B2）：冲突信息**在归并那一刻就被吃掉了**。`_dedupe_entities` 对同一个人
+# 的同一个格子「保留第一个非空」，花名册说「周雅婷 / 市场推广部」、周报说「周雅婷 / 前厅部」，合并
+# 后只剩一个，**输的那个读数连同它的出处一起消失**——没有任何下游还有机会知道两份资料对不上。
+# 这里不新写比较器，只让归并把**它自己丢掉的东西**记下来。
+#
+# v1 收窄到「确定性可比」的少数字段，且只报**两边都非空且完全不相等**的字符串。数值类（人数/进度）
+# 一律不做：口径歧义大、假阳性高。同义不同写（「传菜组」vs「传菜」vs「前厅-传菜」）是已知的假阳性
+# 来源，v1 不做归一化，交给 T7 卡面上的「可能只是叫法不同」关闭出口。
+#
+# 🔴 ADR-0033：这里只出**机器键**（field='team'）+ **verbatim 原值**，一个中文句子都不拼。
+# 句子归前端 i18n（T7 的活）。
+_CONFLICT_FIELD_ALLOWLIST: dict[str, tuple[str, ...]] = {
+    "person": ("team",),                      # 部门/团队
+    "project": ("status", "dueDate"),         # 项目状态 / 到期日
+}
+
+# 票面 v1 点名四个字段，上面只落地了三个。**第四个（人员在职状态）今天没有落脚点**：PersonEntity
+# 通篇没有任职状态这个格子（见上面的 dataclass），`_ZH_HEADER_MAP` 也不认「任职状态」——合伙人
+# 《标准管理信息填写表单》01 表确实有这一列（在职/试用期/待离职，make-intake-xlsx.py:97），但它从
+# 表格走到人卡的那条路还没修，位置兜底只读到 cells[3]（司龄）为止，第 7 列根本够不着。
+#
+# 所以这里**不**在上面的表里放一个指向不存在字段的条目：那种条目是个静默 no-op，跑起来永远零命中，
+# 在报告里却读作「四个字段都覆盖了」。改成一条会说话的门——`test_employment_status_has_no_home_yet`
+# 断言 PersonEntity 至今没有这个格子；哪天 T1/T5 把它加上，那条门立刻变红并指回这里说「该把
+# 'person' 那一行补上了」。不可达就明写不可达。
+_CONFLICT_FIELD_WITHOUT_A_HOME = "人员在职状态"
+
+
+def doc_key_of(source: str) -> str:
+    """从 `"<文档名>:<行>"` 的出处串里切出**文档名**——即 `SourceDocument.source_key` 的那个 key。
+
+    ONE RULER（feat-048 round 1 的老教训）：这个表达式在仓库里本来已经**手抄了两遍**——
+    `pipeline.py` 的 `chunk_counts` 与 `registry.py._chunks_per_file`（文件清单的每文件块数就是按它
+    归的）。T6 需要第三处，于是把它提成一个函数，那两处改成调它。**判据必须逐字符一致**：它决定
+    「这条读数算哪份文档的」，一旦漂移，冲突卡引用的文档和清单上数块数的文档就会是两份不同的东西。
+    所以这里刻意**不加** `.strip()` 之类的"顺手改进"——那会让新旧两种口径对带空白的出处给出不同答案。
+
+    用 rsplit 取**最后**一个冒号：文档名自己带冒号时（Windows 路径、带冒号的中文标题）仍然切对。
+    没有冒号就整串当文档名，空串照原样返回——绝不编一个不存在的文档名出来。
+    """
+    src = source or ""
+    return src.rsplit(":", 1)[0] if ":" in src else src
+
+
+@dataclass
+class ConflictValue:
+    """冲突里的**一个**读数：值 + 出处行 + 文档名。value 是 verbatim 原值，不做归一化。"""
+    value: str
+    source: str = ""                            # "<文档名>:<行>"，与实体的 source 同一形状
+    doc_key: str = ""                           # 文档名，doc_key_of(source) 的产物
+
+
+@dataclass
+class FieldConflict:
+    """两份及以上的资料，对同一主体的同一字段，给出了完全不相等的读数。
+
+    `subject_ref` 是**活下来那条实体的 id**（人卡/项目卡就是按它作键的），不是姓名——姓名不在这里
+    重复一遍，T7 顺着 id 去卡上取就行（少一处 verbatim 副本，也少一处口径漂移）。
+
+    `values[0]` 恒为**胜出**的那个读数（即最终写在实体上的值），其后依次是被丢弃的读数，按文档到达
+    顺序。三份资料各说一样就是三条 value。
+    """
+    subject_kind: str                           # 'person' | 'project'
+    subject_ref: str                            # 活下来那条实体的 id
+    field: str                                  # 机器键：'team' | 'status' | 'dueDate'
+    values: list[ConflictValue] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        # pg 往返回来是普通 dict（pg_registry 存 asdict、回读 FieldConflict(**payload)）——强转成
+        # dataclass，否则消费方 `v.doc_key` 是在 dict 上取属性，只在**持久化**那条路上炸。
+        # 与 PersonEntity.self_report / ProjectEntity.risk 同一张方子（rich-align-0722 的血教训）。
+        self.values = [ConflictValue(**v) if isinstance(v, dict) else v for v in self.values]
+
+
 @dataclass
 class ExtractionResult:
     people: list[PersonEntity] = field(default_factory=list)
@@ -386,10 +462,16 @@ class ExtractionResult:
     # demoted, each citing the rule and document line behind the call. Populated by extract_docs;
     # an extractor's own per-doc result leaves it empty. NOT merged (see merge below).
     granularity: list[Ruling] = field(default_factory=list)
+    # T6/B2a — 归并时被丢弃的读数。**只有 `_dedupe_entities` 往这里写**，而它一整轮抽取只跑一次
+    # （extract_docs 里 apply_gate 之后、_link_owners 之前），所以单个 extractor 的 per-doc 结果这
+    # 里恒为空——与 `granularity` 同一个道理，同样**不进 merge()**。
+    conflicts: list[FieldConflict] = field(default_factory=list)
 
     def merge(self, other: "ExtractionResult") -> "ExtractionResult":
         # `granularity` is intentionally NOT concatenated: merge() folds together partial results
         # from before the gate has run, and the gate assigns the finished list once, post-merge.
+        # `conflicts` is NOT concatenated for the same reason (see the field's comment): cross-doc
+        # reconciliation happens once, after every merge() has already run.
         self.people += other.people
         self.projects += other.projects
         self.signals += other.signals
@@ -1645,6 +1727,72 @@ def extract_docs(docs: list[ParsedDoc], extractor: Extractor | None = None,
     return out
 
 
+def _note_conflicts(res: ExtractionResult, index: dict, kind: str, cur, incoming, key: str,
+                    held_src: dict[tuple[str, str], str]) -> None:
+    """T6/B2a — 在 `cur` 吸收 `incoming` **之前**，把这一轮将要被丢弃的读数记下来。
+
+    必须在合并之前调用：合并之后 `cur` 上已经是胜出值，输家不复存在。
+
+    判据（v1，三条一起成立才算冲突）：
+      1. 新来的那个格子**非空**——空不是一个读数，是「这份文档没说这件事」；
+      2. 已有的那个格子**非空**——否则这不是冲突，是 enrichment（空格子被填上）；
+      3. 两者**完全不相等**——同义不同写不归这里管（T7 的 dismiss 出口）。
+
+    🔴 判据用 `if not value` 而不是 `is None`，是因为这三个字段（team/status/dueDate）在
+    dataclass 上都是 `str` 且缺席即 `""`；`_dedupe_entities` 对它们走的也正是 `or`。**不要把这个
+    写法照抄给 `progress`**——那个字段 0 是合法读数，`not 0` 为真会把真读数当成缺席
+    （test_project_progress_uses_is_None_so_ZERO_is_a_real_reading 钉着这件事）。
+    """
+    for fname in _CONFLICT_FIELD_ALLOWLIST[kind]:
+        new = getattr(incoming, fname, "")
+        if not new:
+            continue
+        held = getattr(cur, fname, "")
+        if not held:
+            # 空格子这一轮会被 `or` 填上——把出处一并记住，它才是这个值真正的来源文档。
+            held_src[(key, fname)] = incoming.source
+            continue
+        if held == new:
+            continue
+        _append_conflict(res, index, kind, key, cur.id, fname,
+                         held, held_src.get((key, fname), cur.source), new, incoming.source)
+
+
+def _append_conflict(res: ExtractionResult, index: dict, kind: str, key: str, ref: str, fname: str,
+                     held: str, held_source: str, new: str, new_source: str) -> None:
+    """一个 (主体, 字段) 只长**一条** FieldConflict，第三份、第四份资料往 `values` 上追加。
+
+    ⚠ 出处为什么不能直接用 `cur.source`：`cur.source` 自己也是 keep-first 的**整条**出处，而某个
+    格子的值完全可能是后来某份文档补上的（enrichment）。拿 cur.source 当那个格子的出处，就会在卡
+    上引用一份**从没说过这件事**的文档——比不报冲突更糟。所以逐 (主体,字段) 记 `held_src`。
+
+    🔴 ONE RULER —— `index` 的键必须是**归并用的那把身份尺**（`key` = `_person_key`/`_project_key`
+    的产物），**绝不能**用 `cur.id`。第一版用了 `cur.id`，是个真 bug，复现过：`_slug` 会折叠标点
+    并在 32 字符处截断，而 `_project_key` 只折叠空白与 `_ -`。于是
+    「别墅套餐推广（八月）」与「别墅套餐推广(八月)」（全角/半角括号，中文文档里再普通不过的排版差异）
+    是**两个不同的项目卡**（_project_key 不同、各自独立存在），却**共用一个 id**。用 id 当索引键，
+    两张卡各自的冲突会被**融成一条**：第一张卡凭空多出一条别的项目才有的读数，第二张卡自己的冲突
+    整条消失。身份判据只能有一把尺子——就是归并本身用的那把。
+    钉在 test_two_projects_sharing_a_slug_id_do_not_fuse_their_conflicts。
+
+    `ref`（写进 `subject_ref` 给前端 join 卡片）仍然是 `cur.id`，因为卡就是按 id 渲染的；
+    它只是**载荷**，不是索引键。
+    """
+    hit = index.get((kind, key, fname))
+    if hit is not None:
+        hit.values.append(ConflictValue(value=new, source=new_source,
+                                        doc_key=doc_key_of(new_source)))
+        return
+    fresh = FieldConflict(
+        subject_kind=kind, subject_ref=ref, field=fname,
+        values=[
+            ConflictValue(value=held, source=held_source, doc_key=doc_key_of(held_source)),
+            ConflictValue(value=new, source=new_source, doc_key=doc_key_of(new_source)),
+        ])
+    index[(kind, key, fname)] = fresh
+    res.conflicts.append(fresh)
+
+
 def _dedupe_entities(res: ExtractionResult) -> None:
     """Collapse the SAME person/project seen in DIFFERENT documents into one record (feat-048).
 
@@ -1683,12 +1831,21 @@ def _dedupe_entities(res: ExtractionResult) -> None:
     """
     # people — enrich into the first record, preserving first-seen order
     people: dict[str, PersonEntity] = {}
+    # T6/B2a — (身份key, 字段) -> 当前那个值**是哪份文档给的**。见 _append_conflict 的 ⚠。
+    people_src: dict[tuple[str, str], str] = {}
+    # T6/B2a — (kind, 身份key, 字段) -> 已开的那条 FieldConflict。键**必须**是归并用的身份尺，
+    # 不是实体 id（_slug 会折叠标点+截断，两个不同主体可以撞 id）。见 _append_conflict 的 🔴。
+    conflict_index: dict[tuple[str, str, str], FieldConflict] = {}
     for p in res.people:
         key = _person_key(p.name)
         cur = people.get(key)
         if cur is None:
             people[key] = p
+            for fname in _CONFLICT_FIELD_ALLOWLIST["person"]:
+                if getattr(p, fname, ""):
+                    people_src[(key, fname)] = p.source
             continue
+        _note_conflicts(res, conflict_index, "person", cur, p, key, people_src)   # T6/B2a: 必须在合并前
         cur.role = cur.role or p.role
         cur.team = cur.team or p.team
         cur.tenure = cur.tenure or p.tenure
@@ -1713,12 +1870,18 @@ def _dedupe_entities(res: ExtractionResult) -> None:
 
     # projects — same rule; blockers/dependsOn union because two docs list complementary ones
     projects: dict[str, ProjectEntity] = {}
+    # T6/B2a — 与人员那本分开：人名与项目标题的 key 命名空间可能撞（一个人叫 X、一个项目也叫 X）。
+    projects_src: dict[tuple[str, str], str] = {}
     for pr in res.projects:
         key = _project_key(pr.title)
         cur = projects.get(key)
         if cur is None:
             projects[key] = pr
+            for fname in _CONFLICT_FIELD_ALLOWLIST["project"]:
+                if getattr(pr, fname, ""):
+                    projects_src[(key, fname)] = pr.source
             continue
+        _note_conflicts(res, conflict_index, "project", cur, pr, key, projects_src)   # T6/B2a: 必须在合并前
         cur.ownerId = cur.ownerId or pr.ownerId
         cur.ownerName = cur.ownerName or pr.ownerName
         cur.status = cur.status or pr.status

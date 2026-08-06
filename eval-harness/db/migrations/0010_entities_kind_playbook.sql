@@ -1,4 +1,13 @@
 -- rich-align-0722/08 — admit the "playbook" entity kind into entities_kind_check.
+-- 差距战役 T6/B2a (2026-08-06) — 同一条 CHECK 再收一个 kind: "conflict"（归并丢弃的读数）。
+--
+-- ⚠ 为什么是**就地改这一条**而不是新加一个 0013：`test_entities_kind_check_covers_written_kinds`
+-- 扫的是 db/migrations/*.sql 里**每一条** `ADD CONSTRAINT entities_kind_check`，要求它们**全部**
+-- 等于 pg_registry._ENTITY_KINDS。新加一条超越迁移，会让这里这条旧的当场变成 out-of-sync 而门红；
+-- 更要命的是 `_ensure_schema` 每次引导都重放全部迁移，留着一条严格子集的 ADD，等于在库里有 conflict
+-- 行之后每次引导都拿旧 CHECK 重验全表 → 「violated by some row」→ 引导中止、整个后端起不来
+-- （0002 的 8 键 allowlist 就这样炸过一次，见 0009 的文件头）。**加 kind 改这一条，永不叠新的。**
+-- 集合仍是 0001 那三个的严格超集，ADD 不可能拒掉任何既有行。
 --
 -- 0001 declared `kind text NOT NULL CHECK (kind IN ('person','project','signal'))` (auto-named
 -- entities_kind_check). Slice 08 (playbooks/方法库) added a fourth entity kind — pg_registry.put()
@@ -19,7 +28,7 @@ DECLARE
     have text;
     -- Keep this array identical to the ADD below (test_entities_kind_check_covers_written_kinds pins
     -- both to pg_registry._ENTITY_KINDS). Compared after the same normalization 0009 uses.
-    want text := 'CHECK (kind = ANY (ARRAY[''person'',''project'',''signal'',''playbook'']::text[]))';
+    want text := 'CHECK (kind = ANY (ARRAY[''person'',''project'',''signal'',''playbook'',''conflict'']::text[]))';
 BEGIN
     SELECT pg_get_constraintdef(oid) INTO have
     FROM pg_constraint
@@ -36,7 +45,7 @@ BEGIN
     THEN
         ALTER TABLE avery.entities DROP CONSTRAINT IF EXISTS entities_kind_check;
         ALTER TABLE avery.entities ADD CONSTRAINT entities_kind_check CHECK (
-            kind = ANY (ARRAY['person', 'project', 'signal', 'playbook']::text[])
+            kind = ANY (ARRAY['person', 'project', 'signal', 'playbook', 'conflict']::text[])
         );
     END IF;
 END

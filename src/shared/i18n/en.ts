@@ -1452,6 +1452,7 @@ export const en = {
       'R-PROGRESS-LOW': { title: 'Self-reported progress under {pct}% and not finished', basis: 'Progress' },
       'R-SIGNAL-WATCH': { title: 'A linked signal mentions a delay, rework or being short-handed', basis: 'Signals + blockers' },
       'R-SELF-REPORT-MISMATCH': { title: 'Reports itself on track while carrying an unresolved blocker', basis: 'Status + blockers' },
+      'R-STALE-EVIDENCE': { title: 'Even the newest file on hand was uploaded {days} or more days ago, and nothing newer has been read since', basis: 'When the files were uploaded' },
       'R-NO-EVIDENCE': { title: 'None of status, blockers, progress or due date could be read — too little to treat as safe', basis: '(none of those fields could be read)' },
       'R-UNCLASSIFIED': { title: 'What was read does not match any existing rule, so it needs a person to confirm', basis: '(no rule matched)' },
       'R-DONE': { title: 'The project reports itself finished, with no risk signals', basis: 'Status' },

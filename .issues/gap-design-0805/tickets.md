@@ -114,6 +114,40 @@ i18n 约 12 键 zh/en 自写大白话，跑 i18n-orphans。
 
 **前置**：无（与 T1-T3 并行）。**规模**：1 个 session。
 
+> ## ✅ 已做完（2026-08-06）· 但**只交付了一条规则**，第二条已裁决移交 T7
+>
+> 落地的是 `R-STALE-EVIDENCE`（需确认级）+ 资料时间轴 `DocTimeline`。
+> **`R-FRESH-CONTRADICTS-STALE` 没做，整条移交 T7**——理由不是没时间，是它今天**不可能命中**，
+> 而且语义会跟 T7 打架。三条实证（都在代码里核过）：
+>
+> 1. **两份读数在定级之前就没了**。`_dedupe_entities`（extract.py:1714-1738）对项目标量字段一律
+>    「首个非空槽胜出」（`cur.status = cur.status or pr.status`），落败读数**零残留**——没日志、
+>    没 side-car。让归并留下冲突是 **T6** 的活。所以「同一字段两份读数」在 T6 之前结构上不存在。
+> 2. **改用「旧自述 vs 新负面信号」也是死的**。信号一旦命中高风险词族，卡片**已经**是高风险
+>    （R-SIGNAL-*），新规则一分等级都不动；唯一真能改判的切片要求「信号那份文档严格晚于项目那份」，
+>    而**每次 `/ingest` 都铸新 context_id**（pipeline.py:154，今天没有「给已有公司追加上传」的端点），
+>    同 context 的资料必然同批同刻 → 天粒度下恒假；若改用原始时间戳，谁新谁旧就由**文件遍历顺序**
+>    决定——那是一条对着上传顺序开单的规则。**要么死、要么错，没有第三种状态。**
+> 3. **会跟 T7 抢地盘**。T7 的 `R-CROSS-DOC-CONFLICT` 覆盖字段明确含项目状态/到期日，
+>    正是这条规则的定义域；今天把 rule_id 占掉，T6 落地后要么改定义重写四处文案，要么规则表里
+>    并排两条经理分不清的条目，而且等级还是倒挂的（这条高风险 vs T7 需确认）。
+>
+> **交给 T7 的东西已经就位**：`decision_grading.build_doc_timeline()` / `DocTimeline.stamp_for()`
+> （出处 `"<key>:<line>"` → 上传日）/ `_uploaded_day()`（全仓唯一一处 UTC 归一），
+> 就是 T7 票面写的「时间映射复用 T4」。T7 请在自己票里把第二条规则的措辞与等级和
+> `R-CROSS-DOC-CONFLICT` 一起定，**别一高一低**。
+>
+> 另外两条落地时改掉的票面细节，都是撞硬门后改的，不是口味问题：
+> - **《{doc}》进不了句子**。`RULE_PARAMS` 类型是 `dict[str, dict[str, int]]` 且有明文红线只放静态
+>   阈值；中文文档名进 `params` 会直接触 `test_no_backend_prose_anywhere_in_the_payload`
+>   （`matched_rules` 里只有 `evidence` 放行 CJK）。文档名 + 上传日**作为字段读数进 evidence**，
+>   照 `R-OVERDUE` 把日期摆 evidence 的既有做法。`{days}` 是**静态阈值**不是实际天数
+>   （实际天数要拿本地 date 减 UTC 时间戳，跨日差一天就是屏幕上一句假话）。
+> - **判据取「全 context 最新一份」，不是这个项目自己那份**。因为归并只留得下一个 `source`，
+>   一个项目的 status 与 dueDate 可能读自两份不同资料 → 按项目自己那份算，会说出
+>   「关于它没有更新的资料」这种当场可被推翻的假话。取全库最新则与归并怎么洗无关，恒为真。
+>   代价：命中面粗（整块公司齐命中或齐不命中），等 T2 表单线把时间轴拉开后才有条件收窄。
+
 **目标**：今天页出两类大白话条目：「这条判断依据来自 {days} 天前的《{doc}》，之后没有更新的资料」
 （R-STALE-EVIDENCE，需确认级）；「同一事在两份新旧资料里读数不同且新的更糟」（R-FRESH-CONTRADICTS-STALE，高风险级）。
 
@@ -187,6 +221,18 @@ i18n 约 12 键 zh/en 自写大白话，跑 i18n-orphans。
 **范围与锚点**：
 - 新规则 `R-CROSS-DOC-CONFLICT`（需确认级）：证据=两条 verbatim 原句 + 两文档名 + 两 uploaded_at
   （时间映射复用 T4）。四处同步 + 两道硬门，同 T4。
+- **⚠ 本票还多接了一条：`R-FRESH-CONTRADICTS-STALE`（T4 移交过来的，理由见 T4 节的收尾框）。**
+  它要的「同一字段两份读数」正是 T6 的 `conflicts` 才第一次提供的东西，所以它的家在这里不在 T4。
+  两条规则请**一起定等级**：同为需确认，或一起升高风险——一高一低会让经理看到
+  「新文档白纸黑字推翻旧读数」反而比「关键词族信号」更轻。
+- **时间映射直接用 T4 已上产的**：`avery/decision_grading.py` 的 `build_doc_timeline()` /
+  `DocTimeline.stamp_for()` / `_uploaded_day()`。🔴 UTC 归一**只许走 `_uploaded_day()` 这一处**，
+  别再推一遍——`as_of` 是服务端本地 naive date、`uploaded_at` 是带时区瞬间，两处各归一一次早晚
+  归出两个不同的日子。日期比较一律**天粒度**：同批上传彼此差微秒，用原始时间戳等于让文件
+  遍历顺序当判据。
+- **别读 `signal_cards()["source"]`**：那个键装的是 `source_kind`（'doc'/'figma' 类型词），
+  不是文档引用。定级这一路的出处走 `sourceRef`（见 `CompanyContext._decision_subjects()`）。
+  拿类型词去当文档 key 比较**不报错、门也全绿**，是个静默错误。
 - 前端：双栏证据渲染（照抄现有 verbatim+出处证据契约：gapDerive.ts:55-70 与 LiveDecisionRuleHit 同一纪律，
   不发明新形状）；dismiss 沿用 flowStore.ts:226-236 分桶，零新状态机制。
 - **措辞红线**：只说「读到…读到…对不上」，绝不「你写错了」（ADR-0018 + zh.ts 决策块注释）。
