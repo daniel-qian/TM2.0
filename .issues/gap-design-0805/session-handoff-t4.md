@@ -148,5 +148,10 @@ init.sh + i18n-orphans + 后端契约门已覆盖这次改动的全部面。
 - 本线已自行合入 main（AGENTS.md 先斩后奏）。与 T1 的唯一交叉是 `registry.py` / `pg_registry.py`
   与两个 feature 记账 JSON：代码侧 git 自动并干净，JSON 侧两条线都取了 feat-097，已让号解决。
 - ⚠ T1 的交接里记了一条**与本票无关但会影响 needs_db 轮**的既有红：
+
+> **✅ 更正（2026-08-06 晚，T1 线）**：上面转述的那条根因「`sweep_ephemeral` 子查询的 LIMIT 没有
+> ORDER BY」**是错的**（那是 T1 线未经验证就写下的假说）。真因是**本机 Docker 容器时钟来回跳
+> ~115 秒**，已定案并修复；整轮 needs_db 现在 0 failed。见 `session-handoff-T1.md` 末尾「更正」一节。
+
   `sweep_ephemeral` 子查询的 LIMIT 没有 ORDER BY。本票动了 `clone_context`（给副本重打
   `uploaded_at`），跑 needs_db 时别把那条红算到这次头上。

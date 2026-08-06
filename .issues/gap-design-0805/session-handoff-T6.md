@@ -158,6 +158,17 @@ cd eval-harness && AVERY_DB_URL="postgresql://postgres:dev@127.0.0.1:5432/teamma
 
 ### ⚠ 一条**既有**的真库 flake（不是本票引入，别记到 T6 头上）
 
+> **✅ 已定案并修复（2026-08-06 晚，T1 线认领）。** 你这条记录是对的，而且你多给了一个我没有的
+> 关键数据点——「两次红的不是同一条测试」。真因：**本机 Docker 容器时钟会来回跳 ~115 秒**
+> （连续采样当场抓到 delta 在 −0.25s 与 +115s 之间横跳）。在「跳到未来」窗口里建的行拿到未来的
+> `created_at`，`created_at < now()` 恒假，那一行对 sweep 隐身 ~115 秒；跳窗口撞上哪条测试就红哪条
+> ——这正是你观察到的「红在不同测试上」。
+> 你猜的方向（`older_than_hours=0` 落到 `created_at` 上）是对的。
+> ⚠ 顺带更正：T1 交接里此前写的根因「子查询 LIMIT 缺 ORDER BY」**是错的**（纯逻辑即可证伪：
+> 无序 `LIMIT 50` 只要有合格行就必删至少一条，返回 0 只能是 WHERE 没匹配——过滤问题不是排序问题）。
+> 修法与证据见 `session-handoff-T1.md` 末尾的「更正」一节。
+
+
 `test_registry_contract.py` 的 GC sweep 那两条
 （`test_sweep_collects_only_old_unlinked_ephemeral_clones` / `test_sweep_respects_the_batch_limit`）
 在**跑全套 needs_db** 时会有一条红，断言都是同一句
