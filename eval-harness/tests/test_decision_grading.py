@@ -655,12 +655,36 @@ def _stale_timeline():
     return build_doc_timeline([doc("别墅二期-5月月报.md", f"{STALE_DAY}T02:30:00+00:00")])
 
 
+def _split_timeline():
+    """两份资料：项目自己读自的那份很老，另一份昨天刚传（own_doc ≠ newest_doc）。
+
+    🔴 这是 /ingest 的常态形状，也是本条规则那一刀（比**全库最新**那份、**不**比项目自己那份）
+    唯一能被证伪的语料——单份语料下 own_doc 恒等于 newest_doc，任何门都分不出两种写法。
+    """
+    return build_doc_timeline([doc("别墅二期-3月月报.md", "2026-03-01T00:00:00+00:00"),
+                               doc("七月总周报.md", f"{FRESH_DAY}T23:00:00+00:00")])
+
+
+def test_a_fresh_upload_elsewhere_keeps_an_old_sourced_card_fresh():
+    """🔴 判据是**全库最新**那份，绝不是项目自己那份。
+
+    项目读自 3 月的月报，但昨天刚传过一份新周报 → 不命中。若按项目自己那份算，就会对客户说
+    「资料 139 天没更新」，而他昨天刚传过——一句当场可证伪的假话。
+    （`_m_stale_evidence` 那段红线注释就是为拦这个而写的；没有这条门，那段注释拦不住任何东西。）
+    """
+    d = grade_project(proj(id="p_t", status="on-track", sourceRef="别墅二期-3月月报.md:12"),
+                      [], as_of=TODAY, timeline=_split_timeline())
+    assert "R-STALE-EVIDENCE" not in [h.rule_id for h in d.matched_rules], d.matched_rules
+    assert d.rule_grade == R.CAN_PROCEED
+
+
 def test_stale_evidence_fires_only_past_the_threshold():
     """恰好到阈值那天命中，差一天不命中。🔴 边界要钉死：这是唯一一条要把服务端本地 date
     与带时区的 uploaded_at 对齐的规则，差一天就是屏幕上一句假话。"""
-    card = proj(id="p_t", status="on-track")          # 本来是「可推进」
+    card = proj(id="p_t", status="on-track", sourceRef="别墅二期-5月月报.md:12")  # 本来是「可推进」
     stale = grade_project(card, [], as_of=TODAY, timeline=_stale_timeline())
-    fresh = grade_project(card, [], as_of=TODAY, timeline=build_doc_timeline(
+    fresh = grade_project(proj(id="p_t", status="on-track", sourceRef="别墅二期-6月周报.md:8"),
+                          [], as_of=TODAY, timeline=build_doc_timeline(
         [doc("别墅二期-6月周报.md", f"{FRESH_DAY}T02:30:00+00:00")]))
     assert "R-STALE-EVIDENCE" in [h.rule_id for h in stale.matched_rules]
     assert "R-STALE-EVIDENCE" not in [h.rule_id for h in fresh.matched_rules]
@@ -671,17 +695,66 @@ def test_stale_evidence_fires_only_past_the_threshold():
 
 def test_stale_evidence_never_drags_a_worse_card_down():
     """需确认级的命中只抬「可推进」，绝不动已经更严重的卡（等级取最严重的一档）。"""
-    high = grade_project(proj(id="p_b", status="blocked"), [], as_of=TODAY,
-                         timeline=_stale_timeline())
+    high = grade_project(proj(id="p_b", status="blocked", sourceRef="别墅二期-5月月报.md:3"),
+                         [], as_of=TODAY, timeline=_stale_timeline())
     assert high.rule_grade == R.HIGH_RISK
     assert "R-STALE-EVIDENCE" in [h.rule_id for h in high.matched_rules]
 
 
 def test_no_timeline_means_the_rule_simply_does_not_run():
     """不传时间轴 = 没有时间轴，这条规则一条都不命中（老调用方原样不受影响）。"""
-    d = grade_project(proj(id="p_t", status="on-track"), [], as_of=TODAY)
+    d = grade_project(proj(id="p_t", status="on-track", sourceRef="别墅二期-5月月报.md:12"),
+                      [], as_of=TODAY)
     assert "R-STALE-EVIDENCE" not in [h.rule_id for h in d.matched_rules]
     assert d.rule_grade == R.CAN_PROCEED
+
+
+def test_a_hand_added_card_is_never_told_its_evidence_is_stale():
+    """🔴 手加的卡（`source` 恒空 → 连 sourceRef 键都不发）**不读自任何资料**，
+    凭什么说它"依据的资料 45 天没更新"、还摆一份跟它毫无关系的月报当证据。
+
+    这是经理一分钟前手敲进去的项目；这句话对它结构上不成立。
+    """
+    d = grade_project(proj(id="p_new", title="今天新开的项目", status="on-track"),
+                      [], as_of=TODAY, timeline=_stale_timeline())
+    assert "R-STALE-EVIDENCE" not in [h.rule_id for h in d.matched_rules], d.matched_rules
+    assert d.rule_grade == R.CAN_PROCEED
+    # 出处指向一份我们手上没有的资料，同样不成立（"读自它"这件事我们核不了）。
+    gone = grade_project(proj(id="p_g", status="on-track", sourceRef="早就删了的文件.md:3"),
+                         [], as_of=TODAY, timeline=_stale_timeline())
+    assert "R-STALE-EVIDENCE" not in [h.rule_id for h in gone.matched_rules]
+
+
+def test_a_finished_project_is_not_dragged_by_stale_material_either():
+    """自报已完成的项目不被时间拖累——与本文件另外三条时间规则同一豁免
+    （`test_done_project_is_not_dragged_by_dates` 是那条口径的原门）。做完了就是做完了。"""
+    d = grade_project(proj(id="p_d", status="done", progress=100,
+                           sourceRef="别墅二期-5月月报.md:9"),
+                      [], as_of=TODAY, timeline=_stale_timeline())
+    assert "R-STALE-EVIDENCE" not in [h.rule_id for h in d.matched_rules], d.matched_rules
+    assert d.rule_grade == R.CAN_PROCEED
+
+
+def test_a_file_we_could_not_read_is_never_called_our_newest_material():
+    """🔴 解析失败 / 零 chunk 的上传**一个字都没被读到**，不算"我们读到的资料"。
+
+    没有这一条，一份 2026-07-17 传上来、解析失败的扫描件会让整个 context 显得很新鲜
+    （规则闭嘴，真正的陈旧被藏起来）；反过来在同批里它还会被 newest() 选中当证据，
+    对客户点名一份文件清单页上明明标着「解析失败」的文件，说判断读自它。
+    """
+    tl = build_doc_timeline([
+        doc("别墅二期-5月月报.md", f"{STALE_DAY}T00:00:00+00:00"),          # 真读到了
+        SimpleNamespace(source_key="扫描件.pdf", filename="扫描件.pdf",
+                        uploaded_at=f"{FRESH_DAY}T23:00:00+00:00", status="failed"),
+        SimpleNamespace(source_key="空表.xlsx", filename="空表.xlsx",
+                        uploaded_at=f"{FRESH_DAY}T23:30:00+00:00", status="empty"),
+    ])
+    assert tl.newest().source_key == "别墅二期-5月月报.md"
+    d = grade_project(proj(id="p_t", status="on-track", sourceRef="别墅二期-5月月报.md:12"),
+                      [], as_of=TODAY, timeline=tl)
+    hit = next(h for h in d.matched_rules if h.rule_id == "R-STALE-EVIDENCE")
+    joined = " ".join(hit.evidence)
+    assert "扫描件" not in joined and "空表" not in joined, hit.evidence
 
 
 @pytest.mark.parametrize("uploaded_at", ["", "   ", "不是时间", "2026-13-45T00:00:00+00:00", None])
@@ -690,40 +763,51 @@ def test_unreadable_upload_time_is_never_treated_as_old(uploaded_at):
     元数据缺失去给客户的文档定性，和把"读不准"说成"文档没写"是同一类错。"""
     tl = build_doc_timeline([doc("花名册.csv", uploaded_at)])
     assert tl.newest() is None
-    d = grade_project(proj(id="p_t", status="on-track"), [], as_of=TODAY, timeline=tl)
+    d = grade_project(proj(id="p_t", status="on-track", sourceRef="花名册.csv:2"),
+                      [], as_of=TODAY, timeline=tl)
     assert "R-STALE-EVIDENCE" not in [h.rule_id for h in d.matched_rules]
 
 
 def test_newest_document_wins_not_the_first_one():
     """判据是**最新**那份，不是列表里第一份——一份新资料就应该让整批重新变新鲜。"""
-    tl = build_doc_timeline([doc("三月旧档.md", "2026-03-01T00:00:00+00:00"),
-                             doc("七月周报.md", f"{FRESH_DAY}T23:00:00+00:00")])
-    assert tl.newest().source_key == "七月周报.md"
-    d = grade_project(proj(id="p_t", status="on-track"), [], as_of=TODAY, timeline=tl)
+    tl = _split_timeline()
+    assert tl.newest().source_key == "七月总周报.md"
+    d = grade_project(proj(id="p_t", status="on-track", sourceRef="七月总周报.md:4"),
+                      [], as_of=TODAY, timeline=tl)
     assert "R-STALE-EVIDENCE" not in [h.rule_id for h in d.matched_rules]
 
 
 def test_evidence_prints_the_same_day_it_compared():
     """🔴 印一个、比另一个 = 本仓最经典的假话面。证据里那个日期必须就是判据用的那个日期，
-    而且必须是**日期**——uploaded_at 原样是带微秒的 ISO8601，摆上屏是机器噪音不是读数。"""
-    tl = build_doc_timeline([doc("别墅二期-5月月报.md", f"{STALE_DAY}T02:30:00.926384+00:00")])
-    d = grade_project(proj(id="p_t", status="on-track", sourceRef="别墅二期-5月月报.md:12"),
+    而且必须是**日期**——uploaded_at 原样是带微秒的 ISO8601，摆上屏是机器噪音不是读数。
+
+    🔴 语料必须是**两份都超期、但不同天**：own_doc（3 月）≠ newest_doc（5 月）。
+    单份语料下两者恒等，这条门就对它自己声称要防的那类 bug 结构上是瞎的。
+    """
+    tl = build_doc_timeline([doc("别墅二期-3月月报.md", "2026-03-01T00:00:00+00:00"),
+                             doc("别墅二期-5月月报.md", f"{STALE_DAY}T02:30:00.926384+00:00")])
+    d = grade_project(proj(id="p_t", status="on-track", sourceRef="别墅二期-3月月报.md:12"),
                       [], as_of=TODAY, timeline=tl)
     hit = next(h for h in d.matched_rules if h.rule_id == "R-STALE-EVIDENCE")
     joined = " ".join(hit.evidence)
     assert f'uploaded_at="{STALE_DAY}"' in joined, hit.evidence
     assert "926384" not in joined and "T02:30" not in joined, f"上传时间原样漏进证据：{hit.evidence}"
-    assert "别墅二期-5月月报.md" in joined
-    # 出处（ADR-0028 的 `<文档名>:<行号>`）在时间轴里核得到，才引。
-    assert 'source="别墅二期-5月月报.md:12"' in joined
+    assert 'newest_material="别墅二期-5月月报.md"' in joined
+    assert "2026-03-01" not in joined, f"印的是项目自己那份、比的却是最新那份：{hit.evidence}"
+    # 出处（ADR-0028 的 `<文档名>:<行号>`）是**项目自己那份**，与上面那行判据日期分属两份资料
+    # ——正好把「印一个、比另一个」钉开。
+    assert 'source="别墅二期-3月月报.md:12"' in joined
 
 
-def test_evidence_never_cites_a_source_we_cannot_back_up():
-    """出处指向一份我们手上没有的资料时，不引它——不摆悬空指针。"""
-    d = grade_project(proj(id="p_t", status="on-track", sourceRef="早就删了的文件.md:3"),
+def test_evidence_is_exactly_these_two_lines():
+    """行数与整行形状都钉死。只断言"包含某子串"挡不住多一行、少一行、或某行被复制一遍。"""
+    d = grade_project(proj(id="p_t", status="on-track", sourceRef="别墅二期-5月月报.md:12"),
                       [], as_of=TODAY, timeline=_stale_timeline())
     hit = next(h for h in d.matched_rules if h.rule_id == "R-STALE-EVIDENCE")
-    assert not any("早就删了的文件" in line for line in hit.evidence), hit.evidence
+    assert hit.evidence == (
+        'source="别墅二期-5月月报.md:12"',
+        f'newest_material="别墅二期-5月月报.md" uploaded_at="{STALE_DAY}"',
+    ), hit.evidence
 
 
 def test_manual_edits_never_become_document_provenance():
@@ -756,14 +840,59 @@ def test_manual_edits_never_become_document_provenance():
 
 def test_a_signal_kind_word_can_never_be_read_as_a_document_key():
     """🔴 命名陷阱的门：`signal_cards()` 里字面叫 `source` 的键装的是 source_kind（'doc'），
-    不是文档引用。定级这一路走的是 `sourceRef`，所以哪怕真有一份资料叫 'doc'，
-    一个 `source='doc'` 的信号也绝不会被当成"读自那份资料"。"""
+    不是文档引用。定级这一路走的是 `sourceRef`。
+
+    所以哪怕真有一份资料**就叫 'doc'**、且它老得该命中，一张只挂着 `source='doc'` 信号、
+    自己没有 `sourceRef` 的项目卡也绝不会被当成"读自那份资料"——一个字都不许命中。
+    （若哪天有人图省事把匹配器改成读 `signal["source"]`，这条门会红；那个错误不报异常、
+    别的门也全绿。）
+    """
     tl = build_doc_timeline([doc("doc", f"{STALE_DAY}T00:00:00+00:00")])
     assert tl.stamp_for("doc") is not None          # 时间轴本身认得这个 key
     card = proj(id="p_t", status="on-track")        # 项目没有 sourceRef
     d = grade_project(card, [sig(source="doc", summary="随手一条")], as_of=TODAY, timeline=tl)
+    assert "R-STALE-EVIDENCE" not in [h.rule_id for h in d.matched_rules], d.matched_rules
+
+
+def test_pre_032_rows_without_a_source_key_still_join_by_filename():
+    """feat-032 之前入库的行 `source_key=''`（`SourceDocument.source_key` 的注释明写这种行存在，
+    pg 原样读回）。回退到 filename 是 `file_cards()` 数 chunk 的既有口径——去掉回退，
+    这类老 context 的整条规则会**静默失效**，而"读不到上传时间所以不判"和"根本没有时间轴"
+    在载荷上长得一模一样，没人看得出来。"""
+    tl = build_doc_timeline([SimpleNamespace(source_key="", filename="老档案.md",
+                                             uploaded_at=f"{STALE_DAY}T00:00:00+00:00")])
+    assert tl.newest().source_key == "老档案.md"
+    d = grade_project(proj(id="p_t", status="on-track", sourceRef="老档案.md:7"),
+                      [], as_of=TODAY, timeline=tl)
+    assert "R-STALE-EVIDENCE" in [h.rule_id for h in d.matched_rules]
+
+
+def test_two_uploads_sharing_a_filename_stay_separate_documents():
+    """生产常态：同批传两个「周报.md」，`_unique_parse_names` 给出不同的 source_key
+    （「周报.md」/「周报(1).md」）而 filename **都是**「周报.md」。
+
+    🔴 join key 必须是 source_key（filename 优先会让两份互相覆盖，第二份的出处静默查不到），
+    而 evidence 里给经理看的名字必须是 **filename** —— 文件清单页只回 filename，
+    印 source_key 就是给他一个在他自己文件页上根本不存在的名字。
+    """
+    # 🔴 让 filename ≠ source_key 的那一份成为**最新**（晚一天，不是晚一小时）——否则
+    # newest 落在 source_key == filename 的那份上，这条门对"印错哪个字段"结构上是瞎的。
+    tl = build_doc_timeline([
+        SimpleNamespace(source_key="周报.md", filename="周报.md",
+                        uploaded_at=f"{(TODAY - timedelta(days=R.STALE_EVIDENCE_DAYS + 1)).isoformat()}"
+                                    f"T01:00:00+00:00"),
+        SimpleNamespace(source_key="周报(1).md", filename="周报.md",
+                        uploaded_at=f"{STALE_DAY}T02:00:00+00:00"),
+    ])
+    assert tl.newest().source_key == "周报(1).md"      # 最新那份正是同名的第二份
+    assert tl.stamp_for("周报(1).md:5").source_key == "周报(1).md"   # 没被同名那份覆盖
+    assert tl.stamp_for("周报.md:5").source_key == "周报.md"
+    d = grade_project(proj(id="p_t", status="on-track", sourceRef="周报(1).md:5"),
+                      [], as_of=TODAY, timeline=tl)
     hit = next(h for h in d.matched_rules if h.rule_id == "R-STALE-EVIDENCE")
-    assert not any(line.startswith('source="') for line in hit.evidence), hit.evidence
+    joined = " ".join(hit.evidence)
+    assert 'newest_material="周报.md"' in joined, f"给经理看的应是文件名：{hit.evidence}"
+    assert "newest_material=\"周报(1).md\"" not in joined
 
 
 def test_stamp_for_splits_on_the_last_colon_only():
@@ -797,13 +926,19 @@ def test_stale_evidence_is_reproducible():
 
 
 def test_same_day_uploads_pick_a_stable_newest():
-    """同一天上传的多份资料（今天的常态：一批 /ingest 全进）必须选出**定死**的那一份，
-    否则证据行会随实体迭代序漂，"连跑两次一致"的承诺就破了。"""
-    a = build_doc_timeline([doc("乙.md", f"{STALE_DAY}T01:00:00+00:00"),
-                            doc("甲.md", f"{STALE_DAY}T02:00:00+00:00")])
-    b = build_doc_timeline([doc("甲.md", f"{STALE_DAY}T02:00:00+00:00"),
-                            doc("乙.md", f"{STALE_DAY}T01:00:00+00:00")])
-    assert a.newest() == b.newest()
+    """同一天上传的多份资料（今天的常态：一批 /ingest 全进，彼此只差微秒）必须选出**定死**
+    的那一份，否则证据行会随迭代序漂，"连跑两次一致"的承诺就破了。
+
+    🔴 断言的是**具体是哪一份**，不是"两次调用彼此相等"：后者对着一个 `set` 迭代序实现
+    也会在同一个进程里全绿（同一个 PYTHONHASHSEED），只有换进程才露馅——那种门是装饰。
+    口径是 `max((day, source_key))`，所以同日里 source_key 字典序最大的那份胜出。
+    """
+    stamps = [doc("乙方补充材料.md", f"{STALE_DAY}T01:00:00+00:00"),
+              doc("甲方来函.md", f"{STALE_DAY}T02:00:00+00:00"),
+              doc("丙栋验收单.md", f"{STALE_DAY}T03:00:00+00:00")]
+    expected = max(s.source_key for s in stamps)
+    for order in (stamps, list(reversed(stamps)), [stamps[1], stamps[2], stamps[0]]):
+        assert build_doc_timeline(order).newest().source_key == expected
 
 
 def test_stale_evidence_payload_stays_free_of_backend_prose():
@@ -874,6 +1009,47 @@ def test_project_source_ref_stays_out_of_the_public_project_card():
     ctx = _ctx_with_docs(f"{STALE_DAY}T02:30:00+00:00")
     assert "sourceRef" not in ctx.project_cards()[0]
     assert ctx._decision_subjects()[0]["sourceRef"] == "别墅二期-5月月报.md:12"
+
+
+def test_soft_deleted_projects_leave_the_decision_path_too():
+    """🔴 用户扔进折叠抽屉的项目，不许从今天页 / 「N 个值得多看一眼」里爬回来。
+
+    定级现在吃的是 `_decision_subjects()`，它和 `project_cards()` 必须同一条 archived 口径。
+    这条不变量此前只由 `project_cards()` 那侧的门守着；本票新开一条投影 = 抄了第二份，
+    没有这条门，把过滤删掉全仓一条不红。
+    """
+    ctx = _ctx_with_docs(f"{STALE_DAY}T02:30:00+00:00")
+    ctx.extraction.projects[0].status = "blocked"          # 归档前是高风险，最容易爬回来
+    assert ctx.decision_cards(as_of=TODAY)                 # 归档前在场
+    ctx.set_project_archived("p_a", True)
+    assert ctx.project_cards() == []
+    assert ctx._decision_subjects() == []
+    assert ctx.decision_cards(as_of=TODAY) == []
+    assert not [m for m in ctx.briefing(as_of=TODAY)["metrics"] if m["label"] == "need a look"]
+
+
+def test_a_freshly_claimed_sample_team_is_not_told_its_material_is_stale():
+    """🔴 demo 母本是内容寻址的、一次铸成就常驻，它的 `uploaded_at` 冻在这台部署首次铸母本那天。
+
+    若克隆逐字继承那个时间戳，母本满 45 天之后，**每一位三秒前才领到示例团队、一个文件都没传过**
+    的访客，一进门就是整块看板「需确认：手上最新的一份资料也是 45 天以前上传的」，
+    而且他无论做什么都消不掉。所以 `clone_context` 给副本重打上传时间。
+    """
+    from avery.ingest.registry import ContextRegistry
+
+    reg = ContextRegistry()
+    master = _ctx_with_docs("2026-01-01T00:00:00+00:00")    # 母本：铸于很久以前
+    master.context_id = "ctx_demo_master"
+    reg.put(master)
+    assert reg.clone_context("ctx_demo_master", new_context_id="ctx_visitor",
+                             new_owner_token="tok-visitor")
+    twin = reg.get("ctx_visitor")
+    # 副本的资料对这位访客来说，确实是此刻才进他工作区的。
+    assert twin.source_documents[0].uploaded_at != master.source_documents[0].uploaded_at
+    from avery.decision_grading import _uploaded_day
+    assert _uploaded_day(twin.source_documents[0].uploaded_at) == date.today()
+    for card in twin.decision_cards():                      # as_of 走 date.today()，同生产
+        assert "R-STALE-EVIDENCE" not in [h["rule_id"] for h in card["matched_rules"]], card
 
 
 def test_company_context_emits_decision_cards():

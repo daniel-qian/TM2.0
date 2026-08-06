@@ -427,8 +427,17 @@ class CompanyContext:
         when the doc stated it; risk 4-dims / reportedStatus are left absent (R2 don't invent).
         rich-align-0722/05a: archived (soft-deleted) projects are EXCLUDED here — they go to the
         collapse drawer via archived_project_cards()."""
-        return [self._one_project_card(pr) for pr in self.extraction.projects
-                if not getattr(pr, "archived", False)]
+        return [self._one_project_card(pr) for pr in self._active_projects()]
+
+    def _active_projects(self) -> list:
+        """rich-align-0722/05a 软删（archived）的**唯一**过滤点。`project_cards()` 与
+        `_decision_subjects()` 都从这里取。
+
+        🔴 为什么收成一处：这条业务不变量抄第二份就一定会漂——而漂掉的后果是用户已经扔进
+        折叠抽屉的项目，从今天页和「N 个值得多看一眼」里爬回来。收成一处之后，
+        `test_project_crud_05a` 对 `project_cards()` 的既有门就**传递性**地守住了定级那条路。
+        """
+        return [pr for pr in self.extraction.projects if not getattr(pr, "archived", False)]
 
     def archived_project_cards(self) -> list[dict]:
         """rich-align-0722/05a: soft-deleted projects for the 'archived' collapse drawer (restorable).
@@ -544,7 +553,7 @@ class CompanyContext:
         内部键塞进 /team 回帧的公开契约，以后想改就是破坏性变更。
         """
         return [{**self._one_project_card(pr), **({"sourceRef": pr.source} if pr.source else {})}
-                for pr in self.extraction.projects if not getattr(pr, "archived", False)]
+                for pr in self._active_projects()]
 
     def doc_timeline(self):
         """gap-design-0805 · B1 —— 这份 context 的资料上传时间轴（source_key → uploaded_at）。
@@ -964,10 +973,21 @@ class ContextRegistry(ProjectWriteMixin):
         store = KeywordStore()
         store.add(extraction.materials)
         mem_dir = materialize_memory(extraction, data_root() / new_context_id)
+        # 🔴 副本的 `uploaded_at` 重打成**此刻**（gap-design-0805 · B1）。母本是内容寻址的、
+        # 一次铸成就常驻（`service/demo.py::_master_id`，sweep 明令不碰母本），所以它的上传时间
+        # 冻在这台部署第一次铸母本那天。逐字继承会让「资料多久没更新」这条时间轴规则，在母本
+        # 满 45 天之后，对每一位**三秒前刚领到示例团队、一个文件都没传过**的访客说
+        # 「手上最新的一份资料也是 45 天以前上传的」——整块看板变黄，且他无论做什么都消不掉。
+        # 对这位访客来说，这些文件确实是此刻才进他的工作区的。
+        # （笔记的 `created_at` 仍逐字保留：那是「实时数据缺位」那段叙事的时间线，是内容不是元数据。）
+        docs = copy.deepcopy(src.source_documents)
+        stamped = _now_iso()
+        for sd in docs:
+            sd.uploaded_at = stamped
         twin = CompanyContext(
             context_id=new_context_id, extraction=extraction, store=store, memory_dir=mem_dir,
             name=src.name, source_files=list(src.source_files),
-            source_documents=copy.deepcopy(src.source_documents),
+            source_documents=docs,
             owner_token=new_owner_token)
         self._by_id[new_context_id] = twin
         self._notes[new_context_id] = [replace(n, id=new_note_id())

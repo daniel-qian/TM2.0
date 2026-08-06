@@ -222,15 +222,25 @@ class DocTimeline:
         return None
 
 
+# 只有这个状态的上传真的产出了可读内容。'failed'（解析不出）/ 'empty'（解析了但零 chunk）
+# 的文件**一个字都没被读到**，所以它们不算"我们读到的资料"——把它们算进时间轴，就会让
+# 「最新的一份资料」指向一份从没参与过任何判断的文件，等于拿一份解析失败的扫描件冒充依据。
+# 缺 `status` 属性的（pre-032 行、鸭子类型的测试替身）按默认值 'ingested' 处理。
+_READABLE_DOC_STATUS = "ingested"
+
+
 def build_doc_timeline(source_documents) -> DocTimeline:
     """从 `CompanyContext.source_documents` 建时间轴。
 
     join key 用 `source_key or filename`，与 `registry.file_cards()` 数 chunk 的回退口径逐字一致
-    （pre-032 的行没有 source_key）。读不出上传时间的行**整行跳过**——那是我们自己的元数据缺失，
-    不该变成关于客户资料的任何断言。
+    （pre-032 的行没有 source_key）。两类行**整行跳过**：
+      · 读不出上传时间的 —— 那是我们自己的元数据缺失，不该变成关于客户资料的任何断言；
+      · 没读出内容的（status 不是 'ingested'）—— 见 `_READABLE_DOC_STATUS`。
     """
     stamps: list[DocStamp] = []
     for sd in source_documents or []:
+        if _norm_text(getattr(sd, "status", _READABLE_DOC_STATUS)) != _READABLE_DOC_STATUS:
+            continue
         day = _uploaded_day(getattr(sd, "uploaded_at", ""))
         if day is None:
             continue
@@ -460,8 +470,16 @@ def _m_stale_evidence(s: _Subject, as_of: date) -> list[str]:
 
     🔴 拿不到任何上传时间（老 context、元数据缺失）→ 不命中。"不知道资料多新"绝不能变成
     "资料很旧"——那是拿我们自己的元数据缺失去给客户的文档定性。
+
+    另外两道**不命中**的闸，都是"这句话对这张卡不成立"，不是降噪：
+    · 这张卡**根本不读自任何我们手上的资料**（`own_doc is None`：手加的卡 `source` 恒空，
+      出处指向一份已经不在的资料也算）→ 不命中。经理一分钟前手敲进去的项目，凭什么说它
+      "依据的资料 45 天没更新"？还要摆一份与它毫无关系的月报当证据。
+    · 项目**自报已完成**（`status == done`）→ 不命中，与本文件另外三条时间规则同一豁免
+      （`test_done_project_is_not_dragged_by_dates` 钉着这条口径）。做完了就是做完了，
+      时间过去不会把它变回没做完。
     """
-    if s.newest_doc is None:
+    if s.newest_doc is None or s.own_doc is None or s.status == STATUS_DONE:
         return []
     if (as_of - s.newest_doc.day).days < STALE_EVIDENCE_DAYS:
         return []
@@ -536,7 +554,17 @@ def _m_clear(s: _Subject) -> list[str]:
 # 全部拆掉：能进规则标题的进标题（由前端 i18n 出两种语言），进不去的（"已过 N 天"）就不说了
 # ——到期日原样摆在那儿，经理自己会看日历。
 #
-# 这两条规则的证据面按定义为空（一条没读到任何字段，一条是"跑完整张表都没命中"），
+# 🔴 gap-design-0805 · B1 起 evidence 里多了**第三种**东西，明写在这里免得下一个人拿它当先例：
+#   ③ **我们自己的入库读数** —— `uploaded_at="2026-06-20"`（那份资料进 avery.source_documents
+#      的日子）。它既不是文档原句，也不是从文档里读出来的字段值：客户翻开那份 5 月月报，
+#      里面一个字都没有这个日期。放行它的理由是它仍然满足这一节真正要守的两条——语言中立、
+#      且可溯源到一条确定的事实（文件清单页上就有同一个日期）。
+#   前端把 evidence 渲染在「文件原文 / Straight from your files」标签下，所以这一格是**有代价**的：
+#   它把一条系统元数据摆进了一个说"这些来自你的文件"的位置。这条边界只开到这里为止——
+#   ⚠ 任何**后端算出来的数**（"已过 62 天"、"共 3 份"）仍然不许进 evidence，那是第四种东西，
+#   而且是被 ADR-0033 明令删掉过一次的那种（见上面那段「（已过 12 天）」的碑）。
+#
+# 下面这两条规则的证据面按定义为空（一条没读到任何字段，一条是"跑完整张表都没命中"），
 # 匹配器返回的 `@matched` 只是"命中了"的记号，在建 RuleHit 时抹掉。
 _EVIDENCE_FREE_RULES = frozenset({"R-NO-EVIDENCE", "R-UNCLASSIFIED"})
 
