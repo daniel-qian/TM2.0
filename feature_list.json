@@ -542,9 +542,15 @@
     },
     {
       "id": "feat-099",
-      "name": "conflicts-rule-b2b · 冲突上今天页（差距战役 T7 / #56）",
+      "name": "T2 表单提交进资料 · 统一数据契约 + 向量只嵌增量（差距战役 T2 / #53）",
       "status": "done",
       "evidence_ref": "feature_archive.json#feat-099"
+    },
+    {
+      "id": "feat-100",
+      "name": "conflicts-rule-b2b · 冲突上今天页（差距战役 T7 / #56）",
+      "status": "done",
+      "evidence_ref": "feature_archive.json#feat-100"
     }
   ]
 }

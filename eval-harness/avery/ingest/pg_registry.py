@@ -226,7 +226,18 @@ class PostgresContextRegistry(ProjectWriteMixin):
 
     # --- feat-031: real vector RAG at the storage door -------------------------------------------
 
-    def _material_vectors(self, ctx: CompanyContext) -> list[list[float]] | None:
+    def _prior_vector_keys(self, context_id: str) -> set[tuple[str, str]]:
+        """T2/#53 —— 这个 context 库里**已带非 NULL 向量**的块的 (chunk_id, text) 键集。
+        键故意与 put() 事务内 `_prior_mat_vecs` 回填的 join 条件逐字同口径（chunk_id + text 双键：
+        text 变了说明块真变了，不给旧向量）——`_material_vectors` 靠它决定哪些块**不必**重嵌。"""
+        self._ensure_schema()
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT chunk_id, text FROM avery.materials "
+                "WHERE context_id = %s AND embedding IS NOT NULL", (context_id,)).fetchall()
+        return {(cid, text) for cid, text in rows}
+
+    def _material_vectors(self, ctx: CompanyContext) -> "list[list[float] | None] | None":
         """Embeddings aligned to `ctx.extraction.materials` to persist into materials.embedding, or
         None (keyword mode -> the column stays NULL, an HONEST 'no vectors here'). It PREFERS the
         vectors the pipeline already computed (`ctx.store`, a VectorStore) so a corpus is embedded
@@ -236,6 +247,14 @@ class PostgresContextRegistry(ProjectWriteMixin):
 
         Embedding is done OUTSIDE the DB transaction (it may hit a network endpoint); only the
         already-computed vectors cross into put()'s transaction.
+
+        T2/#53（gap-design-0805 · A1 的成本命门）：`get()` 重建的 store 是 `PgVectorStore` ——
+        它**不是** `VectorStore` 的子类（store.py 里是两个独立类，add() 还是 no-op），所以下面的
+        isinstance 对 get→mutate→put 的每一次手编/append 写回**恒假**，修前每次都落到 fallback
+        把整个语料重嵌一遍（10 人×每周一份周报 = 每周 10 次全语料计费）。修法是把事务内
+        `_prior_mat_vecs` 已证明可行的那招提前用上：先按 (chunk_id, text) 问库里哪些块已有向量，
+        那些块返回 **None 占位**（INSERT 落 NULL → 同一事务的 UPDATE...FROM 原库回填，向量全程
+        不出库），只对真正新增/文本变过的块调 embedder。返回列表因此是 per-row Optional。
 
         feat-031 honesty: if vectors ARE produced but their dim != the vector(N) column (a wrong-dim
         embedder against feat-030's frozen 1024), we still degrade to NULL/keyword — but LOUDLY, via
@@ -257,21 +276,36 @@ class PostgresContextRegistry(ProjectWriteMixin):
                 return candidate
             vecs = candidate           # kept only to report its (wrong) dim if the embedder also fails
         if self._embedder is not None:
+            # T2/#53：只嵌库里还没有向量的块。首次 ingest（库里零行）时 missing=全部，行为与修前
+            # 完全一致；append/手编写回时 missing=新增那几行。键查询失败不该挡 put ——
+            # 退化成「全嵌」（修前行为），贵但正确。
+            try:
+                prior = self._prior_vector_keys(ctx.context_id)
+            except Exception as e:
+                logger.warning(
+                    "reading prior vector keys failed (%s: %s) — falling back to a full re-embed "
+                    "for context %s", type(e).__name__, str(e)[:200], ctx.context_id)
+                prior = set()
+            missing = [i for i, m in enumerate(mats) if (m.id, m.text) not in prior]
             # 0805 走查修闸: this fallback re-embed is billable too (and now passes the
             # AVERY_EMBED_CALL_BUDGET spend gate). A failure — endpoint outage or the gate refusing
             # the batch — must degrade to NULL embeddings (keyword retrieval at get()), never fail
-            # the whole put(): the manager's upload lands either way.
+            # the whole put(): the manager's upload lands either way. (旧块的向量仍由事务内回填
+            # 保住 —— 一次失败的 append 不会把已有检索面拖回 keyword。)
             try:
-                candidate = self._embedder.embed([m.text for m in mats])
+                fresh = self._embedder.embed([mats[i].text for i in missing]) if missing else []
             except Exception as e:
                 logger.warning(
                     "embedding the material corpus failed (%s: %s) — storing NULL embeddings for "
                     "context %s; retrieval degraded to keyword",
                     type(e).__name__, str(e)[:200], ctx.context_id)
                 return None
-            if _fits(candidate):
-                return candidate
-            vecs = candidate
+            if len(fresh) == len(missing) and all(len(v) == dim for v in fresh):
+                out: "list[list[float] | None]" = [None] * len(mats)
+                for i, v in zip(missing, fresh):
+                    out[i] = v
+                return out
+            vecs = fresh
 
         # A dim that does not match the vector(N) column can't be stored. Degrade to keyword, but say
         # so — a wrong-dim embedder is a config error that would otherwise vanish into a silent NULL.
@@ -386,8 +420,10 @@ class PostgresContextRegistry(ProjectWriteMixin):
                     "INSERT INTO avery.materials "
                     "(context_id, idx, chunk_id, text, source, doc_kind, embedding) "
                     "VALUES (%s, %s, %s, %s, %s, %s, %s::vector)",   # feat-031 fills embedding
+                    # T2/#53：vecs 是 per-row Optional —— 行内 None = 「库里已有这块的向量」，
+                    # 先落 NULL，交给下面的 _prior_mat_vecs 回填在库内补齐（向量不出库）。
                     [(ctx.context_id, i, m.id, m.text, m.source, m.doc_kind,
-                      _vec_literal(vecs[i]) if vecs is not None else None)  # None -> NULL::vector
+                      _vec_literal(vecs[i]) if vecs is not None and vecs[i] is not None else None)
                      for i, m in enumerate(ctx.extraction.materials)])
                 cur.executemany(
                     "INSERT INTO avery.memory_files (context_id, filename, content) "
@@ -416,9 +452,10 @@ class PostgresContextRegistry(ProjectWriteMixin):
                     "WHERE sd.context_id = %s AND sd.content IS NULL "
                     "  AND COALESCE(NULLIF(sd.source_key, ''), sd.filename) = pb.key",
                     (ctx.context_id,))
-                # chunk_id+text 双键：text 变了说明块真变了，不给旧向量（诚实降级）。有 embedder
-                # 时新行非 NULL，本条不说话——CRUD 重嵌的**成本**问题（核验按语点名）另立票，
-                # 此处只治「抹掉」。
+                # chunk_id+text 双键：text 变了说明块真变了，不给旧向量（诚实降级）。
+                # T2/#53 起本条兼任**复用**的落点：_material_vectors 对库里已有向量的块刻意
+                # 落 NULL（per-row None 占位），正是靠这条 UPDATE...FROM 在库内原样补回——
+                # 「CRUD/append 重嵌的成本问题」那张票就是这么修的，向量全程不出库。
                 cur.execute(
                     "UPDATE avery.materials m SET embedding = pv.embedding "
                     "FROM _prior_mat_vecs pv "
@@ -820,7 +857,8 @@ class PostgresContextRegistry(ProjectWriteMixin):
 
     # --- T1 · form-backend-a1a: 常驻表单存储 —— registry 表单 seam 的 postgres 双胞胎 -------------
     # 表在 db/migrations/0013_form_templates.sql。⚠ 这两组方法存的是「表单这个采集器」，**不是**
-    # 资料的第二条存储通道：一次提交最终会变成一份与上传文件平权的 SourceDocument（T2 的活）。
+    # 资料的第二条存储通道：一次提交在提交那一刻被 form_append 渲染成一份与上传文件平权的
+    # SourceDocument，走 get→原地 append→put 进 context（T2）。
 
     _FORM_TPL_COLS = "context_id, id, title, fields, active, created_at"
     _FORM_SUB_COLS = ("id, context_id, template_id, person_id, person_name, period, "

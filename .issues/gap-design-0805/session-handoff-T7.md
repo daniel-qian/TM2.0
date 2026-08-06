@@ -2,7 +2,7 @@
 
 > 差距战役 0805 收官票。前置 T4（#51）/ T6（#52）合 main 已核（`6baf6a0` / `98ec459`）。
 > 根 `progress.md` / 根 `session-handoff.md` 归主检出集成者，本文件只记本线。
-> feature 记账：`feature_list.json#feat-099` → `feature_archive.json#feat-099`。
+> feature 记账：`feature_list.json#feat-100` → `feature_archive.json#feat-100`（原记 feat-099，合 main 时 T2/#53 已占号，让号——同 T4 让号 T1 的先例）。
 
 ## 一句话
 
@@ -74,9 +74,9 @@
 
 ## 已知局限（不藏）
 
-1. **R-FRESH-CONTRADICTS-STALE 今天在生产一次都不会亮**：每次 /ingest 铸新 context、同批
-   `uploaded_at` 同刻，天粒度下永远排不出新旧（这正是同日闸的本意）。等 **T2 表单线**把时间轴
-   拉开后它才有命中面——与 T4 的 R-STALE-EVIDENCE 同款局限，同款理由，已写进说明书。
+1. **R-FRESH-CONTRADICTS-STALE 今天在生产基本不会亮**：每次 /ingest 铸新 context、同批
+   `uploaded_at` 同刻，天粒度下排不出新旧（这正是同日闸的本意）。合 main 时 **T2（#53）刚好
+   落地**——表单提交按周分散追加，就是把时间轴拉开的那条数据源；等真实表单跑起来它才有命中面——与 T4 的 R-STALE-EVIDENCE 同款局限，同款理由，已写进说明书。
    演示要看它得备 `uploaded_at` 挪开过的种子。
 2. **已知假阳性=设计内**：同日期两种写法/同部门两种叫法会报「对不上」（T6 v1 不做归一化），
    dismiss 出口就是为它开的。测试语料故意用了这个形状并注明。
@@ -100,7 +100,7 @@
 ## 记账口径
 
 - issue **#56** 正源，commit 走 `feat(#56)`，收尾关 issue。
-- `feature_list.json#feat-099`（done 四字段指针）→ `feature_archive.json#feat-099` 完整记录。
+- `feature_list.json#feat-100`（done 四字段指针）→ `feature_archive.json#feat-100` 完整记录。
   T6 没建条目、T1/T4 建了——按 AGENTS.md DoD 从 T4 口径。
 - dist 收尾时指向 `http://127.0.0.1:8151`（本线验证残留，端口已死，**无毒**；下次 init.sh
   的 build 会重打。真正危险的是被 bundle-privacy 重打成生产域名那种，本线没跑 C 区）。
