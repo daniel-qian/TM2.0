@@ -388,7 +388,7 @@ class MethodCard:
 #
 # 🔴 ADR-0033：这里只出**机器键**（field='team'）+ **verbatim 原值**，一个中文句子都不拼。
 # 句子归前端 i18n（T7 的活）。
-_CONFLICT_FIELDS: dict[str, tuple[str, ...]] = {
+_CONFLICT_FIELD_ALLOWLIST: dict[str, tuple[str, ...]] = {
     "person": ("team",),                      # 部门/团队
     "project": ("status", "dueDate"),         # 项目状态 / 到期日
 }
@@ -1743,7 +1743,7 @@ def _note_conflicts(res: ExtractionResult, kind: str, cur, incoming, key: str,
     写法照抄给 `progress`**——那个字段 0 是合法读数，`not 0` 为真会把真读数当成缺席
     （test_project_progress_uses_is_None_so_ZERO_is_a_real_reading 钉着这件事）。
     """
-    for fname in _CONFLICT_FIELDS[kind]:
+    for fname in _CONFLICT_FIELD_ALLOWLIST[kind]:
         new = getattr(incoming, fname, "")
         if not new:
             continue
@@ -1824,7 +1824,7 @@ def _dedupe_entities(res: ExtractionResult) -> None:
         cur = people.get(key)
         if cur is None:
             people[key] = p
-            for fname in _CONFLICT_FIELDS["person"]:
+            for fname in _CONFLICT_FIELD_ALLOWLIST["person"]:
                 if getattr(p, fname, ""):
                     people_src[(key, fname)] = p.source
             continue
@@ -1860,7 +1860,7 @@ def _dedupe_entities(res: ExtractionResult) -> None:
         cur = projects.get(key)
         if cur is None:
             projects[key] = pr
-            for fname in _CONFLICT_FIELDS["project"]:
+            for fname in _CONFLICT_FIELD_ALLOWLIST["project"]:
                 if getattr(pr, fname, ""):
                     projects_src[(key, fname)] = pr.source
             continue

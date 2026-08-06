@@ -5,7 +5,7 @@
 消失**。这个文件验的是收容所：输家不再蒸发，而是带着 value + source + doc_key 进 conflicts。
 
 **v1 是刻意收窄的**，三条边界写在这里，免得后来人以为是漏做：
-  * 字段只有三个（`_CONFLICT_FIELDS`）：部门/团队、项目状态、到期日。票面点了四个，第四个
+  * 字段只有三个（`_CONFLICT_FIELD_ALLOWLIST`）：部门/团队、项目状态、到期日。票面点了四个，第四个
     「人员在职状态」今天在数据模型里**没有落脚点**——见 `test_employment_status_still_has_no_home`。
   * 只报**两边都非空且完全不相等**的字符串。同义不同写（「传菜组」/「传菜」/「前厅-传菜」）不做归一化，
     是已知的假阳性来源，交给 T7 卡面上的关闭出口。
@@ -31,7 +31,7 @@ import pytest
 
 from avery.ingest import HeuristicExtractor, extract_docs, ingest_docs, parse_bytes
 from avery.ingest.extract import (
-    _CONFLICT_FIELDS,
+    _CONFLICT_FIELD_ALLOWLIST,
     _CONFLICT_FIELD_WITHOUT_A_HOME,
     ConflictValue,
     ExtractionResult,
@@ -76,14 +76,14 @@ def _only(res: ExtractionResult) -> FieldConflict:
 # 本身要被断言，而不是被信任。
 
 def test_every_declared_conflict_field_is_a_real_attribute():
-    """`_CONFLICT_FIELDS` 里的每个名字都必须是对应 dataclass 上真实存在的字段。
+    """`_CONFLICT_FIELD_ALLOWLIST` 里的每个名字都必须是对应 dataclass 上真实存在的字段。
 
     拼错一个字母（'dueDate' 写成 'duedate'）不会报错，只会让那个字段**永远不产生冲突**——正是
     "判据够不着"型假绿。这条门让拼写错误当场变红。
     """
     by_kind = {"person": PersonEntity, "project": ProjectEntity}
-    assert set(_CONFLICT_FIELDS) == set(by_kind), "字段表的 kind 与实体类对不上"
-    for kind, names in _CONFLICT_FIELDS.items():
+    assert set(_CONFLICT_FIELD_ALLOWLIST) == set(by_kind), "字段表的 kind 与实体类对不上"
+    for kind, names in _CONFLICT_FIELD_ALLOWLIST.items():
         real = {f.name for f in fields(by_kind[kind])}
         missing = [n for n in names if n not in real]
         assert not missing, f"{kind} 的冲突字段 {missing} 在 {by_kind[kind].__name__} 上不存在"
@@ -98,7 +98,7 @@ def test_declared_conflict_fields_are_all_plain_strings():
     test_project_progress_uses_is_None_so_ZERO_is_a_real_reading 讲的就是这件事。这条门挡住它。
     """
     by_kind = {"person": PersonEntity, "project": ProjectEntity}
-    for kind, names in _CONFLICT_FIELDS.items():
+    for kind, names in _CONFLICT_FIELD_ALLOWLIST.items():
         types = {f.name: f.type for f in fields(by_kind[kind])}
         for n in names:
             assert "str" in str(types[n]) and "int" not in str(types[n]), (
@@ -115,7 +115,7 @@ def test_employment_status_still_has_no_home():
     不如让不可达**明写成不可达**。
 
     🔴 哪天 T1/T5 给 PersonEntity 加上任职状态，这条门会变红——那个红的意思是：
-    「回 extract.py 的 `_CONFLICT_FIELDS`，把 'person' 那一行补上，然后来改这条门。」
+    「回 extract.py 的 `_CONFLICT_FIELD_ALLOWLIST`，把 'person' 那一行补上，然后来改这条门。」
     """
     assert _CONFLICT_FIELD_WITHOUT_A_HOME == "人员在职状态"
     names = {f.name for f in fields(PersonEntity)}
@@ -123,7 +123,7 @@ def test_employment_status_still_has_no_home():
                 if "status" in n.lower() or "employ" in n.lower() or "active" in n.lower()]
     assert not suspects, (
         f"PersonEntity 长出了 {suspects} —— 如果其中之一是任职状态，说明 T6 v1 的第四个字段终于有家了："
-        f"去 extract.py 的 _CONFLICT_FIELDS['person'] 补上它，再回来改这条门。"
+        f"去 extract.py 的 _CONFLICT_FIELD_ALLOWLIST['person'] 补上它，再回来改这条门。"
     )
 
 
