@@ -527,6 +527,12 @@
       "name": "locale 契约 · 判读链路双语对等（#38 / ADR-0033）",
       "status": "done",
       "evidence_ref": "feature_archive.json#feat-096"
+    },
+    {
+      "id": "feat-097",
+      "name": "T1 常驻表单后端 · 模板+单人单链+员工 H5（gap-design-0805 §A1）",
+      "status": "done",
+      "evidence_ref": "feature_archive.json#feat-097"
     }
   ]
 }

@@ -28,7 +28,6 @@ revoked = 410; expired / unknown token = loud 404 (feat-028 discipline).
 """
 from __future__ import annotations
 
-import html
 import json
 import logging
 import re
@@ -47,7 +46,7 @@ from avery.ingest.ask import (
 )
 from avery.ingest.registry import active_registry
 
-from . import account, brain_factory, llm_budget
+from . import account, brain_factory, h5, llm_budget
 from .ingest_api import authorize_context, extract_owner_token
 
 logger = logging.getLogger(__name__)
@@ -483,57 +482,15 @@ _COPY = {
     },
 }
 
-_H5_CSS = """
-*{box-sizing:border-box;margin:0;padding:0;font-family:system-ui,-apple-system,'PingFang SC',
-'Microsoft YaHei',sans-serif}
-body{background:#f6f4ef;color:#1f2328;padding:16px;max-width:560px;margin:0 auto;line-height:1.55}
-.h5-card{background:#fff;border:1px solid #e4dfd5;border-radius:14px;padding:20px;margin-top:12px}
-h1{font-size:1.15rem;margin-bottom:6px}
-.h5-meta,.h5-who,.h5-what,.h5-visibility{font-size:.85rem;color:#5b6068;margin:3px 0}
-.h5-meta b,.h5-who b,.h5-what b,.h5-visibility b{color:#1f2328}
-.h5-for{font-size:.85rem;color:#5b6068;margin-top:10px}
-.h5-q{margin:18px 0 6px;font-size:1rem;font-weight:600}
-.h5-hint{font-size:.78rem;color:#8a8f98;margin-bottom:8px}
-.h5-scale,.h5-yn{display:flex;gap:8px}
-.h5-scale label,.h5-yn label{flex:1;text-align:center}
-.h5-scale input,.h5-yn input{position:absolute;opacity:0;width:0;height:0}
-.h5-btn{display:block;padding:14px 0;border:1.5px solid #d8d2c6;border-radius:12px;font-size:1.05rem;
-cursor:pointer;user-select:none;background:#faf9f6}
-input:checked+.h5-btn{border-color:#1f6f5c;background:#e8f3ef;font-weight:700}
-textarea{width:100%;min-height:64px;border:1.5px solid #d8d2c6;border-radius:12px;padding:10px;
-font-size:1rem;margin-top:6px;background:#faf9f6}
-.h5-submit{width:100%;margin-top:20px;padding:15px 0;border:0;border-radius:12px;background:#1f6f5c;
-color:#fff;font-size:1.1rem;font-weight:700;cursor:pointer}
-.h5-lang{display:inline-block;margin-top:14px;font-size:.8rem;color:#5b6068}
-.h5-status h1{font-size:1.3rem;margin-bottom:10px}
-"""
-
-
-def _esc(s: str) -> str:
-    return html.escape(s or "", quote=True)
+# T1 提取：转义 / 内联 CSS / 页面模板搬去了 service/h5.py，两个员工页（快问 /r、表单 /f）共用同一
+# 张壳。这里保留三个私有别名，调用点一个字没改，渲染出的 HTML 与提取前逐字节相同。
+_H5_CSS = h5.H5_CSS
+_esc = h5.esc
+_page = h5.page
 
 
 def _lang(lang: str | None) -> dict:
     return _COPY["en"] if (lang or "").lower().startswith("en") else _COPY["zh"]
-
-
-def _page(L: dict, og_title: str, og_desc: str, body_html: str, lang_attr: str) -> str:
-    return (
-        "<!doctype html>\n"
-        f'<html lang="{lang_attr}"><head>\n'
-        '<meta charset="utf-8">\n'
-        '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
-        '<meta name="robots" content="noindex">\n'
-        f'<meta property="og:title" content="{_esc(og_title)}">\n'
-        f'<meta property="og:description" content="{_esc(og_desc)}">\n'
-        '<meta property="og:type" content="website">\n'
-        f"<title>{_esc(L['title'])}</title>\n"
-        f"<style>{_H5_CSS}</style>\n"
-        "</head><body>\n"
-        f"{body_html}\n"
-        f"{L['lang_switch']}\n"
-        "</body></html>"
-    )
 
 
 def _status_page(L: dict, key: str, status_code: int, extra: str = "") -> HTMLResponse:
