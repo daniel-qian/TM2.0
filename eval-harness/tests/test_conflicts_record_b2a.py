@@ -561,6 +561,50 @@ def test_conflicts_round_trip_through_a_REAL_postgres(tmp_path: Path):
 
 
 @needs_db
+def test_conflicts_survive_a_get_MUTATE_put_crud_round_trip(tmp_path: Path):
+    """🔴 本仓库最毒的一类 bug 的位置：**读端省略某列 → 写端把它抹成 NULL**。
+
+    全部手编 CRUD 都是 `get() → 改 → put()`（`ProjectWriteMixin`），而 `put()` 是
+    DELETE + 全量重插。所以任何 `get()` **没读回来**的东西，都会被下一次「加一个项目」这种无关操作
+    **永久销毁**——files-hub-0729 就是这样把用户上传的原始字节全写成 NULL 的（清单照列、下载 404）。
+    `granularity` 今天正是这个状态（get 不读它），只是没人在意。
+
+    conflicts 绝不能重蹈：这条门加一个项目，再用全新实例读回来，冲突必须一条不少、类型不丢。
+    离线套的 in-memory registry 复现不出来（它 get 回来的是同一个对象），只有真库能考。
+    """
+    url = _db_url()
+    if not url:
+        pytest.skip("needs AVERY_DB_URL (or PGVECTOR_URL) pointing at a Postgres")
+    pytest.importorskip("psycopg")
+    from avery.ingest.pg_registry import PostgresContextRegistry
+
+    cid = "ctx_t6_" + uuid.uuid4().hex[:12]
+    reg = PostgresContextRegistry(url, data_dir=tmp_path / "data")
+    try:
+        parsed = [parse_bytes(n, t.encode("utf-8"))
+                  for n, t in (("roster_a.md", _ROSTER_A), ("roster_b.md", _ROSTER_B))]
+        rep = ingest_docs(parsed, extractor=HeuristicExtractor(), registry=reg, context_id=cid)
+        assert rep.ok and rep.context.extraction.people, "语料自检：真库 ingest 没抽出人"
+        assert len(rep.context.extraction.conflicts) == 1, "前提不成立：ingest 后就没有冲突"
+
+        reg.add_project(cid, {"title": "手编项目", "status": "进行中"})   # get → mutate → put
+
+        got = PostgresContextRegistry(url, data_dir=tmp_path / "data2").get(cid)
+        assert "手编项目" in [p.title for p in got.extraction.projects], "手编项目没写进去"
+        assert len(got.extraction.conflicts) == 1, (
+            "一次无关的手编 CRUD 把冲突抹掉了 —— 这正是 files-hub-0729 那类读写不对称"
+        )
+        c = got.extraction.conflicts[0]
+        assert all(isinstance(v, ConflictValue) for v in c.values)
+        assert [v.value for v in c.values] == [ROSTER_TEAM, WEEKLY_TEAM]
+    finally:
+        try:
+            reg.delete(cid)
+        except Exception:
+            pass
+
+
+@needs_db
 def test_a_context_with_NO_conflicts_still_round_trips(tmp_path: Path):
     """反面：没有冲突的 context 照常往返，`conflicts` 回来是空列表而不是炸。"""
     url = _db_url()
