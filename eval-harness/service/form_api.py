@@ -42,12 +42,15 @@ from avery.ingest.form import (
     FIELD_KINDS, MAX_HELP_CHARS, MAX_LABEL_CHARS, MAX_RECIPIENTS_PER_MINT, MAX_TITLE_CHARS,
     NUMBER_MAX_CEIL, NUMBER_MIN_FLOOR,
     FormField, FormSubmission, FormTemplate,
-    current_period, default_expiry, effective_submission_status, ensure_builtin_templates,
+    answered_field_ids, current_period, default_expiry, effective_submission_status,
+    ensure_builtin_templates, gate_used_fields, live_fields,
     new_submission_id, new_template_id, now_iso, parse_submitted_answers,
     validate_template_shape,
 )
 from avery.ingest.form_append import append_submission_to_context
 from avery.ingest.form_autofill import ensure_current_period_links
+from avery.ingest.form_draft import draft_template_from_doc
+from avery.ingest.parse import parse_bytes
 from avery.ingest.registry import active_registry
 
 from . import account, h5
@@ -100,7 +103,17 @@ class FormFieldIn(BaseModel):
     # T5/A2 —— 这一格的答案是一句情境陈述（回流成人卡情境信号 / 项目卡阻塞原句）。
     # 必须在这里出现：`extra='forbid'` + `FormFieldIn(**...)` 往回建 FormField，漏了这个键，
     # 经理在前端存一次模板就把内置周报的两个 `situational=True` 静默抹平了，回流从此不响。
+    #
+    # 🔴 gap2 T11 血教训：这个键**当年确实加在了模型上，`save_form` 里却没往回传**
+    #（`FormField(id=…, kind=…, …)` 那串 kwargs 里没有它）。所以上面那句警告写着的事故，
+    # 从 T5 那天起就已经是既成事实——只是当时前端一个调用者都没有，没人踩到。本票让经理
+    # 真能存模板，它当场就会发作。教训：**模型上列了键 ≠ 那个键会被传下去**，一路到
+    # dataclass 的赋值点都要有门（`tests/test_form_reflow_a2.py` 的 HTTP 往返门就是这道门）。
     situational: bool = False
+    # gap2 T11 —— 这一格的答案是本人自述，回流成人卡上的负载/情绪读数（'' = 只进资料库）。
+    self_report: str = Field("", max_length=20)
+    # gap2 T11 —— 停用：不再问这一格，但历史答案仍按这个 id 对得上号。
+    retired: bool = False
 
 
 class FormTemplateIn(BaseModel):
@@ -142,22 +155,39 @@ def save_form(context_id: str, body: FormTemplateIn,
       2. 🔴 红线门 `gate_form_red_line`（在 registry 的 `put_form_template` 里，两个双胞胎共用的
          那道存储门）—— 一张给人打分的题面在任何 INSERT 之前就被拒，422。
 
+      3. 🔴 gap2 T11 · 历史门 `gate_used_fields` —— 一个**已经有人交过答案**的 `field.id` 不许
+         被删掉、也不许换 kind。答案按 id 落、`form_templates` 又没有版本列（回流读的永远是
+         当时最新那张模板，见下面 refile 那两处），所以这不是「后果自负的编辑」，是静默篡改
+         历史。允许的是改题面 / 加题 / **停用**（`retired=True`，id 还在）/ 撤下整张表。
+
     ⚠ 已有提交的模板被覆盖时，老提交的答案是按 `field.id` 落的：改 label 安全，**改/删 field.id
-    会让老答案对不上号**。所以这里不动 id 就只是改题面，动 id 等于开一张新表。"""
+    会让老答案对不上号**——这句话现在有第 3 道门在执法，不再只是一句注释。"""
     reg = active_registry()
     authorize_context(reg, context_id, extract_owner_token(x_avery_token, authorization),
                       account.resolve_account(x_avery_account))
+    template_id = (body.id or "").strip() or new_template_id()
     template = FormTemplate(
         context_id=context_id,
-        id=(body.id or "").strip() or new_template_id(),
+        id=template_id,
         title=body.title.strip(),
+        # 🔴 三个语义开关必须逐个往回传。漏一个 = 经理在拼装器里存一次就把它抹成默认值，
+        # 回流从此不响且没有任何东西报错（`situational` 就这么漏过一次，见 FormFieldIn 的注释）。
         fields=[FormField(id=f.id.strip(), kind=f.kind.strip(), label=f.label.strip(),
                           help=(f.help or "").strip(), required=bool(f.required),
-                          choices=[c.strip() for c in f.choices], min=f.min, max=f.max)
+                          choices=[c.strip() for c in f.choices], min=f.min, max=f.max,
+                          situational=bool(f.situational),
+                          self_report=(f.self_report or "").strip(),
+                          retired=bool(f.retired))
                 for f in body.fields],
         active=bool(body.active),
         created_at=now_iso())
     reason = validate_template_shape(template)
+    if reason:
+        raise HTTPException(status_code=422,
+                            detail={"error": "form rejected", "reason": reason})
+    stored_before = reg.get_form_template(context_id, template_id)
+    used = answered_field_ids(reg.list_form_submissions(context_id, template_id, 500))
+    reason = gate_used_fields(stored_before, template, used)
     if reason:
         raise HTTPException(status_code=422,
                             detail={"error": "form rejected", "reason": reason})
@@ -213,6 +243,64 @@ def mint_links(context_id: str, template_id: str, body: MintLinksBody,
                 "error": "form link mint rejected", "reason": str(e)})
     return {"context_id": context_id, "template_id": template.id, "period": period,
             "links": [_submission_payload(s, with_answers=False) for s in minted]}
+
+
+class DraftFromFileBody(BaseModel):
+    """让 Avery 读**已经在资料库里的**某一份文档，起草一张表单。
+
+    ⚠ 只读已传的文档，不在这条路上收新上传：`POST /ingest` 传旧 context_id 是**重建并覆盖**
+    而不是追加（store.ts 顶部那段讲的就是它），为起草单开一条会写资料的上传路，等于给
+    「读一读」这个动作装上一个能毁掉整个工作区的副作用。经理走既有上传口传完再回来点起草，
+    多一步、但那一步是他自己按的。（追加上传是 T10/#59 的活。）
+    """
+    model_config = {"extra": "forbid"}
+    # `GET /team/{id}/files` 那一行里的 `idx`。⚠ idx 是 `source_documents` 的**位置**，
+    # 不是稳定键——所以它只在这一次请求里有效，前端别缓存（追加上传会改变这个 list）。
+    file_index: int = Field(..., ge=0)
+    # 经理已经想好的表名。省略 = 让起草层从文档里取（取不到就留空，拼装器让他填）。
+    title: str = Field("", max_length=MAX_TITLE_CHARS)
+
+
+@router.post("/team/{context_id}/forms/draft-from-file")
+def draft_form_from_file(context_id: str, body: DraftFromFileBody,
+                         x_avery_token: str | None = Header(None),
+                         authorization: str | None = Header(None),
+                         x_avery_account: str | None = Header(None)) -> dict:
+    """gap2 T11 —— 读一份旧表格，起草一张表单。**提案，不落库。**
+
+    回执里的 `template` 就是拼装器要预览的那份提案（`id` 恒为空串：落不落、落成哪个 id，是经理
+    点确认之后 `POST /team/{id}/forms` 的事）。`dropped` 是起草层拿掉的东西，**必须**投到界面上：
+    旧表格里「本周表现评分」这种列很常见，原样带过去会让经理改了半天、点确认才吃一个红线 422，
+    而错在三步之前那份文档里（`form_draft` 命门②）。
+
+    `origin` 诚实标注这份提案是谁起的：`llm`（真 brain 读懂了）/ `heading`（退回表头启发式）/
+    `none`（一格都没读出来，交白表）。绝不把降级过的结果标成 `llm`。
+    """
+    reg = active_registry()
+    authorize_context(reg, context_id, extract_owner_token(x_avery_token, authorization),
+                      account.resolve_account(x_avery_account))
+    ctx = reg.get(context_id)
+    if ctx is None or body.file_index >= len(ctx.source_documents):
+        raise HTTPException(status_code=404, detail=f"unknown file: {body.file_index}")
+    sd = ctx.source_documents[body.file_index]
+    # 🔴 走 registry 的下载缝取字节，**不**读 `sd.content`：pg 孪生的 get() 从不带 content
+    #（registry.py:50-51），照 sd.content 写会在本地内存跑绿、上生产拿到 None。
+    data = reg.source_document_bytes(context_id, body.file_index)
+    if not data:
+        raise HTTPException(status_code=409, detail={
+            "error": "nothing to read",
+            "reason": "this file's bytes are not on hand — nothing to draft from"})
+    try:
+        doc = parse_bytes(sd.filename, data)
+    except Exception as e:   # ParseError 及其子类；坏文件不该变成 500
+        raise HTTPException(status_code=422, detail={
+            "error": "cannot read this file", "reason": f"{type(e).__name__}: {e}"})
+    result = draft_template_from_doc(doc, context_id, title=body.title.strip())
+    return {"context_id": context_id,
+            "origin": result.origin,
+            "dropped": result.dropped,
+            "source": {"filename": sd.filename, "source_key": sd.source_key},
+            "template": _template_payload(result.template)}
 
 
 @router.get("/team/{context_id}/forms/submissions")
@@ -353,6 +441,10 @@ _COPY = {
         "for_line": "这条链接是发给 {name} 的 —— 一人一链，交完即锁定。",
         "optional": "选填",
         "number_hint": "拖一下滑杆（默认停在 {value}）。",
+        # gap2 T11 —— 窄档 number（1~5 分那种）渲染成一排按钮，配一句只说值域、不替客户解释
+        # 「几分算好」的提示：那张表是谁的、每一档什么意思，只有出题的经理知道。
+        "scale_hint": "在 {min} 到 {max} 之间挑一个。",
+        "yes": "是", "no": "否",
         "submit": "提交",
         "submitted_title": "你已经交过了",
         "submitted_body": "提交后即锁定，无法修改 —— 这样你的原话才稳得住。",
@@ -387,6 +479,8 @@ _COPY = {
         "for_line": "This link was made for {name} — one person, one link; it locks once sent.",
         "optional": "optional",
         "number_hint": "Drag the slider (it starts at {value}).",
+        "scale_hint": "Pick a number from {min} to {max}.",
+        "yes": "Yes", "no": "No",
         "submit": "Send it",
         "submitted_title": "You already sent this one",
         "submitted_body": "It locks on submit and can't be changed — that keeps your words yours.",
@@ -484,12 +578,48 @@ def _render_choice(L: dict, f) -> str:
     return "".join(out)
 
 
-def _render_number(L: dict, f) -> str:
-    """0-100 滑杆 + 一直看得见的读数。
+def _radio_row(f, css_class: str, options) -> str:
+    """一排「按钮长相的单选」。`options` 是 (提交值, 可见文案) 的序列。
 
-    ⚠ 诚实说明：滑杆**恒有值**（HTML range 没有「没选」这个态），初值停在中点。所以读数是常显的、
-    hint 也把初值写出来 —— 员工提交前一定看得到即将交上去的那个数，没有藏起来的默认值。
-    `oninput` 是内联属性、不是外部脚本；即便 webview 不跑它，滑杆本身照样提交（诚实降级）。"""
+    markup 与 `_render_choice` / 快问的 scale·yesno 逐字同形（h5.py:37-42 的
+    `.h5-scale,.h5-yn` + `.h5-btn` + `input:checked+.h5-btn` 三条规则一份 CSS 都不用新加）。
+    """
+    out = [f'<div class="{css_class}">']
+    for value, label in options:
+        rid = f"f_{f.id}_{value}"
+        out.append(
+            f'<label for="{_esc(rid)}">'
+            f'<input type="radio" id="{_esc(rid)}" name="f_{_esc(f.id)}" '
+            f'value="{_esc(str(value))}"{" required" if f.required else ""}>'
+            f'<span class="h5-btn">{_esc(str(label))}</span></label>')
+    out.append("</div>")
+    return "".join(out)
+
+
+def _render_yesno(L: dict, f) -> str:
+    """gap2 T11 —— 是/否。快问的姊妹实现（ask_api.py:530-538）逐字同形：提交值恒是 ASCII
+    的 `yes`/`no`，员工眼前的「是 / 否」只是这一层的文案。"""
+    from avery.ingest.form import YESNO_VALUES
+    return _radio_row(f, "h5-yn", tuple(zip(YESNO_VALUES, (L["yes"], L["no"]))))
+
+
+def _render_number(L: dict, f) -> str:
+    """窄档（1~5 分那种）→ 一排按钮；宽档（0-100 负载那种）→ 滑杆 + 一直看得见的读数。
+
+    🔴 为什么窄档不用滑杆：滑杆**恒有值**（HTML range 没有「没选」这个态），一格 `required=False`
+    的滑杆照样会交上来一个数——那个数没人真的选过，而 `parse_submitted_answers` 的
+    「absent ≠ 空」纪律说的正是这两件事不许折成一个。档数少到能一排摆开时，按钮组既有真的
+    未选态、又比在手机上拖一个五档滑杆准得多（快问的 1..5 就是这么渲染的）。
+
+    ⚠ 宽档滑杆那条诚实说明照旧：读数是常显的、hint 也把初值写出来 —— 员工提交前一定看得到
+    即将交上去的那个数，没有藏起来的默认值。`oninput` 是内联属性、不是外部脚本；即便 webview
+    不跑它，滑杆本身照样提交（诚实降级）。"""
+    from avery.ingest.form import SCALE_MAX_STEPS
+    steps = int(f.max) - int(f.min) + 1
+    if 2 <= steps <= SCALE_MAX_STEPS:
+        row = _radio_row(f, "h5-scale", ((v, v) for v in range(int(f.min), int(f.max) + 1)))
+        hint = L["scale_hint"].format(min=int(f.min), max=int(f.max))
+        return f'<p class="h5-hint">{_esc(hint)}</p>' + row
     start = (f.min + f.max) // 2
     return (
         '<div class="h5-num">'
@@ -501,7 +631,8 @@ def _render_number(L: dict, f) -> str:
     )
 
 
-_FIELD_RENDERERS = {"text": _render_text, "choice": _render_choice, "number": _render_number}
+_FIELD_RENDERERS = {"text": _render_text, "choice": _render_choice, "number": _render_number,
+                    "yesno": _render_yesno}
 
 if set(_FIELD_RENDERERS) != set(FIELD_KINDS):
     # 新增题型却忘了给渲染函数，页面上会静默少一格 —— 宁可起不来也不许静默少题。
@@ -519,7 +650,9 @@ def _form_page(L: dict, template, sub, company: str, token: str) -> str:
     who = (L["who"].format(company=company) if company and company != "company"
            else L["who_nocompany"])
     rows = []
-    for f in template.fields:
+    # 停用的格不渲染（`live_fields` 是渲染层与 `parse_submitted_answers` 共用的同一把尺——
+    # 两处各写一次 `if not f.retired` 就是两把会各自漂的尺子）。
+    for f in live_fields(template):
         rows.append(_field_head(L, f))
         rows.append(_FIELD_RENDERERS[f.kind](L, f))
     body = (

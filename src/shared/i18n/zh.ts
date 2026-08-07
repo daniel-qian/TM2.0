@@ -545,6 +545,83 @@ export const zh: Dict = {
     "formsVoiding": "正在撤回…",
     // 无障碍名：一排「撤回」按钮在读屏器里全都叫「撤回」，说不出撤的是谁那一条。
     "formsVoidAria": "撤回发给{name}的这条链接",
+    // ⚠ HAND-WRITTEN（gap2 T11 · 模板拼装器）。词族仍锁在「表单」，不混用问卷/表格/打卡。
+    // 🔴 三个开关旁边必须说清这一格的答案**去哪儿**。没勾开关的题照旧逐字进资料库
+    //（可检索、议事室引得到），只是不长成卡——绝不暗示「加一个字段就会自动长出一张卡」。
+    // 🔴 一个字都不许往「给人打分」上靠：写侧红线门连一张打分的题面都拒绝落库，
+    // 任何邀请经理那么写的文案都是一句产品做不到的承诺。
+    // 🔴 这里只放界面文案。经理自己打的表名/题面/说明/选项是**客户的内容**（与文件名同级），
+    // 一个字都不进词典。
+    "formsBuilderNew": "建一张表",
+    "formsBuilderCopy": "照「{title}」改一张",
+    "formsBuilderEdit": "改「{title}」",
+    "formsBuilderEditing": "正在改「{title}」",
+    "formsBuilderNewTitle": "新建一张表",
+    "formsBuilderDraft": "让 Avery 读一份你们的旧表格",
+    "formsBuilderDraftBusy": "正在读…",
+    "formsBuilderDraftHint": "挑一份你已经传上来的文件。Avery 把它的表头变成题目——你不点保存，什么都不会存下来。",
+    "formsBuilderDraftFromLlm": "根据 {filename} 起草的。保存前自己过一遍。",
+    // 诚实降级：模型没参与的时候，不许讲成「Avery 读懂了你的表」。
+    "formsBuilderDraftFromHeadings": "照 {filename} 的表头抄下来的——Avery 没有理解它们。",
+    "formsBuilderDraftReview": "这些题目只是提案。要等你保存这张表、再生成链接，才会发出去。",
+    "formsBuilderTitleLabel": "表名",
+    "formsBuilderQuestionN": "第 {n} 题",
+    "formsBuilderKind": "怎么答",
+    "formsBuilderKindText": "自己写一段",
+    "formsBuilderKindChoice": "从几个选项里挑一个",
+    "formsBuilderKindNumber": "填一个数",
+    "formsBuilderKindYesno": "是或否",
+    "formsBuilderRequired": "必须回答",
+    "formsBuilderChoices": "选项",
+    "formsBuilderChoiceN": "第 {n} 个选项",
+    "formsBuilderAddChoice": "加一个选项",
+    "formsBuilderDropChoice": "去掉",
+    "formsBuilderMin": "最小",
+    "formsBuilderMax": "最大",
+    "formsBuilderHelp": "题目下面的一行说明",
+    "formsBuilderSwitchSituational": "这题问的是哪儿卡住了",
+    "formsBuilderSwitchLoad": "这题问的是他自己觉得有多忙",
+    "formsBuilderSwitchMood": "这题问的是他自己的状态",
+    "formsBuilderGoesToCard": "这一格的答案还会上他的人卡，带着一条能点回原话的出处。",
+    "formsBuilderGoesToLibrary": "这一格的答案只进资料库——搜得到、议事室引得到，但不上任何卡。",
+    "formsBuilderRetire": "以后不问这一题了",
+    // 这一句是「这里为什么没有删除键」的答案。
+    "formsBuilderLockedHint": "已经有人答过这一题了，所以它得留在表上——留着，他那句答案才说得清自己在回答什么。",
+    "formsBuilderDropField": "去掉",
+    "formsBuilderAddField": "加一题",
+    "formsBuilderCount": "{max} 题里用了 {asked} 题",
+    "formsBuilderRetireForm": "撤下这张表",
+    "formsBuilderRetireFormHint": "撤下之后不再发新链接。已经交上来的内容照旧在资料库里。",
+    "formsBuilderSave": "保存这张表",
+    "formsBuilderSaveBusy": "正在保存…",
+    "formsBuilderCancel": "取消",
+    // 🔴 与 formsError* 分成两族：同一个 422 在这两件事上意思完全不同，
+    // 保存失败之后接一句「一次发给 1 到 30 个人」就是对经理撒谎。
+    "formsBuilderErrorRejected": "Avery 没有收下这张表。它给的原因是：",
+    "formsBuilderErrorUnavailable": "建表要连上你的工作区才能做。",
+    "formsBuilderErrorUnreadable": "那份文件读不出来，没有可起草的东西。",
+    "formsBuilderErrorFailed": "这会儿没能保存。过一会儿再试。",
+    // 上限镜像（formShape.ts）。每一条都用**题号**指路——那正是编辑器里每一格标着的那个数。
+    // `q3` 这种内部键经理从没见过，拿它指路等于没指。
+    "formsIssueTitleMissing": "这张表还没有名字。",
+    "formsIssueTitleTooLong": "表名超过了 {max} 个字。",
+    "formsIssueNoQuestions": "一张表至少要问一题。",
+    "formsIssueTooManyQuestions": "一张表最多问 {max} 题，这张问了 {got} 题。",
+    "formsIssueTooManyStored": "这张表连停用的一起算，超过了 {max} 题。",
+    "formsIssueDuplicateId": "第 {at} 题和前面某一题用了同一个内部键。",
+    "formsIssueLabelMissing": "第 {at} 题还没写题目。",
+    "formsIssueLabelTooLong": "第 {at} 题超过了 {max} 个字。",
+    "formsIssueHelpTooLong": "第 {at} 题下面那行说明超过了 {max} 个字。",
+    "formsIssueChoiceCount": "第 {at} 题要给 {min} 到 {max} 个选项，现在有 {got} 个。",
+    "formsIssueChoiceEmpty": "第 {at} 题有一个选项是空的。",
+    "formsIssueChoiceTooLong": "第 {at} 题有个选项超过了 {max} 个字。",
+    "formsIssueChoiceDuplicate": "第 {at} 题有两个一样的选项。",
+    "formsIssueNumberRange": "第 {at} 题的最小要小于最大，而且都落在 {floor} 到 {ceil} 之间。",
+    "formsIssueSituationalKind": "只有让人自己写一段的题才谈得上「哪儿卡住了」，第 {at} 题不是。",
+    "formsIssueLoadKind": "「有多忙」是一个数，第 {at} 题不是。",
+    "formsIssueLoadRange": "「有多忙」在人卡上按百分比显示，所以第 {at} 题得是 0 到 100。",
+    "formsIssueMoodKind": "「状态」是从几个词里挑一个，第 {at} 题不是。",
+    "formsIssueSlotTaken": "第 {other} 题和第 {at} 题都想占人卡上同一个位置。",
     // ⚠ HAND-WRITTEN（files-hub-0729/03）：团队屏零文件元素 + 入口铺设。
     // 🔴 teamEmptyBody 说的是「我们还没拿到东西可读」，不是「你们没有团队」——
     // absent≠none 在这一格的样子。

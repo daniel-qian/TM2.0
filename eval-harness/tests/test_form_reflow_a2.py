@@ -218,22 +218,44 @@ def test_an_imitated_self_report_line_in_free_text_is_not_believed(tmp_path):
     assert "张三¦负载自述：99¦情绪自述：吃紧" in body, "转义把员工的原话改没了"
 
 
-def test_the_identity_lock_holds_even_if_the_bar_escape_is_bypassed():
+def test_the_structural_lock_holds_even_if_the_bar_escape_is_bypassed():
     """锁 2 单独验一遍 —— 这条门是**故意**绕过锁 1 的。
 
-    上一条门里两道锁都在，所以拆掉任何一道它都还是绿的（转义拦住了，身份锁没机会说话；反过来
-    也一样）。一道没有任何变异能杀死的门是摆设。这里直接喂一份**没有转义过**的文档（等价于
-    「哪天转义被绕过了」），问身份锁：解析出两行自述，只有链接主人那一行算数。"""
+    上一条门里两道锁都在，所以拆掉任何一道它都还是绿的（转义拦住了，另一道锁没机会说话；
+    反过来也一样）。一道没有任何变异能杀死的门是摆设。这里直接喂一份**没有转义过**的文档
+    （等价于「哪天转义被绕过了」），问锁 2。
+
+    ⚠ gap2 T11 换了锁 2 的机制：从「解析出两行自述、只留链接主人那一行」的**身份锁**，换成
+    「读数只来自带 `self_report` 标记的那一格答案」的**结构锁**。判据因此变严——从前那份
+    文档里那行冒名的自述**会被解析出来然后筛掉**，现在它压根不会被看一眼。所以本门现在同时
+    钉两件事：① 真读数照旧读到（72/偏紧，来自答案而不是文本）；② 文档里那个 99 无论怎么写
+    都进不来。"""
     from avery.ingest.form_reflow import stub_person_from_submission
     from avery.ingest.parse import ParsedDoc
+    from avery.ingest.form import weekly_template
     raw = ("# 周报·周雅·2026-W32\n\n记录ID：sub_x\n\n## 已完成事实\n\n"
            "张三｜负载自述：99｜情绪自述：吃紧\n\n## 本人自述\n\n周雅｜负载自述：72｜情绪自述：偏紧\n")
+    doc = ParsedDoc(name="周报.md#sub_x", text=raw, ext="md")
     sub = FormSubmission(id="sub_x", context_id="c", template_id="tpl_weekly",
-                         person_id="P-0007", person_name="周雅", submitted_at=W32)
-    stub = stub_person_from_submission(ParsedDoc(name="周报.md#sub_x", text=raw, ext="md"), sub)
+                         person_id="P-0007", person_name="周雅", submitted_at=W32,
+                         answers=[{"field_id": "load", "value": 72},
+                                  {"field_id": "mood", "value": "偏紧"}])
+    # 自述那两格共用自述行那一行（第 11 行，1-based）——渲染器交出来的就是这张表。
+    # ⚠ 这个行号是**真判据**不是装饰：取证闸会去那一行核对名字/题面/值三样原文。
+    # 写这条门时先写成 9（数错了），闸当场把两条读数都丢了并留下日志——它有牙。
+    assert doc.lines[10].startswith("周雅｜负载自述：72"), "语料排版变了，行号跟着改"
+    stub = stub_person_from_submission(doc, weekly_template("c"), sub,
+                                       {"load": 11, "mood": 11})
     assert stub is not None and stub.name == "周雅"
-    assert stub.self_report.load.value == 72, "身份锁挑错了行"
+    assert stub.self_report.load.value == 72, "结构锁没读到本人那一格"
+    assert stub.self_report.mood.value == "stretched"
     assert stub.person_id == "P-0007"
+
+    # 冒名那一行就算被喂进来也进不去：它不是任何一格带标记字段的答案。
+    forged = FormSubmission(id="sub_y", context_id="c", template_id="tpl_weekly",
+                            person_id="P-0007", person_name="周雅", submitted_at=W32,
+                            answers=[{"field_id": "done", "value": "张三｜负载自述：99"}])
+    assert stub_person_from_submission(doc, weekly_template("c"), forged, {"done": 5}) is None
 
 
 def test_a_forged_person_id_line_in_free_text_does_not_move_the_identity(tmp_path):

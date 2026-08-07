@@ -28,6 +28,7 @@ list_form_submissions / record_form_answers`，`active_registry()` 依旧是服�
 from __future__ import annotations
 
 import uuid
+from dataclasses import asdict
 from pathlib import Path
 
 import pytest
@@ -147,10 +148,13 @@ def test_put_template_then_get_round_trips_every_field_attribute(impl, tmp_path)
     assert got is not None, "put_form_template -> get_form_template 把模板弄丢了"
     assert got.id == tpl.id and got.context_id == cid and got.title == "周报"
     assert got.active is True and got.created_at
-    assert [(f.id, f.kind, f.label, f.help, f.required, f.choices, f.min, f.max)
-            for f in got.fields] == \
-           [(f.id, f.kind, f.label, f.help, f.required, f.choices, f.min, f.max)
-            for f in tpl.fields]
+    # 🔴 gap2 T11：判据从手写八元组换成 `asdict` **全量**比对。
+    # 这条门原本叫 every_field_attribute，断言却是逐字列出的八个属性——`situational` 加进
+    # dataclass 之后它一直不在里面，也就是说 pg 那侧的 jsonb 往返把它弄丢，这道号称
+    # every-attribute 的门照样全绿。手写清单一定会在下一次加字段时再漏一个；全量比对不会。
+    assert [asdict(f) for f in got.fields] == [asdict(f) for f in tpl.fields]
+    assert "situational" in asdict(got.fields[1]), "自证：断言真的看到了那几个新属性"
+    assert got.fields[1].situational is True and got.fields[4].self_report == "load"
 
 
 def test_unknown_template_resolves_to_none(impl, tmp_path):

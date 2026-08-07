@@ -2,9 +2,11 @@ import { create } from 'zustand'
 import type {
   AskDraft,
   AskQuestionKind,
+  FormDraftResult,
   FormLinkRecipient,
   FormAutoFilled,
   FormLinksResult,
+  FormTemplateInput,
   LiveFileEntry,
   LiveAdviseRunEntry,
   LiveFormSubmission,
@@ -199,6 +201,15 @@ export type ContextSwitchError = 'missing-credential' | 'unreadable' | 'failed'
 // 状态码走 TransportError.status 这条结构化通道，文案这一族自己写（同 isNotFound 的教训）。
 export type FormsMintError = 'rejected' | 'retired' | 'failed'
 
+// gap2 T11 · 拼装器写侧失败的四种。理由与上面那三种同源（同一个 422 在不同动作上意思完全不同），
+// 但取值刻意分开——一句「一次发给 1 到 30 个人」放在保存模板失败之后就是对经理撒谎。
+//   'rejected'    —— 422：服务端的三道门之一拒了（结构 / 红线 / 已被引用的 field.id）。
+//                    这一种**带 detail**：那句英文 reason 是唯一能定位到哪一格的线索。
+//   'unavailable' —— 这条通道没有这个方法（stub / 老后端）。不是"出错了"，是"这里做不了这件事"。
+//   'unreadable'  —— 起草专用，409/422：那份文件读不出来（没有字节 / 解析不了）。
+//   'failed'      —— 其余一切（网断、404 凭据过期、5xx）。
+export type FormBuilderError = 'rejected' | 'unavailable' | 'unreadable' | 'failed'
+
 // 首帧同步取回（不等 effect）：store 建好时 contextId 就位，`restoreSession()` 才有的可拉。
 // feat-068 补漏：feat-050 用 isStubTransportSelected() 判断「这是 stub 的假 context，别持久化」，
 // 但那个函数直接读 URL 的 ?transport=stub，**不受 DEV 闸约束**——而 :181 的 defaultTransport 受。
@@ -352,6 +363,18 @@ interface LiteState {
   // 整段置灰会让第二次点击看起来像没反应。
   formsVoiding: string | null
 
+  // ── gap2 T11 · 模板拼装器（建/改模板、让 Avery 读旧表格起草）───────────────────────────
+  // 🔴 刻意**不复用** formsBusy / formsError：
+  //   · formsBusy 只有 'idle'|'minting' 一个标志，借它表示「正在保存模板」会把铸链按钮一起
+  //     锁死；而唯一能解锁它的 resetFormsWrite 只挂在「切换模板」上，那排按钮又只在有 2 张以上
+  //     模板时才渲染——今天恒是内置周报一张，于是那条解锁路径在生产上从来不可达。
+  //   · formsError 的三个取值各自对应一句铸链文案（'rejected' 说的是「一次发给 1 到 30 个人」），
+  //     模板保存的 422 原因是「未知 kind / 字段 id 重复 / 题面撞红线」，套进那句话就是对经理撒谎。
+  formBuilderBusy: 'idle' | 'saving' | 'drafting'
+  // 一次写/起草失败。`code` 决定屏幕上那句话，`detail` 是服务端 422 body 里那句英文 reason
+  // ——只在 code='rejected' 时有，附在句子后面当诊断（不是那句话本身）。
+  formBuilderError: { code: FormBuilderError; detail?: string } | null
+
   // ── actions ──
   // feat-051：`params` 可给目标屏叠加 query——feat-057 的决策卡走
   // `goScreen('room', { q: '<问题>' })` 带着问题进议事室。省略即只切屏（既有 7 个调用点不变）。
@@ -400,6 +423,13 @@ interface LiteState {
   voidFormLink: (submissionId: string) => Promise<boolean>
   // 清铸链态（换模板 / 重新选人时调，别把上一次的报错和上一批链接挂到下一次操作上）。
   resetFormsWrite: () => void
+  // ── gap2 T11 · 拼装器。两个写 action 都返回「成功了没」，UI 据此决定关不关编辑器。
+  // 🔴 写失败诚实报错，绝不伪装成功——保存本身的失败**绝不能**走 refreshForms 那条静默吞错的路，
+  // 那会把一次真失败变成一次「什么都没发生」。
+  saveFormTemplate: (input: FormTemplateInput) => Promise<boolean>
+  // 让 Avery 读一份已传的旧表格起草。返回提案本身（**不落库**）或 null（失败/不可用）。
+  draftFormFromFile: (fileIndex: number, title?: string) => Promise<FormDraftResult | null>
+  resetFormBuilder: () => void
   // ── 项目手编 CRUD（rich-align-0722 · issue 05a）。写端点已就绪（f1ca46d）；action 写后
   // refreshTeam() 从权威 /team 重新派生网格（含 archived_projects + 逐字段 provenance），
   // 不做易漂移的乐观拼装（archive/restore 要跨 active↔archived 两个数组，单条回执拼不全）。
@@ -478,6 +508,16 @@ async function runProjectWrite(
   }
 }
 
+// gap2 T11 —— 一次拼装器写失败落成哪一种。状态码走 TransportError 这条结构化通道，
+// 文案自己写：`httpErrorMessage` 把 422 映射成「那个文件类型不接受」（与 415 共用一句），
+// 直接上屏会让一次「题面撞红线」变成一句讲文件格式的话（同 FormsMintError 那段的教训）。
+function builderError(err: unknown): { code: FormBuilderError; detail?: string } {
+  if (!(err instanceof TransportError)) return { code: 'failed' }
+  if (err.status === 422) return { code: 'rejected', detail: err.serverReason }
+  if (err.status === 409 || err.status === 410) return { code: 'unreadable' }
+  return { code: 'failed' }
+}
+
 export const useLite = create<LiteState>((set, get) => ({
   transport: defaultTransport,
 
@@ -522,6 +562,8 @@ export const useLite = create<LiteState>((set, get) => ({
   formsError: null,
   formsAutoFilled: null,
   formsVoiding: null,
+  formBuilderBusy: 'idle',
+  formBuilderError: null,
 
   // Room 内的一次性 nudge（用户已离开事发现场；nudge 是瞬态感知，不是持久红点）按「路由变更
   // 即清」的统一动作走，三条离开 Room 的路径都要清：① goScreen tab 切换；② Topbar 的 <Link>
@@ -713,7 +755,7 @@ export const useLite = create<LiteState>((set, get) => ({
           adviseRuns: null,
           // T3：这条 404 分支**绕开了 adoptContext**，所以公司域清单要在这里再列一遍——
           // 漏掉的话，死锚点恢复失败后上一家公司的表单链接会原地留在屏上。
-          // 七件齐（同 adoptContext 那份的理由）。T9 加的两件同样是公司数据：
+          // 九件齐（同 adoptContext 那份的理由）。T9 加的两件同样是公司数据：
           // formsAutoFilled 是「A 公司这次备好了几条」，留给 B 就是替 B 宣布一件没发生的事；
           // formsVoiding 漏了则「作废途中切公司」会把那颗按钮在所有公司上永久置灰。
           formTemplates: null,
@@ -723,6 +765,8 @@ export const useLite = create<LiteState>((set, get) => ({
           formsError: null,
           formsAutoFilled: null,
           formsVoiding: null,
+          formBuilderBusy: 'idle',
+          formBuilderError: null,
           ingestStatus: 'idle',
           restoring: false,
           restoreError: null,
@@ -745,15 +789,17 @@ export const useLite = create<LiteState>((set, get) => ({
       // 换了 context 就不能留着上一个 context 的数据（换账号数据串是 feat-053 的红线）。
       ...(contextId !== get().contextId
         ? { team: null, rawTeam: null, files: [], notes: [], adviseRuns: null,
-            // T3：表单**五件**同属公司域——留着就是把 A 公司的链接摆在 B 公司的资料库里，
+            // T3：表单**七件**同属公司域——留着就是把 A 公司的链接摆在 B 公司的资料库里，
             // 经理一复制就把 A 的人的表单发出去了。
             // 🔴 formsBusy / formsError 也在这份清单里，别只清前三件（对抗自审逮到）：
             // formsError 是「A 那次铸链为什么没成」，挂到 B 头上就是替 B 断言一件没发生的事；
             // formsBusy 漏了则「铸链途中切公司」会把生成键永久卡在「正在生成…」。
+            // gap2 T11 把 formBuilderBusy / formBuilderError 加进同一份清单，理由逐字相同。
             // 这份清单与 resetLiteCompanyData 那份是同一份契约的两个抄本，改一处必须改两处。
             formTemplates: null, formSubmissions: null, formsMinted: null,
             formsBusy: 'idle' as const, formsError: null,
             formsAutoFilled: null, formsVoiding: null,
+            formBuilderBusy: 'idle' as const, formBuilderError: null,
             ingestStatus: 'idle' as IngestStatus }
         : {}),
     })
@@ -1033,6 +1079,74 @@ export const useLite = create<LiteState>((set, get) => ({
 
   resetFormsWrite: () => set({ formsBusy: 'idle', formsError: null, formsMinted: null }),
 
+  // ── gap2 T11 · 拼装器写侧 ────────────────────────────────────────────────────────────────
+  // 骨架照 runProjectWrite 的先例（判可用 → 判忙 → 写 → 回权威重拉 → 落忙态 / 诚实报错），
+  // 但不共用它：那一族的忙/错态被 8 个 CRUD action 共享，把模板保存挤进去会让「改项目」和
+  // 「改模板」互相锁死，而它们在屏幕上离得很远。
+  saveFormTemplate: async (input) => {
+    const { contextId, transport } = get()
+    if (!contextId) return false
+    if (!transport.saveFormTemplate) {
+      set({ formBuilderError: { code: 'unavailable' } })
+      return false
+    }
+    if (get().formBuilderBusy !== 'idle') return false
+    set({ formBuilderBusy: 'saving', formBuilderError: null })
+    try {
+      await transport.saveFormTemplate(contextId, input)
+      // 🔴 结果过期时也要把忙态放回 idle（同 createFormLinks 那条对抗自审逮到的高危）。
+      if (!stillOn(get, contextId)) {
+        set({ formBuilderBusy: 'idle' })
+        return false
+      }
+      // 写完回权威清单重拉，不做本地乐观拼装：服务端会给 id、会铸 created_at、还可能在
+      // ensure_builtin_templates 里回填标记——本地拼出来的那一份从第一秒就和库里不是同一张。
+      await get().refreshForms()
+      set({ formBuilderBusy: 'idle' })
+      return true
+    } catch (err) {
+      if (!stillOn(get, contextId)) {
+        // 报错属于上一家公司，挂到已经切过去的这一家头上就是替它断言一件没发生的事。
+        set({ formBuilderBusy: 'idle' })
+        return false
+      }
+      set({ formBuilderBusy: 'idle', formBuilderError: builderError(err) })
+      return false
+    }
+  },
+
+  draftFormFromFile: async (fileIndex, title) => {
+    const { contextId, transport } = get()
+    if (!contextId) return null
+    if (!transport.draftFormFromFile) {
+      set({ formBuilderError: { code: 'unavailable' } })
+      return null
+    }
+    if (get().formBuilderBusy !== 'idle') return null
+    set({ formBuilderBusy: 'drafting', formBuilderError: null })
+    try {
+      const result = await transport.draftFormFromFile(contextId, {
+        file_index: fileIndex,
+        ...(title ? { title } : {}),
+      })
+      if (!stillOn(get, contextId)) {
+        set({ formBuilderBusy: 'idle' })
+        return null
+      }
+      set({ formBuilderBusy: 'idle' })
+      return result
+    } catch (err) {
+      if (!stillOn(get, contextId)) {
+        set({ formBuilderBusy: 'idle' })
+        return null
+      }
+      set({ formBuilderBusy: 'idle', formBuilderError: builderError(err) })
+      return null
+    }
+  },
+
+  resetFormBuilder: () => set({ formBuilderBusy: 'idle', formBuilderError: null }),
+
   // ── 项目手编 CRUD（rich-align-0722 · issue 05a）。四个都走 runProjectWrite 共用骨架
   // （判可用/判忙 → 写 → refreshTeam 从权威 /team 重派生 → 落忙态/诚实报错）。────────────────
   addProject: (input) => runProjectWrite(get, set, (cid, t) => t.addProject?.(cid, input)),
@@ -1219,8 +1333,9 @@ export function resetLiteCompanyData(): void {
     notes: [],
     noteJustAdded: false,
     adviseRuns: null,   // issue #49：历史是公司域数据，换账号/重开必清
-    // T3 · 常驻表单七件全清（T9 又加了两件）。formsBusy 也要归位——换账号时卡在 'minting' 等于把生成键
-    // 永久置灰成一个死按钮（那次请求属于上一个账号，永远不会回来解锁它）。
+    // T3 · 常驻表单**九件**全清（gap2 T11 加了拼装器那两件，T9 又加了自动补铸那两件）。
+    // 两个 busy 都要归位——换账号时卡在 'minting'/'saving' 等于把那个键永久置灰成一个死按钮
+    // （那次请求属于上一个账号，永远不会回来解锁它）；formsVoiding 同理。
     formTemplates: null,
     formSubmissions: null,
     formsMinted: null,
@@ -1228,6 +1343,8 @@ export function resetLiteCompanyData(): void {
     formsError: null,
     formsAutoFilled: null,
     formsVoiding: null,
+    formBuilderBusy: 'idle',
+    formBuilderError: null,
     ingestStatus: 'idle',
     ingestError: null,
     knownContexts: [],
