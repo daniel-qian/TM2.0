@@ -12,6 +12,15 @@ from dataclasses import dataclass
 from pathlib import Path
 
 _WORD = re.compile(r"[a-z0-9]+")
+# T8/#57 · 中日韩表意文字的连续段。`_WORD` 只认 `[a-z0-9]+`，一整句中文在它眼里**一个 token 都没有**
+# —— 于是关键词 recall 对中文语料恒返回空列表。这不是"召回差"，是"完全够不着"：
+# 上传的中文资料、员工填的中文周报，走关键词那条腿时一行都检索不到。
+# 🔴 为什么以前没人发现：mock 侧 recall 落空会兜底成一条 `facts.md:1` 的罐头引用
+# （service/live_input.py:139），屏幕上照样有一条形状完美的引用——门看着是绿的。
+# 🔴 影响面：真 brain 走 `tools.py:157` 的 `embedder=ctx.embedder`，配了 DashScope 就走语义排序，
+# 中文没问题；但 `avery/embeddings.py:145` 明写着 key 缺失/轮换即降级到关键词，
+# 「降级不会让 advise 挂掉」这句话对中文客户不成立——它降到的是**零证据**。
+_CJK = re.compile(r"[一-鿿㐀-䶿぀-ヿ가-힯]+")
 _STOP = {
     "the", "a", "an", "and", "or", "of", "to", "in", "on", "for", "is", "are", "was", "were",
     "her", "his", "their", "she", "he", "they", "it", "that", "this", "with", "has", "have",
@@ -33,7 +42,21 @@ class Hit:
 
 
 def _tokens(s: str) -> set[str]:
-    return {w for w in _WORD.findall(s.lower()) if w not in _STOP and len(w) > 1}
+    """拉丁词 + 中日韩二元组（bigram）。
+
+    中文没有空格分词，逐字切又太糙（「宴会」「会厅」这种搭配才是信息量所在），所以按相邻两字
+    切二元组 —— 检索里最便宜也最稳的中文索引法，无需分词词典、纯离线、确定性。
+    单字段（一个字自成一段，如「人」）保底收自己，否则那一段会消失。
+    ⚠ 分数口径不变（命中的**不同** token 数），只是中文这边现在真的有 token 可命中了。
+    """
+    s = s.lower()
+    toks = {w for w in _WORD.findall(s) if w not in _STOP and len(w) > 1}
+    for run in _CJK.findall(s):
+        if len(run) == 1:
+            toks.add(run)
+        else:
+            toks.update(run[i:i + 2] for i in range(len(run) - 1))
+    return toks
 
 
 def load_facts_head(memory_dir: Path, max_lines: int = 12) -> str:

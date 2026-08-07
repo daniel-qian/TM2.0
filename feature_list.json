@@ -563,6 +563,12 @@
       "name": "form-frontend-a1c · 资料库「常驻表单」区 + 生成链接（差距战役 T3 / #54）",
       "status": "done",
       "evidence_ref": "feature_archive.json#feat-102"
+    },
+    {
+      "id": "feat-103",
+      "name": "T8 全链端到端循环自检 + 中文关键词检索修复（差距战役收官 / #57）",
+      "status": "done",
+      "evidence_ref": ".issues/gap-design-0805/receipt-T8-e2e.md"
     }
   ]
 }
