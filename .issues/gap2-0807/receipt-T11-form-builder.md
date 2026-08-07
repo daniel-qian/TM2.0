@@ -128,8 +128,10 @@ label 没改过说明那格正被老正则读着，补标记只是把同一件�
 | 后端离线全套 `pytest`（四个 deselect 是默认值，见 pytest.ini） | **3848 passed · 107 deselected · 4 xfailed · 0 failed**（T8/HITL 基线 3798 + 本票 50 条） |
 | 新门 `tests/test_form_builder_t11.py` | 50 条全绿 |
 | 新门 `tools/verify-form-builder.mjs`（真浏览器 + 真 mock 后端） | **43 PASS · 0 FAIL** |
-| 前端电池 A 区（含新门，已入 ROSTER） | 见下 |
-| 前端电池 B / C 区 | 见下 |
+| 前端电池 A 区（含新门，已入 ROSTER） | **26/26 绿**（SPEC_STICK=99） |
+| 前端电池 B 区 | **3/3 绿**（像素见下） |
+| 前端电池 C 区 | **3/3 绿** |
+| 真库 `@needs_db`（form 两族） | **24 passed**（新属性的 jsonb 往返在真 PG 上验过） |
 | i18n 孤儿 | 0（962 叶子键） |
 | 变异测试（后端 15 条 + 前端 2 条） | 17/17 被抓（详见下节） |
 
@@ -200,6 +202,28 @@ label 没改过说明那格正被老正则读着，补标记只是把同一件�
 - `test_form_store_contract` 那条号称 `every_field_attribute` 的门，判据原本是**手写的八元组**，
   `situational` 一直不在里面——pg 的 jsonb 往返把它弄丢，那道门照样全绿。本票换成
   `asdict` 全量比对（手写清单一定会在下一次加字段时再漏一个）。
+
+## 像素基线（合 main 后在主检出做的那一步）
+
+两轮，两个不同的意思，别混：
+
+1. **在 worktree 里跑的那轮不是比对**。`__snapshots__/` 是 gitignore 的单机产物、每 worktree
+   一份，本 worktree 压根没有 → 第一轮是「A snapshot doesn't exist … writing actual」×40，
+   playwright 报 exit 1。那**既不是漂移红、也不是绿**，是首轮写入。第二轮（对着刚写的那份
+   自比）3/3 绿，只证明渲染是确定的，不证明「与 main 没漂」。
+2. **真比对在主检出 `D:\avery` 上**（合 main 之后）：40 张全绿，**零漂移**。那份基线的 mtime
+   是 08-07（HITL 那轮人审后重冻的），是一份真的旧基线，不是我这次写的。
+
+**为什么零漂移——这条必须写下来，否则下一个人会以为像素门验过拼装器：**
+像素 spec 走 `?transport=stub`，而 `saveFormTemplate` / `draftFormFromFile` 在 `LiveTransport`
+上是可选方法、stub 通道没有；更前一步，那条 spec 全程不上传，**根本没有 contextId** →
+`StandingFormsSection` 第一条早退命中 → 整个常驻表单区（含拼装器）一个像素都不渲染。
+翻了基线 PNG 逐张确认：`aurora-files-desktop.png` 上是资料库的**空态**（「还没传过材料」+ 上传口），
+表单区确实不在画面里。所以：
+
+- 零漂移是**对的**，也是**结构上必然的**；
+- 像素门**结构性地看不见**这一段，`verify-form-builder.mjs` 是它唯一的自动化眼睛；
+- 因此没有可重冻的东西（重冻一份逐字节相同的图是空操作）。人眼过走的是下面那六张截图。
 
 ## 人眼过（截图）
 
