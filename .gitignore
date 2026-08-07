@@ -51,4 +51,4 @@ scripts/__pycache__/
 .issues/sweep/*-shots/
 
 # HITL 会话（含生产 context 的 ownerToken，绝不进版本库）
-.issues/**/.hitl-session.json
+.issues/**/.hitl-session*.json
