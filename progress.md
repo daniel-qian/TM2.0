@@ -34,10 +34,10 @@
     `provenance`/`archived` 本来就在往返里；新加的只有一个**读**方法 `is_ephemeral()`，
     读的是 `avery.contexts.ephemeral` 这个既有列。
   - 判据一句话：**动 dataclass 里被整块 jsonb 装着的字段 → 免迁移；动表的顶层列 → 必须迁移。**
-- 🔴 **三票合的都是本地 main，没有 push**（`main...origin/main [ahead 9]`）。票面写的
+- 🔴 **三票合的都是本地 main，没有 push**（`main...origin/main [ahead 14]`）。票面写的
   「落 main 即止」在这个仓库里必须理解成**不 push**：前端没有人工上产步骤，**push main 即自动
   构建上产**，推一下就等于把前端单独上了产、而后端容器还停在旧镜像。这一步留给统一上产
-  那个 session：它要在**同一个窗口里** push + 换后端容器（见 What's Next 第 2 条）。
+  那个 session：它要在**同一个窗口里** push + 换后端容器（见 What's Next 第 1 条）。
 
 ## 本轮做完的（2026-08-07 深夜 · T10 补资料，issue #59）
 
@@ -137,7 +137,7 @@
 
 - 无硬 blocker。
 - 🟠 **别单独 push main**：前端 push 即自动上产、后端容器要人手换。三票各自的「上到一半」
-  长什么样见 What's Next 第 2 条。两件事同窗口做。
+  长什么样见 What's Next 第 1 条。两件事同窗口做。
 - 🔴 **在 worktree 里重冻像素＝没重冻**：`__snapshots__/` 是 gitignore 的单机产物、每 worktree
   一份。新 worktree 第一次跑像素门是 40 张「没有基线」全写入（playwright 报 exit 1）——
   那**既不是漂移红也不是绿**。真比对只在主检出上有意义；红了先比 mtime 再谈漂移。
