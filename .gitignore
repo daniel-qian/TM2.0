@@ -52,3 +52,7 @@ scripts/__pycache__/
 
 # HITL 会话（含生产 context 的 ownerToken，绝不进版本库）
 .issues/**/.hitl-session*.json
+
+# T9（gap2 #58）· verify-forms-proactive 的截图 + 逐条 JSON 产物。单机产物，同 review-shots /
+# sweep 的老惯例不入库；门自己会重建（mkdirSync recursive）。
+eval-harness/tools/.t9-shots/

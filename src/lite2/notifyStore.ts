@@ -21,7 +21,17 @@ import { deriveGaps } from './gapDerive'
 const STORAGE_KEY = 'lite2:notify:v1'
 const MAX_ITEMS = 50
 
-export type NotifKind = 'ingest' | 'run' | 'ask' | 'gap'
+// T9（gap2 #58）· 'form' = 常驻表单这一路：本期已按上期名单备好 / 有人交了本期的表单。
+// 🔴 两个触发合用**同一个** kind 而不是拆成两个，是被上面那条红线逼出来的：文案永不点名员工
+// 个人，所以「谁交了」只能说「有人交了本期的表单」。既然文案已经泛化到这一步，再拆一个 kind
+// 也说不出更多东西——只会多一处必须同步维护的枚举。
+export type NotifKind = 'ingest' | 'run' | 'ask' | 'gap' | 'form'
+
+// 🔴 一处真源：加 kind 时改这里，下面三处（类型、NOTIF_TARGET 的完整性、isKind 的运行时判据）
+// 全部跟着走。此前 `isKind` 是一份**手写的第二份枚举**（`v === 'ingest' || …` 的布尔链），
+// 与 NotifKind 之间没有任何类型联系——漏改它不是编译错误，而是**刷新页面后这一类通知静默消失**
+// （persisted items 被过滤掉了）。这种缺陷只有真人重开页面才看得见。
+const NOTIF_KINDS = ['ingest', 'run', 'ask', 'gap', 'form'] as const
 
 export interface NotifItem {
   id: string
@@ -30,24 +40,36 @@ export interface NotifItem {
   read: boolean
 }
 
-// 点击通知跳对应 tab（kind → 屏）。
+// 点击通知跳对应 tab（kind → 屏）。`Record<NotifKind, …>` 保证漏一个就是编译错误。
 export const NOTIF_TARGET: Record<NotifKind, LiteScreen> = {
   ingest: 'team',
   run: 'room',
   ask: 'room',
   gap: 'closerlook',
+  // 表单这一路的落点是「文件与表单」屏——「本期备好了」和「有人交了」两件事都在那一屏上
+  // 有真东西可看（名单、链接、谁交了）。
+  form: 'files',
 }
 
 interface PersistedNotify {
   items: NotifItem[]
   seenGapIds: string[]
   seenAskIds: string[]
+  // T9 · 已经通知过的「有人交了」提交 id（同 seenAskIds 的去重姿态）。没有它，每一次刷新都会
+  // 把库里所有 submitted 行重新认成"新交的"，铃铛按已提交人数刷屏。
+  seenFormIds: string[]
+  // T9 · 已经通知过的「本期已备好」周期键（`<template>|<period>`）。服务端的 auto_filled 只在
+  // 真的铸了行的那一次出现，但经理可能在两台设备/两个标签页上各触发一次，各自都是真事件——
+  // 对同一期只提醒一次就够了。
+  seenFormPeriods: string[]
 }
 
-const EMPTY_PERSISTED: PersistedNotify = { items: [], seenGapIds: [], seenAskIds: [] }
+const EMPTY_PERSISTED: PersistedNotify = {
+  items: [], seenGapIds: [], seenAskIds: [], seenFormIds: [], seenFormPeriods: [],
+}
 
 function isKind(v: unknown): v is NotifKind {
-  return v === 'ingest' || v === 'run' || v === 'ask' || v === 'gap'
+  return (NOTIF_KINDS as readonly string[]).includes(v as string)
 }
 
 function loadPersisted(): PersistedNotify {
@@ -65,7 +87,16 @@ function loadPersisted(): PersistedNotify {
       : []
     const strArr = (v: unknown): string[] =>
       Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []
-    return { items, seenGapIds: strArr(parsed.seenGapIds), seenAskIds: strArr(parsed.seenAskIds) }
+    return {
+      items,
+      seenGapIds: strArr(parsed.seenGapIds),
+      seenAskIds: strArr(parsed.seenAskIds),
+      // T9 加的两个去重集：老的持久化载荷里没有这两个键，strArr 会给出 []，于是升级后的
+      // 第一次刷新会把已有的 submitted 行都认成"新交的"。刻意接受这一次——把 items 里
+      // 已有的通知拿来反推"哪些通知过了"是猜；一次性多几条真事件的提醒，比记错账便宜。
+      seenFormIds: strArr(parsed.seenFormIds),
+      seenFormPeriods: strArr(parsed.seenFormPeriods),
+    }
   } catch {
     return { ...EMPTY_PERSISTED }
   }
@@ -80,6 +111,8 @@ function savePersisted(state: PersistedNotify) {
         items: state.items,
         seenGapIds: state.seenGapIds,
         seenAskIds: state.seenAskIds,
+        seenFormIds: state.seenFormIds,
+        seenFormPeriods: state.seenFormPeriods,
       }),
     )
   } catch {
@@ -105,14 +138,19 @@ interface NotifyState extends PersistedNotify {
   _push: (kind: NotifKind) => void
   _rememberGaps: (ids: string[]) => void
   _rememberAsk: (id: string) => void
+  _rememberForms: (ids: string[]) => void
+  _rememberFormPeriod: (key: string) => void
 }
 
 export const useNotify = create<NotifyState>((set, get) => {
   const initial = loadPersisted()
 
   function persist() {
-    const { items, seenGapIds, seenAskIds } = get()
-    savePersisted({ items, seenGapIds, seenAskIds })
+    // 逐字段解构（不是 `savePersisted(get())`）是刻意的：`get()` 还带着 `open` 与那几个 action，
+    // 全塞进 localStorage 就是把 UI 态和函数一起序列化。代价是加字段时要在这里也补一笔——
+    // 而 `savePersisted` 的入参类型是 `PersistedNotify`，漏了就是 tsc 报错，不是静默丢数据。
+    const { items, seenGapIds, seenAskIds, seenFormIds, seenFormPeriods } = get()
+    savePersisted({ items, seenGapIds, seenAskIds, seenFormIds, seenFormPeriods })
   }
 
   return {
@@ -147,6 +185,15 @@ export const useNotify = create<NotifyState>((set, get) => {
     },
     _rememberAsk: (id) => {
       set((s) => ({ seenAskIds: [...s.seenAskIds, id] }))
+      persist()
+    },
+    _rememberForms: (ids) => {
+      if (ids.length === 0) return
+      set((s) => ({ seenFormIds: [...s.seenFormIds, ...ids] }))
+      persist()
+    },
+    _rememberFormPeriod: (key) => {
+      set((s) => ({ seenFormPeriods: [...s.seenFormPeriods, key] }))
       persist()
     },
   }
@@ -194,6 +241,35 @@ export function initNotifications() {
         for (let i = 0; i < fresh.length; i++) notify._push('gap')
       }
     }
+
+    // ⑤ T9（gap2 #58）· 常驻表单这一路，两个触发。
+    //
+    // 🔴 两个都必须是**真实状态迁移**，不是"当下为真的静态事实"（本文件开头那条红线）。
+    //    这一路最容易写错的形态是拿「本期有 open 行」或「有人交过」当判据——那两句话在此后
+    //    每一次刷新上都为真，铃铛会按刷新次数刷屏。所以两边都按 id/周期去重，且**先记账再推**。
+
+    // ⑤a 有人交了：库里出现了一条我们没见过的 submitted 行。
+    //     去重认 submission id（一条链一个人一次提交，id 是它的终身标识）。
+    if (state.formSubmissions && state.formSubmissions !== prev.formSubmissions) {
+      const fresh = state.formSubmissions
+        .filter((s) => s.submitted_at && !notify.seenFormIds.includes(s.id))
+        .map((s) => s.id)
+      if (fresh.length > 0) {
+        notify._rememberForms(fresh)
+        for (let i = 0; i < fresh.length; i++) notify._push('form')
+      }
+    }
+
+    // ⑤b 本期已备好：服务端**这一次**真的按上期名单铸了行（`auto_filled` 键缺席就是没铸）。
+    //     再按 `<模板>|<周期>` 去重一层：同一期在两台设备上各触发一次都是真事件，但提醒一次够了。
+    if (state.formsAutoFilled && state.formsAutoFilled !== prev.formsAutoFilled) {
+      for (const filled of state.formsAutoFilled) {
+        const key = `${filled.template_id}|${filled.period}`
+        if (useNotify.getState().seenFormPeriods.includes(key)) continue
+        useNotify.getState()._rememberFormPeriod(key)
+        useNotify.getState()._push('form')
+      }
+    }
   })
 }
 
@@ -202,5 +278,11 @@ export function initNotifications() {
 // 调用。🔴 往 NotifyState 加字段时必须同步决定进不进这里（通知条目/已见 id 是公司数据；
 // open 是 UI 态，宁可多清）。
 export function resetNotifyCompanyScope(): void {
-  useNotify.setState({ items: [], seenGapIds: [], seenAskIds: [], open: false })
+  useNotify.setState({
+    items: [], seenGapIds: [], seenAskIds: [],
+    // T9 加的两个去重集同样是**公司数据**（提交 id / 周期都属于那一家公司）。留着它们，
+    // 换到 B 公司之后 B 的第一批提交会被当成"通知过了"而静默不响。
+    seenFormIds: [], seenFormPeriods: [],
+    open: false,
+  })
 }

@@ -875,7 +875,8 @@ class PostgresContextRegistry(ProjectWriteMixin):
     # ⚠ 列序就是 `_form_submission_from_row` 的解包顺序 —— 加列一律**追加在末尾**，改中间等于
     # 把两个字段的值对调，而两个都是 text，Postgres 与 Python 都不会吭一声。
     _FORM_SUB_COLS = ("id, context_id, template_id, person_id, person_name, period, "
-                      "share_token, answers, submitted_at, created_at, expires_at, project_ref")
+                      "share_token, answers, submitted_at, created_at, expires_at, project_ref, "
+                      "auto_key")
 
     @staticmethod
     def _form_template_from_row(row):
@@ -893,11 +894,12 @@ class PostgresContextRegistry(ProjectWriteMixin):
     def _form_submission_from_row(row):
         from .form import FormSubmission
         (sid, context_id, template_id, person_id, person_name, period, share_token,
-         answers, submitted_at, created_at, expires_at, project_ref) = row
+         answers, submitted_at, created_at, expires_at, project_ref, auto_key) = row
         return FormSubmission(
             id=sid, context_id=context_id, template_id=template_id,
             person_id=person_id or "", person_name=person_name or "", period=period or "",
             project_ref=project_ref or "", share_token=share_token or "",
+            auto_key=auto_key or "",
             answers=list(answers) if answers is not None else None,
             submitted_at=submitted_at.isoformat() if submitted_at is not None else "",
             created_at=created_at.isoformat() if created_at is not None else "",
@@ -946,32 +948,45 @@ class PostgresContextRegistry(ProjectWriteMixin):
         """Persist one submission snapshot (minted link, or a re-put). Storage-safety gate only —
         answers are the employee's OWN words and are deliberately NOT red-line scanned (ADR-0023);
         the guarantee is placement: they hang off (template, submission), never off avery.entities."""
-        from psycopg.types.json import Jsonb
         from .form import gate_submission_storage_safety
         gate_submission_storage_safety(submission)
         self._ensure_schema()
         with self._connect() as conn, conn.transaction():
-            conn.execute(
-                "INSERT INTO avery.form_submissions (id, context_id, template_id, person_id, "
-                " person_name, period, share_token, answers, submitted_at, created_at, expires_at, "
-                " project_ref) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s::timestamptz, "
-                "        COALESCE(%s::timestamptz, now()), "
-                "        COALESCE(%s::timestamptz, now() + interval '7 days'), %s) "
-                "ON CONFLICT (id) DO UPDATE SET "
-                "  template_id = EXCLUDED.template_id, person_id = EXCLUDED.person_id, "
-                "  person_name = EXCLUDED.person_name, period = EXCLUDED.period, "
-                "  share_token = EXCLUDED.share_token, answers = EXCLUDED.answers, "
-                "  submitted_at = EXCLUDED.submitted_at, expires_at = EXCLUDED.expires_at, "
-                "  project_ref = EXCLUDED.project_ref",
-                (submission.id, submission.context_id, submission.template_id,
-                 submission.person_id or "", submission.person_name,
-                 submission.period or "", submission.share_token or None,
-                 Jsonb(submission.answers) if submission.answers is not None else None,
-                 submission.submitted_at or None,
-                 submission.created_at or None, submission.expires_at or None,
-                 submission.project_ref or ""))
+            conn.execute(self._FORM_SUB_INSERT + "ON CONFLICT (id) DO UPDATE SET "
+                         "  template_id = EXCLUDED.template_id, person_id = EXCLUDED.person_id, "
+                         "  person_name = EXCLUDED.person_name, period = EXCLUDED.period, "
+                         "  share_token = EXCLUDED.share_token, answers = EXCLUDED.answers, "
+                         "  submitted_at = EXCLUDED.submitted_at, expires_at = EXCLUDED.expires_at, "
+                         "  project_ref = EXCLUDED.project_ref, auto_key = EXCLUDED.auto_key",
+                         self._form_sub_params(submission))
         return self.get_form_submission(submission.id)
+
+    # 两条写路径（`put_form_submission` 覆盖式 upsert / `put_form_submission_if_absent` 幂等落行）
+    # 共用同一句 INSERT 与同一份参数打包 —— 列表分叉过一次就够了：`_FORM_SUB_COLS` 的注释里那句
+    # 「加列一律追加在末尾」讲的正是列序错位不会有任何一层吭声。
+    _FORM_SUB_INSERT = (
+        "INSERT INTO avery.form_submissions (id, context_id, template_id, person_id, "
+        " person_name, period, share_token, answers, submitted_at, created_at, expires_at, "
+        " project_ref, auto_key) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s::timestamptz, "
+        "        COALESCE(%s::timestamptz, now()), "
+        "        COALESCE(%s::timestamptz, now() + interval '7 days'), %s, %s) ")
+
+    @staticmethod
+    def _form_sub_params(submission) -> tuple:
+        from psycopg.types.json import Jsonb
+        return (submission.id, submission.context_id, submission.template_id,
+                submission.person_id or "", submission.person_name,
+                submission.period or "", submission.share_token or None,
+                Jsonb(submission.answers) if submission.answers is not None else None,
+                submission.submitted_at or None,
+                submission.created_at or None, submission.expires_at or None,
+                submission.project_ref or "",
+                # 🔴 空串必须落成 SQL NULL，不是 ''：0015 那条唯一索引的 `WHERE auto_key IS NOT NULL`
+                # 谓词认的是 NULL。存 '' 的话每一条**手动**铸的链都会带着同一个 '' 进索引，
+                # 于是经理第二次点「生成本周链接」会撞唯一约束——正好把本票明令不许动的那条
+                # 行为（重复铸链＝再发一轮）废掉。
+                (submission.auto_key or "").strip() or None)
 
     def get_form_submission(self, submission_id: str):
         self._ensure_schema()
@@ -1009,6 +1024,66 @@ class PostgresContextRegistry(ProjectWriteMixin):
             rows = conn.execute(sql, tuple(params)).fetchall()
         return [self._form_submission_from_row(r) for r in rows]
 
+    # --- T9 · gap2 #58：自动补铸要的两问一写 ------------------------------------------------
+
+    def list_form_submissions_in_period(self, context_id: str, template_id: str,
+                                        period: str) -> list:
+        """这家公司这张模板这一期的**全部**行——刻意没有 LIMIT。
+
+        `list_form_submissions` 那条有 limit（默认 200 / 上限 500），拿它回答「本期有没有行」
+        会在重铸历史多的公司上被截断成「没有」，而那句错答的代价是给全公司每个人再发一条链接。
+        判据要多少行就读多少行。走 0015 的 (context_id, template_id, period) 索引。"""
+        self._ensure_schema()
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"SELECT {self._FORM_SUB_COLS} FROM avery.form_submissions "
+                "WHERE context_id = %s AND template_id = %s AND period = %s "
+                "ORDER BY created_at, id", (context_id, template_id, period)).fetchall()
+        return [self._form_submission_from_row(r) for r in rows]
+
+    def latest_form_period_before(self, context_id: str, template_id: str,
+                                  period: str) -> str | None:
+        """这张模板在 `period` 之前最近的一个有行的周期，没有则 None。
+
+        比较交给 Postgres 的文本序，与内存双胞胎的 Python 字符串序同解：ISO 周 `YYYY-Www` 的
+        字典序即时间序（年在前、周补零两位）。`period <> ''` 把没写周期的历史行挡在外面——
+        拿它当「上期」等于照着一份没有周期语义的名单发链接。"""
+        self._ensure_schema()
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT max(period) FROM avery.form_submissions "
+                "WHERE context_id = %s AND template_id = %s AND period <> '' AND period < %s",
+                (context_id, template_id, period)).fetchone()
+        return (row[0] or None) if row is not None else None
+
+    def put_form_submission_if_absent(self, submission):
+        """自动补铸专用的写：`auto_key` 没被占则落行并返回它，已被占则返回 **None**（绝不覆盖）。
+
+        🔴 这就是护栏本体，而且它是**事务级**的：`ON CONFLICT ... DO NOTHING` 撞的是 0015 那条
+        唯一索引，所以两个并发请求各自查到「本期没有行」再各自 INSERT 时，仍然只有一条能活。
+        先查后插挡不住那一幕（两边都查到空）——护栏必须在库上，Python 里那道只是省一次往返。
+
+        手动铸链完全不走这条路（`put_form_submission` 照旧），而且手动行的 auto_key 落成 NULL、
+        连索引都不进，所以「重复调用等于再发一轮」一个字节没变。"""
+        from .form import gate_submission_storage_safety
+        if not (submission.auto_key or "").strip():
+            raise ValueError("put_form_submission_if_absent needs a non-empty auto_key")
+        gate_submission_storage_safety(submission)
+        self._ensure_schema()
+        with self._connect() as conn, conn.transaction():
+            row = conn.execute(
+                # 🔴 `WHERE auto_key IS NOT NULL` 不是装饰：0015 那条是**部分**唯一索引，
+                # Postgres 只有在 ON CONFLICT 的推断子句里同样写出谓词时才认得出该用哪条索引；
+                # 漏掉它会当场 InvalidColumnReference（"no unique or exclusion constraint
+                # matching the ON CONFLICT specification"），不是静默退化。
+                self._FORM_SUB_INSERT + "ON CONFLICT (context_id, auto_key) "
+                                        "WHERE auto_key IS NOT NULL DO NOTHING "
+                                        "RETURNING id",
+                self._form_sub_params(submission)).fetchone()
+        if row is None:
+            return None
+        return self.get_form_submission(submission.id)
+
     def record_form_answers(self, share_token: str, answers: list,
                             submitted_at: str) -> str:
         """The answer-once lock, ATOMIC in SQL: the UPDATE lands only where submitted_at IS NULL, so
@@ -1027,6 +1102,28 @@ class PostgresContextRegistry(ProjectWriteMixin):
                 exists = conn.execute(
                     "SELECT 1 FROM avery.form_submissions WHERE share_token = %s",
                     (share_token,)).fetchone()
+                return "already" if exists else "unknown"
+        return "ok"
+
+    def expire_form_submission(self, submission_id: str, at_iso: str) -> str:
+        """T9 · 作废一条还没交的链接 = 把 expires_at 拨到此刻。'ok' / 'already' / 'unknown'。
+
+        与 `record_form_answers` 同一形状的原子写：UPDATE 只落在 `submitted_at IS NULL` 的那一行，
+        所以「员工正在按提交、经理同时点作废」这一幕里，**答案永远赢**——先落地的提交把这一行
+        锁成终态，作废拿到 'already' 而不是把一条已经交上来的证据改成过期。
+        （已提交是终态，过了期也仍然是 submitted：`form.effective_submission_status`。）"""
+        if not submission_id:
+            return "unknown"
+        self._ensure_schema()
+        with self._connect() as conn, conn.transaction():
+            row = conn.execute(
+                "UPDATE avery.form_submissions SET expires_at = %s::timestamptz "
+                "WHERE id = %s AND submitted_at IS NULL RETURNING id",
+                (at_iso, submission_id)).fetchone()
+            if row is None:
+                exists = conn.execute(
+                    "SELECT 1 FROM avery.form_submissions WHERE id = %s",
+                    (submission_id,)).fetchone()
                 return "already" if exists else "unknown"
         return "ok"
 

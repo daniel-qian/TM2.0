@@ -48,6 +48,7 @@ from avery.ingest.form import (
     validate_template_shape,
 )
 from avery.ingest.form_append import append_submission_to_context
+from avery.ingest.form_autofill import ensure_current_period_links
 from avery.ingest.form_draft import draft_template_from_doc
 from avery.ingest.parse import parse_bytes
 from avery.ingest.registry import active_registry
@@ -310,13 +311,91 @@ def list_submissions(context_id: str,
                      authorization: str | None = Header(None),
                      x_avery_account: str | None = Header(None)) -> dict:
     """「本周谁交了 / 谁没交」的唯一真相。铸链即建行，所以没交的人在这里是 `status='open'` 的行，
-    不是缺席——前端不用去猜「名单减去交了的」。答案原样带回（员工的原话，不改写）。"""
+    不是缺席——前端不用去猜「名单减去交了的」。答案原样带回（员工的原话，不改写）。
+
+    🔴 gap2 T9（#58）—— 这支端点现在**顺手把本期备好**：本期还没有链接、而上期有，就照着上期
+    的名单铸出来（`form_autofill.ensure_current_period_links`）。为什么把一次写挂在读上：
+
+      * 这是本仓的正统范式，不是新发明——内置模板就是「首次 GET 按需铸」（`ensure_builtin_templates`，
+        本文件上面那支 `list_forms` 已经这么干了三票），demo 克隆的 GC 也是顺着请求顺手做的
+        （`service/demo.py`）。**拍板口径明写不引 cron/调度器**（0807 grill 第 3 条）。
+      * 挂在**这一支**而不是 `/team`：`/team` 是今天页每次刷新都打的那条路，经理可能根本没打开
+        表单区，链接却已经悄悄发出去了。这支端点的语义就是「经理正在看表单收集」。
+
+    幂等由两道锁保证（各挡各的，见 form_autofill 文件头）：本期已有行的人一律不铸（手动铸的
+    也算），并发两发由库上唯一索引顶住。**手动铸链那一路一个字节没动。**
+
+    补铸失败绝不吃掉这次读取：名单读得出来才是这支端点的本职，「本期没自动备好」是可以再来一次
+    的事（下次经理刷新就补上），而「谁交了没交都看不到」不是。
+    """
+    reg = active_registry()
+    ctx = authorize_context(reg, context_id, extract_owner_token(x_avery_token, authorization),
+                            account.resolve_account(x_avery_account))
+    autofilled: list[dict] = []
+    try:
+        ensure_builtin_templates(reg, context_id)
+        outcomes = ensure_current_period_links(
+            reg, context_id,
+            # 上期绑的项目今天还在不在，要拿这家公司**当前**的项目卡去比；拿不到就传 None，
+            # 此时绑定原样保留（absent≠none：读不到项目列表不等于项目没了）。
+            projects=getattr(getattr(ctx, "extraction", None), "projects", None))
+        autofilled = [{"template_id": o.template_id, "period": o.period,
+                       "copied_from": o.copied_from, "minted": o.count}
+                      for o in outcomes if o.count]
+    except Exception:
+        logger.exception(
+            "T9: auto-filling this period's form links for %s failed — the submission list below "
+            "is still the real one; the next refresh retries the fill", context_id)
+    rows = reg.list_form_submissions(context_id, template_id, limit)
+    payload: dict[str, Any] = {
+        "context_id": context_id,
+        "submissions": [_submission_payload(s, with_answers=True) for s in rows]}
+    # additive key，空即缺席（同 playbooks / scoring_enabled 的姿态）：只有**这一次调用真的铸了
+    # 链接**才出现。前端据此弹「本期已按上期名单备好（N 人）· 去调整」，并合成一条 'form' 通知
+    # ——判据是一次真实的状态迁移，不是「本期有行」这种每次刷新都为真的静态事实。
+    if autofilled:
+        payload["auto_filled"] = autofilled
+    return payload
+
+
+@router.post("/team/{context_id}/forms/submissions/{submission_id}/void")
+def void_submission(context_id: str, submission_id: str,
+                    x_avery_token: str | None = Header(None),
+                    authorization: str | None = Header(None),
+                    x_avery_account: str | None = Header(None)) -> dict:
+    """T9（#58）· 作废一条**还没交**的链接——「沿用上期（N 人）· 去调整」里的「去调整」。
+
+    自动补铸照抄的是上期名单，而名单会过时：有人离职了、有人这周轮休、经理本来就想换人。
+    没有这个出口，那几条链接会一直挂在「本期还差 N 人没交」里，把一个经理**无法消除**的数字
+    印在今天页上——一条永远做不完的待办比没有待办更糟。
+
+    作废 = 把到期时刻拨到此刻（`expire_form_submission` 的 docstring 讲了为什么不是删行：
+    已交的不许动、删了会与自动补铸打成死循环、而「已过期」那张诚实页面是现成的）。
+    要换人就照常走手动铸链——那条路本票一个字节没动。
+
+    ⚠ 刻意**不**限定只有自动铸的行才能作废。经理在「谁没交」那一段里看到的是一排状态一样的行，
+    他分不出哪条是系统备好的、哪条是他自己上周点出来的（也不该要求他分）；只在其中一部分上
+    长出按钮，是把一个内部实现细节做成了界面规则。风险为零：作废非破坏性，随时可以再铸一条。
+
+    门与本文件其余经理端点同一张：owner_token 或持有账号，否则同体 404 无枚举。"""
     reg = active_registry()
     authorize_context(reg, context_id, extract_owner_token(x_avery_token, authorization),
                       account.resolve_account(x_avery_account))
-    rows = reg.list_form_submissions(context_id, template_id, limit)
-    return {"context_id": context_id,
-            "submissions": [_submission_payload(s, with_answers=True) for s in rows]}
+    sub = reg.get_form_submission(submission_id)
+    # 🔴 跨租户越权与"不存在"必须**同体** 404：否则这支端点就成了一个"这个 id 在不在"的
+    # 枚举 oracle（与 authorize_context 的无枚举姿态同一条线）。
+    if sub is None or sub.context_id != context_id:
+        raise HTTPException(status_code=404, detail=f"unknown form submission: {submission_id}")
+    outcome = reg.expire_form_submission(submission_id, now_iso())
+    if outcome == "unknown":
+        raise HTTPException(status_code=404, detail=f"unknown form submission: {submission_id}")
+    if outcome == "already":
+        raise HTTPException(status_code=409, detail={
+            "error": "already submitted",
+            "reason": "this link has been filled in — the answers stay exactly as they are"})
+    fresh = reg.get_form_submission(submission_id)
+    return {"context_id": context_id, "submission_id": submission_id,
+            "submission": _submission_payload(fresh, with_answers=False) if fresh else None}
 
 
 def _template_payload(t) -> dict[str, Any]:
@@ -332,6 +411,10 @@ def _submission_payload(s, *, with_answers: bool) -> dict[str, Any]:
         "status": effective_submission_status(s),
         "created_at": s.created_at, "expires_at": s.expires_at,
         "submitted_at": s.submitted_at or None,
+        # T9 · 这一行是系统按上期名单**自动备好**的（True）还是经理亲手点出来的（False）。
+        # 只发这个布尔，不发 `auto_key` 本身：那是幂等护栏的内部键（含姓名/工号），前端没有任何
+        # 一处需要它，投出去只会多一个日后必须跟着维护的公开契约。
+        "auto": bool(s.auto_key),
     }
     if s.share_token:
         payload["token"] = s.share_token

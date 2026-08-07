@@ -36,7 +36,8 @@ import pytest
 from avery.ingest import ingest_paths
 from avery.ingest.form import (
     FormField, FormSubmission, FormTemplate,
-    default_expiry, ensure_builtin_templates, new_submission_id, now_iso, weekly_template,
+    auto_mint_key, default_expiry, ensure_builtin_templates, new_submission_id, now_iso,
+    weekly_template,
 )
 from avery.ingest.registry import ContextRegistry
 
@@ -427,3 +428,112 @@ def test_deleting_the_context_takes_its_forms_with_it(tmp_path):
     fresh = PostgresContextRegistry(url, data_dir=tmp_path / "data2")
     assert fresh.get_form_submission_by_token(sub.share_token) is None
     assert fresh.list_form_templates(cid) == []
+
+
+# ==============================================================================================
+# T9 · gap2 #58 —— 自动补铸的幂等护栏（共有判据 + 真库并发）
+# ==============================================================================================
+
+def test_put_if_absent_lands_once_and_reports_the_second_call(impl, tmp_path):
+    """共有判据（两个双胞胎都跑）：同一个 `auto_key` 第二次落空，返回 None 且**不覆盖**。"""
+    reg, cid = _ingest_context(impl, tmp_path / "mem")
+    reg.put_form_template(weekly_template(cid))
+
+    first = _auto(cid, "周雅", person_id="P-0007")
+    stored = reg.put_form_submission_if_absent(first)
+    assert stored is not None and stored.id == first.id
+    assert stored.auto_key == first.auto_key
+
+    second = _auto(cid, "周雅", person_id="P-0007")     # 同一个人同一期 → 同一把 auto_key
+    assert second.auto_key == first.auto_key and second.id != first.id
+    assert reg.put_form_submission_if_absent(second) is None, "第二次把同一个人又铸了一条"
+
+    rows = reg.list_form_submissions_in_period(cid, "tpl_weekly", "2026-W32")
+    assert [r.id for r in rows] == [first.id], "库里多出了一行，或者首行被覆盖了"
+
+
+def test_the_guard_never_touches_the_manual_path(impl, tmp_path):
+    """🔴 手动铸链（auto_key 为空）想铸几条铸几条——「再发一轮」是正当语义。
+
+    库上那条唯一索引是**部分**索引（`WHERE auto_key IS NOT NULL`），手动行连索引都不进。
+    这条判据在真库那条腿上还顺带验了一件离线看不见的事：空串必须落成 SQL NULL 而不是 ''，
+    否则每一条手动行都带着同一个 '' 撞进索引，经理第二次点「生成本周链接」当场 500。
+    """
+    reg, cid = _ingest_context(impl, tmp_path / "mem")
+    reg.put_form_template(weekly_template(cid))
+    for _ in range(3):
+        assert reg.put_form_submission(_minted(cid, "tpl_weekly", "周雅", person_id="P-0007"))
+    rows = reg.list_form_submissions_in_period(cid, "tpl_weekly", "2026-W32")
+    assert len(rows) == 3 and all(r.auto_key == "" for r in rows)
+
+
+def test_voiding_an_open_link_is_atomic_against_a_racing_submit(impl, tmp_path):
+    """作废只落在 `submitted_at IS NULL` 的那一行 —— 已提交的答案永远赢。"""
+    reg, cid = _ingest_context(impl, tmp_path / "mem")
+    reg.put_form_template(weekly_template(cid))
+    sub = _minted(cid, "tpl_weekly", "周雅")
+    reg.put_form_submission(sub)
+
+    assert reg.expire_form_submission(sub.id, now_iso()) == "ok"
+    assert reg.expire_form_submission("sub_nope", now_iso()) == "unknown"
+
+    other = _minted(cid, "tpl_weekly", "陈立")
+    reg.put_form_submission(other)
+    assert reg.record_form_answers(other.share_token, _ZH_ANSWERS, now_iso()) == "ok"
+    assert reg.expire_form_submission(other.id, now_iso()) == "already", \
+        "作废改动了一条已经交上来的证据"
+    got = reg.get_form_submission(other.id)
+    assert got.submitted_at and got.answers, "已提交行被作废动过"
+
+
+@needs_db
+def test_two_concurrent_autofills_mint_exactly_one_link_per_person(tmp_path):
+    """🔴 事务级护栏的**唯一**真证明：两条独立连接同时抢同一把 `auto_key`。
+
+    离线内存双胞胎在这件事上什么都证明不了（单进程、一次字典查改），硬在那边"证明"就是一条假绿
+    ——所以这条判据只在真库上跑。挡的是先查后插挡不住的那一幕：两个请求都查到「本期没有行」，
+    然后各自建行，员工手机上收到两条一模一样的链接。
+
+    并发用真线程 + 每线程一个**独立 registry 实例**（各自的连接池），不是同一个连接上的两次调用
+    ——后者根本进不了竞争态，是一条看起来在测并发、实际在测顺序调用的假门。
+    """
+    url = _db_url()
+    if not url:
+        pytest.skip("needs AVERY_DB_URL (or PGVECTOR_URL)")
+    pytest.importorskip("psycopg")
+    from concurrent.futures import ThreadPoolExecutor
+    from avery.ingest.pg_registry import PostgresContextRegistry
+
+    impl = _Impl("postgres", lambda: PostgresContextRegistry(url, data_dir=tmp_path / "data"))
+    try:
+        reg, cid = _ingest_context(impl, tmp_path / "mem")
+        reg.put_form_template(weekly_template(cid))
+
+        racers = [PostgresContextRegistry(url, data_dir=tmp_path / f"c{i}") for i in range(4)]
+        rows = [_auto(cid, "周雅", person_id="P-0007") for _ in range(4)]
+        # 四把钥匙必须是同一把，否则这条门测的是四个不同的人，恒绿。
+        assert len({r.auto_key for r in rows}) == 1
+
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            outcomes = list(pool.map(lambda pair: pair[0].put_form_submission_if_absent(pair[1]),
+                                     zip(racers, rows)))
+
+        winners = [o for o in outcomes if o is not None]
+        assert len(winners) == 1, (
+            f"四条并发补铸里活下来 {len(winners)} 条——护栏不是事务级的，"
+            f"周雅手机上会收到 {len(winners)} 条链接")
+        persisted = reg.list_form_submissions_in_period(cid, "tpl_weekly", "2026-W32")
+        assert len(persisted) == 1 and persisted[0].id == winners[0].id
+    finally:
+        _pg_cleanup(impl)
+
+
+def _auto(cid: str, name: str, *, person_id: str = "", period: str = "2026-W32") -> FormSubmission:
+    """一条**自动补铸**形状的行：带 auto_key，其余与手动行同形。"""
+    created = now_iso()
+    return FormSubmission(
+        id=new_submission_id(), context_id=cid, template_id="tpl_weekly",
+        person_id=person_id, person_name=name, period=period,
+        share_token="tok_auto_" + uuid.uuid4().hex,
+        created_at=created, expires_at=default_expiry(created),
+        auto_key=auto_mint_key("tpl_weekly", period, person_id, name))

@@ -4,6 +4,7 @@ import type {
   AskQuestionKind,
   FormDraftResult,
   FormLinkRecipient,
+  FormAutoFilled,
   FormLinksResult,
   FormTemplateInput,
   LiveAppendReceipt,
@@ -360,6 +361,13 @@ interface LiteState {
   // React 的 disabled 要等一次重渲染，同一拍的第二次点击挡不住，而这个端点不幂等）。
   formsBusy: 'idle' | 'minting'
   formsError: FormsMintError | null
+  // T9（gap2 #58）· 最近一次拉取里，服务端**真的**按上期名单备好了什么。
+  // 🔴 null = 这次读取一行都没铸（不是「本期没有行」）。界面那句「本期已按上期名单备好（N 人）」
+  // 与铃铛那条 'form' 通知都吃它——判据必须是一次真实的状态迁移，不是每次刷新都为真的静态事实。
+  formsAutoFilled: FormAutoFilled[] | null
+  // 正在作废的那一条（按 submission id）。逐条置灰而不是整段——经理可能连着撤两个人，
+  // 整段置灰会让第二次点击看起来像没反应。
+  formsVoiding: string | null
 
   // ── gap2 T11 · 模板拼装器（建/改模板、让 Avery 读旧表格起草）───────────────────────────
   // 🔴 刻意**不复用** formsBusy / formsError：
@@ -421,6 +429,8 @@ interface LiteState {
   // 给选中的人铸这一期的链接。返回 boolean：true=成功（UI 展开链接列表），false=失败
   // （UI 留在原地读 formsError）。🔴 写失败诚实报错，绝不伪装成功。
   createFormLinks: (templateId: string, recipients: FormLinkRecipient[]) => Promise<boolean>
+  // T9 · 作废一条还没交的链接（「沿用上期（N 人）· 去调整」的去处）。成功后回权威清单。
+  voidFormLink: (submissionId: string) => Promise<boolean>
   // 清铸链态（换模板 / 重新选人时调，别把上一次的报错和上一批链接挂到下一次操作上）。
   resetFormsWrite: () => void
   // ── gap2 T11 · 拼装器。两个写 action 都返回「成功了没」，UI 据此决定关不关编辑器。
@@ -563,6 +573,8 @@ export const useLite = create<LiteState>((set, get) => ({
   formsMinted: null,
   formsBusy: 'idle',
   formsError: null,
+  formsAutoFilled: null,
+  formsVoiding: null,
   formBuilderBusy: 'idle',
   formBuilderError: null,
 
@@ -798,12 +810,16 @@ export const useLite = create<LiteState>((set, get) => ({
           adviseRuns: null,
           // T3：这条 404 分支**绕开了 adoptContext**，所以公司域清单要在这里再列一遍——
           // 漏掉的话，死锚点恢复失败后上一家公司的表单链接会原地留在屏上。
-          // 七件齐（同 adoptContext 那份的理由）。
+          // 九件齐（同 adoptContext 那份的理由）。T9 加的两件同样是公司数据：
+          // formsAutoFilled 是「A 公司这次备好了几条」，留给 B 就是替 B 宣布一件没发生的事；
+          // formsVoiding 漏了则「作废途中切公司」会把那颗按钮在所有公司上永久置灰。
           formTemplates: null,
           formSubmissions: null,
           formsMinted: null,
           formsBusy: 'idle',
           formsError: null,
+          formsAutoFilled: null,
+          formsVoiding: null,
           formBuilderBusy: 'idle',
           formBuilderError: null,
           ingestStatus: 'idle',
@@ -837,6 +853,7 @@ export const useLite = create<LiteState>((set, get) => ({
             // 这份清单与 resetLiteCompanyData 那份是同一份契约的两个抄本，改一处必须改两处。
             formTemplates: null, formSubmissions: null, formsMinted: null,
             formsBusy: 'idle' as const, formsError: null,
+            formsAutoFilled: null, formsVoiding: null,
             formBuilderBusy: 'idle' as const, formBuilderError: null,
             ingestStatus: 'idle' as IngestStatus,
             // T10：补资料那一组同属公司域（「A 公司那次补传为什么没成」挂到 B 头上，
@@ -1015,10 +1032,53 @@ export const useLite = create<LiteState>((set, get) => ({
       try {
         const payload = await transport.fetchFormSubmissions(contextId)
         if (!stillOn(get, contextId)) return
-        set({ formSubmissions: payload.submissions })
+        // T9 · 这支端点在服务端顺手把本期备好了（流量触发，不引 cron）。`auto_filled` 是
+        // additive key，**缺席**表示这次调用一行都没铸——所以这里用 `?? null` 而不是 `?? []`：
+        // 「没铸」和「铸了 0 条」在下游是同一件事，但 null 让"这次什么都没发生"读起来是它本来
+        // 的样子，而不是一个空数组（订阅方要判 length 才知道，最容易写成 truthy 判断而恒真）。
+        //
+        // 🔴 每次拉取都重写这个字段（包括写回 null）。留着上一次的值，铃铛会在此后每一次刷新
+        // 上重复响一声同一件事——notifyStore 文件头那条红线要的是**真实状态转移**，
+        // 不是一个曾经为真、之后一直挂着的标志。
+        set({
+          formSubmissions: payload.submissions,
+          formsAutoFilled: payload.auto_filled?.length ? payload.auto_filled : null,
+        })
       } catch {
         // 同上。
       }
+    }
+  },
+
+  // T9 · 作废一条还没交的链接。作废 = 服务端把到期时刻拨到此刻（行还在，员工那头看到的是
+  // 现成的「这条链接已过期」页），所以自动补铸不会立刻把它发回来。
+  // 🔴 不做乐观改写：状态由服务端背书，改完回权威清单（同 createFormLinks 的姿态）。
+  voidFormLink: async (submissionId) => {
+    const { contextId, transport } = get()
+    if (!contextId || !transport.voidFormSubmission || !submissionId) return false
+    if (get().formsVoiding) return false // 同一时刻只作废一条，防双击（disabled 顶不住同一拍）
+    set({ formsVoiding: submissionId, formsError: null })
+    try {
+      await transport.voidFormSubmission(contextId, submissionId)
+      // 结果过期时也要放开忙态（createFormLinks 那条对抗自审逮到的高危，同一个坑）。
+      if (!stillOn(get, contextId)) {
+        set({ formsVoiding: null })
+        return false
+      }
+      set({ formsVoiding: null })
+      void get().refreshForms()
+      return true
+    } catch (err) {
+      if (!stillOn(get, contextId)) {
+        set({ formsVoiding: null })
+        return false
+      }
+      const status = err instanceof TransportError ? err.status : undefined
+      // 409 = 这条已经被交上来了。那不是失败，是**过时**：经理看到的那一屏比库里旧。
+      // 回一次权威清单，让那一行自己变成「已交」——比弹一句报错有用得多。
+      set({ formsVoiding: null, formsError: status === 409 ? null : 'failed' })
+      void get().refreshForms()
+      return false
     }
   },
 
@@ -1331,14 +1391,16 @@ export function resetLiteCompanyData(): void {
     notes: [],
     noteJustAdded: false,
     adviseRuns: null,   // issue #49：历史是公司域数据，换账号/重开必清
-    // T3 · 常驻表单七件全清（gap2 T11 加了拼装器那两件）。两个 busy 都要归位——换账号时
-    // 卡在 'minting'/'saving' 等于把那个键永久置灰成一个死按钮（那次请求属于上一个账号，
-    // 永远不会回来解锁它）。
+    // T3 · 常驻表单**九件**全清（gap2 T11 加了拼装器那两件，T9 又加了自动补铸那两件）。
+    // 两个 busy 都要归位——换账号时卡在 'minting'/'saving' 等于把那个键永久置灰成一个死按钮
+    // （那次请求属于上一个账号，永远不会回来解锁它）；formsVoiding 同理。
     formTemplates: null,
     formSubmissions: null,
     formsMinted: null,
     formsBusy: 'idle',
     formsError: null,
+    formsAutoFilled: null,
+    formsVoiding: null,
     formBuilderBusy: 'idle',
     formBuilderError: null,
     ingestStatus: 'idle',

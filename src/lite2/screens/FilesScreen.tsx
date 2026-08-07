@@ -132,6 +132,10 @@ function StandingFormsSection() {
   const refreshForms = useLite((s) => s.refreshForms)
   const createFormLinks = useLite((s) => s.createFormLinks)
   const resetFormsWrite = useLite((s) => s.resetFormsWrite)
+  // T9 · 服务端这一次真的按上期名单备好了什么 + 正在撤回哪一条。
+  const formsAutoFilled = useLite((s) => s.formsAutoFilled)
+  const formsVoiding = useLite((s) => s.formsVoiding)
+  const voidFormLink = useLite((s) => s.voidFormLink)
 
   const [templateId, setTemplateId] = useState<string | null>(null)
   const [picked, setPicked] = useState<string[]>([])
@@ -173,6 +177,14 @@ function StandingFormsSection() {
   const periods = rows.map((s) => s.period).filter(Boolean).sort()
   const latestPeriod = periods.length > 0 ? periods[periods.length - 1] : ''
   const statusRows = latestPeriod ? rows.filter((s) => s.period === latestPeriod) : rows
+
+  // T9 · 这一次服务端为**当前选中的这张表**备好了什么。逐表取而不是取第一条：将来经理有两张
+  // 常驻表时，把 A 表的「备好了 5 人」印在 B 表的标题下面就是一句假话。
+  // ⚠ T11 之后 `selected` 可以是 null（一张模板都还没有也照样渲染「新建表单」入口），
+  // 所以这里用可选链 + `?? ''` —— 没有选中表时永远匹配不到，横幅自然不出。
+  const autoFilled =
+    (formsAutoFilled ?? []).find((f) => f.template_id === (selected?.id ?? '')) ?? null
+  const autoFilledCount = autoFilled?.minted ?? 0
 
   // 🔴 两条否决，每一条都是「这一段现在连一件真东西都做不了」——标题跟着内容一起消失，
   // 因为一个底下空无一物的小节读起来像加载失败（SwitchSection 那条注释说的就是这件事）。
@@ -280,6 +292,17 @@ function StandingFormsSection() {
     <section className="lite-files-section lite-files-forms" aria-label={l.formsTitle}>
       <h3 className="lite-files-section-title">{l.formsTitle}</h3>
       <p className="lite-files-empty">{l.formsLede}</p>
+
+      {/* T9（gap2 #58）· 「本期已按上期名单备好（N 人）· 去调整」。
+          🔴 这条只在服务端**这一次**真的铸了行时出现（`auto_filled` 键缺席 = 什么都没发生），
+          不是「本期有行」那种每次刷新都为真的静态事实。措辞把两件事都说清楚：照抄的是**上期
+          那份经理自己选的名单**（不是我们替他挑的人），以及改在哪儿改——底下那排选人与每行的
+          「撤回」就是入口，所以不另做一个跳转按钮，只说一句「下面可以改」。 */}
+      {autoFilled ? (
+        <p className="lite-files-forms-autofilled" data-autofilled={autoFilledCount}>
+          {fill(l.formsAutoFilled, { count: autoFilledCount, period: autoFilled.period })}
+        </p>
+      ) : null}
 
       {/* 模板列表。只有一张时不给切换按钮——一个唯一选项的单选组是纯噪音；题面预览照给，
           经理发出去之前有权看清员工会被问到什么。
@@ -495,6 +518,24 @@ function StandingFormsSection() {
                   <span className="lite-badge lite-files-forms-status-badge" data-tone={view.tone}>
                     {view.label}
                   </span>
+                  {/* T9 · 「去调整」的落点：撤回一条还没交的链接。
+                      🔴 只在 `status === 'open'` 时渲染。已交的**不许动**（答案是员工本人的话，
+                      撤回按钮不该有机会碰它）；已过期的撤了也没意义（它本来就打不开了）。
+                      🔴 判据用的是服务端背书的 `row.status`，不是从 submitted_at 现推——
+                      「显示值和判据值必须分开」那条老规矩（AGENTS.md 易复发陷阱第一条）。
+                      撤回 = 服务端把到期时刻拨到此刻：行还在（所以自动补铸不会立刻发回来一条），
+                      员工那头看到的是现成的「这条链接已过期」页，不是一种新造的状态。 */}
+                  {row.status === 'open' && voidFormLink ? (
+                    <button
+                      type="button"
+                      className="lite-btn lite-btn--ghost lite-files-forms-void"
+                      disabled={formsVoiding !== null}
+                      aria-label={fill(l.formsVoidAria, { name: row.person_name })}
+                      onClick={() => void voidFormLink(row.id)}
+                    >
+                      {formsVoiding === row.id ? l.formsVoiding : l.formsVoid}
+                    </button>
+                  ) : null}
                 </li>
               )
             })}

@@ -21,6 +21,10 @@ function fill(template: string, vars: Record<string, string | number>): string {
   return template.replace(/\{(\w+)\}/g, (_, k: string) => String(vars[k] ?? ''))
 }
 
+// 🔴 穷尽分支 + `never` 兜底（T9 改）。这里原本是 `default: return l.notifGap` ——
+// 加一个新 NotifKind 而忘了给它一句文案，**不是编译错误**：那条新通知会顶着"文件里有一处
+// 值得注意"上屏，说的是另一件事。整类缺陷只有真人点开铃铛才看得见，而它看起来完全正常。
+// 现在漏一个 case 就是 `never` 赋值失败 —— tsc 在 CI 上拦下它。
 function notifText(kind: NotifKind, l: Dict['lite2']): string {
   switch (kind) {
     case 'ingest':
@@ -29,8 +33,14 @@ function notifText(kind: NotifKind, l: Dict['lite2']): string {
       return l.notifRun
     case 'ask':
       return l.notifAsk
-    default:
+    case 'gap':
       return l.notifGap
+    case 'form':
+      return l.notifForm
+    default: {
+      const exhaustive: never = kind
+      return exhaustive
+    }
   }
 }
 

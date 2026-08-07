@@ -140,13 +140,64 @@ def test_rule_copy_placeholders_match_backend_params(locale, path):
     table = _rules(path)
     for rid, entry in table.items():
         used = set(re.findall(r"\{(\w+)\}", entry["title"] + entry["basis"]))
-        available = set(R.RULE_PARAMS.get(rid, {}))
+        available = _available_params(rid)
         assert used <= available, (
             f"{locale}/{rid} 的文案用了后端不发的占位符 {sorted(used - available)}；"
             f"后端只发 {sorted(available)}")
         assert available <= used, (
             f"{locale}/{rid}：后端发了 {sorted(available - used)} 但文案没用——"
             f"要么是句子里把阈值写死了（下一次调阈值就撒谎），要么是这个参数该删")
+
+
+def _available_params(rule_id: str) -> set[str]:
+    """这条规则**发得出来**的占位符名，两个来源合起来算（gap2 T9 · #58）：
+
+      · `RULE_PARAMS` —— 静态阈值（「7 天内到期」的 7），归后端配置；
+      · `RULE_DYNAMIC_PARAMS` —— 每次命中都不同的数（「还差 3 人没交」的 3），值由匹配器当场算，
+        随 `RuleHit.params` 逐条发。
+
+    🔴 为什么要开这第二张表、而不是把动态值塞进 `RULE_PARAMS` 凑数：那张表的红线注释写着
+    "只放阈值"，塞一个假的静态值进去等于把碑推倒还假装它还立着。两张表在**这道门**面前是一张
+    ——占位符对账两个方向都照旧严格，只是"后端发得出什么"的定义诚实地变宽了一格。
+    `test_dynamic_params_are_declared` 守住第二张表不是随便写的：登记了名字就必须真有一条
+    匹配器发它，反过来也一样。"""
+    return set(R.RULE_PARAMS.get(rule_id, {})) | set(R.RULE_DYNAMIC_PARAMS.get(rule_id, ()))
+
+
+def test_dynamic_params_are_declared():
+    """`RULE_DYNAMIC_PARAMS` 是给上面那道门看的**声明**，声明就有对不上的可能，所以要对账：
+
+      ① 登记的规则号必须真在规则表里（改了规则号、这张表没跟着改 → 声明成了孤儿，
+         而孤儿的后果是那条规则的 `{n}` 突然变成"后端不发的占位符"，i18n 门以一句
+         看不懂的话红掉）；
+      ② 登记的名字不许与静态表撞（同一个名字两个来源，合并时谁赢是隐式的）；
+      ③ 反向：真有匹配器在发的动态参数，必须登记进来——否则 i18n 文案里那个 `{n}`
+         会被上面那道门判成"用了后端不发的占位符"。这一条用**真跑一次**来验，不靠人记得。
+    """
+    for rid, names in R.RULE_DYNAMIC_PARAMS.items():
+        assert rid in R.RULES_BY_ID, f"{rid} 登记在 RULE_DYNAMIC_PARAMS 里，但规则表里没有它"
+        assert names, f"{rid} 登记了一个空的动态参数表——那就该整条删掉"
+        overlap = set(names) & set(R.RULE_PARAMS.get(rid, {}))
+        assert not overlap, f"{rid} 的 {sorted(overlap)} 同时登记成了静态阈值和动态参数"
+
+    # ③ 真跑一次那条唯一带动态参数的规则，看它实际发出去的 params 键与声明逐字相等。
+    #    🔴 不 mock、不构造 RuleHit——那样量的是我自己写的假数据，不是产品那条路。
+    from datetime import datetime, timedelta, timezone
+
+    from avery.decision_grading import grade_form_period
+    from avery.ingest.form_autofill import FormPeriodStatus
+
+    now = datetime(2026, 8, 7, 12, 0, tzinfo=timezone.utc)
+    soon = (now + timedelta(hours=5)).isoformat()
+    decided = grade_form_period(
+        FormPeriodStatus(template_id="tpl_weekly", template_title="周报", period="2026-W32",
+                         missing=(("周雅", soon), ("陈立", soon))),
+        now=now)
+    assert decided is not None, "构造的 fixture 没让那条规则命中——这条门在空跑"
+    hit = decided.matched_rules[0].to_dict()
+    declared = _available_params(hit["rule_id"])
+    assert set(hit["params"]) == declared, (
+        f"{hit['rule_id']} 实际发 {sorted(hit['params'])}，两张表加起来声明的是 {sorted(declared)}")
 
 
 def test_placeholder_sets_agree_across_locales():
