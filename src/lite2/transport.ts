@@ -201,9 +201,12 @@ export interface LivePlaybookCard {
 // rich-align-0722 · issue 05a：字段级出处（ADR-0028）。后端 side-car，缺就不发键（absent≠none）。
 // origin='doc' = 文档抽取（source=<文件名>:<行>）；origin='manual' = 人手编（source 恒『手动编辑』）。
 // 🔴 前端凭 origin==='manual' 才挂「手动编辑」角标——doc 出处或键缺席都不挂（不替文档冒充手编）。
+// 差距战役 T5/A2 加了第三个取值 origin='form'：这一格最后一次是**一份员工表单提交**改的
+// （source=那份周报文档）。它既不是「我们从公司资料里读到的」，也不是「经理手打的」——挂
+// 「手动编辑」是假话，什么都不挂则是把员工本人这周说的话冒充成一份存量文档。所以它自己一个角标。
 export interface LiveFieldProvenance {
-  origin: 'doc' | 'manual'
-  source: string // 手编='手动编辑'；文档=<filename>:<line>
+  origin: 'doc' | 'manual' | 'form'
+  source: string // 手编='手动编辑'；文档/表单=<filename>:<line>
   updated_at: string // ISO8601
 }
 
@@ -361,11 +364,16 @@ export interface LiveBriefingPayload {
 
 export interface LiveSignalCard {
   id: string
+  // 🔴 命名陷阱：这个 `source` 是 `source_kind`（'doc' / 'figma' / 'feedback' 这类**类型词**），
+  // 不是文档指针。要把一条信号连回它那份资料，读的是下面的 `sourceRef`。
   source?: string
   subjectType: 'person' | 'project' | 'task'
   subjectId: string
   summary: string
   tag?: string
+  // 差距战役 T5/A2：`'<文件名>:<行>'`，与决策那一路的 `sourceRef` 同一个键名。缺席=这条信号
+  // 没有出处（手加的、老 context），前端据此不引，而不是引一个空串。
+  sourceRef?: string
 }
 
 // ── Ask / Quick ask 契约（feat-034 阶段 B；后端契约提案，阶段 C 落 FastAPI）──────────────

@@ -8,14 +8,15 @@ import { InitialAvatar } from './InitialAvatar'
 import { LiteModal } from './LiteModal'
 import {
   buildProjectViews,
-  isManualField,
   milestoneStatusLabel,
+  provenanceBadgeKind,
   projectAskPrefill,
   projectRiskLabel,
   projectStatusLabel,
   type ProjectView,
 } from './projectView'
 import type { LiteDetail } from './store'
+import { docFromSource } from './teamData'
 import type { LitePerson, LiteTeam } from './teamData'
 import type { LiveTeamPayload, PersonPatchInput, ProjectPatchInput } from './transport'
 
@@ -133,8 +134,22 @@ export function DetailOverlay() {
         <section className="lite-detail-section">
           <p className="eyebrow">{t.lite2.detailSignals}</p>
           <ul>
+            {/* T5/A2：情境信号带出处。`sig.source` 是类型词（'doc'），文档指针在 `sourceRef`
+                ——读错那个键不会报错、门也全绿，所以这里写死读 sourceRef。缺席就不引
+                （手加的、老 context 的信号没有出处，宁可少说一句，不编一个文档名）。 */}
             {signals.map((sig) => (
-              <li key={sig.id}>{sig.summary}</li>
+              <li key={sig.id}>
+                {sig.summary}
+                {sig.sourceRef ? (
+                  <span className="lite-detail-cite">
+                    {' '}
+                    {t.lite2.detailSignalSource.replace(
+                      '{source}',
+                      docFromSource(sig.sourceRef),
+                    )}
+                  </span>
+                ) : null}
+              </li>
             ))}
           </ul>
         </section>
@@ -277,10 +292,16 @@ function ProjectDetailBody({
   const canSave = dTitle.trim().length > 0 && !busy
   const isEditing = editing && open && !archived
 
-  const manual = (field: string) =>
-    isManualField(project, field) ? (
-      <span className="lite-detail-provenance">{l.projectsManualBadge}</span>
-    ) : null
+  // T5/A2：三态。manual=经理手打的、form=员工填表填出来的、其余（doc / 缺席）不挂角标。
+  const manual = (field: string) => {
+    const kind = provenanceBadgeKind(project.provenance, field)
+    if (!kind) return null
+    return (
+      <span className="lite-detail-provenance">
+        {kind === 'manual' ? l.projectsManualBadge : l.projectsFormBadge}
+      </span>
+    )
+  }
 
   if (isEditing) {
     return (
@@ -469,7 +490,13 @@ function ProjectDetailBody({
 
       {project.blockers.length > 0 ? (
         <section className="lite-detail-section">
-          <p className="eyebrow">{l.detailBlockers}</p>
+          {/* T5/A2：这一段的出处角标此前**从来没有挂过** —— `manual('blockers')` 一处都没调，
+              于是后端早就在写的 provenance.blockers 在屏幕上完全隐身。表单回流开始往这里写
+              origin='form' 之后，不挂就等于把员工这周说的话冒充成一份存量文档里读到的。 */}
+          <p className="eyebrow">
+            {l.detailBlockers}
+            {manual('blockers')}
+          </p>
           <ul>
             {project.blockers.map((item) => (
               <li key={item}>{item}</li>
@@ -628,10 +655,17 @@ function PersonDetailBody({
   const canSave = dName.trim().length > 0 && !busy
   const isEditing = editing && open && !archived
 
-  const manual = (field: string) =>
-    person.provenance?.[field]?.origin === 'manual' ? (
-      <span className="lite-detail-provenance">{l.projectsManualBadge}</span>
-    ) : null
+  // 人卡这一侧同一张方子（T5/A2 三态）。🔴 自述槽**永远**到不了这里：它不是 provenance 覆盖的
+  // 定性字段，人身数字只走解析层（PersonEntity.provenance 的注释写死了这条）。
+  const manual = (field: string) => {
+    const kind = provenanceBadgeKind(person.provenance, field)
+    if (!kind) return null
+    return (
+      <span className="lite-detail-provenance">
+        {kind === 'manual' ? l.projectsManualBadge : l.projectsFormBadge}
+      </span>
+    )
+  }
 
   if (isEditing) {
     return (
