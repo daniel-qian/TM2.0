@@ -507,8 +507,10 @@ export interface LiveAdviseRunsPayload {
 // 🔴 词表由服务端定（form.py:35 FIELD_KINDS / :116 effective_submission_status），前端只照做。
 // 闭合联合 + `| string` 兜底：后端哪天多一个词，界面显示「未知」而不是默认按 happy 值渲染
 //（与 LiteFileStatus 同一条 absent≠none 纪律，见 :435）。
-export type LiveFormFieldKind = 'text' | 'choice' | 'number'
+export type LiveFormFieldKind = 'text' | 'choice' | 'number' | 'yesno'
 export type LiveFormStatus = 'open' | 'submitted' | 'expired'
+// gap2 T11 · 自述标记。'' = 这一格的答案只进资料库那份提交文档，不上任何卡。
+export type LiveFormSelfReport = '' | 'load' | 'mood'
 
 export interface LiveFormField {
   id: string // ASCII 稳定键——答案按它落，改 label 不动老答案
@@ -517,8 +519,16 @@ export interface LiveFormField {
   help: string
   required: boolean
   choices: string[] // 仅 choice
-  min: number // 仅 number
+  min: number // 仅 number（'1~5 分' 就是把这一对收窄，不是新 kind）
   max: number // 仅 number
+  // ⚠ 这三个键**必须**在这里出现。GET /forms 是 `asdict(f)` 原样投出来的，而拼装器保存时走的是
+  // 「读回来的模板 → 按这个类型重建 payload → POST 回去」——类型里少一个键，那一趟就把它抹成
+  // 后端的默认值，回流从此不响且**没有任何一道门会红**。
+  // `situational` 当年就是这么漏的：后端 dataclass 有、FormFieldIn 有，前端类型与 save_form 的
+  // 赋值点两处都没有。那时前端一个调用者都没有所以没人踩到，本票让经理真能存模板，它当场发作。
+  situational: boolean // 这一格写的是处境 → 人卡情境信号 / 项目卡阻塞原句
+  self_report: LiveFormSelfReport | string // 本人自述 → 人卡负载/情绪读数
+  retired: boolean // 停用：不再问，但历史答案仍按这个 id 对得上号
 }
 
 export interface LiveFormTemplate {
@@ -552,7 +562,9 @@ export interface LiveFormSubmission {
   // T5 · 铸链时绑的项目（`form.py` 存的是空串默认，所以这里可能是 ''）。
   // 空/缺席 = 这份周报没绑项目：只回流人卡，不碰项目卡。
   project_ref?: string
-  answers?: Array<{ field_id: string; value: string | number }> // 仅 submissions 端点、且已提交
+  // 仅 submissions 端点、且已提交。`boolean` 是 yesno（gap2 T11）——后端存的是 bool 不是文案，
+  // 中文壳和英文壳答的「是」/「Yes」才是同一个值。
+  answers?: Array<{ field_id: string; value: string | number | boolean }>
 }
 
 export interface LiveFormSubmissionsPayload {
@@ -584,6 +596,38 @@ export interface FormLinksResult {
   template_id: string
   period: string
   links: LiveFormSubmission[] // with_answers=False，所以这一批永远没有 answers 键
+}
+
+// ── gap2 T11 · 模板拼装器的写侧 ────────────────────────────────────────────────────────────────
+// 建一张表 / 按 id 覆盖一张已有的（`POST /team/{id}/forms`）。⚠ 后端两个 pydantic 模型都是
+// `extra: "forbid"` —— payload 里多一个键（临时行 key、拖拽序号…）就是 422。
+export interface FormTemplateInput {
+  id?: string // 省略/空 = 服务端铸一个新 id
+  title: string
+  fields: LiveFormField[]
+  active?: boolean
+}
+
+// 让 Avery 读一份**已经在资料库里的**文档，起草一张表。
+export interface FormDraftInput {
+  // `GET /team/{id}/files` 那一行里的 idx。⚠ 它是 source_documents 的**位置**不是稳定键，
+  // 只在这一次请求里有效——别缓存（追加上传会改变这个 list）。
+  file_index: number
+  title?: string
+}
+
+// 起草回执。🔴 这是**提案不是落库**：`template.id` 恒为空串，落不落库由经理在拼装器里点确认，
+// 走的仍是既有的 saveFormTemplate。
+export interface FormDraftResult {
+  context_id: string
+  // 'llm' = 真模型读懂了；'heading' = 退回表头启发式；'none' = 一格都没读出来。
+  // 服务端诚实标注，前端照实说——绝不把降级过的结果讲成「Avery 读懂了」。
+  origin: 'llm' | 'heading' | 'none' | string
+  // 起草层拿掉的东西。**必须**投到界面上：旧表格里「员工绩效排名」这种列很常见，
+  // 悄悄少两列的提案比明说「这两列我没带过来，因为…」的提案危险得多。
+  dropped: Array<{ label: string; reason: string }>
+  source: { filename: string; source_key: string }
+  template: LiveFormTemplate
 }
 
 // ── 端点分歧台账（wire-contract-duplicated-endpoint-asymmetry-unledgered）──────────────────
@@ -679,6 +723,12 @@ export interface LiveTransport {
   ) => Promise<FormLinksResult>
   // 「这一期谁交了 / 谁没交」的唯一真相（未交 = status 'open' 的行，不是名单里的缺席）。
   fetchFormSubmissions?: (contextId: string) => Promise<LiveFormSubmissionsPayload>
+  // gap2 T11 · 拼装器的写侧：建一张表，或按 id 覆盖一张已有的。
+  // 🔴 失败必须能说清**哪一条**超限/撞门——服务端的 422 body 里有 `detail.reason`，
+  // 抛出来的 TransportError 会把它带在 `serverReason` 上（见 readServerReason）。
+  saveFormTemplate?: (contextId: string, input: FormTemplateInput) => Promise<LiveFormTemplate>
+  // gap2 T11 · 让 Avery 读一份已传的旧表格，起草一份提案（不落库）。
+  draftFormFromFile?: (contextId: string, input: FormDraftInput) => Promise<FormDraftResult>
 
   // ── 账号（feat-053）。可选实现：stub transport 不提供，调用方须判空 ──────────────────
   // 🔴 可选（`?:`）是刻意的——LiveTransport 有第二个实现（stubTransport，AFK 门/离线演示），
@@ -832,13 +882,56 @@ function fill(template: string, vars: Record<string, string | number>): string {
 export class TransportError extends Error {
   readonly endpoint: string
   readonly status?: number
+  /**
+   * gap2 T11 —— 服务端 422 body 里那句 `detail.reason`（英文、面向开发者的一句人话原因）。
+   *
+   * 🔴 它**不是**给用户看的整句：`message` 才是（已本地化）。它的用途只有一个——让 UI 能把
+   * 「这次为什么没保存成」定位到**哪一条**规则上（哪个 field.id、超了哪个上限），从而说出
+   * 一句比「保存失败」有用的话，或者在最坏情况下把它作为诊断附在报错后面。
+   *
+   * 为什么不复用既有的 formsError 三态：那三个取值的文案分别在讲「一次发给 1 到 30 个人」这类
+   * 铸链的事，套到模板保存上就是对经理撒谎（同一个 422，两件完全不同的事）。
+   *
+   * ⚠ 这不是 `withServerDetail` 的复活：那个函数早在某次合并里丢了（transport.ts 的
+   * 「端点分歧台账」警告的正是这种丢法），今天全仓零引用。这里是重新写的一小段，只服务
+   * 拼装器这一条路。
+   */
+  readonly serverReason?: string
 
-  constructor(message: string, endpoint: string, status?: number) {
+  constructor(message: string, endpoint: string, status?: number, serverReason?: string) {
     super(message)
     this.name = 'TransportError'
     this.endpoint = endpoint
     this.status = status
+    this.serverReason = serverReason
   }
+}
+
+/**
+ * 把 `{"detail": {"error": …, "reason": "…"}}` 里那句 reason 读出来（读不出就 undefined）。
+ * body 只读一次——`res.json()` 会消费流，调用方拿到错误之后不该再去读它。
+ */
+async function readServerReason(res: Response): Promise<string | undefined> {
+  try {
+    const body = (await res.clone().json()) as { detail?: unknown }
+    const detail = body?.detail
+    if (typeof detail === 'string') return detail
+    if (detail && typeof detail === 'object') {
+      const reason = (detail as { reason?: unknown }).reason
+      if (typeof reason === 'string' && reason.trim()) return reason
+    }
+  } catch {
+    // 非 JSON / 空 body / 已被读过——没有诊断可给，不是错误。
+  }
+  return undefined
+}
+
+// 写侧专用：与 transportError 同一条身份/本地化纪律，另外把服务端那句 reason 带上。
+export async function transportErrorDetailed(name: string, res: Response): Promise<TransportError> {
+  const reason = await readServerReason(res)
+  const message = httpErrorMessage(res)
+  console.debug(`[avery] ${name}: HTTP ${res.status} — ${message}${reason ? ` (${reason})` : ''}`)
+  return new TransportError(message, name, res.status, reason)
 }
 
 // 抛给调用方的错误：人话 message + 可排查的身份。
@@ -1307,6 +1400,32 @@ export function createHttpTransport(base: string = apiBase()): LiveTransport {
       )
       if (!res.ok) throw transportError('form submissions', res)
       return (await res.json()) as LiveFormSubmissionsPayload
+    },
+
+    // gap2 T11 · 拼装器写侧。这条与上面三条只读的不同：失败要能说清**哪一条**规则拦的，
+    // 所以走 transportErrorDetailed（读 body 里那句 detail.reason）而不是 transportError。
+    async saveFormTemplate(contextId, input) {
+      const res = await send('form save', `${base}/team/${encodeURIComponent(contextId)}/forms`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeader(contextId) },
+        body: JSON.stringify(input),
+      })
+      if (!res.ok) throw await transportErrorDetailed('form save', res)
+      return ((await res.json()) as { template: LiveFormTemplate }).template
+    },
+
+    async draftFormFromFile(contextId, input) {
+      const res = await send(
+        'form draft',
+        `${base}/team/${encodeURIComponent(contextId)}/forms/draft-from-file`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...authHeader(contextId) },
+          body: JSON.stringify(input),
+        },
+      )
+      if (!res.ok) throw await transportErrorDetailed('form draft', res)
+      return (await res.json()) as FormDraftResult
     },
 
     // ── 账号（feat-053）────────────────────────────────────────────────────────────────

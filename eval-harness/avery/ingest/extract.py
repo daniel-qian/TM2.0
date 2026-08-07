@@ -107,6 +107,35 @@ class SelfReportMood:
     valueRaw: str = ""
 
 
+def read_selfreport_load(raw: object, source: str) -> "SelfReportLoad | None":
+    """一个负载读数的**唯一**判据：整数 0..100，越界即拒（不 clamp——absent≠none），读不出就 None。
+
+    gap2 T11 —— 提出来是因为现在有两条路要用同一把尺：
+      · `_selfreport_from_lines`（**上传的 06 表**那条路）—— 客户手写的周报里没有字段描述可读，
+        只能靠正则去认 label 里的「××自述」，认到之后拿这里的判据读值；
+      · `form_reflow.selfreport_from_marked_fields`（**表单提交**那条路）—— 哪一格是负载由
+        `FormField.self_report` 这个结构化标记说了算，值仍旧走这里。
+    识别方式可以有两种（一种认文案、一种认结构），**读数的判据只能有一把**：抄一份的下场是
+    哪天上下界改了，两条路上的人卡会给出两个不同的数，而且没有一条门会红。
+    """
+    m = re.match(r"^(\d{1,3})\s*%?$", str(raw if raw is not None else "").strip())
+    if not m:
+        return None
+    iv = int(m.group(1))
+    return SelfReportLoad(value=iv, source=source) if 0 <= iv <= 100 else None
+
+
+def read_selfreport_mood(raw: object, source: str) -> "SelfReportMood | None":
+    """一个情绪读数的唯一判据：词表内 → 枚举；词表外 → `other` + 原词逐字回显（与里程碑/状态同
+    姿态）；空 → None。两条路共用，理由同 `read_selfreport_load`。"""
+    val = str(raw if raw is not None else "").strip()
+    if not val:
+        return None
+    enum = norm_mood_selfreport(val)
+    return SelfReportMood(value=enum or "other", source=source,
+                          valueRaw="" if enum else val[:40])
+
+
 @dataclass
 class PersonSelfReport:
     """一个人的自述槽 {load?, mood?}。任一子槽缺 = 该维度文档未提及（absent≠none，前端不编 0）。"""
@@ -1445,16 +1474,12 @@ class HeuristicExtractor:
                 if not m:
                     continue
                 label, val = m.group(1).strip(), m.group(2).strip()
+                # 只有「哪一格是哪个槽」这一步认文案；值的判据走共用原语（gap2 T11 的
+                # ONE RULER —— 表单那条路认结构化标记，但读出来的数必须是同一把尺量的）。
                 if re.search(r"负载|工作量|工作负荷|饱和|负荷", label):
-                    mv = re.match(r"^(\d{1,3})\s*%?$", val)
-                    if mv:
-                        iv = int(mv.group(1))
-                        if 0 <= iv <= 100:          # reject, don't clamp (absent≠none)
-                            load = SelfReportLoad(value=iv, source=src)
+                    load = read_selfreport_load(val, src) or load
                 elif re.search(r"情绪|心情|状态", label):
-                    enum = norm_mood_selfreport(val)
-                    mood = SelfReportMood(value=enum or "other", source=src,
-                                          valueRaw="" if enum else val[:40])
+                    mood = read_selfreport_mood(val, src) or mood
             if load or mood:
                 res.people.append(PersonEntity(
                     id=_slug(name, "u"), name=name,

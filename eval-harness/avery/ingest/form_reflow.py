@@ -5,21 +5,35 @@ T2 已经把一次提交变成了一份与上传文件平权的资料文档。�
 文档里，那一行 `周雅｜负载自述：72｜情绪自述：偏紧` 被解析层读成人卡上的自述槽，两格情境自由文本
 成为带出处的情境信号，绑了项目的那条链再把同一句话追加成项目卡的阻塞原句。
 
-🔴 命门①（A0-2，本模块存在的唯一理由）：**人身数字只能走解析层。**
+🔴 命门①（A0-2，本模块存在的唯一理由）：**人身数字只能有一把尺。**
 `registry._apply_person_fields` 明写「不碰 self_report」、`ingest_api.PersonIn/PersonPatch` 是
-`extra='forbid'` 且没有这个键——手编 HTTP 通道永远碰不到自述槽。所以这里也**不许**自己
-`person.self_report = ...`：数字必须由 `HeuristicExtractor._selfreport_from_lines` 从文档文本里
-读出来（`caliber` 是 dataclass 默认值「本人自述」、`source` 由解析层按 `<key>:<行>` 铸），本模块只
-负责把那条读数放到对的人身上。少一条旁路，护城河就少一个缺口。
+`extra='forbid'` 且没有这个键——手编 HTTP 通道永远碰不到自述槽。本模块也**不许**自己拼一个
+`SelfReportLoad(value=int(...))`：读数必须走 `extract.read_selfreport_load` /
+`read_selfreport_mood` 这两个共用原语，与上传一份周报读出来的数同一段代码、同一套
+「0..100 越界即拒不 clamp」「词表外走 other 并逐字回显」。
+
+⚠ gap2 T11 把这条命门收窄到它真正说的那件事上。**「哪一格是自述」的识别方式换了**：从前是拿
+正则去认渲染出来那行里带「自述」二字的 label（`_selfreport_from_lines`，认文案不认结构），
+现在读 `FormField.self_report` 这个结构化标记。为什么必须换：经理一改题面，老路就静默失灵；
+一个从没打算上卡的数字题只要被起名叫「产能自述」，那个数就会爬上人卡。拼装器（T11）让经理
+真能随手改题面，这条腿再不变成结构化的，第一天就断。正则老路**一字未改**，只留给「上传的
+06 表」——客户手写的周报里没有字段描述可读，只能认文案。
 
 🔴 命门②（模仿攻击）：员工在自由文本里写 `张三｜负载自述：99` 不得被当真。**两道锁，互相独立**：
   1. T2 的结构锁 —— 自由文本里的 `｜`/`|` 一律转义成 `¦`，那一行在解析器眼里切不出第二格
      （`form_append.escape_vertical_bars`）。
-  2. 本模块的身份锁 —— 解析出来的自述人里，**只**留下名字等于 `submission.person_name` 的那一个
-     （`_person_key` 同一把尺）。谁交的表就只能给谁自述，锁 1 万一被绕过，这一条还在。
+  2. 本模块的结构锁 —— 读数取自 `answers` 里那个**带标记的 field.id**，姓名与工号取自
+     `submission` 的结构化字段。员工在自由文本里写什么都造不出一格带标记的字段。
+     （T11 之前这一条是「解析出来的自述人里只留名字对得上的那一个」的身份锁；换成结构化标记
+     之后这道锁变强了——从「事后筛掉冒名的」变成「压根没有冒名这条路」。）
 并且：工号取自 `submission.person_id` 这个**结构化字段**，绝不从文档文本里读。文档里的
 「人员ID：P-0007」是渲染给人看的元数据行，它**没有分隔符可转义**——员工完全可以在自由文本里
 写出一模一样的一行。任何"从文档里解析工号"的写法都是一个自带钥匙的后门。
+
+🔴 命门②b（取证闸，0807 HITL 的同款）：每条读数都要有**一行文档原文**同时写着这个人的名字、
+这一格的题面和这个值，找不到就丢掉这条读数（`_backed_by_the_document`）。今天渲染器自己交行号、
+结构上不会错——但判据不能建立在「今天的渲染器不会错」上：渲染器与本模块是两段可以各自改的
+代码，这道闸就是它们之间那份可执行的合同。
 
 🔴 命门③（投影不开后门）：自述**存储恒有**，人卡上显不显示由 `AVERY_ALLOW_PERSON_SCORING` 在
 `registry.team_cards()` 那一处决定。本模块一次都不读那个开关。
@@ -34,8 +48,9 @@ from __future__ import annotations
 import logging
 
 from .extract import (
-    HeuristicExtractor, PersonEntity, PersonIndex, ProjectEntity, SignalEntity,
-    _person_key, _project_key, _slug, doc_key_of, merge_person_reading,
+    PersonEntity, PersonIndex, PersonSelfReport, ProjectEntity, SignalEntity,
+    _project_key, _slug, doc_key_of, merge_person_reading,
+    read_selfreport_load, read_selfreport_mood,
 )
 from .form import FormSubmission, FormTemplate, answers_by_field
 from .parse import ParsedDoc
@@ -56,29 +71,90 @@ MAX_BLOCKERS = 6
 FORM_PROVENANCE_ORIGIN = "form"
 
 
-def stub_person_from_submission(doc: ParsedDoc,
-                                submission: FormSubmission) -> PersonEntity | None:
-    """从渲染出来的文档里读出**这位提交人**的自述槽；读不到就 None。
+def _backed_by_the_document(doc: ParsedDoc, line_no: int | None, *pieces: str) -> bool:
+    """取证闸 —— 这条读数指着的那一行，必须真的把每一块原文都写着。
 
-    读的是解析层（`_selfreport_from_lines`），不是答案字典 —— 这一点是刻意的：人卡上的数字与
-    上传一份周报读出来的数字，走的必须是同一段代码、同一套越界即拒/词表外走 other 的判据。
-    自己从 `answers` 里搭一个 `SelfReportLoad`，等于给人身数字开第二条通道。
-
-    身份锁见文件头命门②：解析出多少行自述都不管，只认名字等于这条链主人的那一行。
+    0807 HITL 给 LLM 抽取补的是同一道闸（`llm_extract._self_report_backing_line`）：一条人身
+    读数如果在文档里找不到撑着它的那行原文，它就是凭空出现的，出处再漂亮也是假的。表单这条路
+    上今天由渲染器自己交行号、结构上不会错——但**判据不能建立在「今天的渲染器不会错」上**：
+    渲染器与回流是两段可以各自改的代码，这道闸就是它们之间那份可执行的合同。找不到 → 丢读数。
     """
-    parsed = HeuristicExtractor()._selfreport_from_lines(doc).people
-    mine = _person_key(submission.person_name)
-    for p in parsed:
-        if _person_key(p.name) != mine:
-            log.warning(
-                "form %s rendered a self-report line for %r, which is not this link's owner (%r) — "
-                "dropped; only the submitter may self-report on her own form",
-                submission.id, p.name, submission.person_name)
+    if line_no is None or line_no < 1 or line_no > len(doc.lines):
+        return False
+    line = doc.lines[line_no - 1]
+    return all(piece and piece in line for piece in pieces)
+
+
+def stub_person_from_submission(doc: ParsedDoc, template: FormTemplate,
+                                submission: FormSubmission,
+                                answer_lines: dict[str, int]) -> PersonEntity | None:
+    """读出**这位提交人**的自述槽；一格都没标记 / 读不出值 → None。
+
+    🔴 gap2 T11 —— 哪一格是自述，由 `FormField.self_report` 这个**结构化标记**说了算。
+    改这条腿之前是拿正则去认渲染出来那行里带「自述」二字的 label（`_selfreport_from_lines`），
+    于是经理把题面从「负载自述」改成「这一周有多忙」，回流就静默失灵；反过来，一个从没打算
+    上卡的数字题只要被起名叫「产能自述」，那个数就会爬上人卡。拼装器让经理能随手改题面，
+    那条腿必须先变成结构化的。正则老路一字未改，**只**留给「上传的 06 表」那条路——客户手写的
+    周报里没有字段描述可读，只能认文案。
+
+    命门① 仍然成立，只是收窄到它真正说的那件事上：**值的判据只能有一把尺**。这里读的是
+    `extract.read_selfreport_load` / `read_selfreport_mood`，与上传那条路同一段代码、同一套
+    「越界即拒不 clamp」「词表外走 other 并逐字回显」。自己在这儿写一个 `int(...)` 才是开第二
+    条通道；改的只是「哪一格」的识别方式，不是「读出什么」的判据。
+
+    命门②（模仿攻击）由此**变强而不是变弱**：姓名与工号都取自 `submission` 的结构化字段，
+    答案取自 `answers` 里那个 field.id ——员工在自由文本里写什么都造不出一格带标记的字段。
+    T2 的竖线转义那道锁照旧在（自述行的分隔符只能由渲染器放），两把锁仍然互相独立。
+    """
+    marked = {f.self_report: f for f in template.fields if f.self_report}
+    if not marked:
+        return None
+    by_field = answers_by_field(submission)
+    load = mood = None
+    for slot, f in marked.items():
+        if f.id not in by_field:
             continue
-        # 工号来自结构化字段，不来自文档文本（命门②）。
-        p.person_id = (submission.person_id or "").strip()
-        return p
-    return None
+        raw = by_field[f.id]
+        src = f"{doc.name}:{answer_lines.get(f.id, 0)}"
+        reading = (read_selfreport_load(raw, src) if slot == "load"
+                   else read_selfreport_mood(raw, src) if slot == "mood" else None)
+        if reading is None:
+            continue
+        # 取证闸：出处那一行必须同时写着这个人的名字、这一格的题面和这个值的原文。
+        if not _backed_by_the_document(doc, answer_lines.get(f.id),
+                                       submission.person_name, f.label, str(raw)):
+            log.warning(
+                "form %s: the %s reading has no line in the filed document backing it — dropped; "
+                "a card reading without a line of its own document behind it is not evidence",
+                submission.id, slot)
+            continue
+        if slot == "load":
+            load = reading
+        else:
+            mood = reading
+    if load is None and mood is None:
+        return None
+    name = (submission.person_name or "").strip()
+    return PersonEntity(
+        id=_slug(name, "u"), name=name,
+        person_id=(submission.person_id or "").strip(),
+        self_report=PersonSelfReport(load=load, mood=mood),
+        source=f"{doc.name}:{answer_lines.get(next(iter(marked.values())).id, 1)}")
+
+
+def identity_stub_from_submission(doc: ParsedDoc,
+                                  submission: FormSubmission) -> PersonEntity:
+    """只有身份、没有任何读数的一个人。
+
+    gap2 T11 —— 情境信号要挂上卡就需要一个人卡 id，而在拼装器之前「有没有人卡 id」和「有没有
+    自述读数」是同一件事（内置周报恒带 load/mood 两格）。经理现在能建一张**全是自由文本**的表，
+    那种表一条自述都没有却照样该出情境信号。所以身份与读数在这里分成两段：这个函数只回答
+    「这份表是谁交的」。
+    """
+    name = (submission.person_name or "").strip()
+    return PersonEntity(id=_slug(name, "u"), name=name,
+                        person_id=(submission.person_id or "").strip(),
+                        source=f"{doc.name}:1")
 
 
 def _first_line(text: object) -> str:
@@ -87,6 +163,17 @@ def _first_line(text: object) -> str:
         if line:
             return line
     return ""
+
+
+def situational_fields(template: FormTemplate, by_field: dict) -> list:
+    """标了「这题写的是处境」、且这次真答了的那几格。
+
+    ⚠ 这一行判据从前被逐字抄了两份（信号一份、项目卡阻塞句一份）。两份产出用的是同一句话、
+    同一把长度尺，判据当然也只能有一把——抄两份的时候，改一处就会变成「信号出了、阻塞句没出」，
+    而两条门是各自独立的用例，谁都不会红。
+    """
+    return [f for f in template.fields
+            if f.situational and f.kind == "text" and f.id in by_field]
 
 
 def _signal_survives_the_red_line(sig: SignalEntity) -> bool:
@@ -116,9 +203,7 @@ def signals_from_submission(template: FormTemplate, submission: FormSubmission,
     """
     by_field = answers_by_field(submission)
     out: list[SignalEntity] = []
-    for f in template.fields:
-        if not getattr(f, "situational", False) or f.kind != "text" or f.id not in by_field:
-            continue
+    for f in situational_fields(template, by_field):
         summary = _first_line(by_field[f.id])
         if not (SIGNAL_MIN_CHARS <= len(summary) <= SIGNAL_MAX_CHARS):
             continue
@@ -146,9 +231,7 @@ def blockers_from_submission(template: FormTemplate,
     """
     by_field = answers_by_field(submission)
     out: list[str] = []
-    for f in template.fields:
-        if not getattr(f, "situational", False) or f.kind != "text" or f.id not in by_field:
-            continue
+    for f in situational_fields(template, by_field):
         line = _first_line(by_field[f.id])
         if SIGNAL_MIN_CHARS <= len(line) <= SIGNAL_MAX_CHARS:
             out.append(line)
@@ -220,15 +303,17 @@ def reflow_submission(ctx, template: FormTemplate, submission: FormSubmission,
       · 在 `validate_extraction` **之前** —— 新写进去的东西要接受与既有实体同一道门的检查；
       · 在 `materialize_memory` 之前 —— 信号要进 notes.md，议事室当天引得到。
     """
-    stub = stub_person_from_submission(doc, submission)
     outcome = {"person_id": "", "self_report": False, "signals": 0,
                "blockers": 0, "refreshed": [], "skipped": ""}
-    if stub is None:
-        # 提交里没有可读的自述（模板没有 number/choice 格、或者姓名解析层不认），人卡这一半就
-        # 没有落点。信号仍然可以出——但它需要一个人卡 id 才挂得上，所以这里一起收手，并留一行日志。
-        log.info("form %s produced no readable self-report line — nothing reflows onto a person card",
+    # gap2 T11 —— 身份与读数分两段读。拼装器之前这两件事恒是同一件（内置周报总带 load/mood
+    # 两格，读不出自述就等于连人都认不出），于是「没有自述」就把信号也一起收了手。经理现在能
+    # 建一张**全是自由文本**的表：那种表一条自述都没有，情境信号却照样该长出来。
+    stub = (stub_person_from_submission(doc, template, submission, answer_lines)
+            or identity_stub_from_submission(doc, submission))
+    if not stub.name:
+        log.info("form %s carries no person name — nothing reflows onto a person card",
                  submission.id)
-        outcome["skipped"] = "no-self-report-line"
+        outcome["skipped"] = "no-person-name"
         return outcome
 
     index = PersonIndex(ctx.extraction.people)
@@ -243,7 +328,10 @@ def reflow_submission(ctx, template: FormTemplate, submission: FormSubmission,
         return outcome
 
     incumbent = index.slots.get(index.resolve(stub))
-    if incumbent is not None:
+    # 🔴 只有这次**真带来了读数**才腾旧槽。gap2 T11 之前这里恒真（走到这一步就说明读出了自述），
+    # 现在一张全是自由文本的表也会走到这儿——那种提交对负载/情绪一个字都没说，把卡上原有的
+    # 读数腾空就是拿「没提到」当「已归零」（absent≠none 在这一格的样子）。
+    if incumbent is not None and stub.self_report is not None:
         outcome["refreshed"] = clear_stale_self_report(
             incumbent, ctx.source_documents, submission.submitted_at)
     person = merge_person_reading(ctx.extraction.people, stub)

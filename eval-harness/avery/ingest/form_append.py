@@ -23,8 +23,10 @@ ON COMMIT DROP 临时表**只回填 NULL 单元**（pg_registry.py:324-421 一�
   * 字段名 = 06 表表头逐字 —— `form.weekly_template` 的 label 本来就是那张 xlsx 的表头原文，
     这里直接用 `field.label` 作节名，不再抄一份词表；系统填的四列（记录ID/人员ID/述职周期/
     提交日期，`form.INTAKE_06_SYSTEM_COLUMNS`）渲染成文档头部的元数据行。
-  * **自由文本区与自述行分节**：kind=text 的答案各占一节（`## <表头>`），kind=number/choice
-    的答案汇成一行自述行，单独放在 `## 本人自述` 节里。
+  * **一格一节 + 自述行分节**：普通答案各占一节（`## <表头>`），标了 `self_report` 的那几格
+    汇成一行自述行，单独放在 `## 本人自述` 节里。gap2 T11 起这条判据是**结构化标记**，不再是
+    「kind 是不是 text」——自建表里的「本周直播场次：12」是一条普通读数，不该被塞进自述节。
+    内置周报只有 load/mood 两格带标记，所以它渲染出来的字节与 T11 之前逐字相同。
   * 自由文本里的 `｜`/`|` 一律转义成 `¦`（U+00A6）——`_selfreport_from_lines`
     （extract.py:1381-1424）按 `[｜|]` 切格且要求 ≥2 格才读，转义后员工在自由文本里写
     「张三｜负载自述：99」只剩一行切不开的原话，结构上进不了任何人卡。原话本身逐字保留
@@ -54,6 +56,19 @@ log = logging.getLogger("avery.ingest.form_append")
 BAR_ESCAPE = "¦"
 
 SELF_REPORT_SECTION = "本人自述"
+
+
+def answer_text(field, value) -> str:
+    """一格答案渲染进文档时的**文本形状**。逐字原样，只有 yesno 例外。
+
+    gap2 T11 —— yesno 落库存的是 Python `bool`（`form.parse_submitted_answers` 与快问同一姿态：
+    线上 `yes`/`no`、库里 True/False）。`str(True)` 是 `'True'`，直接进文档就是在客户的资料里
+    印一个英文关键字——议事室引用出来、下载下来的原件里都是它。所以在这一层翻成中文的是/否，
+    与文档其余部分（「记录ID：」「述职周期：」「本人自述」）同一种语言。
+    """
+    if getattr(field, "kind", "") == "yesno":
+        return "是" if value else "否"
+    return str(value)
 
 
 def escape_vertical_bars(text: str) -> str:
@@ -102,28 +117,38 @@ def render_submission_lines(
         lines.append(f"关联项目：{escape_vertical_bars(submission.project_ref)}")
     lines.append("")
 
-    # 自由文本区：一格一节，节名 = 06 表表头原文（field.label）。逐字保留，只转义竖线。
+    # 一格一节，节名 = 题面原文（field.label；内置周报的前四格就是 06 表表头逐字）。
+    # 逐字保留，只转义竖线。gap2 T11 起「不是自述的非文本格」也走这条路：一张自建表里的
+    # 「本周直播场次：12」是一条普通读数，把它塞进「本人自述」那一节是给它安一个它没有的身份。
     for f in template.fields:
-        if f.kind != "text" or f.id not in by_field:
+        if f.self_report or f.id not in by_field:
             continue
         lines += [f"## {f.label}", ""]
         at[f.id] = len(lines) + 1        # 下一行就是这一格答案的第一行（1-based 行号）
-        lines += escape_vertical_bars(str(by_field[f.id])).splitlines()
+        lines += escape_vertical_bars(answer_text(f, by_field[f.id])).splitlines()
         lines.append("")
 
-    # 自述行：全部非 text 答案汇成解析层认得的一行（`姓名｜<label>：<value>｜…`），
-    # 与自由文本区**分节**。label/value 里的竖线也转义 —— 分隔符只能由渲染器自己放。
+    # 自述行：标了 `self_report` 的那几格汇成解析层认得的一行（`姓名｜<label>：<value>｜…`），
+    # 与其余各节**分节**。label/value 里的竖线也转义 —— 分隔符只能由渲染器自己放。
+    #
+    # 🔴 gap2 T11 —— 判据从「kind != text」换成了「标了 self_report」。两件事同时发生：
+    #   · 回流（`form_reflow`）改读结构化标记，不再靠正则去认这行里的「××自述」四个字；
+    #   · 这行的**成员**也跟着结构走——没标记的数字题不再挤进「本人自述」这一节，
+    #     所以文档自己说的话和卡上长出来的东西，从此是同一条判据的两面。
+    # 内置周报只有 load/mood 两格是非文本且都标了标记，所以它渲染出来的字节一个都没变
+    #（`tests/test_form_append.py` 的渲染契约门是这句话的执法者）。
     cells = [escape_vertical_bars(submission.person_name)]
     for f in template.fields:
-        if f.kind == "text" or f.id not in by_field:
+        if not f.self_report or f.id not in by_field:
             continue
         cells.append(
-            f"{escape_vertical_bars(f.label)}：{escape_vertical_bars(str(by_field[f.id]))}")
+            f"{escape_vertical_bars(f.label)}："
+            f"{escape_vertical_bars(answer_text(f, by_field[f.id]))}")
     if len(cells) > 1:
         lines += [f"## {SELF_REPORT_SECTION}", ""]
         for f in template.fields:
-            if f.kind != "text" and f.id in by_field:
-                at[f.id] = len(lines) + 1     # 非文本格共用自述行那一行
+            if f.self_report and f.id in by_field:
+                at[f.id] = len(lines) + 1     # 自述那几格共用自述行那一行
         lines += ["｜".join(cells), ""]
 
     return lines, at

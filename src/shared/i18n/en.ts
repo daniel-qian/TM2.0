@@ -618,6 +618,96 @@ export const en = {
     formsErrorRetired: 'This form has been retired, so no new links go out.',
     formsErrorFailed: 'The links could not be made just now. Try again in a moment.',
 
+    // ── gap2 T11 · the form builder (build/edit a form, let Avery draft one from an old sheet) ──
+    // ⚠ HAND-WRITTEN. Word family locked to the one this section already uses: 「表单 / form」,
+    // never 问卷 / 表格 / 打卡 / survey / questionnaire.
+    // 🔴 The three switches must say WHERE an answer goes. A question with no switch ticked still
+    // lands in the records verbatim (searchable, quotable in the room) — it just does not grow a
+    // card. Never imply "add a field and a card appears".
+    // 🔴 Never write copy that rates a person. The write-side door refuses to store a scoring
+    // form at all, so any wording that invites one is a promise the product breaks.
+    // 🔴 Only interface chrome lives here. A manager's own title / question / hint / options are
+    // the customer's content — same tier as a filename — and never enter this dictionary.
+    formsBuilderNew: 'Build a form',
+    formsBuilderCopy: 'Start from “{title}”',
+    formsBuilderEdit: 'Edit “{title}”',
+    formsBuilderEditing: 'Editing “{title}”',
+    formsBuilderNewTitle: 'A new form',
+    formsBuilderDraft: 'Let Avery read one of your old sheets',
+    formsBuilderDraftBusy: 'Reading…',
+    formsBuilderDraftHint:
+      'Pick a file you have already uploaded. Avery turns its column headings into questions — nothing is saved until you say so.',
+    formsBuilderDraftFromLlm: 'Drafted from {filename}. Read it over before you save.',
+    // Honest degradation: when the model did not take part, do not say Avery "read" the sheet.
+    formsBuilderDraftFromHeadings:
+      'Taken from the column headings of {filename} — Avery did not interpret them.',
+    formsBuilderDraftReview:
+      'These questions are a proposal. Nothing goes out until you save the form and make links.',
+    formsBuilderTitleLabel: 'Form name',
+    formsBuilderQuestionN: 'Question {n}',
+    formsBuilderKind: 'Answer type',
+    formsBuilderKindText: 'In their own words',
+    formsBuilderKindChoice: 'Pick one option',
+    formsBuilderKindNumber: 'A number',
+    formsBuilderKindYesno: 'Yes or no',
+    formsBuilderRequired: 'Must be answered',
+    formsBuilderChoices: 'Options',
+    formsBuilderChoiceN: 'Option {n}',
+    formsBuilderAddChoice: 'Add an option',
+    formsBuilderDropChoice: 'Remove',
+    formsBuilderMin: 'Lowest',
+    formsBuilderMax: 'Highest',
+    formsBuilderHelp: 'A line of guidance under the question',
+    formsBuilderSwitchSituational: 'This one asks what got in the way',
+    formsBuilderSwitchLoad: 'This one is how busy they felt',
+    formsBuilderSwitchMood: 'This one is how they felt',
+    formsBuilderGoesToCard:
+      'This answer also shows on the person card, with a link back to what they wrote.',
+    formsBuilderGoesToLibrary:
+      'This answer goes into your records only — searchable and quotable, but not on any card.',
+    formsBuilderRetire: 'Stop asking this one',
+    // The one sentence that explains why there is no delete button here.
+    formsBuilderLockedHint:
+      'Someone has already answered this one, so it stays on the form — that is what keeps their answer readable.',
+    formsBuilderDropField: 'Remove',
+    formsBuilderAddField: 'Add a question',
+    formsBuilderCount: '{asked} of {max} questions',
+    formsBuilderRetireForm: 'Retire this form',
+    formsBuilderRetireFormHint:
+      'A retired form sends no new links. Everything already sent in stays in your records.',
+    formsBuilderSave: 'Save this form',
+    formsBuilderSaveBusy: 'Saving…',
+    formsBuilderCancel: 'Cancel',
+    // 🔴 A separate error family from formsError*: the same 422 means something completely
+    // different here, and 'Send to between one and thirty people' after a failed save is a lie.
+    formsBuilderErrorRejected: 'Avery would not store this form. What it said:',
+    formsBuilderErrorUnavailable: 'Building forms needs a live connection to your workspace.',
+    formsBuilderErrorUnreadable: 'That file could not be read, so there is nothing to draft from.',
+    formsBuilderErrorFailed: 'This did not save just now. Try again in a moment.',
+
+    // The shape mirror (formShape.ts). Each one names the question by its NUMBER — the same
+    // number shown on that question in the editor. Field ids like `q3` are internal keys the
+    // manager has never seen; pointing at one is not pointing at anything.
+    formsIssueTitleMissing: 'The form needs a name.',
+    formsIssueTitleTooLong: 'The form name is longer than {max} characters.',
+    formsIssueNoQuestions: 'A form asks at least one question.',
+    formsIssueTooManyQuestions: 'A form asks up to {max} questions — this one asks {got}.',
+    formsIssueTooManyStored: 'This form is carrying more than {max} questions including retired ones.',
+    formsIssueDuplicateId: 'Question {at} shares its key with an earlier one.',
+    formsIssueLabelMissing: 'Question {at} has no question in it yet.',
+    formsIssueLabelTooLong: 'Question {at} is longer than {max} characters.',
+    formsIssueHelpTooLong: 'The guidance under question {at} is longer than {max} characters.',
+    formsIssueChoiceCount: 'Question {at} offers {min} to {max} options — it has {got}.',
+    formsIssueChoiceEmpty: 'Question {at} has an empty option.',
+    formsIssueChoiceTooLong: 'An option on question {at} is longer than {max} characters.',
+    formsIssueChoiceDuplicate: 'Question {at} repeats an option.',
+    formsIssueNumberRange: 'Question {at} needs a lowest below its highest, within {floor}–{ceil}.',
+    formsIssueSituationalKind: 'Only a question answered in their own words can be about what got in the way — question {at} is not.',
+    formsIssueLoadKind: 'How busy they felt is a number — question {at} is not.',
+    formsIssueLoadRange: 'How busy they felt reads as a percentage, so question {at} has to run 0 to 100.',
+    formsIssueMoodKind: 'How they felt is one of a few words to pick from — question {at} is not.',
+    formsIssueSlotTaken: 'Questions {other} and {at} both claim the same slot on the person card.',
+
     // ── files-hub-0729/03 · team screen goes file-free, entry points get laid ────────────────
     // The team screen used to carry the upload panel in BOTH states. Danny's ruling: 「团队和
     // 项目应该只分析团队和项目」. Its empty state becomes a pointer instead of a second upload

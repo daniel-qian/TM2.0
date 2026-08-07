@@ -32,9 +32,26 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 
 # ── 服务端拥有的词表与上限（前端/H5 只照做，服务端才是定义方）────────────────────────────────
-FIELD_KINDS = ("text", "choice", "number")
+# gap2 T11 —— `yesno` 是第四种控件，仿快问的姊妹实现（`avery.ingest.ask.QUESTION_KINDS`）：
+# 线上值恒是 `yes`/`no` 两个 ASCII 词，存进 answers 的是 **bool**（`ask_api.py:608` 同一姿态），
+# 员工眼前的「是 / 否」只是那一层的本地化文案。为什么不存成 choices=['是','否'] 的 choice：
+# 那样一张表的「是」在中文壳和英文壳里就是两个不同的答案值，跨期对比会当成两个词。
+FIELD_KINDS = ("text", "choice", "number", "yesno")
 
-MAX_FIELDS = 12                 # 一张常驻表单不是问卷系统
+# 「1~5 分」不是新 kind —— 它就是 number 把 min/max 收窄（`validate_template_shape` 今天就放行）。
+# 档数 ≤ 这个数时 H5 渲染成一排按钮（复用 `.h5-scale`，快问的 1..5 就长这样），再宽才给滑杆。
+# 为什么按钮更好：滑杆**恒有值**（HTML range 没有「没选」这个态），一格 required=False 的滑杆
+# 照样会交上来一个数；按钮组有真的未选态，`parse_submitted_answers` 的 absent≠none 才成立。
+SCALE_MAX_STEPS = 5
+
+# yesno 线上的两个值。**ASCII 且与页面语言无关**——员工眼前的「是 / 否」只是 `_COPY` 里那层文案，
+# 提交上来的恒是这两个词，落库折成 bool（`ask_api.py:606-608` 同一姿态）。
+YESNO_VALUES = ("yes", "no")
+
+MAX_FIELDS = 12                 # 一张常驻表单不是问卷系统（**在问的**格数，停用的不算）
+# 停用的格留在模板里（答案按 field.id 落，删了老答案就对不上号——form_api.py 的设计边界），
+# 所以「存着几格」比「在问几格」宽。上界仍要有：一张只增不减的表迟早撑爆一行 JSONB。
+MAX_STORED_FIELDS = MAX_FIELDS * 2
 MAX_CHOICES = 8
 MAX_TITLE_CHARS = 120
 MAX_LABEL_CHARS = 120
@@ -46,12 +63,19 @@ NUMBER_MIN_FLOOR, NUMBER_MAX_CEIL = 0, 100
 
 EXPIRY_DAYS = 7                 # 拍板 #4：单人单链 + 7 天过期
 
+# gap2 T11 · 自述标记 —— 人卡上那两个人身自述子槽（`extract.PersonSelfReport`）的**结构化**入口。
+# `''` = 这一格的答案只进资料库那份提交文档（可检索、议事室引得到），不上任何卡。
+SELF_REPORT_SLOTS = ("", "load", "mood")
+# 负载读数在人卡上按**百分比**渲染（`extract.SelfReportLoad` 是 0..100），所以标了 load 的那一格
+# 必须真是 0..100 的 number。允许一格 1..5 的「分」挂上 load，等于让卡上出现「自述负载 3%」。
+LOAD_SELF_REPORT_RANGE = (NUMBER_MIN_FLOOR, NUMBER_MAX_CEIL)
+
 
 @dataclass
 class FormField:
     """一格。`kind` 决定它怎么渲染、怎么校验——渲染层与校验层都按 kind 查表，不认字段名。"""
     id: str                              # ASCII 稳定键（答案按它落，改 label 不动答案）
-    kind: str                            # 'text' | 'choice' | 'number'
+    kind: str                            # 'text' | 'choice' | 'number' | 'yesno'
     label: str                           # 员工看到的题面（过红线门）
     help: str = ""                       # 题面下的一行说明（过红线门）
     required: bool = True
@@ -67,6 +91,24 @@ class FormField:
     # 模板是可编辑的（`POST /team/{ctx}/forms`），按 id 写死意味着经理一改题面，回流就静默失灵。
     # 与 kind 同一条纪律——渲染层/校验层/回流层都读字段描述，谁都不认字段名（T1 文件头）。
     situational: bool = False
+    # gap2 T11 —— 这一格的答案是**本人自述**，回流成人卡上那两个自述子槽之一：
+    #   'load' → `SelfReportLoad`（0..100 的数）· 'mood' → `SelfReportMood`（情绪枚举）· '' → 不上卡。
+    #
+    # 🔴 为什么是标记而不是认 label 文案（这一格是本票要修的隐患）：改这条腿之前，
+    # 回流靠 `_selfreport_from_lines` 的正则去认渲染出来那行里带「自述」二字的 label
+    # （extract.py:1419-1462）——**认文案不认结构**。于是经理把题面从「负载自述」改成
+    # 「这一周有多忙」，回流就静默失灵：资料照进、卡上什么都不长，而且不报错。
+    # 反过来，一个从没打算上卡的数字题只要被起名叫「产能自述」，那个数就会爬上人卡。
+    # 拼装器（本票）让经理能随手改题面，那条腿必须先变成结构化的，否则第一天就断。
+    # 正则老路**只**留给「上传的 06 表」那条路：客户手写的周报里没有字段描述可读，
+    # 只能认文案（`_selfreport_from_lines` 一字未改）。
+    self_report: str = ""
+    # gap2 T11 —— 停用：这一格不再问了，但**留在模板里**。
+    # 为什么不能直接删：答案是按 `field.id` 落的，删了这一格，去年那些提交的答案就对不上号
+    # （form_api.py 的设计边界）。所以生命周期是「加题 / 停用」，不是「加题 / 删题」。
+    # 停用的格：员工页不渲染、提交解析不要它的答案、回流不读它——但历史提交里那一格的答案
+    # 照旧在资料库里逐字躺着，议事室照旧引得到。
+    retired: bool = False
 
 
 @dataclass
@@ -177,7 +219,7 @@ def gate_form_red_line(template: FormTemplate) -> None:
 
     every_text = outbound + [template.id, template.context_id]
     for f in template.fields:
-        every_text += [f.id, f.kind]
+        every_text += [f.id, f.kind, f.self_report]
     if any("\x00" in (t or "") for t in every_text):
         raise ValueError(
             "unsupported control character (NUL / 0x00) in a form template — cannot be stored")
@@ -196,18 +238,35 @@ def gate_submission_storage_safety(sub: FormSubmission) -> None:
             "unsupported control character (NUL / 0x00) in a form submission — cannot be stored")
 
 
+def live_fields(t: FormTemplate) -> list:
+    """还在问的那几格（停用的不算）。渲染层 / 解析层 / 回流层 / 上限判据共用这一把尺——
+    每一处各自写 `if not f.retired` 是四把会各自漂的尺子。"""
+    return [f for f in t.fields if not f.retired]
+
+
 def validate_template_shape(t: FormTemplate) -> str | None:
     """结构校验（服务端是最后一道门）。返回人话原因或 None。不是红线关切——只是「坏形状永不落库」。"""
     if not (t.title or "").strip():
         return "a form needs a title"
     if len(t.title) > MAX_TITLE_CHARS:
         return f"a form title longer than {MAX_TITLE_CHARS} characters"
-    if not (1 <= len(t.fields) <= MAX_FIELDS):
-        return f"a form carries 1 to {MAX_FIELDS} fields (got {len(t.fields)})"
+    asked = live_fields(t)
+    if not (1 <= len(asked) <= MAX_FIELDS):
+        return (f"a form asks 1 to {MAX_FIELDS} questions "
+                f"(got {len(asked)}, not counting retired ones)")
+    if len(t.fields) > MAX_STORED_FIELDS:
+        return (f"a form carries at most {MAX_STORED_FIELDS} fields including retired ones "
+                f"(got {len(t.fields)})")
+    # 一个槽只能有一格认领。两格都标 'load' 时「哪个数上卡」没有正确答案——挑一个就是掷硬币，
+    # 两个都写等于后写的悄悄盖掉先写的。宁可在这里 422。
+    claimed: dict[str, str] = {}
     seen: set[str] = set()
     for f in t.fields:
         if f.kind not in FIELD_KINDS:
             return f"unknown field kind {f.kind!r} (allowed: {', '.join(FIELD_KINDS)})"
+        if f.self_report not in SELF_REPORT_SLOTS:
+            return (f"unknown self-report slot {f.self_report!r} "
+                    f"(allowed: {', '.join(repr(s) for s in SELF_REPORT_SLOTS)})")
         if not (f.id or "").strip():
             return "a field with an empty id"
         if f.id in seen:
@@ -236,7 +295,77 @@ def validate_template_shape(t: FormTemplate) -> str | None:
             if not (NUMBER_MIN_FLOOR <= f.min < f.max <= NUMBER_MAX_CEIL):
                 return (f"number field {f.id!r} needs {NUMBER_MIN_FLOOR} <= min < max <= "
                         f"{NUMBER_MAX_CEIL} (got {f.min}..{f.max})")
+        # ── gap2 T11 · 三个语义开关各自的落点判据 ───────────────────────────────────────────
+        # 每一条防的都是同一件事：**开关标了、回流那一层却读不到**，界面上却像标成功了。
+        # 静默失灵是这一族最贵的失败——经理以为卡会长出来，卡什么都不长，而且不报错。
+        if f.situational and f.kind != "text":
+            # `form_reflow.signals_from_submission` 只从 kind='text' 的格里取情境原句
+            #（一句情境陈述是一段话，不是一个数、不是一个选项）。标在别的 kind 上是死开关。
+            return (f"field {f.id!r} is {f.kind}, not text — only a free-text answer can be "
+                    "marked as a situational statement")
+        if f.self_report:
+            if f.self_report in claimed:
+                return (f"fields {claimed[f.self_report]!r} and {f.id!r} both claim the "
+                        f"{f.self_report!r} self-report slot — a person card holds one of each")
+            claimed[f.self_report] = f.id
+        if f.self_report == "load":
+            lo, hi = LOAD_SELF_REPORT_RANGE
+            if f.kind != "number":
+                return (f"field {f.id!r} is {f.kind}, not number — a load self-report is a "
+                        f"number {lo}..{hi}")
+            if (f.min, f.max) != (lo, hi):
+                # 人卡把这个读数当**百分比**渲染。一格 1..5 的「分」挂上 load，卡上会印出
+                # 「自述负载 3%」——一个谁都没说过的数。
+                return (f"a load self-report reads {lo}..{hi} on the card — field {f.id!r} "
+                        f"is {f.min}..{f.max}")
+        if f.self_report == "mood" and f.kind != "choice":
+            # 情绪是定性的（`_MOOD_SELFREPORT_MAP` 三个桶 + 词表外逐字留 other），不是数。
+            return (f"field {f.id!r} is {f.kind}, not choice — a mood self-report is one of "
+                    "a few words, never a number")
     return None
+
+
+def gate_used_fields(stored: FormTemplate | None, incoming: FormTemplate,
+                     used_ids: set[str]) -> str | None:
+    """🔴 gap2 T11 —— 改一张**已经有人交过**的表时，被引用过的 `field.id` 禁改禁删。
+
+    答案是按 `field.id` 落的、而且 `form_templates` 没有版本列（回流读的永远是**当时最新**那张
+    模板，form_api.py:522/554）。所以：
+      * 删掉一个被引用过的 id → 去年那份提交里的那格答案再也说不出自己在回答什么问题；
+      * 把它的 kind 从 number 改成 choice → 同一个格里躺着的 `85` 会被当成一个选项文本。
+    两种都不是「后果自负的编辑」，是**静默篡改历史**——所以这道门在服务端，不只在界面上。
+
+    允许的：改 label / help / required / choices / min / max（答案不按这些落）、加新题、
+    **停用**（`retired=True`，id 还在，历史答案仍对得上号）、撤下整张表（`active=False`）。
+
+    `used_ids` 由调用方从这张模板**已提交**的答案里取（form_api.save_form）。
+    `stored is None` = 这是一张新表，没有历史可篡改。
+    """
+    if stored is None or not used_ids:
+        return None
+    incoming_kind = {f.id: f.kind for f in incoming.fields}
+    stored_kind = {f.id: f.kind for f in stored.fields}
+    dropped = sorted(i for i in used_ids if i not in incoming_kind)
+    if dropped:
+        return ("someone has already answered " + ", ".join(repr(i) for i in dropped) +
+                " — those questions can be retired but not deleted, or the answers already "
+                "filed stop saying what they answered")
+    retyped = sorted(i for i in used_ids
+                     if i in stored_kind and incoming_kind[i] != stored_kind[i])
+    if retyped:
+        return ("someone has already answered " + ", ".join(repr(i) for i in retyped) +
+                " — the answer type cannot change under a filed answer")
+    return None
+
+
+def answered_field_ids(submissions) -> set[str]:
+    """这些提交的答案落在了哪些 `field.id` 上。`gate_used_fields` 的输入。"""
+    used: set[str] = set()
+    for sub in submissions or []:
+        for a in (getattr(sub, "answers", None) or []):
+            if isinstance(a, dict) and a.get("field_id"):
+                used.add(str(a["field_id"]))
+    return used
 
 
 # ── 答案校验：按 kind 查表，与渲染层同一张字段描述 ────────────────────────────────────────────
@@ -251,16 +380,22 @@ def _clean_free_text(raw: str | None) -> str:
 def parse_submitted_answers(template: FormTemplate, get) -> tuple[list[dict] | None, str | None]:
     """把一次 POST 的表单体变成 `[{field_id, value}]`，或给出拒绝原因（→ 422）。
 
-    `get(field_id) -> str | None` 是取值函数（HTTP 层传 `form.get`）。三种 kind 各有各的判据：
+    `get(field_id) -> str | None` 是取值函数（HTTP 层传 `form.get`）。四种 kind 各有各的判据：
       * text   —— 必填时不许空白；有界；C0 剥净；其余逐字；
       * choice —— 值必须**恰好**是这一格给出的选项之一（不是「像」某个选项）；
       * number —— `isdecimal()`（不是 `isdigit()`：`²`/`①` 会让 `isdigit()` 为真而 `int()` 炸，
-                  ask 侧 F-1 对抗性发现的同一个坑）且落在 [min, max] 内。
+                  ask 侧 F-1 对抗性发现的同一个坑）且落在 [min, max] 内；
+      * yesno  —— 线上只认 `yes`/`no` 两个 ASCII 词，落库存 **bool**（`ask_api.py:606-608`
+                  逐字同一条）。存 bool 不存文案：同一张表在中文壳和英文壳上答的「是」，
+                  跨期对比时必须是同一个值。
 
     可选（`required=False`）且留空的格：**不产出条目**（absent ≠ 空字符串 —— 前端/T2 渲染时
-    「这一格他没写」和「他写了个空」不是一回事，别在这里折成同一个）。"""
+    「这一格他没写」和「他写了个空」不是一回事，别在这里折成同一个）。
+
+    停用的格（`retired=True`）压根不问，所以也不收它的答案 —— 员工页没渲染它，POST 体里
+    出现同名键只可能是有人手搓的（`live_fields` 是渲染层与这里共用的同一把尺）。"""
     answers: list[dict] = []
-    for f in template.fields:
+    for f in live_fields(template):
         raw = get(f"f_{f.id}")
         raw = "" if raw is None else str(raw)
         if f.kind == "text":
@@ -279,6 +414,15 @@ def parse_submitted_answers(template: FormTemplate, get) -> tuple[list[dict] | N
             if picked not in f.choices:
                 return None, f"field {f.id} got an option that is not on the form"
             answers.append({"field_id": f.id, "value": picked})
+        elif f.kind == "yesno":
+            picked = raw.strip()
+            if not picked:
+                if f.required:
+                    return None, f"field {f.id} needs a yes or a no"
+                continue
+            if picked not in YESNO_VALUES:
+                return None, f"field {f.id} needs a yes or a no"
+            answers.append({"field_id": f.id, "value": picked == "yes"})
         else:  # number
             token = raw.strip()
             if not token:
@@ -364,17 +508,50 @@ def weekly_template(context_id: str, *, created_at: str = "") -> FormTemplate:
                      "经理才知道该在哪儿使劲。"),
             FormField(
                 id="load", kind="number", label="负载自述", required=True, min=0, max=100,
+                self_report="load",
                 help="这一周你自己感觉的忙碌程度：0 是很闲，100 是快扛不住了。"
                      "这是你本人的说法，会标明是你自述的。"),
             FormField(
                 id="mood", kind="choice", label="情绪自述", required=True,
-                choices=["如常", "偏紧", "吃紧"],
+                choices=["如常", "偏紧", "吃紧"], self_report="mood",
                 help="这一周的状态，挑一个最接近的。"),
         ],
     )
 
 
 BUILTIN_TEMPLATE_BUILDERS = (weekly_template,)
+
+
+def backfill_builtin_markers(stored: FormTemplate, fresh: FormTemplate) -> list[str]:
+    """🔴 gap2 T11 · 存量回填 —— 把 `self_report` 标记补到**早就铸在库里**的内置模板上。
+    就地改 `stored`，返回补了哪几格（空 = 什么都没动，调用方据此决定要不要回写）。
+
+    为什么非做不可：`ensure_builtin_templates` 见到 `tpl_weekly` 已存在就原样复用、绝不覆盖
+    （下面那个函数的注释讲了为什么——题面必须被快照住）。于是给内置模板加的新标记**只对
+    从没打开过表单页的新公司生效**；生产上任何点开过一次的 context，库里的 fields 是老快照，
+    标记永远是默认值，本票的新开关在那些公司上静默失灵，而且没有一道门会红。
+
+    🔴 判据是「这一格还没被经理接管」，三条**同时**成立才补：
+      1. 这一格的 id 在内置版里也有，且 kind 一样（不是同名的另一回事）；
+      2. 库里那格还**没有**任何 self_report 标记（有了就是经理自己标的，不许覆盖）；
+      3. label 与内置版**逐字相同**（题面一个字都没改过）。
+
+    第 3 条是这件事能被称为「保持现状」而不是「替经理断言」的全部理由：label 没改过，说明
+    改这条腿之前那格正被老正则（认 label 里的「××自述」）读着——补上标记只是把同一件事从
+    认文案改成认结构，行为一字不变。改过题面的那些格，老正则**本来就已经读不到了**（那正是
+    本票要修的隐患），这里不补 = 保持它们今天的行为，把要不要上卡交回给经理在拼装器里勾。
+    """
+    fresh_by_id = {f.id: f for f in fresh.fields}
+    touched: list[str] = []
+    for f in stored.fields:
+        model = fresh_by_id.get(f.id)
+        if model is None or not model.self_report:
+            continue
+        if f.self_report or f.kind != model.kind or f.label != model.label:
+            continue
+        f.self_report = model.self_report
+        touched.append(f.id)
+    return touched
 
 
 def ensure_builtin_templates(reg, context_id: str) -> list[FormTemplate]:
@@ -389,7 +566,12 @@ def ensure_builtin_templates(reg, context_id: str) -> list[FormTemplate]:
     for build in BUILTIN_TEMPLATE_BUILDERS:
         tpl = build(context_id)
         if tpl.id in existing:
-            minted.append(existing.pop(tpl.id))
+            stored = existing.pop(tpl.id)
+            # 唯一一处允许改动存量内置模板的地方，判据见 `backfill_builtin_markers`：
+            # 只补「经理一个字都没碰过的那几格」的结构化标记，题面/必填/选项一律不动。
+            if backfill_builtin_markers(stored, tpl):
+                stored = reg.put_form_template(stored)
+            minted.append(stored)
             continue
         minted.append(reg.put_form_template(tpl))
     return minted + list(existing.values())
