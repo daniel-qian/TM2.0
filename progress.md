@@ -15,7 +15,9 @@
   端到端 `t8-e2e.mjs` zh/en/zh **连续三轮零新发现**。
 - **✅ 已统一上产（2026-08-07）**：回执 `.issues/gap-design-0805/receipt-deploy-0807.md`。
   后端容器 `main-20260805-160609` → **`main-20260807-142044`**（= main `4650e1e`），
-  回滚一级 = `avery-prev-20260807-142044`。前端线上 `__AVERY_BUILD__.commit = 4650e1e`。
+  回滚一级 = `avery-prev-20260807-142044`。前端线上 = **main HEAD**（push 即自动构建；
+  上产当时核实到的是 `4650e1e`，此后每次 push 都会把它顶成新的 HEAD——**核实方式**见回执，
+  别记具体 SHA）。
   迁移 0012/0013/0014 已在生产库落地（`form_templates`/`form_submissions`/`project_ref` 列、
   `entities.kind` 含 `conflict`、person 白名单含 `person_id`/`self_report`/`provenance`）。
   ⚠ **口径纠正**：前端**没有人工上产步骤**（push main 即自动构建上产），只有**核实步骤**——
