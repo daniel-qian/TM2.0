@@ -353,3 +353,49 @@ def test_llm_same_name_without_staff_numbers_still_merges_as_before():
     people = _people_by_id(payload, _ROSTER_WITH_IDS)
     assert len(people) == 1
     assert people[0].person_id == ""
+
+
+# --- 0807 HITL 规则 3.5：文档自己写了部门，就不该算「认不出主人」 --------------------------------
+# 生产实测：花名册里两位「林小满」（SY-0422 前厅部 / SY-0906 康乐部）分开之后，纪要里那句
+# 「参会：…林小满（前厅部）」因为没带工号，撞上 T5 规则 3「同名歧义 + 无工号 → 另开一格」，
+# 于是团队页出现**第三张**林小满卡（无职位、部门前厅部）——两张看起来一模一样。
+# 但那份纪要自己写了部门：候选里恰好只有一位在前厅部。这不是猜，是读。
+
+def _index_with_two_lins():
+    from avery.ingest.extract import PersonEntity, PersonIndex
+    a = PersonEntity(id="u_lin_a", name="林小满", person_id="SY-0422", team="前厅部", role="前厅部经理")
+    b = PersonEntity(id="u_lin_b", name="林小满", person_id="SY-0906", team="康乐部", role="康乐部主管")
+    idx = PersonIndex([a, b])
+    return idx, a, b
+
+
+def test_ambiguous_name_with_matching_team_merges_into_that_one():
+    from avery.ingest.extract import PersonEntity
+    idx, a, b = _index_with_two_lins()
+    mention = PersonEntity(id="u_x", name="林小满", team="前厅部")     # 纪要里的那一句，没工号
+    key = idx.resolve(mention)
+    assert idx.slots.get(key) is a, "文档写了「（前厅部）」，候选里只有一位对得上——不该另开一格"
+
+
+def test_ambiguous_name_with_unmatched_team_still_opens_its_own_slot():
+    from avery.ingest.extract import PersonEntity
+    idx, a, b = _index_with_two_lins()
+    mention = PersonEntity(id="u_x", name="林小满", team="工程部")     # 谁都对不上
+    assert idx.slots.get(idx.resolve(mention)) is None                # 退回规则 3：另开一格
+
+
+def test_ambiguous_name_without_team_still_opens_its_own_slot():
+    from avery.ingest.extract import PersonEntity
+    idx, a, b = _index_with_two_lins()
+    mention = PersonEntity(id="u_x", name="林小满")                   # 没工号也没部门
+    assert idx.slots.get(idx.resolve(mention)) is None                # 没有二次判据就不猜
+
+
+def test_two_same_name_in_the_same_team_is_not_disambiguated_by_team():
+    """同名又同部门 → 部门这把尺子不够用，绝不许拿它当身份。"""
+    from avery.ingest.extract import PersonEntity, PersonIndex
+    a = PersonEntity(id="u_a", name="张伟", person_id="E-1", team="工程部")
+    b = PersonEntity(id="u_b", name="张伟", person_id="E-2", team="工程部")
+    idx = PersonIndex([a, b])
+    mention = PersonEntity(id="u_x", name="张伟", team="工程部")
+    assert idx.slots.get(idx.resolve(mention)) is None

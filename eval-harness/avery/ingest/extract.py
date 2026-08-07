@@ -1884,6 +1884,8 @@ class PersonIndex:
         self.slots: dict[str, PersonEntity] = {}
         self._by_id: dict[str, str] = {}
         self._by_name: dict[str, str] = {}
+        # 同一个姓名底下的**全部**格子（规则 3.5 要在候选之间按部门挑，只记「第一格」不够用）。
+        self._name_keys: dict[str, list[str]] = {}
         self._dupe_names: set[str] = set()
         for p in people:
             self.place(self.resolve(p), p)
@@ -1900,6 +1902,19 @@ class PersonIndex:
             held = _person_id_key(self.slots[hit].person_id)
             if not (ik and held and ik != held):
                 return hit
+        # 规则 3.5（0807 HITL 补）：名字歧义、这条读数没工号，但**文档自己写了部门**。
+        # 花名册里两位「林小满」（前厅部 / 康乐部），纪要上写「参会：…林小满（前厅部）」——
+        # 这不是猜，是读：候选里恰好只有一位在前厅部，那句话说的就是她。
+        # 🔴 只在**恰好一位**候选对得上时才认；对上两位（同名又同部门）或一位都对不上，
+        #    立刻退回规则 3 的老口径（另开一格，宁可多一条认不出主人的记录）——
+        #    有二次判据就用，没有就不猜，绝不把「像谁」当成「是谁」。
+        if not ik and nk in self._dupe_names:
+            team = (p.team or "").strip()
+            if team:
+                same = [k for k in self._name_keys.get(nk, ())
+                        if (self.slots[k].team or "").strip() == team]
+                if len(same) == 1:
+                    return same[0]
         return f"#id:{ik}" if ik else f"#name:{nk}"
 
     def place(self, key: str, p: PersonEntity) -> None:
@@ -1910,6 +1925,7 @@ class PersonIndex:
         if _person_id_key(p.person_id):
             self._by_id[_person_id_key(p.person_id)] = key
         nk = _person_key(p.name)
+        self._name_keys.setdefault(nk, []).append(key)
         if nk in self._by_name:
             self._dupe_names.add(nk)     # 这个名字底下从此有两个人，不再是一把够用的尺
         else:
