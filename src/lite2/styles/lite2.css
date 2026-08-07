@@ -7794,6 +7794,63 @@
   margin-top: 14px;
 }
 
+/* 重名时补的部门。间距即分隔符——不写任何标点字面量（见 FilesScreen 那处注释的碑）。
+   11px 走 --ink-faint：它是同一个按钮里的次要信息，不该与姓名抢注意力；
+   chip 本身的前景色由按钮态给，这里只压弱这一小段。 */
+.lite2-shell .lite-files-forms-chip-team {
+  margin-left: 6px;
+  font-size: 11px;
+  opacity: 0.72;
+}
+
+/* 0807 HITL 补的「这几份周报各自关于哪个项目」。逐人一行：姓名撑开、下拉贴右，
+   与「谁交了」那一段同一个骨架（flex + 姓名 flex:1），两段读起来才是同一张表的两面。 */
+.lite2-shell .lite-files-forms-bind {
+  margin-top: 14px;
+}
+
+.lite2-shell .lite-files-forms-bind-list {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lite2-shell .lite-files-forms-bind-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--rule, rgba(0, 0, 0, 0.08));
+}
+
+.lite2-shell .lite-files-forms-bind-row:last-child {
+  border-bottom: 0;
+}
+
+.lite2-shell .lite-files-forms-bind-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--ink);
+  word-break: break-word;
+}
+
+/* 原生 <select>：这一格要的是「一眼看清选了什么、能改」，不是又一套自绘下拉。
+   字号 12px 走 --ink（不是 --ink-faint）——小字用弱色够不到 AA 4.5，
+   verify-contrast-smalltext 那道门 07-20 就是这么栽的。 */
+.lite2-shell .lite-files-forms-bind-select {
+  flex: 0 1 auto;
+  max-width: 100%;
+  padding: 4px 8px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--ink);
+  background: var(--surface, transparent);
+  border: 1px solid var(--rule, rgba(0, 0, 0, 0.18));
+  border-radius: 8px;
+}
+
 /* 铸链失败的横幅。terracotta 而不是 var(--alert)——🔴 `--alert` 全仓从未声明
    （l.7674 那处一直落在硬编码兜底 #b3261e 上），它不跟随皮切换。别再抄那一处。 */
 .lite2-shell .lite-files-forms-error {
@@ -7907,6 +7964,15 @@
 
 .lite2-shell .lite-files-forms-status-badge[data-tone='unknown'] {
   color: var(--ink-faint, #8a8578);
+}
+
+/* 绑了项目就在行上说出来。11px 小字同样走 --ink-faint —— 与旁边的时间戳同一档，
+   两个次要信息不该一个深一个浅。 */
+.lite2-shell .lite-files-forms-status-project {
+  flex: none;
+  font-size: 11px;
+  color: var(--ink-faint, #8a8578);
+  word-break: break-word;
 }
 
 .lite2-shell .lite-files-forms-status-when {

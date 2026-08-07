@@ -22,6 +22,9 @@ export type LiteTone = 'sage' | 'honey' | 'terracotta'
 // 人卡形状——定性 ONLY，**没有**任何数字键（红线结构护栏）。
 export interface LitePerson {
   id: string
+  // 🔴 与 `id` 是两件事：`id` 是人卡内部键，`personId` 是花名册上的工号（T5 的身份尺）。
+  // 缺席 = 这家公司的资料里没有工号（铸链时退回按姓名认人，与 T5 之前的行为一字不差）。
+  personId?: string
   name: string
   role: string
   team?: string
@@ -202,6 +205,8 @@ function toLitePerson(card: LivePersonCard): LitePerson {
   const { read, ownsRead, tone } = liveRead(card)
   return {
     id: card.id,
+    // 工号原样透传（0807 HITL）：铸链要拿它当身份尺，缺席就是缺席，不补空串冒充「有」。
+    personId: card.person_id,
     name: card.name,
     role: card.role ?? '',
     team: card.team,

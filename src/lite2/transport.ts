@@ -157,6 +157,11 @@ export interface LivePersonSelfReport {
 // self_report 是**唯一例外**且**只在开关开时**才由后端投影（见 scoring_enabled），运行时剥离据此放行。
 export interface LivePersonCard {
   id: string
+  // 🔴 `id` 是人卡的**内部键**（`u_周雅` 之类），`person_id` 才是花名册上那个工号
+  // （01 表「人员ID」，T5 的 `PersonIndex` 拿它当身份尺）。两者绝不可互相冒充：
+  // 拿内部键当工号送去铸链，会让 PersonIndex 规则 2 判成「两个恰好同名的人」而彻底不并卡。
+  // 0807 HITL 起后端才投它（缺席=这家公司的资料里没有工号，不是 0 也不是空对象）。
+  person_id?: string
   name: string
   role?: string
   team?: string
@@ -544,6 +549,9 @@ export interface LiveFormSubmission {
   submitted_at: string | null // 后端写的是 `s.submitted_at or None` —— 未提交是 null，不是空串
   token?: string // 键**缺席**（不是空串）当这条没有 share_token
   link?: string // 同上。服务端拼好的整链，见本段头部注释
+  // T5 · 铸链时绑的项目（`form.py` 存的是空串默认，所以这里可能是 ''）。
+  // 空/缺席 = 这份周报没绑项目：只回流人卡，不碰项目卡。
+  project_ref?: string
   answers?: Array<{ field_id: string; value: string | number }> // 仅 submissions 端点、且已提交
 }
 
@@ -557,6 +565,11 @@ export interface LiveFormSubmissionsPayload {
 export interface FormLinkRecipient {
   id: string // 01 表的人员ID。归并按 ID 不按姓名——酒店有同名/花名，按名会并错人
   name: string
+  // T5 · 这份周报「是关于哪个项目的」。填了它，员工自由文本里的风险原话才会带着
+  // 「来自周报填写」的角标进那张项目卡的阻塞（`form_reflow.find_bound_project` 按标题找）。
+  // 0807 HITL 之前这个字段**在界面上没有任何入口**，于是那条回流路真人永远走不到。
+  // 省略 = 不绑（后端 `project_ref` 默认空串，回流只落人卡，不碰项目卡）。
+  project_ref?: string
 }
 
 export interface FormLinksInput {

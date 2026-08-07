@@ -107,6 +107,9 @@ function StandingFormsSection() {
   const [templateId, setTemplateId] = useState<string | null>(null)
   const [picked, setPicked] = useState<string[]>([])
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  // 「这个人的这份周报是关于哪个项目的」——键是人卡内部 id，值是项目标题（''=不绑）。
+  // 逐人一格而不是整批一个：一批人本来就可能各扛各的项目，整批绑一个等于替经理断言。
+  const [bindings, setBindings] = useState<Record<string, string>>({})
 
   // 🔴 hooks 必须全部跑在早退之前（下面四条 return null 在它们后面）。
   // 拉取挂在「经理打开了资料库屏」这个动作上，**不**并进 uploadFiles/restoreSession 那几处
@@ -116,10 +119,21 @@ function StandingFormsSection() {
   useEffect(() => {
     setPicked([])
     setCopiedId(null)
+    setBindings({})
     void refreshForms()
   }, [refreshForms, contextId])
 
   const roster = team?.people ?? []
+  // 可绑的项目 = 这家公司当前的项目卡（归档的不出现在 team.projects 里）。
+  const bindable = team?.projects ?? []
+  // 同名的人要能分得出来。0807 起工号真的进了人卡，两位同名同事第一次不再被并成一张——
+  // 于是选人那排出现两个一模一样的「林小满」，经理没法知道该点哪个（截图人眼过时逮到的）。
+  // 只给**真的重名**的人补一行部门：不重名的补了只是噪音。
+  const dupeNames = new Set(
+    roster.map((p) => p.name).filter((n, i, all) => all.indexOf(n) !== i),
+  )
+  const disambiguator = (p: (typeof roster)[number]) =>
+    dupeNames.has(p.name) ? (p.team ?? '') : ''
   const active = (templates ?? []).filter((tpl) => tpl.active)
   const selected = active.find((tpl) => tpl.id === templateId) ?? active[0] ?? null
 
@@ -155,28 +169,30 @@ function StandingFormsSection() {
     resetFormsWrite()
     setPicked([])
     setCopiedId(null)
+    setBindings({})
   }
 
   const mint = () => {
     if (!selected) return
     const recipients = picked
-      .map((id) => ({
-        // 🔴 `id` 这个键在后端是**工号**（01 表人员ID，`FormSubmission.person_id`），T5 的
-        // `PersonIndex` 拿它当身份尺。而 `team_cards()` 发的 `p.id` 是人卡的**内部键**，
-        // 不是工号——工号（`PersonEntity.person_id`，T5 新加）今天根本没投到前端来。
-        //
-        // 所以这里**故意送空串**，不拿内部键冒充工号。送错比不送更糟，不是保守：
-        // PersonIndex 规则 2 是「两边工号都非空且**不同** = 两个恰好同名的人，绝不并卡」。
-        // 一家真填了工号的公司，花名册那条是 `MKT-001`、表单这条是内部键 `pe_...`，
-        // 于是**连名字一样的同一个人都并不上**，自述整个回流不了。送空串则退回按姓名并，
-        // 与 T5 之前的行为一字不差。
-        //
-        // 代价（T5 交接点名的那条，如实继承）：公司里有同名员工时，那一份自述会被
-        // **诚实跳过 + 记一行日志**，不掷硬币挑一个。要修得把工号投到 team_cards 上
-        // 再接进选人控件——那是跨后端的一刀，不在本票范围。
-        id: '',
-        name: roster.find((p) => p.id === id)?.name ?? '',
-      }))
+      .map((id) => {
+        const person = roster.find((p) => p.id === id)
+        return {
+          // 🔴 `id` 这个键在后端是**工号**（01 表人员ID，`FormSubmission.person_id`），T5 的
+          // `PersonIndex` 拿它当身份尺；人卡的内部键（`p.id`，形如 `u_周雅`）**不是**工号，
+          // 拿它冒充会让 PersonIndex 规则 2 判成「两个恰好同名的人」而彻底不并卡。
+          //
+          // 0807 HITL 之前后端根本没把工号投到前端，所以这里只能送空串（退回按姓名认人）。
+          // 代价当场在生产上被逮到：花名册里两位同名同事，谁交的都认不出，自述被诚实跳过，
+          // 而经理看到的是「我交了、卡上没反应」。现在 `team_cards()` 投了 `person_id`，
+          // 这条腿才算真接上：**有工号就送工号，没有就仍送空串**（一字不差地退回旧行为，
+          // 没工号的公司什么都没变）。
+          id: person?.personId ?? '',
+          name: person?.name ?? '',
+          // 绑项目：空串就是「不绑」——后端 `project_ref` 默认也是空串，送空与不送同义。
+          project_ref: bindings[id] ?? '',
+        }
+      })
       // 后端 name 是 min_length=1 的必填——名字空的人送过去只会换回一个 422，
       // 而经理看到的会是一句「这次没生成成」，查不出是哪一行的锅。
       .filter((r) => r.name.trim().length > 0)
@@ -293,10 +309,64 @@ function StandingFormsSection() {
                   onClick={() => togglePicked(p.id)}
                 >
                   {p.name}
+                  {/* 重名时补部门。🔴 分隔符走 CSS 间距、不写任何标点字面量——
+                      这一段的碑就在上面（`{l.formsFieldsLead}：{preview}` 那个硬编码全角冒号，
+                      英文壳上多出一个中文标点、而 i18n 门看不见）。部门是**客户数据**，
+                      与界面语言无关，所以它不进词典。 */}
+                  {disambiguator(p) ? (
+                    <span className="lite-files-forms-chip-team">{disambiguator(p)}</span>
+                  ) : null}
                 </button>
               )
             })}
           </div>
+          {/* 绑项目。只在**已经选了人**且这家公司真有项目卡时才出——没项目可绑时摆一排
+              永远只有「不绑」一个选项的下拉框，是纯噪音（同上面「一张模板不给切换按钮」）。
+              逐人一格：一批人各扛各的项目是常态，整批绑一个等于替经理断言。
+              🔴 默认「不绑」而不是猜一个：绑了才会把员工的原话写进项目卡，
+              猜错的代价是把 A 的话挂到 B 的项目上。 */}
+          {picked.length > 0 && bindable.length > 0 ? (
+            <div className="lite-files-forms-bind">
+              <p className="lite-files-forms-label">{l.formsBindLabel}</p>
+              <p className="lite-files-forms-note">{l.formsBindHint}</p>
+              <ul className="lite-files-forms-bind-list">
+                {picked.map((id) => {
+                  const person = roster.find((p) => p.id === id)
+                  if (!person) return null
+                  const selectId = `lite-forms-bind-${id}`
+                  return (
+                    <li key={id} className="lite-files-forms-bind-row">
+                      <label className="lite-files-forms-bind-name" htmlFor={selectId}>
+                        {person.name}
+                        {disambiguator(person) ? (
+                          <span className="lite-files-forms-chip-team">
+                            {disambiguator(person)}
+                          </span>
+                        ) : null}
+                      </label>
+                      <select
+                        id={selectId}
+                        className="lite-files-forms-bind-select"
+                        value={bindings[id] ?? ''}
+                        onChange={(e) =>
+                          setBindings((prev) => ({ ...prev, [id]: e.target.value }))
+                        }
+                      >
+                        <option value="">{l.formsBindNone}</option>
+                        {/* value 用**标题**不是内部 id：后端 `find_bound_project` 按标题找
+                            （project_ref 是一段人写的引用，不是外键）。 */}
+                        {bindable.map((pr) => (
+                          <option key={pr.id} value={pr.title}>
+                            {pr.title}
+                          </option>
+                        ))}
+                      </select>
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
+          ) : null}
           <button
             type="button"
             className="lite-btn lite-btn--primary lite-files-forms-mint"
@@ -367,6 +437,13 @@ function StandingFormsSection() {
               return (
                 <li key={row.id} className="lite-files-forms-status-row" data-tone={view.tone}>
                   <span className="lite-files-forms-status-name">{row.person_name}</span>
+                  {/* 绑了项目就说出来——「绑了之后经理怎么看得出来」的答案就在这一行。
+                      没绑的什么都不写（absent≠none：不编一句「未绑定」）。 */}
+                  {row.project_ref ? (
+                    <span className="lite-files-forms-status-project">
+                      {fill(l.formsStatusAbout, { project: row.project_ref })}
+                    </span>
+                  ) : null}
                   {/* 已交的给出时刻（服务端盖的章，切到分钟）。没交的这里什么都不写——
                       编一句「等待中」只是把空白换成噪音。
                       🔴 时间戳排在徽章**前面**：徽章恒为行尾，两种行的状态词才对得上一列。

@@ -345,6 +345,12 @@ class CompanyContext:
         rich-align-0722/03: self_report projected ONLY when allow_scoring (caliber+source travel with it).
         rich-align-0722/06: provenance side-car passed through (缺就不发键；手编字段带 origin='manual')."""
         card = {"id": p.id, "name": p.name, "role": p.role}
+        # T5 的工号，0807 HITL 补投：`id` 是人卡的**内部键**，`person_id` 才是花名册上那个工号。
+        # 以前不投，于是铸链界面只能送空工号（FilesScreen.tsx 那段长注释写着「跨后端的一刀」），
+        # 同名两位同事交的周报永远认不出是谁、自述被诚实跳过——经理看到的是「交了却没反应」。
+        # 缺就不发键（absent≠none，同下面 team/tenure 的口径）：没工号的公司一个字节都不多收。
+        if getattr(p, "person_id", ""):
+            card["person_id"] = p.person_id
         if p.team:
             card["team"] = p.team
         if p.tenure:

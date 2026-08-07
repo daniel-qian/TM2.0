@@ -514,6 +514,12 @@ export const zh: Dict = {
     "formsFieldsLead": "问这几格：",
     "formsPickLabel": "这次发给谁",
     "formsPickHint": "点名字选中，一次最多 30 个人。每人一条自己的链接，谁也看不到别人写了什么。",
+    // 绑项目（0807 HITL 补的入口）。措辞刻意是「关于哪个项目」而不是「归属/分配」——
+    // 绑的是这份周报**在说哪件事**，不是把人派给项目。
+    "formsBindLabel": "这几份周报各自关于哪个项目",
+    "formsBindHint": "选了项目，他在「未达成及原因」里写的原话才会带着出处进那张项目卡；不选就只进他自己的人卡。",
+    "formsBindNone": "不绑项目",
+    "formsStatusAbout": "关于 {project}",
     "formsMintAction": "生成本期链接",
     "formsMintBusy": "正在生成…",
     "formsLinksTitle": "{period} 的链接",

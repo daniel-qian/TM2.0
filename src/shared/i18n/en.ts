@@ -592,6 +592,13 @@ export const en = {
     formsPickLabel: 'Who gets a link this time',
     formsPickHint:
       "Tap a name to pick them. Up to thirty at a time, and each person's link is their own — nobody sees anyone else's answers.",
+    // Binding a report to a project (the entry point added after the 0807 HITL round). The wording
+    // is "about", not "assign": binding says what the report is ABOUT, it does not staff anyone.
+    formsBindLabel: 'What each of these reports is about',
+    formsBindHint:
+      "Pick a project and whatever they write under “what did not land” goes onto that project's card, quoted and sourced. Leave it unset and it only lands on their own card.",
+    formsBindNone: 'No project',
+    formsStatusAbout: 'about {project}',
     formsMintAction: 'Make links for this period',
     formsMintBusy: 'Making links…',
     formsLinksTitle: 'Links for {period}',

@@ -728,3 +728,40 @@ def test_a_bound_submission_round_trips_its_project_ref(tmp_path):
         share_token="tok_" + uuid.uuid4().hex, created_at=created,
         expires_at=default_expiry(created)))
     assert reg.get_form_submission(sub.id).project_ref == "宴会厅翻台"
+
+
+# --- 0807 HITL：工号投到人卡上（铸链界面才拿得到身份尺）-----------------------------------------
+# `_one_person_card` 以前只发内部键 `id`（`u_周雅`），不发 `person_id`。后果不是抽象的：
+# 铸链界面因此只能送空工号（FilesScreen 那段长注释写着「跨后端的一刀」），
+# 花名册里两位同名同事交的周报永远认不出是谁，自述被诚实跳过——经理看到的是「交了却没反应」。
+
+_ROSTER_WITH_IDS_MD = "\n".join([
+    "# 花名册",
+    "",
+    "姓名 | 人员ID | 职位 | 部门",
+    "周雅 | SY-0308 | 宴会厅领班 | 餐饮部",
+    "陈明远 | | 中餐厨师长 | 厨房",
+    "",
+])
+
+
+def _cards_from(md: str) -> dict:
+    from avery.ingest import ContextRegistry, HeuristicExtractor, ingest_docs
+    from avery.ingest.parse import parse_bytes
+    rep = ingest_docs([parse_bytes("roster.md", md.encode("utf-8"))],
+                      extractor=HeuristicExtractor(), registry=ContextRegistry())
+    return {c["name"]: c for c in rep.context.team_cards()}
+
+
+def test_person_card_carries_the_staff_number():
+    cards = _cards_from(_ROSTER_WITH_IDS_MD)
+    assert cards["周雅"]["person_id"] == "SY-0308"
+    # 🔴 内部键与工号是两件事，绝不可互相冒充（送错工号比不送更糟：PersonIndex 规则 2
+    # 会把同一个人判成「两个恰好同名的人」而彻底不并卡）。
+    assert cards["周雅"]["id"] != cards["周雅"]["person_id"]
+
+
+def test_person_card_omits_the_key_when_there_is_no_staff_number():
+    """absent≠none：没工号的公司一个字节都不多收，前端据此退回按姓名认人。"""
+    cards = _cards_from(_ROSTER_WITH_IDS_MD)
+    assert "person_id" not in cards["陈明远"]
