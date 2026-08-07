@@ -41,7 +41,7 @@ import time
 log = logging.getLogger("avery.ingest.llm_extract")
 
 from .extract import (
-    ExtractionResult, Extractor, HeuristicExtractor, PersonEntity, PersonSelfReport,
+    ExtractionResult, Extractor, HeuristicExtractor, PersonEntity, PersonIndex, PersonSelfReport,
     ProjectEntity, ProjectMilestone, ProjectRisk, SelfReportLoad, SelfReportMood, SignalEntity,
     _INDEX_TOKEN_RE, _NOT_NAME, _norm_status, _norm_team, _person_key, _project_key, _slug,
     norm_milestone_status, norm_mood_selfreport, norm_risk_level,
@@ -84,7 +84,8 @@ HARD RULES (a compliance gate rejects your output if you break them):
 _INSTRUCTIONS = """Return exactly this JSON shape:
 {
   "people": [
-    {"name": "", "role": "", "team": "", "tenure": "", "owns": [""], "collaboration": [""],
+    {"name": "", "person_id": "", "role": "", "team": "", "tenure": "", "owns": [""],
+     "collaboration": [""],
      "self_report": {"load": {"value": 0}, "mood": {"value": ""}}, "line": 0}
   ],
   "projects": [
@@ -111,6 +112,11 @@ Field rules:
   -> Design; a "Founder / CEO" -> Founders; a "Head of Sales" -> GTM; an "Office Manager" -> Ops.
   If a title maps onto none of the six, "".
   tenure = stated experience/tenure phrase (e.g. "8 years of B2B design", free text).
+  person_id = the staff number the DOCUMENT gives this person, copied VERBATIM — from a
+  「人员ID」/「工号」/"Employee ID"/"Staff No." column or an explicit line. It is the identity key
+  two same-named colleagues are told apart by, so a wrong one merges two real people into one
+  card: copy it letter-for-letter or leave it "". Never invent, never renumber, never reuse a
+  row index as an id.
   owns = up to 6 short phrases of what they own / are responsible for, from the doc.
   self_report: the STRICT, NARROW exception to "people are qualitative only". Emit it ONLY when the
   document explicitly labels a line as the person's OWN self-report — a 「负载自述：」/「情绪自述：」
@@ -231,12 +237,42 @@ def _llm_milestones(v) -> list[ProjectMilestone]:
     return out
 
 
-def _llm_self_report(v, source: str) -> "PersonSelfReport | None":
+# 「这是他自己说的」这句话，必须有一行文档原文撑着。
+# 与启发式那条腿同一个判据（`extract.py::_selfreport_from_lines` 的 `if "自述" not in s`）——
+# 一个问题一个答案，两条腿不许分叉。
+_SELF_MARK_RE = re.compile(r"自述|自報|self[\s\-]?report", re.I)
+
+
+def _self_report_backing_line(doc: "ParsedDoc | None", name: str, needle: str) -> int | None:
+    """撑得住这条读数的那一行（1-based），没有就 None。
+
+    要求同一行上三样齐全：**这个人的名字** + **自述标记** + **这个值本身**。
+    三样缺一，我们就没有资格在卡面上说「这是他自己说的」。
+    """
+    if doc is None or not name or not needle:
+        return None
+    for i, ln in enumerate(doc.lines, start=1):
+        if name in ln and needle in ln and _SELF_MARK_RE.search(ln):
+            return i
+    return None
+
+
+def _llm_self_report(v, source: str, *, doc: "ParsedDoc | None" = None,
+                     name: str = "") -> "PersonSelfReport | None":
     """rich-align-0722/03: LLM people[].self_report → PersonSelfReport, SAME shape/口径 as the
     heuristic's _selfreport_from_lines. load is 0..100 (out-of-range REJECTED, not clamped); mood maps
-    to the qualitative enum, out-of-vocab kept verbatim as `other`. caliber is forced to 本人自述 and
-    source to the person's line — the model does not get to assert an unverifiable authorship claim;
-    the slot itself IS the provenance. Returns None if neither sub-metric survives."""
+    to the qualitative enum, out-of-vocab kept verbatim as `other`. caliber is forced to 本人自述.
+
+    🔴 0807 HITL 逮到的真事故：`_SYSTEM` 白纸黑字要求「只有文档里明确标了自述才准吐这个键」，
+    而生产上的 MiniMax **不听**——它读着「负责人：徐岚」这一行，吐回来一条
+    `self_report.load.value = 0`，于是人卡上出现「自述负载 0%·本人自述」，出处指着一行
+    连数字都没有的原文。这不是召回差，是**替客户说话**（ADR-0018 红线）。
+    提示词管不住模型，所以判据不能只写在提示词里：这里按 `_not_a_person` 同款
+    「belt to the model's suspenders」加一道**取证闸**——每条读数都要在文档里找到一行
+    同时含「名字 + 自述标记 + 这个值」的原文，找不到就整条丢弃（不是降级、不是猜）。
+    找到了就把 source 重新指到**那一行**（比模型给的人物行更可核）。
+    ⚠ 拿不到 doc 时一律判否（fail closed）：宁可少一条自述，不可多一句假话。
+    """
     if not isinstance(v, dict):
         return None
     load = None
@@ -247,18 +283,36 @@ def _llm_self_report(v, source: str) -> "PersonSelfReport | None":
         except (TypeError, ValueError):
             iv = None
         if iv is not None and 0 <= iv <= 100:       # reject, don't clamp (absent≠none)
-            load = SelfReportLoad(value=iv, source=source)
+            hit = _self_report_backing_line(doc, name, str(iv))
+            if hit is not None:
+                load = SelfReportLoad(value=iv, source=f"{doc.name}:{hit}")
     mood = None
     mv = v.get("mood")
     if isinstance(mv, dict):
         raw = _s(mv.get("value"), 40)
         if raw:
-            enum = norm_mood_selfreport(raw)
-            mood = SelfReportMood(value=enum or "other", source=source,
-                                  valueRaw="" if enum else raw)
+            hit = _self_report_backing_line(doc, name, raw)
+            if hit is not None:
+                enum = norm_mood_selfreport(raw)
+                mood = SelfReportMood(value=enum or "other", source=f"{doc.name}:{hit}",
+                                      valueRaw="" if enum else raw)
     if not load and not mood:
         return None
     return PersonSelfReport(load=load, mood=mood)
+
+
+def _llm_person_id(doc: "ParsedDoc | None", v) -> str:
+    """花名册的「人员ID / 工号」列 → PersonEntity.person_id（T5 的身份锁）。
+
+    🔴 0807 HITL 逮到：启发式那条腿认表头认得好好的（`extract.py::_ZH_HEADER_MAP`），
+    **LLM 那条腿压根没要过这个字段**，于是生产上每个人的 person_id 都是空的——
+    同名两位「林小满」（工号不同、部门不同）被并成了一张卡。T5 的工号腿在离线通、在生产等于没接。
+    取证闸同上：工号必须**逐字出现在文档里**才收，模型编不出一个不在纸上的工号。
+    """
+    s = _s(v, 40)
+    if not s or doc is None:
+        return ""
+    return s if s in doc.text else ""
 
 
 # Label/header cells that are obviously not a human — belt to the model's suspenders (_SYSTEM
@@ -391,7 +445,13 @@ class LLMExtractor:
 
     def _build(self, doc: ParsedDoc, data: dict) -> ExtractionResult:
         res = ExtractionResult()
-        seen_people: dict[str, PersonEntity] = {}
+        # 🔴 0807 HITL：这里以前是 `dict[_person_key(name)] -> PersonEntity`，也就是**只按姓名**
+        # 认人。注释还写着「与跨文档归并同一个定义、两边不会分叉」——T5 把跨文档那边换成
+        # `PersonIndex`（工号第一、两个不同工号永不并）之后，这句话就不再成立了：同一份花名册里
+        # 两位同名不同工号的「林小满」，在**文档内**这一步就已经被并成一张卡，跨文档那边再讲究也来不及。
+        # 生产上实测过：两个人合成一张，team 取了前厅部，owns 里却挂着康乐部那位的活。
+        # 现在两边读同一本索引。
+        seen_people = PersonIndex()
         for raw in data.get("people", [])[:40]:
             if not isinstance(raw, dict):
                 continue
@@ -403,12 +463,14 @@ class LLMExtractor:
                 continue
             # shared with cross-document dedup (extract._dedupe_entities) — one definition of
             # "same person", so within-doc and cross-doc can never drift apart
-            key = _person_key(name)
-            person = seen_people.get(key)
+            pid = _llm_person_id(doc, raw.get("person_id"))
+            key = seen_people.resolve(PersonEntity(id=_slug(name, "u"), name=name, person_id=pid))
+            person = seen_people.slots.get(key)
             src = _line_ref(doc, raw.get("line"))
             if person is None:
                 person = PersonEntity(
                     id=_slug(name, "u"), name=name,
+                    person_id=pid,
                     role=_strip_person_ratings(_s(raw.get("role"), 120)),
                     team=_norm_team(_s(raw.get("team"), 40)),
                     tenure=_strip_person_ratings(_s(raw.get("tenure"), 120)),
@@ -418,16 +480,21 @@ class LLMExtractor:
                                    _slist(raw.get("collaboration")) if _strip_person_ratings(c)],
                     source=src,
                     # rich-align-0722/03: person self-report (load/mood), same slot/口径 as heuristic.
-                    self_report=_llm_self_report(raw.get("self_report"), src))
-                seen_people[key] = person
+                    self_report=_llm_self_report(raw.get("self_report"), src, doc=doc, name=name))
+                seen_people.place(key, person)
                 res.people.append(person)
             else:
                 # same person across windows: enrich, don't duplicate
                 extra = [_strip_person_ratings(o) for o in _slist(raw.get("owns"))]
                 person.owns = (person.owns + [o for o in extra if o])[:6]
                 person.role = person.role or _strip_person_ratings(_s(raw.get("role"), 120))
+                # 工号 keep-first：先读到的那个是身份锁，后面的窗口只补空，不许改写
+                # （改写＝把两个真人的读数悄悄并到一个工号下）。补上之后要让索引也认得。
+                if pid and not person.person_id:
+                    person.person_id = pid
+                    seen_people.adopt_id(key, pid)
                 # keep-first per self-report sub-slot (parity with _dedupe_entities).
-                sr = _llm_self_report(raw.get("self_report"), src)
+                sr = _llm_self_report(raw.get("self_report"), src, doc=doc, name=name)
                 if sr:
                     if person.self_report is None:
                         person.self_report = sr

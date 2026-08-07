@@ -189,10 +189,22 @@ class _FakeBrain:
         return BrainResponse(text=json.dumps(self._payload))
 
 
-def _llm_people(payload) -> dict[str, PersonEntity]:
+# 0807 HITL 之后，LLM 那条腿的自述读数必须有**文档原文**撑着（名字 + 自述标记 + 那个值同在一行），
+# 所以这份桩文档不再是一句占位的「- 小王 自述」，而是真把读数写在纸上。
+# 想验「模型编数字」这条路，用 _llm_people(payload, text=<不含读数的文档>)。
+_DOC_WITH_SELF_REPORTS = (
+    "# 周报\n"
+    "人员动态\n"
+    "- 小王｜负载自述：85｜情绪自述：吃紧\n"
+    "- 小李｜情绪自述：还没定\n"
+    "- 小张｜负载自述：150\n"
+)
+
+
+def _llm_people(payload, text: str = _DOC_WITH_SELF_REPORTS) -> dict[str, PersonEntity]:
     from avery.ingest import LLMExtractor
     from avery.ingest.parse import ParsedDoc
-    doc = ParsedDoc(name="weekly.md", text="# 周报\n人员动态\n- 小王 自述\n", doc_kind="project", ext="md")
+    doc = ParsedDoc(name="weekly.md", text=text, doc_kind="project", ext="md")
     res = LLMExtractor(_FakeBrain(payload), retry_backoff_s=0).extract(doc)
     return {p.name: p for p in res.people}
 
@@ -227,3 +239,48 @@ def test_llm_out_of_range_load_rejected_and_forbidden_key_still_dies():
     ppl = _llm_people(payload)
     assert ppl["小张"].self_report is None            # 150 rejected → no surviving metric → slot None
     assert "小赵" not in ppl                           # free scoring key → whole record dropped
+
+
+# --- 0807 HITL 逮到的真事故：模型不听提示词，自己编了一条自述 -------------------------------
+# 生产上 MiniMax 读着「负责人：徐岚」这一行，回了 self_report.load.value=0，
+# 于是人卡上出现「自述负载 0%·本人自述」，出处指着一行连数字都没有的原文。
+# 提示词管不住模型，所以判据落在**文档原文**上：一条读数要上卡，得有一行同时写着
+# 名字 + 自述标记 + 这个值。下面四条钉死这道闸的四个面。
+
+_DOC_NO_SELF_REPORT = "# 项目总览\n\n## 项目：草坪婚宴旺季档\n\n负责人：徐岚\n自报状态：正常\n进度：72%\n"
+
+
+def test_llm_fabricated_selfreport_is_dropped():
+    """模型凭空吐读数、文档里没有任何自述行 → 整条丢弃（这就是生产上那次事故的形状）。"""
+    payload = {"people": [{"name": "徐岚", "role": "宴会销售经理", "line": 5,
+                           "self_report": {"load": {"value": 0}}}],
+               "projects": [], "signals": []}
+    ppl = _llm_people(payload, text=_DOC_NO_SELF_REPORT)
+    assert ppl["徐岚"].self_report is None, "文档一个自述字都没有，卡面不许说「这是他自己说的」"
+
+
+def test_llm_selfreport_needs_the_value_on_that_line_too():
+    """文档里有自述行、但写的是别的数 → 模型报的那个数仍然不算数（不许张冠李戴）。"""
+    payload = {"people": [{"name": "小王", "line": 3,
+                           "self_report": {"load": {"value": 30}}}],   # 纸上写的是 85
+               "projects": [], "signals": []}
+    ppl = _llm_people(payload)
+    assert ppl["小王"].self_report is None
+
+
+def test_llm_selfreport_source_repoints_to_the_backing_line():
+    """收下的读数，出处要指到**撑住它的那一行**，不是模型顺手给的人物行。"""
+    payload = {"people": [{"name": "小王", "line": 1,          # 模型说在第 1 行（标题行）
+                           "self_report": {"load": {"value": 85}}}],
+               "projects": [], "signals": []}
+    sr = _llm_people(payload)["小王"].self_report
+    assert sr.load.source == "weekly.md:3"                    # 真正写着 85 的是第 3 行
+
+
+def test_llm_selfreport_mood_also_needs_backing():
+    """情绪同理：纸上没写「还没定」，就不许把它挂到人卡上。"""
+    payload = {"people": [{"name": "小王", "line": 3,
+                           "self_report": {"mood": {"value": "还没定"}}}],   # 纸上小王写的是 吃紧
+               "projects": [], "signals": []}
+    sr = _llm_people(payload)["小王"].self_report
+    assert sr is None or sr.mood is None

@@ -49,3 +49,6 @@ scripts/__pycache__/
 
 # 走查产物：截图 + 逐屏 JSON 快照，单机产物、体量大，不入 git（round-1 的 2026-08-02-shots 同样惯例）
 .issues/sweep/*-shots/
+
+# HITL 会话（含生产 context 的 ownerToken，绝不进版本库）
+.issues/**/.hitl-session.json

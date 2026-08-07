@@ -298,3 +298,58 @@ def test_parse_strips_mojibake_and_ligatures():
     assert "�" not in doc.text
     assert "Office workflow" in doc.text
     assert "shyphen" in doc.text          # soft hyphen removed, word intact
+
+
+# --- 0807 HITL：工号那条腿在 LLM 这边压根没接上 ------------------------------------------------
+# 生产实测：花名册里两位同名不同工号的「林小满」，走真 MiniMax 抽取后并成了一张卡——
+# team 取了前厅部，owns 里却挂着康乐部那位的活。两个原因叠在一起：
+#   ① schema 从来没要过 person_id（模型自然不吐）；
+#   ② `_build` 的文档内归并只按姓名（`_person_key`），T5 把跨文档那边换成 PersonIndex 之后，
+#      两条腿就分叉了——文档内这一步先并掉，跨文档再讲究也来不及。
+# 下面三条分别钉住：分得开、编不出、老行为没被动。
+
+_ROSTER_WITH_IDS = ParsedDoc(
+    name="花名册.md",
+    text="\n".join([
+        "# 宴会条线花名册",
+        "姓名 | 人员ID | 职位 | 部门",
+        "林小满 | SY-0422 | 前厅部经理 | 前厅部",
+        "林小满 | SY-0906 | 康乐部主管 | 康乐部",
+    ]),
+    doc_kind="roster", ext="md")
+
+
+def _people_by_id(payload, doc):
+    res = LLMExtractor(FakeBrain([payload]), retry_backoff_s=0).extract(doc)
+    return res.people
+
+
+def test_llm_same_name_different_staff_number_stays_two_people():
+    payload = {"people": [
+        {"name": "林小满", "person_id": "SY-0422", "role": "前厅部经理", "team": "前厅部", "line": 3},
+        {"name": "林小满", "person_id": "SY-0906", "role": "康乐部主管", "team": "康乐部", "line": 4},
+    ], "projects": [], "signals": []}
+    people = _people_by_id(payload, _ROSTER_WITH_IDS)
+    assert len(people) == 2, f"同名不同工号被并成一张卡：{[(p.name, p.person_id, p.team) for p in people]}"
+    assert {p.person_id for p in people} == {"SY-0422", "SY-0906"}
+    assert {p.team for p in people} == {"前厅部", "康乐部"}
+
+
+def test_llm_invented_staff_number_is_dropped():
+    """模型编一个纸上没有的工号 → 不收（收了就是拿一个假身份去归并别人的读数）。"""
+    payload = {"people": [
+        {"name": "林小满", "person_id": "SY-9999", "role": "前厅部经理", "line": 3},
+    ], "projects": [], "signals": []}
+    people = _people_by_id(payload, _ROSTER_WITH_IDS)
+    assert people[0].person_id == ""
+
+
+def test_llm_same_name_without_staff_numbers_still_merges_as_before():
+    """没有任何工号时，逐字退回老行为：同名并成一张（T6 钉死门的口径不许被本次改动动到）。"""
+    payload = {"people": [
+        {"name": "林小满", "role": "前厅部经理", "line": 3},
+        {"name": "林小满", "role": "康乐部主管", "line": 4},
+    ], "projects": [], "signals": []}
+    people = _people_by_id(payload, _ROSTER_WITH_IDS)
+    assert len(people) == 1
+    assert people[0].person_id == ""
