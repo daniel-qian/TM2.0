@@ -63,10 +63,19 @@ SHARE_TOKEN_BYTES = 32     # 与 owner_token / 快问 share_token 同一熵级�
 # ── 经理侧请求体 ────────────────────────────────────────────────────────────────────────────────
 
 class FormRecipientIn(BaseModel):
-    """铸链发给谁。`id` 是 01 表的人员ID —— 归并按 ID 不按姓名（酒店有同名/花名，按名会并错人）。"""
+    """铸链发给谁。`id` 是 01 表的人员ID —— 归并按 ID 不按姓名（酒店有同名/花名，按名会并错人）。
+
+    T5/A2：`id` 留空**不是**等价选项。公司里只要有两个人同名，没带工号的那份提交就回流不到任何
+    一张人卡（挑一个是掷硬币）——资料照样进库，卡上不会多出那个数字。经理侧选人时请带上工号。
+
+    `project_ref` 是这条链绑的项目名称（02 表「项目名称」/ 项目卡标题）。绑了，这个人这一格
+    「未达成及原因 / 需要支持」的原话就会追加成那张项目卡的阻塞原句；不绑，回流只走人卡。
+    逐条链绑而不是整张模板绑：同一张周报，不同的人本来就在不同的项目上。
+    """
     model_config = {"extra": "forbid"}
     id: str = Field("", max_length=120)
     name: str = Field(..., min_length=1, max_length=120)
+    project_ref: str = Field("", max_length=200)
 
 
 class MintLinksBody(BaseModel):
@@ -87,6 +96,10 @@ class FormFieldIn(BaseModel):
     choices: list[str] = Field(default_factory=list)
     min: int = NUMBER_MIN_FLOOR
     max: int = NUMBER_MAX_CEIL
+    # T5/A2 —— 这一格的答案是一句情境陈述（回流成人卡情境信号 / 项目卡阻塞原句）。
+    # 必须在这里出现：`extra='forbid'` + `FormFieldIn(**...)` 往回建 FormField，漏了这个键，
+    # 经理在前端存一次模板就把内置周报的两个 `situational=True` 静默抹平了，回流从此不响。
+    situational: bool = False
 
 
 class FormTemplateIn(BaseModel):
@@ -189,6 +202,7 @@ def mint_links(context_id: str, template_id: str, body: MintLinksBody,
         sub = FormSubmission(
             id=new_submission_id(), context_id=context_id, template_id=template.id,
             person_id=(r.id or "").strip(), person_name=r.name.strip(), period=period,
+            project_ref=(r.project_ref or "").strip(),
             share_token=secrets.token_urlsafe(SHARE_TOKEN_BYTES),
             created_at=created, expires_at=default_expiry(created))
         try:
@@ -226,6 +240,7 @@ def _submission_payload(s, *, with_answers: bool) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "id": s.id, "template_id": s.template_id,
         "person_id": s.person_id, "person_name": s.person_name, "period": s.period,
+        "project_ref": s.project_ref,
         "status": effective_submission_status(s),
         "created_at": s.created_at, "expires_at": s.expires_at,
         "submitted_at": s.submitted_at or None,

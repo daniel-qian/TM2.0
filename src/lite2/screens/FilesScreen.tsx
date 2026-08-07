@@ -160,7 +160,23 @@ function StandingFormsSection() {
   const mint = () => {
     if (!selected) return
     const recipients = picked
-      .map((id) => ({ id, name: roster.find((p) => p.id === id)?.name ?? '' }))
+      .map((id) => ({
+        // 🔴 `id` 这个键在后端是**工号**（01 表人员ID，`FormSubmission.person_id`），T5 的
+        // `PersonIndex` 拿它当身份尺。而 `team_cards()` 发的 `p.id` 是人卡的**内部键**，
+        // 不是工号——工号（`PersonEntity.person_id`，T5 新加）今天根本没投到前端来。
+        //
+        // 所以这里**故意送空串**，不拿内部键冒充工号。送错比不送更糟，不是保守：
+        // PersonIndex 规则 2 是「两边工号都非空且**不同** = 两个恰好同名的人，绝不并卡」。
+        // 一家真填了工号的公司，花名册那条是 `MKT-001`、表单这条是内部键 `pe_...`，
+        // 于是**连名字一样的同一个人都并不上**，自述整个回流不了。送空串则退回按姓名并，
+        // 与 T5 之前的行为一字不差。
+        //
+        // 代价（T5 交接点名的那条，如实继承）：公司里有同名员工时，那一份自述会被
+        // **诚实跳过 + 记一行日志**，不掷硬币挑一个。要修得把工号投到 team_cards 上
+        // 再接进选人控件——那是跨后端的一刀，不在本票范围。
+        id: '',
+        name: roster.find((p) => p.id === id)?.name ?? '',
+      }))
       // 后端 name 是 min_length=1 的必填——名字空的人送过去只会换回一个 422，
       // 而经理看到的会是一句「这次没生成成」，查不出是哪一行的锅。
       .filter((r) => r.name.trim().length > 0)

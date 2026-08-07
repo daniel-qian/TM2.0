@@ -393,7 +393,9 @@ def test_the_zh_header_map_only_targets_keys_the_extractor_actually_reads_ONE_RU
     canonicalised into silence, which is worse than leaving it uncanonicalised, because the next
     reader sees a mapping and assumes the column works.
     """
-    readable = {"name", "role", "team", "tenure", "owns", "focus", "projects"}
+    # person_id 加进来是 T5/A2：`_people_from_roster` 真的读它（`col.get("person_id")`），
+    # 而且它是 `_dedupe_entities` 认人的第一把尺——不是一个"映射了但没人看"的键。
+    readable = {"name", "role", "team", "tenure", "owns", "focus", "projects", "person_id"}
     stray = sorted((w, k) for w, k in _ZH_HEADER_MAP.items() if k not in readable)
     assert not stray, f"header words mapped onto keys the extractor never looks up: {stray}"
 

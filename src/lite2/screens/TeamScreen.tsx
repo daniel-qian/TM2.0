@@ -17,6 +17,7 @@ import {
   GROUP_UNGROUPED,
   MOOD_ALL,
 } from '../teamDirectory'
+import { docFromSource } from '../teamData'
 import type { LitePerson } from '../teamData'
 
 // feat-024 · lite 屏 1+2：上传空态 · Your team——ADR-0022 决策 1。
@@ -34,11 +35,6 @@ function fill(template: string, vars: Record<string, string | number>): string {
 
 function classNames(parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(' ')
-}
-
-// rich-align-0722/03 · 自述出处 → 展示用文档名（剥掉 `:行号` 尾缀）。
-function docFromSource(source: string): string {
-  return source.replace(/:\d+$/, '')
 }
 
 // rich-align-0722/03 · 情绪定性枚举 → 当前字典的词。other 走文档原词 valueRaw（不替客户改写）。

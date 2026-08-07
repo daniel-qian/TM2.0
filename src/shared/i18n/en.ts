@@ -1064,6 +1064,7 @@ export const en = {
     detailProgress: 'Progress',
     detailBlockers: 'Worth noting',
     detailSignals: 'What the documents say',
+    detailSignalSource: '(from «{source}»)',
     detailGone: 'This card is no longer in your uploads.',
     // feat-055: the project overlay used to render `status` and `ownerName` straight from the
     // defaulted view model, so a project the documents never gave a status to read as "on-track".
@@ -1134,6 +1135,9 @@ export const en = {
     projectsWriteFailed: 'Could not save',
     // provenance badge — this field/card carries a manual edit (origin=manual); doc-only fields never show it.
     projectsManualBadge: 'Hand-edited',
+    // T5/A2 — the third provenance origin: this field last changed because someone filled in a
+    // form, not because we read a document and not because a manager typed it.
+    projectsFormBadge: 'From a submitted form',
     projectsArchivedTitle: 'Archived ({count})',
     projectsArchivedAria: 'Archived projects',
     projectsArchivedRestore: 'Restore',

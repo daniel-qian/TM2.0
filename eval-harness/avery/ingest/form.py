@@ -58,6 +58,15 @@ class FormField:
     choices: list[str] = field(default_factory=list)   # 仅 choice：单选按钮组的选项（过红线门）
     min: int = NUMBER_MIN_FLOOR                        # 仅 number
     max: int = NUMBER_MAX_CEIL                         # 仅 number
+    # 差距战役 T5/A2 —— 这一格的答案是一句**情境陈述**（哪儿卡住了 / 缺什么），回流时：
+    #   * 成为人卡上一条带出处的情境信号（`SignalEntity`，summary 停在情境，绝不是对人的判断）；
+    #   * 表单若绑定了项目（`FormSubmission.project_ref`），同一句话追加成项目卡的阻塞原句。
+    # 默认 False，而且**必须**默认 False：「已完成事实」是成绩、「下一周期目标」是计划，把它们
+    # 当成情境信号，等于每人每周往卡上糊四条噪音，真正卡住的那一条反而看不见了。
+    # 为什么是字段描述上的一个开关、而不是在回流代码里按 field.id 写死 `{'missed','support'}`：
+    # 模板是可编辑的（`POST /team/{ctx}/forms`），按 id 写死意味着经理一改题面，回流就静默失灵。
+    # 与 kind 同一条纪律——渲染层/校验层/回流层都读字段描述，谁都不认字段名（T1 文件头）。
+    situational: bool = False
 
 
 @dataclass
@@ -79,6 +88,10 @@ class FormSubmission:
     person_id: str = ""
     person_name: str = ""
     period: str = ""
+    # 差距战役 T5/A2 —— 这条链绑定到哪个项目（项目**名称**，即 02 表「项目名称」/`ProjectEntity.title`，
+    # 因为 `_project_key(title)` 才是归并认项目的那把尺）。经理铸链时选，**员工改不了**：填的人不该
+    # 能决定自己那句话挂到哪张项目卡上。空 = 这条链不绑项目 → 回流只走人卡，一个字都不往项目卡写。
+    project_ref: str = ""
     share_token: str = ""
     answers: list | None = None          # [{field_id, value}]；None = 未提交
     submitted_at: str = ""
@@ -173,7 +186,7 @@ def gate_form_red_line(template: FormTemplate) -> None:
 def gate_submission_storage_safety(sub: FormSubmission) -> None:
     """提交侧**只**做存储安全（NUL/0x00），刻意不做红线扫描——答案是员工本人的话。"""
     texts = [sub.id, sub.context_id, sub.template_id, sub.person_id, sub.person_name,
-             sub.period, sub.share_token]
+             sub.period, sub.project_ref, sub.share_token]
     for a in (sub.answers or []):
         if isinstance(a, dict):
             texts += [str(a.get("field_id") or ""),
@@ -320,7 +333,12 @@ def weekly_template(context_id: str, *, created_at: str = "") -> FormTemplate:
     「负载自述」「情绪自述」，情绪三个选项 `如常 / 偏紧 / 吃紧` 正是
     `_MOOD_SELFREPORT_MAP`（`extract.py:79-90`）三个桶各自的头一个词，所以 T5 把它们渲染进
     文档时是 1:1 映射，不用再造一层翻译。⚠ 这两格是**本人自述**，不是对人的评分——题面里
-    一个字都不许出现打分/排名（`gate_form_red_line` 是这句话的执法者）。"""
+    一个字都不许出现打分/排名（`gate_form_red_line` 是这句话的执法者）。
+
+    T5/A2 —— 四个自由文本格里只有「未达成及原因」「需要支持」标了 `situational=True`：那两格问的
+    就是「哪儿卡住了 / 缺什么」，回流成人卡上的情境信号与项目卡的阻塞原句刚好是同一件事。
+    「已完成事实」是成绩、「下一周期目标」是计划，都不是需要经理今天去看一眼的情境——它们照旧
+    逐字进资料库、议事室照旧引得到，只是不长成卡上的一条信号。"""
     return FormTemplate(
         context_id=context_id,
         id=WEEKLY_TEMPLATE_ID,
@@ -333,6 +351,7 @@ def weekly_template(context_id: str, *, created_at: str = "") -> FormTemplate:
                      "比写「直播工作顺利推进」有用得多。"),
             FormField(
                 id="missed", kind="text", label="未达成及原因", required=True,
+                situational=True,
                 help="哪些没做完、为什么。写客观情况，不用自我检讨——是资源不够、被别的事挤了，"
                      "还是外部原因没到位。"),
             FormField(
@@ -340,6 +359,7 @@ def weekly_template(context_id: str, *, created_at: str = "") -> FormTemplate:
                 help="下个周期你要做完什么。"),
             FormField(
                 id="support", kind="text", label="需要支持", required=False,
+                situational=True,
                 help="需要谁配合、需要什么资源。这一栏经常被留空，但它最能帮到你——写下来，"
                      "经理才知道该在哪儿使劲。"),
             FormField(

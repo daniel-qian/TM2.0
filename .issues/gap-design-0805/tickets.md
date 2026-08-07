@@ -167,6 +167,39 @@ i18n 约 12 键 zh/en 自写大白话，跑 i18n-orphans。
 
 ## T5 · form-reflow-a2：表单回流人卡/项目卡
 
+> ## ✅ 已做完（2026-08-07 · `ad9d51c`）· 三处**故意没照票面做**，理由都在代码里核过
+>
+> 交接：`session-handoff-T5.md`（同目录），feature_list `feat-101`，issue #55 已关。
+>
+> **票面「按人员ID归并（01 表已有该列）」的前提不成立**——那一列从来没走到人卡过：
+> `PersonEntity` 没有工号字段、`_ZH_HEADER_MAP` 不认「人员ID」、`_people_from_roster` 一个字
+> 没读过它，`_person_key` 的 docstring 自己写着「要分开同名的人得有真身份信号，lite 没有」。
+> 本票把这条路修通了（新字段 `person_id` + `PersonIndex`），所以它比票面估的略大。
+>
+> 1. **回流不调 `_dedupe_entities`**（票面点名要调）。它结尾整表重写 `res.people`/`res.signals`，
+>    而 `ctx.extraction` 是跑过归并、之后又被手编 CRUD 改过的清单：手加的人（`um-…`）会被同名
+>    并掉，而 `archived`（软删）与 `provenance`（手编出处）**根本不在合并规则里**，连人带证据
+>    一起消失——一次员工提交不该有权撤销经理手动归档过的一张卡。另有三条（conflicts 重复、
+>    `held_src` 重建引错文档、signals 换尺重筛）。改用 `merge_person_reading`，**与
+>    `_dedupe_entities` 共用同一把身份尺（`PersonIndex`）和同一段吸收规则（`_absorb_person`）**，
+>    一致性由门 `test_the_form_writer_and_the_pipeline_merge_a_person_the_same_way` 咬着。
+> 2. **自述的时间性要单独处理**（票面没提，但不处理就是演示地雷）。keep-first 在表单这条路上
+>    等于 keep-**oldest**：周雅第二周报 85，卡会永远停在第一周的 72 且一直引那份旧文档。
+>    解法是合并**之前**按 `uploaded_at` 腾空过时子槽，让既有 keep-first 自然填上——不动那条
+>    两条抽取路共用的规则。时间只走 `decision_grading._uploaded_moment`（本票把 `_uploaded_day`
+>    拆成它的薄壳，全仓仍只有一处解析 `uploaded_at`）；用**瞬间**不是天粒度，理由见交接。
+> 3. **「表单绑定项目」这件事在数据层没有落脚点**，得先造出来：`FormSubmission.project_ref`
+>    + 迁移 `0014` + `FormRecipientIn.project_ref`。经理铸链时选，**员工的 H5 上不存在这个字段**。
+>
+> 另外三条顺手补的（都是本票让它们第一次变得会说谎，不补就是新造的假话）：
+> `signal_cards()` 补 `sourceRef`（文档指针此前根本没投出去）；`docFromSource` 剥掉 T2 铸进
+> source_key 的 `#sub_<hex>`（否则人卡角标当着客户面显示一串 UUID）；`provenance.origin` 加第三
+> 个取值 `'form'` + 前端三态角标（`blockers` 那一格此前**从来没挂过**出处角标）。
+>
+> **留给 T3 的两条**：`recipients[].id`（工号）与 `recipients[].project_ref` 目前**只有 API 面
+> 没有 UI**。选人控件不带工号的话，公司里有同名员工时那一份自述**回流不了**——诚实跳过 +
+> 一行日志，不掷硬币挑一个（`test_without_a_staff_number_an_ambiguous_name_reflows_onto_nobody`）。
+
 **前置**：T2 已合 main。**规模**：1-1.5 个 session。
 
 **目标**：周雅提交周报后——人卡出现「本人自述：负载 72（《周报-周雅-W32》）· 情绪偏紧」；

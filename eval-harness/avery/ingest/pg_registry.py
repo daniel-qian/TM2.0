@@ -861,8 +861,10 @@ class PostgresContextRegistry(ProjectWriteMixin):
     # SourceDocument，走 get→原地 append→put 进 context（T2）。
 
     _FORM_TPL_COLS = "context_id, id, title, fields, active, created_at"
+    # ⚠ 列序就是 `_form_submission_from_row` 的解包顺序 —— 加列一律**追加在末尾**，改中间等于
+    # 把两个字段的值对调，而两个都是 text，Postgres 与 Python 都不会吭一声。
     _FORM_SUB_COLS = ("id, context_id, template_id, person_id, person_name, period, "
-                      "share_token, answers, submitted_at, created_at, expires_at")
+                      "share_token, answers, submitted_at, created_at, expires_at, project_ref")
 
     @staticmethod
     def _form_template_from_row(row):
@@ -880,11 +882,11 @@ class PostgresContextRegistry(ProjectWriteMixin):
     def _form_submission_from_row(row):
         from .form import FormSubmission
         (sid, context_id, template_id, person_id, person_name, period, share_token,
-         answers, submitted_at, created_at, expires_at) = row
+         answers, submitted_at, created_at, expires_at, project_ref) = row
         return FormSubmission(
             id=sid, context_id=context_id, template_id=template_id,
             person_id=person_id or "", person_name=person_name or "", period=period or "",
-            share_token=share_token or "",
+            project_ref=project_ref or "", share_token=share_token or "",
             answers=list(answers) if answers is not None else None,
             submitted_at=submitted_at.isoformat() if submitted_at is not None else "",
             created_at=created_at.isoformat() if created_at is not None else "",
@@ -940,21 +942,24 @@ class PostgresContextRegistry(ProjectWriteMixin):
         with self._connect() as conn, conn.transaction():
             conn.execute(
                 "INSERT INTO avery.form_submissions (id, context_id, template_id, person_id, "
-                " person_name, period, share_token, answers, submitted_at, created_at, expires_at) "
+                " person_name, period, share_token, answers, submitted_at, created_at, expires_at, "
+                " project_ref) "
                 "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s::timestamptz, "
                 "        COALESCE(%s::timestamptz, now()), "
-                "        COALESCE(%s::timestamptz, now() + interval '7 days')) "
+                "        COALESCE(%s::timestamptz, now() + interval '7 days'), %s) "
                 "ON CONFLICT (id) DO UPDATE SET "
                 "  template_id = EXCLUDED.template_id, person_id = EXCLUDED.person_id, "
                 "  person_name = EXCLUDED.person_name, period = EXCLUDED.period, "
                 "  share_token = EXCLUDED.share_token, answers = EXCLUDED.answers, "
-                "  submitted_at = EXCLUDED.submitted_at, expires_at = EXCLUDED.expires_at",
+                "  submitted_at = EXCLUDED.submitted_at, expires_at = EXCLUDED.expires_at, "
+                "  project_ref = EXCLUDED.project_ref",
                 (submission.id, submission.context_id, submission.template_id,
                  submission.person_id or "", submission.person_name,
                  submission.period or "", submission.share_token or None,
                  Jsonb(submission.answers) if submission.answers is not None else None,
                  submission.submitted_at or None,
-                 submission.created_at or None, submission.expires_at or None))
+                 submission.created_at or None, submission.expires_at or None,
+                 submission.project_ref or ""))
         return self.get_form_submission(submission.id)
 
     def get_form_submission(self, submission_id: str):
