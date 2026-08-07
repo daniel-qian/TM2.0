@@ -51,6 +51,15 @@ const { browser, page, pageErrors } = await bootPage({
   trackPageErrors: true,
 })
 
+// 数真的发出去的保存请求。⚠ 这一条来自变异测试：初版判据是「点完保存后 formBuilderBusy
+// 仍是 idle」，而那是个**恒绿的空判据**——忙态早在断言之前就回落了，发没发请求它都说 idle。
+// 拆掉上限镜像的变异（checkFormShape 恒返回 []）在它底下活了下来。真判据只能是「网络上
+// 到底有没有那一发 POST」。
+let savePosts = 0
+page.on('request', (r) => {
+  if (r.method() === 'POST' && /\/forms$/.test(new globalThis.URL(r.url()).pathname)) savePosts += 1
+})
+
 // ── ⓪ 真上传造一个工作区（stub 通道没有这三个端点，这道门只能走真后端）──────────────────
 await page.evaluate(
   async ({ roster, sheet, seam }) => {
@@ -129,15 +138,16 @@ rec('② 自述开关在读不到它的题型上是灰的（标了也读不到 =
 // ── ③ 上限镜像：本地就拦住并说清哪一条 ───────────────────────────────────────────────────
 // 题面留空直接保存：这一步**必须**在本地就给出「第 1 题还没写题目」，不是发一趟请求换回
 // 一句英文 reason。
+const postsBeforeReject = savePosts
 await page.locator('.lite-files-forms-builder-save').click()
-await page.waitForTimeout(300)
+await page.waitForTimeout(800)
 const issues = await page.locator('.lite-files-forms-builder-issues li').allInnerTexts()
 rec('③ 空题面在本地就被拦住，并说清是第几题',
   issues.some((t) => t.includes('第 1 题') && t.includes('还没写题目')), JSON.stringify(issues))
 rec('③ 表名没填也一并说了（一次列全，不是改一条报一条）',
   issues.some((t) => t.includes('还没有名字')), JSON.stringify(issues))
-rec('③ 被本地拦下时没有发出保存请求（formBuilderBusy 没进过 saving）',
-  (await page.evaluate((seam) => window[seam].getState().formBuilderBusy, SEAM)) === 'idle')
+rec('③ 被本地拦下时**一发请求都没出去**（判据是网络，不是一个早已回落的忙态标志）',
+  savePosts === postsBeforeReject, `POST /forms × ${savePosts - postsBeforeReject}`)
 
 // 加到 12 题：「加一题」必须置灰，且旁边那行计数说清是哪条上限。
 await page.locator('#lite-forms-builder-title').fill('值班交接')

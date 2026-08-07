@@ -350,6 +350,39 @@ def test_a_text_only_form_still_grows_a_situational_signal(client):
     assert mine[0].get("sourceRef"), "情境信号没有出处"
 
 
+def test_only_the_marker_decides_which_answer_becomes_a_card_reading():
+    """🔴 **只**量标记这一条规则，把取证闸从判据里摘出去。
+
+    为什么非要单独一条：`test_an_unmarked_number_question_never_climbs_onto_a_card` 走的是整条
+    真链，而真链上那份文档里，没标记的数字题渲染成自己的一节（`## 产能自述` + 一行光秃秃的
+    `93`）——那一行没有名字，取证闸自己就把它挡了。于是把「认标记」换回「认 label 文案」的
+    变异在那条门下**活了下来**：门是绿的，但绿的原因是另一把锁。
+    两把锁必须两道门（belt-and-braces 会让内层规则免疫变异）。
+
+    所以这里把取证闸**喂饱**：故意给一行 `周雅｜产能自述：93`，名字/题面/值三样俱全，取证闸
+    无话可说。此时唯一还能说话的就是标记本身。A/B 只差一个字段：同一份文档、同一个答案、
+    同一个行号，标了就上卡、没标就不上。"""
+    from avery.ingest.form_reflow import stub_person_from_submission
+    from avery.ingest.parse import ParsedDoc
+    from avery.ingest.form import FormField, FormTemplate
+
+    doc = ParsedDoc(name="产能表.md#s2", ext="md",
+                    text="# 产能表\n\n记录ID：s2\n\n## 本人自述\n\n周雅｜产能自述：93\n")
+    line = next(i for i, ln in enumerate(doc.lines, 1) if "产能自述：93" in ln)
+    sub = FormSubmission(id="s2", context_id="c", template_id="t", person_name="周雅",
+                         submitted_at=W32, answers=[{"field_id": "cap", "value": 93}])
+
+    def tpl(marker: str) -> FormTemplate:
+        return FormTemplate(context_id="c", id="t", title="产能表", fields=[
+            FormField(id="cap", kind="number", label="产能自述", min=0, max=100,
+                      self_report=marker)])
+
+    unmarked = stub_person_from_submission(doc, tpl(""), sub, {"cap": line})
+    assert unmarked is None, "没标记的格上了卡——回流在认 label 文案，不是认结构"
+    marked = stub_person_from_submission(doc, tpl("load"), sub, {"cap": line})
+    assert marked is not None and marked.self_report.load.value == 93, "标了的格反而没上卡"
+
+
 def test_a_reading_with_no_line_of_the_document_behind_it_is_dropped():
     """取证闸（0807 HITL 那道的同族）：出处那一行必须真写着名字 + 题面 + 值。
 
