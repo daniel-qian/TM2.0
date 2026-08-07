@@ -2,8 +2,12 @@ import { create } from 'zustand'
 import type {
   AskDraft,
   AskQuestionKind,
+  FormLinkRecipient,
+  FormLinksResult,
   LiveFileEntry,
   LiveAdviseRunEntry,
+  LiveFormSubmission,
+  LiveFormTemplate,
   LiveNoteEntry,
   LiveTeamPayload,
   LiveTransport,
@@ -183,6 +187,17 @@ export function forgetKnownContext(contextId: string): KnownContext[] {
 // 🔴 也绝不允许第四种"静默失败"：切不过去就必须说，不能停在原地让人以为点没生效。
 export type ContextSwitchError = 'missing-credential' | 'unreadable' | 'failed'
 
+// T3 · 铸链失败的三种，因为对经理的意思完全不同（同 ContextSwitchError 的取舍）：
+//   'rejected' —— 422：人数越界（一次 1..30）或服务端结构/红线门拒了这次铸链。改了能成。
+//   'retired'  —— 409/410：这张表已经撤下，不再发新链接。不是"出错了"，是"这条路关了"。
+//   'failed'   —— 其余一切（网断、404 凭据过期、5xx）。
+//
+// 🔴 为什么不能直接把 TransportError.message 上屏：httpErrorMessage 把 **422 映射成
+// `transport.unsupportedType`**（"那个文件类型不接受"，与 415 共用一句，见 transport.ts 里
+// 那行 `if (status === 415 || status === 422)`）。一次人数越界会给经理看一句讲文件格式的话。
+// 状态码走 TransportError.status 这条结构化通道，文案这一族自己写（同 isNotFound 的教训）。
+export type FormsMintError = 'rejected' | 'retired' | 'failed'
+
 // 首帧同步取回（不等 effect）：store 建好时 contextId 就位，`restoreSession()` 才有的可拉。
 // feat-068 补漏：feat-050 用 isStubTransportSelected() 判断「这是 stub 的假 context，别持久化」，
 // 但那个函数直接读 URL 的 ?transport=stub，**不受 DEV 闸约束**——而 :181 的 defaultTransport 受。
@@ -312,6 +327,23 @@ interface LiteState {
   askBusy: 'idle' | 'saving' | 'refreshing'
   askError: string | null
 
+  // ── 常驻表单（gap-design-0805 T3 · 资料库第④段）─────────────────────────────────────
+  // 🔴 三态，不是两态（同 adviseRuns 的取舍，不是 files 的 `[]` 初值）：
+  //   null —— 没拉过 / 通道没有这个方法（stub、门里注入的假 transport、老后端）/ 拉失败。
+  //   []   —— 200 回来了，这家公司确实一张表都没有。
+  // 两者在屏上都表现为"整段不渲染"，但把它们**在数据里**分开是有代价的选择：将来要给
+  // 「拉失败」写一句诚实提示时，不必回头重造这个区分。
+  // 🔴 绝不从 404 推出「没有表单」——那是后端对缺/错 owner_token 的无枚举答复。
+  formTemplates: LiveFormTemplate[] | null
+  formSubmissions: LiveFormSubmission[] | null
+  // 刚铸出来的这一批链接（供逐条复制）。刻意**不复用** formSubmissions：那份是全部周期的
+  // 全量，而这一批是经理此刻要粘出去的那几条——混在一起最容易粘错周。
+  formsMinted: FormLinksResult | null
+  // 铸链在飞。UI 据此置灰——但真正的临界区在 store 里（见 createFormLinks 的注释：
+  // React 的 disabled 要等一次重渲染，同一拍的第二次点击挡不住，而这个端点不幂等）。
+  formsBusy: 'idle' | 'minting'
+  formsError: FormsMintError | null
+
   // ── actions ──
   // feat-051：`params` 可给目标屏叠加 query——feat-057 的决策卡走
   // `goScreen('room', { q: '<问题>' })` 带着问题进议事室。省略即只切屏（既有 7 个调用点不变）。
@@ -350,6 +382,14 @@ interface LiteState {
   // issue #49 · 拉取议事室历史。transport.fetchAdviseRuns 可选（stub 无）——判空即无操作，
   // adviseRuns 停在 null，历史区整块不渲染（不出假空态）。
   refreshAdviseRuns: () => Promise<void>
+  // ── 常驻表单（T3）。模板与提交状态一起拉；两个 transport 方法都可选（stub 无）——判空即
+  // 无操作，状态停在 null，整段不渲染（不出假空态）。次要只读视图：失败静默。
+  refreshForms: () => Promise<void>
+  // 给选中的人铸这一期的链接。返回 boolean：true=成功（UI 展开链接列表），false=失败
+  // （UI 留在原地读 formsError）。🔴 写失败诚实报错，绝不伪装成功。
+  createFormLinks: (templateId: string, recipients: FormLinkRecipient[]) => Promise<boolean>
+  // 清铸链态（换模板 / 重新选人时调，别把上一次的报错和上一批链接挂到下一次操作上）。
+  resetFormsWrite: () => void
   // ── 项目手编 CRUD（rich-align-0722 · issue 05a）。写端点已就绪（f1ca46d）；action 写后
   // refreshTeam() 从权威 /team 重新派生网格（含 archived_projects + 逐字段 provenance），
   // 不做易漂移的乐观拼装（archive/restore 要跨 active↔archived 两个数组，单条回执拼不全）。
@@ -462,6 +502,14 @@ export const useLite = create<LiteState>((set, get) => ({
   ask: null,
   askBusy: 'idle',
   askError: null,
+
+  // T3 · 常驻表单。两份清单起手是 null 而不是 []——「没拉过」与「拉到了确实是空的」在
+  // 数据里必须分得开（见 LiteState 里那段）。
+  formTemplates: null,
+  formSubmissions: null,
+  formsMinted: null,
+  formsBusy: 'idle',
+  formsError: null,
 
   // Room 内的一次性 nudge（用户已离开事发现场；nudge 是瞬态感知，不是持久红点）按「路由变更
   // 即清」的统一动作走，三条离开 Room 的路径都要清：① goScreen tab 切换；② Topbar 的 <Link>
@@ -651,6 +699,14 @@ export const useLite = create<LiteState>((set, get) => ({
           files: [],
           notes: [],
           adviseRuns: null,
+          // T3：这条 404 分支**绕开了 adoptContext**，所以公司域清单要在这里再列一遍——
+          // 漏掉的话，死锚点恢复失败后上一家公司的表单链接会原地留在屏上。
+          // 五件齐（同 adoptContext 那份的理由）。
+          formTemplates: null,
+          formSubmissions: null,
+          formsMinted: null,
+          formsBusy: 'idle',
+          formsError: null,
           ingestStatus: 'idle',
           restoring: false,
           restoreError: null,
@@ -673,6 +729,14 @@ export const useLite = create<LiteState>((set, get) => ({
       // 换了 context 就不能留着上一个 context 的数据（换账号数据串是 feat-053 的红线）。
       ...(contextId !== get().contextId
         ? { team: null, rawTeam: null, files: [], notes: [], adviseRuns: null,
+            // T3：表单**五件**同属公司域——留着就是把 A 公司的链接摆在 B 公司的资料库里，
+            // 经理一复制就把 A 的人的表单发出去了。
+            // 🔴 formsBusy / formsError 也在这份清单里，别只清前三件（对抗自审逮到）：
+            // formsError 是「A 那次铸链为什么没成」，挂到 B 头上就是替 B 断言一件没发生的事；
+            // formsBusy 漏了则「铸链途中切公司」会把生成键永久卡在「正在生成…」。
+            // 这份清单与 resetLiteCompanyData 那份是同一份契约的两个抄本，改一处必须改两处。
+            formTemplates: null, formSubmissions: null, formsMinted: null,
+            formsBusy: 'idle' as const, formsError: null,
             ingestStatus: 'idle' as IngestStatus }
         : {}),
     })
@@ -823,6 +887,91 @@ export const useLite = create<LiteState>((set, get) => ({
       // 历史是次要只读视图——拉取失败不该打断主流程（adviseRuns 停在上一次的值）。
     }
   },
+
+  // T3 · 常驻表单——与 refreshNotes / refreshAdviseRuns 同骨架（contextId 收口 + stillOn 闸
+  // + 静默降级）。两次拉取各自判空、各自 stillOn：模板拉到了而提交没拉到时，模板照样该显示。
+  // 🔴 必须吞错。live-frontend-gate 的 tokenDiscipline 相位会在**故意缺 token** 的情况下调
+  // 整个 refresh 系列，任何一条抛出去就是门红——而这三条端点缺 token 恒 404。
+  refreshForms: async () => {
+    const { contextId, transport } = get()
+    if (!contextId) return
+    if (transport.fetchForms) {
+      try {
+        const payload = await transport.fetchForms(contextId)
+        if (!stillOn(get, contextId)) return
+        set({ formTemplates: payload.templates })
+      } catch {
+        // 次要只读视图——失败不打断主流程；formTemplates 停在 null，整段不渲染。
+      }
+    }
+    // 上面那次 await 期间 contextId 可能已经被换掉——再拉一次提交清单前先核一次身份，
+    // 否则会拿着 B 公司的 id 去发一条本该属于 A 的请求。
+    if (!stillOn(get, contextId)) return
+    if (transport.fetchFormSubmissions) {
+      try {
+        const payload = await transport.fetchFormSubmissions(contextId)
+        if (!stillOn(get, contextId)) return
+        set({ formSubmissions: payload.submissions })
+      } catch {
+        // 同上。
+      }
+    }
+  },
+
+  // T3 · 铸这一期的链接。
+  //
+  // 🔴 防双击的闸必须在 store 里，UI 的 `disabled` 顶不住：React 的 disabled 要等一次重渲染
+  // 才落到 DOM 上，同一拍里的第二次 click 发生在那之前（同 switchContext 那段的教训，那次是
+  // verify-context-switch 用「同一拍连点两下」逮到的）。而这个端点**不幂等**——第二发不是
+  // 一次多余的请求，是真的给每个人再发一轮新链接，员工手机上会收到两条。
+  createFormLinks: async (templateId, recipients) => {
+    const { contextId, transport } = get()
+    if (!contextId || !transport.createFormLinks) return false
+    if (get().formsBusy !== 'idle') return false
+    // 本地先挡一次人数越界：判据与服务端同一条（MAX_RECIPIENTS_PER_MINT=30），但**服务端
+    // 仍是最后一道门**——这里挡只是为了不让经理白等一次往返，不是把校验搬到前端。
+    if (recipients.length < 1 || recipients.length > 30) {
+      set({ formsError: 'rejected' })
+      return false
+    }
+    set({ formsBusy: 'minting', formsError: null })
+    try {
+      const result = await transport.createFormLinks(contextId, templateId, { recipients })
+      // 🔴 结果过期时**也要把 formsBusy 放回 idle**（对抗自审逮到的高危）。
+      // 第一版这里直接 `return false`，忙态就永远卡在 'minting' 了：adoptContext 的公司域
+      // 清单当时只清三件（模板/提交/刚铸的链接），不含 formsBusy；而唯一能清它的
+      // resetFormsWrite 只挂在「切换模板」上，那排按钮又只在有 2 张以上模板时才渲染——
+      // 今天恒是内置周报这一张。于是「铸链途中切换公司」= 生成键在**所有**公司上永久置灰、
+      // 标着「正在生成…」，只有刷新页面或登出能救。
+      // 放回 idle 是安全的：进门那道 `formsBusy !== 'idle'` 闸保证同一时刻只有一次铸链在飞，
+      // 所以这次结果落地时不可能有另一次铸链正持有这个标志。
+      if (!stillOn(get, contextId)) {
+        set({ formsBusy: 'idle' })
+        return false
+      }
+      set({ formsMinted: result, formsBusy: 'idle' })
+      // 铸完立刻回权威清单：新铸的这几条在 submissions 里是 status 'open' 的行，
+      // 「谁交了」那一段要跟着长出来（不做乐观拼装——状态由服务端背书）。
+      void get().refreshForms()
+      return true
+    } catch (err) {
+      // 同上：过期的失败也要放开忙态，但**不写 formsError**——那句报错属于上一家公司，
+      // 挂到已经切过去的这一家头上，就是替它断言了一件没发生的事。
+      if (!stillOn(get, contextId)) {
+        set({ formsBusy: 'idle' })
+        return false
+      }
+      const status = err instanceof TransportError ? err.status : undefined
+      set({
+        formsBusy: 'idle',
+        formsError:
+          status === 422 ? 'rejected' : status === 409 || status === 410 ? 'retired' : 'failed',
+      })
+      return false
+    }
+  },
+
+  resetFormsWrite: () => set({ formsBusy: 'idle', formsError: null, formsMinted: null }),
 
   // ── 项目手编 CRUD（rich-align-0722 · issue 05a）。四个都走 runProjectWrite 共用骨架
   // （判可用/判忙 → 写 → refreshTeam 从权威 /team 重派生 → 落忙态/诚实报错）。────────────────
@@ -1010,6 +1159,13 @@ export function resetLiteCompanyData(): void {
     notes: [],
     noteJustAdded: false,
     adviseRuns: null,   // issue #49：历史是公司域数据，换账号/重开必清
+    // T3 · 常驻表单五件全清。formsBusy 也要归位——换账号时卡在 'minting' 等于把生成键
+    // 永久置灰成一个死按钮（那次请求属于上一个账号，永远不会回来解锁它）。
+    formTemplates: null,
+    formSubmissions: null,
+    formsMinted: null,
+    formsBusy: 'idle',
+    formsError: null,
     ingestStatus: 'idle',
     ingestError: null,
     knownContexts: [],

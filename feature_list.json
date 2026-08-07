@@ -551,6 +551,12 @@
       "name": "conflicts-rule-b2b · 冲突上今天页（差距战役 T7 / #56）",
       "status": "done",
       "evidence_ref": "feature_archive.json#feat-100"
+    },
+    {
+      "id": "feat-101",
+      "name": "form-frontend-a1c · 资料库「常驻表单」区 + 生成链接（差距战役 T3 / #54）",
+      "status": "done",
+      "evidence_ref": "feature_archive.json#feat-101"
     }
   ]
 }
