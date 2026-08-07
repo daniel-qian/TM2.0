@@ -167,14 +167,14 @@ class DocStamp:
     day: date
 
 
-def _uploaded_day(uploaded_at: str) -> date | None:
-    """把 `SourceDocument.uploaded_at`（ISO8601，通常带 UTC 时区和微秒）折成一个 UTC 日期。
+def _uploaded_moment(uploaded_at: str) -> datetime | None:
+    """把 `SourceDocument.uploaded_at`（ISO8601，通常带 UTC 时区和微秒）解析成一个 UTC 瞬间。
 
-    🔴 全模块**只有这一处**做时间归一，谁要算资料年龄都得走它。理由是这是本文件第一条跨
-    date/datetime 边界的规则：`as_of` 是服务端本地的 naive `date`（生产恒为 `date.today()`），
-    而 `uploaded_at` 是带时区的瞬间。两处各归一一次，早晚会归出两个不同的日子。
+    🔴 **全仓只有这一处**把 `uploaded_at` 解析并归一到 UTC。`_uploaded_day` 是它的一层薄壳，
+    T5 的表单回流（`ingest/form_reflow.py`，判「哪一份自述更新」）也调它。多一处 `fromisoformat`
+    + `astimezone`，早晚就是两套对带/不带时区、对 `Z` 后缀的不同答案。
 
-    认不出来（空串、被截断、不是 ISO）→ `None` = **不知道**，绝不兜底成 `today` 或 `date.min`：
+    认不出来（空串、被截断、不是 ISO）→ `None` = **不知道**，绝不兜底成 `now` 或 `datetime.min`：
     前者让每份资料永远新鲜、后者让每份资料永远陈旧，两种假话各错一边。
     """
     text = str(uploaded_at or "").strip()
@@ -186,7 +186,23 @@ def _uploaded_day(uploaded_at: str) -> date | None:
         return None
     if moment.tzinfo is not None:
         moment = moment.astimezone(timezone.utc)
-    return moment.date()
+    return moment
+
+
+def _uploaded_day(uploaded_at: str) -> date | None:
+    """`uploaded_at` → 一个 UTC **日期**（天粒度）。
+
+    🔴 本模块的时间归一只走这一处（它自己只走 `_uploaded_moment`），谁要算资料年龄都得走它。
+    理由是这是本文件第一条跨 date/datetime 边界的规则：`as_of` 是服务端本地的 naive `date`
+    （生产恒为 `date.today()`），而 `uploaded_at` 是带时区的瞬间。两处各归一一次，早晚会归出
+    两个不同的日子。
+
+    ⚠ 天粒度是**定级这条路**的口径，理由是同一批上传彼此只差微秒，用原始时间戳等于让文件遍历
+    顺序当判据。表单回流那条路刻意用 `_uploaded_moment` 的原始瞬间：两份提交的 `uploaded_at`
+    是员工两次真的按下提交的时刻，同一天再交一份是**新读数**，不是同一批。
+    """
+    moment = _uploaded_moment(uploaded_at)
+    return moment.date() if moment is not None else None
 
 
 @dataclass(frozen=True)

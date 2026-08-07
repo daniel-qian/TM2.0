@@ -75,9 +75,25 @@ export interface ProjectView {
   provenance: Record<string, LiveFieldProvenance>
 }
 
-/** 某字段是否为人手编（origin==='manual'）。缺席/doc 出处 → false（不替文档冒充手编）。 */
+/** 某字段是否为人手编（origin==='manual'）。缺席/doc/form 出处 → false（不替文档冒充手编）。 */
 export function isManualField(view: ProjectView, field: string): boolean {
   return view.provenance[field]?.origin === 'manual'
+}
+
+/**
+ * 这一格该挂哪种出处角标 —— 只有**不是**「我们从资料里读到的」时候才挂。
+ *
+ * T5/A2 加了 'form' 之后，`isManualField` 那种二值判断不够用了：`origin==='form'` 既不满足
+ * manual、也不该被当成 doc 静默无标——那会让「员工本人这周填的」跟「八周前那份文档里读到的」
+ * 在屏幕上长得一模一样。三态显式列出来，新增第四种取值时 TypeScript 会在这里报错，而不是
+ * 悄悄落进 `null` 分支。
+ */
+export function provenanceBadgeKind(
+  provenance: Record<string, LiveFieldProvenance> | undefined,
+  field: string,
+): 'manual' | 'form' | null {
+  const origin = provenance?.[field]?.origin
+  return origin === 'manual' || origin === 'form' ? origin : null
 }
 
 const KNOWN_STATUS = new Set(['blocked', 'at-risk', 'on-track', 'done'])

@@ -69,14 +69,22 @@ def submission_filename(template: FormTemplate, submission: FormSubmission) -> s
     return "-".join(p for p in parts if p) + ".md"
 
 
-def render_submission_markdown(template: FormTemplate, submission: FormSubmission) -> str:
-    """一次提交 → 一份 md 资料文档。节结构与转义规则见文件头「渲染契约」。
+def render_submission_lines(
+        template: FormTemplate,
+        submission: FormSubmission) -> tuple[list[str], dict[str, int]]:
+    """渲染出文档的每一行，**外加**一张 `{field_id: 这一格答案第一行的行号}`（1-based）。
+
+    行号这张表是 T5 回流要的：一条 `SignalEntity` 的出处必须是 `"<source_key>:<行号>"`，才能和上传
+    文件走同一条引用契约（`MaterialChunk.source` / `DocTimeline.stamp_for` 都按这个形状 join）。
+    它由**渲染器自己**交出来，而不是回流那边拿字符串再找一遍——文档长什么样只有这里知道，
+    在别处 `md.splitlines().index(...)` 找答案文本，就是第二把尺，答案一重复就找错行。
 
     可选且留空的格**不渲染**（absent≠none：「这一格他没写」和「他写了个空」不是一回事，
     parse_submitted_answers 已经在入口守住了这条，这里不折回去）。"""
     by_field = answers_by_field(submission)
     lines: list[str] = [
         f"# {template.title}·{submission.person_name}·{submission.period}", ""]
+    at: dict[str, int] = {}
 
     # 06 表的四个系统列（form.INTAKE_06_SYSTEM_COLUMNS 的落点）。「记录ID：sub_…」恒 ≥ 12 字符，
     # 是命门②「至少一个 chunk」的结构保证。
@@ -87,6 +95,11 @@ def render_submission_markdown(template: FormTemplate, submission: FormSubmissio
         lines.append(f"述职周期：{submission.period}")
     if submission.submitted_at:
         lines.append(f"提交日期：{submission.submitted_at[:10]}")
+    if submission.project_ref:
+        # T5/A2 —— 这条链绑的项目（经理铸链时选的，员工改不了）。渲染出来是为了**资料本身诚实**：
+        # 下载下来的原件说得出「这份周报是关于哪个项目的」。回流读的是 `submission.project_ref`
+        # 这个结构化字段，**不是**这一行文本 —— 文档里的任何一行都可能是员工写的。
+        lines.append(f"关联项目：{escape_vertical_bars(submission.project_ref)}")
     lines.append("")
 
     # 自由文本区：一格一节，节名 = 06 表表头原文（field.label）。逐字保留，只转义竖线。
@@ -94,6 +107,7 @@ def render_submission_markdown(template: FormTemplate, submission: FormSubmissio
         if f.kind != "text" or f.id not in by_field:
             continue
         lines += [f"## {f.label}", ""]
+        at[f.id] = len(lines) + 1        # 下一行就是这一格答案的第一行（1-based 行号）
         lines += escape_vertical_bars(str(by_field[f.id])).splitlines()
         lines.append("")
 
@@ -106,15 +120,48 @@ def render_submission_markdown(template: FormTemplate, submission: FormSubmissio
         cells.append(
             f"{escape_vertical_bars(f.label)}：{escape_vertical_bars(str(by_field[f.id]))}")
     if len(cells) > 1:
-        lines += [f"## {SELF_REPORT_SECTION}", "", "｜".join(cells), ""]
+        lines += [f"## {SELF_REPORT_SECTION}", ""]
+        for f in template.fields:
+            if f.kind != "text" and f.id in by_field:
+                at[f.id] = len(lines) + 1     # 非文本格共用自述行那一行
+        lines += ["｜".join(cells), ""]
 
+    return lines, at
+
+
+def render_submission_markdown(template: FormTemplate, submission: FormSubmission) -> str:
+    """一次提交 → 一份 md 资料文档。节结构与转义规则见文件头「渲染契约」。"""
+    lines, _ = render_submission_lines(template, submission)
     return "\n".join(lines).rstrip() + "\n"
 
 
+def submission_source_key(template: FormTemplate, submission: FormSubmission) -> str:
+    """资料库里这份文档的唯一键。提交 id 铸在里面 —— display 名允许重复，键不许。"""
+    return f"{submission_filename(template, submission)}#{submission.id}"
+
+
+def parsed_submission_doc(template: FormTemplate,
+                          submission: FormSubmission) -> tuple[ParsedDoc, dict[str, int]]:
+    """渲染出来的那份文档 + 那张 `{field_id: 行号}`。
+
+    `ParsedDoc.name` = source_key，所以每一条 `<key>:<行>` 出处与资料库里那一行天然对得上。
+    切块（T2）与回流（T5）**共用这一次渲染**：渲两遍不会立刻出错，但那就是两份可以各自漂的
+    文档，而它们的行号正是出处的一半。"""
+    lines, answer_lines = render_submission_lines(template, submission)
+    md = "\n".join(lines).rstrip() + "\n"
+    filename = submission_filename(template, submission)
+    doc = ParsedDoc(name=submission_source_key(template, submission), text=md,
+                    doc_kind=sniff_kind(filename, md), ext="md")
+    return doc, answer_lines
+
+
 def build_submission_document(
-        template: FormTemplate,
-        submission: FormSubmission) -> tuple[SourceDocument, list[MaterialChunk]]:
+        template: FormTemplate, submission: FormSubmission,
+        *, prepared: ParsedDoc | None = None) -> tuple[SourceDocument, list[MaterialChunk]]:
     """渲染 + 切块，产出与上传文件同构的 (SourceDocument, chunks)。
+
+    `prepared` 是调用方已经渲染好的那一份（`parsed_submission_doc` 的产物）。给了就用它，
+    别再渲一遍——append 那条路同时要 chunk 和行号表，两次渲染就是两份可以各自漂的文档。
 
     * `source_key = "<filename>#<submission.id>"` —— 提交 id 保证逐份唯一（feat-032 P1 的
       per-document join key 纪律），同时让 append 幂等判据（「这份提交进过了没」）是一次
@@ -123,10 +170,10 @@ def build_submission_document(
       ≥12 字符、`<key>:<line>` 出处）。平权数据源不配第二把切块尺。
     * `uploaded_at` = 员工提交那一刻（submitted_at）——「这份资料多新」说的是它进资料库的
       时间，正是表单把时间轴拉开的地方（design-options §B1）。"""
-    md = render_submission_markdown(template, submission)
+    doc = prepared if prepared is not None else parsed_submission_doc(template, submission)[0]
+    md = doc.text
     filename = submission_filename(template, submission)
-    source_key = f"{filename}#{submission.id}"
-    doc = ParsedDoc(name=source_key, text=md, doc_kind=sniff_kind(filename, md), ext="md")
+    source_key = doc.name
     chunks = HeuristicExtractor()._materials(doc).materials
     if not chunks:
         # 命门②：结构上到不了这里（记录ID 行恒 ≥ 12 字符）。真到了宁可拒绝 append，也不落一份
@@ -160,13 +207,28 @@ def append_submission_to_context(reg, template: FormTemplate,
     if ctx is None:
         raise KeyError(submission.context_id)
 
-    sd, chunks = build_submission_document(template, submission)
+    doc, answer_lines = parsed_submission_doc(template, submission)
+    sd, chunks = build_submission_document(template, submission, prepared=doc)
     for existing in ctx.source_documents:
         if (existing.source_key or existing.filename) == sd.source_key:
             return existing, False   # 这份提交已经进过资料库 —— 幂等，不 append 第二份
 
     ctx.source_documents.append(sd)
     ctx.extraction.materials.extend(chunks)
+
+    # T5 · form-reflow-a2 —— 同一份文档再走一层解析：自述行 → 人卡自述槽，情境自由文本 → 带出处的
+    # 情境信号，绑了项目的再追加项目卡阻塞原句。放在这里而不是别处有三个理由（form_reflow 文件头
+    # 讲了细节）：幂等早返之后、`validate_extraction` 之前、`materialize_memory` 之前。
+    # 回流失败**绝不**吃掉这份资料：文档已经在 `ctx` 上了，卡面产物是它之上的一层增益。
+    from .form_reflow import reflow_submission
+    try:
+        reflowed = reflow_submission(ctx, template, submission, doc, answer_lines)
+        log.info("form %s reflowed: %s", submission.id, reflowed)
+    except Exception as e:
+        log.exception("T5: reflowing submission %s onto the cards failed (%s) — the document is "
+                      "still filed; the cards simply do not gain this week's reading",
+                      submission.id, type(e).__name__)
+
     if sd.source_key not in ctx.source_files:
         # briefing 的 "Ingested N of M" 口径：source_files 数「parse 成功的」，本文档 chunk 非零
         # 即 parsed —— 不加这行，头条会永远少报一份。

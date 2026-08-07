@@ -314,3 +314,17 @@ function readLookKind(briefing: unknown): LiteLookKind | undefined {
   const raw = (briefing as { look_kind?: unknown } | null)?.look_kind
   return raw === 'projects' || raw === 'items' || raw === 'none' ? raw : undefined
 }
+
+// 差距战役 T5/A2 · 出处串 → 展示用的文档名。**一处定义，两个消费方**（人卡的自述角标、
+// 详情浮层的情境信号引文）——同一份文档在屏幕上出现两个不同的名字，比不显示名字更糟。
+//
+// 剥两样东西，都只剥自己认得的那一种形状：
+//   · 尾缀 `:12` —— 出处按构造是 `<source_key>:<行号>`；
+//   · 尾缀 `#sub_<hex>` —— 表单提交的 source_key 是 `<文件名>#<提交id>`（服务端铸的
+//     `sub_` + 16 位十六进制）。它是唯一性用的，不是给人看的：客户在演示里看到
+//     「《周报-周雅-2026-W32.md#sub_9f3a2b…》」只会问这串乱码是什么。
+//     判据卡死在 `sub_` + 十六进制这个形状上，所以客户自己文件名里的 `#`（`Q3#定稿.md`）
+//     一个字都不会被吃掉。真吃错了也只是少显几个字：判据值仍在 data-metric-source 里。
+export function docFromSource(source: string): string {
+  return (source ?? '').replace(/:\d+$/, '').replace(/#sub_[0-9a-f]{6,}$/i, '')
+}

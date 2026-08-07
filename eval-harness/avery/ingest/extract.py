@@ -134,6 +134,14 @@ class PersonEntity:
     still rejected."""
     id: str
     name: str
+    # 差距战役 T5/A2 · 工号（01 表「人员ID *」那一列 / 铸表单链时经理选人带上的那个 id）。
+    # 归并的**第一把尺**：`_dedupe_entities` 有工号时按工号认人，姓名只做兜底——酒店里同名
+    # （张伟/王芳）与花名（小周/周姐）都是常态，按名归并会把两个人并成一张卡。
+    # 🔴 它是一把 join key，不是人卡上的一句话：**刻意不进** `as_facts_lines()`（不进 facts.md /
+    # 议事室引用面）、**刻意不进** `team_cards()` 投影（前端一个消费者都没有）。也因此它**不在**
+    # `redline_extract._person_text_fields` 的扫描面里——扫描面是「会被当成对这个人的描述读出来
+    # 的自由文本」，而工号是 `MKT-001` 这种标识符，与 `PersonEntity.id` 同类。
+    person_id: str = ""
     role: str = ""
     # FREE TEXT since feat-048 BUG-4, not a closed set: a department the TEAMS taxonomy cannot
     # express ('别墅销售组', 'Growth') reaches the page verbatim — see _norm_team, which maps onto a
@@ -603,6 +611,17 @@ def _person_key(name: str) -> str:
     return re.sub(r"\s+", " ", text.lower()).strip()
 
 
+def _person_id_key(person_id: str) -> str:
+    """差距战役 T5/A2 —— 工号的归一（`PersonEntity.person_id` → 归并用的键）。空 = 这份资料没说工号。
+
+    折**全部**空白（不只是 Han 之间的），因为工号不是名字：`MKT-001` 与 `MKT- 001` 是同一个工号被
+    Excel 换行/粘贴弄脏了，中间那个空格没有任何语义。大小写也折（`mkt-001` == `MKT-001`）。
+    标点**不折**——`MKT-001` 与 `MKT_001` 在客户那边完全可以是两个不同的编号体系，替客户判定
+    它们相等，就是拿两个人的卡赌一条我们没有证据的规则。
+    """
+    return re.sub(r"\s+", "", (person_id or "")).lower()
+
+
 def _project_key(title: str) -> str:
     """Identity key for a project. Folds whitespace AND _ / - so 'Core-Flow' == 'core flow'."""
     return re.sub(r"[\s_\-]+", " ", (title or "").lower()).strip()
@@ -678,6 +697,15 @@ _ZH_HEADER_MAP: dict[str, str] = {
     "负责": "owns", "負責": "owns", "主要负责": "owns", "主要負責": "owns",
     "负责事项": "owns", "負責事項": "owns", "负责项目": "owns", "負責項目": "owns",
     "项目": "projects", "項目": "projects",
+    # 差距战役 T5/A2 —— 工号列。合伙人《标准管理信息填写表单》01 表的「人员ID *」（示例 MKT-001，
+    # 「全表不可重复……在其他所有表里都要用到」，make-intake-xlsx.py:92-94），加上它自己的说明文字
+    # 里用的叫法「工号」，以及两者的繁体。**逐字，不放宽**：
+    #   * 「人员」单独一个词**故意不在**这里——中文名册里「人员」这一列装的常常是姓名，把它映成
+    #     工号会让整张表认不出人（而且它会被自动折进 _NOT_NAME，连姓名列都一起废掉）。
+    #   * 大小写两版都列出来，因为 `_canon_header` 的直查发生在 `.lower()` 之前（键必须逐字命中）。
+    "人员ID": "person_id", "人員ID": "person_id",
+    "人员id": "person_id", "人員id": "person_id",
+    "工号": "person_id", "工號": "person_id",
 }
 
 # The name-column headers, DERIVED (never hand-listed — see above). Substring-searched over the whole
@@ -700,7 +728,9 @@ def _canon_header(cell: str) -> str:
     This REPLACES the bare `c.strip().lower()` that built the header list, and on an ASCII cell it
     IS that expression, character for character — BY CONSTRUCTION, not by measurement, which is what
     lets the English contract survive a rule that changes how every roster is read:
-      * every key of _ZH_HEADER_MAP is Han, so an ASCII cell can never hit the map;
+      * every key of _ZH_HEADER_MAP CONTAINS A HAN CHARACTER, so an ASCII cell can never hit the map
+        (it used to be "is Han"; T5's 「人员ID」/「人員id」 carry an ASCII tail, and the weaker claim is
+        the one the identity actually needs — pinned by test_every_zh_header_key_contains_han);
       * _HAN_PAD_RE needs a Han character on BOTH sides of the whitespace (see _slug);
       * the bilingual step reduces the cell to its Han characters, which for ASCII is "" — falsy, so
         the lookup is skipped entirely rather than merely missing.
@@ -791,7 +821,10 @@ _NOT_NAME = {
     # only fires on row 0 of a table, while _looks_like_name is what protects every other line of
     # every other document (banners, resume headers — see the round-3 block below).
     # Simplified + Traditional (a Sanya hotel takes HK/TW paperwork too); .lower() is a no-op on Han.
-    "负责人", "負責人", "工号", "工號", "邮箱",
+    # 「工号」「工號」曾经手列在这里；T5/A2 把它们教给了 _ZH_HEADER_MAP（→ person_id），于是它们
+    # 从下面这行**移到**了那张表里，照旧被自动折进本集合（见本 literal 末尾的 | set(_ZH_HEADER_MAP)）。
+    # 留两份抄本就是 feat-048 round 1 付过学费的那种漂移。
+    "负责人", "負責人", "邮箱",
     "郵箱", "电话", "電話", "手机", "手機", "状态", "狀態", "备注", "備註",
     "日期", "入职", "入職", "入职时间", "入職時間", "性别", "性別", "年龄", "年齡", "合计", "合計",
     "总计", "總計", "小计", "小計", "未知", "无", "無", "暂无", "暫無", "待定", "其他", "简历",
@@ -1334,8 +1367,13 @@ class HeuristicExtractor:
             owns_val = col.get("owns") or col.get("focus") or col.get("projects")
             if owns_val:
                 owns = [o.strip() for o in _OWNS_SPLIT_RE.split(owns_val) if o.strip()]
+            # T5/A2 — 工号，**只从表头读，没有位置兜底**。这不是省事：01 表把「人员ID」放在第 6 列，
+            # 而位置兜底只认 cells[1..3]；给它编一个位置，等于在一张列序不同的名册上把部门当工号
+            # 存进归并的第一把尺——那比读不到工号糟得多（读不到只是退回按姓名归并，读错是把两个人
+            # 判成同一个/把一个人判成两个）。表头没说工号，这一列就当没有。
+            person_id = (col.get("person_id") or "").strip()
             res.people.append(PersonEntity(
-                id=_slug(name, "u"), name=name, role=role.strip(), team=team,
+                id=_slug(name, "u"), name=name, person_id=person_id, role=role.strip(), team=team,
                 tenure=tenure.strip(), owns=owns, source=f"{doc.name}:{i + 1}"))
         return res
 
@@ -1793,6 +1831,180 @@ def _append_conflict(res: ExtractionResult, index: dict, kind: str, key: str, re
     res.conflicts.append(fresh)
 
 
+def _disambiguate_person_ids(survivors: list[PersonEntity]) -> None:
+    """差距战役 T5/A2 —— 同名不同工号的两张卡**不许撞 id**。
+
+    `_slug` 只看姓名，所以 `_resolve_person_slot` 一旦按工号把两个同名的人分成两张卡，这两张卡的
+    `id` 就是同一个字符串。`id` 是前端的 join key（`signal.subjectId === detail.id`、
+    `project.ownerId`、卡片列表的 React key），撞了不会报错，只会让 A 的信号显示在 B 的详情里——
+    正是 `_append_conflict` 那条 🔴 讲过的同一种静默错误，换了个主体。
+
+    只在**真撞上**时改后来那张卡的 id，优先用工号重铸（稳定、可读、与姓名同源），工号也撞不出唯一
+    值时再挂序号。今天仓库里没有任何语料会让两张人卡撞 id（同名恒被并成一张），所以这一趟对存量
+    数据是 byte-identical 的 no-op。
+    """
+    seen: set[str] = set()
+    for p in survivors:
+        if p.id not in seen:
+            seen.add(p.id)
+            continue
+        fresh = _slug(f"{p.name}-{p.person_id}", "u") if p.person_id else ""
+        n = 2
+        while not fresh or fresh in seen:
+            fresh = f"{p.id}-{n}"
+            n += 1
+        p.id = fresh
+        seen.add(fresh)
+
+
+class PersonIndex:
+    """差距战役 T5/A2 —— 「谁是谁」的那本索引：一批人员实体 → 归并用的格子。
+
+    **工号第一，姓名兜底，两个不同的工号永不并成一个人。** `resolve()` 的四条规则，按顺序：
+
+      1. 工号对上 → 就是这个人（哪怕两份资料叫她不同的名字：花名册写「周雅」、周报链接写「小周」，
+         同一个 `MKT-001` 仍然是一张卡）。这是本票存在的一半理由。
+      2. 工号对不上（或这条读数没工号）→ 退回姓名。**除非**双方工号都非空且不同 —— 那是两个恰好
+         同名的人（张伟/王芳在中文名册里是常态），并成一张卡就是把 A 的负载挂到 B 的头上。
+      3. 这个姓名底下**已经有不止一个人**（上一条已经把他们分开过）而这条读数**没有工号** →
+         也不并。谁都对得上就是谁都对不上；从两个周雅里挑第一个，是一次不会报错的掷硬币，
+         而掷出来的结果是把一个人的负载写到另一个人的卡上。宁可多一条认不出主人的记录。
+      4. 都对不上 → 开新的一格。
+
+    键的形状（`#id:` / `#name:` 前缀）只是内部命名空间，防止一个工号恰好等于另一个人的姓名键。
+
+    🔴 **没有任何一份资料带工号时，`resolve()` 逐字退化成 `_person_key(p.name)` 那一行**：
+    `by_id` 恒空、规则 2/3 的条件恒假（规则 3 要先有规则 2 分出来的同名两条），于是 key 恒为
+    `"#name:" + _person_key(name)`，与旧代码一一对应。今天仓库里的全部语料都在这条路上——所以
+    T6 的钉死门（test_dedupe_characterization_b2a）必须仍然全绿，它绿就是「旧行为一个字节没动」
+    的证明。
+    """
+
+    def __init__(self, people=()):
+        self.slots: dict[str, PersonEntity] = {}
+        self._by_id: dict[str, str] = {}
+        self._by_name: dict[str, str] = {}
+        self._dupe_names: set[str] = set()
+        for p in people:
+            self.place(self.resolve(p), p)
+
+    def resolve(self, p: PersonEntity) -> str:
+        ik = _person_id_key(p.person_id)
+        nk = _person_key(p.name)
+        if ik:
+            hit = self._by_id.get(ik)
+            if hit is not None:
+                return hit
+        hit = self._by_name.get(nk)
+        if hit is not None and nk not in self._dupe_names:
+            held = _person_id_key(self.slots[hit].person_id)
+            if not (ik and held and ik != held):
+                return hit
+        return f"#id:{ik}" if ik else f"#name:{nk}"
+
+    def place(self, key: str, p: PersonEntity) -> None:
+        """把 `p` 记成 `key` 这一格的住户（已有住户就什么都不做——住户是先到的那个）。"""
+        if key in self.slots:
+            return
+        self.slots[key] = p
+        if _person_id_key(p.person_id):
+            self._by_id[_person_id_key(p.person_id)] = key
+        nk = _person_key(p.name)
+        if nk in self._by_name:
+            self._dupe_names.add(nk)     # 这个名字底下从此有两个人，不再是一把够用的尺
+        else:
+            self._by_name[nk] = key
+
+    def adopt_id(self, key: str, person_id: str) -> None:
+        """某一格补上了工号（花名册没写、表单带来了）——从此这一格按工号也认得出来。"""
+        if _person_id_key(person_id):
+            self._by_id[_person_id_key(person_id)] = key
+
+    def name_is_ambiguous(self, name: str) -> bool:
+        """这个姓名底下站着不止一个人吗？（规则 3 的判据，回流那边也要问同一个问题。）"""
+        return _person_key(name) in self._dupe_names
+
+
+def _absorb_person(cur: PersonEntity, p: PersonEntity) -> bool:
+    """`cur` 吸收 `p`（同一个人的另一条读数）。就地改 `cur`，返回「这一趟补上了工号吗」。
+
+    ONE DEFINITION（T5/A2 把它从 `_dedupe_entities` 的循环体里提了出来）。两个调用方：
+      · `_dedupe_entities` —— 整批语料的跨文档归并（上传那条路）；
+      · `form_reflow.merge_person_reading` —— 表单回流时把**一条**新读数并进已经归并过的清单。
+    提出来不是为了好看：两处各写一遍「怎么合一个人」，就是 `_person_key` / `_link_owners` 当年那种
+    「两把尺量同一件事」的复发，而这一次两把尺分别长在上传路和表单路上，谁也不会在对方的门里红。
+    """
+    grew_id = False
+    # T5/A2 — 工号是**补上就补上**（花名册没工号、表单带工号），补上之后这条卡从此按工号认人。
+    if not _person_id_key(cur.person_id) and _person_id_key(p.person_id):
+        cur.person_id = p.person_id
+        grew_id = True
+    cur.role = cur.role or p.role
+    cur.team = cur.team or p.team
+    cur.tenure = cur.tenure or p.tenure
+    cur.source = cur.source or p.source
+    # rich-align-0722/03 — self_report enriches across docs, keep-first PER sub-slot: a roster
+    # carries identity + no self-report, a weekly carries the self-report + no identity. Merge so
+    # the person who actually exists has both, without a later weekly clobbering an earlier one.
+    if p.self_report:
+        if cur.self_report is None:
+            cur.self_report = p.self_report
+        else:
+            if cur.self_report.load is None:
+                cur.self_report.load = p.self_report.load
+            if cur.self_report.mood is None:
+                cur.self_report.mood = p.self_report.mood
+    # union, order-preserving, capped at the same 6 _slist/_build use
+    cur.owns = (cur.owns + [o for o in p.owns if o and o not in cur.owns])[:6]
+    cur.collaboration = (
+        cur.collaboration + [c for c in p.collaboration if c and c not in cur.collaboration]
+    )[:6]
+    return grew_id
+
+
+def merge_person_reading(people: list[PersonEntity], incoming: PersonEntity) -> PersonEntity:
+    """差距战役 T5/A2 —— 把**一条**新的人员读数并进一份**已经归并过**的人员清单，返回活下来那条。
+
+    身份判据与吸收规则都直接复用 `_dedupe_entities` 的那两个零件（`_resolve_person_slot` /
+    `_absorb_person`），所以「按人员ID归并、姓名兜底、两个不同工号永不并成一个人」在表单这条路上
+    与上传那条路是同一句话，不是两份实现。
+
+    🔴 为什么表单回流**不**直接调 `_dedupe_entities(ctx.extraction)`——四条都在代码里核过的伤：
+      1. `_dedupe_entities` 结尾是 `res.people = list(...)` / `res.signals = kept`，**整表重写**。
+         而 `ctx.extraction` 是一份已经跑过归并、之后还被手编 CRUD 改过的清单：手加的人
+         （`um-…` id）一旦与抽取出来的同名，会在这一趟里被并掉，而 `archived`（软删）与
+         `provenance`（手编出处）**根本不在合并规则里**——它们会连人带证据一起消失。
+         一次员工提交不该有权删掉经理手动归档过的一张卡。
+      2. `conflict_index` 是**每次调用新建**的，而 `res.conflicts` 是跨 `get()` 持久的：重跑一遍
+         归并，凡是还能再撞一次的字段都会往 conflicts 上再追加一条重复记录（T7 会渲染两遍）。
+      3. `held_src` 同理从零重建，会把某个格子的出处认成「活下来那条实体的整条 source」——
+         正是 `_append_conflict` 那条 ⚠ 讲的「引用一份从没说过这件事的文档」。
+      4. signals 那一段按 `_signal_key` 重新去重，而回流时信号的 `subjectRef` 已经是 id 不是
+         姓名，重跑等于换一把尺再筛一遍。
+    本函数只碰**一个人**：要么就地 enrich 一条已有实体，要么在**末尾**追加一条新的。别的什么都不动。
+
+    ⚠ `incoming` 只许携带身份 + self_report。它若带着 T6 冲突口径里的字段（team/…），这里会拒绝——
+    因为记录冲突需要 `_note_conflicts` 那一整套 `held_src` 账本，本函数刻意没有它；静默吞掉一条
+    冲突读数，比拒绝写更糟。
+    """
+    dirty = [f for f in _CONFLICT_FIELD_ALLOWLIST["person"] if getattr(incoming, f, "")]
+    if dirty:
+        raise ValueError(
+            f"merge_person_reading only takes identity + self-report readings; {dirty} would need "
+            f"the conflict bookkeeping only _dedupe_entities has")
+    index = PersonIndex(people)
+    key = index.resolve(incoming)
+    cur = index.slots.get(key)
+    if cur is None:
+        # 名册里没有这个人（新同事第一次交表）——追加在**末尾**。绝不插在前面：活下来那条的 id 是
+        # 前端编辑/归档的靶子，把它换掉等于让经理刚改过的那张卡失联。
+        people.append(incoming)
+        _disambiguate_person_ids(people)
+        return incoming
+    _absorb_person(cur, incoming)
+    return cur
+
+
 def _dedupe_entities(res: ExtractionResult) -> None:
     """Collapse the SAME person/project seen in DIFFERENT documents into one record (feat-048).
 
@@ -1830,43 +2042,27 @@ def _dedupe_entities(res: ExtractionResult) -> None:
     the cite chain to the rest, and make registry.py's `_chunks_per_file` under-report chunk counts.
     """
     # people — enrich into the first record, preserving first-seen order
-    people: dict[str, PersonEntity] = {}
+    # T5/A2 — 「谁是谁」交给 PersonIndex（工号第一、姓名兜底、同名不同工号绝不并）。
+    index = PersonIndex()
     # T6/B2a — (身份key, 字段) -> 当前那个值**是哪份文档给的**。见 _append_conflict 的 ⚠。
     people_src: dict[tuple[str, str], str] = {}
     # T6/B2a — (kind, 身份key, 字段) -> 已开的那条 FieldConflict。键**必须**是归并用的身份尺，
     # 不是实体 id（_slug 会折叠标点+截断，两个不同主体可以撞 id）。见 _append_conflict 的 🔴。
     conflict_index: dict[tuple[str, str, str], FieldConflict] = {}
     for p in res.people:
-        key = _person_key(p.name)
-        cur = people.get(key)
+        key = index.resolve(p)
+        cur = index.slots.get(key)
         if cur is None:
-            people[key] = p
+            index.place(key, p)
             for fname in _CONFLICT_FIELD_ALLOWLIST["person"]:
                 if getattr(p, fname, ""):
                     people_src[(key, fname)] = p.source
             continue
         _note_conflicts(res, conflict_index, "person", cur, p, key, people_src)   # T6/B2a: 必须在合并前
-        cur.role = cur.role or p.role
-        cur.team = cur.team or p.team
-        cur.tenure = cur.tenure or p.tenure
-        cur.source = cur.source or p.source
-        # rich-align-0722/03 — self_report enriches across docs, keep-first PER sub-slot: a roster
-        # carries identity + no self-report, a weekly carries the self-report + no identity. Merge so
-        # the person who actually exists has both, without a later weekly clobbering an earlier one.
-        if p.self_report:
-            if cur.self_report is None:
-                cur.self_report = p.self_report
-            else:
-                if cur.self_report.load is None:
-                    cur.self_report.load = p.self_report.load
-                if cur.self_report.mood is None:
-                    cur.self_report.mood = p.self_report.mood
-        # union, order-preserving, capped at the same 6 _slist/_build use
-        cur.owns = (cur.owns + [o for o in p.owns if o and o not in cur.owns])[:6]
-        cur.collaboration = (
-            cur.collaboration + [c for c in p.collaboration if c and c not in cur.collaboration]
-        )[:6]
-    res.people = list(people.values())
+        if _absorb_person(cur, p):
+            index.adopt_id(key, cur.person_id)
+    res.people = list(index.slots.values())
+    _disambiguate_person_ids(res.people)
 
     # projects — same rule; blockers/dependsOn union because two docs list complementary ones
     projects: dict[str, ProjectEntity] = {}
@@ -1925,8 +2121,20 @@ def _link_owners(res: ExtractionResult) -> None:
     only 「孙　浩」while the signal still pointed at 「孙 浩」. Miss. And a missed lookup here is
     SILENT: subjectRef just stays a name, the signal never reaches the person's card, and nothing
     reports it. Projects survived on luck (the first-name fallback below); signals have no fallback.
+
+    AMBIGUOUS NAMES ARE DROPPED FROM `by_name` (T5/A2). Until工号 existed, two colleagues who share a
+    name were merged into one card by `_dedupe_entities`, so `_person_key` was unique among survivors
+    by construction and this dict could not lose anyone. `_resolve_person_slot` now keeps them apart
+    when the documents give them different 工号 — and then a dict comprehension would silently pick
+    **whichever 张伟 happened to be last**. A name that maps to two people is not a lookup miss, it is
+    a question the data cannot answer; the honest answer is to link neither (the signal keeps its
+    name and simply does not land on a card) rather than to land it on a coin-flip colleague.
+    On every corpus without 工号 this is a no-op — nothing can be ambiguous there.
     """
-    by_name = {_person_key(p.name): p.id for p in res.people}
+    counts: dict[str, int] = {}
+    for p in res.people:
+        counts[_person_key(p.name)] = counts.get(_person_key(p.name), 0) + 1
+    by_name = {_person_key(p.name): p.id for p in res.people if counts[_person_key(p.name)] == 1}
     for proj in res.projects:
         if proj.ownerName and not proj.ownerId:
             key = _person_key(proj.ownerName)

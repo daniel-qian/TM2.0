@@ -540,9 +540,17 @@ class CompanyContext:
         `card["source"]`; the decision path passes the pointer under a distinct `sourceRef`
         key (see `_decision_subjects`) precisely so a type word can never be silently
         mistaken for a document key — that mistake raises no error and turns no gate red.
+
+        T5/A2 —— `sourceRef` 是那个**真**指针（`'<source_key>:<行>'`），键名与 `_decision_subjects`
+        逐字一致，就是为了让「文档出处」在整个仓库里只有一个键名。缺席就不发这个键
+        （absent≠none：手加的、旧 context 的信号没有出处，前端据此不引，而不是引一个空串）。
+        为什么现在才补：在此之前每一条信号都来自上传文档，卡上不引出处只是少一句话；表单回流
+        之后，卡上会出现「员工本人这周说的一句话」，而它跟一份八周前的文档长得一模一样——
+        不说这句话是哪份资料来的，卡就在替我们撒一个关于时间的谎。
         """
         return [{"id": s.id, "source": s.source_kind, "subjectType": s.subjectType,
-                 "subjectId": s.subjectRef, "summary": s.summary, "tag": s.tag}
+                 "subjectId": s.subjectRef, "summary": s.summary, "tag": s.tag,
+                 **({"sourceRef": s.source} if s.source else {})}
                 for s in self.extraction.signals]
 
     def _decision_subjects(self) -> list[dict]:
