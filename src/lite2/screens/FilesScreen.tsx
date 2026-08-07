@@ -4,6 +4,7 @@ import { useLite } from '../store'
 import { FileManifest } from '../FileManifest'
 import { KnownContextList } from '../KnownContextList'
 import { UploadPanel } from '../UploadPanel'
+import { FormBuilder } from '../FormBuilder'
 import type { LiveFormSubmission } from '../transport'
 
 // files-hub-0729/01（ADR-0032）· 资料库屏。
@@ -173,17 +174,19 @@ function StandingFormsSection() {
   const latestPeriod = periods.length > 0 ? periods[periods.length - 1] : ''
   const statusRows = latestPeriod ? rows.filter((s) => s.period === latestPeriod) : rows
 
-  // 🔴 四条否决，每一条都是「这一段现在没有任何真东西可说」——标题跟着内容一起消失，
+  // 🔴 两条否决，每一条都是「这一段现在连一件真东西都做不了」——标题跟着内容一起消失，
   // 因为一个底下空无一物的小节读起来像加载失败（SwitchSection 那条注释说的就是这件事）。
-  //  ① 没有 contextId：还没有公司，链接无处可铸。
-  //  ② templates === null：没拉过 / 这条通道没有这个方法 / 拉失败。**不是**「这家公司没有
-  //     表单」——404 是后端对缺凭据的无枚举答复，不承载存在信息（absent≠none）。
-  //  ③ 一张在用的模板都没有：200 回来确实是空的，那也没有可发的表。
-  //  ④ 既没有花名册可选人、又一条提交记录都没有：两个子块都空，只剩标题最误导。
+  //  ① 没有 contextId：还没有公司，表无处可建、链接无处可铸。
+  //  ② templates === null：没拉过 / 这条通道没有这个方法（stub）/ 拉失败。**不是**「这家公司
+  //     没有表单」——404 是后端对缺凭据的无枚举答复，不承载存在信息（absent≠none）。
+  //
+  // ⚠ gap2 T11 拆掉了原来的第 ③④ 条（「一张在用的模板都没有」「既没花名册又没提交记录」）。
+  // 那两条当年是对的：那时候这一段只能做「发内置周报」，没模板/没人选就真的一件事都做不了。
+  // 现在这一段还能**建表**——而第 ④ 条恰好在最需要它的时候把入口拿掉：一家刚上传完、花名册
+  // 还没解析出来的公司会命中它，于是「新建表单」在第一天不存在。两条改成各自包住自己那一块
+  // （下面 `roster.length > 0` / `statusRows.length > 0` / `selected` 三处判空）。
   if (!contextId) return null
   if (templates === null) return null
-  if (!selected) return null
-  if (roster.length === 0 && rows.length === 0) return null
 
   const togglePicked = (personId: string) => {
     setPicked((prev) =>
@@ -279,10 +282,12 @@ function StandingFormsSection() {
       <p className="lite-files-empty">{l.formsLede}</p>
 
       {/* 模板列表。只有一张时不给切换按钮——一个唯一选项的单选组是纯噪音；题面预览照给，
-          经理发出去之前有权看清员工会被问到什么。 */}
+          经理发出去之前有权看清员工会被问到什么。
+          ⚠ gap2 T11：一张在用的模板都没有时，这个 <ul> 渲染成空——底下的拼装器仍在，
+          经理可以从这里建第一张（这正是拆掉那条早退的原因）。 */}
       <ul className="lite-files-forms-templates">
         {active.map((tpl) => {
-          const isSelected = tpl.id === selected.id
+          const isSelected = tpl.id === selected?.id
           const preview = tpl.fields.map((f) => f.label).join(' · ')
           return (
             <li key={tpl.id} className="lite-files-forms-template" data-selected={isSelected ? '1' : '0'}>
@@ -315,9 +320,15 @@ function StandingFormsSection() {
         })}
       </ul>
 
-      {/* 选人 + 生成。没有花名册就整块不出——没有人可选时一个「生成链接」按钮点了必然
-          什么都不会发生，那就是假按钮。 */}
-      {roster.length > 0 ? (
+      {/* gap2 T11 · 模板拼装器（建一张 / 复制一张改 / 让 Avery 读旧表格起草）。
+          摆在模板列表和「选人生成链接」之间：先有表，才谈发给谁。
+          🔴 它**不受**下面那两块的判空约束——花名册还没解析出来的第一天，恰恰是最该能建表的
+          时候（原来那条 `roster.length === 0 && rows.length === 0` 早退会把它一起藏掉）。 */}
+      <FormBuilder templates={templates ?? []} />
+
+      {/* 选人 + 生成。没有花名册、或者一张在用的表都还没有，就整块不出——那时候一个
+          「生成链接」按钮点了必然什么都不会发生，那就是假按钮。 */}
+      {selected && roster.length > 0 ? (
         <div className="lite-files-forms-mint-block">
           <p className="lite-files-forms-label">{l.formsPickLabel}</p>
           <p className="lite-files-forms-note">{l.formsPickHint}</p>

@@ -8262,3 +8262,248 @@
   min-width: 0;
   box-sizing: border-box;
 }
+
+/* ── gap2 T11 · 模板拼装器（FilesScreen 第④段里的建/改表编辑器）────────────────────────
+   排版口径照抄本段既有的几块（12px 小标题 / 11px --ink-faint 说明 / 62ch 行宽 / 8px 圆角），
+   一个新 token 都不引入。⚠ 视口高度是这一屏的盲轴：编辑器是纵向堆叠的，行距一律走既有变量，
+   别在这里加固定高度——一张十二格的表在 375×812 上必须能一路滚下去。 */
+.lite2-shell .lite-files-forms-builder {
+  margin-top: 16px;
+}
+
+.lite2-shell .lite-files-forms-builder.is-open {
+  padding: 14px;
+  border: 1px solid var(--rule, rgba(0, 0, 0, 0.14));
+  border-radius: 12px;
+  background: var(--surface-soft, rgba(0, 0, 0, 0.02));
+}
+
+.lite2-shell .lite-files-forms-builder-entries,
+.lite2-shell .lite-files-forms-builder-edits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.lite2-shell .lite-files-forms-builder-edits {
+  margin-top: 6px;
+}
+
+.lite2-shell .lite-files-forms-builder-entry,
+.lite2-shell .lite-files-forms-builder-edit,
+.lite2-shell .lite-files-forms-builder-file {
+  padding: 3px 11px;
+  font-size: 12px;
+}
+
+.lite2-shell .lite-files-forms-builder-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* 起草回执。左边一道竖线与报错横幅同形，但走 --rule 不走 --terracotta——它不是错误，
+   是一句「我带过来了什么、没带什么」。 */
+.lite2-shell .lite-files-forms-builder-notice {
+  margin: 10px 0;
+  padding: 8px 12px;
+  border-left: 3px solid var(--rule, rgba(0, 0, 0, 0.18));
+  max-width: 62ch;
+}
+
+.lite2-shell .lite-files-forms-builder-dropped {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.lite2-shell .lite-files-forms-builder-dropped li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+/* 被丢掉的那一列的原文：删除线说明「它没进这张表」，比再写一句「已丢弃」省一行字。 */
+.lite2-shell .lite-files-forms-builder-dropped-label {
+  font-weight: 700;
+  color: var(--ink-soft);
+  text-decoration: line-through;
+}
+
+.lite2-shell .lite-files-forms-builder-dropped-why {
+  color: var(--ink-faint, #8a8578);
+}
+
+.lite2-shell .lite-files-forms-builder-fieldlabel {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink-faint, #8a8578);
+}
+
+.lite2-shell .lite-files-forms-builder-titlerow,
+.lite2-shell .lite-files-forms-builder-helprow {
+  display: block;
+  margin-top: 10px;
+}
+
+.lite2-shell .lite-files-forms-builder-input {
+  width: 100%;
+  max-width: 62ch;
+  padding: 6px 9px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--surface, transparent);
+  border: 1px solid var(--rule, rgba(0, 0, 0, 0.18));
+  border-radius: 8px;
+}
+
+.lite2-shell .lite-files-forms-builder-select,
+.lite2-shell .lite-files-forms-builder-num {
+  padding: 4px 8px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--ink);
+  background: var(--surface, transparent);
+  border: 1px solid var(--rule, rgba(0, 0, 0, 0.18));
+  border-radius: 8px;
+}
+
+.lite2-shell .lite-files-forms-builder-num {
+  width: 6.5em;
+}
+
+.lite2-shell .lite-files-forms-builder-fields {
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.lite2-shell .lite-files-forms-builder-field {
+  padding: 10px 12px;
+  border: 1px solid var(--rule, rgba(0, 0, 0, 0.12));
+  border-radius: 10px;
+}
+
+/* 停用的那一格：整块压弱，一眼看得出「这题不再问了」，但它仍然在表上（这正是重点）。 */
+.lite2-shell .lite-files-forms-builder-field[data-retired='1'] {
+  opacity: 0.62;
+}
+
+.lite2-shell .lite-files-forms-builder-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 14px;
+  margin-top: 10px;
+}
+
+.lite2-shell .lite-files-forms-builder-switches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 10px;
+}
+
+.lite2-shell .lite-files-forms-builder-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+/* 关掉的开关（题型读不到它）不是「坏了」，是「这题不适用」——压弱而不是变红。 */
+.lite2-shell .lite-files-forms-builder-switch input:disabled + span {
+  color: var(--ink-faint, #8a8578);
+}
+
+.lite2-shell .lite-files-forms-builder-choices {
+  margin-top: 10px;
+}
+
+.lite2-shell .lite-files-forms-builder-choicerow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.lite2-shell .lite-files-forms-builder-choicerow .lite-files-forms-builder-input {
+  max-width: 28ch;
+}
+
+.lite2-shell .lite-files-forms-builder-choicedrop,
+.lite2-shell .lite-files-forms-builder-addchoice,
+.lite2-shell .lite-files-forms-builder-drop,
+.lite2-shell .lite-files-forms-builder-add {
+  padding: 3px 11px;
+  font-size: 12px;
+}
+
+.lite2-shell .lite-files-forms-builder-addchoice {
+  margin-top: 8px;
+}
+
+.lite2-shell .lite-files-forms-builder-fieldactions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.lite2-shell .lite-files-forms-builder-addrow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+/* 🔴 addrow 里那句「12 题里用了 N 题」贴着按钮走，不该顶着 .lite-files-forms-note 的
+   `margin-top:8px` 掉下去一行——那一条是给整段说明用的。 */
+.lite2-shell .lite-files-forms-builder-addrow .lite-files-forms-note {
+  margin-top: 0;
+}
+
+.lite2-shell .lite-files-forms-builder-issues {
+  margin: 10px 0 0;
+  padding: 8px 12px;
+  border-left: 3px solid var(--terracotta);
+  list-style: none;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--ink-soft);
+  max-width: 62ch;
+}
+
+/* 服务端那句英文 reason 是**诊断**不是给用户的句子：等宽、压弱、另起一行。 */
+.lite2-shell .lite-files-forms-builder-detail {
+  display: block;
+  margin-top: 4px;
+  font-family: var(--mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 11px;
+  color: var(--ink-faint, #8a8578);
+  word-break: break-word;
+}
+
+.lite2-shell .lite-files-forms-builder-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
