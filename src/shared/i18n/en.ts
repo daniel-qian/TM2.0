@@ -617,6 +617,19 @@ export const en = {
       'That did not go through. Send to between one and thirty people and try again.',
     formsErrorRetired: 'This form has been retired, so no new links go out.',
     formsErrorFailed: 'The links could not be made just now. Try again in a moment.',
+    // T9 (gap2 #58) · auto-filled links + taking one back.
+    // 🔴 The copy spells out that the roster is the one YOU picked last period — that is the
+    // REASON this is not us deciding on your behalf. Leave it out and it reads as "the system
+    // sent something to a bunch of people on its own".
+    // "You can change it below" needs no jump button: the controls (the name picker, the per-row
+    // take-back) are a little further down the same screen.
+    formsAutoFilled:
+      'Links for {period} are ready, using the same people you sent to last period ({count}). Swap someone out or take a link back below.',
+    formsVoid: 'Take back',
+    formsVoiding: 'Taking it back…',
+    // Accessible name: a column of buttons all called "Take back" tells a screen reader nothing
+    // about WHICH link is being taken back.
+    formsVoidAria: 'Take back the link sent to {name}',
 
     // ── files-hub-0729/03 · team screen goes file-free, entry points get laid ────────────────
     // The team screen used to carry the upload panel in BOTH states. Danny's ruling: 「团队和
@@ -1367,6 +1380,10 @@ export const en = {
     notifRun: 'Avery has finished thinking it through — the read is ready.',
     notifAsk: 'All replies to your quick ask are in.',
     notifGap: 'Something in the files is worth noting.',
+    // T9 · forms. 🔴 Same red line as the four above: generic copy, never names an individual —
+    // there is no slot to carry a name (NotifItem holds only a kind). "Someone sent theirs in"
+    // rather than "Zhou Ya sent hers in" is deliberate.
+    notifForm: 'There is movement on your form collection — take a look under Files & forms.',
 
     // ── Compliance footer (PRD F6) — shell-global, memo tone (not regulatory tone). ──
     footerText:
@@ -1507,6 +1524,7 @@ export const en = {
       'R-FRESH-CONTRADICTS-STALE': { title: 'On the same thing, the more recently uploaded file reads worse — the older reading may be out of date', basis: 'The same field across files + upload times' },
       'R-NO-EVIDENCE': { title: 'None of status, blockers, progress or due date could be read — too little to treat as safe', basis: '(none of those fields could be read)' },
       'R-UNCLASSIFIED': { title: 'What was read does not match any existing rule, so it needs a person to confirm', basis: '(no rule matched)' },
+      'R-FORM-MISSING': { title: '{n} people have not sent this period in yet, and the first link expires within {hours} hours', basis: 'this period’s form links and when they expire' },
       'R-DONE': { title: 'The project reports itself finished, with no risk signals', basis: 'Status' },
       'R-CLEAR': { title: 'The project reports itself on track, with no blockers and no risk signals', basis: 'Status + blockers' },
     },

@@ -25,6 +25,7 @@ registry (offline default, the pre-030 ADR-0021 §6 ephemeral behavior). Same ge
 """
 from __future__ import annotations
 
+import logging
 import mimetypes
 import secrets
 import tempfile
@@ -42,6 +43,8 @@ from avery.ingest import guards, ingest_paths
 from avery.ingest.registry import CompanyContext, ContextRegistry, SourceDocument, active_registry
 
 from . import account, embedding_factory, extractor_factory, upload_guard
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -188,18 +191,43 @@ def _unique_parse_names(display_names: list[str]) -> list[str]:
     return out
 
 
+def _form_period_status(ctx: CompanyContext):
+    """gap2 T9（#58）· 本期表单收集进度，喂给定级引擎的「本期还差人没交」那条规则。
+
+    🔴 只读，绝不写。自动补铸挂在经理侧读表单区那一下（`GET /team/{ctx}/forms/submissions`），
+    **不**挂在这里：`/team` 是今天页每次刷新都打的那条路，让它顺手建行等于把一次写接到了
+    全站最热的读上——而且经理还没打开表单区，链接就已经悄悄发出去了。
+
+    读不到就当没有（`forms=None`，那条规则不参评）。表单表是 T1 之后才有的，老 context、
+    没跑过迁移的库、以及任何不认这几个方法的 registry 双胞胎都必须**照旧工作**——
+    今天页不能因为表单这一路出问题就整屏空掉。
+    """
+    try:
+        from avery.ingest.form_autofill import form_period_status
+        return form_period_status(active_registry(), ctx.context_id)
+    except Exception:
+        logger.exception("T9: reading this period's form status for %s failed — the today page "
+                         "renders without the this-period-form rule (every other rule is unaffected)",
+                         ctx.context_id)
+        return None
+
+
 def _team_payload(ctx: CompanyContext) -> dict:
     """Project a CompanyContext onto the exact LiveTeamPayload shape transport.ts expects."""
+    # 🔴 同一份 forms 必须同时喂给 briefing() 与 decision_cards()：两者共用同一张规则表，
+    # 只喂一边就会让「N 个值得多看一眼」和底下的卡片对不上（registry.briefing() 的长注释
+    # 记着这个旧伤，B1 的 timeline 与 B2b 的 conflicts 都是照这条纪律接的）。
+    forms = _form_period_status(ctx)
     payload = {
         "context_id": ctx.context_id,
         "source_files": ctx.source_files,
         "people": ctx.team_cards(),      # QUALITATIVE by default; self_report only when switch on
         "projects": ctx.project_cards(),
-        "briefing": ctx.briefing(),
+        "briefing": ctx.briefing(forms=forms),
         "signals": ctx.signal_cards(),
         # feat-056 决策定级（additive）：feat-057「今天要决策的」按此列表的顺序展示。
         # 纯规则产出、无 LLM —— 不增加任何请求延迟，也不受模型随机性影响。
-        "decisions": ctx.decision_cards(),
+        "decisions": ctx.decision_cards(forms=forms),
     }
     # rich-align-0722/03 — additive top-level flag, present-and-true ONLY when person scoring is
     # unblocked (mirrors account_linked's absent-when-false semantics). The frontend's layer-3 runtime

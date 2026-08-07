@@ -7989,6 +7989,38 @@
   text-align: right;
 }
 
+/* ── T9（gap2 #58）· 自动补铸的告知条 + 逐行撤回 ───────────────────────────────────────── */
+
+/* 「{period} 的链接已经按你上期发过的名单备好了（N 人）」。
+   刻意**不**做成成功提示的绿条：它不是一次操作成功的回执，是一句「我替你先摆好了，你看一眼」。
+   左侧一道细边把它与上面那句 lede 分开，颜色走正文档而不是 faint —— 经理必须读到它，
+   读不到就等于系统背着他发了链接。 */
+.lite2-shell .lite-files-forms-autofilled {
+  margin: 10px 0 0;
+  padding: 8px 0 8px 12px;
+  border-left: 2px solid var(--sage-text, var(--sage, #4a7c59));
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--ink-soft);
+  max-width: 62ch;
+}
+
+/* 撤回按钮。11px 与同行的时间戳/项目名同档——它是一个次要动作，不该比状态词还响；
+   但颜色仍走 --ink-soft 而不是 faint：能点的东西不许看起来像禁用态。
+   `margin-left: 0` 抵掉徽章那条 `margin-left:auto` 之后的自然堆叠，让它紧跟徽章右侧。 */
+.lite2-shell .lite-files-forms-void {
+  flex: none;
+  margin-left: 0;
+  padding: 2px 10px;
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+
+.lite2-shell .lite-files-forms-void:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
 /* ── files-hub-0729/03 · 团队屏空态引导卡 + 首页去资料库的两条链接 ───────────────────────
    团队屏右栏空态原来摆的是 UploadPanel；本战役把它换成一张"这里为什么是空的 + 去哪"的卡。
    刻意不用 .nexus-empty 的垂直居中语法：那是给**整屏空**用的，这里只是双栏里的右栏空。 */

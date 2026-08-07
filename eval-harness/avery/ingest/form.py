@@ -97,6 +97,44 @@ class FormSubmission:
     submitted_at: str = ""
     created_at: str = ""
     expires_at: str = ""
+    # T9（gap2 #58）—— 这条链是**自动补铸**出来的时候带的幂等键（见 `auto_mint_key`）；
+    # 空串 = 经理手动铸的。库上那条唯一索引只盖 auto_key 非空的行（0015 迁移文件头讲了为什么），
+    # 所以手动铸链的「重复调用等于再发一轮」一个字节没变。
+    auto_key: str = ""
+
+
+def person_key(person_id: str, person_name: str) -> str:
+    """「本期这个人有没有已经拿到链接」认的那把尺。
+
+    有工号就认工号（01 表人员ID，`FormSubmission.person_id`）——酒店有同名有花名，按名会并错人，
+    这是 T5/A2 与 0807 HITL 都用血换过的口径。没工号才退回姓名。
+
+    姓名的归一**只折排版噪音**：剥两侧空白、把连续空白压成一个。刻意**不**把内部空格删光
+    （「周 雅」和「周雅」仍是两把不同的钥匙）——两种错的代价不对等：
+      * 误合并（把两个人当成一个）＝ 其中一个人这一周**静默**收不到表单，没有任何一处会报错；
+      * 误拆分（把一个人当成两个）＝ 他多收到一条链接，经理在「谁没交」那一段一眼就看见。
+    宁可犯后者。同理不做大小写折叠 / 全半角折叠：那些都是"看起来像同一个人"的猜测。
+
+    🔴 两个命名空间必须**显式分开**（`id:` / `name:` 前缀）：否则一个工号恰好等于另一个人姓名的
+    公司，会把两个人判成同一个人而漏铸一条链接——那是「有人这期根本没收到表单」的静默形态。
+    """
+    pid = (person_id or "").strip()
+    if pid:
+        return "id:" + pid
+    return "name:" + re.sub(r"\s+", " ", (person_name or "").strip())
+
+
+def auto_mint_key(template_id: str, period: str, person_id: str, person_name: str) -> str:
+    """自动补铸的幂等键 —— **唯一**的生成处（库上 0015 那条唯一索引比对的就是这个值）。
+
+    形状 `<template_id>|<period>|<person_key>`。不含 context_id：索引的前导列就是它，
+    拼进值里只是把同一个事实存两遍。
+
+    🔴 分隔符 `|` 与三段各自的取值域：template_id 是 ASCII 稳定键（`tpl_weekly` / `tpl_<hex>`），
+    period 是 `YYYY-Www`，person_key 带 `id:`/`name:` 前缀——都不含 `|`，所以拼接无歧义。
+    姓名理论上可以含 `|`，但那只会让这个人**自己**的键变长，不会与别人撞（前缀已经分好命名空间）。
+    """
+    return f"{template_id}|{period}|{person_key(person_id, person_name)}"
 
 
 # ── id / 时间 ────────────────────────────────────────────────────────────────────────────────
@@ -186,7 +224,7 @@ def gate_form_red_line(template: FormTemplate) -> None:
 def gate_submission_storage_safety(sub: FormSubmission) -> None:
     """提交侧**只**做存储安全（NUL/0x00），刻意不做红线扫描——答案是员工本人的话。"""
     texts = [sub.id, sub.context_id, sub.template_id, sub.person_id, sub.person_name,
-             sub.period, sub.project_ref, sub.share_token]
+             sub.period, sub.project_ref, sub.share_token, sub.auto_key]
     for a in (sub.answers or []):
         if isinstance(a, dict):
             texts += [str(a.get("field_id") or ""),

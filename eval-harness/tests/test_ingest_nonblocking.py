@@ -35,10 +35,15 @@ def _stub_report():
     ctx = SimpleNamespace(
         context_id="ctx_stub", source_files=[],
         team_cards=lambda: [], project_cards=lambda: [],
-        briefing=lambda: {}, signal_cards=lambda: [],
+        # gap2 T9 (#58): both now take the period's form status as a keyword — _team_payload feeds
+        # ONE aggregate to BOTH (feeding only one is how the today page and the briefing count start
+        # contradicting each other; see registry.briefing()'s long note). **kw here, not an explicit
+        # `forms=None`: this fake exists to satisfy a SURFACE, and pinning today's exact kwarg list
+        # would make this event-loop gate go red every time that surface grows a keyword.
+        briefing=lambda **kw: {}, signal_cards=lambda: [],
         # feat-056: _team_payload now also projects the decision grades. This gate is about the
         # event loop, not payload shape — the fake just has to satisfy the same surface.
-        decision_cards=lambda: [],
+        decision_cards=lambda **kw: [],
         # rich-align-0722/05a: _team_payload also projects the archived (soft-deleted) project drawer.
         archived_project_cards=lambda: [],
         # rich-align-0722/06: …and the archived (soft-deleted) people drawer.

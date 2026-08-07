@@ -458,7 +458,7 @@ def test_rules_doc_in_sync():
         assert family in doc, f"关键词族 {family} 没写进说明文档"
     for const in ("DUE_SOON_DAYS", "DUE_CRUNCH_DAYS", "PROGRESS_CRUNCH_PCT",
                   "PROGRESS_LOW_PCT", "BLOCKER_STACK_N", "DUE_YEAR_LOOKBACK_DAYS",
-                  "STALE_EVIDENCE_DAYS"):
+                  "STALE_EVIDENCE_DAYS", "FORM_DUE_SOON_HOURS"):
         assert const in doc, f"阈值 {const} 没写进说明文档"
         assert str(getattr(R, const)) in doc, f"{const} 的值在文档里对不上"
 

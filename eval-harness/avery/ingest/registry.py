@@ -578,7 +578,7 @@ class CompanyContext:
         from ..decision_grading import build_doc_timeline
         return build_doc_timeline(self.source_documents)
 
-    def decision_cards(self, as_of=None) -> list[dict]:
+    def decision_cards(self, as_of=None, *, forms=None, now=None) -> list[dict]:
         """feat-056 决策定级：给每个项目算一个 高风险/需确认/可推进，按严重度排好序。
 
         前端 feat-057 的「今天要决策的」直接吃这个列表（顺序即展示顺序）。等级由
@@ -588,16 +588,22 @@ class CompanyContext:
         纯规则版，reason_source == "rule"。
 
         `as_of` 不传则取今天——时间类规则（到期日）以它为准，显式传入即可复现。
+
+        `forms` / `now`（gap2 T9 · #58）是本期表单收集进度与"此刻"，由服务层从 registry 读出来
+        再喂进来（`CompanyContext` 自己不持有 registry 句柄，也不该为了这一条去持有）。
+        不传 = 这条路上没有表单数据，「本期还差人没交」那条规则不参评。
         """
         from ..decision_grading import grade_projects
         # gap-design-0805 · B2b：conflicts（T6 归并记下的落败读数）与时间轴一样，decision_cards
         # 与 briefing() **两边都要喂**——只喂一边，今天页的卡片和「N 个值得多看一眼」就会对不上。
+        # T9 的 forms 同一条纪律，同一个理由。
         return [d.to_dict() for d in grade_projects(self._decision_subjects(), self.signal_cards(),
                                                     as_of=as_of, timeline=self.doc_timeline(),
                                                     conflicts=getattr(self.extraction,
-                                                                      "conflicts", None))]
+                                                                      "conflicts", None),
+                                                    forms=forms, now=now)]
 
-    def briefing(self, as_of=None) -> dict:
+    def briefing(self, as_of=None, *, forms=None, now=None) -> dict:
         """A calm, HONEST 'organization weather' briefing. Counts are real (people/projects); it
         emits NO invented aggregate health score (R2: real-or-nothing).
 
@@ -652,17 +658,25 @@ class CompanyContext:
 
         signals = self.signal_cards()
         projects = self.project_cards()
-        # 🔴 定级用的是带 `sourceRef` 的那份投影 + 时间轴 + 冲突记录，必须与 `decision_cards()`
-        # 逐字同口径；下面的 `_signals_no_decision_covers` 仍吃不带 sourceRef 的 `projects`
-        # （它只做信号归属）。
+        # 🔴 定级用的是带 `sourceRef` 的那份投影 + 时间轴 + 冲突记录 + 本期表单，必须与
+        # `decision_cards()` 逐字同口径；下面的 `_signals_no_decision_covers` 仍吃不带 sourceRef
+        # 的 `projects`（它只做信号归属）。
         decisions = grade_projects(self._decision_subjects(), signals,
                                    as_of=as_of, timeline=self.doc_timeline(),
-                                   conflicts=getattr(self.extraction, "conflicts", None))
+                                   conflicts=getattr(self.extraction, "conflicts", None),
+                                   forms=forms, now=now)
         flagged = [d for d in decisions if d.grade != CAN_PROCEED]
         loose_signals = self._signals_no_decision_covers(projects, signals, flagged)
         n_flagged, n_loose = len(flagged), len(loose_signals)
         n_look = n_flagged + n_loose
-        look_kind = "none" if not n_look else ("items" if n_loose else "projects")
+        # 🔴 gap2 T9：`look_kind == "projects"` 这句话的全部内容是「数出来的每一样东西**都是**
+        # 一张项目卡」，中文壳据此印「其中 N 个项目值得多看一眼」。T9 起 `decisions` 里可能混进
+        # 一张**公司级**的表单卡（subject_type == 'forms'），它不是项目——不把它算进来判 kind，
+        # 屏幕上就会出现「2 个项目」而只有 1 张项目卡在场。那正是这个方法的长注释里记着的、
+        # 因为同一个原因栽过两次的那句谎（第一次是 loose signals，这是第三次的入口）。
+        n_nonproject = sum(1 for d in flagged if d.subject_type != "project")
+        look_kind = "none" if not n_look else (
+            "items" if (n_loose or n_nonproject) else "projects")
 
         metrics = [{"label": "people", "value": str(n_people)},
                    {"label": "active projects", "value": str(n_proj)}]
@@ -983,6 +997,48 @@ class ContextRegistry(ProjectWriteMixin):
         rows.sort(key=lambda s: (s.created_at or "", s.id), reverse=True)
         return [copy.deepcopy(s) for s in rows[: max(1, int(limit))]]
 
+    # --- T9 · gap2 #58：自动补铸要的两问一写 ------------------------------------------------
+    # 为什么不复用 `list_form_submissions`：它有 limit（默认 200 / 上限 500）。自动补铸的第一问是
+    # 「本期**有没有**行」——一个被截断的列表会把「有」答成「没有」，而那句错答的代价是给全公司
+    # 每个人**再发一条链接**。判据要多少行就得读到多少行，不能骑在一个为了分页而存在的上限上。
+
+    def list_form_submissions_in_period(self, context_id: str, template_id: str,
+                                        period: str) -> list:
+        """这家公司这张模板这一期的**全部**行（不截断、不分页）。顺序 oldest-first，稳定可 diff。"""
+        import copy
+        rows = [s for s in self._form_submissions.values()
+                if s.context_id == context_id and s.template_id == template_id
+                and (s.period or "") == period]
+        rows.sort(key=lambda s: (s.created_at or "", s.id))
+        return [copy.deepcopy(s) for s in rows]
+
+    def latest_form_period_before(self, context_id: str, template_id: str,
+                                  period: str) -> str | None:
+        """这张模板在 `period` **之前**最近的一个有行的周期，没有则 None。
+
+        比较用字符串序：ISO 周 `YYYY-Www` 的字典序就是时间序（年在前、周补零到两位）。空 period
+        的行不参与——那是没写周期的历史行，拿它当「上期」会让自动补铸照着一份没有周期语义的名单发。
+        """
+        periods = {(s.period or "") for s in self._form_submissions.values()
+                   if s.context_id == context_id and s.template_id == template_id}
+        earlier = sorted(p for p in periods if p and p < period)
+        return earlier[-1] if earlier else None
+
+    def put_form_submission_if_absent(self, submission):
+        """自动补铸专用的写：`auto_key` 没被占则落行并返回它，已被占则返回 **None**（不覆盖）。
+
+        🔴 内存这一份是**单进程**的，它的「原子」只是 GIL 下的一次字典查改；真正顶住并发的是
+        Postgres 那条唯一索引（0015）。两个双胞胎在**行为**上一致（第二次调用落空），但只有
+        真库那条腿证明得了事务级——所以并发那道门是 `@needs_db`，不是离线门。
+        """
+        key = (submission.auto_key or "").strip()
+        if not key:
+            raise ValueError("put_form_submission_if_absent needs a non-empty auto_key")
+        for s in self._form_submissions.values():
+            if s.context_id == submission.context_id and (s.auto_key or "") == key:
+                return None
+        return self.put_form_submission(submission)
+
     def record_form_answers(self, share_token: str, answers: list,
                             submitted_at: str) -> str:
         """答一次锁：首答落地返回 'ok'，重复提交返回 'already'（**不覆盖**——证据必须稳得住，
@@ -997,6 +1053,27 @@ class ContextRegistry(ProjectWriteMixin):
             return "already"
         sub.answers = list(answers)
         sub.submitted_at = submitted_at
+        return "ok"
+
+    def expire_form_submission(self, submission_id: str, at_iso: str) -> str:
+        """T9 · 作废一条**还没交**的链接 = 把到期时刻拨到此刻。'ok' / 'already' / 'unknown'。
+
+        🔴 为什么是「拨到期」而不是删行——三个理由，每一个单独都够：
+          ① **已提交的一律不许动**（`submitted_at` 非空 → 'already'）。答案是员工本人的话，
+             删掉它就是销毁证据。这条判据与首答锁同一条纪律（PRD Q8）。
+          ② 删行会和自动补铸打架：护栏认的是「本期这个人有没有行」，行没了 → 下一次 GET 又给
+             他铸一条，经理点一次作废、系统立刻发回来一条，无限循环。拨到期之后这一行仍在，
+             仍算「他本期已经有过链接」，循环从结构上不存在。
+          ③ 作废后员工手机上那条链接的表现是**现成的、诚实的**那一页——「这条链接已过期，
+             如果还需要你填，请让负责人重新发一条」（`form_api._resolve_link` 的 404 过期页）。
+             不需要为「被撤回」新造一种状态词、一张页、一套文案。
+        """
+        sub = self._form_submissions.get(submission_id)
+        if sub is None:
+            return "unknown"
+        if sub.submitted_at:
+            return "already"
+        sub.expires_at = at_iso
         return "ok"
 
     # --- feat-053: the account seam (Supabase user id <-> context ownership) -------------------
@@ -1199,6 +1276,13 @@ class ContextRegistryProtocol(Protocol):
                               limit: int = 200) -> list: ...
     def record_form_answers(self, share_token: str, answers: list,
                             submitted_at: str) -> str: ...
+    # T9 · gap2 #58：自动补铸（form_autofill.py）要的两问一写
+    def list_form_submissions_in_period(self, context_id: str, template_id: str,
+                                        period: str) -> list: ...
+    def latest_form_period_before(self, context_id: str, template_id: str,
+                                  period: str) -> str | None: ...
+    def put_form_submission_if_absent(self, submission): ...
+    def expire_form_submission(self, submission_id: str, at_iso: str) -> str: ...
 
     # account <-> context binding (feat-038 / feat-053)
     def link_account_context(self, user_id: str, context_id: str) -> bool: ...

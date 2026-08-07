@@ -33,6 +33,7 @@ from .decision_rules import (
     DUE_CRUNCH_DAYS,
     DUE_SOON_DAYS,
     DUE_YEAR_LOOKBACK_DAYS,
+    FORM_DUE_SOON_HOURS,
     GRADES,
     HIGH_RISK,
     KEYWORD_FAMILIES,
@@ -53,7 +54,8 @@ from .decision_rules import (
 
 __all__ = [
     "AveryReview", "Decision", "DocStamp", "DocTimeline", "RuleHit",
-    "build_doc_timeline", "grade_project", "grade_projects", "apply_review", "parse_due_date",
+    "build_doc_timeline", "grade_project", "grade_projects", "grade_form_period",
+    "FORMS_SUBJECT_TYPE", "apply_review", "parse_due_date",
 ]
 
 
@@ -424,6 +426,16 @@ class _Subject:
     own_source_ref: str = ""
     # --- B2b 跨资料冲突（缺席 = 这个 context 没有冲突记录，两条冲突规则一律闭嘴）---
     conflicts: tuple[_SubjectConflict, ...] = ()
+    # --- T9 本期表单收集（gap2 #58）---
+    # 🔴 **项目主体上这两格恒为 None**，而且必须恒为 None：表单是按人铸的，一张项目卡说不出
+    # 「本期还差几个人没交」这件公司级的事。只有 `grade_form_period` 造的那个主体带着它们。
+    # 于是 `_m_form_missing` 在 `grade_project` 的每一次全表遍历里都干净地返回 []，
+    # 不是靠 if 判断绕过去的——它读的那格本来就没有值。缺省 None 让所有老调用方一字不改。
+    forms: object | None = None
+    # 判「快到期了」比的是**瞬间**，不是 as_of 那个日期：链接按刻建行，同一天铸的两批可以差
+    # 十几个小时。显式带进主体（而不是让匹配器自己 `datetime.now()`）是为了保住纯函数性——
+    # 同样的主体永远算出同样的结果，测试与回放才可复现。
+    now_moment: datetime | None = None
 
 
 def _norm_text(v) -> str:
@@ -704,6 +716,46 @@ def _m_unclassified(s: _Subject) -> list[str]:
     return []
 
 
+def _m_form_missing(s: _Subject) -> list[str]:
+    """gap2 T9（#58）· 本期常驻表单还有人没交，而最早的一条链接就要到期了。
+
+    🔴 **项目主体永远命不中这一条**，而且不是靠一句 `if` 绕过去的：`s.forms` 在项目主体上恒为
+    None（`_Subject.forms` 的注释讲了为什么表单说不出项目级的事），所以第一行就干净地返回空。
+    这条规则唯一的出场方式是 `grade_form_period()` 造的那个**公司级**主体。
+
+    判据两条都要满足，缺一不响：
+      ① 本期确实还有 open 行（没交的人是行，不是缺席——铸链即建行，`form_api.list_submissions`）；
+      ② 这些行里**最早**的那条到期时刻落在 `FORM_DUE_SOON_HOURS` 之内。
+    为什么要第二条：链接是 7 天期，刚铸出来就喊「还差 6 人没交」等于每周有五天在催人，
+    经理会学会忽略这一屏。取最早那条而不是最晚：先过期的那条才是**真的要来不及**的那条。
+
+    ⚠ 已经过期的行不算「还差他没交」——`form_period_status` 已经把它们分到 `expired` 里去了。
+    催一条今天已经打不开的链接，是给经理派一件做不成的事；那种情况该做的是重新铸链，不是催。
+
+    证据面 = 每个没交的人一行 `person="…" expires_at="…"`。这是 ADR-0033 evidence 三类里的
+    第 ③ 类（我们自己的入库读数，与 `uploaded_at="2026-06-20"` 同族）：机器键 + 我们库里那一行的
+    真值，语言中立、逐字可核（同一批人就摆在资料库「谁交了」那一段里，一眼能对上）。
+    🔴 这一列的**长度就是**规则文案里那个 N（见 `_form_hit`）——不另算一个会漂的第二个数。
+    """
+    status = s.forms
+    if status is None or not status.missing or s.now_moment is None:
+        return []
+    deadlines = [(_uploaded_moment(iso), name) for name, iso in status.missing]
+    soonest = min((m for m, _ in deadlines if m is not None), default=None)
+    if soonest is None:
+        # 一条到期时刻都解析不出来 → 说不出"快到期了"，闭嘴。绝不因为读不出时间就当成"快到了"
+        # （那是拿一个我们并不知道的事实去打扰经理），也不当成"还早"——前者更贵，两者都不猜。
+        return []
+    if (soonest - s.now_moment).total_seconds() > FORM_DUE_SOON_HOURS * 3600:
+        return []
+    lines = []
+    for name, iso in status.missing:
+        moment = _uploaded_moment(iso)
+        when = moment.date().isoformat() if moment is not None else ""
+        lines.append(f'person="{name}" expires_at="{when}"')
+    return lines
+
+
 def _risk_free(s: _Subject) -> bool:
     """没有任何高风险族 / 待办族信号，也没有阻塞。"""
     if s.blockers:
@@ -767,6 +819,9 @@ _MATCHERS = {
     "R-UNCLASSIFIED": _m_unclassified,
     "R-DONE": _m_done,
     "R-CLEAR": _m_clear,
+    # T9（#58）：登记在这里是为了满足「规则表与匹配器一一对应」那道门，而且它是**真的**匹配器
+    # ——`grade_project` 每张项目卡都会调它一次，只是项目主体没有 `forms` 那一格，恒返回空。
+    "R-FORM-MISSING": _m_form_missing,
 }
 _DATED_MATCHERS = {
     "R-OVERDUE": _m_overdue,
@@ -796,12 +851,20 @@ class RuleHit:
     title: str          # 中文一行，**只喂 decision_grading_rules.md 那份客户口径说明书**，不进载荷
     basis: str          # 同上
     evidence: tuple[str, ...]
+    # T9（gap2 #58）· **每次命中都不同**的那几个占位符实参，形如 `(("n", 3),)`。
+    # 存成 pairs 而不是 dict：`RuleHit` 是 frozen dataclass（自动生成 `__hash__`），挂一个 dict
+    # 会让它在任何一次被哈希时炸掉，而那种炸法只在某条新代码第一次去 set 里放它时才出现。
+    # 参数**名**必须先登记进 `decision_rules.RULE_DYNAMIC_PARAMS`（那张表是给 i18n 契约门看的
+    # 声明；`test_dynamic_params_are_declared` 守住两边不脱节）。
+    dynamic_params: tuple[tuple[str, int], ...] = ()
 
     def to_dict(self) -> dict:
-        # `params` = 这条规则的模板占位符实参（阈值归后端配置，句子归前端 i18n）。
+        # `params` = 这条规则的模板占位符实参（句子归前端 i18n）。两个来源合并：
+        #   · `RULE_PARAMS` —— **静态阈值**，归后端配置（Danny 调 DUE_SOON_DAYS 就该跟着变）；
+        #   · `dynamic_params` —— 这一次命中算出来的数（今天只有 R-FORM-MISSING 的 `n`）。
         # 没有占位符的规则发 `{}`，形状恒定，前端不用做 in 判断。
         return {"rule_id": self.rule_id, "grade": self.grade, "severity": self.severity,
-                "params": dict(RULE_PARAMS.get(self.rule_id, {})),
+                "params": {**RULE_PARAMS.get(self.rule_id, {}), **dict(self.dynamic_params)},
                 "evidence": list(self.evidence)}
 
 
@@ -937,18 +1000,72 @@ def grade_project(project: dict, signals: list[dict] | None = None, *,
     )
 
 
+FORMS_SUBJECT_TYPE = "forms"
+
+
+def grade_form_period(status, *, now: datetime | None = None) -> Decision | None:
+    """gap2 T9（#58）· 给**一张模板的本期收集**定级，命不中返回 None。
+
+    `status` 是 `avery.ingest.form_autofill.FormPeriodStatus`（只读聚合，本模块不去碰 registry）。
+
+    🔴 为什么不走 `grade_project` 的那张全表遍历，而是只跑 R-FORM-MISSING 这一条：
+    那张表的其余每一条问的都是**项目**的事（status / blockers / progress / dueDate / 跨资料冲突）。
+    拿一个公司级主体去跑它们，第一个响的会是 `R-NO-EVIDENCE`——「没读到状态、阻塞、进度、到期日
+    中的任何一项」。那句话对这张卡是**假的**：这张卡本来就不该有那四个字段，不是"没读到"。
+    ADR-0018 的红线（只说读到/没读到什么，绝不替客户断言）正是拦这种话的。
+    所以这里显式只问那一条，并且把"为什么只问一条"写在这儿，免得下一个人以为是漏了。
+
+    `now` 不传则取此刻——传进来才是可复现的用法，测试与批量调用一律显式传（同 `as_of` 的约定）。
+    """
+    moment = now or datetime.now(timezone.utc)
+    subject = _Subject(
+        subject_id=f"forms:{status.template_id}:{status.period}",
+        title=status.template_title or status.template_id,
+        owner_name="", status="", progress=None, due_raw="", due=None,
+        blockers=(), signals=(), unknown_fields=(), unparsed_fields=(),
+        forms=status, now_moment=moment)
+    lines = _m_form_missing(subject)
+    if not lines:
+        return None
+    r = rule("R-FORM-MISSING")
+    hit = RuleHit(rule_id=r.id, grade=r.grade, severity=SEVERITY[r.grade],
+                  title=r.title_zh, basis=r.basis, evidence=tuple(lines),
+                  # 🔴 N **就是**证据行数，不是另算一遍的第二个数——句子说差几人，底下就正好
+                  # 摆着几行「谁」。两者结构上不可能对不上。
+                  dynamic_params=(("n", len(lines)),))
+    return Decision(
+        subject_type=FORMS_SUBJECT_TYPE,
+        subject_id=subject.subject_id,
+        subject_title=subject.title,
+        owner_name="",
+        grade=r.grade, rule_grade=r.grade,
+        matched_rules=(hit,),
+        unknown_fields=(), unparsed_fields=(),
+        reason="", reason_source="rule")
+
+
 def grade_projects(projects: list[dict], signals: list[dict] | None = None, *,
                    as_of: date | None = None,
                    timeline: DocTimeline | None = None,
-                   conflicts=None) -> list[Decision]:
+                   conflicts=None, forms=None, now: datetime | None = None) -> list[Decision]:
     """批量定级 + 排序。顺序即前端 057「今天要决策的」的展示顺序：
 
     先按等级从高到低，同级按标题字典序（稳定、可复现，绝不用 dict/set 迭代序）。
     `timeline` / `conflicts` 语义同 `grade_project`：不传则对应规则不参评。
+
+    `forms`（T9 · #58）是本期各张模板的收集进度（`form_autofill.form_period_status()` 的产出）。
+    🔴 它产出的是**公司级**卡，与项目卡一起排序、一起返回——刻意不另开一条返回通道：
+    `decision_cards()` 与 `briefing()` 必须看到**同一个**列表，否则今天页的卡片和它上面那句
+    「N 个值得多看一眼」又会对不上（`registry.briefing()` 那段长注释记着的旧伤）。
+    不传 = 没有表单数据，这条规则不参评，老调用方一字不受影响。
     """
     today = as_of or date.today()
     out = [grade_project(p, signals, as_of=today, timeline=timeline, conflicts=conflicts)
            for p in (projects or [])]
+    for status in (forms or []):
+        decided = grade_form_period(status, now=now)
+        if decided is not None:
+            out.append(decided)
     out.sort(key=lambda d: (-d.severity, d.subject_title, d.subject_id))
     return out
 

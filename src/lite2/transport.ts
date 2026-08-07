@@ -553,11 +553,32 @@ export interface LiveFormSubmission {
   // 空/缺席 = 这份周报没绑项目：只回流人卡，不碰项目卡。
   project_ref?: string
   answers?: Array<{ field_id: string; value: string | number }> // 仅 submissions 端点、且已提交
+  // T9（gap2 #58）· 这一行是系统按上期名单**自动备好**的（true），还是经理亲手点出来的（false）。
+  // 老后端不发这个键 → undefined，一律按「不知道」处理，绝不折成 false（absent≠none）。
+  auto?: boolean
+}
+
+// T9 · 这一次读取**真的**自动补铸了什么。🔴 键**缺席**表示这次调用一行都没铸——不是 `[]`，
+// 也不是「本期没有行」。前端合成通知的判据必须是一次真实的状态迁移；拿「本期有行」这种每次
+// 刷新都为真的静态事实当判据，铃铛会每刷一次响一声（notifyStore 文件头那条红线）。
+export interface FormAutoFilled {
+  template_id: string
+  period: string // 备好的是哪一期（服务端算的 ISO 周，前端永不自己再算一遍）
+  copied_from: string // 照抄的是上面哪一期
+  minted: number // 这次真的铸了几条 —— 界面上「沿用上期（N 人）」的 N 就是它
 }
 
 export interface LiveFormSubmissionsPayload {
   context_id: string
   submissions: LiveFormSubmission[]
+  auto_filled?: FormAutoFilled[]
+}
+
+// T9 · 作废一条**还没交**的链接（= 把到期时刻拨到此刻）。已提交的 409、不是你的 404。
+export interface FormVoidResult {
+  context_id: string
+  submission_id: string
+  submission: LiveFormSubmission | null
 }
 
 // 铸链请求体。⚠ 后端 pydantic 两个模型都是 `extra: "forbid"`（form_api.py:67/73）——
@@ -679,6 +700,8 @@ export interface LiveTransport {
   ) => Promise<FormLinksResult>
   // 「这一期谁交了 / 谁没交」的唯一真相（未交 = status 'open' 的行，不是名单里的缺席）。
   fetchFormSubmissions?: (contextId: string) => Promise<LiveFormSubmissionsPayload>
+  // T9 · 作废一条还没交的链接。可选（同上面三条）：不认这个方法的通道上，界面那颗按钮不渲染。
+  voidFormSubmission?: (contextId: string, submissionId: string) => Promise<FormVoidResult>
 
   // ── 账号（feat-053）。可选实现：stub transport 不提供，调用方须判空 ──────────────────
   // 🔴 可选（`?:`）是刻意的——LiveTransport 有第二个实现（stubTransport，AFK 门/离线演示），
@@ -1307,6 +1330,20 @@ export function createHttpTransport(base: string = apiBase()): LiveTransport {
       )
       if (!res.ok) throw transportError('form submissions', res)
       return (await res.json()) as LiveFormSubmissionsPayload
+    },
+
+    // T9 · 作废一条还没交的链接。submissionId 同样 encodeURIComponent——它来自服务端的
+    // `new_submission_id()`（'sub_' + hex），今天是 ASCII 安全串，但不赌它永远是。
+    async voidFormSubmission(contextId, submissionId) {
+      const res = await send(
+        'form void',
+        `${base}/team/${encodeURIComponent(contextId)}/forms/submissions/${encodeURIComponent(
+          submissionId,
+        )}/void`,
+        { method: 'POST', headers: authHeader(contextId) },
+      )
+      if (!res.ok) throw transportError('form void', res)
+      return (await res.json()) as FormVoidResult
     },
 
     // ── 账号（feat-053）────────────────────────────────────────────────────────────────
