@@ -492,6 +492,87 @@ export interface LiveAdviseRunsPayload {
   runs: LiveAdviseRunEntry[]
 }
 
+// ── 常驻表单（T1 · form-backend-a1a：`/team/{id}/forms*` 契约，gap-design-0805 §A1）────────
+// 经理侧三件事：这家公司挂着哪几张常驻表单、给谁铸了链接、这一期谁交了。
+//
+// 🔴 两个 token 世界严格分开（form_api.py:15-20）：owner_token 是经理凭据，**只走 header**；
+// 员工的 share_token 按设计骑在 `/f/<token>` URL 上——那是 IM webview 里唯一免登录走得通的
+// 路。下面 LiveFormSubmission.link 是**服务端拼好的整条链接**，前端永不自造（见 :16 注释）。
+//
+// 🔴 词表由服务端定（form.py:35 FIELD_KINDS / :116 effective_submission_status），前端只照做。
+// 闭合联合 + `| string` 兜底：后端哪天多一个词，界面显示「未知」而不是默认按 happy 值渲染
+//（与 LiteFileStatus 同一条 absent≠none 纪律，见 :435）。
+export type LiveFormFieldKind = 'text' | 'choice' | 'number'
+export type LiveFormStatus = 'open' | 'submitted' | 'expired'
+
+export interface LiveFormField {
+  id: string // ASCII 稳定键——答案按它落，改 label 不动老答案
+  kind: LiveFormFieldKind | string
+  label: string
+  help: string
+  required: boolean
+  choices: string[] // 仅 choice
+  min: number // 仅 number
+  max: number // 仅 number
+}
+
+export interface LiveFormTemplate {
+  id: string // 内置「周报」恒为 'tpl_weekly'
+  title: string
+  active: boolean
+  created_at: string
+  fields: LiveFormField[]
+}
+
+export interface LiveFormsPayload {
+  context_id: string
+  templates: LiveFormTemplate[]
+}
+
+// 一次「发给某一个人的一份表单」。🔴 铸链即建行——没交的人在这里是 `status:'open'` 的**行**，
+// 不是缺席（form_api.py:210-211）。前端因此不许用「名册减去交了的」去猜谁没交：那会把
+// 从来没收到过链接的人也算成"没交"，是替客户断言一件我们并不知道的事。
+export interface LiveFormSubmission {
+  id: string
+  template_id: string
+  person_id: string
+  person_name: string
+  period: string // 述职周期，ISO 周如 '2026-W32'（铸链时定，不是从 submitted_at 倒推）
+  status: LiveFormStatus | string
+  created_at: string
+  expires_at: string
+  submitted_at: string | null // 后端写的是 `s.submitted_at or None` —— 未提交是 null，不是空串
+  token?: string // 键**缺席**（不是空串）当这条没有 share_token
+  link?: string // 同上。服务端拼好的整链，见本段头部注释
+  answers?: Array<{ field_id: string; value: string | number }> // 仅 submissions 端点、且已提交
+}
+
+export interface LiveFormSubmissionsPayload {
+  context_id: string
+  submissions: LiveFormSubmission[]
+}
+
+// 铸链请求体。⚠ 后端 pydantic 两个模型都是 `extra: "forbid"`（form_api.py:67/73）——
+// 多送一个键就是 422，别顺手往里塞前端自己的字段。
+export interface FormLinkRecipient {
+  id: string // 01 表的人员ID。归并按 ID 不按姓名——酒店有同名/花名，按名会并错人
+  name: string
+}
+
+export interface FormLinksInput {
+  recipients: FormLinkRecipient[] // 1..30（MAX_RECIPIENTS_PER_MINT），越界 422
+  period?: string // 省略即服务端按当前 ISO 周填（form.py:109）
+}
+
+// 铸链回执。🔴 每次调用铸**新**链接，不幂等——「这周的周报」和「上周的周报」是两份不同的
+// 提交，重复调用等于再发一轮（form_api.py:166-167）。调用方必须挡住双击。
+export interface FormLinksResult {
+  context_id: string
+  template_id: string
+  period: string
+  links: LiveFormSubmission[] // with_answers=False，所以这一批永远没有 answers 键
+}
+
 // ── 端点分歧台账（wire-contract-duplicated-endpoint-asymmetry-unledgered）──────────────────
 // 两壳各自持一份 LiveTransport（src/lite/transport.ts vs 本文件），端点早就不对称了。
 // 区分信息只活在 commit message 里，代码与 AGENTS.md 均无痕迹——本台账把它挖出来钉在这里，
@@ -504,11 +585,12 @@ export interface LiveAdviseRunsPayload {
 //     这一段 delta）」。（offlinePreview 那时也没带，但 feat-068 后来补齐了——见下方
 //     offlinePreview 字段注释；revokeAsk 至今仍是那唯一没补的缺口。）
 //
-// 仅 v02（本文件）有、v01 没有（14 个）—— 未裁定：
+// 仅 v02（本文件）有、v01 没有（17 个）—— 未裁定：
 //   downloadFile（files-hub-0729/01）、fetchAccountContexts / claimContext（feat-053）、
 //   demoStatus / demoClaim / appendNote（input-side-0721）、addProject / patchProject /
 //   archiveProject / restoreProject（rich-align-0722 issue 05a）、addPerson / patchPerson /
-//   archivePerson / restorePerson（rich-align-0722 issue 06）。这 14 个全部诞生在
+//   archivePerson / restorePerson（rich-align-0722 issue 06）、fetchForms / createFormLinks /
+//   fetchFormSubmissions（gap-design-0805 T3 · 常驻表单）。这 17 个全部诞生在
 //   2026-07-19 v01 冻结（src/shared/version.ts:8，Danny 拍板）之后——冻结之后所有新功能
 //   只往 v02 加，v01 没跟进不是逐条比对后"判定 v01 不需要"，只是没轮到。没有任何一条
 //   commit message 像 revokeAsk 那样写"刻意不给 v01"，所以标未裁定。
@@ -566,6 +648,24 @@ export interface LiveTransport {
   // issue #49 · 议事室历史（只读、新→旧）。可选：stub 通道无持久层，判空即整块不渲染
   //（与 fetchAccountContexts 同款降级纪律）。
   fetchAdviseRuns?: (contextId: string) => Promise<LiveAdviseRunsPayload>
+
+  // ── 常驻表单（gap-design-0805 T3）。同为可选：联网后端能力，stub 天然没有；判空即整段
+  // 不渲染（与 fetchAdviseRuns 同款降级纪律）。三条全走 owner_token/账号双通道 header。────
+  //
+  // ⚠ GET /forms 在服务端**首次调用会写**：`ensure_builtin_templates` 把内置「周报」铸进
+  // 这家公司的表单库（form_api.py:113 → form.py:360）。按模板 id 幂等（已存在则原样不动，
+  // 经理改过的题面不会被内置版覆盖），所以重复调用安全——但别把它当成一次免费的读，
+  // 挂在"经理打开资料库屏"这个动作上，不要挂进每次上传/恢复的扇出。
+  fetchForms?: (contextId: string) => Promise<LiveFormsPayload>
+  // 给选中的人各铸一条不可猜的 `/f/<token>` 链接（一人一链、7 天过期，拍板 #4）。
+  // 🔴 服务端不发消息、不碰 IM——**转发这个动作本身就是人的闸**，经理自己去粘。
+  createFormLinks?: (
+    contextId: string,
+    templateId: string,
+    input: FormLinksInput,
+  ) => Promise<FormLinksResult>
+  // 「这一期谁交了 / 谁没交」的唯一真相（未交 = status 'open' 的行，不是名单里的缺席）。
+  fetchFormSubmissions?: (contextId: string) => Promise<LiveFormSubmissionsPayload>
 
   // ── 账号（feat-053）。可选实现：stub transport 不提供，调用方须判空 ──────────────────
   // 🔴 可选（`?:`）是刻意的——LiveTransport 有第二个实现（stubTransport，AFK 门/离线演示），
@@ -1156,6 +1256,44 @@ export function createHttpTransport(base: string = apiBase()): LiveTransport {
       })
       if (!res.ok) throw transportError('history', res)
       return (await res.json()) as LiveAdviseRunsPayload
+    },
+
+    // ── 常驻表单（gap-design-0805 T3）——同上 header-only 纪律（owner_token 缺/错一律 404）。
+    // 🔴 404 在这三条上**不是**「这家公司没有表单」：后端按"不泄露存在性"的规矩，把「不存在」
+    // 与「你证明不了这是你的」编码成同一个 404（见 httpErrorMessage 的 staleToken 那段）。
+    // 空清单只能来自 200 + `templates: []`，调用方不许从 404 推出空态。
+    async fetchForms(contextId) {
+      const res = await send('forms', `${base}/team/${encodeURIComponent(contextId)}/forms`, {
+        headers: authHeader(contextId),
+      })
+      if (!res.ok) throw transportError('forms', res)
+      return (await res.json()) as LiveFormsPayload
+    },
+
+    // 铸链。templateId 同样 encodeURIComponent——今天恒是 'tpl_weekly'，但经理自建的模板 id
+    // 来自 new_template_id()，这里不赌它永远是 ASCII 安全串（同 downloadFile 连数字都编的先例）。
+    async createFormLinks(contextId, templateId, input) {
+      const res = await send(
+        'form links',
+        `${base}/team/${encodeURIComponent(contextId)}/forms/${encodeURIComponent(templateId)}/links`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...authHeader(contextId) },
+          body: JSON.stringify(input),
+        },
+      )
+      if (!res.ok) throw transportError('form links', res)
+      return (await res.json()) as FormLinksResult
+    },
+
+    async fetchFormSubmissions(contextId) {
+      const res = await send(
+        'form submissions',
+        `${base}/team/${encodeURIComponent(contextId)}/forms/submissions`,
+        { headers: authHeader(contextId) },
+      )
+      if (!res.ok) throw transportError('form submissions', res)
+      return (await res.json()) as LiveFormSubmissionsPayload
     },
 
     // ── 账号（feat-053）────────────────────────────────────────────────────────────────

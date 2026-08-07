@@ -7686,6 +7686,243 @@
   max-width: 62ch;
 }
 
+/* ── gap-design-0805 T3 · form-frontend-a1c ·「常驻表单」第④段 ────────────────────────
+   同 01/02 段的取舍：只用既有 token，两张皮自动跟随，本段不各写一份。
+
+   ⚠ 与 AskCard 的 .ask-* 那套（recipient chip / link-row / copy）是**抄本不是复用**：
+   那套全部 scoped 在 .lite-ask-card 之下（本文件 l.1667 起），类名挂到资料库的节点上会
+   一点样式都不生效。分开还有第二个好处——改这里不会连坐 AskCard，AskCard 的按钮族门也
+   不会把本段的节点数进它的计数里。
+
+   ⚠ 刻意不抄 .ask-recipient-chips 的 max-height——那会在 .lite-files-scroll 里再开一根
+   滚动条（屏内双滚动），而且硬像素高度对两种语言不等价：en 的人名更长、折行更早，
+   内滚出现的时机会两边不一样。这里让它自然折行，长度交给外层那一根滚动条。
+
+   ⚠ 按钮一律挂 .lite-btn 族（verify-button-family 的硬不变量：.lite2-shell 下每个可见
+   button 要么挂族、要么进白名单，而白名单膨胀=门失效）。chip 的选中/未选中直接用族里的
+   soft/ghost 两个变体表达，所以本段**一条颜色都不写**，只压尺寸——颜色写在这里是 (0,3,0)，
+   与 l.6269 起那层双写同权重，靠后写侥幸胜出的规则下次有人插一段就塌。 */
+.lite2-shell .lite-files-forms-templates {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+}
+
+.lite2-shell .lite-files-forms-template {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--rule, rgba(0, 0, 0, 0.08));
+}
+
+.lite2-shell .lite-files-forms-template:last-child {
+  border-bottom: 0;
+}
+
+.lite2-shell .lite-files-forms-template-name {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.lite2-shell .lite-files-forms-template-pick {
+  padding: 3px 12px;
+  font-size: 12px;
+}
+
+/* 题面预览。这是服务端存着的那张表的原文（客户自己的内容），不是界面文案——
+   排版上跟文件名同级：可以长，允许折行，不给省略号。
+   🔴 word-break: keep-all —— 这一行是**一串并列的题面名**用「·」隔开，不是散文。
+   中文默认可以在任意两字之间断行，人眼过时逮到它把「情绪自述」断成「情绪 / 自述」，
+   读起来像多了一格。keep-all 让它只在分隔符处断。
+   🔴 必须配 overflow-wrap: anywhere（对抗自审逮到）：题面是**服务端数据**，后端允许到
+   `MAX_LABEL_CHARS = 120`，而经理自建模板走的是同一个 POST /forms。单靠 keep-all，一条
+   一百二十字不带分隔符的中文题面就是一整个不可断的词——它会横向溢出，然后被
+   `.lite-files-scroll { overflow-x: hidden }` **静默裁掉**：没有省略号、没有横向滚动条，
+   经理看不到自己被截断了。anywhere 只在「实在没有别的断点」时才生效，所以正常的短题面
+   仍然只在「·」处断，观感一点没变。散文段落不要照抄 keep-all 这一条。 */
+.lite2-shell .lite-files-forms-template-fields {
+  margin: 6px 0 0;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--ink-faint, #8a8578);
+  max-width: 62ch;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+.lite2-shell .lite-files-forms-mint-block,
+.lite2-shell .lite-files-forms-links-block,
+.lite2-shell .lite-files-forms-status-block {
+  margin-top: 18px;
+}
+
+.lite2-shell .lite-files-forms-label {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+/* 周期徽记（`2026-W32`）。跟在小标题后面，不是徽章——它是限定语不是状态。 */
+.lite2-shell .lite-files-forms-period {
+  margin-left: 8px;
+  font-weight: 400;
+  color: var(--ink-faint, #8a8578);
+}
+
+.lite2-shell .lite-files-forms-note {
+  margin: 8px 0 0;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--ink-faint, #8a8578);
+  max-width: 62ch;
+}
+
+.lite2-shell .lite-files-forms-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0 0;
+}
+
+.lite2-shell .lite-files-forms-chip {
+  padding: 3px 11px;
+  font-size: 12px;
+}
+
+.lite2-shell .lite-files-forms-mint {
+  margin-top: 14px;
+}
+
+/* 铸链失败的横幅。terracotta 而不是 var(--alert)——🔴 `--alert` 全仓从未声明
+   （l.7674 那处一直落在硬编码兜底 #b3261e 上），它不跟随皮切换。别再抄那一处。 */
+.lite2-shell .lite-files-forms-error {
+  margin: 10px 0 0;
+  padding: 8px 12px;
+  border-left: 3px solid var(--terracotta);
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--ink-soft);
+  max-width: 62ch;
+}
+
+.lite2-shell .lite-files-forms-links {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+/* 链接行。flex-wrap 是必须的：链接本身很长，窄屏上「姓名 + 整条链接 + 复制」三件挤不下，
+   让复制键掉到第二行也不能让它被挤出可点尺寸。 */
+.lite2-shell .lite-files-forms-link-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.lite2-shell .lite-files-forms-link-name {
+  flex: 0 0 auto;
+  min-width: 96px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+/* min-width:0 是必须的——flex item 默认 min-width:auto 会拒绝收缩到内容宽度以下，
+   于是这一条不换行的长链接会把整行撑破外层（同 FileManifest 文件名那处的老伤）。 */
+.lite2-shell .lite-files-forms-link-url {
+  flex: 1 1 220px;
+  min-width: 0;
+  padding: 5px 8px;
+  border: 1px solid var(--rule, rgba(0, 0, 0, 0.1));
+  border-radius: 5px;
+  background: var(--paper);
+  color: var(--ink-soft);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lite2-shell .lite-files-forms-copy {
+  flex: none;
+  padding: 2px 10px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+/* 与本段其余文字同一条度量线（62ch）。不设上限的话，1280 宽下姓名贴左、状态贴右，
+   中间空出半屏——两列离得越远越要用眼睛横着找，人眼过时就是这么发现的。
+   🔴 `font-size` 这一行是判据的一部分，不是装饰：`ch` 量的是**这个元素自己**字号下 '0' 的
+   宽度。本段其它几处 62ch 都在同一条规则里声明了字号（题面预览 11px / 说明 11px / 报错
+   12px），只有这条 `<ul>` 当初没写，于是它按继承来的浏览器默认 16px 算——实测 581.73px，
+   比同标称的 11px 块（399.94px）宽 45%，所以「62ch」这个说法当时是假的。
+   三个子元素各自都声明了字号（-name 13px / -when 11px / .lite-badge 11.5px），
+   所以在这里定 13px 不会漏到任何一个子元素身上。 */
+.lite2-shell .lite-files-forms-status {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  font-size: 13px;
+  max-width: 62ch;
+}
+
+.lite2-shell .lite-files-forms-status-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--rule, rgba(0, 0, 0, 0.08));
+}
+
+.lite2-shell .lite-files-forms-status-row:last-child {
+  border-bottom: 0;
+}
+
+.lite2-shell .lite-files-forms-status-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--ink);
+  word-break: break-word;
+}
+
+/* 状态徽章配色。三个状态各自取一个既有 token 的**文字色**档：11.5px 的小字用装饰亮度
+   够不到 AA（FileManifest 那处 07-20 实测 3.9–4.5:1 就是这么栽的），所以一律走 --*-text，
+   取不到再逐级回落。unknown 走 ink-faint——它不是一种状态，是「我们没读懂这个词」。 */
+.lite2-shell .lite-files-forms-status-badge[data-tone='ok'] {
+  color: var(--sage-text, var(--sage, #4a7c59));
+}
+
+.lite2-shell .lite-files-forms-status-badge[data-tone='open'] {
+  color: var(--ink-soft);
+}
+
+.lite2-shell .lite-files-forms-status-badge[data-tone='warn'] {
+  color: var(--honey-text, var(--honey, #b8860b));
+}
+
+.lite2-shell .lite-files-forms-status-badge[data-tone='unknown'] {
+  color: var(--ink-faint, #8a8578);
+}
+
+.lite2-shell .lite-files-forms-status-when {
+  flex: none;
+  font-size: 11px;
+  color: var(--ink-faint, #8a8578);
+  white-space: nowrap;
+}
+
+/* 徽章恒贴行尾并右对齐：两种状态行（一种带时间戳、一种不带）的状态词因此对得上一列。 */
+.lite2-shell .lite-files-forms-status-badge {
+  flex: none;
+  margin-left: auto;
+  text-align: right;
+}
+
 /* ── files-hub-0729/03 · 团队屏空态引导卡 + 首页去资料库的两条链接 ───────────────────────
    团队屏右栏空态原来摆的是 UploadPanel；本战役把它换成一张"这里为什么是空的 + 去哪"的卡。
    刻意不用 .nexus-empty 的垂直居中语法：那是给**整屏空**用的，这里只是双栏里的右栏空。 */
@@ -7752,10 +7989,25 @@
    带高取值：composer（含 16px 底距）实测占屏底 110px，胶囊占 68px，合规页脚窄屏会换行到
    59px+ —— 取 120px 覆盖最厚的那一种。⚠ 这个数字没有门盯着"够不够"，
    verify-bottom-furniture-clearance 盯的是结果（有没有控件被劫持），改布局后重跑它即可。 */
+/* T3（gap-design-0805）· .lite-files-scroll 补进名单。它是最后一个漏网的屏级滚动壳——
+   `inset:0` 一路铺到视口底边，正好从 .lite-ask-avery 胶囊（l.7790，z45，除 room 外每屏都在、
+   只要有 contextId）底下穿过。
+
+   🔴 这不是「为新区块预防性加的」，是**量出来的既有缺陷**（T3 做反事实实测，判据逐条照抄
+   verify-bottom-furniture-clearance 的 AUDIT，含 clippedAway）：
+     不加这一条 · 375×812 · 滚动位 top → ② 段的「选择文件」@(188,701) 被 .lite-ask-avery
+     劫持（elementFromPoint 实打，未被裁剪）。加上之后四个采样位全零。
+   也就是说资料库屏只要有 contextId，上传主按钮在手机上就已经点不中了——常驻表单段只是
+   让人去量了这一次。代价是屏底 120px 让位带在**所有**资料库状态下都占着（像素基线里那
+   4 张 files 因此变了），与另外四个滚动壳付的是同一笔。
+
+   🔴 给内容加 padding-bottom 不是替代品（理由见下面那段）：它只在滚到底时有效，而
+   verify-bottom-furniture-clearance 在**首末两个滚动位**各审一次。 */
 .lite2-shell .home-scroll,
 .lite2-shell .lite-home-scroll,
 .lite2-shell .lite-followups-scroll,
-.lite2-shell .lite-projects-scroll {
+.lite2-shell .lite-projects-scroll,
+.lite2-shell .lite-files-scroll {
   bottom: var(--lite2-bottom-band, 120px);
 }
 
@@ -7771,11 +8023,14 @@
    下面凭空一条空带），胶囊看起来像装在独立容器里；当年 projects 不在带名单，内容从胶囊
    底下穿过去，反而是用户想要的「悬浮」观感——把硬切换成渐隐，家具浮在淡出的内容上方，
    防劫持的带一寸不让。mask 只吃滚动口自己（背景透明，不碰 aurora）。 */
+/* T3：files 跟着band 一起进渐隐名单。只加带不加渐隐 = 重犯 #45 前半条那个「白容器错觉」
+   （滚动口在带上沿把内容拦腰硬切，下面凭空一条空带），那是已经定过案的 bug。 */
 .lite2-shell .home-scroll,
 .lite2-shell .lite-home-scroll,
 .lite2-shell .lite-followups-scroll,
 .lite2-shell .lite-projects-scroll,
-.lite2-shell .lite-room-scroll {
+.lite2-shell .lite-room-scroll,
+.lite2-shell .lite-files-scroll {
   -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 44px), transparent);
   mask-image: linear-gradient(to bottom, #000 calc(100% - 44px), transparent);
 }

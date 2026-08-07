@@ -557,6 +557,12 @@
       "name": "T5 表单回流人卡/项目卡 · 工号归并 + 情境信号 + 模仿攻击门（差距战役 T5 / #55）",
       "status": "done",
       "evidence_ref": "feature_archive.json#feat-101"
+    },
+    {
+      "id": "feat-102",
+      "name": "form-frontend-a1c · 资料库「常驻表单」区 + 生成链接（差距战役 T3 / #54）",
+      "status": "done",
+      "evidence_ref": "feature_archive.json#feat-102"
     }
   ]
 }

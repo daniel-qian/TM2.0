@@ -498,6 +498,38 @@ export const zh: Dict = {
     "filesCurrentEmptyNone": "还没传过材料。在下面发几份给 Avery，团队就会长出来。",
     "filesCurrentEmptyRead": "这一批里 Avery 没列出任何文件。如果刚传完，等一会儿再刷新；要是一直是空的，多半是这些文件没读出内容，重新传一次是最快的解法。",
     "filesUploadTitle": "上传新一批",
+    // ⚠ HAND-WRITTEN（gap-design-0805 T3 · form-frontend-a1c）：资料库第④段「常驻表单」。
+    // 词族锁定：这一族统一说「表单」，不混用「问卷/表格/打卡/考勤」。
+    // 🔴 表单是**员工本人对自己这段工作的说法**，不是对人的评分——后端 gate_form_red_line
+    // 连一张给人打分的题面都拒绝落库。所以打分/排名/考核/绩效那一族词一个都不许出现。
+    // 🔴「转发」照实说是经理自己做的事：服务端不发消息、不碰 IM（拍板 #4）。不许写成
+    // 「已发送给他」这种把人的动作说成系统动作的话。
+    // 🔴 三条铸链失败各自一句：复用 transport.* 通用句会在人数越界（422）时对经理讲文件
+    // 格式（理由见 store.ts 的 FormsMintError）。
+    "formsTitle": "常驻表单",
+    "formsLede": "给每个人生成一条链接，你自己转发过去；他在手机上填完，内容就成为上面「当前资料」里的一份，原话照录、标明是他自己说的。",
+    // 🔴 分隔符写进字符串本身，不写在 JSX 里：初版是 `{l.formsFieldsLead}：{preview}`，
+    // 那个全角冒号硬编码在组件里，英文壳上就多出一个中文标点，而 i18n 门看不见它
+    //（它扫的是这份文件里的键，不是 tsx 里的字面量）。
+    "formsFieldsLead": "问这几格：",
+    "formsPickLabel": "这次发给谁",
+    "formsPickHint": "点名字选中，一次最多 30 个人。每人一条自己的链接，谁也看不到别人写了什么。",
+    "formsMintAction": "生成本期链接",
+    "formsMintBusy": "正在生成…",
+    "formsLinksTitle": "{period} 的链接",
+    "formsLinksNote": "链接由你自己转发给本人——Avery 不替你发消息。一人一链，七天过期，交完就锁上。",
+    "formsCopy": "复制",
+    "formsCopied": "已复制",
+    "formsStatusTitle": "谁交了",
+    "formsStatusOpen": "还没交",
+    "formsStatusSubmitted": "已交",
+    "formsStatusExpired": "链接过期了",
+    // absent≠none 在这一格：不认识的状态词就说「状态未知」，绝不悄悄按好的那几种渲染
+    //（同 fileStatusUnknown 的纪律）。
+    "formsStatusUnknown": "状态未知",
+    "formsErrorRejected": "这次没生成成。一次发给 1 到 30 个人，改完再试一次。",
+    "formsErrorRetired": "这张表已经撤下了，不再发新链接。",
+    "formsErrorFailed": "这会儿没能生成链接。过一会儿再试。",
     // ⚠ HAND-WRITTEN（files-hub-0729/03）：团队屏零文件元素 + 入口铺设。
     // 🔴 teamEmptyBody 说的是「我们还没拿到东西可读」，不是「你们没有团队」——
     // absent≠none 在这一格的样子。

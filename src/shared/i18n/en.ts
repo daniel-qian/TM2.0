@@ -572,6 +572,45 @@ export const en = {
       "Avery hasn't listed any files for this upload. If you just uploaded, give it a moment and refresh; if it stays empty, the files came back unreadable and uploading them again is the fix.",
     filesUploadTitle: 'Upload another batch',
 
+    // ── gap-design-0805 T3 · form-frontend-a1c · the standing-forms section (④) ──────────────
+    // 🔴 What a standing form IS, in copy: the employee's own account of their own stretch of
+    // work. It is NOT a rating of a person — the backend's `gate_form_red_line` refuses to even
+    // store a person-scoring prompt. So not one word from the scoring/ranking/appraisal family
+    // appears here, in either language.
+    // 🔴 Forwarding is the human gate (拍板 #4): the server sends no messages and never touches
+    // IM. The copy says so plainly rather than letting the manager assume Avery delivers them.
+    // 🔴 The three mint failures each get their OWN sentence — see FormsMintError in store.ts
+    // for why reusing `transport.*` would tell a manager about file formats after a headcount 422.
+    formsTitle: 'Standing forms',
+    formsLede:
+      'Make one link per person and forward it yourself. They fill it in on their phone, and what they write becomes one more item in the files above — their own words, marked as theirs.',
+    // 🔴 The separator lives INSIDE the string, not in JSX. The first cut wrote
+    // `{l.formsFieldsLead}：{preview}` with a hard-coded fullwidth colon, which shipped a CJK
+    // glyph into the English shell — and no i18n gate can see it, because it is a literal in the
+    // component rather than a key in this file.
+    formsFieldsLead: 'Asks for: ',
+    formsPickLabel: 'Who gets a link this time',
+    formsPickHint:
+      "Tap a name to pick them. Up to thirty at a time, and each person's link is their own — nobody sees anyone else's answers.",
+    formsMintAction: 'Make links for this period',
+    formsMintBusy: 'Making links…',
+    formsLinksTitle: 'Links for {period}',
+    formsLinksNote:
+      'You forward each link to that person yourself — Avery does not send messages for you. One person, one link; it expires in seven days and locks once they send it in.',
+    formsCopy: 'Copy',
+    formsCopied: 'Copied',
+    formsStatusTitle: 'Who has sent one in',
+    formsStatusOpen: 'Not yet',
+    formsStatusSubmitted: 'Sent in',
+    formsStatusExpired: 'Link expired',
+    // absent≠none in this cell: a word we do not recognise is shown as unknown, never quietly
+    // rendered as one of the good states (same discipline as `fileStatusUnknown`).
+    formsStatusUnknown: 'Status unknown',
+    formsErrorRejected:
+      'That did not go through. Send to between one and thirty people and try again.',
+    formsErrorRetired: 'This form has been retired, so no new links go out.',
+    formsErrorFailed: 'The links could not be made just now. Try again in a moment.',
+
     // ── files-hub-0729/03 · team screen goes file-free, entry points get laid ────────────────
     // The team screen used to carry the upload panel in BOTH states. Danny's ruling: 「团队和
     // 项目应该只分析团队和项目」. Its empty state becomes a pointer instead of a second upload
