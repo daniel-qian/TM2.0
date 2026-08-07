@@ -9,12 +9,12 @@
 
 - **git**：`main` = 差距战役 #50–#57 八票 + **gap2 三票齐**：T11（#60 模板拼装器）、
   T9（#58 站内主动）、T10（#59 补资料）。三份回执都在 `.issues/gap2-0807/`。
-- **验证账实（T10 合完这一刻的实测，非估数）**：
-  后端离线全套 **3938 passed / 111 deselected / 4 xfailed / 0 failed**（T9 那刻 3882 + T10 的 45 条 + 合并后重跑）；
-  `@needs_db` 全套 **106 passed**（真 PG；HITL 基线 98 + T9 的 4 + T10 的 4）；
+- **验证账实（三票齐了之后在 T10 worktree 上的实测，非估数）**：
+  后端离线全套 **3927 passed / 115 deselected / 4 xfailed / 0 failed**；
+  `@needs_db` 全套 **106 passed**（真 PG，7m27s；HITL 基线 98 + T9 的 4 + T10 的 4）；
   前端电池 **A 28/28 · B（data-boundary）37/37 · C 3/3**（A 区多出来的三道 = T11 form-builder、
   T9 forms-proactive、T10 append-story）；
-  i18n **971** 叶子键 / 孤儿 0，zh/en 键集逐键对齐；
+  i18n **976** 叶子键 / 孤儿 0，zh/en 键集逐键对齐；
   变异测试三票各自跑过（T11 17 条 · T9 15 条 · T10 后端 18 + 前端 3），全部 killed。
   🔴 **像素基线：T10 改了界面，40 张要在主检出重冻并人眼过——这是三票里唯一没做完的动作**
   （见 What's Next 第 1 条）。
