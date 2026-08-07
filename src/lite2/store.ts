@@ -4,6 +4,7 @@ import type {
   AskQuestionKind,
   FormLinkRecipient,
   FormLinksResult,
+  LiveAppendReceipt,
   LiveFileEntry,
   LiveAdviseRunEntry,
   LiveFormSubmission,
@@ -270,6 +271,11 @@ interface LiteState {
   // ── Your team（feat-016 ingestion 产出）──
   ingestStatus: IngestStatus
   ingestError: string | null
+  // T10 · 补资料这条路自己的状态机（理由见 appendFiles 上方那段 🔴：借 ingestStatus 会发假通知）。
+  // `appendReceipt` 只留最近一次的，换公司时清掉。
+  appendStatus: IngestStatus
+  appendError: string | null
+  appendReceipt: LiveAppendReceipt | null
   team: LiteTeam | null
   contextId: string | null
   // feat-047 移植（持久化链 feat-038 租户隔离）：本公司 owner_token（经理凭据）。transport 已
@@ -355,6 +361,10 @@ interface LiteState {
   clearNoteNudge: () => void
   setTransport: (transport: LiveTransport) => void // AFK 门注入确定性 stub
   uploadFiles: (files: File[]) => Promise<void>
+  // T10 · 给**当前这家公司**补资料。与 uploadFiles 的分界只有一句：那个开新公司，这个补当前的。
+  // 🔴 刻意**不复用** ingestStatus：`notifyStore` 只认 `ingesting → ready` 这一跳并据此弹
+  //「你的团队已就绪」——补一份周报不是"团队就绪"，借它的状态机就是发一条假通知。
+  appendFiles: (files: File[]) => Promise<void>
   // input-side-0721 · 3A：领一份示例团队（后端克隆预铸母本 → 本访客私有副本）。
   // 落地路径与 uploadFiles 完全同构（adoptContext 收口 → 团队入 state → 名册 → files/notes）。
   claimDemoTeam: () => Promise<void>
@@ -473,6 +483,9 @@ export const useLite = create<LiteState>((set, get) => ({
 
   ingestStatus: 'idle',
   ingestError: null,
+  appendStatus: 'idle',
+  appendError: null,
+  appendReceipt: null,
   team: null,
   // feat-050：从 localStorage 同步取回（stub 传输下恒为 null，见 restoredContextId）。
   contextId: restoredContextId,
@@ -583,6 +596,48 @@ export const useLite = create<LiteState>((set, get) => ({
       set({
         ingestStatus: 'error',
         ingestError: err instanceof Error ? err.message : String(err),
+      })
+    }
+  },
+
+  // T10 · 补资料 —— 与 uploadFiles 是**两条路**，差别都在下面这几行里，不是文案差别：
+  //   ① 不调 adoptContext。那个收口在 contextId 变了时会清掉 team/files/notes/forms——正是
+  //      「每次上传=新开一家公司」那堵墙的前端半边。补资料的 context_id 没变，一个字都不该清。
+  //   ② 不记名册（knownContexts）。没有新公司诞生，记一行只会让切换列表多一条指向同一份数据的行。
+  //   ③ 不碰 ownerToken。服务端没有新铸，也没回传。
+  //   ④ 走自己的状态机（见 LiteState 里那段 🔴：借 ingestStatus 会发一条假的「团队已就绪」通知）。
+  appendFiles: async (files) => {
+    if (files.length === 0) return
+    const { transport, contextId } = get()
+    const append = transport.appendFiles
+    // 没有这个方法的通道（stub / 老后端）本就不该显示入口——这里再兜一层诚实报错，不做假按钮。
+    if (!contextId || !append) {
+      set({ appendStatus: 'error', appendError: 'append is not available on this transport' })
+      return
+    }
+    set({ appendStatus: 'ingesting', appendError: null, appendReceipt: null })
+    try {
+      const payload = await append.call(transport, contextId, files)
+      // 🔴 await 回来先核一次身份：这期间经理可能已经切到别家公司了，那这份结果就是"上一家的"，
+      //    一个字段都不许写（同 restoreSession 的那条纪律）。
+      if (!stillOn(get, contextId)) {
+        set({ appendStatus: 'idle' })
+        return
+      }
+      set({
+        appendStatus: 'ready',
+        appendError: null,
+        appendReceipt: payload.appended ?? null,
+        // 卡片当场是新读数——这正是本票「不许砍半」的那一半：资料库多一行的同时，卡也得动。
+        team: liteTeamFromPayload(payload),
+        rawTeam: payload,
+      })
+      // 资料库那份清单（含每文件块数）跟着刷新；次要视图，失败不影响补传已经成功这件事。
+      void get().refreshFiles()
+    } catch (err) {
+      set({
+        appendStatus: 'error',
+        appendError: err instanceof Error ? err.message : String(err),
       })
     }
   },
@@ -737,7 +792,10 @@ export const useLite = create<LiteState>((set, get) => ({
             // 这份清单与 resetLiteCompanyData 那份是同一份契约的两个抄本，改一处必须改两处。
             formTemplates: null, formSubmissions: null, formsMinted: null,
             formsBusy: 'idle' as const, formsError: null,
-            ingestStatus: 'idle' as IngestStatus }
+            ingestStatus: 'idle' as IngestStatus,
+            // T10：补资料那一组同属公司域（「A 公司那次补传为什么没成」挂到 B 头上，
+            // 就是替 B 断言一件没发生的事——与上面 formsError 逐字同一条理由）。
+            appendStatus: 'idle' as IngestStatus, appendError: null, appendReceipt: null }
         : {}),
     })
   },
@@ -1168,6 +1226,10 @@ export function resetLiteCompanyData(): void {
     formsError: null,
     ingestStatus: 'idle',
     ingestError: null,
+    // T10 · 补资料那一组（与 adoptContext 里那份是同一份契约的两个抄本，改一处必须改两处）。
+    appendStatus: 'idle',
+    appendError: null,
+    appendReceipt: null,
     knownContexts: [],
     switchError: null,
     switchPending: null,

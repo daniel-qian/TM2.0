@@ -39,6 +39,7 @@ from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
 from avery.ingest import guards, ingest_paths
+from avery.ingest.file_append import append_paths_to_context, existing_source_keys
 from avery.ingest.registry import CompanyContext, ContextRegistry, SourceDocument, active_registry
 
 from . import account, embedding_factory, extractor_factory, upload_guard
@@ -165,14 +166,21 @@ def authorize_context(reg: ContextRegistry, context_id: str,
     return ctx
 
 
-def _unique_parse_names(display_names: list[str]) -> list[str]:
+def _unique_parse_names(display_names: list[str], taken: set[str] | None = None) -> list[str]:
     """feat-032 P1: give each upload in a batch a DISTINCT on-disk basename, so two files that share
     a display name (both 'report.txt') no longer clobber the SAME temp path — which silently dropped
     the first file's content from parse -> memory/RAG. The returned name is the parsed doc's name and
     the SourceDocument.source_key (the per-document n_chunks join key); the ORIGINAL display name is
     kept separately on SourceDocument.filename. Collisions get a `(1)`/`(2)` suffix, deduped against
-    every name already assigned (so it never re-collides with another original)."""
-    used: set[str] = set()
+    every name already assigned (so it never re-collides with another original).
+
+    T10: `taken` seeds the used-set with the keys THIS COMPANY ALREADY HOLDS. /ingest passes nothing
+    (a fresh context holds none); the append endpoint passes `file_append.existing_source_keys(ctx)`.
+    Without the seed,补传ing a second 「周报.md」 reuses the first one's source_key — and that key is
+    half of the `<key>:<line>` citation contract, so every reading of the NEW document would be
+    attributed to the OLD one (per-file chunk counts, the timeline's day, the document a conflict
+    card cites — all three wrong at once, and no gate goes red)."""
+    used: set[str] = set(taken or ())
     out: list[str] = []
     for name in display_names:
         candidate = name
@@ -188,7 +196,25 @@ def _unique_parse_names(display_names: list[str]) -> list[str]:
     return out
 
 
-def _team_payload(ctx: CompanyContext) -> dict:
+def _registry_says_ephemeral(reg, context_id: str) -> bool:
+    """T10 —— 这份 context 是一次性的示例克隆吗？Duck-typed + fail-open：没有这个方法的 registry
+    （老的测试替身）或一次查询打嗝，都报 False。
+
+    这里的 fail-open 与 `account_owns_context` 的 fail-closed 是**相反**方向，而且是故意的：
+    那边答的是「要不要放行一次读」，出错必须拒绝；这边答的只是「补资料这个入口要不要藏起来」，
+    出错时多显示一个入口的代价是往一份一次性克隆里补了文件（数据会随 GC 一起没），
+    而少显示一个入口的代价是**真公司的经理补不了资料**。两害相权。
+    """
+    probe = getattr(reg, "is_ephemeral", None)
+    if probe is None:
+        return False
+    try:
+        return bool(probe(context_id))
+    except Exception:
+        return False
+
+
+def _team_payload(ctx: CompanyContext, *, reg: ContextRegistry | None = None) -> dict:
     """Project a CompanyContext onto the exact LiveTeamPayload shape transport.ts expects."""
     payload = {
         "context_id": ctx.context_id,
@@ -222,6 +248,13 @@ def _team_payload(ctx: CompanyContext) -> dict:
     archived_ppl = ctx.archived_people_cards()
     if archived_ppl:
         payload["archived_people"] = archived_ppl
+    # T10 · 一次性克隆（示例团队）——additive key，false 时**缺席**（与 scoring_enabled /
+    # account_linked 同一个 absent≠none 姿态）。前端按它藏掉「给这家公司补资料」的入口。
+    # 🔴 与 payload['demo'] 不是同一件事：那个只在 `POST /demo/claim` 的**首帧**出现，
+    #    刷一次页面就没了（transport.ts 自己的注释写着）。这一条每次 `GET /team/{id}` 都在，
+    #    所以入口禁得住刷新——判据活在服务端，不活在前端内存里。
+    if reg is not None and _registry_says_ephemeral(reg, ctx.context_id):
+        payload["ephemeral"] = True
     return payload
 
 
@@ -382,7 +415,9 @@ def team(context_id: str,
     reg = active_registry()
     ctx = authorize_context(reg, context_id, extract_owner_token(x_avery_token, authorization),
                             account.resolve_account(x_avery_account))
-    return _team_payload(ctx)
+    # T10: 这条刷新帧要带上 `ephemeral`——「补资料」入口的判据必须禁得住刷新页面，
+    # 而 `demo` 那个键只在 /demo/claim 的首帧出现（见 _team_payload 里那段 🔴）。
+    return _team_payload(ctx, reg=reg)
 
 
 @router.get("/team/{context_id}/notes")
@@ -673,6 +708,113 @@ def team_person_restore(context_id: str, person_id: str,
     except KeyError:
         raise _person_write_404()
     return {"context_id": context_id, "person": _one_person_card_now(p)}
+
+
+@router.post("/team/{context_id}/files")
+async def team_files_append(context_id: str,
+                            files: list[UploadFile] = File(...),
+                            x_avery_token: str | None = Header(None),
+                            authorization: str | None = Header(None),
+                            x_avery_account: str | None = Header(None)) -> dict:
+    """T10 · 补资料 —— 把新文件 append 进**这家已经存在的公司**，卡片安静更新到新读数。
+
+    与 `POST /ingest` 的分界，一句话：/ingest 是「开一家公司」，本端点是「给这家公司补资料」。
+    /ingest 恒新建 context 并铸一个新 owner_token；本端点一个 context 都不新建、一个 token 都不铸，
+    只往 `context_id` 那份资料库里加文档，并把新读数并进已有的人卡/项目卡（`file_append` 的文件头
+    写了归并的四个坑与它们的答案）。
+
+    门与读路径同一张（`authorize_context`）：owner_token（或持有账号）——否则 404，无存在性
+    oracle。字节侧的闸与 /ingest **逐条同一套**，一个都不许少：批量条数（`enforce_count`）、
+    逐文件大小（`read_capped`，413）、整批总量（`max_total_bytes`，413）、伪装类型/zip 炸弹
+    （`enforce_type_and_archive`，415/413）；ASGI 边缘那层（限流 + Content-Length 预检 +
+    流式总量兜底）由 `upload_guard._route_for` 的 `/team/*/files` 分支接上。
+
+    🔴 新文件的 `source_key` 要拿**这家公司已经占用的那些 key** 去重（`taken=` 那个参数），
+    不只是这一批内部去重：`<source_key>:<行号>` 是出处契约的一半，撞了 key 之后新文档的每一条
+    读数都会被算到旧文档头上，而且没有任何一道门会红。
+
+    422 的两种成因与 /ingest 同体：红线（抽到了对人的评分）、这批文件一份都读不出来。
+    """
+    if not files:
+        raise HTTPException(status_code=400, detail="no files uploaded")
+    upload_guard.enforce_count(len(files))
+
+    reg = active_registry()
+    # 先鉴权再读字节：认不出的调用方连一个 byte 都不该让它送进来（也拿不到「这个 id 存不存在」）。
+    ctx = authorize_context(reg, context_id, extract_owner_token(x_avery_token, authorization),
+                            account.resolve_account(x_avery_account))
+
+    per_file_cap = guards.max_file_bytes()
+    total_cap = guards.max_total_bytes()
+    running_total = 0
+    tmp = Path(tempfile.mkdtemp(prefix="avery-append-"))
+    saved: list[Path] = []
+    src_docs: list[SourceDocument] = []
+    try:
+        display_names = [Path(f.filename or "upload").name or "upload" for f in files]
+        parse_names = _unique_parse_names(display_names, taken=existing_source_keys(ctx))
+        for f, display, parse_name in zip(files, display_names, parse_names):
+            raw = await upload_guard.read_capped(f, display, per_file_cap)
+            running_total += len(raw)
+            if running_total > total_cap:
+                raise HTTPException(status_code=413, detail={
+                    "error": "upload too large",
+                    "detail": f"batch exceeds the {total_cap}-byte per-request limit"})
+            upload_guard.enforce_type_and_archive(display, raw)
+            dest = tmp / parse_name
+            dest.write_bytes(raw)
+            saved.append(dest)
+            src_docs.append(SourceDocument(filename=display, source_key=parse_name, mime=(
+                f.content_type or mimetypes.guess_type(display)[0] or "application/octet-stream"),
+                size_bytes=len(raw), content=raw))
+
+        def _extract_and_append() -> object:
+            # 与 /ingest 同一个理由跑在工作线程里：整段 parse+抽取是分钟级同步活，跑在事件循环上
+            # 会冻住 /health，Docker HEALTHCHECK 会在抽取中途把容器重启掉。
+            registry = active_registry()
+            extractor = extractor_factory.make_extractor()
+            rep = append_paths_to_context(registry, context_id, [str(p) for p in saved],
+                                          src_docs, extractor=extractor)
+            return rep, extractor_factory.extraction_mode(extractor)
+
+        try:
+            report, extraction_mode = await run_in_threadpool(_extract_and_append)
+        except KeyError:
+            # context 在鉴权之后、写之前消失了（GC / 另一路删除）——同体 404，不解释。
+            raise HTTPException(status_code=404,
+                                detail=f"unknown company_context_id: {context_id}")
+        except ValueError as e:
+            raise HTTPException(status_code=422,
+                                detail={"error": "upload rejected", "reason": str(e)})
+
+        if not report.ok or report.context is None:
+            raise HTTPException(status_code=422, detail={
+                "error": "extraction refused",
+                "reason": ("red line: a person-scoring/ranking field was extracted"
+                           if report.violations else "no parseable content in the upload"),
+                "violations": [{"kind": v.kind, "person": v.person, "detail": v.detail,
+                                "rule_id": v.rule_id} for v in report.violations],
+                "parse_errors": report.parse_errors})
+
+        # 回执 = 与 /team/{id} 同一张 payload（前端拿它整屏刷新，卡片当场是新读数）。
+        # 🔴 **不发** owner_token：那是创建时才交出去一次的凭据，本端点没有新铸也不该重发一遍
+        #    （调用方已经拿着它才走到这里）。
+        payload = _team_payload(report.context, reg=reg)
+        payload["extraction_mode"] = extraction_mode
+        payload["appended"] = {
+            "documents": [sd.source_key or sd.filename for sd in report.added_documents],
+            "skipped": report.skipped_duplicates,
+            "parse_errors": report.parse_errors,
+            "conflicts_added": report.conflicts_added,
+        }
+        return payload
+    finally:
+        for p in saved:
+            p.unlink(missing_ok=True)
+        try:
+            tmp.rmdir()
+        except OSError:
+            pass
 
 
 @router.get("/team/{context_id}/files")

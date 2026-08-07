@@ -85,6 +85,19 @@ function withLocale(req: AdviseRequest): AdviseRequest & { locale: Locale } {
 
 // ── ingestion 契约（feat-016 registry.py 的 dict 形状，经 feat-018 HTTP 暴露）──────────────
 // 严格对齐 CompanyContext.team_cards()/project_cards()/briefing()/signal_cards()。
+/**
+ * T10 · 一次补传的回执。
+ * `documents` 是**服务端最终采用的 source_key**，不一定等于用户选的文件名——同名文件补传第二次
+ * 会拿到 `周报(1).md`（`<source_key>:<行号>` 是出处契约的一半，两份文档不许共用一个 key）。
+ * `skipped` 是被判为重复而没落第二份的；`conflicts_added` 是这一趟新开的冲突条数。
+ */
+export interface LiveAppendReceipt {
+  documents: string[]
+  skipped: string[]
+  parse_errors: string[]
+  conflicts_added: number
+}
+
 export interface LiveTeamPayload {
   context_id: string
   source_files?: string[]
@@ -109,6 +122,15 @@ export interface LiveTeamPayload {
   // input-side-0721 · 3A：POST /demo/claim 的首帧自报"这是示例团队的克隆副本"。
   // /team/{id} 刷新帧不发（demo 身份只在领取那一刻有叙事意义；副本此后就是一份普通工作区）。
   demo?: boolean
+  // T10 · 这份工作区是**一次性**的吗（示例克隆，会被 TTL 回收）。缺席即 false（additive-key，
+  // 仿 account_linked / scoring_enabled）。
+  // 🔴 与上面的 `demo` 是两件事，别混：`demo` 只在领取那一帧出现，刷新一次就没了；`ephemeral`
+  // **每次 `GET /team/{id}` 都在**（服务端读的是 GC 用的同一个标记）。"补资料"入口按它藏起来，
+  // 判据必须禁得住刷新页面——往一份马上会被回收的克隆里补文件，经理会以为资料存下来了。
+  ephemeral?: boolean
+  // T10 · `POST /team/{id}/files` 的首帧附带："这一趟到底加了什么"。仅补传回执有，
+  // /ingest 与 /team/{id} 都不发。
+  appended?: LiveAppendReceipt
   // rich-align-0722 · issue 03：人身自述投影开关（后端 AVERY_ALLOW_PERSON_SCORING）。
   // present-and-true ONLY when 开关开（仿 account_linked 缺席即 false 语义）。true 时后端才会在人卡上
   // 投影 self_report；缺席/false 时人卡零自述数字。前端运行时剥离据此决定放不放行 self_report 白名单。
@@ -619,8 +641,15 @@ export interface LiveTransport {
     onDone: (error?: Error) => void,
   ) => { abort: () => void }
 
-  // 上传文件 → ingestion → context_id + 首帧 Your team 结构。
+  // 上传文件 → ingestion → context_id + 首帧 Your team 结构。**每次都新开一家公司。**
   ingest: (files: File[]) => Promise<LiveTeamPayload>
+
+  // T10 · 给**这家已经存在的公司**补资料 → 同一个 context_id + 刷新过的 Your team 结构。
+  // 与 `ingest` 的分界就是这一句：那个开公司，这个补资料。回执里的 context_id 恒等于入参，
+  // 也不会回传 owner_token（凭据只在创建时交出去一次）。
+  // 可选：老的 stub/离线通道没有这个方法，调用方按 `!!transport.appendFiles` 探测能力
+  //（同 demoClaim 的先例——不做假按钮）。
+  appendFiles?: (contextId: string, files: File[]) => Promise<LiveTeamPayload>
 
   // 按 context_id 重新拉取 Your team（上传后填充/刷新）。
   fetchTeam: (contextId: string) => Promise<LiveTeamPayload>
@@ -1053,6 +1082,24 @@ export function createHttpTransport(base: string = apiBase()): LiveTransport {
       // feat-047: store this company's owner_token so every later read/advise can present it.
       rememberToken(payload.context_id, payload.owner_token)
       return payload
+    },
+
+    // T10 · 补资料。与 ingest 逐条同形（同一层 send 包装 —— 抽取同样是分钟级、同样跨境），
+    // 三处刻意不同：
+    //   ① 带 `authHeader(contextId)` —— 这是**已有公司**的写口，要凭 owner_token 才进得去；
+    //   ② **不** rememberToken —— 服务端没有新铸 token，也没回传（凭据只在创建时交出去一次）；
+    //   ③ 回执的 context_id 恒等于入参，所以 store 侧走的是"原地刷新"而不是 adoptContext
+    //      （那条路会把上一家公司的 team/files/notes 清掉，正是这一票要拆掉的那堵墙）。
+    async appendFiles(contextId, files) {
+      const form = new FormData()
+      for (const f of files) form.append('files', f, f.name)
+      const res = await send('ingest', `${base}/team/${encodeURIComponent(contextId)}/files`, {
+        method: 'POST',
+        body: form,
+        headers: { ...authHeader(contextId), ...accountHeader() },
+      })
+      if (!res.ok) throw transportError('ingest', res)
+      return (await res.json()) as LiveTeamPayload
     },
 
     async fetchTeam(contextId) {

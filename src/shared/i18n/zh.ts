@@ -228,8 +228,17 @@ export const zh: Dict = {
     "fileStatusUnknown": "状态未知",
     "fileStatusEmptyHint": "这份文件能打开，但里面没取出文字——扫描件或纯图片导出通常是这样。它没有任何内容进入你的团队。",
     "fileStatusFailedHint": "这份文件完全没能打开，常见原因是字符编码不匹配（另存为 UTF-8 后重新上传）。它没有任何内容进入你的团队。",
-    "againTitle": "再传文件会另起一家公司",
-    "againBody": "每次上传，Avery 都当作独立的一家公司来读。新传的不会并进你现在看的这一份——两份都留着，可以在这里来回切。",
+    // ⚠ HAND-WRITTEN, NOT YET M3（T10 · 2026-08-07）：这两句必须跟着改口。以前"合并"根本不存在，
+    // 说"不会并进"是全部真相；现在**存在**一条会合并的路（就在这一段上面的「补资料」），
+    // 再说同一句话就是把经理往错的按钮上引。
+    "againTitle": "这个口子会另起一家公司",
+    "againBody": "从这里传，Avery 会当作另一家公司从头读一遍，不并进你现在看的这一份。要给现在这家补资料，用上面那个口子。两份都留着，可以在这里来回切。",
+    // ⚠ HAND-WRITTEN, NOT YET M3（T10 · 补资料口）。
+    "appendTitle": "给这家公司补资料",
+    "appendCaption": "新文件会并进你现在看的这家公司。读到的新情况直接更新到卡片上；和旧资料对不上的地方，会出现在今天页等你确认。",
+    "appendReadyLabel": "新资料已经并进来了",
+    "appendAddedLead": "这次加进来的",
+    "appendConflicts": "有 {count} 处和旧资料对不上，去「今天」页看两边分别怎么写的。",
     "switchTitle": "这台电脑上传过的",
     "switchAction": "打开这一份",
     "switchOpening": "打开中…",
@@ -497,7 +506,13 @@ export const zh: Dict = {
     "filesCurrentTitle": "当前资料",
     "filesCurrentEmptyNone": "还没传过材料。在下面发几份给 Avery，团队就会长出来。",
     "filesCurrentEmptyRead": "这一批里 Avery 没列出任何文件。如果刚传完，等一会儿再刷新；要是一直是空的，多半是这些文件没读出内容，重新传一次是最快的解法。",
-    "filesUploadTitle": "上传新一批",
+    "filesUploadTitle": "另建一份画像",
+    // ⚠ HAND-WRITTEN, NOT YET M3（T10 · 补资料这一段的小节壳）。
+    // 🔴 demoNote 说的是「为什么这儿没有口子」，不是「这个功能不存在」——示例副本本来就是随手可弃的，
+    //    往里补资料会随清理一起没，那才是真正该讲清楚的一句。
+    "filesAppendTitle": "给这家公司补资料",
+    "filesAppendLede": "又拿到新周报、新纪要、新名册？从这里传，它们会并进现在这家公司，卡片直接更新到新读数。",
+    "filesAppendDemoNote": "示例团队是一份随时会被清理掉的副本，往里补的资料留不住。要正式用起来，在下面另建一份属于你自己公司的画像。",
     // ⚠ HAND-WRITTEN（gap-design-0805 T3 · form-frontend-a1c）：资料库第④段「常驻表单」。
     // 词族锁定：这一族统一说「表单」，不混用「问卷/表格/打卡/考勤」。
     // 🔴 表单是**员工本人对自己这段工作的说法**，不是对人的评分——后端 gate_form_red_line
@@ -834,6 +849,9 @@ export const zh: Dict = {
     "projectsWriteFailed": "未能保存",
     "projectsManualBadge": "手动编辑",
     "projectsFormBadge": "来自周报填写",
+    // ⚠ HAND-WRITTEN, NOT YET M3（T10）：这一格被一份**更新的**资料顶掉过，出处指向那一份。
+    // 🔴 只印文档名不印行号（实体出处的行号是块级兜底，可能指向一个标题行）。
+    "projectsDocBadge": "读自{source}",
     "projectsArchivedTitle": "已归档（{count}）",
     "projectsArchivedAria": "已归档的项目",
     "projectsArchivedRestore": "恢复",

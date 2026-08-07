@@ -178,7 +178,9 @@ async def demo_claim() -> dict:
         ctx = reg.get(new_id)
         if ctx is None:
             raise HTTPException(status_code=503, detail="demo clone did not land")
-        payload = _team_payload(ctx)
+        # T10: 传 reg —— 克隆是 ephemeral 的，这一帧就要把 `ephemeral: true` 带出去，
+        # 否则「补资料」入口会在领到示例团队之后闪一下才被下一次刷新收走。
+        payload = _team_payload(ctx, reg=reg)
         payload["owner_token"] = token
         payload["demo"] = True     # 前端要标注「这是示例」语义，不许冒充用户自己的数据
         _sweep_expired_clones(reg)   # gc-demo-clones-0724: opportunistic TTL GC, best-effort

@@ -1129,6 +1129,19 @@ class ContextRegistry(ProjectWriteMixin):
             self._form_templates.pop(cid, None)
         return len(victims)
 
+    def is_ephemeral(self, context_id: str) -> bool:
+        """T10 —— 这份 context 是**一次性**的吗（示例团队的克隆副本，会被 TTL 回收）？
+
+        补资料的入口按它禁用：往一份马上会被 GC 掉的克隆里补文件，经理会以为资料存下来了。
+        「先禁入口不做语义」是本票的明确边界（克隆连表单表都没复制），而入口要禁得住刷新页面，
+        判据就不能只活在前端内存里 —— 所以它是**服务端**这一问，和 `sweep_ephemeral` 认的是
+        同一个标记，不是第二份口径。
+
+        pg 侧同名方法读 `avery.contexts.ephemeral` 列。账号一绑（`link_account_context`）这个
+        标记就会被清掉——那时它不再是一次性的，入口自然重新出现，这正是想要的语义。
+        """
+        return context_id in self._ephemeral_at
+
     def __contains__(self, context_id: str) -> bool:
         return context_id in self._by_id
 
@@ -1170,6 +1183,7 @@ class ContextRegistryProtocol(Protocol):
     def clone_context(self, src_context_id: str, *, new_context_id: str,
                       new_owner_token: str, ephemeral: bool = True) -> bool: ...
     def sweep_ephemeral(self, *, older_than_hours: int, limit: int = 50) -> int: ...
+    def is_ephemeral(self, context_id: str) -> bool: ...
 
     # Avery's notes (write side)
     def append_note(self, context_id: str, text: str, source_excerpt: str = "") -> CompanyNote: ...

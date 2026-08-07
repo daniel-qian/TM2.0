@@ -657,6 +657,17 @@ class PostgresContextRegistry(ProjectWriteMixin):
                 (hours, batch))
             return cur.rowcount
 
+    def is_ephemeral(self, context_id: str) -> bool:
+        """T10（内存孪生见 registry.ContextRegistry.is_ephemeral）—— 这份 context 是一次性的
+        克隆副本吗？读的就是 `sweep_ephemeral` 用来选收割对象的**同一列**，不是第二份口径。
+        未知 id → False（不存在的东西不是「一次性的」，也不给存在性 oracle 一个新出口）。"""
+        self._ensure_schema()
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT ephemeral FROM avery.contexts WHERE context_id = %s",
+                (context_id,)).fetchone()
+        return bool(row[0]) if row is not None and row[0] is not None else False
+
     def source_document_bytes(self, context_id: str, idx: int) -> bytes | None:
         """feat-032 download seam: the raw bytea of one uploaded file, pulled on demand (never in
         get()). None for an unknown context / idx or a NULL content. Short-lived connection, same

@@ -60,17 +60,37 @@ type UploadPanelProps = {
    * 会数出双倍行数。这不是样式偏好，是断言正确性。
    */
   showFiles?: boolean
+  /**
+   * T10 · 这个口子把文件送去哪儿。
+   *   'new'（默认）—— `POST /ingest`，**另开一家公司**。既有三处用法一字不变。
+   *   'append'    —— `POST /team/{id}/files`，并进当前这家公司，卡片安静更新到新读数。
+   *
+   * 🔴 两种模式共用这一个组件而不是各写一份，是因为**accept 列表、逐文件闸、等待态、
+   * 错误文案**四样必须逐字一致：`ACCEPT` 那行有一条明令「改这里要同步后端 SUPPORTED_EXTS」，
+   * 抄第二份出去就是第二把尺，而它多列一种格式就是把用户领进一条必然 422 的死路。
+   */
+  mode?: 'new' | 'append'
 }
 
-export function UploadPanel({ showFiles = true }: UploadPanelProps = {}) {
+export function UploadPanel({ showFiles = true, mode = 'new' }: UploadPanelProps = {}) {
   const { t } = useDict()
+  const appending = mode === 'append'
   const uploadFiles = useLite((s) => s.uploadFiles)
-  const status = useLite((s) => s.ingestStatus)
-  const error = useLite((s) => s.ingestError)
+  const appendFiles = useLite((s) => s.appendFiles)
+  const ingestStatus = useLite((s) => s.ingestStatus)
+  const ingestError = useLite((s) => s.ingestError)
+  const appendStatus = useLite((s) => s.appendStatus)
+  const appendError = useLite((s) => s.appendError)
+  const receipt = useLite((s) => s.appendReceipt)
   const team = useLite((s) => s.team)
   const inputRef = useRef<HTMLInputElement | null>(null)
   const [dragOver, setDragOver] = useState(false)
 
+  // 🔴 两条路各有各的状态机：`notifyStore` 只认 ingest 的 `ingesting → ready` 并据此弹
+  // 「你的团队已就绪」——补一份周报借它的状态就是发一条假通知（store.ts 的 appendFiles 上有碑）。
+  const status = appending ? appendStatus : ingestStatus
+  const error = appending ? appendError : ingestError
+  const send = appending ? appendFiles : uploadFiles
   const sourceFiles = team?.sourceFiles ?? []
   const busy = status === 'ingesting'
   const elapsed = useIngestElapsedSeconds(busy)
@@ -80,7 +100,7 @@ export function UploadPanel({ showFiles = true }: UploadPanelProps = {}) {
     // feat-068 · 发车前先松锚，保证这一发从 0 起算（理由见 lite/UploadPanel 同处注释）。
     if (files.length > 0) {
       clearIngestStart()
-      void uploadFiles(files)
+      void send(files)
     }
     // 允许重复选同名文件再次触发。
     event.target.value = ''
@@ -93,7 +113,7 @@ export function UploadPanel({ showFiles = true }: UploadPanelProps = {}) {
     const files = Array.from(event.dataTransfer.files ?? [])
     if (files.length > 0) {
       clearIngestStart()
-      void uploadFiles(files)
+      void send(files)
     }
   }
 
@@ -109,10 +129,11 @@ export function UploadPanel({ showFiles = true }: UploadPanelProps = {}) {
   }
 
   return (
-    <section className="upload-panel" aria-label={t.upload.title}>
+    <section className="upload-panel" aria-label={appending ? t.upload.appendTitle : t.upload.title}
+             data-upload-mode={mode}>
       <header className="upload-panel-head">
-        <h2>{t.upload.title}</h2>
-        <p>{t.upload.caption}</p>
+        <h2>{appending ? t.upload.appendTitle : t.upload.title}</h2>
+        <p>{appending ? t.upload.appendCaption : t.upload.caption}</p>
       </header>
 
       <div
@@ -195,8 +216,25 @@ export function UploadPanel({ showFiles = true }: UploadPanelProps = {}) {
         ) : null}
         {status === 'ready' ? (
           <div className="upload-ready">
-            <p className="upload-ready-label">{t.upload.readyLabel}</p>
-            {sourceFiles.length > 0 ? (
+            <p className="upload-ready-label">
+              {appending ? t.upload.appendReadyLabel : t.upload.readyLabel}
+            </p>
+            {/* 补资料模式：只报**这一趟**加进来的那几份，不重列整个资料库（整份清单在上面 ① 段）。
+                服务端最终采用的 source_key 可能与用户选的文件名不同（同名补传第二次会拿到
+                `周报(1).md`）——照实显示服务端那个名字，别显示用户选的那个：资料库里那一行、
+                下载下来那份、卡片引用的出处，三处都是它。 */}
+            {appending ? (
+              receipt && receipt.documents.length > 0 ? (
+                <p className="upload-grown-from">
+                  {t.upload.appendAddedLead}:{' '}
+                  {receipt.documents.map((name) => (
+                    <span key={name} className="upload-source-chip">
+                      {name}
+                    </span>
+                  ))}
+                </p>
+              ) : null
+            ) : sourceFiles.length > 0 ? (
               <p className="upload-grown-from">
                 {t.upload.grownFrom}:{' '}
                 {sourceFiles.map((name) => (
@@ -204,6 +242,14 @@ export function UploadPanel({ showFiles = true }: UploadPanelProps = {}) {
                     {name}
                   </span>
                 ))}
+              </p>
+            ) : null}
+            {/* 「新旧对不上」这件事本身不在这儿展开——今天页那条双栏通道才是它的落点。
+                这里只说有几处、去哪儿看；缺席（0 处）什么都不写（absent≠none：不编一句「全都对得上」，
+                我们只知道**记下来的**冲突有几条，不知道有没有没被记下的）。 */}
+            {appending && receipt && receipt.conflicts_added > 0 ? (
+              <p className="upload-append-conflicts">
+                {fill(t.upload.appendConflicts, { count: receipt.conflicts_added })}
               </p>
             ) : null}
           </div>
@@ -217,7 +263,12 @@ export function UploadPanel({ showFiles = true }: UploadPanelProps = {}) {
             </button>
           </div>
         ) : null}
-        {status === 'idle' ? <p className="upload-empty">{t.upload.empty}</p> : null}
+        {/* 补资料模式的空闲态不写这一行：`empty`（「还没有文件」）说的是**整个工作区**是空的，
+            而补资料只在已经有一家公司时才出现——那句话在这里恒为假。上头的 caption 已经把
+            「选一批新文件会发生什么」讲完了。 */}
+        {status === 'idle' && !appending ? (
+          <p className="upload-empty">{t.upload.empty}</p>
+        ) : null}
       </div>
 
       {/* feat-047 移植（feat-032）·「你的文件」持久清单——回看上传过哪些材料、Avery 的记忆

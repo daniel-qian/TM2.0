@@ -17,6 +17,18 @@ import {
 } from './projectView'
 import type { LiteDetail } from './store'
 import { docFromSource } from './teamData'
+
+/**
+ * T10 · 「读自《某某.md》」——把一条 `<source_key>:<行号>` 出处渲成角标文案。
+ *
+ * 🔴 只印**文档名**，不印行号：T6 钉过实体出处的行号是块级兜底、可能指向一个标题行
+ * （`test_KNOWN_LIMITATION_project_source_is_BLOCK_level_not_field_level`）。印一个行号就是
+ * 请经理去翻一行可能什么都没写的字。文档名是我们今天能背书的全部——`docFromSource` 与情境信号
+ * 那一行走的是同一把尺，不是第二份实现。
+ */
+function fillDoc(template: string, source: string): string {
+  return template.replace('{source}', docFromSource(source))
+}
 import type { LitePerson, LiteTeam } from './teamData'
 import type { LiveTeamPayload, PersonPatchInput, ProjectPatchInput } from './transport'
 
@@ -292,13 +304,19 @@ function ProjectDetailBody({
   const canSave = dTitle.trim().length > 0 && !busy
   const isEditing = editing && open && !archived
 
-  // T5/A2：三态。manual=经理手打的、form=员工填表填出来的、其余（doc / 缺席）不挂角标。
+  // T5/A2 三态 + T10 第四态：manual=经理手打的、form=员工填表填出来的、
+  // doc=**被一份更新的资料顶掉过**（首次上传的格子不写侧车，所以这一态恰好只出现在补传改过的
+  // 格子上，这就是拍板③「出处指新资料」在屏幕上的落点）、缺席=一直是首批资料读到的那个值。
   const manual = (field: string) => {
     const kind = provenanceBadgeKind(project.provenance, field)
     if (!kind) return null
     return (
       <span className="lite-detail-provenance">
-        {kind === 'manual' ? l.projectsManualBadge : l.projectsFormBadge}
+        {kind === 'manual'
+          ? l.projectsManualBadge
+          : kind === 'form'
+            ? l.projectsFormBadge
+            : fillDoc(l.projectsDocBadge, project.provenance[field]?.source ?? '')}
       </span>
     )
   }
@@ -662,7 +680,11 @@ function PersonDetailBody({
     if (!kind) return null
     return (
       <span className="lite-detail-provenance">
-        {kind === 'manual' ? l.projectsManualBadge : l.projectsFormBadge}
+        {kind === 'manual'
+          ? l.projectsManualBadge
+          : kind === 'form'
+            ? l.projectsFormBadge
+            : fillDoc(l.projectsDocBadge, person.provenance?.[field]?.source ?? '')}
       </span>
     )
   }

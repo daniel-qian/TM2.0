@@ -60,6 +60,16 @@ def _route_for(path: str) -> str | None:
     exact = _GUARDED.get(path)
     if exact:
         return exact
+    # T10 · 补资料：`POST /team/{id}/files` 与 `/ingest` 是**同一件事**（一批文件的字节走同一条
+    # parse→抽取路），所以共用 'ingest' 那个表盘和那个总体积上限——上传口的防护不该因为多开一个
+    # 入口就少一份。
+    # 🔴 `_GUARDED` 是**精确匹配**的字典，带路径参数的路由永远命不中它。漏了这一条，新端点在 ASGI
+    #    边缘就是零防护（无限流、无 Content-Length 预检、无流式总量兜底），而处理器内部的逐文件/
+    #    逐批闸照旧生效——「看起来有闸」正是这种漏法最难被发现的原因。
+    #    读侧不受影响：中间件只对 POST 起闸（'share' 那条公开面除外），`GET /team/{id}/files`
+    #    （文件清单）与 `/team/{id}/files/{idx}`（下载，不以 /files 结尾）都照旧直通。
+    if path.startswith("/team/") and path.endswith("/files"):
+        return "ingest"
     if path == "/ask" or path.startswith("/ask/"):
         return "ask"
     if path.startswith("/r/"):

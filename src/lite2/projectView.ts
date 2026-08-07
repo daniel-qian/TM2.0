@@ -91,9 +91,14 @@ export function isManualField(view: ProjectView, field: string): boolean {
 export function provenanceBadgeKind(
   provenance: Record<string, LiveFieldProvenance> | undefined,
   field: string,
-): 'manual' | 'form' | null {
+): 'manual' | 'form' | 'doc' | null {
   const origin = provenance?.[field]?.origin
-  return origin === 'manual' || origin === 'form' ? origin : null
+  if (origin === 'manual' || origin === 'form') return origin
+  // T10 · 'doc' 出处只有在**补资料**把这一格改写过之后才会存在（首次上传的格子不写侧车），
+  // 所以它出现的地方恰好就是「这个读数被一份更新的资料顶掉过」。拍板③ 的后半句「出处指新资料」
+  // 就落在这里——不指出来的话，卡上是新值、屏幕上却没有任何东西说明它从哪儿变来的。
+  // 🔴 要有 `source` 才挂：没有指针的角标只是一句「来自某份文档」的废话。
+  return origin === 'doc' && provenance?.[field]?.source ? 'doc' : null
 }
 
 const KNOWN_STATUS = new Set(['blocked', 'at-risk', 'on-track', 'done'])

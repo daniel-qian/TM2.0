@@ -1941,6 +1941,27 @@ class PersonIndex:
         return _person_key(name) in self._dupe_names
 
 
+def _absorb_self_report(cur: PersonEntity, p: PersonEntity) -> None:
+    """rich-align-0722/03 —— self_report enriches across docs, keep-first PER sub-slot: a roster
+    carries identity + no self-report, a weekly carries the self-report + no identity. Merge so
+    the person who actually exists has both, without a later weekly clobbering an earlier one.
+
+    T10 把它从 `_absorb_person` 里提出来，是因为补传路（`AppendLedger.absorb`）也要它，而
+    「怎么合一个自述槽」在仓库里只许有一份定义 —— 人身数字是本仓最敏感的那一格，两处各写一遍
+    等于给它开两条口径不同的入口。补传路上的「新的顶掉旧的」不在这里做：那是
+    `form_reflow.clear_stale_self_report` 先把过期的槽清空，然后本函数照旧 keep-first 填回来
+    （T5 定的那条路，只有一个「谁更新」的判据）。"""
+    if not p.self_report:
+        return
+    if cur.self_report is None:
+        cur.self_report = p.self_report
+        return
+    if cur.self_report.load is None:
+        cur.self_report.load = p.self_report.load
+    if cur.self_report.mood is None:
+        cur.self_report.mood = p.self_report.mood
+
+
 def _absorb_person(cur: PersonEntity, p: PersonEntity) -> bool:
     """`cur` 吸收 `p`（同一个人的另一条读数）。就地改 `cur`，返回「这一趟补上了工号吗」。
 
@@ -1959,17 +1980,7 @@ def _absorb_person(cur: PersonEntity, p: PersonEntity) -> bool:
     cur.team = cur.team or p.team
     cur.tenure = cur.tenure or p.tenure
     cur.source = cur.source or p.source
-    # rich-align-0722/03 — self_report enriches across docs, keep-first PER sub-slot: a roster
-    # carries identity + no self-report, a weekly carries the self-report + no identity. Merge so
-    # the person who actually exists has both, without a later weekly clobbering an earlier one.
-    if p.self_report:
-        if cur.self_report is None:
-            cur.self_report = p.self_report
-        else:
-            if cur.self_report.load is None:
-                cur.self_report.load = p.self_report.load
-            if cur.self_report.mood is None:
-                cur.self_report.mood = p.self_report.mood
+    _absorb_self_report(cur, p)
     # union, order-preserving, capped at the same 6 _slist/_build use
     cur.owns = (cur.owns + [o for o in p.owns if o and o not in cur.owns])[:6]
     cur.collaboration = (
@@ -1978,7 +1989,374 @@ def _absorb_person(cur: PersonEntity, p: PersonEntity) -> bool:
     return grew_id
 
 
-def merge_person_reading(people: list[PersonEntity], incoming: PersonEntity) -> PersonEntity:
+def _absorb_project(cur: ProjectEntity, pr: ProjectEntity) -> None:
+    """`cur` 吸收 `pr`（同一个项目的另一条读数）。就地改 `cur`。
+
+    ONE DEFINITION（T10 把它从 `_dedupe_entities` 的循环体里提了出来，理由与 `_absorb_person`
+    当年被提出来时**逐字**一样）：上传路（`_dedupe_entities`）与补传路（`merge_project_reading`）
+    各写一遍「怎么合一个项目」，就是两把尺量同一件事，而这一次两把尺分别长在两条路上，
+    谁也不会在对方的门里红。
+
+    规则一个字节没动（钉在 test_dedupe_characterization_b2a）：
+      · 标量 `or` 保留第一个非空；
+      · `progress` 用 `is None` 而不是 `or`/`not` —— **0 是合法读数**
+        （test_project_progress_uses_is_None_so_ZERO_is_a_real_reading）；
+      · `risk` 整个对象 keep-first、`milestones` 整张列表 keep-first（rich-align-0722/01、02）；
+      · blockers/dependsOn 保序并集，与 `_absorb_person` 的 owns/collaboration 同一个 6 上限；
+      · `id` / `title` / `archived` / `provenance` **一个都不碰**。
+    """
+    cur.ownerId = cur.ownerId or pr.ownerId
+    cur.ownerName = cur.ownerName or pr.ownerName
+    cur.status = cur.status or pr.status
+    cur.dueDate = cur.dueDate or pr.dueDate
+    cur.summary = cur.summary or pr.summary
+    cur.source = cur.source or pr.source
+    if cur.progress is None:
+        cur.progress = pr.progress
+    if cur.risk is None:                      # rich-align-0722/01: keep-first risk across docs
+        cur.risk = pr.risk
+    if not cur.milestones:                    # rich-align-0722/02: keep-first milestones across docs
+        cur.milestones = pr.milestones
+    cur.blockers = (cur.blockers + [b for b in pr.blockers if b and b not in cur.blockers])[:6]
+    cur.dependsOn = (
+        cur.dependsOn + [d for d in pr.dependsOn if d and d not in cur.dependsOn]
+    )[:6]
+
+
+def _disambiguate_project_ids(survivors: list[ProjectEntity]) -> None:
+    """T10 —— 项目卡之间**不许撞 id**。`_disambiguate_person_ids` 的项目孪生，一字不差同一个理由。
+
+    `_slug` 折叠标点并在 32 字符处截断，而 `_project_key` 只折叠空白与 `_ -`：
+    「别墅套餐推广（八月）」与「别墅套餐推广(八月)」是**两张卡**（_project_key 不同），
+    却**共用一个 id**（test_two_projects_sharing_a_slug_id_do_not_fuse_their_conflicts 里那对）。
+    id 是前端的 join key（`signal.subjectId === detail.id`、`project.ownerId`、列表 React key），
+    撞了不会报错，只会让 A 的信号显示在 B 的详情里。
+
+    上传那条路今天靠 `_dedupe_entities` 之后没人再加卡而侥幸没炸；补传这条路会往一份**已经在用**
+    的清单末尾追加新卡，撞 id 就成了必然。只在**真撞上**时改后来那张卡的 id（先到的那张不动——
+    经理正对着它编辑/归档）。存量数据上是 byte-identical 的 no-op。
+    """
+    seen: set[str] = set()
+    for pr in survivors:
+        if pr.id not in seen:
+            seen.add(pr.id)
+            continue
+        fresh = ""
+        n = 2
+        while not fresh or fresh in seen:
+            fresh = f"{pr.id}-{n}"
+            n += 1
+        pr.id = fresh
+        seen.add(fresh)
+
+
+# ── T10 · append-upload（补资料）—— 把一批新资料的读数并进一份**已经在用**的 extraction ────────
+#
+# 上传路（`_dedupe_entities`）是一次性的：它对着一份刚建出来的 ExtractionResult 跑一遍，跑完这份
+# 东西才第一次被人看见。补传路不是——它要动的那张表已经渲染在经理屏幕上、被手编 CRUD 改过、被
+# 归档过，还挂着上一轮记下来的冲突。`merge_person_reading` 的 docstring 逐条列了直接重跑
+# `_dedupe_entities` 会造成的四种伤；本节就是那四条各自的正面答案：
+#
+#   坑① 整表重写吞手编/软删/出处 → 本节只碰**点名**的那一个主体，`id`/`name`/`title`/`archived`/
+#        `provenance` 一个都不改写，手编（origin='manual'）的格子恒不被文档顶掉。
+#   坑② 旧冲突重复记账     → `AppendLedger` 的 conflict_index 从**持久化的** `extraction.conflicts`
+#        重建（不是每次新建），同一 (主体,字段) 只长一条 FieldConflict；同一条读数（值+出处）
+#        已经在里面就不再追加 —— 同一批语料补传两次，冲突行数不翻倍。
+#   坑③ held_src 记错      → 逐字段出处走 `provenance` 侧车（本来就是为「这一格是谁给的」存在的、
+#        且跨 `get()` 活着的那本账），只有侧车没有这一格时才退回实体级 `source`（正是 dataclass
+#        注释里「未列的字段=doc 出处，source=本实体 self.source」那句话）。
+#   坑④ signals 换尺重筛   → 见 `merge_signal_readings`：先把两边都换成 id，再按同一把尺去重。
+#
+# 🔴 拍板③「安静更新」（.issues/gap2-0807/tickets.md）在这里落成一句可执行的话：
+# **只有在确凿地知道新资料更新时，才让新值顶掉旧值。** 不知道（哪一边的 uploaded_at 认不出来、
+# 那份资料已经不在 source_documents 里）一律退回 keep-first —— 与 `clear_stale_self_report`
+# （form_reflow.py）逐字同一条口径：绝不靠猜去改写一个有出处的读数。
+DOC_PROVENANCE_ORIGIN = "doc"
+MANUAL_PROVENANCE_ORIGIN = "manual"
+
+# 一份更新的资料**可以改写**哪些格子。刻意与 `_CONFLICT_FIELD_ALLOWLIST` 分成两张表：那张答的是
+# 「哪些分歧要记账、上今天页」，这张答的是「哪些格子允许被新资料顶掉」。两件事的答案不一样——
+# `role`/`summary` 该安静更新但不值得上今天页，`team`/`status` 两件都要。
+# 🔴 不在表里的字段恒不被改写：`id`/`name`/`title`（是身份，改了经理的卡就自己改名了）、
+# `source`（实体级 keep-first 出处）、`archived`/`provenance`（手编领域）、`person_id`（工号只补不改，
+# 见 `_absorb_person`：两个不同工号在 `PersonIndex` 里根本走不到同一格）。
+_APPEND_REFRESHABLE: dict[str, tuple[str, ...]] = {
+    "person": ("role", "team", "tenure"),
+    "project": ("ownerName", "status", "dueDate", "summary", "progress", "risk", "milestones"),
+}
+# 并集字段：新读数只**添**不**顶**（两份资料各列一半阻塞是常态，不是分歧）。上限 6 与
+# `_absorb_person`/`_absorb_project` 同一个数，不是第二把尺。
+_APPEND_UNIONED: dict[str, tuple[str, ...]] = {
+    "person": ("owns", "collaboration"),
+    "project": ("blockers", "dependsOn"),
+}
+_APPEND_LIST_CAP = 6
+
+
+def _reading_absent(value) -> bool:
+    """「这份文档没说这件事」= 空串 / None / 空列表。
+
+    🔴 判据是**逐类型的等值比较**，不是真值性：`progress=0` 是一条合法读数（文档真写了 0%），
+    `not 0` 为真会把它当成缺席，正是 `_note_conflicts` 上那条 ⚠ 点名警告过的写法
+    （test_project_progress_uses_is_None_so_ZERO_is_a_real_reading 钉着它）。
+    """
+    if value is None:
+        return True
+    if isinstance(value, str):
+        return value.strip() == ""
+    if isinstance(value, (list, tuple)):
+        return len(value) == 0
+    return False
+
+
+class AppendLedger:
+    """补传这一趟的账本：「这一格现在的值是哪份资料给的」+「这个 (主体,字段) 已经开过冲突没有」。
+
+    两本账都必须是**跨 `get()` 活着**的东西重建出来的，不能每次新建 —— 那正是坑②③。
+    构造一次、整批读数共用一个实例：一批新文件里如果有两份都说同一个人的部门，第二份撞的是
+    第一份刚写进去的值，账本自然把它记成同一条 FieldConflict 的第三个读数。
+    """
+
+    def __init__(self, extraction: "ExtractionResult", source_documents=()) -> None:
+        self.extraction = extraction
+        # source_key -> (那份资料的上传瞬间 | None, 原始 uploaded_at 串)
+        self._docs: dict[str, tuple[object, str]] = {}
+        from ..decision_grading import _uploaded_moment   # 全仓唯一的 uploaded_at 解析器
+        for sd in source_documents or ():
+            key = (getattr(sd, "source_key", "") or getattr(sd, "filename", "") or "").strip()
+            if not key:
+                continue
+            raw = str(getattr(sd, "uploaded_at", "") or "")
+            self._docs[key] = (_uploaded_moment(raw), raw)
+        self._conflicts: dict[tuple[str, str, str], FieldConflict] = {}
+        self._adopt_existing_conflicts()
+
+    # -- 账本重建 ---------------------------------------------------------------------------
+    def _adopt_existing_conflicts(self) -> None:
+        """把已经记在 `extraction.conflicts` 上的条目认领进索引，键用**归并身份尺**。
+
+        `FieldConflict.subject_ref` 存的是实体 id（前端按它 join 卡片），而索引键必须是身份尺
+        （`_append_conflict` 那条 🔴：`_slug` 会折叠标点并在 32 字符处截断，两个不同主体可以撞
+        一个 id，用 id 当索引键会把两张卡的冲突融成一条）。所以这里 id→身份尺反查一次，
+        **只在恰好反查到一个主体时**才认领：撞了 id 的、主体已经不在场的，宁可不认领
+        （代价是那条旧冲突这一趟长不出新读数），也不把两张卡的账合成一本。
+        """
+        keys_by_ref: dict[tuple[str, str], list[str]] = {}
+        for key, person in PersonIndex(self.extraction.people).slots.items():
+            keys_by_ref.setdefault(("person", person.id), []).append(key)
+        seen_projects: set[str] = set()
+        for pr in self.extraction.projects:
+            key = _project_key(pr.title)
+            if key in seen_projects:
+                continue
+            seen_projects.add(key)
+            keys_by_ref.setdefault(("project", pr.id), []).append(key)
+        for c in self.extraction.conflicts:
+            hits = keys_by_ref.get((c.subject_kind, c.subject_ref)) or []
+            if len(hits) != 1:
+                continue
+            self._conflicts[(c.subject_kind, hits[0], c.field)] = c
+
+    # -- 出处与新旧 -------------------------------------------------------------------------
+    def held_source(self, entity, fname: str) -> tuple[str, str]:
+        """这一格**现在这个值**的出处：`(出处串, origin)`。
+
+        侧车里有这一格就用侧车（origin 可能是 'doc'/'manual'/'form'）；没有就退回实体级
+        `source` 并按 'doc' 算 —— 这不是兜底发明，是 `PersonEntity.provenance` /
+        `ProjectEntity.provenance` 的 dataclass 注释写死的口径：「未列的字段=doc 出处
+        （source=本实体 self.source）」。
+        """
+        rec = (getattr(entity, "provenance", None) or {}).get(fname) or {}
+        origin = str(rec.get("origin") or "")
+        src = str(rec.get("source") or "")
+        if origin and src:
+            return src, origin
+        return str(getattr(entity, "source", "") or ""), DOC_PROVENANCE_ORIGIN
+
+    def is_manual(self, entity, fname: str) -> bool:
+        """这一格是经理亲手写/亲手清空的吗？手编赢（registry.py 的「手编赢」口径），恒不被文档顶掉。"""
+        return self.held_source(entity, fname)[1] == MANUAL_PROVENANCE_ORIGIN
+
+    def outranks(self, entity, fname: str, incoming_source: str) -> bool:
+        """新资料**确凿地**比这一格现在这个值所依据的资料新吗？不确定一律 False。
+
+        三种「不确定」都退回 keep-first：手编（不参与新旧比较，手编恒赢）、新资料的上传时刻认不出、
+        旧值那份资料已经不在 `source_documents` 里或时刻认不出。宁可显示一个有出处的旧读数，
+        也不靠猜去顶掉它。
+        """
+        held_src, origin = self.held_source(entity, fname)
+        if origin == MANUAL_PROVENANCE_ORIGIN:
+            return False
+        held_at = (self._docs.get(doc_key_of(held_src)) or (None, ""))[0]
+        new_at = (self._docs.get(doc_key_of(incoming_source)) or (None, ""))[0]
+        if held_at is None or new_at is None:
+            return False
+        return held_at < new_at
+
+    def stamp(self, entity, fname: str, source: str) -> None:
+        """这一格刚被一份资料写过 —— 把出处指到**那份资料**上（拍板③「出处指新资料」的落点）。
+
+        origin 用 'doc'：线上那个联合类型是闭的（`transport.ts` 的 `'doc'|'manual'|'form'`），
+        发明第四种取值会在前端悄悄落进「不挂角标」分支，而载荷已经违约。
+        """
+        rec = {"origin": DOC_PROVENANCE_ORIGIN, "source": source,
+               "updated_at": (self._docs.get(doc_key_of(source)) or (None, ""))[1]}
+        try:
+            entity.provenance[fname] = rec
+        except TypeError:                        # provenance 不是 dict（脏数据）——不为一条出处炸掉整次补传
+            entity.provenance = {fname: rec}
+
+    # -- 冲突记账 ---------------------------------------------------------------------------
+    def note_conflict(self, kind: str, key: str, cur, fname: str,
+                      held: str, held_source: str, new: str, new_source: str,
+                      *, fresh_wins: bool) -> None:
+        """一个 (主体, 字段) 只长**一条** FieldConflict —— 与 `_append_conflict` 同一条纪律，
+        差别只有两处，都是补传特有的：
+
+          · 索引从**持久化的** conflicts 重建（坑②），所以第二批、第三批资料是往同一条上追加；
+          · `values[0]` 恒为**胜出**读数（FieldConflict 的 dataclass 契约）。补传路上新资料确凿
+            更新时是新值胜出，所以它插在**队首**；被它顶掉的那些照旧按到达顺序排在后面
+            （旧的胜出者本来就比后来的输家先到，所以插队首之后整条仍是「胜出 + 到达序」）。
+
+        重复读数（值与出处都一样）不追加 —— 同一份文档被补传两次时，冲突行数不翻倍。
+        """
+        fresh = ConflictValue(value=new, source=new_source, doc_key=doc_key_of(new_source))
+        hit = self._conflicts.get((kind, key, fname))
+        if hit is not None:
+            if any(v.value == fresh.value and v.source == fresh.source for v in hit.values):
+                return
+            if fresh_wins:
+                hit.values.insert(0, fresh)
+            else:
+                hit.values.append(fresh)
+            return
+        old = ConflictValue(value=held, source=held_source, doc_key=doc_key_of(held_source))
+        record = FieldConflict(subject_kind=kind, subject_ref=cur.id, field=fname,
+                               values=[fresh, old] if fresh_wins else [old, fresh])
+        self._conflicts[(kind, key, fname)] = record
+        self.extraction.conflicts.append(record)
+
+    # -- 逐格归并 ---------------------------------------------------------------------------
+    def absorb(self, kind: str, key: str, cur, incoming) -> None:
+        """把一条新读数并进已有主体 `cur`。就地改 `cur`，别的什么都不动。
+
+        每一格三问，顺序不可换：
+          1. 新资料这一格说话了吗（`_reading_absent`）—— 没说就什么都不做（absent≠none）；
+          2. 这一格现在是空的吗 —— 是就直接填上，出处记新资料。这是 **enrichment 不是冲突**
+             （`_note_conflicts` 的第 2 条判据，逐字同一句话）；
+          3. 两边不一样吗 —— 一样就什么都不做（不为一次复述改出处）。不一样：**先记冲突再改值**
+             （改完输的那条就不存在了，这是 `_note_conflicts` 那句「必须在合并之前」），
+             然后只有 `outranks` 为真才让新值顶掉旧值。
+        """
+        conflict_fields = _CONFLICT_FIELD_ALLOWLIST.get(kind, ())
+        for fname in _APPEND_REFRESHABLE.get(kind, ()):
+            new = getattr(incoming, fname, None)
+            if _reading_absent(new):
+                continue
+            if self.is_manual(cur, fname):
+                # 手编赢。但**绝不静默吞掉**这条读数：够得着冲突口径的字段照样记账，
+                # 经理在今天页看到的就是「你手填的 X ／ 新资料读到 Y」。
+                held = getattr(cur, fname, None)
+                if fname in conflict_fields and not _reading_absent(held) and held != new:
+                    self.note_conflict(kind, key, cur, fname, str(held),
+                                       self.held_source(cur, fname)[0], str(new),
+                                       getattr(incoming, "source", ""), fresh_wins=False)
+                continue
+            held = getattr(cur, fname, None)
+            if _reading_absent(held):
+                setattr(cur, fname, new)
+                self.stamp(cur, fname, getattr(incoming, "source", ""))
+                continue
+            if held == new:
+                continue
+            fresh_wins = self.outranks(cur, fname, getattr(incoming, "source", ""))
+            if fname in conflict_fields:
+                self.note_conflict(kind, key, cur, fname, str(held),
+                                   self.held_source(cur, fname)[0], str(new),
+                                   getattr(incoming, "source", ""), fresh_wins=fresh_wins)
+            if not fresh_wins:
+                continue
+            if fname == "ownerName":
+                # 换了负责人：`ownerId` 是**派生**的 join key，不是独立读数——清空让 `_link_owners`
+                # 按当前花名册重新解一次。留着旧 id 会让这张卡显示新名字、信号却还挂在旧人身上。
+                cur.ownerId = ""
+            setattr(cur, fname, new)
+            self.stamp(cur, fname, getattr(incoming, "source", ""))
+        for fname in _APPEND_UNIONED.get(kind, ()):
+            new_items = getattr(incoming, fname, None) or []
+            if not new_items or self.is_manual(cur, fname):
+                # 手编过的列表整条不碰：`_absorb_person` 的并集是**无条件** [:6] 截断的，
+                # 而手编没有长度上限——一次补传就能把经理列的第 7 条起悄悄剪掉。
+                continue
+            held_items = list(getattr(cur, fname, None) or [])
+            fresh_items = [x for x in new_items if x and x not in held_items]
+            if not fresh_items:
+                continue
+            setattr(cur, fname, (held_items + fresh_items)[:_APPEND_LIST_CAP])
+            self.stamp(cur, fname, getattr(incoming, "source", ""))
+
+
+def merge_project_reading(projects: list[ProjectEntity], incoming: ProjectEntity,
+                          *, ledger: AppendLedger) -> ProjectEntity:
+    """T10 —— 把**一条**新的项目读数并进一份已经归并过的项目清单，返回活下来那条。
+
+    人卡侧的 `merge_person_reading` 的项目孪生。身份尺是 `_project_key(title)`，与
+    `_dedupe_entities`、`form_reflow.find_bound_project` 同一把 —— 项目认人只许有一把尺。
+
+    🔴 **归档的卡照样是候选**（与 `find_bound_project` 刻意相反，两处的活不一样）：那边是「这条
+    表单链绑了哪张卡」，找不到就什么都不做才对；这边是**归并**，跳过归档卡的下场是给同一个
+    `_project_key` 再开一张新卡，于是清单里同时躺着两张同名卡——`_dedupe_entities` 保证的唯一性
+    当场破掉，下一次整表重建会把它们融回一张，经理那次归档就这么无声蒸发了。所以宁可让新读数
+    落在一张他看不见的卡上（他自己归档的，恢复即见），也不破坏唯一性。
+
+    标题为空的读数拒收：`_project_key("") == ""`，所有无标题的卡会被归成同一格
+    （`find_bound_project` 早就在同一件事上守着这条）。
+    """
+    key = _project_key(incoming.title)
+    if not key:
+        raise ValueError("merge_project_reading needs a titled project reading — an empty title "
+                         "collapses every untitled card into one bucket")
+    cur = next((pr for pr in projects if _project_key(pr.title) == key), None)
+    if cur is None:
+        # 新项目：追加在**末尾**（同 `merge_person_reading` 的理由——活下来那条的 id 是前端
+        # 编辑/归档的靶子，插在前面等于让经理刚改过的那张卡失联），然后解一次 id 碰撞。
+        projects.append(incoming)
+        _disambiguate_project_ids(projects)
+        return incoming
+    ledger.absorb("project", key, cur, incoming)
+    return cur
+
+
+def dedupe_signals_after_linking(extraction: "ExtractionResult") -> int:
+    """把 `extraction.signals` 里**逐字重复**的克隆去掉，返回丢掉的条数。
+
+    坑④的正面答案。`_dedupe_entities` 的信号去重按 `_signal_key(subjectType, subjectRef, summary)`，
+    而**存量**信号的 `subjectRef` 早已是人卡 id（`_link_owners` 换过、表单回流直接写的就是 id），
+    新抽出来的那批还是姓名——两边不是同一把尺，直接去重等于换尺重筛。
+
+    所以顺序是：先照旧把新信号挂上去，由调用方跑一次 `_link_owners`（那是仓库里唯一那把
+    姓名→id 的尺）把两边都换成 id，**然后**才用 `_signal_key` 去重。本函数只负责最后那一步，
+    keep-first、保序、只删**逐字重复**的克隆——信号没有手编通道，所以这里没有手编可吞。
+    同一批语料补传两次时，正是这一步让信号不翻倍。
+
+    ⚠ 本函数**只在补传路上**被调用。上传路的那一遍在 `_dedupe_entities` 里，两处用的是同一个
+    `_signal_key`，所以不是两把尺——是同一把尺在两个时点各量一次。
+    """
+    before = len(extraction.signals)
+    seen: set[tuple[str, str, str]] = set()
+    kept: list[SignalEntity] = []
+    for s in extraction.signals:
+        sig_key = _signal_key(s.subjectType, s.subjectRef, s.summary)
+        if sig_key in seen:
+            continue
+        seen.add(sig_key)
+        kept.append(s)
+    extraction.signals = kept
+    return before - len(kept)
+
+
+def merge_person_reading(people: list[PersonEntity], incoming: PersonEntity,
+                         *, ledger: AppendLedger | None = None) -> PersonEntity:
     """差距战役 T5/A2 —— 把**一条**新的人员读数并进一份**已经归并过**的人员清单，返回活下来那条。
 
     身份判据与吸收规则都直接复用 `_dedupe_entities` 的那两个零件（`_resolve_person_slot` /
@@ -1999,15 +2377,23 @@ def merge_person_reading(people: list[PersonEntity], incoming: PersonEntity) -> 
          姓名，重跑等于换一把尺再筛一遍。
     本函数只碰**一个人**：要么就地 enrich 一条已有实体，要么在**末尾**追加一条新的。别的什么都不动。
 
-    ⚠ `incoming` 只许携带身份 + self_report。它若带着 T6 冲突口径里的字段（team/…），这里会拒绝——
-    因为记录冲突需要 `_note_conflicts` 那一整套 `held_src` 账本，本函数刻意没有它；静默吞掉一条
-    冲突读数，比拒绝写更糟。
+    ⚠ **不带 `ledger` 时** `incoming` 只许携带身份 + self_report。它若带着 T6 冲突口径里的字段
+    （team/…），这里会拒绝——因为记录冲突需要 `_note_conflicts` 那一整套 `held_src` 账本，
+    没有账本时本函数刻意不接；静默吞掉一条冲突读数，比拒绝写更糟。表单回流（T5）走的就是这条路，
+    行为一个字节没变。
+
+    ✅ **带 `ledger` 时**（T10 补传）账本在场，于是 `team` 成了合法载荷 —— 这不只是放宽一条断言：
+    `PersonIndex` 的规则 3.5（0807 HITL 补的同名+部门消歧）读的**正是** `p.team`，所以在旧口径下
+    那条规则从这个入口根本够不着（带部门的读数在 `resolve()` 跑起来之前就被拒了）。补传是它第一次
+    真的能用上：纪要里「林小满（前厅部）」这条读数，账本在场时既能认出是哪一位，也能把
+    「花名册说康乐部、纪要说前厅部」记成一条冲突而不是悄悄吃掉。
     """
-    dirty = [f for f in _CONFLICT_FIELD_ALLOWLIST["person"] if getattr(incoming, f, "")]
-    if dirty:
-        raise ValueError(
-            f"merge_person_reading only takes identity + self-report readings; {dirty} would need "
-            f"the conflict bookkeeping only _dedupe_entities has")
+    if ledger is None:
+        dirty = [f for f in _CONFLICT_FIELD_ALLOWLIST["person"] if getattr(incoming, f, "")]
+        if dirty:
+            raise ValueError(
+                f"merge_person_reading only takes identity + self-report readings; {dirty} would "
+                f"need the conflict bookkeeping only _dedupe_entities has")
     index = PersonIndex(people)
     key = index.resolve(incoming)
     cur = index.slots.get(key)
@@ -2017,7 +2403,15 @@ def merge_person_reading(people: list[PersonEntity], incoming: PersonEntity) -> 
         people.append(incoming)
         _disambiguate_person_ids(people)
         return incoming
-    _absorb_person(cur, incoming)
+    if ledger is None:
+        _absorb_person(cur, incoming)
+        return cur
+    # 补传路：定性格子走账本（安静更新 + 手编赢 + 冲突记账），身份与自述槽仍走上传路那两条规则，
+    # 一个字节都不重写——「工号只补不改」与「自述槽 keep-first」在两条路上必须是同一句话。
+    if not _person_id_key(cur.person_id) and _person_id_key(incoming.person_id):
+        cur.person_id = incoming.person_id
+    ledger.absorb("person", key, cur, incoming)
+    _absorb_self_report(cur, incoming)
     return cur
 
 
@@ -2094,22 +2488,7 @@ def _dedupe_entities(res: ExtractionResult) -> None:
                     projects_src[(key, fname)] = pr.source
             continue
         _note_conflicts(res, conflict_index, "project", cur, pr, key, projects_src)   # T6/B2a: 必须在合并前
-        cur.ownerId = cur.ownerId or pr.ownerId
-        cur.ownerName = cur.ownerName or pr.ownerName
-        cur.status = cur.status or pr.status
-        cur.dueDate = cur.dueDate or pr.dueDate
-        cur.summary = cur.summary or pr.summary
-        cur.source = cur.source or pr.source
-        if cur.progress is None:
-            cur.progress = pr.progress
-        if cur.risk is None:                      # rich-align-0722/01: keep-first risk across docs
-            cur.risk = pr.risk
-        if not cur.milestones:                    # rich-align-0722/02: keep-first milestones across docs
-            cur.milestones = pr.milestones
-        cur.blockers = (cur.blockers + [b for b in pr.blockers if b and b not in cur.blockers])[:6]
-        cur.dependsOn = (
-            cur.dependsOn + [d for d in pr.dependsOn if d and d not in cur.dependsOn]
-        )[:6]
+        _absorb_project(cur, pr)              # T10: ONE DEFINITION —— 补传路调的是同一个函数
     res.projects = list(projects.values())
 
     # signals — keep-first on literal clones only (see _signal_key); never enriched

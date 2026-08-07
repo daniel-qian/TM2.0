@@ -75,9 +75,20 @@ export const en = {
     // files" and then silently swapped the screen to the new upload, with no way back — the
     // manager's reading is "I lost my data". These strings say what actually happens, up front,
     // and label the way back. Nothing here promises a merge, because there is no merge.
-    againTitle: 'Adding more files starts a separate company',
+    // T10 — these two had to change. Before the append endpoint existed, "no merge" was the whole
+    // truth; now a merging path DOES exist (the section right above this one), so repeating the old
+    // sentence would point the manager at the wrong button.
+    againTitle: 'This one starts a separate company',
     againBody:
-      "Avery reads each upload as its own company. A new upload will not be merged into the one you're looking at now — both are kept, and you can switch between them here.",
+      "Upload here and Avery reads it from scratch as another company — it is not merged into the one you're looking at. To add to the company you have open, use the box above. Both are kept, and you can switch between them here.",
+    // T10 — the append box.
+    appendTitle: 'Add materials to this company',
+    appendCaption:
+      "New files are merged into the company you're looking at. Anything they say more recently updates the cards directly; wherever they disagree with what you sent before, it shows up on Today for you to settle.",
+    appendReadyLabel: 'The new materials are in',
+    appendAddedLead: 'Added this time',
+    appendConflicts:
+      "{count} reading(s) disagree with your earlier materials — open Today to see what each one says.",
     switchTitle: 'Uploads on this browser',
     switchAction: 'Open this one',
     switchOpening: 'Opening…',
@@ -570,7 +581,15 @@ export const en = {
     filesCurrentEmptyNone: 'Nothing uploaded yet. Send Avery a few files below and your team appears.',
     filesCurrentEmptyRead:
       "Avery hasn't listed any files for this upload. If you just uploaded, give it a moment and refresh; if it stays empty, the files came back unreadable and uploading them again is the fix.",
-    filesUploadTitle: 'Upload another batch',
+    filesUploadTitle: 'Start a separate company',
+    // T10 — the append section's shell. `filesAppendDemoNote` explains why there is no box here
+    // rather than pretending the feature doesn't exist: a demo copy is disposable by design, so
+    // anything added to it goes away with it — that is the sentence worth saying.
+    filesAppendTitle: 'Add materials to this company',
+    filesAppendLede:
+      'Got a new weekly, a new set of minutes, an updated roster? Send them here and they are merged into the company you have open — the cards update to what the newer materials say.',
+    filesAppendDemoNote:
+      'The sample team is a disposable copy that gets cleaned up, so anything you add to it will not stick. To use Avery for real, start a company of your own below.',
 
     // ── gap-design-0805 T3 · form-frontend-a1c · the standing-forms section (④) ──────────────
     // 🔴 What a standing form IS, in copy: the employee's own account of their own stretch of
@@ -1145,6 +1164,10 @@ export const en = {
     // T5/A2 — the third provenance origin: this field last changed because someone filled in a
     // form, not because we read a document and not because a manager typed it.
     projectsFormBadge: 'From a submitted form',
+    // T10 — this cell was overwritten by a NEWER document; the badge points at that document.
+    // Document name only, never the line number (an entity's source is block-level and can land
+    // on a heading line — pinned in the backend's own gate).
+    projectsDocBadge: 'From {source}',
     projectsArchivedTitle: 'Archived ({count})',
     projectsArchivedAria: 'Archived projects',
     projectsArchivedRestore: 'Restore',

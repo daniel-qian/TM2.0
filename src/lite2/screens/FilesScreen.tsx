@@ -39,6 +39,34 @@ function SwitchSection() {
   )
 }
 
+// T10 · 「给这家公司补资料」——第 ②a 段的外壳。抽成小组件的理由同 SwitchSection：
+// 小节标题与内容**同生共死**，三条否决里任何一条成立时整段（含标题）一起消失。
+function AppendSection() {
+  const { t } = useDict()
+  const l = t.lite2
+  const contextId = useLite((s) => s.contextId)
+  const rawTeam = useLite((s) => s.rawTeam)
+  const canAppend = useLite((s) => !!s.transport.appendFiles)
+
+  if (!contextId || !canAppend) return null
+  // 一次性副本：不做假按钮，但也不装作这个功能不存在——说清楚为什么这儿没有口子。
+  if (rawTeam?.ephemeral) {
+    return (
+      <section className="lite-files-section lite-files-append" aria-label={l.filesAppendTitle}>
+        <h3 className="lite-files-section-title">{l.filesAppendTitle}</h3>
+        <p className="lite-files-empty">{l.filesAppendDemoNote}</p>
+      </section>
+    )
+  }
+  return (
+    <section className="lite-files-section lite-files-append" aria-label={l.filesAppendTitle}>
+      <h3 className="lite-files-section-title">{l.filesAppendTitle}</h3>
+      <p className="lite-files-empty">{l.filesAppendLede}</p>
+      <UploadPanel showFiles={false} mode="append" />
+    </section>
+  )
+}
+
 // 词典占位符替换（与 lite2/AskCard.tsx、OnboardWizard.tsx 的 fill 同形——本仓有十多份各自
 // 独立的拷贝，没有共享导出；这里照惯例再放一份，不为一个三行函数新开一个 shared 模块）。
 function fill(template: string, vars: Record<string, string | number>): string {
@@ -501,13 +529,28 @@ export function FilesScreen() {
           )}
         </section>
 
-        {/* ── ② 上传新一批 ───────────────────────────────────────────────────────
-            🔴 诚实说明必须在上传口**之前**：后端每次 POST /ingest 都新铸一个 context，
-            传旧 id 是重建并覆盖而不是追加（见 store.ts 顶部那段）。改造前界面一路邀请
-            "再加点文件"，然后把屏幕悄悄换成新的那一份，且没有任何回得去的入口——经理的
-            读法是"我把数据弄丢了"。againTitle/againBody 这两条 copy 早就写好并审过字，
-            却因为一次合并把 UI 整块吃掉而当了很久的孤儿键（AGENTS.md「孤儿文案键是红旗」
-            那条说的就是它）。这里把它们接回去。
+        {/* ── ②a 给这家公司补资料（T10）─────────────────────────────────────────
+            这一段是「每次上传=新开一家公司」那堵墙被拆掉之后新长出来的口子：文件并进**当前**
+            这家公司，卡片安静更新到新读数，新旧对不上的地方走今天页那条双栏通道。
+
+            三条否决，每条都是「这里现在没有一个诚实的按钮可放」：
+             ① 没有 contextId —— 还没有公司，"补"无从谈起（下面 ②b 才是开公司的口子）。
+             ② 这份工作区是一次性的示例克隆（后端 `ephemeral`）—— 补进去的资料会随 TTL 回收
+                一起消失，经理却会以为存下来了。**先禁入口**是本票的明确边界（克隆连表单表
+                都没复制），所以这里不做假按钮，只留一句说明。
+                🔴 判据取自后端每帧都发的 `ephemeral`，不是只在领取首帧出现的 `demo`——
+                后者刷新一次页面就没了，入口会自己冒出来（那读起来像 bug，不像功能）。
+             ③ 这条通道没有 appendFiles（stub / 老后端）—— 同 demoClaim 的先例，能力探测判空。 */}
+        <AppendSection />
+
+        {/* ── ②b 另建一份画像 ───────────────────────────────────────────────────
+            🔴 诚实说明必须在上传口**之前**：这个口子每次 POST /ingest 都新铸一个 context。
+            改造前界面一路邀请"再加点文件"，然后把屏幕悄悄换成新的那一份，且没有任何回得去的
+            入口——经理的读法是"我把数据弄丢了"。againTitle/againBody 这两条 copy 早就写好并
+            审过字，却因为一次合并把 UI 整块吃掉而当了很久的孤儿键（AGENTS.md「孤儿文案键是
+            红旗」那条说的就是它）。这里把它们接回去。
+            T10 之后这两句必须改口：以前"合并"根本不存在，说"不会并进"是全部真相；现在**存在**
+            另一条会合并的路（就在上面 ②a），再说同一句话就是把经理往错的按钮上引。
             `showFiles={false}`：上面 ① 段已经有一份清单了，两处都渲染 = 两个
             `.upload-files`，门按类名全局取样会数出双倍行数。 */}
         <section className="lite-files-section lite-files-upload" aria-label={l.filesUploadTitle}>
