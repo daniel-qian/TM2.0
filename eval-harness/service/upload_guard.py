@@ -66,8 +66,8 @@ def _route_for(path: str) -> str | None:
     # 🔴 `_GUARDED` 是**精确匹配**的字典，带路径参数的路由永远命不中它。漏了这一条，新端点在 ASGI
     #    边缘就是零防护（无限流、无 Content-Length 预检、无流式总量兜底），而处理器内部的逐文件/
     #    逐批闸照旧生效——「看起来有闸」正是这种漏法最难被发现的原因。
-    #    读侧不受影响：中间件只对 POST 起闸（'share' 那条公开面除外），`GET /team/{id}/files`
-    #    （文件清单）与 `/team/{id}/files/{idx}`（下载，不以 /files 结尾）都照旧直通。
+    #    读侧不受影响：guarded 谓词（`is_guarded`）只对 POST/DELETE 起闸，`GET /team/{id}/files`
+    #    （文件清单）与 `/team/{id}/files/{idx}`（下载）都照旧直通。
     if path.startswith("/team/") and path.endswith("/files"):
         return "ingest"
     # issue #77 · 删除一份资料：`DELETE /team/{id}/files/{source_key}`。它与补传是同一张写脸
@@ -85,6 +85,26 @@ def _route_for(path: str) -> str | None:
     if path.startswith("/f/"):
         return "share"
     return None
+
+
+def is_guarded(route: str | None, method: str) -> bool:
+    """这条 (路由, 方法) 组合要不要过边缘闸。
+
+    抽成具名函数是为了让它**可断言**：`_route_for` 只回答「这条路径属于哪个表盘」，而
+    「读侧会不会被顺带闸住」是 route + method 两个量的函数。此前这段谓词内联在中间件里，
+    测试只能去断言 `_route_for` 的返回值——于是 issue #77 给 `/team/{id}/files/{key}` 补路由
+    时，一条本来该说「下载不受影响」的判据以「返回值变了」的形态红掉，看起来像回归，其实
+    被测的那个行为一个字节没变。
+
+    POST 每条路由都闸；DELETE 同理（#77 的删除口，它没有请求体，只吃限流那一半）；
+    'share' 那条公开面连 GET 也闸——`/r/{token}` 是唯一一张无鉴权的脸（OG 抓取也会打它）。
+    其余的 GET 一律直通：文件清单与逐份下载都在这一支。
+    """
+    if route is None:
+        return False
+    if method in ("POST", "DELETE"):
+        return True
+    return route == "share" and method == "GET"
 
 
 # ── per-IP token-bucket rate limiter (in-memory, single-worker) ───────────────────────────────────
@@ -201,10 +221,7 @@ class IngestGuardMiddleware:
         method = scope.get("method", "GET").upper()
         # POST is guarded on every route; the employee H5 ('share') guards its GET too — the
         # /r/{token} page is the one PUBLIC unauthenticated surface (OG unfurlers hit it as well).
-        # issue #77: DELETE 也是写。它没有请求体，所以只吃限流那一半，下面的体积闸对它无意义。
-        guarded = route is not None and (
-            method in ("POST", "DELETE") or (route == "share" and method == "GET"))
-        if not guarded:
+        if not is_guarded(route, method):
             return await self.app(scope, receive, send)
 
         # Opportunistic memory sample on write traffic (cheap; the /health hook also samples).
