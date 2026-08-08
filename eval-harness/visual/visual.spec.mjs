@@ -1,6 +1,13 @@
 // 9 屏 × 2 皮 × 2 视口 = 36 张像素基线（cr-align 视觉战役棒0；files-hub-0729 加 files；
 // #63 merge-closerlook 退掉 closerlook——对照卡并进 home 屏差距摘要块，随 home 两张被采）。
-// 数据走 ?transport=stub（固定 16 人团队，零后端零随机）；onboarding Escape 掉。
+// 🔴 #68 订正：这 36 张**全是空态采样**。URL 里的 `?transport=stub` 在 build+preview 产物上
+// 是死的（store.ts 的 import.meta.env.DEV 被 vite build 静态求值成 false——头注释此前写的
+// 「固定 16 人团队」从来没存在过），实际是真 transport + fresh context = team===null：
+// 九屏采的都是空态引导页（home 还叠一张依赖后端 /demo/status 的示例团队门卡——「像素基线
+// 不密闭」那条 Blocker 的病根）。**任何只在数据态渲染的部件不在这 36 张射程内**——
+// 数据态覆盖见同目录 visual-data.spec.mjs（#68，真上传种子后采 home/team/projects）。
+// URL 里的 transport=stub 参数保留不动：它虽然死了，但摘掉它会改变 URL 指纹，
+// 空态基线全部作废重冻，纯损无益。onboarding Escape 掉。
 // mask 原则：出现日期/时钟类动态区再按需加 locator，先跑裸的看稳定性。
 //
 // ⚠ 一个 test 里串着跑 9 次 toHaveScreenshot：**第一处不匹配就中止整条**，后面的屏根本
