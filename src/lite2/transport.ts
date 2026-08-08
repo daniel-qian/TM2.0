@@ -500,6 +500,13 @@ export type LiveFileStatus = 'ingested' | 'empty' | 'failed'
 export interface LiveFileEntry {
   idx: number
   filename: string
+  // issue #74 · 服务端消歧后的**每文档**键（== SourceDocument.source_key == 材料块 '<key>:<line>'
+  // 前缀）。`filename` 是展示名，补传重名时后端刻意保留原样；被消歧的是这一把。@ 引用必须按
+  // 这把键送 id，否则 references._file_entry 的 `source_key == want or filename == want` 对两份
+  // 同名文档都成立、`next()` 恒取第一份——引用看起来健康，读到的却是另一份文档（#70 实证）。
+  // optional：老后端/stub 不发这个键，缺席时调用点退回 filename（additive 契约，同 status 那条
+  // 纪律）。后端发的是**已解析**值（`sd.source_key or sd.filename`），所以永不为空串。
+  source_key?: string
   size_bytes: number
   mime: string
   doc_kind: string

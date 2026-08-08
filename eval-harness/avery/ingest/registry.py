@@ -789,12 +789,22 @@ class CompanyContext:
 
     def file_cards(self) -> list[dict]:
         """The per-file manifest the 'your files' view renders — METADATA ONLY (no bytes): filename,
-        size, mime, doc_kind, status, uploaded_at, and n_chunks (material chunks the file produced).
-        n_chunks joins on source_key (the per-document key), falling back to filename for a pre-032
-        row that has none. Content is untrusted data; the manifest lists it, the download seam serves
-        the bytes separately."""
+        size, mime, doc_kind, status, uploaded_at, source_key, and n_chunks (material chunks the file
+        produced). n_chunks joins on source_key (the per-document key), falling back to filename for a
+        pre-032 row that has none. Content is untrusted data; the manifest lists it, the download seam
+        serves the bytes separately.
+
+        issue #74 — `source_key` is emitted RESOLVED (`sd.source_key or sd.filename`), i.e. the exact
+        same expression n_chunks joins on and the exact string `references._file_entry` matches an @
+        mention against. ONE RULER: the key the manifest hands the client is the key that resolves
+        back to THIS document. Emitting the raw (possibly empty) field instead would hand a pre-032
+        row an id that matches nothing. Two uploads sharing a `filename` get distinct source_keys from
+        `_unique_parse_names`, which is what makes an @ reference to the second one resolvable at all —
+        before this key was published the client had only `filename` and every mention of a duplicate
+        name silently resolved to the FIRST document."""
         counts = self._chunks_per_file()
-        return [{"idx": i, "filename": sd.filename, "size_bytes": sd.size_bytes, "mime": sd.mime,
+        return [{"idx": i, "filename": sd.filename, "source_key": sd.source_key or sd.filename,
+                 "size_bytes": sd.size_bytes, "mime": sd.mime,
                  "doc_kind": sd.doc_kind, "status": sd.status, "uploaded_at": sd.uploaded_at,
                  "n_chunks": counts.get(sd.source_key or sd.filename, 0)}
                 for i, sd in enumerate(self.source_documents)]
