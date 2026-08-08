@@ -149,8 +149,10 @@ export function baseScreenFrom(pathname: string, state: unknown): LiteScreen {
 // 一次性「接力棒」参数：导航离开时丢掉，不跟着人跑遍全屏。
 // `q` = `/room?q=<问题>`（从决策卡带着问题进议事室，feat-057 的上游接口）——它描述的是
 // 「这次进屋要问什么」，不是会话状态，带到 /notes 再带回来会诈尸重放。
+// `refs` = `/room?refs=<JSON>`（#64：悬浮胶囊里选好的 @ 引用随 q 一起进屋）——同一条
+// 「这次进屋要带谁」的接力语义，同样一次性（编解码在 askRefs.ts）。
 // 其余一切参数（v/mode/look/lang/showInactive/transport/未来新增的）一律跟着走。
-const EPHEMERAL_PARAMS = ['q'] as const
+const EPHEMERAL_PARAMS = ['q', 'refs'] as const
 
 /**
  * 取当前 URL 的 search，去掉一次性参数，叠加 extra，返回可直接拼在路径后的 `?...`（或空串）。

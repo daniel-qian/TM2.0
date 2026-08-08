@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { LiteHandoff, LiteTeam } from './teamData'
+import type { AskRef } from './askRefs'
 import { deriveGaps, type GapCard } from './gapDerive'
 
 // feat-036 · lite2 晨间分诊 + Follow-ups 跟进（PRD F2+F3, ADR-0017 原判的真正执行）。
@@ -106,7 +107,10 @@ interface FlowState {
   // "带进议事室"：分诊条目一键飞进 The room——composer 预填该条目上下文（不自动提交，
   // manager 审过再发问；与 AskCard 的 authorship 原则同一条线：起草由 Avery，动手由人）。
   composerDraft: string | null
-  setComposerDraft: (text: string) => void
+  // #64 · 悬浮胶囊里选好的 @ 引用随问题文字一起中继进议事室（refs 可选，老调用点不传 =
+  // null——分诊/详情浮层那几条「带进议事室」仍是纯文字预填，票面明写不升级）。
+  composerDraftRefs: AskRef[] | null
+  setComposerDraft: (text: string, refs?: AskRef[]) => void
   consumeComposerDraft: () => void
 
   // feat-044（PRD F4）· "A closer look" 矛盾卡的 resolve/dismiss marks——同一 localStorage
@@ -184,8 +188,11 @@ export const useFlow = create<FlowState>((set, get) => {
     },
 
     composerDraft: null,
-    setComposerDraft: (text) => set({ composerDraft: text }),
-    consumeComposerDraft: () => set({ composerDraft: null }),
+    composerDraftRefs: null,
+    // refs 不传即清 null——预填是一次性的整体快照，旧 refs 挂到新草稿上就是接错线。
+    setComposerDraft: (text, refs) =>
+      set({ composerDraft: text, composerDraftRefs: refs && refs.length > 0 ? refs : null }),
+    consumeComposerDraft: () => set({ composerDraft: null, composerDraftRefs: null }),
 
     gapMarks: initial.gapMarks,
     resolveGap: (id) => {
@@ -242,5 +249,11 @@ export function selectGapsDismissed(team: LiteTeam | null, marks: Record<string,
 // 公司数据（条目/标记/草稿正文）必进；找不到不清的理由就清。
 // 对象/数组给新字面量而非 spread EMPTY_PERSISTED——模块常量的内层引用不进活 state。
 export function resetFlowCompanyScope(): void {
-  useFlow.setState({ triageMarks: {}, followups: [], gapMarks: {}, composerDraft: null })
+  useFlow.setState({
+    triageMarks: {},
+    followups: [],
+    gapMarks: {},
+    composerDraft: null,
+    composerDraftRefs: null,
+  })
 }

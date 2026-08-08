@@ -62,6 +62,18 @@ export interface LiveAgentEvent {
   [key: string]: unknown
 }
 
+// #64 · @ 引用（additive）：被 @ 的实体随请求结构化下发，后端**保证**把它的卡片读数与
+// 相关文档行注入模型上下文（不看 recall 脸色）。老后端不认识这个键 → FastAPI 静默忽略——
+// 所以提交层必须同时把引用织进 situation 文字兜底（askRefs.weaveRefs），任何后端版本下
+// 答案不至于比今天差。id 语义按 kind：person/project=实体 id；file=文件名；playbook=标题。
+export type AdviseReferenceKind = 'person' | 'project' | 'file' | 'playbook'
+
+export interface AdviseReference {
+  kind: AdviseReferenceKind
+  id: string
+  label: string
+}
+
 export interface AdviseRequest {
   situation: string
   title?: string
@@ -69,6 +81,9 @@ export interface AdviseRequest {
   // ADR-0033：判读正文的语言。调用方**不用填**——`streamAdvise` 自己从界面那条 locale 链补上
   // （见下面 withLocale 的注释）。留在契约里是因为它确实是请求的一部分，后端按它写 prompt。
   locale?: Locale
+  // #64 · 可选（additive）：没有引用时**整键不发**（absent≠none——空数组和「没带」在
+  // 后端是同一回事，但请求体里不多送一个键）。
+  references?: AdviseReference[]
 }
 
 // 🔴 一处补全，不要在每个调用点各写一遍。

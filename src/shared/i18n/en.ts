@@ -1160,10 +1160,23 @@ export const en = {
     roomNoMaterialCta: 'Go add materials',
 
     // refPeople/refProjects：曾是 LiteComposer 引用菜单的词——#47（2026-08-05）该组件退役后，
-    // 由顶栏搜索的分组标题继续消费。refAll/refAdd/refSearch/refEmpty/composer*Aria 四件套
-    // 已随组件删除（孤儿键是红旗，AGENTS.md 陷阱条）。
+    // 由顶栏搜索的分组标题继续消费。
+    // #64（at-references）：@ 引用回归，AskRefComposer 是新消费者——refAll/refEmpty/
+    // composer*Aria 按当下用词重建（不是恢复 #47 删掉的旧值），refFiles/refPlaybooks 是
+    // 候选轴从两类扩到四类的新词。refWeavePrefix/refWeaveSeparator 是织进 situation 文字的
+    // 兜底前缀/分隔符（用户可见：它进 advise_runs.question 的历史回显）。
+    refAll: 'All',
     refPeople: 'People',
     refProjects: 'Projects',
+    refFiles: 'Files',
+    refPlaybooks: 'Playbooks',
+    refEmpty: 'Upload a few files first — people and projects appear here.',
+    refMenuAria: 'Reference candidates',
+    composerFilterAria: 'Filter reference candidates',
+    composerRefsAria: 'Referenced in this question',
+    composerRemoveRefAria: 'Remove {label}',
+    refWeavePrefix: 'About: ',
+    refWeaveSeparator: ', ',
 
     // 棒E · Topbar search (pure in-memory retrieval; ≥1280 only). searchEmpty is ZERO MATCHES —
     // deliberately distinct from the retired refEmpty (ZERO DATA). Group headings reuse refPeople/refProjects.
