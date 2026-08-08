@@ -93,6 +93,11 @@
 - 后端离线全套：**3974 passed / 115 deselected / 4 xfailed / 0 failed**（76.9s；本批零后端
   改动，跑它是合并前的回归确认——账面与 #64 逐字相同）
 - `./init.sh` 绿（typecheck + build）。
+- **后合复验**（#65 先落 main `3910bcb`，本 session 是后合者）：`main` 合进本分支零冲突
+  （HomeScreen 两票改的是不同段落——`gapsOpen` 初值 + 我的三处 handler 同居无恙；差距卡门
+  剧本的「若收起先点展开」容错分支在 #65 默认展开下自然跳过）；合流树上**全电池复跑**：
+  A **30/30**（含 flow-gap-phases 10 判据 + at-references 40 判据）· B 37/37+15/15 · C 3/3；
+  主检出 main 同树像素 + 电池见下节。
 
 ## 交互态截图（人眼过）
 
