@@ -45,7 +45,10 @@ export const NOTIF_TARGET: Record<NotifKind, LiteScreen> = {
   ingest: 'team',
   run: 'room',
   ask: 'room',
-  gap: 'closerlook',
+  // #63 ·「值得注意」屏并进「今天」的差距摘要块后，gap 通知落 home——对照卡现在住在
+  // 那儿（'closerlook' 已从 LiteScreen 退休，写回去是编译错误）。接线判据在
+  // verify-flow-gap-phases 的 gapNotifRoute 步：点真通知条目、断言 data-scene 落 home。
+  gap: 'home',
   // 表单这一路的落点是「文件与表单」屏——「本期备好了」和「有人交了」两件事都在那一屏上
   // 有真东西可看（名单、链接、谁交了）。
   form: 'files',

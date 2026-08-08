@@ -39,7 +39,9 @@ const SEED_DOC = [
 // files-hub-0729/01 · 'files' 追加在末尾：这个数组是「哪些屏会被采样」的唯一名单，
 // 漏掉一屏不会红、只会**永远不采样它**（假绿）。资料库屏是 t.upload.* 那 38 个键在
 // 07-29 之后唯一的落屏点（上传面板已从团队屏撤走），漏了等于整族文案无人扫。
-const V2_SCREENS = ['home', 'team', 'projects', 'room', 'followups', 'notes', 'closerlook', 'playbooks', 'vision', 'files']
+// #63（merge-closerlook）· 'closerlook' 出列：屏已退休，对照卡（.lite-gap-* 按钮族）并进
+// home 的差距摘要块——那些按钮全员 .lite-btn，家族审计口径不变。
+const V2_SCREENS = ['home', 'team', 'projects', 'room', 'followups', 'notes', 'playbooks', 'vision', 'files']
 
 // 白名单=「不是普通按钮」的族（作战地图 r4-recon-map.md 第 1 节逐个定性）。
 // 纪律：往这里加条目前先问「它真有专属语法吗」——白名单膨胀=门失效。

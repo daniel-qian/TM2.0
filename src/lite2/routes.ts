@@ -33,7 +33,10 @@ export type LiteScreen =
   | 'room'
   | 'followups'
   | 'notes'
-  | 'closerlook'
+  // #63（merge-closerlook，2026-08-08）：'closerlook' 从联合类型里退休——「值得注意」屏
+  // 并进了「今天」的差距摘要块（HomeScreen ② 区）。/closer-look 冷深链由 Lite2App 显式
+  // 重定向到 home（不 404）；scene id 'closerlook' 自此不复存在，门里引用它的判据已随
+  // 本票逐条改判（见 issue #63）。
   | 'playbooks'
   | 'vision'
   // feat-055（PRD G9）：整屏项目看板。追加在末尾——本批另一条线（feat-057）同样往这个
@@ -49,14 +52,12 @@ export type LiteScreen =
 
 export type LiteDetail = { kind: 'person' | 'project'; id: string } | null
 
-// 7 屏路径。注意 `closerlook`（store/门用的 scene id，data-scene 属性值）与 `/closer-look`
-// （URL 形状，PRD G2 原文）不同名 —— 别把两者当同一个字符串用。
+// 屏 → 路径。
 export const SCREEN_PATH: Record<LiteScreen, string> = {
   team: '/team',
   room: '/room',
   followups: '/followups',
   notes: '/notes',
-  closerlook: '/closer-look',
   playbooks: '/playbooks',
   vision: '/vision',
   // feat-055：项目屏。与下面的 PROJECT_PATH 同值——项目详情 `/projects/:projectId` 就是
@@ -73,6 +74,11 @@ export const SCREEN_PATH: Record<LiteScreen, string> = {
 // 详情段一个字没改——路径形状、导航入口（openDetail('project', id)）全部照旧，变的只是
 // 「浮层底下垫哪一屏」：冷深链现在垫项目屏，不再垫团队屏（见 screenFromPathname）。
 export const PROJECT_PATH = '/projects'
+
+// #63 ·「值得注意」屏退休后留下的老路径。发出去的链接/书签死不掉，所以这条路径必须
+// 永远活着——Lite2App 给它挂了一条显式重定向到默认屏（home，对照卡现在住在那儿的
+// 差距摘要块里）。刻意不进 SCREEN_PATH：它不再是屏，只是一条搬家后的转发地址。
+export const CLOSER_LOOK_LEGACY_PATH = '/closer-look'
 
 // partner-docs-0728 ·「文件与表单」页。**刻意不进 LiteScreen 联合类型**：它不是第九屏，
 // 没有 tab、不参与 data-scene、不进 SCREEN_PATH。顶栏已经 9 个 tab 且正在因窄屏溢出被另一条
@@ -244,10 +250,10 @@ export function navigateToDetail(kind: 'person' | 'project', id: string) {
 
 /**
  * 关详情 = 回**来源屏**，用 replace。
- * 用 replace 而不是 push：否则历史会留下 [.., /closer-look, /projects/:id, /closer-look]，
+ * 用 replace 而不是 push：否则历史会留下 [.., /followups, /projects/:id, /followups]，
  * 按后退键又把刚关掉的浮层翻出来（点了「关闭」再后退却重新打开，是明确的坏体验）。
  * 回的是 currentBaseScreen()（history state 里的来源屏），不是按路径派生的底屏——从
- * 「多看一眼」点开项目详情再关掉，人要留在「多看一眼」，不是被扔到 /team。
+ * 待办清单点开项目详情再关掉，人要留在待办清单，不是被扔到 /team。
  * 冷深链（新标签页直接打开 /projects/:id，没有来源屏可查）才退回默认屏。
  */
 export function navigateCloseDetail() {

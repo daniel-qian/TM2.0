@@ -153,6 +153,18 @@ export function HomeScreen() {
   const gapsShown =
     gapFilter === 'resolved' ? gapsResolved : gapFilter === 'dismissed' ? gapsDismissed : gapsActive
   const gapsTotal = gapsActive.length + gapsResolved.length + gapsDismissed.length
+  // #63（merge-closerlook）·「值得注意」屏并进本块，原地展开。浅合：只搬界面——对照卡/
+  // 三态归宿（解决/忽略/放回来）/历史折叠/带去议事室预填，全部自 CloserLookScreen 迁入；
+  // gapDerive 前端推导与 flowStore 的 gapMarks 一个字没动（深合另议，见票面「明确不做」）。
+  // 默认仍是摘要形态（chips + 前三条预览，与迁移前逐字节相同）；点「全部展开」原地换成
+  // 完整对照卡视图——不撑爆首屏靠的就是这个默认收起。
+  const [gapsOpen, setGapsOpen] = useState(false)
+  const [gapHistoryOpen, setGapHistoryOpen] = useState(false)
+  const [gapFollowupIds, setGapFollowupIds] = useState<ReadonlySet<string>>(new Set())
+  const resolveGap = useFlow((s) => s.resolveGap)
+  const dismissGap = useFlow((s) => s.dismissGap)
+  const restoreGap = useFlow((s) => s.restoreGap)
+  const gapHistoryCount = gapsResolved.length + gapsDismissed.length
   const attention = useMemo(() => deriveAttentionPeople(team, rawTeam), [team, rawTeam])
   const openFollowups = followups.filter((item) => !item.done).length
   // 今日待办（B4）：flowStore 真数据——dueGroup==='today' 且未完成。首页只列前 5 条，
@@ -195,7 +207,7 @@ export function HomeScreen() {
   // **已本地化**的 action + evidence。
   function handleTakeToRoom(handoff: HandoffDisplay) {
     // 分隔符用 " — " 而非换行：composer 是 <input type="text">，换行被剥掉后两段文字会
-    // 连成一坨不可读（feat-044 对抗验证发现的同根 bug，见 CloserLookScreen 同款注释）。
+    // 连成一坨不可读（feat-044 对抗验证发现的同根 bug，见下面 handleGapAsk 同款注释）。
     setComposerDraft(`${handoff.action} — ${handoff.evidence}`)
     goScreen('room')
   }
@@ -205,6 +217,33 @@ export function HomeScreen() {
     setHandoffFollowupIds((prev) => {
       const next = new Set(prev)
       next.add(handoff.id)
+      return next
+    })
+  }
+
+  // ── #63 · 对照卡的两个动作（自 CloserLookScreen 逐字迁入）──────────────────
+  function handleGapAsk(gap: GapCard) {
+    // 预填含项目引用 + claim/evidence 上下文；正文不携带人身评判语（只谈项目自述与信号，
+    // 不谈"你为什么没说实话"一类归咎措辞）。不自动提交——manager 审过再问，同分诊
+    // "带进议事室"的 authorship 原则（feat-036）。
+    // 分隔符用 " — " 而非换行：composer 是 <input type="text">，换行被剥掉后三段文字会
+    // 连成一坨不可读（对抗验证 redline 路发现，2026-07-14）。
+    setComposerDraft(`${gap.projectTitle} — ${gapClaimText(gap, t.lite2)} — ${gap.evidence}`)
+    goScreen('room')
+  }
+
+  function handleGapAddFollowup(gap: GapCard) {
+    addFollowup({
+      // 迁入时顺手还掉那笔记档过的债（原 CloserLook 写死英文模板 `Take a closer look at …`，
+      // 本屏决策卡的同款动作早已走字典）：标题走 gapFollowupTitle 模板，zh/en 各一份。
+      title: fill(t.lite2.gapFollowupTitle, { title: gap.projectTitle }),
+      source: 'closer-look',
+      dueGroup: 'today',
+      note: gap.evidence,
+    })
+    setGapFollowupIds((prev) => {
+      const next = new Set(prev)
+      next.add(gap.id)
       return next
     })
   }
@@ -480,8 +519,8 @@ export function HomeScreen() {
                         }
                         followupAdded={followupAddedKeys.has(cardKey)}
                         onAddFollowup={() => {
-                          // B4 闭环：决策落成待办。标题走字典模板（CloserLook 的英文硬模板
-                          // 是已知历史债，这里不再新增一处）；note 带决策理由溯源。
+                          // B4 闭环：决策落成待办。标题走字典模板（对照卡那笔英文硬模板的
+                          // 历史债已随 #63 迁入一并还清——gapFollowupTitle）；note 带决策理由溯源。
                           addFollowup({
                             title: fill(t.lite2.homeDecisionFollowupTitle, {
                               title: card.subject_title,
@@ -687,10 +726,13 @@ export function HomeScreen() {
 
             {/* 右轨 1fr —— 她的 GapRail + PeopleRail 纵向堆叠位 */}
             <div className="lite-home-rail">
-            {/* ── ② 差距摘要 → 多看一眼（棒D · 布局与真部件战役 2026-07-22）──────────
+            {/* ── ② 差距摘要（棒D 立摘要形态；#63 把「值得注意」整屏并进来，原地展开）────
                 她的 /gaps 差距卡把「自报 vs 观察」做成对照双列——这是这个概念的视觉语法。主页右轨
-                是摘要位（空间窄），不整卡照搬，但对齐她的语法：section-label 小标题 + 每条
+                是摘要位（空间窄），默认不整卡照搬，但对齐她的语法：section-label 小标题 + 每条
                 「自报 / 观察」两侧带标签的证据 + 项目归属。
+                #63（浅合拍板，推翻 feat-057「7 分屏全保留」之 closerlook 一屏）：tab 退了之后
+                这里就是对照卡唯一的家——头部链接从「跳去那一屏」换成「原地展开」，展开态渲染
+                完整对照卡（.lite-gap-card 家族类名原样保留，B/C 组门的选择器合同不破）。
                 🔴 claim 走 gapClaimText（B-2 修复）：summary 是真自述句才引原文，是标题/负责人这类
                 元信息结构行就退回本地化的机械状态读出，绝不让一句标题冒充「文件里的说法」。 */}
             <section className="lite-home-block lite-home-gaps" aria-label={t.lite2.homeGapsTitle}>
@@ -701,16 +743,139 @@ export function HomeScreen() {
                     {fill(t.lite2.homeGapsCount, { count: gapsActive.length })}
                   </span>
                 ) : null}
-                <button
-                  type="button"
-                  className="lite-home-block-link"
-                  onClick={() => goScreen('closerlook')}
-                >
-                  {t.lite2.homeGapsLink} →
-                </button>
+                {gapsTotal > 0 ? (
+                  <button
+                    type="button"
+                    className="lite-home-block-link lite-home-gap-expand"
+                    aria-expanded={gapsOpen}
+                    onClick={() => setGapsOpen((open) => !open)}
+                  >
+                    {gapsOpen ? t.lite2.homeGapsCollapse : t.lite2.homeGapsExpand}{' '}
+                    <span aria-hidden="true">{gapsOpen ? '▴' : '▾'}</span>
+                  </button>
+                ) : null}
               </div>
               {gapsTotal === 0 ? (
                 <p className="lite-home-quiet">{t.lite2.homeGapsEmpty}</p>
+              ) : gapsOpen ? (
+                <>
+                  {/* ── 展开态 = 原「值得注意」屏的正文（#63 迁入，DOM 类名逐字保留）─────
+                      对照卡（claim/evidence 双栏 + 负责人 + 四动作）→ 实时预告 → 历史折叠。
+                      key 带下标：跨文档重复项目会产出同 id 的 gap（后端 issue #10），裸 id 撞键；
+                      data-gap-id 仍是裸 id——门按它找卡（assertGapsResolve），别把下标混进去。 */}
+                  {gapsActive.length > 0 ? (
+                    <ol className="lite-gap-list">
+                      {gapsActive.map((gap, idx) => (
+                        <li key={`${gap.id}_${idx}`} className="lite-gap-card" data-gap-id={gap.id}>
+                          <div className="lite-gap-compare">
+                            <div className="lite-gap-pane lite-gap-pane-claim">
+                              <p className="lite-badge lite-gap-pane-label">{t.lite2.gapCardClaimLabel}</p>
+                              <p className="lite-gap-pane-text">{gapClaimText(gap, t.lite2)}</p>
+                            </div>
+                            <div className="lite-gap-pane lite-gap-pane-evidence">
+                              <p className="lite-badge lite-gap-pane-label">{t.lite2.gapCardEvidenceLabel}</p>
+                              <p className="lite-gap-pane-text">{gap.evidence}</p>
+                            </div>
+                          </div>
+                          <div className="lite-gap-meta">
+                            <button
+                              type="button"
+                              className="lite-gap-project-link"
+                              onClick={() => openDetail('project', gap.projectId)}
+                            >
+                              <span className="lite-gap-project-title">{gap.projectTitle}</span> →
+                            </button>
+                            <span className="lite-gap-owner">
+                              {/* 兜底在渲染层（Blockers 5c）：gapDerive 透传的是原值或空串。 */}
+                              {t.lite2.gapOwnerPrefix} {gap.ownerName || t.lite2.projectsUnknownValue}
+                            </span>
+                          </div>
+                          <div className="lite-gap-actions">
+                            <button type="button" className="lite-btn lite-btn--primary lite-gap-resolve" onClick={() => resolveGap(gap.id)}>
+                              {t.lite2.gapResolveLabel}
+                            </button>
+                            <button type="button" className="lite-btn lite-btn--ghost lite-gap-dismiss" onClick={() => dismissGap(gap.id)}>
+                              {t.lite2.gapDismissLabel}
+                            </button>
+                            <button type="button" className="lite-btn lite-btn--ghost lite-gap-ask" onClick={() => handleGapAsk(gap)}>
+                              {t.lite2.gapAskLabel} ↗
+                            </button>
+                            <button
+                              type="button"
+                              className="lite-btn lite-btn--soft lite-gap-addfollowup"
+                              disabled={gapFollowupIds.has(gap.id)}
+                              onClick={() => handleGapAddFollowup(gap)}
+                            >
+                              {gapFollowupIds.has(gap.id) ? t.lite2.followupAdded : t.lite2.gapAddFollowupLabel}
+                            </button>
+                          </div>
+                        </li>
+                      ))}
+                    </ol>
+                  ) : (
+                    <section className="lite-gap-empty" aria-label={t.lite2.gapEmptyAria}>
+                      <h2>{t.lite2.gapEmptyTitle}</h2>
+                      <p>{t.lite2.gapEmptyBody}</p>
+                    </section>
+                  )}
+
+                  {/* 0721 对齐棒 · Danny 2C 拍板：实时分析不做名字（现功能是离线文档对照），
+                      页内用条件时态预告「连接公司数据后变实时」。随 #63 原样迁入。 */}
+                  <aside className="lite-gap-realtime-note" data-realtime-note="">
+                    <p className="lite-gap-realtime-title">{t.lite2.gapRealtimeTitle}</p>
+                    <p className="lite-gap-realtime-body">{t.lite2.gapRealtimeBody}</p>
+                  </aside>
+
+                  {gapHistoryCount > 0 ? (
+                    <section className="lite-gap-history">
+                      <button
+                        type="button"
+                        className="lite-gap-history-toggle"
+                        aria-expanded={gapHistoryOpen}
+                        onClick={() => setGapHistoryOpen((open) => !open)}
+                      >
+                        {t.lite2.gapHistoryToggleLabel} · {gapHistoryCount}
+                        <span aria-hidden="true">{gapHistoryOpen ? '▴' : '▾'}</span>
+                      </button>
+                      {gapHistoryOpen ? (
+                        <ul className="lite-gap-history-list">
+                          {gapsResolved.map((gap) => (
+                            <li
+                              key={gap.id}
+                              className="lite-gap-history-item"
+                              data-gap-id={gap.id}
+                              data-gap-status="resolved"
+                            >
+                              <span className="lite-gap-history-title">{gap.projectTitle}</span>
+                              <span className={classNames(['lite-badge', 'lite-gap-history-badge', 'is-resolved'])}>
+                                {t.lite2.gapResolvedBadge}
+                              </span>
+                              <button type="button" className="lite-btn lite-btn--ghost lite-gap-restore" onClick={() => restoreGap(gap.id)}>
+                                {t.lite2.gapRestoreLabel}
+                              </button>
+                            </li>
+                          ))}
+                          {gapsDismissed.map((gap) => (
+                            <li
+                              key={gap.id}
+                              className="lite-gap-history-item"
+                              data-gap-id={gap.id}
+                              data-gap-status="dismissed"
+                            >
+                              <span className="lite-gap-history-title">{gap.projectTitle}</span>
+                              <span className={classNames(['lite-badge', 'lite-gap-history-badge', 'is-dismissed'])}>
+                                {t.lite2.gapDismissedBadge}
+                              </span>
+                              <button type="button" className="lite-btn lite-btn--ghost lite-gap-restore" onClick={() => restoreGap(gap.id)}>
+                                {t.lite2.gapRestoreLabel}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+                    </section>
+                  ) : null}
+                </>
               ) : (
                 <>
                   {/* 三态筛选 chip + 每态计数（纯前端分桶）。chip 是带 aria-pressed 的按钮，
