@@ -72,7 +72,8 @@ export interface GapCard {
 // Render-layer helper: the claim column's display text. Genuine self-report → verbatim summary;
 // otherwise → a localized, mechanical readout of the self-reported status (B-2 fallback). Kept out
 // of deriveGaps so the derivation stays i18n-free; `copy` = t.lite / t.lite2 (both satisfy
-// ProjectStatusCopy). Used by CloserLookScreen (/gaps) and the home gap rail alike.
+// ProjectStatusCopy). Used by the home gap block — summary rows and expanded comparison
+// cards alike (#63: the standalone CloserLookScreen retired; the cards live on /home now).
 export function gapClaimText(gap: GapCard, copy: ProjectStatusCopy): string {
   return gap.claim || projectStatusText(gap.claimStatusRaw, copy)
 }

@@ -42,7 +42,8 @@ const REPORT_DIR = join(HERE, '..', 'reports', 'ui-sweep')
 // files-hub-0729/01 · 'files' 追加在末尾：这个数组是「哪些屏会被采样」的唯一名单，
 // 漏掉一屏不会红、只会**永远不采样它**（假绿）。资料库屏是 t.upload.* 那 38 个键在
 // 07-29 之后唯一的落屏点（上传面板已从团队屏撤走），漏了等于整族文案无人扫。
-const V2_SCREENS = ['home', 'team', 'projects', 'room', 'followups', 'notes', 'closerlook', 'playbooks', 'vision', 'files']
+// #63（merge-closerlook）· 'closerlook' 出列：屏已退休，对照卡并进 home 的差距摘要块。
+const V2_SCREENS = ['home', 'team', 'projects', 'room', 'followups', 'notes', 'playbooks', 'vision', 'files']
 const LOOKS = ['aurora', 'paper']
 const VIEWPORTS = [
   { name: 'desktop', width: 1440, height: 900, focusProbe: true },
