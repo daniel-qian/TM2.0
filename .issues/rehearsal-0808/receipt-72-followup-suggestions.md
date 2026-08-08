@@ -106,7 +106,8 @@
 | A 区（31 道，含 at-references 56 判据、room-conversation 42 判据） | **31/31 绿** |
 | B · data-boundary | **绿** |
 | B · null-owner | **绿**——本 wave 无并行线，直接在标准端口 5173/8137 跑全电池，把 wave1「null-owner 写死 5173 没跑」的缺口顺手补上（这次是真证据） |
-| B · visual-baseline | **电池内红（exit=1）＝无基线首写**（worktree 各持一份 gitignore 基线，0 张起步；首写后单独复跑 8/8 绿只证稳定不证零漂移——照碑记「worktree 里冻＝白冻」，零漂移在合 main 后的主检出对真基线证，见下） |
+| B · visual-baseline（worktree） | **电池内红（exit=1）＝无基线首写**（worktree 各持一份 gitignore 基线，0 张起步；首写后单独复跑 8/8 绿只证稳定不证零漂移——照碑记「worktree 里冻＝白冻」） |
+| B · visual-baseline（**主检出真比对**） | 合 main（ff 到 `0fb483b`）后在主检出跑：**8/8 全绿、52 张基线 mtime 哈希前后逐字节一致**（`f1b927cb…` == `f1b927cb…`，是比对不是重写）。chips 是运行态部件、快问收敛只动触发不动静息 DOM——静息态零漂移的预判成立 |
 | C 区（3 道） | **3/3 绿**；跑完 HEAD 仍在自己分支无 detach；runner 收尾重建的 dist 不带 api base（=生产域名），截图前已用本地 api base 重打 |
 | `verify-room-conversation.mjs` | **21 → 42 判据，42/42 绿**（#72 扩：chips 在场/点击即发+history/只挂尾轮/busy 闸/短答路 chips/收敛两头/撤卡重裁两半/卡随对话散场） |
 
