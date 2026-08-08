@@ -30,6 +30,7 @@ from avery.loop import MAX_ITERS, _delivered, _nudge
 from avery.tools import ToolContext, ToolError, cited_snippets, dispatch
 
 from . import contract
+from .history import history_conversation_turns
 
 
 def _anthropic_tools() -> list[dict]:
@@ -40,7 +41,8 @@ def _anthropic_tools() -> list[dict]:
 def stream_advice(brain: Brain, case: Case, system_prompt: str, *, agent_name: str,
                   scaffold: str, memory_dir: Path, enforce_chain: bool = True,
                   enforce_redline: bool = True, max_iters: int = MAX_ITERS, embedder=None,
-                  preamble: str | None = None) -> Iterator[dict[str, Any]]:
+                  preamble: str | None = None,
+                  history: list[Any] | None = None) -> Iterator[dict[str, Any]]:
     """Drive one (brain, case) and yield events. Event `type` is one of:
 
         started   — run metadata (agent, case_id, prompt)
@@ -60,16 +62,31 @@ def stream_advice(brain: Brain, case: Case, system_prompt: str, *, agent_name: s
     model's context unconditionally. Default None keeps the turn byte-identical to run_loop's
     (test_service_contract parity rides on that default). The started event / transcript
     `prompt` stays the manager's own words — the preamble is context, not the question.
+
+    #71 `history`: the earlier turns of THIS conversation, prepended as plain user/assistant
+    message pairs BEFORE the opening turn (quota + normalization in `service/history.py`,
+    which this function calls itself — see that module's docstring for why the engine does
+    not trust its caller). Default None prepends nothing, so the pre-#71 request produces the
+    pre-#71 conversation byte for byte.
+
+    How the two compose, since both add context and both are optional: `history` is EARLIER
+    TURNS (its own messages, before the opening one), `preamble` is THIS turn's pinned records
+    (appended inside the opening turn's text). Order in the final conversation is therefore
+    history…, then `opening = scenario + this question + preamble`. They never touch each
+    other's bytes; with both present the model sees the conversation so far, then the current
+    question with its @-referenced records attached. The reference block is built from THIS
+    turn's refs only — history turns do NOT re-inject their own (they already got their
+    answer; re-pinning old records would crowd out the current ones under the same quota).
     """
     ctx = ToolContext(memory_dir=Path(memory_dir), case_path=case.path, case_id=case.case_id,
                       embedder=embedder)
     opening = f"Scenario id: {case.case_id}\n\nThe leader asks:\n{case.prompt}"
     if preamble:
         opening += f"\n\n{preamble}"
-    conversation: list[dict] = [{
-        "role": "user",
-        "content": [{"type": "text", "text": opening}],
-    }]
+    conversation: list[dict] = [
+        *history_conversation_turns(history),
+        {"role": "user", "content": [{"type": "text", "text": opening}]},
+    ]
 
     steps: list[dict] = []
     nudged_chain = nudged_redline = False

@@ -180,7 +180,8 @@ export function HomeScreen() {
   const markTriageDone = useFlow((s) => s.markTriageDone)
   const discardTriage = useFlow((s) => s.discardTriage)
   const restoreTriage = useFlow((s) => s.restoreTriage)
-  const setComposerDraft = useFlow((s) => s.setComposerDraft)
+  // #69 · 卡片入口一律走 hint 通道（灰提示，不占正文）——正文通道只剩悬浮胶囊那一处。
+  const setComposerHint = useFlow((s) => s.setComposerHint)
   // feat-058 · 应用内草稿框（弹层本体常驻挂在壳层 Lite2App，这里只负责开框）。
   const openDraft = useDraft((s) => s.openDraft)
   const [triageDrawerOpen, setTriageDrawerOpen] = useState(false)
@@ -210,15 +211,15 @@ export function HomeScreen() {
   // feat-068 · 入参是 HandoffDisplay：composer 预填 / 跟进标题 / 草稿正文用的都是
   // **已本地化**的 action + evidence。
   function handleTakeToRoom(handoff: HandoffDisplay) {
-    // 分隔符用 " — " 而非换行：composer 是 <input type="text">，换行被剥掉后两段文字会
-    // 连成一坨不可读（feat-044 对抗验证发现的同根 bug，见下面 handleGapAsk 同款注释）。
+    // #69：这句话现在是**灰提示**不是正文——分隔符仍用 " — " 而非换行（placeholder 同样
+    // 只有一行，换行被剥掉后两段文字会连成一坨不可读；feat-044 对抗验证发现的同根 bug）。
     // #67 · 分诊卡多引用：涉及的项目+人员全带上（查不到的 id 丢弃；超出后端 REF_MAX_COUNT
     // 由后端既有封顶兜住，前端不另设限）。refs 空则整参不传＝纯文字预填，行为与旧口径同。
     const refs = [
       ...handoff.projectIds.map((id) => refOfProject(team, id)),
       ...handoff.personIds.map((id) => refOfPerson(team, id)),
     ].filter((r): r is AskRef => r !== null)
-    setComposerDraft(`${handoff.action} — ${handoff.evidence}`, refs.length > 0 ? refs : undefined)
+    setComposerHint(`${handoff.action} — ${handoff.evidence}`, refs.length > 0 ? refs : undefined)
     goScreen('room')
   }
 
@@ -233,14 +234,14 @@ export function HomeScreen() {
 
   // ── #63 · 对照卡的两个动作（自 CloserLookScreen 逐字迁入）──────────────────
   function handleGapAsk(gap: GapCard) {
-    // 预填含项目引用 + claim/evidence 上下文；正文不携带人身评判语（只谈项目自述与信号，
+    // 提示含项目引用 + claim/evidence 上下文；措辞不携带人身评判语（只谈项目自述与信号，
     // 不谈"你为什么没说实话"一类归咎措辞）。不自动提交——manager 审过再问，同分诊
     // "带进议事室"的 authorship 原则（feat-036）。
-    // 分隔符用 " — " 而非换行：composer 是 <input type="text">，换行被剥掉后三段文字会
-    // 连成一坨不可读（对抗验证 redline 路发现，2026-07-14）。
+    // 分隔符用 " — " 而非换行：placeholder 只有一行，换行被剥掉后三段文字会连成一坨
+    // 不可读（对抗验证 redline 路发现，2026-07-14）。
     // #67 · 差距卡带项目引用（gap.projectId → refOfProject，那把尺）。
     const ref = refOfProject(team, gap.projectId)
-    setComposerDraft(
+    setComposerHint(
       `${gap.projectTitle} — ${gapClaimText(gap, t.lite2)} — ${gap.evidence}`,
       ref ? [ref] : undefined,
     )
@@ -533,9 +534,13 @@ export function HomeScreen() {
                           // #67 · 决策卡走 q+refs 中继（Lite2App useRoomQueryRelay 已能吃）。
                           // kind 映射在 refOfSubject 里，这里不写 'project' 字面量——将来出新
                           // 主体类型，映射不认识就退回纯文字（refs=null 是删除语义，URL 不挂空键）。
+                          // #69 · 走 `qh`（提示键）而不是 `q`（正文键）：决策卡这句同样是
+                          // 模板产文，落地要是灰 placeholder。`q: null` 把可能残留的旧正文
+                          // 键从 URL 上删掉（carrySearch 对 null 是删除语义）。
                           const ref = refOfSubject(team, card.subject_type, card.subject_id)
                           goScreen('room', {
-                            q: `${card.subject_title} — ${card.reason}`,
+                            q: null,
+                            qh: `${card.subject_title} — ${card.reason}`,
                             refs: ref ? encodeRefsParam([ref]) : null,
                           })
                         }}

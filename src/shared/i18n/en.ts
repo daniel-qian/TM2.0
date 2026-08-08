@@ -1729,6 +1729,8 @@ export const en = {
     adviceEyebrow: "Avery's analysis",
     // 0729/03 分流短答：事实查询的一段话直答气泡（与判读卡互斥）。
     roomAnswerLabel: "Avery's answer",
+    // #71 · 会话流里每一轮的提问行标签。与 roomAnswerLabel 成对——一问一答两个 eyebrow。
+    roomTurnQuestionLabel: 'You asked',
     // issue #49 · 议事室历史（advise_runs 只读回看面）的入口/抽屉标题。
     roomHistoryTitle: 'Asked before',
     adviceReadTitle: 'The read',

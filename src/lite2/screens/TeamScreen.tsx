@@ -311,7 +311,7 @@ export function TeamScreen() {
   const goScreen = useLite((s) => s.goScreen)
   // #48 · 人员卡「去问 Avery」：预填走 flowStore.composerDraft（与分诊卡同一条通道），
   // 只预填不自动发。预填 = 姓名 + 读数句（localizePersonRead 的文档真派生，零编造）。
-  const setComposerDraft = useFlow((s) => s.setComposerDraft)
+  const setComposerHint = useFlow((s) => s.setComposerHint)   // #69 · 卡片入口＝灰提示通道
   // feat-050 · 会话不丢：空态下要分清"正在取回上次会话"和"真没有会话"。
   const restoring = useLite((s) => s.restoring)
   const restoreError = useLite((s) => s.restoreError)
@@ -435,10 +435,11 @@ export function TeamScreen() {
                 scoringEnabled={team.scoringEnabled}
                 onOpen={(id) => openDetail('person', id)}
                 onAsk={(person, read) => {
-                  // 分隔符 " — "（composer 是 input[type=text]，换行会被剥掉——feat-044 同根）。
+                  // 分隔符 " — "（placeholder 只有一行，换行会被剥掉——feat-044 同根）。
                   // #67 · person ref 同批带上（refOfPerson 那把尺，重名的 dupeTeam 随构造器来）。
+                  // #69 · 模板文字进 hint 通道（灰 placeholder），正文留空。
                   const ref = refOfPerson(team, person.id)
-                  setComposerDraft(`${person.name} — ${read}`, ref ? [ref] : undefined)
+                  setComposerHint(`${person.name} — ${read}`, ref ? [ref] : undefined)
                   goScreen('room')
                 }}
               />

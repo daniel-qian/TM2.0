@@ -1242,6 +1242,7 @@ export const zh: Dict = {
     "adviceCardAria": "Avery 的分析 —— 判读",
     "adviceEyebrow": "Avery 的分析",
     "roomAnswerLabel": "Avery 的回答",
+    "roomTurnQuestionLabel": "你问的",
     "roomHistoryTitle": "之前问过的",
     "adviceReadTitle": "判读",
     "adviceSignOff": "由你拍板",

@@ -26,6 +26,14 @@
 //   ⑨ #67 · 预填入口全量引用化：7 个入口逐个**真点**（团队屏人卡 / 项目屏卡面 / 项目详情
 //      浮层 / 人员详情浮层 / 晨间分诊卡（多引用）/ 差距卡 / 决策卡（goScreen refs 中继））→
 //      议事室 chip 在场 → 提交 → **POST /advise 请求体带对应 references[]**。
+//      #69 改判：同一批入口现在还要满足「正文空 + 灰提示带入口上下文 + 发送键置灰」，
+//      提交后 situation **不含**提示文字（提示是提示，不是替 manager 打的字）。
+//
+// ## #71 改判（会话流）
+// 议事室的对话在**离开屏时清空**（票面拍板：session 内连续，离开/刷新即结束）。本门里
+// 每次 goScreen 走开再回来，议事室都回到空态——⑧(a) 的「运行态宿主」因此要**当场问一句**
+// 造出来，不能再指望上一段留下的 run 还挂在那儿。同理 submitRoom 必须自己打字：
+// #69 之后入口带来的是 placeholder，输入框是空的，空文本发送键 disabled，光按 Enter 发不出去。
 //
 // ## 怎么跑
 // 🔴 **上传型门**（真发 POST /ingest 造 context）；**绝不能排在 C 区之后**（dist 被 C 区
@@ -74,6 +82,15 @@ const waitForPosts = async (n, ms = 20000) => {
   }
   return false
 }
+// #71：上一轮还在流时发送键是 disabled 的（对齐 codex/claude：生成中不收新消息）。
+// 同一次进屋里连问两发之前必须等它落定，否则第二发的 Enter 会被那个闸挡掉——
+// 那是**被测行为正常工作**，不是 bug，门自己要遵守它。
+const waitRoomSettled = (ms = 30000) => page.waitForFunction(
+  (seam) => {
+    const turns = window[seam].getState().turns ?? []
+    if (turns.length === 0) return true
+    return ['complete', 'error'].includes(turns[turns.length - 1].run.status)
+  }, SEAM, { timeout: ms }).then(() => true).catch(() => false)
 
 // ── ⓪ 铺语料（store 只在这一段当搬运工；被测部件从①起全走真键盘）────────────────────────
 await page.evaluate(async ({ files, seam }) => {
@@ -110,6 +127,13 @@ await page.evaluate((seam) => window[seam].getState().goScreen('room'), SEAM)
 await page.waitForTimeout(600)
 const input = () => page.locator('.lite-room .nexus-followup-composer input[type="text"]')
 rec('① 自证：议事室常驻 composer 在屏上', (await input().count()) === 1)
+// #69 · 无预填时的默认提示——⑨ 用它当"这条提示确实来自入口"的对照（只判非空会被
+// 「提示恒等于默认文案」的假实现蒙混过去）。
+const DEFAULT_PLACEHOLDER = await page.evaluate(() =>
+  document.querySelector('.lite-room .nexus-followup-composer input[type="text"]')
+    ?.getAttribute('placeholder') ?? '')
+rec('① 自证：默认 placeholder 采到了（⑨ 的对照基准）', DEFAULT_PLACEHOLDER.length > 0,
+  JSON.stringify(DEFAULT_PLACEHOLDER))
 
 await input().click()
 await input().pressSequentially('@林', { delay: 40 })
@@ -193,7 +217,9 @@ rec('③ 织文兜底在：situation 同时带问题原文 + 「涉及：」+ �
   JSON.stringify(post1?.situation ?? null))
 
 // ── ④ 无引用：请求体不带 references 键（additive，absent≠[]）───────────────────────────
-await page.waitForTimeout(800)
+// #71：同一次进屋里连问第二发，先等上一轮落定（running 时发送键 disabled）。
+rec('④ 自证：上一轮已落定（#71 的 busy 闸放行）', await waitRoomSettled())
+await input().click()
 await input().pressSequentially('下周谁最需要我搭把手', { delay: 20 })
 await input().press('Enter')
 const gotSecond = await waitForPosts(2)
@@ -320,8 +346,15 @@ const clearInputEl = (sel) => page.evaluate((s) => {
 const ROOM_INPUT = '.lite-room .nexus-followup-composer input[type="text"]'
 
 // (a) 议事室运行态 @ 1280×900（bootPage 默认视口）
+// 🔴 #71：离开议事室 = 这场对话结束（turns 清空），所以「运行态宿主」得**当场问一句**造出来
+//    ——⑦ 那一段刚把人带去 home，上一段留下的对话已经散了。
 await page.evaluate((seam) => window[seam].getState().goScreen('room'), SEAM)
 await page.waitForTimeout(600)
+await input().click()
+await input().pressSequentially('这周有什么要紧的', { delay: 20 })
+await input().press('Enter')
+await waitForPosts(advisePosts.length + 1)
+await waitRoomSettled()
 rec('⑧ 自证：议事室在运行态（对话已开始，composer 在场景底）',
   (await page.locator('.lite-room-scroll').count()) === 1)
 await input().click()
@@ -415,12 +448,48 @@ const roomChips = () => page.evaluate(() =>
     id: c.getAttribute('data-ref-id'),
     team: c.querySelector('.lite-ref-chip-team')?.textContent ?? '',
   })))
+// #69 · 进屋那一刻 composer 的四件事：正文 / 灰提示 / 发送键 / chip。
+const composerEntry = () => page.evaluate(() => {
+  const inp = document.querySelector('.lite-room .nexus-followup-composer input[type="text"]')
+  const btn = document.querySelector('.lite-room .nexus-followup-composer button[type="submit"]')
+  return {
+    value: inp?.value ?? null,
+    placeholder: inp?.getAttribute('placeholder') ?? '',
+    disabled: !!btn?.disabled,
+    chips: document.querySelectorAll('.lite-room .lite-ref-chip').length,
+  }
+})
+// #69 逐入口的四合一判据。`context` = 这个入口必须出现在提示里的那个词（分诊卡的成句是
+// 后端派生的，拿不到稳定词——那一路传 null，退回"提示非空且不等于默认文案"）。
+const TYPED = '这件事我该怎么推进'
+const recEntryPrefill = (label, st, context) => {
+  const ph = st.placeholder ?? ''
+  const distinct = ph.length > 0 && ph !== DEFAULT_PLACEHOLDER
+  const hasContext = context === null ? distinct : ph.includes(context)
+  rec(`⑨ 入口·${label} · #69：正文**空**、灰提示带入口上下文、发送键置灰、chip 在场`,
+    st.value === '' && hasContext && distinct && st.disabled && st.chips >= 1,
+    JSON.stringify(st))
+}
+// #69 · 提交后 situation 不许带提示文字。判据落在提示的**尾段**（模板是「主体 — 理由」，
+// 尾段是理由）——不能用开头：开头是主体名，而 refs 的织文「涉及：主体名」本来就该在
+// situation 里，拿它当判据是自己给自己下套。
+const recNoHintInBody = (label, ph, post) => {
+  const tail = (ph ?? '').replace(/…$/, '').slice(-12)
+  const sit = post?.situation ?? ''
+  rec(`⑨ 入口·${label} · #69：提交的 situation 只有 manager 打的字（不含灰提示原文）`,
+    tail.length >= 8 && sit.startsWith(TYPED) && !sit.includes(tail),
+    JSON.stringify({ tail, situation: sit.slice(0, 80) }))
+}
+// #71：进屋前一定要等上一轮落定——`goScreen` 走开会 clearTurns + abort，但门自己的
+// waitForPosts 只等到"请求发出去了"，落定与否还得单独等。
 const submitRoom = async () => {
   const n = advisePosts.length
   await input().click()
+  // #69：入口带来的是 placeholder，输入框是空的（发送键 disabled）——manager 得自己打字。
+  await input().pressSequentially(TYPED, { delay: 15 })
   await input().press('Enter')
   const got = await waitForPosts(n + 1)
-  await page.waitForTimeout(500)
+  await waitRoomSettled()
   return got ? advisePosts[n] : null
 }
 
@@ -450,15 +519,18 @@ await page.waitForTimeout(600)
 await page.locator('.home-person-card', { hasText: '林小满' }).first().locator('.lite-card-ask').click()
 await page.waitForTimeout(600)
 let chips = await roomChips()
+let st = await composerEntry()
 rec('⑨ 入口·团队屏人卡：chip 在场且**带部门**（重名消歧走 refOfPerson 那把尺）',
   chips.length === 1 && chips[0].kind === 'person' &&
   [ids.frontId, ids.houseId].includes(chips[0].id) && chips[0].team !== '',
   JSON.stringify(chips))
+recEntryPrefill('团队屏人卡', st, '林小满')
 let entryPost = await submitRoom()
 rec('⑨ 入口·团队屏人卡：POST /advise 带 person reference（id=点的那张卡）',
   !!entryPost && Array.isArray(entryPost.references) && entryPost.references.length === 1 &&
   entryPost.references[0].kind === 'person' && entryPost.references[0].id === chips[0]?.id,
   JSON.stringify(entryPost?.references ?? null))
+recNoHintInBody('团队屏人卡', st.placeholder, entryPost)
 
 // 入口 2 · 项目屏卡面
 await page.evaluate((seam) => window[seam].getState().goScreen('projects'), SEAM)
@@ -466,7 +538,10 @@ await page.waitForTimeout(600)
 await page.locator('.lite-project-card', { hasText: '别墅套餐推广' }).first().locator('.lite-card-ask').click()
 await page.waitForTimeout(600)
 chips = await roomChips()
+st = await composerEntry()
+recEntryPrefill('项目屏卡面', st, '别墅套餐推广')
 entryPost = await submitRoom()
+recNoHintInBody('项目屏卡面', st.placeholder, entryPost)
 rec('⑨ 入口·项目屏卡面：chip 在场且 POST 带 project reference（id=别墅套餐）',
   chips.length === 1 && chips[0].kind === 'project' && chips[0].id === ids.villaId &&
   !!entryPost && entryPost.references?.length === 1 && entryPost.references[0].kind === 'project' &&
@@ -484,7 +559,10 @@ await page.waitForTimeout(600)
 await page.locator('.lite-detail-ask').click()
 await page.waitForTimeout(600)
 chips = await roomChips()
+st = await composerEntry()
+recEntryPrefill('项目详情浮层', st, '别墅套餐推广')
 entryPost = await submitRoom()
+recNoHintInBody('项目详情浮层', st.placeholder, entryPost)
 rec('⑨ 入口·项目详情浮层：chip 在场且 POST 带 project reference',
   chips.length === 1 && chips[0].kind === 'project' && chips[0].id === ids.villaId &&
   !!entryPost && entryPost.references?.length === 1 && entryPost.references[0].id === ids.villaId,
@@ -499,7 +577,10 @@ await page.waitForTimeout(600)
 await page.locator('.lite-detail-ask').click()
 await page.waitForTimeout(600)
 chips = await roomChips()
+st = await composerEntry()
+recEntryPrefill('人员详情浮层', st, '林小满')
 entryPost = await submitRoom()
+recNoHintInBody('人员详情浮层', st.placeholder, entryPost)
 rec('⑨ 入口·人员详情浮层：chip 带部门且 POST 带 person reference（id=客房部那位）',
   chips.length === 1 && chips[0].kind === 'person' && chips[0].id === ids.houseId && chips[0].team === '客房部' &&
   !!entryPost && entryPost.references?.length === 1 && entryPost.references[0].id === ids.houseId,
@@ -511,7 +592,11 @@ await page.waitForTimeout(600)
 await page.locator('.lite-triage-room').first().click()
 await page.waitForTimeout(600)
 chips = await roomChips()
+st = await composerEntry()
+// 分诊卡的成句由后端信号派生，没有稳定词可断——退回"提示非空且不是默认文案"。
+recEntryPrefill('晨间分诊卡', st, null)
 entryPost = await submitRoom()
+recNoHintInBody('晨间分诊卡', st.placeholder, entryPost)
 {
   const h = ids.handoffs[0]
   const expected = [
@@ -538,7 +623,10 @@ rec('⑨ 自证：亲子乐园的差距卡在（自报稳/真有卡点的矛盾�
 await page.locator('.lite-gap-card', { hasText: '亲子乐园改造' }).locator('.lite-gap-ask').click()
 await page.waitForTimeout(600)
 chips = await roomChips()
+st = await composerEntry()
+recEntryPrefill('差距卡', st, '亲子乐园改造')
 entryPost = await submitRoom()
+recNoHintInBody('差距卡', st.placeholder, entryPost)
 rec('⑨ 入口·差距卡「直接问本人」：chip 在场且 POST 带 project reference（id=亲子乐园）',
   chips.length === 1 && chips[0].kind === 'project' && chips[0].id === ids.parkId &&
   !!entryPost && entryPost.references?.length === 1 && entryPost.references[0].id === ids.parkId,
@@ -555,7 +643,12 @@ rec('⑨ 自证：别墅套餐的决策卡在（受阻项目必过定级引擎�
 await decisionBtn.click()
 await page.waitForTimeout(800)
 chips = await roomChips()
+st = await composerEntry()
+// #69 · 决策卡走 URL 中继：`qh`（提示键）而不是 `q`（正文键）——中继端漏改的形态就是
+// 这条判据上「正文非空」。
+recEntryPrefill('决策卡', st, '别墅套餐推广')
 entryPost = await submitRoom()
+recNoHintInBody('决策卡', st.placeholder, entryPost)
 rec('⑨ 入口·决策卡：中继落 /room、chip 在场且 POST 带 project reference（refs 走 URL 中继）',
   chips.some((c) => c.kind === 'project' && c.id === ids.villaId) && !!entryPost &&
   (entryPost.references ?? []).some((r) => r.kind === 'project' && r.id === ids.villaId),

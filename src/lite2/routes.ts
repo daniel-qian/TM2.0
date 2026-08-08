@@ -157,8 +157,11 @@ export function baseScreenFrom(pathname: string, state: unknown): LiteScreen {
 // 「这次进屋要问什么」，不是会话状态，带到 /notes 再带回来会诈尸重放。
 // `refs` = `/room?refs=<JSON>`（#64：悬浮胶囊里选好的 @ 引用随 q 一起进屋）——同一条
 // 「这次进屋要带谁」的接力语义，同样一次性（编解码在 askRefs.ts）。
+// `qh` = `/room?qh=<提示>`（#69：决策卡那类**卡片模板产的**文字，落地是输入框的灰色
+// placeholder 而不是正文）。与 `q` 分成两个键而不是加个 `qmode`：中继两端各只认自己那个
+// 键，就没有"忘了带模式位 → 模板文字被当成用户原话发出去"这个失手位。
 // 其余一切参数（v/mode/look/lang/showInactive/transport/未来新增的）一律跟着走。
-const EPHEMERAL_PARAMS = ['q', 'refs'] as const
+const EPHEMERAL_PARAMS = ['q', 'qh', 'refs'] as const
 
 /**
  * 取当前 URL 的 search，去掉一次性参数，叠加 extra，返回可直接拼在路径后的 `?...`（或空串）。

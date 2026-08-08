@@ -861,6 +861,60 @@
   overflow: visible;
 }
 
+/* ── #71 · 会话流：一轮一个 <article>，按提问顺序堆叠 ──────────────────────────────
+   board 从「一轮的零件清单」变成「若干轮的列表」。上面那几条解除 story 绝对定位的
+   后代规则（.nexus-terminal / .nexus-brief-hud / .lite-room-card）**一条不动**——它们
+   都是后代选择器，多包一层 article 照样命中。这里只补 article 自己的纵向节奏。
+   🔴 刻意不给历史轮压暗/降透明度：verify-contrast-smalltext 按真实计算色量对比度，
+   「视觉上退一档」的代价是一批小字判据同时变红——分主次靠间距与问题行的边框，不靠灰。 */
+.lite2-shell .lite-room-turn {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 20px;
+}
+
+/* 提问行：manager 自己那句话。与下面「Avery 的回答」卡成一问一答两块。 */
+.lite2-shell .lite-room-turn-question {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 18px;
+  border: 1px solid var(--rule);
+  border-radius: 14px;
+  background: rgba(var(--lite2-accent-rgb), 0.08);
+}
+
+.lite2-shell .lite-room-turn-question-text {
+  color: var(--ink);
+  font-size: 1rem;
+  line-height: 1.55;
+  /* 长问题照原样折行；空白保留让「A — B — C」这类模板句读得出分段。 */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.lite2-shell .lite-room-turn-refs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 2px 0 0;
+}
+
+/* 值与 .lite-ref-chip 同规格（那套颜色/字号过过对比度门）——但**类名刻意不同**：
+   `.lite-ref-chip` 是 composer 里那些可删的活 chip，好几道门按它的数量断言"选中了/
+   删掉了"，历史轮再长出同类名节点会把那批判据整批毒化。 */
+.lite2-shell .lite-room-turn-ref {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: rgba(var(--lite2-accent-rgb), 0.12);
+  color: var(--ink);
+  font-size: 12px;
+}
+
 /* ── feat-059 · 议事室简化输出（PRD G7）────────────────────────────────────────
    默认四相叙事，「展开原始流」切回原终端（原始流 DOM 一行不改）。四相由真事件驱动，
    没走到的相位灰着（.is-pending）——这里没有任何计时器/假进度条可以调。

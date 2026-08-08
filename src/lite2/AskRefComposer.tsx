@@ -85,6 +85,7 @@ export function AskRefComposer({
   submitLabel,
   submitAriaLabel,
   disableEmptySubmit = false,
+  busy = false,
   initialValue,
   initialRefs,
   autoFocusInput = false,
@@ -100,7 +101,14 @@ export function AskRefComposer({
   submitClassName: string
   submitLabel: ReactNode
   submitAriaLabel?: string
+  // #69 · 空文本时把发送键置灰。此前默认 false＝键恒可点，点了走 handleSubmit 的静默
+  // return——「空着点发送什么也没发生」那个坑就是这么来的。
   disableEmptySubmit?: boolean
+  // #71 · 上一轮还在流的时候把发送键置灰（对齐 codex/claude：生成中不收新消息）。
+  // 为什么不是"打断上一轮"：中止的流会在微任务里被收成 'complete'（transport abort 走
+  // onDone() 无 error），那一轮在会话流里就成了一条"看着答完了其实被砍了"的假记录；
+  // 要诚实地表达"被打断"得新起一套状态与文案，本票不做。
+  busy?: boolean
   initialValue?: string
   initialRefs?: AskRef[]
   autoFocusInput?: boolean
@@ -265,7 +273,10 @@ export function AskRefComposer({
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const text = draft.trim()
-    if (!text) return
+    // 🔴 这两句是**兜底**不是主闸：主闸在下面 submit 键的 disabled 上（#69 判据落在
+    // 那个属性上）。留着是因为表单还能被 Enter 隐式提交——Chrome 在默认提交键 disabled
+    // 时会拦掉隐式提交，但这个行为在浏览器间不是铁板一块，键盘那条路不能只靠它。
+    if (busy || !text) return
     onSubmit(text, refs)
     setDraft('')
     setRefs([])
@@ -402,7 +413,10 @@ export function AskRefComposer({
         type="submit"
         className={submitClassName}
         aria-label={submitAriaLabel}
-        disabled={disableEmptySubmit ? draft.trim() === '' : undefined}
+        // #69/#71：空文本置灰（`disableEmptySubmit`）或上一轮还在跑时置灰（`busy`）。
+        // 两者都不成立时给 undefined 而不是 false——静息态 DOM 上一个属性都不多长，
+        // 像素基线与 button-family 的既有判据都锚在那个静息态上。
+        disabled={busy || (disableEmptySubmit && draft.trim() === '') ? true : undefined}
       >
         {submitLabel}
       </button>

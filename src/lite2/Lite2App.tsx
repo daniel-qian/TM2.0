@@ -255,11 +255,15 @@ function useRoomQueryRelay(screen: LiteScreen) {
     relayedKey.current = key
     const params = new URLSearchParams(search)
     const q = params.get('q')?.trim()
-    // #64：refs 坏形状解码成 []（URL 是用户可改的输入）——只有 q/refs 至少一个真有货才预填，
-    // 免得空中继把用户正在打的草稿清掉。
+    // #69：`qh` = 卡片模板产的提示（落地是灰 placeholder），`q` = 用户自己打的原话
+    //（落地是输入框正文）。两个键各走各的 setter，中继层不做语义判断。
+    const qh = params.get('qh')?.trim()
+    // #64：refs 坏形状解码成 []（URL 是用户可改的输入）——只有 q/qh/refs 至少一个真有货
+    // 才预填，免得空中继把用户正在打的草稿清掉。
     const refs = decodeRefsParam(params.get('refs'))
-    if (q || refs.length > 0) {
-      useFlow.getState().setComposerDraft(q ?? '', refs.length > 0 ? refs : undefined)
-    }
+    const wireRefs = refs.length > 0 ? refs : undefined
+    // 两个都带（URL 是用户可改的输入，没法排除）时正文优先——它是"更强"的那一种意图。
+    if (q) useFlow.getState().setComposerDraft(q, wireRefs)
+    else if (qh || refs.length > 0) useFlow.getState().setComposerHint(qh ?? '', wireRefs)
   }
 }

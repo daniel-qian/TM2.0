@@ -74,6 +74,15 @@ export interface AdviseReference {
   label: string
 }
 
+// #71 · 会话流的一轮历史（前几轮的问题 + 终局产物摘要）。轻量到只有两段文字：
+// 前端不把整份判读卡塞回去（那是几 KB 的结构体），后端也只需要"上一轮问了什么、答出了
+// 什么"这一句就够接住追问。配额（轮数/字数）在 askHistory.ts，后端 service/history.py
+// 有一份权威的同款闸——两处都要改。
+export interface AdviseHistoryTurn {
+  question: string
+  answer: string
+}
+
 export interface AdviseRequest {
   situation: string
   title?: string
@@ -84,6 +93,10 @@ export interface AdviseRequest {
   // #64 · 可选（additive）：没有引用时**整键不发**（absent≠none——空数组和「没带」在
   // 后端是同一回事，但请求体里不多送一个键）。
   references?: AdviseReference[]
+  // #71 · 可选（additive，同 references 的纪律）：本场会话前几轮。第一问不带这个键；
+  // 旧前端一个字节都不改也照常工作（后端 default None）。**不落库、不持久化**——它只
+  // 活在这次请求里。
+  history?: AdviseHistoryTurn[]
 }
 
 // 🔴 一处补全，不要在每个调用点各写一遍。

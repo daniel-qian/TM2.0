@@ -135,6 +135,16 @@ class AdviseReference(BaseModel):
     label: str = Field("", description="display label; also the resolve fallback + weave text.")
 
 
+class AdviseHistoryTurn(BaseModel):
+    """#71 · one earlier turn of this Room conversation. Both fields are tolerant plain str
+    with a default (same D11 discipline as AdviseReference): a malformed history entry
+    degrades to "that turn contributes nothing", never to a rejected question. The quota and
+    the drop/truncate rules live in `service/history.py`, not here — this model only says
+    what shape the wire carries."""
+    question: str = Field("", description="What the manager asked that turn (their own words).")
+    answer: str = Field("", description="That turn's terminal artifact, summarized to one blob.")
+
+
 class AdviseRequest(BaseModel):
     situation: str = Field(..., min_length=1,
                            description="The manager's typed management situation + the ask.")
@@ -154,6 +164,14 @@ class AdviseRequest(BaseModel):
     references: list[AdviseReference] | None = Field(
         None, description="#64 @-references: [{kind, id, label}]; readings of these entities are "
                           "pinned into the model context, quota-capped.")
+    # #71 · additive optional, same discipline as `references` above: a pre-#71 client omits
+    # the key and gets the pre-#71 prompt byte for byte (the whole existing pytest suite
+    # passing unchanged IS that guarantee's gate). NOT persisted — `advise_runs` still stores
+    # one row per question with its own terminal artifact, so this ticket is zero-migration.
+    history: list[AdviseHistoryTurn] | None = Field(
+        None, description="#71 conversation so far: [{question, answer}], oldest first. "
+                          "Prepended as plain user/assistant turns before this question; "
+                          "quota-capped and truncation-marked server-side.")
 
 
 def _system_prompt(locale: str = DEFAULT_LOCALE) -> str:
@@ -196,7 +214,8 @@ def _build_reference_block(company_context_id: str | None, references) -> str | 
         return None
 
 
-def _run_events(sit: live_input.LiveSituation) -> tuple[Iterator[dict[str, Any]], Any]:
+def _run_events(sit: live_input.LiveSituation,
+                history: list[Any] | None = None) -> tuple[Iterator[dict[str, Any]], Any]:
     """Build the live case, pick the brain, and return the engine event iterator + the case (so
     the caller can discard the temp file when done). Brain-config errors surface as an error event
     iterator rather than a 500, keeping the SSE contract stable."""
@@ -250,7 +269,12 @@ def _run_events(sit: live_input.LiveSituation) -> tuple[Iterator[dict[str, Any]]
         scaffold="full", memory_dir=memory_dir, enforce_chain=True, enforce_redline=True,
         embedder=embedding_factory.make_embedder(),  # None -> keyword recall (key stays server-side)
         # #64: @ 引用的注入块钉进开场 user 轮——「保证进上下文」的兑现点（engine.py 该参注释）。
-        preamble=sit.reference_block)
+        preamble=sit.reference_block,
+        # #71: 本场会话的前几轮，作为独立的 user/assistant 轮排在开场轮**之前**。
+        # 刻意不塞进 LiveSituation：那个 dataclass 会被 build_live_case 写进 case 文件正文
+        # （read_case 读得到），而历史轮是**对话**不是**材料**——写进 case 等于把上一轮的
+        # 回答伪装成一份公司资料，recall/cite 会在上面引出处。
+        history=history)
     return events, case
 
 
@@ -409,7 +433,7 @@ def advise(req: AdviseRequest,
         company_context_id=req.company_context_id, locale=locale,
         # #64: authorize_context 已在上面把过门——这里解析引用只可能读到**本公司**的卡。
         reference_block=_build_reference_block(req.company_context_id, req.references))
-    events, case = _run_events(sit)
+    events, case = _run_events(sit, req.history)
     events = _with_ask_frame(events, req)   # feat-034: maybe one ask-draft frame after the manifest
 
     if req.stream:

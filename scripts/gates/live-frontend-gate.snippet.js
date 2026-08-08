@@ -157,7 +157,12 @@
  *   await __seedGate.assertTriageActions()           // triageActions: done -> drawer + count
  *                                                    // drop; discard -> disappears; take-to-
  *                                                    // room -> screen switches + composer
- *                                                    // pre-filled (all three re-use the FIRST
+ *                                                    // shows the card context as a GREY
+ *                                                    // PLACEHOLDER with an EMPTY value and a
+ *                                                    // disabled send key (#69, 2026-08-08 —
+ *                                                    // it used to pre-fill the value; chips
+ *                                                    // already carry who/what structurally)
+ *                                                    // (all three re-use the FIRST
  *                                                    // stub card by DOM order via restore-
  *                                                    // between-steps — as of feat-044 the stub
  *                                                    // corpus carries a SECOND blocker-bearing
@@ -1770,8 +1775,15 @@
       } catch (e) { /* fall through */ }
 
       // ── 3) TAKE TO THE ROOM ──
+      // ⚠ #69（2026-08-08 拍板）：「带进议事室」不再往输入框里塞正文——那句模板文字改成
+      //   输入框的**灰色 placeholder**（chips 已经把"问的是谁/哪个项目"结构化带过去了，
+      //   正文里再抄一遍只是让 manager 多按几次退格）。所以判据从 `input.value` 挪到
+      //   `input.placeholder`，并顺手把「正文确实是空的」和「空文本发送键置灰」一起钉住：
+      //   只判 placeholder 的话，一个"两边都填"的半吊子实现照样绿。
       let roomWorks = false;
+      let composerHint = '';
       let composerValue = '';
+      let sendDisabled = false;
       const cardForRoom = $$('.home-handoff').find((c) => ((c.querySelector('h3') || {}).textContent || '').trim() === title);
       if (cardForRoom) {
         const roomBtn = $('.lite-triage-room', cardForRoom);
@@ -1781,8 +1793,11 @@
             await poll(() => ($('.nexus-followup-composer input') ? true : null), 6000, 'room composer to mount');
           } catch (e) { /* fall through */ }
           const input = $('.nexus-followup-composer input');
+          const send = $('.nexus-followup-composer button[type="submit"]');
+          composerHint = input ? (input.getAttribute('placeholder') || '') : '';
           composerValue = input ? input.value : '';
-          roomWorks = !!composerValue && composerValue.includes(title);
+          sendDisabled = !!(send && send.disabled);
+          roomWorks = composerValue === '' && !!composerHint && composerHint.includes(title) && sendDisabled;
         }
       }
 
@@ -1793,7 +1808,9 @@
         drawerHasItem,
         discardWorks,
         roomWorks,
-        composerValueSample: composerValue.slice(0, 120),
+        composerValue,
+        sendDisabled,
+        composerHintSample: composerHint.slice(0, 120),
         pass: doneWorks && drawerHasItem && discardWorks && roomWorks,
       };
       results.triageActions = out;
@@ -2178,21 +2195,30 @@
       const askBtn = $('.lite-gap-ask', card);
       if (!askBtn) return (results.gapsToAsk = { pass: false, error: 'no .lite-gap-ask button' });
       askBtn.click();
+      // ⚠ #69：同 assertTriageActions 那段——项目上下文落在**灰色 placeholder** 上，正文留空、
+      //   空文本发送键置灰。三件事一起判，防"两边都填"的半吊子实现蒙混过关。
       let switchedToRoom = false;
+      let composerHint = '';
       let composerValue = '';
+      let sendDisabled = false;
       try {
         await poll(() => ($('.lite-room') && $('.nexus-followup-composer input') ? true : null), 6000, 'room + composer to mount');
         switchedToRoom = true;
         const input = $('.nexus-followup-composer input');
+        const send = $('.nexus-followup-composer button[type="submit"]');
+        composerHint = input ? (input.getAttribute('placeholder') || '') : '';
         composerValue = input ? input.value : '';
+        sendDisabled = !!(send && send.disabled);
       } catch (e) { /* switchedToRoom stays false */ }
-      const containsProjectRef = !!composerValue && !!projectTitle && composerValue.includes(projectTitle);
+      const containsProjectRef = !!composerHint && !!projectTitle && composerHint.includes(projectTitle);
       const out = {
         projectTitle,
         switchedToRoom,
-        composerValueSample: composerValue.slice(0, 160),
+        composerValue,
+        sendDisabled,
+        composerHintSample: composerHint.slice(0, 160),
         containsProjectRef,
-        pass: switchedToRoom && containsProjectRef,
+        pass: switchedToRoom && containsProjectRef && composerValue === '' && sendDisabled,
       };
       results.gapsToAsk = out;
       return out;

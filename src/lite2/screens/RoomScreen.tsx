@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
-import { useLite } from '../store'
+import { useLite, type LiveTurn } from '../store'
 import { useFlow } from '../flowStore'
 import { useDict } from '../../shared/i18n/useDict'
 import type { Dict } from '../../shared/i18n'
@@ -218,22 +218,27 @@ function LiteThinkingFlow({ run, running }: { run: LiveRunState; running: boolea
 }
 
 // live 提问 composer（空态 + 运行后追问共用）。走 store.askLive → feat-015 /advise SSE。
-// feat-036：initialValue 承接分诊卡"带进议事室"的预填上下文（flowStore.composerDraft，
-// 挂载时读一次——只预填、不自动提交，manager 审过再问）。
+// feat-036：initialValue 承接"带进议事室"的预填上下文（flowStore.composerDraft，挂载时
+// 读一次——只预填、不自动提交，manager 审过再问）。
 // #64：换成共用的 AskRefComposer（@ 引用弹层 + chips）；提交层把 refs 结构化进
 // `askLive.references` 并织进 situation 文字兜底。DOM/类名与旧 LiteAskComposer 静息态等价。
+// #69：卡片入口的模板文字改走 placeholder（灰提示，不占正文）——正文通道只剩悬浮胶囊
+// （那是 manager 自己刚打完的原话，退成灰提示等于逼他到了议事室再打一遍）。
+// #69/#71：发送键在**空文本**或**上一轮还在跑**时置灰。
 function LiteAskComposer({
   placeholder,
   submitLabel,
   onAsk,
   initialValue,
   initialRefs,
+  busy,
 }: {
   placeholder: string
   submitLabel: string
   onAsk: (text: string, refs: AskRef[]) => void
   initialValue?: string
   initialRefs?: AskRef[]
+  busy?: boolean
 }) {
   const { t } = useDict()
   return (
@@ -247,8 +252,118 @@ function LiteAskComposer({
       idPrefix="room"
       initialValue={initialValue}
       initialRefs={initialRefs}
+      disableEmptySubmit
+      busy={busy}
       onSubmit={onAsk}
     />
+  )
+}
+
+// ── #71 · 会话流的一轮 ────────────────────────────────────────────────────────────────
+// 「问题行 + 分析过程 + 回答卡」按提问顺序堆叠（对齐 codex/claude 的 transcript 形态）。
+// 🔴 引用回显用 `.lite-room-turn-ref` 而**不是** `.lite-ref-chip`：后者是 composer 里那些
+//   可删的活 chip，好几道门按 `.lite-room .lite-ref-chip` 的**数量**断言"选中了/删掉了"，
+//   历史轮再长出同类名的节点会把那些判据整批毒化。
+function LiteTurnView({
+  turn,
+  isLast,
+  ask,
+  noteJustAdded,
+  onGoNotes,
+}: {
+  turn: LiveTurn
+  isLast: boolean
+  ask: boolean
+  noteJustAdded: boolean
+  onGoNotes: () => void
+}) {
+  const { t } = useDict()
+  const l = t.lite2
+  const run = turn.run
+  // 🔴 「在跑」只对尾轮成立：历史轮的 run 状态是它当时的定格，不该再有光标在闪。
+  const running = isLast && run.status === 'running'
+  const advice = run.advice
+
+  return (
+    <article className="lite-room-turn" data-room-turn={turn.id}>
+      <section className="lite-room-turn-question" aria-label={l.roomTurnQuestionLabel}>
+        <p className="eyebrow">{l.roomTurnQuestionLabel}</p>
+        {/* 回显的是 manager 自己打的那句原话——不是提交层织过「涉及：」的 situation。
+            引用另起一行出现在下面，比把名字塞回句子里更接近他当时看到的样子。 */}
+        <p className="lite-room-turn-question-text">{turn.question}</p>
+        {turn.refs && turn.refs.length > 0 ? (
+          <p className="lite-room-turn-refs">
+            {turn.refs.map((r) => (
+              <span
+                key={`${r.kind}-${r.id}`}
+                className={`lite-room-turn-ref is-${r.kind}`}
+                data-turn-ref={r.kind}
+                data-ref-id={r.id}
+              >
+                {r.label}
+              </span>
+            ))}
+          </p>
+        ) : null}
+      </section>
+
+      <LiteThinkingFlow run={run} running={running} />
+
+      {/* 实时状态条只挂尾轮：它说的是"此刻"，历史轮上摆一条就是假的。 */}
+      {isLast ? (
+        <div className="nexus-brief-hud">
+          <div className="nexus-brief-bar" aria-label={t.nexus.liveThinking}>
+            <span className="nexus-brief-bar-eyebrow">{t.nexus.liveThinking}</span>
+            <span className="nexus-brief-step">
+              {run.status === 'error'
+                ? t.nexus.liveError
+                : running
+                  ? t.nexus.liveRunning
+                  : t.nexus.liveReady}
+            </span>
+          </div>
+        </div>
+      ) : null}
+
+      {/* 0729/03 分流短答：事实查询的一段话直答（与判读卡互斥）。出处已由上方
+          分析过程面板的「依据 N 条原文」承载；追问入口就是屏底常驻 composer。 */}
+      {!advice && run.answer ? (
+        <div className="lite-room-card lite-room-answer">
+          <section className="lite-room-answer-card" aria-label={l.roomAnswerLabel}>
+            <p className="eyebrow">{l.roomAnswerLabel}</p>
+            <p className="lite-room-answer-text">{run.answer}</p>
+          </section>
+          {/* nudge 是「刚刚这一轮落了新笔记」的瞬态提示，只可能属于尾轮。 */}
+          {isLast && noteJustAdded ? (
+            <button type="button" className="lite-btn lite-btn--ghost lite-notes-nudge" onClick={onGoNotes}>
+              {l.notesNudge} →
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
+      {advice ? (
+        <div className="lite-room-card">
+          <LiteAdviceCard advice={advice} />
+          {/* feat-047 移植（feat-033）：advise 完成且后端确认新笔记落库才出 nudge
+              （丢弃则不出、不显占位）。样式对齐 .lite-metric-chip / .upload-source-chip
+              视觉族；点击切到 notes tab。 */}
+          {isLast && noteJustAdded ? (
+            <button type="button" className="lite-btn lite-btn--ghost lite-notes-nudge" onClick={onGoNotes}>
+              {l.notesNudge} →
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
+      {/* feat-034：第二种 artifact 卡——agent 起草的 Quick ask（manager 确认后出门）。
+          store 里恒只有一张活体草稿、新一轮开跑即撤旧卡，所以它永远属于尾轮。 */}
+      {isLast && ask ? (
+        <div className="lite-room-card lite-room-ask">
+          <AskCard />
+        </div>
+      ) : null}
+    </article>
   )
 }
 
@@ -336,10 +451,25 @@ const ROOM_CHIPS: { id: string; text: (l: Dict['lite2']) => string }[] = [
   { id: 'next-week', text: (l) => l.roomChipPlanning },
 ]
 
+// #69 · 预填的「认领」闸。为什么不是「挂载时读一次」：StrictMode（dev）会把组件
+// 挂载→卸载→重挂载，任何以挂载为闸的读取在**第二次**挂载时读到的都是已经被消费掉的空值
+// （Lite2App 的 useRoomQueryRelay 早就为同一个坑改用了 location.key）。这里同款：
+// 按 history 条目认领一次——重挂载认领的还是同一条，值还在；下一次进议事室是新条目，
+// 重新读 store（那时已被 consume 清空）＝默认提示。
+type ComposerEntry = { draft: string | null; hint: string | null; refs: AskRef[] | null }
+let entryClaim: { key: string; entry: ComposerEntry } | null = null
+function claimComposerEntry(key: string, live: ComposerEntry): ComposerEntry {
+  if (!entryClaim || entryClaim.key !== key) entryClaim = { key, entry: live }
+  return entryClaim.entry
+}
+
 export function RoomScreen() {
-  const run = useLite((s) => s.run)
+  // #71 · 会话流：turns 是唯一真相，屏上按顺序堆叠。`store.run`（尾轮镜像）在本屏不再读——
+  // 读它就等于又回到"只看得见最后一轮"的单槽视角。
+  const turns = useLite((s) => s.turns)
   const ask = useLite((s) => s.ask)
   const askLive = useLite((s) => s.askLive)
+  const clearTurns = useLite((s) => s.clearTurns)
   const noteJustAdded = useLite((s) => s.noteJustAdded)
   const goScreen = useLite((s) => s.goScreen)
   const clearNoteNudge = useLite((s) => s.clearNoteNudge)
@@ -354,22 +484,38 @@ export function RoomScreen() {
 
   // feat-036：分诊"带进议事室"的预填——读一次即消费，之后正常导航不会再带旧草稿回来。
   // #64：悬浮胶囊中继来的 @ 引用（composerDraftRefs）随文字一起消费——可能只有 refs 没有
-  // 文字（q 空），所以判据看两者任一非 null，不能只看 composerDraft 真值。
+  // 文字（q 空），所以判据看三者任一非 null，不能只看 composerDraft 真值。
+  // #69：多了一条 hint 通道（卡片模板产文 → 灰 placeholder）。
   const composerDraft = useFlow((s) => s.composerDraft)
+  const composerHint = useFlow((s) => s.composerHint)
   const composerDraftRefs = useFlow((s) => s.composerDraftRefs)
   const consumeComposerDraft = useFlow((s) => s.consumeComposerDraft)
+  const { key: locationKey, pathname, search } = useLocation()
+  const entry = claimComposerEntry(locationKey, {
+    draft: composerDraft,
+    hint: composerHint,
+    refs: composerDraftRefs,
+  })
   useEffect(() => {
-    if (composerDraft !== null || composerDraftRefs !== null) consumeComposerDraft()
+    if (composerDraft !== null || composerHint !== null || composerDraftRefs !== null) {
+      consumeComposerDraft()
+    }
     // 只在挂载时消费一次——依赖数组特意留空，effect 不该在 composerDraft 变化时重跑。
+    // 值已经在上面 render 期被 entryClaim 认领走了，这里清的是 store，不影响本次显示。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // #71 · 离开议事室即散场（票面拍板：session 内连续，离开/刷新这场对话就结束）。
+  // 刷新那一半是免费的——turns 只活在内存里，**刻意没有** localStorage / 库的第二份拷贝。
+  useEffect(() => () => clearTurns(), [clearTurns])
+
   // #64 · 提交层的双通道：refs 结构化进契约（新后端保证注入），同时织进 situation 文字
   //（旧后端静默忽略 references 的窗口期，答案不比今天差——askRefs.weaveRefs 文件头）。
+  // #71 · 第二参是**织文前的原话**，会话流回显它；history 由 store 从 turns 自己组装。
   const askWithRefs = (text: string, refs: AskRef[]) => {
     const situation = weaveRefs(text, refs, t.lite2.refWeavePrefix, t.lite2.refWeaveSeparator)
-    if (refs.length > 0) askLive({ situation, references: toWireRefs(refs) })
-    else askLive({ situation })
+    if (refs.length > 0) askLive({ situation, references: toWireRefs(refs) }, text)
+    else askLive({ situation }, text)
   }
 
   // nudge-clear-only-on-goscreen-path：离开 Room 的三条路径（goScreen tab 切换 / Topbar
@@ -377,7 +523,6 @@ export function RoomScreen() {
   // location.pathname + location.search，值一变就清掉本屏的一次性 nudge（见 store.ts
   // clearNoteNudge 上方注释）。RoomScreen 挂载本身也算一次「变了」，覆盖「离开后又回到
   // Room」这条路：Room 之外触发的清点走不到这个 effect，全靠重新挂载补上。
-  const { pathname, search } = useLocation()
   useEffect(() => {
     clearNoteNudge()
   }, [pathname, search, clearNoteNudge])
@@ -385,16 +530,25 @@ export function RoomScreen() {
   // issue #49 · 历史拉取：挂载/换公司拉一次；一次 run 完成后再拉（服务端在 manifest 时刻
   // 已落库，complete 时刷新即可把刚问的这条带进列表）。stub/无 context 下是无操作。
   const refreshAdviseRuns = useLite((s) => s.refreshAdviseRuns)
+  const lastRun = turns.length > 0 ? turns[turns.length - 1].run : null
+  const lastStatus = lastRun?.status ?? 'idle'
   useEffect(() => {
     void refreshAdviseRuns()
   }, [refreshAdviseRuns, contextId])
   useEffect(() => {
-    if (run.status === 'complete') void refreshAdviseRuns()
-  }, [run.status, refreshAdviseRuns])
+    if (lastStatus === 'complete') void refreshAdviseRuns()
+  }, [lastStatus, refreshAdviseRuns])
 
-  const running = run.status === 'running'
-  const hasStarted = run.status !== 'idle'
-  const advice = run.advice
+  // #71 · 新一轮起跑就把滚动区带到底部（对齐常见 AI chat：新消息进来跟着走）。
+  // 只在**轮数**变化时跑——流式过程中每帧都滚会把 manager 正在读的历史轮拽走。
+  const scrollRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    const el = scrollRef.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [turns.length])
+
+  const running = lastStatus === 'running'
+  const hasStarted = turns.length > 0
 
   return (
     <section className="scene scene-nexus is-active lite-room" aria-label={t.lite2.tabRoom}>
@@ -404,71 +558,29 @@ export function RoomScreen() {
               pan/zoom 画布换成全站统一的 scroll→frame 纵向语法。⚠ .lite-room-board 类名保留——
               它同时承担「解除 story 绝对定位」的职责（lite2.css board 段），改的只是它自己的
               布局规则（1180px 世界宽 → 纵向列）。composer 仍在滚动区外恒可点。 */}
-          <div className="lite-room-scroll" aria-label={t.lite2.roomBoardAria}>
-            <div className="lite-room-board">
-              <LiteThinkingFlow run={run} running={running} />
-              <div className="nexus-brief-hud">
-                <div className="nexus-brief-bar" aria-label={t.nexus.liveThinking}>
-                  <span className="nexus-brief-bar-eyebrow">{t.nexus.liveThinking}</span>
-                  <span className="nexus-brief-step">
-                    {run.status === 'error'
-                      ? t.nexus.liveError
-                      : running
-                        ? t.nexus.liveRunning
-                        : t.nexus.liveReady}
-                  </span>
-                </div>
-              </div>
-              {/* 0729/03 分流短答：事实查询的一段话直答（与判读卡互斥）。出处已由上方
-                  分析过程面板的「依据 N 条原文」承载；追问入口就是屏底常驻 composer。 */}
-              {!advice && run.answer ? (
-                <div className="lite-room-card lite-room-answer">
-                  <section className="lite-room-answer-card" aria-label={t.lite2.roomAnswerLabel}>
-                    <p className="eyebrow">{t.lite2.roomAnswerLabel}</p>
-                    <p className="lite-room-answer-text">{run.answer}</p>
-                  </section>
-                  {noteJustAdded ? (
-                    <button
-                      type="button"
-                      className="lite-btn lite-btn--ghost lite-notes-nudge"
-                      onClick={() => goScreen('notes')}
-                    >
-                      {t.lite2.notesNudge} →
-                    </button>
-                  ) : null}
-                </div>
-              ) : null}
-              {advice ? (
-                <div className="lite-room-card">
-                  <LiteAdviceCard advice={advice} />
-                  {/* feat-047 移植（feat-033）：advise 完成且后端确认新笔记落库才出 nudge
-                      （丢弃则不出、不显占位）。样式对齐 .lite-metric-chip / .upload-source-chip
-                      视觉族；点击切到 notes tab。 */}
-                  {noteJustAdded ? (
-                    <button
-                      type="button"
-                      className="lite-btn lite-btn--ghost lite-notes-nudge"
-                      onClick={() => goScreen('notes')}
-                    >
-                      {t.lite2.notesNudge} →
-                    </button>
-                  ) : null}
-                </div>
-              ) : null}
-              {/* feat-034：第二种 artifact 卡——agent 起草的 Quick ask（manager 确认后出门） */}
-              {ask ? (
-                <div className="lite-room-card lite-room-ask">
-                  <AskCard />
-                </div>
-              ) : null}
+          <div className="lite-room-scroll" aria-label={t.lite2.roomBoardAria} ref={scrollRef}>
+            {/* #71 · 会话流：一轮一个 <article>，按提问顺序堆叠，尾部是当前这一轮。
+                第二问不再覆盖第一问——覆盖此前是结构性的（store 只有一个 run 单槽）。 */}
+            <div className="lite-room-board" data-room-turns={turns.length}>
+              {turns.map((turn, i) => (
+                <LiteTurnView
+                  key={turn.id}
+                  turn={turn}
+                  isLast={i === turns.length - 1}
+                  ask={ask !== null}
+                  noteJustAdded={noteJustAdded}
+                  onGoNotes={() => goScreen('notes')}
+                />
+              ))}
             </div>
           </div>
+          {/* 追问 composer：常驻屏底、在滚动区外。预填只属于**空态**那一份（进屋那一刻
+              才有卡片上下文），所以这里恒是默认提示 + 空正文。 */}
           <LiteAskComposer
             placeholder={t.nexus.askPlaceholder}
             submitLabel={t.nexus.ask}
             onAsk={askWithRefs}
-            initialValue={composerDraft ?? undefined}
-            initialRefs={composerDraftRefs ?? undefined}
+            busy={running}
           />
         </>
       ) : contextId === null ? (
@@ -496,12 +608,14 @@ export function RoomScreen() {
           <h2>{t.lite2.roomEmptyTitle}</h2>
           <p>{t.lite2.roomEmptyBody}</p>
           <div className="nexus-empty-composer-wrap">
+            {/* #69 · 卡片入口带来的模板句落在 placeholder 上（灰、不占正文、发送不带、
+                一打字就消失）；chips 照旧是真 refs。正文只有悬浮胶囊中继那一条路会填。 */}
             <LiteAskComposer
-              placeholder={t.nexus.askPlaceholder}
+              placeholder={entry.hint ?? t.nexus.askPlaceholder}
               submitLabel={t.nexus.ask}
               onAsk={askWithRefs}
-              initialValue={composerDraft ?? undefined}
-              initialRefs={composerDraftRefs ?? undefined}
+              initialValue={entry.draft ?? undefined}
+              initialRefs={entry.refs ?? undefined}
             />
           </div>
           {/* feat-045：建议问题 chips——点击即发问（同一个 askLive 路径，真 SSE）。 */}

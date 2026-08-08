@@ -272,7 +272,7 @@ export function ProjectsScreen() {
   const openDetail = useLite((s) => s.openDetail)
   const goScreen = useLite((s) => s.goScreen)
   // #48 · 卡面快问：预填走 flowStore.composerDraft（与分诊卡「去问 Avery」同一条通道）。
-  const setComposerDraft = useFlow((s) => s.setComposerDraft)
+  const setComposerHint = useFlow((s) => s.setComposerHint)   // #69 · 卡片入口＝灰提示通道
   // #67 · refOfProject 按 id 查的是 store.team（@ 弹层候选的同一份数据面）——本屏渲染用
   // rawTeam 的 view，id 两边同源（liteTeamFromPayload 不换 id）。
   const team = useLite((s) => s.team)
@@ -384,9 +384,10 @@ export function ProjectsScreen() {
                       view={view}
                       onOpen={(id) => openDetail('project', id)}
                       onAsk={(v) => {
-                        // #67 · 引用随预填走；查不到（不该发生，防御）退纯文字。
+                        // #67 · 引用随预填走；查不到（不该发生，防御）退纯提示。
+                        // #69 · 模板文字进 hint 通道（灰 placeholder），正文留空。
                         const ref = refOfProject(team, v.id)
-                        setComposerDraft(projectAskPrefill(v), ref ? [ref] : undefined)
+                        setComposerHint(projectAskPrefill(v), ref ? [ref] : undefined)
                         goScreen('room')
                       }}
                     />

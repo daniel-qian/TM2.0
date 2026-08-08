@@ -29,7 +29,8 @@ import {
   type LiveAgentSource,
   type LiveRunState,
 } from './streamSource'
-import type { AdviseRequest } from './transport'
+import type { AdviseReference, AdviseRequest } from './transport'
+import { buildAdviseHistory } from './askHistory'
 import { liteTeamFromPayload, type LiteTeam } from './teamData'
 import {
   navigateCloseDetail,
@@ -272,6 +273,28 @@ function isNotFound(err: unknown, message: string): boolean {
   return /HTTP 404/.test(message)
 }
 
+// ── #71 · 会话流的一轮 ────────────────────────────────────────────────────────────────
+// 「一次提问 + 它自己的那条流 + 它自己的终局产物」。此前 store 里只有一个 `run` 单槽，
+// 第二问整体覆盖第一问（store 那一句 `run: {...emptyRunState()}` 就是覆盖本身）——问题
+// 文本前端更是从没存过（LiveRunState 没有这个字段，后端 started.prompt 被 streamSource
+// 显式丢弃）。所以「回显提问」不是加个 DOM 节点的事，得先有地方装它。
+export interface LiveTurn {
+  /** 本轮稳定 id：流回调按它认领自己那一轮，跨轮不串写（旧单槽下这是靠"覆盖"实现的）。 */
+  id: string
+  /** manager 自己打的那句原话——**不含**提交层织进 situation 的「涉及：」后缀。 */
+  question: string
+  /** 本轮带的 @ 引用（wire 形状，与请求体里那份同一个对象）。没带就是 null。 */
+  refs: AdviseReference[] | null
+  /** 本轮的流式状态 + 终局产物（advice / answer / 引用 / 相位）。 */
+  run: LiveRunState
+}
+
+let turnSeq = 0
+function nextTurnId(): string {
+  turnSeq += 1
+  return `turn-${turnSeq}`
+}
+
 interface LiteState {
   transport: LiveTransport
 
@@ -328,7 +351,16 @@ interface LiteState {
   // 而并发切换正是新 finding 1 那条跨公司串数据的触发方式。store 挡住了竞态，UI 还得挡住误触。
   switchPending: string | null
 
+  // ── The room 的会话流（#71）──────────────────────────────────────────────────────────
+  // 一场对话的全部轮次，**按提问顺序**，尾部是当前（可能还在流的）那一轮。
+  // 🔴 刻意不持久化：不落 localStorage、不落库。离开议事室（RoomScreen 卸载）或刷新即清空
+  //    ——票面拍板「离开/刷新即这场对话结束」。持久线程是 carry-over，不在本票。
+  turns: LiveTurn[]
   // ── The room 一次 live 运行（feat-015 /advise）──
+  // 🔴 #71 起这是**尾轮 run 的镜像**，不是独立槽位：`turns` 是唯一真相，写 run 的地方
+  //    只有「同步尾轮」这一处。保留它是因为十来个既有消费者（notifyStore 的完成通知 +
+  //    十道门的 `__lite2Store.getState().run.status`）都读它，改签名等于顺手改十几处判据。
+  //    turns 为空时它是 emptyRunState()（＝空态，与 #71 之前的语义一致）。
   run: LiveRunState
   agentSource: LiveAgentSource
   _abort: (() => void) | null
@@ -458,8 +490,13 @@ interface LiteState {
   restorePerson: (personId: string) => Promise<boolean>
   // 清写态（打开表单 / 进编辑态 / 关浮层时调，别把上一次的报错挂到下一次操作上）。
   resetProjectWrite: () => void
-  askLive: (req: AdviseRequest) => void
+  // #71 · `question` = 回显用的原话（省略即退回 `req.situation`——空态建议 chips 那条路
+  // 没有"织文前的原话"这回事，两者本来就相等）。history 由 store 自己从 turns 组装，
+  // 调用方不传（少一个"新入口忘了带上下文"的位置，同 withLocale 的一处补全纪律）。
+  askLive: (req: AdviseRequest, question?: string) => void
   resetRun: () => void
+  /** #71 · 清空会话流（离开议事室 / 换公司）。顺手中止在飞的那条流。 */
+  clearTurns: () => void
 
   // Ask 草稿态编辑（status==='draft' 才生效；manager 逐字改题、1~3 内增删、点选受访者）
   editAskQuestion: (questionId: string, text: string) => void
@@ -555,6 +592,7 @@ export const useLite = create<LiteState>((set, get) => ({
   switchError: null,
   switchPending: null,
 
+  turns: [],
   run: emptyRunState(),
   agentSource: createLiveAgentSource(defaultTransport),
   _abort: null,
@@ -1224,14 +1262,28 @@ export const useLite = create<LiteState>((set, get) => ({
     runProjectWrite(get, set, (cid, t) => t.restorePerson?.(cid, personId)),
   resetProjectWrite: () => set({ projectWriteBusy: false, projectWriteError: null }),
 
-  askLive: (req) => {
-    // 中止上一轮（切问题不叠流）。新一轮开跑即撤旧 Ask 卡（与 advice 卡同生命周期：
-    // 一个 Thread 问题一张卡；旧草稿随旧 run 退场）。
+  askLive: (req, question) => {
+    // 中止在飞的那条流（`_abort` 在 run 落定后不会自己归 null，对已收尾的流是无操作）。
+    // 🔴 #71 起 UI 层在 running 时把发送键置灰，所以「打断上一轮」这条路在产品里已经走不到；
+    //    这一发留着是给 resetRun / 换公司那几条路兜底，别当成"支持中途换问题"的实现。
+    // 新一轮开跑即撤旧 Ask 卡——与 #71 之前同规格（一个提问一张快问卡，旧草稿随旧轮退场）。
     get()._abort?.()
-    const { agentSource, contextId, notes } = get()
+    const { agentSource, contextId, notes, turns } = get()
     const notesBefore = notes.length
-    set({
+    // 🔴 history 从**已落定且真答出东西**的前几轮组装（askHistory.buildAdviseHistory）。
+    //    组装点在这里而不是调用方：屏底 composer、空态建议 chips、将来的建议追问 chips
+    //    是三个入口，逐个记得带上下文＝给"新入口忘了带"留位置（同 withLocale 的一处补全）。
+    const history = buildAdviseHistory(turns)
+    const turn: LiveTurn = {
+      id: nextTurnId(),
+      // 回显用原话；空态 chips 之类没有"织文前原话"的入口退回 situation 本身。
+      question: (question ?? req.situation ?? '').trim(),
+      refs: req.references ?? null,
       run: { ...emptyRunState(), status: 'running' },
+    }
+    set({
+      turns: [...turns, turn],
+      run: turn.run,
       ask: null,
       askBusy: 'idle',
       askError: null,
@@ -1239,14 +1291,35 @@ export const useLite = create<LiteState>((set, get) => ({
     })
     let settled = false
     const handle = agentSource.run(
-      { ...req, company_context_id: req.company_context_id ?? contextId ?? undefined },
+      {
+        ...req,
+        company_context_id: req.company_context_id ?? contextId ?? undefined,
+        // additive optional：第一问（history 为 undefined）请求体里**没有这个键**。
+        ...(history ? { history } : {}),
+      },
       (state) => {
-        // 流里出生 ask-draft（一次性收养）：之后的编辑/分享/回执活体在 store，不再被流覆盖。
-        const current = get().ask
-        if (state.askDraft && (!current || current.id !== state.askDraft.id)) {
-          set({ run: state, ask: state.askDraft })
-        } else {
-          set({ run: state })
+        // 🔴 按 turn.id 认领自己那一轮——不写"最后一轮"。被中止的旧流会在微任务里再吐一帧
+        //    （transport 的 abort 走 onDone() 无 error，createLiveAgentSource 会把它收成
+        //    'complete'），单槽时代那一帧会**把新一轮整个盖回旧状态**；按 id 写就落在它
+        //    自己那一轮里，盖不到别人。轮次已被清掉（离开议事室）时 map 找不到 id，整帧丢弃。
+        const list = get().turns
+        const idx = list.findIndex((t) => t.id === turn.id)
+        if (idx !== -1) {
+          const next = list.slice()
+          next[idx] = { ...next[idx], run: state }
+          // 流里出生 ask-draft（一次性收养）：之后的编辑/分享/回执活体在 store，不再被流覆盖。
+          const current = get().ask
+          const adopt = state.askDraft && (!current || current.id !== state.askDraft.id)
+          set(
+            // `run` 是尾轮镜像：只有当这一轮就是尾轮时才同步（旧轮收尾不该把界面拉回去）。
+            idx === next.length - 1
+              ? adopt
+                ? { turns: next, run: state, ask: state.askDraft }
+                : { turns: next, run: state }
+              : adopt
+                ? { turns: next, ask: state.askDraft }
+                : { turns: next },
+          )
         }
         // 一次 advise 落定后：拉一次笔记，**后端确认新笔记落库**（计数增长）才亮 nudge——
         // 观察被红线门丢弃时后端不落库、计数不变、nudge 不出（诚实降级，不显占位）。
@@ -1273,7 +1346,21 @@ export const useLite = create<LiteState>((set, get) => ({
 
   resetRun: () => {
     get()._abort?.()
-    set({ run: emptyRunState(), _abort: null, ask: null, askBusy: 'idle', askError: null })
+    set({
+      turns: [],
+      run: emptyRunState(),
+      _abort: null,
+      ask: null,
+      askBusy: 'idle',
+      askError: null,
+    })
+  },
+
+  // #71 · 离开议事室 / 换公司即散场。turns 是本场对话的**全部**载体，清它就等于结束对话
+  // （没有第二份拷贝在 localStorage 或库里等着复活——这是拍板的刻意设计）。
+  clearTurns: () => {
+    get()._abort?.()
+    set({ turns: [], run: emptyRunState(), _abort: null })
   },
 
   // ── Ask 草稿态编辑（只在 draft 生效——shared 之后题目/受访者即定格）──────────────
@@ -1390,6 +1477,11 @@ export function resetLiteCompanyData(): void {
     files: [],
     notes: [],
     noteJustAdded: false,
+    // #71 · 会话流是公司域数据（问的是**这家**公司的事），换账号/重开必清。`run` 是
+    // turns 尾轮的镜像，两者必须同进同退——只清一个会留下"turns 空了但屏上还挂着上一家
+    // 公司的判读卡"的错态。
+    turns: [],
+    run: emptyRunState(),
     adviseRuns: null,   // issue #49：历史是公司域数据，换账号/重开必清
     // T3 · 常驻表单**九件**全清（gap2 T11 加了拼装器那两件，T9 又加了自动补铸那两件）。
     // 两个 busy 都要归位——换账号时卡在 'minting'/'saving' 等于把那个键永久置灰成一个死按钮

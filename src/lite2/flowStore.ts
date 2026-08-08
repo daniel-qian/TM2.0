@@ -80,6 +80,32 @@ function savePersisted(state: PersistedShape) {
   }
 }
 
+// #69 · 灰提示的长度闸。placeholder 被输入框宽度硬截断（手机视口尤甚），比输入框长一倍
+// 的提示只会露个开头、后半截谁也看不到。所有卡片模板都是「主体 — 理由/证据」的形状，
+// 主体在最前面，所以裁尾保住"这是在问谁/问哪个项目"这一段。
+//
+// 🔴 闸开在**显示宽度**上而不是字符数上。第一版按 `length <= 40` 裁，中文没事，英文当场
+// 出血：demo 语料里一条 43 字符的分诊标题（"Take a look at Pilot Launch - Hangzhou
+// Store"）被拦腰截断，连主体都没露全——40 个汉字和 40 个字母在屏幕上差着一倍宽。
+// 单位取半角：CJK/全角记 2，其余记 1。72 的量 = 36 个汉字 ≈ 540px（15px 字号），桌面
+// composer（≈600px）刚好放得下；手机（≈340px）会被输入框自己截掉尾巴，那是渲染事实，
+// 不是数据丢失——真正要防的是"提示比输入框还长一倍"那种纯浪费。
+const HINT_MAX_WIDTH = 72
+
+// 东亚宽字符（含全角标点/假名/汉字/谚文）——Unicode East Asian Wide/Fullwidth 的常用段。
+const WIDE_CHAR = /[ᄀ-ᅟ⺀-〾ぁ-㏿㐀-䶿一-鿿ꀀ-꓏가-힣豈-﫿︰-﹯＀-｠￠-￦]/
+
+function clampHint(text: string): string | null {
+  const s = (text ?? '').trim()
+  if (!s) return null
+  let width = 0
+  for (let i = 0; i < s.length; i += 1) {
+    width += WIDE_CHAR.test(s[i]) ? 2 : 1
+    if (width > HINT_MAX_WIDTH) return `${s.slice(0, i)}…`
+  }
+  return s
+}
+
 let idSeq = 0
 function nextId(prefix: string): string {
   idSeq += 1
@@ -104,14 +130,23 @@ interface FlowState {
   deleteFollowup: (id: string) => void
   editFollowup: (id: string, patch: Partial<Pick<FollowupItem, 'title' | 'dueGroup' | 'note'>>) => void
 
-  // "带进议事室"：分诊条目一键飞进 The room——composer 预填该条目上下文（不自动提交，
-  // manager 审过再发问；与 AskCard 的 authorship 原则同一条线：起草由 Avery，动手由人）。
+  // "带进议事室"的**正文**通道：只剩一个用户——悬浮胶囊（AskAveryLauncher）。那里的文字
+  // 是 manager **自己刚打完并按了发送**的原话，退成灰提示等于让他到了议事室再打一遍。
+  // #69 起卡片类入口（分诊/差距/人卡/项目卡/详情浮层/决策卡）一律改走下面的 hint 通道。
   composerDraft: string | null
+  // #69 · "带进议事室"的**提示**通道（0808 拍板）：卡片模板产的那句话退成输入框的灰色
+  // placeholder——不占正文、发送不带、一打字就消失。缘起是 chips 已经把"问的是谁/哪个
+  // 项目"结构化带过去了，正文里再抄一遍模板文字只是让 manager 多按几次退格。
+  // 🔴 与 composerDraft 是**两条通道**不是一个字段两种用法：URL 中继上也分成两个键
+  //（`q`＝正文、`qh`＝提示，routes.ts EPHEMERAL_PARAMS），否则胶囊和决策卡在同一个 `q`
+  // 上就没法各要各的语义。
+  composerHint: string | null
   // #64 · 悬浮胶囊里选好的 @ 引用随问题文字一起中继进议事室。#67 起**所有**预填入口
   //（人卡/项目卡/分诊卡/差距卡/详情浮层；决策卡走 goScreen refs 中继）都传 refs——
   // 构造一律走 askRefs.refOf*（与 @ 弹层候选同一把尺），调用点不许手拼五元组。
   composerDraftRefs: AskRef[] | null
   setComposerDraft: (text: string, refs?: AskRef[]) => void
+  setComposerHint: (hint: string, refs?: AskRef[]) => void
   consumeComposerDraft: () => void
 
   // feat-044（PRD F4）· "A closer look" 矛盾卡的 resolve/dismiss marks——同一 localStorage
@@ -189,11 +224,25 @@ export const useFlow = create<FlowState>((set, get) => {
     },
 
     composerDraft: null,
+    composerHint: null,
     composerDraftRefs: null,
     // refs 不传即清 null——预填是一次性的整体快照，旧 refs 挂到新草稿上就是接错线。
+    // 两个 setter 都把**另一条通道清掉**：一次导航只有一种语义，留着上一次的残值就是
+    // 「灰提示还挂着、正文又被填了」这种没人想要的叠加态。
     setComposerDraft: (text, refs) =>
-      set({ composerDraft: text, composerDraftRefs: refs && refs.length > 0 ? refs : null }),
-    consumeComposerDraft: () => set({ composerDraft: null, composerDraftRefs: null }),
+      set({
+        composerDraft: text,
+        composerHint: null,
+        composerDraftRefs: refs && refs.length > 0 ? refs : null,
+      }),
+    setComposerHint: (hint, refs) =>
+      set({
+        composerDraft: null,
+        composerHint: clampHint(hint),
+        composerDraftRefs: refs && refs.length > 0 ? refs : null,
+      }),
+    consumeComposerDraft: () =>
+      set({ composerDraft: null, composerHint: null, composerDraftRefs: null }),
 
     gapMarks: initial.gapMarks,
     resolveGap: (id) => {
@@ -255,6 +304,7 @@ export function resetFlowCompanyScope(): void {
     followups: [],
     gapMarks: {},
     composerDraft: null,
+    composerHint: null,   // #69：提示通道同样带公司正文（项目名/人名），照清不误
     composerDraftRefs: null,
   })
 }
