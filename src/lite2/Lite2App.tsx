@@ -9,6 +9,7 @@ import {
 } from 'react-router-dom'
 import { useFlow } from './flowStore'
 import { useLite } from './store'
+import { decodeRefsParam } from './askRefs'
 import { LiteTopbar } from './LiteTopbar'
 import { TeamScreen } from './screens/TeamScreen'
 import { RoomScreen } from './screens/RoomScreen'
@@ -235,8 +236,9 @@ function ScreenView() {
   return <Screen />
 }
 
-// 接力参数 `/room?q=<问题>`（PRD G2）——从决策卡带着问题进议事室。
-// 这里只做「搬运」：把 q 灌进 feat-036 已有的预填通道（flowStore.composerDraft），
+// 接力参数 `/room?q=<问题>&refs=<JSON>`（PRD G2 + #64）——从决策卡/悬浮胶囊带着问题
+// （与选好的 @ 引用）进议事室。
+// 这里只做「搬运」：把 q/refs 灌进 feat-036 已有的预填通道（flowStore.composerDraft），
 // RoomScreen 早就把它当 composer 的 initialValue 消费。不自动发问、不伪造回答。
 //
 // 为什么在 render 期搬而不是 useEffect：RoomScreen 由 ScreenView 在同一次 render 里渲染，
@@ -251,7 +253,13 @@ function useRoomQueryRelay(screen: LiteScreen) {
   const relayedKey = useRef<string | null>(null)
   if (screen === 'room' && relayedKey.current !== key) {
     relayedKey.current = key
-    const q = new URLSearchParams(search).get('q')?.trim()
-    if (q) useFlow.getState().setComposerDraft(q)
+    const params = new URLSearchParams(search)
+    const q = params.get('q')?.trim()
+    // #64：refs 坏形状解码成 []（URL 是用户可改的输入）——只有 q/refs 至少一个真有货才预填，
+    // 免得空中继把用户正在打的草稿清掉。
+    const refs = decodeRefsParam(params.get('refs'))
+    if (q || refs.length > 0) {
+      useFlow.getState().setComposerDraft(q ?? '', refs.length > 0 ? refs : undefined)
+    }
   }
 }

@@ -33,6 +33,11 @@ class LiveSituation:
     # ADR-0033: 判读正文的语言，由请求带下来（前端 `?lang= > localStorage > env > en` 那条链）。
     # 真 brain 从 system prompt 里的语言指令拿它；MockBrain 从下面的 MOCK 块拿它。
     locale: str = DEFAULT_LOCALE
+    # #64 · @ 引用的注入块（服务层用 avery.ingest.references.build_reference_block 造好后
+    # 挂在这里）。两个去处：① case 正文长一段 `## Referenced records (@)`（read_case 看得见）；
+    # ② app.py 把同一块作为 preamble 交给 stream_advice，**保证**进开场 user 轮。
+    # None = 这次提问没带引用（或引用全部无效）——case 与开场轮都一字不多。
+    reference_block: str | None = None
 
 
 def _slugify(text: str, fallback: str = "live-situation") -> str:
@@ -201,6 +206,10 @@ def build_live_case(sit: LiveSituation, memory_dir: Path, *, work_dir: Path | No
         "## The ask",
         sit.situation.strip(),
     ]
+    # #64: the same reference block the service pins into the opening user turn also lands in
+    # the case body — read_case must show exactly what the opening turn pinned (one truth).
+    if sit.reference_block:
+        parts += ["", "## Referenced records (@)", "", sit.reference_block]
     if sit.company_context_id:
         # feat-016 stub: when ingestion is wired, the company RAG behind this id feeds recall().
         parts += ["", f"<!-- company_context_id: {sit.company_context_id} (feat-016 stub) -->"]

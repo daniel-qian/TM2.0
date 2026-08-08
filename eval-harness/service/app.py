@@ -125,6 +125,16 @@ app.include_router(demo_router)
 app.include_router(form_router)
 
 
+class AdviseReference(BaseModel):
+    """#64 · one @-reference riding an advise turn. Every field is DELIBERATELY a tolerant
+    plain str (the D11 locale precedent — never 422 a manager's advise turn): an unknown kind
+    or a dangling id degrades to "skipped / honest not-found line" inside the builder, never
+    to a rejected question."""
+    kind: str = Field("", description="person | project | file | playbook (unknown: skipped).")
+    id: str = Field("", description="entity id / filename / playbook title (kind-dependent).")
+    label: str = Field("", description="display label; also the resolve fallback + weave text.")
+
+
 class AdviseRequest(BaseModel):
     situation: str = Field(..., min_length=1,
                            description="The manager's typed management situation + the ask.")
@@ -138,6 +148,12 @@ class AdviseRequest(BaseModel):
     locale: str | None = Field(
         None, description="Reply language: 'en' (default) or 'zh'. Unknown values fall back to "
                           "'en' with a server-side warning; they are never rejected.")
+    # #64 · additive optional: entities the manager @-referenced. Their card readings + related
+    # record lines are GUARANTEED into the model context (avery/ingest/references.py, quota-capped)
+    # — not left to recall luck. Absent/empty = the pre-#64 request, byte-identical behavior.
+    references: list[AdviseReference] | None = Field(
+        None, description="#64 @-references: [{kind, id, label}]; readings of these entities are "
+                          "pinned into the model context, quota-capped.")
 
 
 def _system_prompt(locale: str = DEFAULT_LOCALE) -> str:
@@ -157,6 +173,27 @@ def _resolve_memory_dir(company_context_id: str | None) -> Path:
         return resolve_memory_dir(company_context_id, MEMORY_DIR)
     except Exception:
         return MEMORY_DIR
+
+
+def _build_reference_block(company_context_id: str | None, references) -> str | None:
+    """#64: resolve the @-references against the (already authorized) context and build the
+    injectable block. Best-effort by design — a builder problem degrades to "no injection"
+    (the woven situation text still carries the labels), NEVER to a failed advise turn.
+    No context id ⇒ no injection (the default demo memory has no entity cards to read)."""
+    if not references or not company_context_id:
+        return None
+    try:
+        from avery.ingest.references import build_reference_block
+        from avery.ingest.registry import active_registry
+        ctx = active_registry().get(company_context_id)
+        if ctx is None:
+            return None
+        block = build_reference_block(
+            ctx, [{"kind": r.kind, "id": r.id, "label": r.label} for r in references])
+        return block or None
+    except Exception as e:   # noqa: BLE001 — injection must never break the advise path
+        logger.warning("POST /advise: reference injection skipped (%s: %s)", type(e).__name__, e)
+        return None
 
 
 def _run_events(sit: live_input.LiveSituation) -> tuple[Iterator[dict[str, Any]], Any]:
@@ -211,7 +248,9 @@ def _run_events(sit: live_input.LiveSituation) -> tuple[Iterator[dict[str, Any]]
         #  同一个 sit.locale，两条路一个来源。）
         brain, case, _system_prompt(sit.locale), agent_name=getattr(brain, "name", kind),
         scaffold="full", memory_dir=memory_dir, enforce_chain=True, enforce_redline=True,
-        embedder=embedding_factory.make_embedder())  # None -> keyword recall (key stays server-side)
+        embedder=embedding_factory.make_embedder(),  # None -> keyword recall (key stays server-side)
+        # #64: @ 引用的注入块钉进开场 user 轮——「保证进上下文」的兑现点（engine.py 该参注释）。
+        preamble=sit.reference_block)
     return events, case
 
 
@@ -367,7 +406,9 @@ def advise(req: AdviseRequest,
         logger.warning("POST /advise: %s", locale_warning)
     sit = live_input.LiveSituation(
         situation=req.situation, title=req.title,
-        company_context_id=req.company_context_id, locale=locale)
+        company_context_id=req.company_context_id, locale=locale,
+        # #64: authorize_context 已在上面把过门——这里解析引用只可能读到**本公司**的卡。
+        reference_block=_build_reference_block(req.company_context_id, req.references))
     events, case = _run_events(sit)
     events = _with_ask_frame(events, req)   # feat-034: maybe one ask-draft frame after the manifest
 

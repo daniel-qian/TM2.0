@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useLite } from '../store'
 import { useFlow } from '../flowStore'
@@ -6,6 +6,8 @@ import { useDict } from '../../shared/i18n/useDict'
 import type { Dict } from '../../shared/i18n'
 import { LiteAdviceCard } from '../LiteAdviceCard'
 import { AskCard } from '../AskCard'
+import { AskRefComposer } from '../AskRefComposer'
+import { toWireRefs, weaveRefs, type AskRef } from '../askRefs'
 import { localizeStreamLine } from '../../shared/streamCopy'
 import { coerceAdvice } from '../streamSource'
 import type {
@@ -218,37 +220,35 @@ function LiteThinkingFlow({ run, running }: { run: LiveRunState; running: boolea
 // live 提问 composer（空态 + 运行后追问共用）。走 store.askLive → feat-015 /advise SSE。
 // feat-036：initialValue 承接分诊卡"带进议事室"的预填上下文（flowStore.composerDraft，
 // 挂载时读一次——只预填、不自动提交，manager 审过再问）。
+// #64：换成共用的 AskRefComposer（@ 引用弹层 + chips）；提交层把 refs 结构化进
+// `askLive.references` 并织进 situation 文字兜底。DOM/类名与旧 LiteAskComposer 静息态等价。
 function LiteAskComposer({
   placeholder,
   submitLabel,
   onAsk,
   initialValue,
+  initialRefs,
 }: {
   placeholder: string
   submitLabel: string
-  onAsk: (text: string) => void
+  onAsk: (text: string, refs: AskRef[]) => void
   initialValue?: string
+  initialRefs?: AskRef[]
 }) {
   const { t } = useDict()
-  const [draft, setDraft] = useState(initialValue ?? '')
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    const text = draft.trim()
-    if (!text) return
-    onAsk(text)
-    setDraft('')
-  }
   return (
-    <form className="nexus-followup-composer" aria-label={t.lite2.roomAskAria} onSubmit={handleSubmit}>
-      <input
-        type="text"
-        value={draft}
-        onChange={(event) => setDraft(event.target.value)}
-        placeholder={placeholder}
-        aria-label={t.lite2.roomLiveQuestionAria}
-      />
-      <button type="submit" className="lite-btn lite-btn--primary">{submitLabel}</button>
-    </form>
+    <AskRefComposer
+      formClassName="nexus-followup-composer"
+      formAriaLabel={t.lite2.roomAskAria}
+      inputAriaLabel={t.lite2.roomLiveQuestionAria}
+      placeholder={placeholder}
+      submitClassName="lite-btn lite-btn--primary"
+      submitLabel={submitLabel}
+      idPrefix="room"
+      initialValue={initialValue}
+      initialRefs={initialRefs}
+      onSubmit={onAsk}
+    />
   )
 }
 
@@ -353,13 +353,24 @@ export function RoomScreen() {
   const { t } = useDict()
 
   // feat-036：分诊"带进议事室"的预填——读一次即消费，之后正常导航不会再带旧草稿回来。
+  // #64：悬浮胶囊中继来的 @ 引用（composerDraftRefs）随文字一起消费——可能只有 refs 没有
+  // 文字（q 空），所以判据看两者任一非 null，不能只看 composerDraft 真值。
   const composerDraft = useFlow((s) => s.composerDraft)
+  const composerDraftRefs = useFlow((s) => s.composerDraftRefs)
   const consumeComposerDraft = useFlow((s) => s.consumeComposerDraft)
   useEffect(() => {
-    if (composerDraft) consumeComposerDraft()
+    if (composerDraft !== null || composerDraftRefs !== null) consumeComposerDraft()
     // 只在挂载时消费一次——依赖数组特意留空，effect 不该在 composerDraft 变化时重跑。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // #64 · 提交层的双通道：refs 结构化进契约（新后端保证注入），同时织进 situation 文字
+  //（旧后端静默忽略 references 的窗口期，答案不比今天差——askRefs.weaveRefs 文件头）。
+  const askWithRefs = (text: string, refs: AskRef[]) => {
+    const situation = weaveRefs(text, refs, t.lite2.refWeavePrefix, t.lite2.refWeaveSeparator)
+    if (refs.length > 0) askLive({ situation, references: toWireRefs(refs) })
+    else askLive({ situation })
+  }
 
   // nudge-clear-only-on-goscreen-path：离开 Room 的三条路径（goScreen tab 切换 / Topbar
   // <Link> / 浏览器前进后退）唯一的公共信号是 location 变了——所以在这里订阅
@@ -455,8 +466,9 @@ export function RoomScreen() {
           <LiteAskComposer
             placeholder={t.nexus.askPlaceholder}
             submitLabel={t.nexus.ask}
-            onAsk={(text) => askLive({ situation: text })}
+            onAsk={askWithRefs}
             initialValue={composerDraft ?? undefined}
+            initialRefs={composerDraftRefs ?? undefined}
           />
         </>
       ) : contextId === null ? (
@@ -487,8 +499,9 @@ export function RoomScreen() {
             <LiteAskComposer
               placeholder={t.nexus.askPlaceholder}
               submitLabel={t.nexus.ask}
-              onAsk={(text) => askLive({ situation: text })}
+              onAsk={askWithRefs}
               initialValue={composerDraft ?? undefined}
+              initialRefs={composerDraftRefs ?? undefined}
             />
           </div>
           {/* feat-045：建议问题 chips——点击即发问（同一个 askLive 路径，真 SSE）。 */}

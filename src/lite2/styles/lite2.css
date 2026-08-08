@@ -8503,3 +8503,173 @@
   gap: 8px;
   margin-top: 14px;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   #64 · at-references — @ 引用（AskRefComposer：议事室常驻 composer + 悬浮胶囊共用）。
+   APPEND-ONLY。静息态零改动：状态类 .has-refs/.is-picking 只在有 chip / 弹层开着时
+   由组件追加，像素基线与 room-usability 的几何判据都锚在静息态上。
+   按钮族：.lite-composer-filter/.lite-composer-option/.lite-composer-remove 是
+   verify-button-family 白名单既有条目（v01 冻结面也在用这几个类名——本段一律带
+   .lite2-shell 前缀，不碰 v01 的呈现）。
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* 有 chip / 弹层时：药丸放宽成圆角卡，chips 行 wrap 到输入行上方。 */
+.lite2-shell .nexus-followup-composer.has-refs,
+.lite2-shell .nexus-followup-composer.is-picking,
+.lite2-shell .lite-ask-avery-form.has-refs,
+.lite2-shell .lite-ask-avery-form.is-picking {
+  flex-wrap: wrap;
+  border-radius: 18px;
+}
+
+/* 弹层锚在 form 上沿。.nexus-followup-composer 本身是 absolute（55-ask-composer 基类），
+   已是包含块；胶囊的 form 基类是 static，只在弹层开着时补 relative（静息态不动）。 */
+.lite2-shell .lite-ask-avery-form.is-picking {
+  position: relative;
+}
+
+.lite2-shell .lite-ref-picker {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 8px);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 14px;
+  background: var(--lite2-surface);
+  box-shadow: var(--shadow);
+  z-index: 5;
+}
+
+.lite2-shell .lite-ref-picker-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.lite2-shell .lite-ref-picker .lite-composer-filter {
+  padding: 4px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.lite2-shell .lite-ref-picker .lite-composer-filter.is-active {
+  border-color: var(--rule-strong);
+  background: rgba(var(--lite2-ink-rgb), 0.08);
+  color: var(--ink);
+}
+
+.lite2-shell .lite-ref-picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.lite2-shell .lite-ref-picker .lite-composer-option {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.lite2-shell .lite-ref-picker .lite-composer-option:hover,
+.lite2-shell .lite-ref-picker .lite-composer-option.is-active {
+  background: rgba(var(--lite2-ink-rgb), 0.06);
+}
+
+.lite2-shell .lite-ref-option-label {
+  flex: 0 0 auto;
+  font-weight: 600;
+}
+
+/* 重名消歧的部门 / 次串：间距即分隔符（零标点字面量，FilesScreen 碑）。 */
+.lite2-shell .lite-ref-option-team {
+  flex: 0 0 auto;
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+
+.lite2-shell .lite-ref-option-meta {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink-faint);
+  font-size: 11px;
+}
+
+.lite2-shell .lite-ref-option-kind {
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding: 1px 6px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  color: var(--ink-faint);
+  font-size: 10px;
+}
+
+.lite2-shell .lite-ref-empty {
+  margin: 0;
+  padding: 8px 10px;
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+
+.lite2-shell .lite-ref-chips {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 2px 6px 0;
+}
+
+.lite2-shell .lite-ref-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px 3px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: rgba(var(--lite2-accent-rgb), 0.12);
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.lite2-shell .lite-ref-chip-team {
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+
+.lite2-shell .lite-ref-chip .lite-composer-remove {
+  padding: 2px 4px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.lite2-shell .lite-ref-chip .lite-composer-remove:hover,
+.lite2-shell .lite-ref-chip .lite-composer-remove:focus-visible {
+  color: var(--ink);
+  background: rgba(var(--lite2-ink-rgb), 0.08);
+}

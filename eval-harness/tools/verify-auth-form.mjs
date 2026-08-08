@@ -501,14 +501,17 @@ console.log('\n═══ ⑤ 游客路径全程健在（登录不是用产品的
     .catch(() => {})
 
   const tabCount = await p.locator('.scene-tabs .scene-tab').count()
-  rec('九个场景 tab 都在（登录入口没有挤占任何一个）', tabCount === 9, `实得 ${tabCount}`)
+  // #63（merge-closerlook）把「值得注意」tab 退役后是 8 个。这个数的正源是 LiteTopbar 的
+  // tabs 数组 + verify-v2boots 的期望序列——#63 改判时漏了本门这条（C 区自建 dist，改判
+  // 清单没扫到），#64 收尾电池逮到后补上。改 tab 数时两处一起改：v2boots 的期望数组 + 这里。
+  rec('八个场景 tab 都在（登录入口没有挤占任何一个）', tabCount === 8, `实得 ${tabCount}`)
   rec('首屏（home）自带上传入口（.upload-dropzone）', (await p.locator('.upload-dropzone').count()) >= 1)
 
   for (let i = 0; i < tabCount; i++) {
     await p.locator('.scene-tabs .scene-tab').nth(i).click()
     await p.waitForTimeout(150)
   }
-  rec('九个 tab 逐一点过一遍，无 pageerror（游客能走完整个应用）', errs.length === 0, errs.slice(0, 2).join(' | ') || '0 条')
+  rec('八个 tab 逐一点过一遍，无 pageerror（游客能走完整个应用）', errs.length === 0, errs.slice(0, 2).join(' | ') || '0 条')
 
   await p.locator('.scene-tabs .scene-tab').first().click() // 回到 home
   await p.waitForTimeout(150)

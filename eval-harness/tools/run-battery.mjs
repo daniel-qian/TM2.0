@@ -135,6 +135,8 @@ const ROSTER = [
 
   { zone: 'A', name: 'form-builder',         cmd: ['eval-harness/tools/verify-form-builder.mjs'],                host: 'preview', backend: true,  dist: false, note: '🔴 上传型门（gap2 T11；真传花名册+一份旧表格造工作区，还会真建模板、真铸链、真在员工页交一份）；**绝不能排在 C 区之后**。43 判据盯模板生命周期：三入口 / 四种控件 / 上限镜像在本地就拦住并说清哪条 / **已被答过的 field.id 禁改禁删（只给停用）** / 三个语义开关往返不丢 / 起草是提案不落库且红线在起草层就落地。⚠ `?transport=stub` 在这道门上是死路：saveFormTemplate/draftFormFromFile 在 stub 通道上根本不存在，整段判空即零像素——本门必须真打 mock 后端。⚠ 题面住在 `<input value>` 里，`hasText` 采不到它（写这门时栽过一次 30s 超时）' },
 
+  { zone: 'A', name: 'at-references',        cmd: ['eval-harness/tools/verify-at-references.mjs'],               host: 'preview', backend: true,  dist: false, note: '🔴 上传型门（#64 @ 引用；一次真 uploadFiles 造工作区 + 三发真 /advise＝每跑一遍造 1 个 context）；**绝不能排在 C 区之后**。主判据落在**网络请求体**上（POST /advise 的 references[] + situation 织文），不落 store（T10 门洞教训）；全程真键盘驱动 composer（pressSequentially/ArrowDown/Enter）。⚠ 显式 `?lang=zh`——织文前缀「涉及：」是 zh 词，EN 壳下该判据假红。⚠ 语料带两位同名林小满（人员ID 不同）：重名消歧判据要求两个候选各带部门' },
+
   // ── B 区 · 自带服务器 / 像素基线（3 道，中段）───────────────────────────────
   { zone: 'B', name: 'data-boundary',         cmd: ['.issues/v02-partner-align-0718/verify-data-boundary.mjs'],   host: 'self',    backend: false, dist: false, note: '自起 dev server :5304（VERIFY_PORT 可改）；可选 VERIFY_OLD_STORE=<git-ref> 做 born-red' },
   { zone: 'B', name: 'null-owner',            cmd: ['.issues/v02-joint-0719/verify-null-owner.mjs'],              host: 'preview', backend: true,  dist: false, note: '⚠️ battle-map 把它归在「自带服务器」的 B 区，但它其实写死打共享 5173（:28 `const UI`，无 VERIFY_BASE）。位置照抄 battle-map 不动（换序＝换风险），此处记档口径' },

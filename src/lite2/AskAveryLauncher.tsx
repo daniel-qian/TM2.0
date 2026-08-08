@@ -1,7 +1,9 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useLite } from './store'
 import { useDict } from '../shared/i18n/useDict'
 import { useCurrentScreen } from './routes'
+import { AskRefComposer } from './AskRefComposer'
+import { encodeRefsParam, type AskRef } from './askRefs'
 
 // 棒F · 悬浮「问 Avery」入口（布局与真部件战役 2026-07-22 · Danny 拍板命名）。
 //
@@ -53,14 +55,12 @@ export function AskAveryLauncher() {
   const screen = useCurrentScreen()
 
   const [open, setOpen] = useState(false)
-  const [draft, setDraft] = useState('')
   const rootRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
 
-  // 展开后聚焦输入框；外点/Esc 收起（Esc 在 input 的 onKeyDown 里，外点在 document 上）。
+  // 展开后外点收起（聚焦与 Esc 都在 AskRefComposer 里：挂载即聚焦；@ 层开着时 Esc 只关层，
+  // 关着时才透传回来收起胶囊）。
   useEffect(() => {
     if (!open) return
-    inputRef.current?.focus()
     function onDown(event: MouseEvent) {
       if (rootRef.current && !rootRef.current.contains(event.target as Node)) setOpen(false)
     }
@@ -76,45 +76,30 @@ export function AskAveryLauncher() {
   //     LiteComposer 退役后，team 屏的提问入口就是本胶囊，不再收起。
   if (screen === 'room') return null
 
-  function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    const q = draft.trim()
-    if (!q) return
-    // 中继：goScreen('room',{q}) → useRoomQueryRelay 把 q 灌进 composerDraft（只预填不自动发）。
-    goScreen('room', { q })
-    setDraft('')
+  function submit(text: string, refs: AskRef[]) {
+    // 中继：goScreen('room',{q,refs}) → useRoomQueryRelay 把两者灌进 composerDraft（只预填
+    // 不自动发）。refs 空时**整参不挂**（carrySearch 对 null 是删除语义），URL 不多一个空键。
+    goScreen('room', { q: text, refs: refs.length > 0 ? encodeRefsParam(refs) : null })
     setOpen(false)
   }
 
   return (
     <div className="lite-ask-avery" ref={rootRef}>
       {open ? (
-        <form className="lite-ask-avery-form" onSubmit={submit}>
-          <input
-            ref={inputRef}
-            type="text"
-            className="lite-ask-avery-input"
-            value={draft}
-            placeholder={l.askAveryPlaceholder}
-            aria-label={l.askAveryAria}
-            autoComplete="off"
-            onChange={(event) => setDraft(event.currentTarget.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Escape') {
-                event.preventDefault()
-                setOpen(false)
-              }
-            }}
-          />
-          <button
-            type="submit"
-            className="lite-btn lite-btn--primary lite-ask-avery-send"
-            aria-label={l.askAveryAria}
-            disabled={draft.trim() === ''}
-          >
-            →
-          </button>
-        </form>
+        <AskRefComposer
+          formClassName="lite-ask-avery-form"
+          inputClassName="lite-ask-avery-input"
+          inputAriaLabel={l.askAveryAria}
+          placeholder={l.askAveryPlaceholder}
+          submitClassName="lite-btn lite-btn--primary lite-ask-avery-send"
+          submitLabel={'→'}
+          submitAriaLabel={l.askAveryAria}
+          disableEmptySubmit
+          autoFocusInput
+          idPrefix="ask-avery"
+          onSubmit={submit}
+          onEscapeClosed={() => setOpen(false)}
+        />
       ) : (
         <button
           type="button"

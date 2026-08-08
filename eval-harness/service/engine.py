@@ -39,8 +39,8 @@ def _anthropic_tools() -> list[dict]:
 
 def stream_advice(brain: Brain, case: Case, system_prompt: str, *, agent_name: str,
                   scaffold: str, memory_dir: Path, enforce_chain: bool = True,
-                  enforce_redline: bool = True, max_iters: int = MAX_ITERS, embedder=None
-                  ) -> Iterator[dict[str, Any]]:
+                  enforce_redline: bool = True, max_iters: int = MAX_ITERS, embedder=None,
+                  preamble: str | None = None) -> Iterator[dict[str, Any]]:
     """Drive one (brain, case) and yield events. Event `type` is one of:
 
         started   — run metadata (agent, case_id, prompt)
@@ -53,13 +53,22 @@ def stream_advice(brain: Brain, case: Case, system_prompt: str, *, agent_name: s
 
     The terminal `manifest` event's `transcript` matches what `run_loop` returns for the same
     inputs; its `contract` block is the API-level 8-field projection + red-line re-validation.
+
+    #64 `preamble`: extra context pinned into the OPENING user turn (after the leader's ask).
+    This is the @-references guarantee point — unlike the case body (which the model only sees
+    if it calls read_case) and unlike recall (which may miss), the opening turn is in the
+    model's context unconditionally. Default None keeps the turn byte-identical to run_loop's
+    (test_service_contract parity rides on that default). The started event / transcript
+    `prompt` stays the manager's own words — the preamble is context, not the question.
     """
     ctx = ToolContext(memory_dir=Path(memory_dir), case_path=case.path, case_id=case.case_id,
                       embedder=embedder)
+    opening = f"Scenario id: {case.case_id}\n\nThe leader asks:\n{case.prompt}"
+    if preamble:
+        opening += f"\n\n{preamble}"
     conversation: list[dict] = [{
         "role": "user",
-        "content": [{"type": "text",
-                     "text": f"Scenario id: {case.case_id}\n\nThe leader asks:\n{case.prompt}"}],
+        "content": [{"type": "text", "text": opening}],
     }]
 
     steps: list[dict] = []
