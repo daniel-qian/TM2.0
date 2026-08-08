@@ -51,7 +51,7 @@ from .registry import SourceDocument, _now_iso, materialize_memory
 log = logging.getLogger("avery.ingest.form_append")
 
 # ｜/| 的转义字符：U+00A6 BROKEN BAR。形近、可读、且不在 `_selfreport_from_lines` 的 `[｜|]`
-# 切格表里，也不在 `_people_from_table` 的 `"|" in ln` 判据里 —— 转义后的行在解析层眼里
+# 切格表里，也不在 `_people_from_roster` 的 `"|" in ln` 判据里 —— 转义后的行在解析层眼里
 # 只是一行普通文本。
 BAR_ESCAPE = "¦"
 

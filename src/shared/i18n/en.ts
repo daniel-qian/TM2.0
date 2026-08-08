@@ -557,7 +557,9 @@ export const en = {
     // ⚠ 主名一动必须同 commit 改 scripts/gates/live-frontend-gate.snippet.js assertV2Boots。
     tabFollowups: 'To-do list',
     tabFollowupsSub: 'Follow-ups',
-    tabCloserLook: 'Worth noting',
+    // #63 (merge-closerlook): `tabCloserLook` retired — the Worth-noting screen folded into
+    // Today's gap-summary block (HomeScreen block ②). The comparison-card copy (gap* keys
+    // below) lives on; only the tab name died with the tab.
     // feat-047: 7th tab, ported from `lite` — same key name/value as `en.lite.tabNotes` so
     // scripts/i18n-zh-lite2-delta.mjs reuses the already-approved zh.lite translation verbatim
     // (no fresh M3 call needed). Placed after Follow-ups in the topbar (LiteTopbar.tsx).
@@ -846,7 +848,9 @@ export const en = {
     followupsSourceTriage: 'From this morning',
     followupsSourceRoom: 'From Ask Avery',
     followupsSourceAsk: 'From a quick ask',
-    followupsSourceCloserLook: 'From Worth noting',
+    // #63: the source id stays 'closer-look' (persisted entries carry it forever); the label
+    // now points at the block the cards live in, not the retired tab.
+    followupsSourceCloserLook: 'From a document mismatch',
     followupsSourceManual: 'Added by you',
     // 0721 对齐棒 · B4 闭环：首页决策卡的「加入跟进」来源标签。
     followupsSourceDecision: 'From a decision',
@@ -867,15 +871,11 @@ export const en = {
     // Advice card — "add to follow-ups" on each recommended action (feat-036, source=room)
     adviceAddFollowup: 'Add to to-dos',
 
-    // ── A closer look screen (feat-035 laid the skeleton as an honest empty placeholder;
-    // feat-044 replaces it with the real comparison-card derivation — PRD F4 / decisions.md
-    // 拍板#4. The old closerLookEyebrow/Title/Body/ComingSoon placeholder keys are retired
-    // outright, not reused — a fresh key set avoids any risk of a stale ZH translation surviving
-    // under an old key name with new meaning, per session-handoff's i18n discipline note.) ──
-    gapPageEyebrow: 'Worth noting',
-    gapPageTitle: "Where the file and the read don't quite line up",
-    gapPageBody:
-      "When a project's own status reads steady but something in the files says otherwise, it shows up here — what the files say next to what the signals show, with a way to settle it, let it go, or ask the person directly.",
+    // ── Comparison cards (feat-044 derivation, PRD F4 / decisions.md 拍板#4).
+    // #63 (merge-closerlook): the standalone screen retired — these cards now render inside
+    // Today's gap-summary block (HomeScreen block ②, expanded view). The page-header keys
+    // (gapPageEyebrow/Title/Body) died with the screen; every card/action/history/empty/
+    // realtime key below moved over verbatim. ──
 
     // Comparison card — left pane vs. right pane.
     gapCardClaimLabel: 'What the files say',
@@ -887,6 +887,9 @@ export const en = {
     gapDismissLabel: 'Let it go',
     gapAskLabel: 'Ask them directly',
     gapAddFollowupLabel: 'Add to to-dos',
+    // #63: the to-do title minted by that action. Was a hard-coded English template in the
+    // old screen (a documented debt) — moved into the dict on the way over.
+    gapFollowupTitle: 'Take a closer look at {title}',
 
     // History (resolved + dismissed, collapsed by default — same drawer language as the
     // morning-triage "Taken care of today" pattern, feat-036).
@@ -1072,9 +1075,10 @@ export const en = {
     briefingMetricNeedLook: 'need a look',
     handoffsTitle: "Today's reminders",
     handoffsEmpty: 'Nothing needs you right now — your uploads read steady.',
-    // UIUX 棒 F4 · 同款于 lite 段（见上）。v02 多一层去处：那几处信号有自己的 tab，
-    // 文案顺手把路指给客户（“Worth noting” 必须与 tabCloserLook 的实际标签一致，0729 改名后同步）。
-    handoffsEmptyButLook: 'Nothing needs you to step in right now — though {count} spots are worth noting. They are under “Worth noting”.',
+    // UIUX 棒 F4 · 同款于 lite 段（见上）。#63 后那几处信号不再有自己的 tab——它们就住在
+    // 本页右侧的差距摘要块里，指路指名必须与块的实际标题（homeGapsTitle）一致，指错名字
+    // 是 bug 不是措辞偏好（0720 的同一条纪律，换了个落点）。
+    handoffsEmptyButLook: 'Nothing needs you to step in right now — though {count} spots are worth noting, under “Where the documents disagree” on this page.',
     handoffOpen: 'Open the project',
     // feat-068 · triage-item copy — see the identical block in the `lite` section above for why
     // this layer exists (frontend-derived strings; no backend change can reach them).
@@ -1579,7 +1583,7 @@ export const en = {
     // ── 0721 · B4 闭环：首页今日待办块 + 决策卡「加入跟进」。 ──
     homeTodayTitle: 'To do today',
     homeTodayEmpty:
-      'Nothing queued for today. Decisions, Ask Avery, and Worth noting can all drop items here.',
+      'Nothing queued for today. Decisions, Ask Avery, and the document mismatches can all drop items here.',
     homeTodayDoneAria: 'Mark "{title}" done',
     homeTodayMore: '+{count} more in the list',
     homeDecisionAddFollowup: 'Add to to-dos',
@@ -1686,16 +1690,19 @@ export const en = {
     // It is a dictionary entry now because punctuation is copy too.
     labelSep: ': ',
 
-    // Block 2 — closer-look summary. 棒D: three-state filter chips + her claim/observed grammar.
+    // Block 2 — gap summary. 棒D: three-state filter chips + her claim/observed grammar.
     // The "Active" chip label is the only new word — Settled / Set aside reuse gapResolvedBadge /
-    // gapDismissedBadge so the same state reads identically here and on the closer-look history.
+    // gapDismissedBadge so the same state reads identically here and in the expanded history.
     // The evidence-source tag reuses handoffEvidenceTag ("From your uploads").
+    // #63: `homeGapsLink` (the jump to the retired Worth-noting tab) is replaced by an
+    // in-place expand/collapse pair — the comparison cards now live inside this block.
     homeGapsTitle: 'Where the documents disagree',
     homeGapsCount: '{count} open',
     homeGapsEmpty: 'Nothing is contradicting itself right now.',
     homeGapsFilterEmpty: 'Nothing in this state right now.',
     homeGapFilterActive: 'Active',
-    homeGapsLink: 'Worth noting',
+    homeGapsExpand: 'Show all',
+    homeGapsCollapse: 'Collapse',
 
     // Block 3 — people worth a look. 🔴 The count says how many times the FILES mention them.
     // It is not a score, a rank or a rating, and the screen says so out loud.
@@ -1770,7 +1777,7 @@ export const en = {
     playbooksEmptyAria: 'Playbooks — coming soon',
     teamLiveAria: 'Team — live',
     followupsViewAria: 'Follow-ups view',
-    gapEmptyAria: 'Worth noting — nothing pending',
+    gapEmptyAria: 'Document mismatches — nothing pending',
     projectsEmptyAria: 'Projects — nothing yet',
     complianceFooterAria: 'How to use what Avery tells you',
   },

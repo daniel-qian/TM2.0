@@ -125,7 +125,8 @@ async function runInjectSeeds(page) {
 
 const { browser, page } = await bootPage({
   // 🔴 `&lang=en` 必须钉死：本门驱动全靠 snippet 的 _clickTab 按**英文**标签点 tab
-  //（'Team' / 'Worth noting' / 'Follow-ups'），不钉语言就等于把门的成败绑在"默认语言恰好是 en"
+  //（'Team' / 'Today' / 'Follow-ups'——#63 起「Worth noting」tab 已退休，gaps 组改走
+  // _openHomeGaps 进「今天」的差距摘要块），不钉语言就等于把门的成败绑在"默认语言恰好是 en"
   // 这个环境事实上。失败模式不会假绿（点不到 → 卡挂不上 → gapsDerive cards=0 → 红），
   // 但那是一条**环境相关的红**，查起来贵。同区的 button-family / status-truth 都显式钉了 lang。
   url: `${UI}/?v=2&mode=live&lang=en`,
@@ -178,6 +179,15 @@ await reinjectSnippet(page)
 {
   const out = await page.evaluate(() => window.__seedGate.assertGapsToAsk())
   rec('gapsToAsk', !!out.pass, out.pass ? '' : JSON.stringify(out).slice(0, 200))
+}
+// ── #63（merge-closerlook）· 第 4 判据：gap 通知的落点接线 ─────────────────────
+// NOTIF_TARGET['gap'] 从退休的 closerlook 改指 home。判据落在**真部件**上：点铃铛里那条
+// 真实的 gap 通知（本轮 injectSeeds 的矛盾语料在 ingest 时就推过一条），断言壳落在
+// data-scene='home' 且差距摘要块在场——不读 store 的映射表。接错线（比如指到 'files'）
+// 或接线整个失灵（点了不动，留在出发屏 team）都直接红。
+{
+  const out = await page.evaluate(() => window.__seedGate.assertGapNotifRoute())
+  rec('gapNotifRoute', !!out.pass, out.pass ? '' : JSON.stringify(out).slice(0, 200))
 }
 
 await finish(gateRec, { browser, label: 'B/C 组判定：triage/followups + gaps' })

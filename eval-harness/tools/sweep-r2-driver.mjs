@@ -37,7 +37,9 @@ const HERE = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(HERE, '..', '..')
 const SEED_DIR = join(ROOT, 'eval-harness', 'tests', 'fixtures', 'demo-seed')
 
-const SCREENS = ['home', 'team', 'projects', 'room', 'followups', 'notes', 'closerlook',
+// #63（merge-closerlook）· 'closerlook' 出列：屏已退休（goScreen 会静默兜底回 home，
+// 留着=把 home 采两遍还叫错名字，正是下面 paperwork 注释里那个坑的同款）。
+const SCREENS = ['home', 'team', 'projects', 'room', 'followups', 'notes',
                  'playbooks', 'vision', 'files', 'paperwork']
 
 const arg = (k, d) => {

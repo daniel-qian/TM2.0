@@ -1883,43 +1883,11 @@
   font-size: 12px;
 }
 
-/* ── feat-044 · A closer look — 矛盾点独立页（PRD F4 / decisions.md 拍板#4）。取代
-   feat-035 立的空态占位屏（同一屏，真实现）。布局与 Follow-ups 屏同口径（scroll/frame/
-   header），卡片语法沿用 .home-handoff 家族（hairline 边框、圆角、柔阴影），仅补一条对照
-   卡专属的左右两栏（claim vs evidence）。 */
-.lite2-shell .lite-closerlook-scroll {
-  position: absolute;
-  inset: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
-}
-
-.lite2-shell .lite-closerlook-frame {
-  max-width: 760px;
-  margin: 0 auto;
-  padding: 84px 36px 90px;
-}
-
-.lite2-shell .lite-closerlook-header {
-  margin-bottom: 22px;
-}
-
-.lite2-shell .lite-closerlook-header h1 {
-  margin: 4px 0 8px;
-  font-family: var(--lite2-heading-font);
-  font-size: clamp(21px, 2.4vw, 27px);
-  font-weight: 500;
-  line-height: 1.32;
-}
-
-.lite2-shell .lite-closerlook-lede {
-  margin: 0;
-  color: var(--ink-soft);
-  font-size: 13px;
-  line-height: 1.6;
-  max-width: 58ch;
-}
-
+/* ── feat-044 · 对照卡（PRD F4 / decisions.md 拍板#4）。#63（merge-closerlook）：独立屏
+   退休，.lite-closerlook-* 的 scroll/frame/header 骨架随之删除；下面的 .lite-gap-* 卡片
+   家族**原样保留**——卡片现在渲染在「今天」的差距摘要块（.lite-home-gaps）展开态里，
+   类名就是 B/C 组门的选择器合同，别动。卡片语法沿用 .home-handoff 家族（hairline 边框、
+   圆角、柔阴影），仅补一条对照卡专属的左右两栏（claim vs evidence）。 */
 .lite2-shell .lite-gap-list {
   display: flex;
   flex-direction: column;
@@ -2175,14 +2143,11 @@
   outline: none;
 }
 
-@media (max-width: 720px) {
-  .lite2-shell .lite-closerlook-frame {
-    padding: 84px 20px 90px;
-  }
-
-  .lite2-shell .lite-gap-compare {
-    grid-template-columns: 1fr;
-  }
+/* #63 · 对照卡搬进右轨（.lite-home-gaps ≈ 1fr 窄柱）后，claim/evidence 双栏在窄柱里
+   会挤成两根 ~200px 的细条——改纵向堆叠，与收起态摘要行（.lite-home-gap-side）的
+   纵排语法一致。左缘语气色（sage/terracotta）不变，仍是区分两侧的手段。 */
+.lite2-shell .lite-home-gaps .lite-gap-compare {
+  grid-template-columns: 1fr;
 }
 
 /* ── feat-036 · 晨间分诊三动作的次级链接（Take to the room / Add to follow-ups /
@@ -5529,7 +5494,8 @@
   background: rgba(var(--lite2-accent-rgb), 0.16);
 }
 
-/* 多看一眼页 · 实时分析预告（Danny 2C：页内预告代替改名）。安静的收尾块——不抢差距卡
+/* 差距摘要块展开态 · 实时分析预告（Danny 2C：页内预告代替改名；#63 随对照卡迁入 home）。
+   安静的收尾块——不抢差距卡
    的注意力；标题走 section-label 语法（uppercase 小字），小字色用 --ink-faint（已压到
    AA 4.7:1，feat-080）。 */
 .lite2-shell .lite-gap-realtime-note {
@@ -6014,15 +5980,14 @@
   }
 }
 
-/* 九消费者：各源块（closerlook l.1732 / followups l.2132 / notes l.3202 / home l.3523 /
-   projects l.4356 / vision l.1152 / 棒1 追加块 / 各自的窄屏媒体块）的顶距全部让位给变量；
+/* 消费者清单（#63 起 closerlook 退休出列）：各源块（followups / notes / home / projects /
+   vision / 棒1 追加块 / 各自的窄屏媒体块）的顶距全部让位给变量；
    side/bottom 维持各源块原值——本块在文件尾，同权重后写者胜。
    .home-frame 是 shared/70-home-cards.css 的类（Team 屏）——.lite2-shell 前缀把覆盖锁在 v02。 */
 .lite2-shell .home-frame,
 .lite2-shell .lite-home-frame,
 .lite2-shell .lite-projects-frame,
 .lite2-shell .lite-followups-frame,
-.lite2-shell .lite-closerlook-frame,
 .lite2-shell .lite-room-board,
 .lite2-shell .lite-notes,
 .lite2-shell .lite-vision {
@@ -6045,7 +6010,6 @@
 .lite2-shell .lite-home-scroll,
 .lite2-shell .lite-projects-scroll,
 .lite2-shell .lite-followups-scroll,
-.lite2-shell .lite-closerlook-scroll,
 .lite2-shell .lite-room-scroll,
 .lite2-shell .lite-notes-body,
 .lite2-shell .lite-vision-scroll {

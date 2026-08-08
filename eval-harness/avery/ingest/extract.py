@@ -795,6 +795,37 @@ def _is_roster_header_row(row: str) -> bool:
     return bool(_ZH_NAME_HEADER_RE.search(row))
 
 
+def _strip_table_frame(ln: str, bars: str = "|") -> str:
+    """GFM 标准表格行的边框竖线（`| 姓名 | 部门 |` 首尾那两根）→ 各去一根，内侧的一根不动 (#61)。
+
+    没有这一步，标准 markdown 表格在 roster / 自述两条腿上都是**零命中且全静默**：
+    `"| 周雅婷 | MKT |".split("|")` 的 cells[0] 是空串，`_looks_like_name('')` 为假，整行被当成
+    「首格没填」丢掉——文件显示已读取、briefing 说 0 people，读起来像文档里本来就没有名册。
+    而「把表格从别处复制成 markdown 再传」恰恰是最自然的动作（GFM 产出首尾都有竖线）。
+
+    判据是**第 0 列就是竖线**，不是「strip 后以竖线开头」，这一字之差是安全边界而非洁癖：
+    parse.py 的三个结构化生产者（docx/xlsx/csv）都用 `" | ".join(cells)` 造行，首格为空时产出
+    ` | 周雅 | …` ——以**空格**开头。这种行今天被静默丢弃（首格空 ≠ 有人），而且必须继续被丢弃：
+    值在第二列，那是 role/team 的位置，「客房部经理」这类 3~5 个汉字的岗位值恰好过
+    _looks_like_name，一旦被顶进 cells[0] 就是 feat-039「No.」那类幽灵人卡。顶格判据让本函数
+    对三个生产者的输出**构造上是 no-op**（join 的行首要么是首格内容要么是空格，永远不是竖线），
+    代价是缩进 1~3 格的 GFM 表格照旧不认——GFM 允许缩进，但「缩进一格的表格行」与「首格为空的
+    join 行」在字节上不可区分（` | a | b` 两读皆通），宁可漏（同 granularity.apply_gate 的取舍）。
+
+    只各剥一根，空格子语义保位：`| 周雅 | | 前厅部 |` 中间的空格子还是空格子；`|| a |` 剥完剩
+    `| a`，首格是空格子。尾侧竖线**不单独剥**——`周雅 | MKT |` 是 join 对「末格为空」的合法产出，
+    它只在首竖线在场时跟着去掉。转义竖线 `\\|`、对齐语法 `:---:` 不在本函数职责内（票面明确不做；
+    分隔行 `---` 靠 _looks_like_name 挡，不靠这里）。
+    """
+    if not ln or ln[0] not in bars:
+        return ln
+    body = ln[1:]
+    tail = body.rstrip()
+    if tail and tail[-1] in bars:
+        return tail[:-1]
+    return body
+
+
 # Separators inside a single roster cell that lists several things ('a; b' / 「甲、乙」).
 # 、(U+3001 IDEOGRAPHIC COMMA) is the point: enumerating a list is its ONLY job in Chinese — it is
 # not a sentence comma — so 「客房夜床服务复核、布草间盘点」is unambiguously two things a colleague
@@ -1377,12 +1408,14 @@ class HeuristicExtractor:
         rows = [ln for ln in doc.lines if "|" in ln]
         header: list[str] = []
         if rows and _is_roster_header_row(rows[0]):
-            header = [_canon_header(c) for c in rows[0].split("|")]
+            # #61: 表头与数据行必须用同一把尺剥边框。只剥一边，col 映射就整体偏一位——那是
+            # docstring 第 3 条那种「卡片自信地全错且无人报告」的错位，比零命中更贵。
+            header = [_canon_header(c) for c in _strip_table_frame(rows[0]).split("|")]
             rows = rows[1:]
         for i, ln in enumerate(doc.lines):
             if "|" not in ln:
                 continue
-            cells = [c.strip() for c in ln.split("|")]
+            cells = [c.strip() for c in _strip_table_frame(ln).split("|")]
             if header and cells and cells[0].strip().lower() in _NOT_NAME:
                 continue
             name = cells[0] if cells else ""
@@ -1457,7 +1490,10 @@ class HeuristicExtractor:
         """
         res = ExtractionResult()
         for i, raw in enumerate(doc.lines):
-            s = strip_decoration(raw.strip())
+            # #61: 剥边框必须发生在 strip 之前——strip_decoration 第一步就 .strip()，会把
+            # ` | 周雅 | …`（join 对「首格为空」的产出）洗成顶格竖线，那种行必须继续被丢弃。
+            # 边框字符集跟本函数自己的切格表一致（｜/|），与 roster 路各认各的尺。
+            s = strip_decoration(_strip_table_frame(raw, "|｜").strip())
             if "自述" not in s:
                 continue
             cells = re.split(r"[｜|]", s)

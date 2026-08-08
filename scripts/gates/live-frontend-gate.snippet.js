@@ -44,8 +44,9 @@
  *        was added and never reached the table; it MUST run after F2 (one real advise is what
  *        writes a note). The table below still omits it entirely — see live-frontend-gate.md,
  *        whose call-order table does carry K.
- *      · assertV2Boots() expects 9 tabs, not 8 (files-hub-0729 added "Files"). Its own
- *        `expected` array is the single source of truth for tab order.
+ *      · assertV2Boots() expects 8 tabs (files-hub-0729 added "Files"; #63 merge-closerlook
+ *        retired "Worth noting" — the comparison cards live inside Today's gap block now).
+ *        Its own `expected` array is the single source of truth for tab order.
  *    Both are corrected inline below. Don't re-derive these numbers from this comment either —
  *    count the keys in verdict() / the entries in assertV2Boots()'s expected array.
  * ══════════════════════════════════════════════════════════════════════════════════════════
@@ -179,10 +180,16 @@
  *                                                    // (localStorage, not in-memory only)
  *   __seedGate.flowVerdict()                         // aggregate (4 phases)
  *
- * feat-044 (lite-live-v02, PRD F4 / decisions.md 拍板#4) — "A closer look" comparison-card
- * phases, SEPARATE aggregate (gapVerdict below, phase group C). BORN RED (2026-07-14, before
- * implementation): no `.lite-gap-card` anywhere — CloserLookScreen is still the feat-035
- * coming-soon placeholder. Driven with `?v=2&mode=live&transport=stub`. The stub corpus
+ * feat-044 (lite-live-v02, PRD F4 / decisions.md 拍板#4) — comparison-card phases, SEPARATE
+ * aggregate (gapVerdict below, phase group C). BORN RED (2026-07-14, before implementation):
+ * no `.lite-gap-card` anywhere — CloserLookScreen was still the feat-035 coming-soon
+ * placeholder. ⚠ #63 (merge-closerlook, 2026-08-08): the standalone "Worth noting" screen
+ * retired — the SAME cards (same class names, same actions) now render inside Today's
+ * gap-summary block, behind an in-place expand (`.lite-home-gap-expand`). All three phases
+ * below navigate via _openHomeGaps() instead of a tab click; a fourth phase (gapNotifRoute)
+ * pins the rewired NOTIF_TARGET['gap'] -> home. Driven with `?v=2&mode=live&transport=stub`
+ * (dead under build+preview — see READ FIRST ①; the mechanical runner drives a real mock
+ * backend instead). The stub corpus
  * (src/lite2/stubTransport.ts) carries exactly ONE genuine self-report/signal mismatch
  * (pr_portal: status reads on-track, but a blocker says otherwise) — gapDerive.ts (pure
  * function, LiteTeam -> GapCard[]) surfaces it as one comparison card; pr_pilot is NOT a gap
@@ -282,7 +289,8 @@
  *                                                    // EXACTLY one 'run' item (final multiset
  *                                                    // gap+ingest+run and nothing else); clicking
  *                                                    // the 'gap' notification ROUTES to the
- *                                                    // mapped tab (A closer look) and marks that
+ *                                                    // mapped screen (#63: Today, where the gap
+ *                                                    // block lives) and marks that
  *                                                    // item read (NOTIF_TARGET wiring — coverage
  *                                                    // added on adversarial-verify rework); the
  *                                                    // unread badge shows and mark-all clears it
@@ -775,6 +783,20 @@
       } catch (e) {
         return false;
       }
+    },
+
+    // #63 (merge-closerlook) · the comparison cards live inside Today's gap-summary block now,
+    // behind an in-place expand. Every group-C phase used to `_clickTab('Worth noting')`; that
+    // tab is gone — navigate to Today and open the block instead. Expanding is idempotent
+    // (aria-expanded guards the click), so phases can call this back-to-back safely.
+    async _openHomeGaps() {
+      this._clickTab('Today');
+      try {
+        await poll(() => ($('.lite-home-gaps') ? true : null), 8000, 'home gap block to mount');
+      } catch (e) { /* fall through — callers report absence */ }
+      const toggle = $('.lite-home-gap-expand');
+      if (toggle && toggle.getAttribute('aria-expanded') !== 'true') toggle.click();
+      return !!toggle;
     },
 
     async assertTeamGrouped() {
@@ -1477,23 +1499,28 @@
     async assertV2Boots() {
       // Phase v2Boots: `?v=2&mode=live` must render the .lite2-shell root with all 9 tabs
       // Tab order = feat-057's aggregate entry + PRD order + feat-047's "Avery's notes"
-      // + feat-055's "Projects" + files-hub-0729's "Files":
+      // + feat-055's "Projects" + files-hub-0729's "Files" − #63's "Worth noting":
       //   Today · Team · Projects · Ask Avery · To-do list/Follow-ups · Avery's notes ·
-      //   Worth noting · Playbooks · Files   (0729 大白话命名 ADR-0031 + 资料库 ADR-0032)
+      //   Playbooks · Files   (0729 大白话命名 ADR-0031 + 资料库 ADR-0032 + merge-closerlook #63)
       //
       // "Avery's notes" was ported from `lite` and placed after Follow-ups per feat-047's
       // tab-order decision (see progress.md).
       // "Today" is PREPENDED (feat-057): it is the `/` landing and the "where do I look first"
-      // screen — an entry placed at the tail is not an entry. 🔴 The 7 detail screens did NOT
-      // retire; Danny's ruling was "aggregate AND split, both extremes". If a future line
-      // removes one of the seven, that is a regression, not a contract update.
+      // screen — an entry placed at the tail is not an entry. 🔴 The detail screens do NOT
+      // retire by default; Danny's ruling was "aggregate AND split, both extremes". If a future
+      // line removes one of them WITHOUT its own ruling, that is a regression, not a contract
+      // update.
       //   ⚠ Clarification (files-hub-0729/01, ADR-0032) — read this before citing the ruling
-      //   above: the seven are team / room / followups / notes / closerlook / playbooks /
+      //   above: the seven were team / room / followups / notes / closerlook / playbooks /
       //   projects. "What's coming" (vision) was NEVER one of them — it is feat-026's
       //   NARRATIVE page. It left the tab row in files-hub-0729/01 and now lives in the
       //   settings menu (the treatment /paperwork already had); its route, screen component
-      //   and data-scene are byte-identical. So a 9-tab row WITHOUT "What's coming" does not
-      //   contradict feat-057. Removing one of the seven still would.
+      //   and data-scene are byte-identical.
+      //   ⚠ #63 (merge-closerlook, 2026-08-08 演习拍板, ruling source = issue #63): "Worth
+      //   noting" (closerlook) DID retire — a per-screen ruling overturning feat-057 for that
+      //   one screen only. Its comparison cards folded into Today's gap-summary block
+      //   (in-place expand); /closer-look redirects to home. The other six screens keep the
+      //   feat-057 protection.
       // "Projects" sits at index 2 (feat-055): the projects screen and the team screen are the
       // two halves of the same upload (people / projects), so it rides next to "Your team"
       // rather than at the tail.
@@ -1518,8 +1545,10 @@
       const tabs = tabBtns.map((b) => ((b.querySelector('.scene-tab-main') || b).textContent || '').trim());
       const subs = tabBtns.map((b) => { const s = b.querySelector('.scene-tab-sub'); return s ? (s.textContent || '').trim() : null; });
       // 0729 大白话命名（ADR-0031，Danny 审字）：5 个主名换企业大白话；home 副小字取消。
-      const expected = ['Today', 'Team', 'Projects', 'Ask Avery', 'To-do list', "Avery's notes", 'Worth noting', 'Playbooks', 'Files'];
-      const expectedSubs = [null, null, null, null, 'Follow-ups', null, null, null, null];
+      // #63（merge-closerlook）：'Worth noting' 退 tab（9→8），与 LiteTopbar.tsx 的 tabs 数组
+      // 同一 commit 同步——这是那个数组注释里点名的碑。
+      const expected = ['Today', 'Team', 'Projects', 'Ask Avery', 'To-do list', "Avery's notes", 'Playbooks', 'Files'];
+      const expectedSubs = [null, null, null, null, 'Follow-ups', null, null, null];
       const out = {
         shellPresent: !!shell,
         dataScene: shell ? shell.getAttribute('data-scene') : null,
@@ -1623,7 +1652,8 @@
     // corpus (src/lite2/stubTransport.ts) carries pr_pilot (status at-risk, one blocker — its
     // own self-report already says "at risk", so the blocker is consistent, not a contradiction)
     // and, as of feat-044, pr_portal (status on-track, one blocker — a DELIBERATE self-report/
-    // signal mismatch that feat-044's gapDerive.ts surfaces on the "A closer look" tab).
+    // signal mismatch that feat-044's gapDerive.ts surfaces as a comparison card — #63:
+    // rendered inside Today's gap block now that the "A closer look" tab retired).
     // teamData.ts liveHandoffs() picks up BOTH as morning-triage cards (any project with a
     // blocker gets surfaced today, regardless of status) — so this now honestly yields TWO
     // triage cards. assertTriageActions below targets only the FIRST one by DOM order
@@ -1938,34 +1968,33 @@
     },
 
     // ── feat-044 (lite-live-v02, PRD F4) — gapVerdict, independent aggregate, phase group C ──
-    // "A closer look" comparison cards: gapDerive.ts derives them purely from LiteTeam project
-    // fields (status reads steady, but a blocker says otherwise) — no person-level judgment, no
-    // point-naming. See the top-of-file usage doc for the full run order and rationale.
+    // Comparison cards: gapDerive.ts derives them purely from LiteTeam project fields (status
+    // reads steady, but a blocker says otherwise) — no person-level judgment, no point-naming.
+    // #63: the cards render inside Today's gap block (expanded) — see _openHomeGaps.
+    // See the top-of-file usage doc for the full run order and rationale.
     async assertGapsDerive() {
       // Phase gapsDerive: collect the team roster on Your team FIRST (screens are mutually-
       // exclusive mounts — Lite2App only renders one `screen` at a time, so `.home-person-card`
-      // isn't in the DOM once we switch to A closer look) — needed for the person-name+digit
-      // red-line scan below. Then switch tabs and assert: >=1 derived comparison card, each with
-      // a claim pane, an evidence pane, and all four action controls; a whole-screen scan for
-      // the banned vocabulary (ADR-0015 lock-in terms — PRD F4 explicitly bans "gap"/"差距"/
-      // "现实差距"/"Nexus" from ever reaching this user-facing surface); and zero person-name+
-      // digit co-occurrence (reuses the Ask redline's _askValueRe — same "no scored person"
-      // shape, ADR-0023).
+      // isn't in the DOM once we switch to Today) — needed for the person-name+digit
+      // red-line scan below. Then open the home gap block and assert: >=1 derived comparison
+      // card, each with a claim pane, an evidence pane, and all four action controls; a scan of
+      // the block for the banned vocabulary (ADR-0015 lock-in terms — PRD F4 explicitly bans
+      // "gap"/"差距"/"现实差距"/"Nexus" from ever reaching this user-facing surface — the ban
+      // followed the cards into the home block; note zh's block title 「资料对不上的地方」and
+      // this scan agree on purpose); and zero person-name+digit co-occurrence (reuses the Ask
+      // redline's _askValueRe — same "no scored person" shape, ADR-0023).
       this._clickTab('Team');
       try {
         await poll(() => ($$('.home-person-card').length > 0 ? true : null), 8000, 'person cards to read roster');
       } catch (e) { /* rosterNames stays whatever is in the DOM (possibly empty) */ }
       const rosterNames = $$('.home-person-card h3').map((el) => (el.textContent || '').trim()).filter(Boolean);
 
-      this._clickTab('Worth noting');
-      try {
-        await poll(() => ($('.lite-closerlook') ? true : null), 8000, 'closer look screen to mount');
-      } catch (e) { /* fall through — assertions below report absence */ }
+      await this._openHomeGaps();
       try {
         await poll(() => ($$('.lite-gap-card').length > 0 || $('.lite-gap-empty') ? true : null), 8000, 'gap cards or honest empty state to render');
       } catch (e) { /* fall through */ }
 
-      const screen = $('.lite-closerlook');
+      const screen = $('.lite-home-gaps');
       const screenText = (screen && screen.innerText) || '';
       const cards = $$('.lite-gap-card');
 
@@ -2012,7 +2041,7 @@
       // now extended with a `gapMarks` field; snapshotGaps() below additionally lets the driver
       // do a real full-page-reload check the same way snapshotFollowups()/assertFollowupsPersist
       // did, as supplementary (non-aggregated) evidence.
-      this._clickTab('Worth noting');
+      await this._openHomeGaps();
       try {
         await poll(() => ($$('.lite-gap-card').length > 0 ? true : null), 8000, 'a gap card to act on');
       } catch (e) { /* report below */ }
@@ -2122,7 +2151,7 @@
       // the composer pre-filled with that card's project title + claim/evidence context (NOT
       // auto-submitted — manager reviews before it goes out, same authorship principle as the
       // triage "take to the room" flow, feat-036/kickoff-dev.md §Feature 切分).
-      this._clickTab('Worth noting');
+      await this._openHomeGaps();
       try {
         await poll(() => ($$('.lite-gap-card').length > 0 ? true : null), 8000, 'a gap card to act on');
       } catch (e) { /* report below */ }
@@ -2153,11 +2182,60 @@
       return out;
     },
 
+    async assertGapNotifRoute() {
+      // Phase gapNotifRoute (#63 · merge-closerlook): NOTIF_TARGET['gap'] rewired from the
+      // retired closerlook screen to home. 🔴 The criterion lives on the REAL part — the bell
+      // popover's actual gap notification item — not on the store table: click it and require
+      // the shell to land on Today (data-scene==='home') with the gap block mounted. A miswired
+      // target (e.g. 'files') lands elsewhere -> red. Leave home FIRST so the route is a real
+      // transition, not an already-there no-op (the mutation "wiring does nothing" must also
+      // go red, and it only can if we start somewhere else).
+      this._clickTab('Team');
+      try {
+        await poll(() => {
+          const shell = $('.lite2-shell');
+          return shell && shell.getAttribute('data-scene') === 'team' ? true : null;
+        }, 6000, 'team screen before bell routing');
+      } catch (e) { /* fall through — landing assertion below still discriminates */ }
+      if (!$('.lite-bell-pop')) {
+        const t = $('.lite-bell-toggle');
+        if (t) t.click();
+      }
+      let gapItem = null;
+      try {
+        gapItem = await poll(
+          () => $$('.lite-notif-item').find((el) => el.getAttribute('data-notif-kind') === 'gap') || null,
+          6000,
+          'a gap notification item in the bell',
+        );
+      } catch (e) {
+        return (results.gapNotifRoute = { pass: false, error: 'no gap notification to click' });
+      }
+      gapItem.click();
+      let landedOnHomeGaps = false;
+      try {
+        await poll(() => {
+          const shell = $('.lite2-shell');
+          return shell && shell.getAttribute('data-scene') === 'home' && $('.lite-home-gaps') ? true : null;
+        }, 6000, 'gap notification to route to Today');
+        landedOnHomeGaps = true;
+      } catch (e) { /* stays false */ }
+      const out = {
+        landedOnHomeGaps,
+        dataScene: ($('.lite2-shell') || { getAttribute: () => null }).getAttribute('data-scene'),
+        pass: landedOnHomeGaps,
+      };
+      results.gapNotifRoute = out;
+      return out;
+    },
+
     gapVerdict() {
       const phases = {
         gapsDerive: !!(results.gapsDerive && results.gapsDerive.pass),
         gapsResolve: !!(results.gapsResolve && results.gapsResolve.pass),
         gapsToAsk: !!(results.gapsToAsk && results.gapsToAsk.pass),
+        // #63 · 通知落点接线（NOTIF_TARGET['gap'] -> home）。
+        gapNotifRoute: !!(results.gapNotifRoute && results.gapNotifRoute.pass),
       };
       return { pass: Object.values(phases).every(Boolean), phases, results };
     },
@@ -2492,14 +2570,14 @@
       } catch (e) { finalKinds = kindsNow(); }
       const finalExact = JSON.stringify(finalKinds) === JSON.stringify(['gap', 'ingest', 'run']);
 
-      // ── 4) clicking a notification ROUTES to its mapped tab and marks THAT item read ──
+      // ── 4) clicking a notification ROUTES to its mapped screen and marks THAT item read ──
       // (coverage added on adversarial-verify rework 2026-07-14: NOTIF_TARGET wiring was
-      // implemented but never gate-exercised). Use the 'gap' item — it routes to A closer look,
-      // a screen we are NOT currently on (we just ran in The room), so the switch is a real
-      // assertion, not a no-op.
+      // implemented but never gate-exercised). Use the 'gap' item — #63 routes it to Today
+      // (the gap block's home), a screen we are NOT currently on (we just ran in The room),
+      // so the switch is a real assertion, not a no-op.
       const badgeShown = !!$('.lite-bell-badge');
       let routeClicked = false;
-      let routedToCloserLook = false;
+      let routedToHome = false;
       let clickedItemRead = false;
       let routedNotifId = null;
       await openBell();
@@ -2511,9 +2589,9 @@
         try {
           await poll(() => {
             const shell = $('.lite2-shell');
-            return shell && shell.getAttribute('data-scene') === 'closerlook' ? true : null;
-          }, 5000, 'notification click to route to A closer look');
-          routedToCloserLook = true;
+            return shell && shell.getAttribute('data-scene') === 'home' && $('.lite-home-gaps') ? true : null;
+          }, 5000, 'notification click to route to Today (gap block home)');
+          routedToHome = true;
         } catch (e) { /* stays false */ }
         // The clicked item must now be read (is-unread gone on that data-notif-id).
         await openBell(); // click closed the popover — reopen to inspect the item state
@@ -2549,11 +2627,11 @@
         finalExact,
         badgeShown,
         routeClicked,
-        routedToCloserLook,
+        routedToHome,
         clickedItemRead,
         markAllWorks,
         pass: bellPresent && initialItems === 0 && emptyMarker && ingestOk && ingestExact &&
-          runOk && finalExact && badgeShown && routeClicked && routedToCloserLook &&
+          runOk && finalExact && badgeShown && routeClicked && routedToHome &&
           clickedItemRead && markAllWorks,
       };
       results.bellIsReal = out;

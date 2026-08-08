@@ -491,7 +491,8 @@ export const zh: Dict = {
     "tabVision": "完整版预告",
     "tabFollowups": "待办清单",
     "tabFollowupsSub": "跟进",
-    "tabCloserLook": "值得注意",
+    // #63（merge-closerlook）：tabCloserLook 已退休——「值得注意」屏并进「今天」的差距摘要块，
+    // 对照卡文案（下面 gap* 键族）原样活着，死掉的只有 tab 名。
     "tabNotes": "Avery 的笔记",
     // ⚠ HAND-WRITTEN, NOT YET M3（files-hub-0729/01 · ADR-0032）：资料库屏。按 PRD
     // 「en 源 → zh 导演手改，短键先例」办。词族锁定见 scripts/i18n-zh-lite2-delta.mjs 的铁律 4：
@@ -703,7 +704,8 @@ export const zh: Dict = {
     "followupsSourceTriage": "来自今早",
     "followupsSourceRoom": "来自问 Avery",
     "followupsSourceAsk": "来自快问",
-    "followupsSourceCloserLook": "来自值得注意",
+    // #63：source id 'closer-look' 不变（已落盘的旧条目终身带着它），标签改指卡片现在住的块。
+    "followupsSourceCloserLook": "来自一处资料对不上",
     "followupsSourceManual": "你手动加的",
     "followupsSourceDecision": "来自一条决策",
     "followupsAddTitlePlaceholder": "要跟进什么？",
@@ -720,9 +722,8 @@ export const zh: Dict = {
     "followupsTitleAria": "跟进标题",
     "followupAdded": "已添加",
     "adviceAddFollowup": "加到待办",
-    "gapPageEyebrow": "值得注意",
-    "gapPageTitle": "文件说的和实际读到的，对不上的地方",
-    "gapPageBody": "当项目自报的状态看起来稳定，文件里却有另一种声音时，会出现在这里——把文件里的说法和实际信号并排摆出来，你可以厘清、先放一放，或者直接问本人。",
+    // #63（merge-closerlook）：独立屏退休，对照卡搬进「今天」差距摘要块的展开态；
+    // 页头三键（gapPageEyebrow/Title/Body）随屏死掉，下面的卡片/动作/历史/空态/预告键原样搬家。
     "gapCardClaimLabel": "文件里的说法",
     "gapCardEvidenceLabel": "实际信号",
     "gapOwnerPrefix": "负责人",
@@ -730,6 +731,8 @@ export const zh: Dict = {
     "gapDismissLabel": "先放一放",
     "gapAskLabel": "直接问本人",
     "gapAddFollowupLabel": "加到待办",
+    // #63：这个动作铸出的待办标题。原屏写死英文模板（记档过的债），搬家顺手入字典。
+    "gapFollowupTitle": "多看一眼{title}",
     "gapHistoryToggleLabel": "已查看过",
     "gapResolvedBadge": "已厘清",
     "gapDismissedBadge": "已搁置",
@@ -815,7 +818,7 @@ export const zh: Dict = {
     "briefingMetricNeedLook": "个值得注意",
     "handoffsTitle": "今日提醒",
     "handoffsEmpty": "暂时没有需要你出面的事——文件读起来一切平稳。",
-    "handoffsEmptyButLook": "眼下没有需要你出手的事——不过有 {count} 处值得注意，都收在「值得注意」里。",
+    "handoffsEmptyButLook": "眼下没有需要你出手的事——不过有 {count} 处值得注意，就在本页「资料对不上的地方」里。",
     "handoffOpen": "打开项目",
     "handoffToneLabel": "值得注意",
     "handoffAction": "{project}：今天先过一下",
@@ -1137,7 +1140,7 @@ export const zh: Dict = {
     "homeSkeletonOverview": "人、项目、文件、备忘、待办——每一个数字都是 Avery 实际读到过的。",
     "homeGuestNote": "不用注册账号也能用——所有功能对访客都开放。登录只是让你在不同设备上还能找回自己上传过的东西。",
     "homeTodayTitle": "今日待办",
-    "homeTodayEmpty": "今天还没有排队的事项。决策、问 Avery、「值得注意」里冒出来的待办，都会落到这里。",
+    "homeTodayEmpty": "今天还没有排队的事项。决策、问 Avery、「资料对不上的地方」冒出来的待办，都会落到这里。",
     "homeTodayDoneAria": "把「{title}」标记为已完成",
     "homeTodayMore": "列表里还有 {count} 项",
     "homeDecisionAddFollowup": "加到待办",
@@ -1221,7 +1224,9 @@ export const zh: Dict = {
     "homeGapsEmpty": "现在没有自相矛盾的地方。",
     "homeGapsFilterEmpty": "这个状态下暂时没有。",
     "homeGapFilterActive": "活跃",
-    "homeGapsLink": "值得注意",
+    // #63：homeGapsLink（跳去已退休 tab 的链接）换成原地展开/收起一对。
+    "homeGapsExpand": "全部展开",
+    "homeGapsCollapse": "收起",
     "homeAttentionTitle": "文件里反复提到的人",
     "homeAttentionCaption": "数的是文件里提到的次数，不是对任何人的评价。",
     "homeAttentionWhySignals": "出现在 {count} 条信号里",
@@ -1275,7 +1280,7 @@ export const zh: Dict = {
     "playbooksEmptyAria": "操作手册 —— 即将上线",
     "teamLiveAria": "团队 —— 实时",
     "followupsViewAria": "跟进事项视图",
-    "gapEmptyAria": "值得注意 —— 暂无待办",
+    "gapEmptyAria": "资料对不上的地方 —— 暂无待看",
     "projectsEmptyAria": "项目 —— 暂无内容",
     "complianceFooterAria": "如何使用 Avery 给你的建议"
   },

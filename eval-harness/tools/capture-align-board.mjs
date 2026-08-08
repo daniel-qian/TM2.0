@@ -7,8 +7,9 @@
 // 她方是酒店 demo 数据——比的是设计语言，不是内容。
 //
 // 配对表（cr 路由 ↔ 我方屏）：home↔/ · team↔/people · projects↔/projects ·
-// room↔/nexus · followups↔/checklist · playbooks↔/playbooks · closerlook↔/gaps ·
-// notes/vision 无对面（单栏出现）。
+// room↔/nexus · followups↔/checklist · playbooks↔/playbooks ·
+// notes/vision 无对面（单栏出现）。#63 起 closerlook 退休：她的 /gaps 概念面
+// 并进了我方 home 屏的差距摘要块。
 //
 //   VERIFY_BASE=http://localhost:5173 CR_BASE=http://localhost:3100 \
 //     node eval-harness/tools/capture-align-board.mjs
@@ -31,7 +32,7 @@ const PAIRS = [
   { screen: 'room', cr: '/nexus' },
   { screen: 'followups', cr: '/checklist' },
   { screen: 'playbooks', cr: '/playbooks' },
-  { screen: 'closerlook', cr: '/gaps' },
+  // #63：closerlook 退休——她的 /gaps 对面现在是 home 屏差距摘要块（home↔/ 已在上面配对）。
   { screen: 'notes', cr: null },
   { screen: 'vision', cr: null },
 ]

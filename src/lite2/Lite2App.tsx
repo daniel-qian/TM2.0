@@ -15,7 +15,6 @@ import { TeamScreen } from './screens/TeamScreen'
 import { RoomScreen } from './screens/RoomScreen'
 import { FollowupsScreen } from './screens/FollowupsScreen'
 import { NotesScreen } from './screens/NotesScreen'
-import { CloserLookScreen } from './screens/CloserLookScreen'
 import { PlaybooksScreen } from './screens/PlaybooksScreen'
 import { VisionScreen } from './screens/VisionScreen'
 import { ProjectsScreen } from './screens/ProjectsScreen'
@@ -32,6 +31,7 @@ import { useLook } from './lookStore'
 import {
   bindNavigator,
   publishBaseScreen,
+  CLOSER_LOOK_LEGACY_PATH,
   DEFAULT_SCREEN,
   PAPERWORK_PATH,
   PROJECT_PATH,
@@ -120,7 +120,7 @@ function Lite2Shell() {
             react-router 不给 RenderedRoute 挂 key，所以「同一位置 + 同一组件类型」在路由
             切换时会被 React 复用；由 ScreenView 内部按当前屏挑真正的屏组件。于是：
               · 换屏（/room → /notes）→ 屏组件类型变了 → 照常卸载重挂，行为不变；
-              · 开详情（/closer-look → /projects/:id）→ 底屏仍是「多看一眼」→ 组件类型没变
+              · 开详情（/followups → /projects/:id）→ 底屏仍是待办清单 → 组件类型没变
                 → 原地保住，展开面板 / 已加入跟进的按钮态这些本地状态不再被冲掉。
             如果每条路由各写各的 element，进详情就等于换了棵树 —— 底屏被偷换、本地状态清零，
             正是复核逮到的那条 major。 */}
@@ -137,7 +137,11 @@ function Lite2Shell() {
           <Route path={SCREEN_PATH.room} element={<ScreenView />} />
           <Route path={SCREEN_PATH.followups} element={<ScreenView />} />
           <Route path={SCREEN_PATH.notes} element={<ScreenView />} />
-          <Route path={SCREEN_PATH.closerlook} element={<ScreenView />} />
+          {/* #63 ·「值得注意」屏退休，对照卡并进 /home 的差距摘要块。老深链必须活着
+              （发出去的链接/书签死不掉）：显式重定向到默认屏（home），query/hash 原样带走。
+              下面的 `*` 兜底其实也能接住它，但这条是**合同**不是巧合——谁改了兜底语义，
+              /closer-look 也不许 404。 */}
+          <Route path={CLOSER_LOOK_LEGACY_PATH} element={<RedirectToDefault />} />
           <Route path={SCREEN_PATH.playbooks} element={<ScreenView />} />
           <Route path={SCREEN_PATH.vision} element={<ScreenView />} />
           {/* feat-055（PRD G9）：整屏项目看板。追加在既有屏路由末尾——本批 feat-057 的
@@ -215,7 +219,6 @@ const SCREEN_COMPONENT: Record<LiteScreen, ComponentType> = {
   room: RoomScreen,
   followups: FollowupsScreen,
   notes: NotesScreen,
-  closerlook: CloserLookScreen,
   playbooks: PlaybooksScreen,
   vision: VisionScreen,
   // feat-055：项目屏。追加在既有条目末尾（本批 feat-057 的 'home' 同样追加在这之后）。

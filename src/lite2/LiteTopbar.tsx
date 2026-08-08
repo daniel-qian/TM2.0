@@ -82,7 +82,7 @@ export function LiteTopbar() {
       const hasRight = el.scrollLeft < max - 1
       setTabsOverflow(hasLeft && hasRight ? 'both' : hasLeft ? 'left' : 'right')
     }
-    // 当前屏的 tab 若被滑出可视区，把它拉回来（窄屏 9 个 tab 必然溢出；不拉回的话
+    // 当前屏的 tab 若被滑出可视区，把它拉回来（窄屏 8 个 tab 必然溢出；不拉回的话
     // 点进某屏后高亮 tab 看不见，等于丢了「我在哪」）。🔴 只动 el.scrollLeft，不用
     // scrollIntoView —— 后者会连带滚祖先，能把整页顶上去。
     const revealActive = () => {
@@ -131,17 +131,22 @@ export function LiteTopbar() {
     { label: t.lite2.tabRoom, screen: 'room' },
     { label: t.lite2.tabFollowups, sub: t.lite2.tabFollowupsSub, screen: 'followups' },
     { label: t.lite2.tabNotes, screen: 'notes' },
-    { label: t.lite2.tabCloserLook, screen: 'closerlook' },
+    // #63（merge-closerlook，2026-08-08 演习拍板）：「值得注意」（closerlook）退 tab，
+    // 界面整套并进「今天」的差距摘要块（HomeScreen ② 区，原地展开）。这条**推翻**了下面
+    // feat-057「7 个分屏一个都没退休」裁定中 closerlook 那一屏——拍板正源即 issue #63
+    //（演习中经理连自己都分不清「值得注意」与「今天要决策的」两个「对不上」界面）。
+    // 其余六个分屏那条裁定原样有效，别顺着这条把别的屏也拆了。
     { label: t.lite2.tabPlaybooks, screen: 'playbooks' },
     // files-hub-0729/01（ADR-0032）· tab 换防：「资料库 / Files」进队尾，「完整版预告」
     // （vision）出 tabs 数组、降进下面的设置菜单。净效果是 tab 数从 9 回到 9 —— 加一个、
     // 减一个，窄屏溢出的压力没有变差（uiux-narrow-0728 那条 bug 的射程不变）。
     //
-    // 🔴 为什么 vision 可以下、七个分屏不可以：feat-057 的裁定原文是「聚合与分屏两极都要，
+    // 🔴 为什么 vision 可以下、分屏默认不可以：feat-057 的裁定原文是「聚合与分屏两极都要，
     // 7 个分屏一个都没退休」，指的是 team/room/followups/notes/closerlook/playbooks/projects
     // 这七屏。vision 是 feat-026 的**叙事页**，从来不在那七个里面 —— 把它的 tab 收进设置
     // 菜单不触碰那条裁定。而且它的路由、屏组件、data-scene 一个字没改，只是入口换了地方
-    //（同 /paperwork 的待遇）。
+    //（同 /paperwork 的待遇）。closerlook 那一屏后来由 #63 单独推翻（见上），是逐屏拍板，
+    // 不是这条裁定失效。
     { label: t.lite2.tabFiles, screen: 'files' },
   ]
 
