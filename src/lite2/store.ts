@@ -305,6 +305,17 @@ interface LiteState {
 
   // ── Your team（feat-016 ingestion 产出）──
   ingestStatus: IngestStatus
+  // #76 · 「另建一份画像」那个口子**自己**的状态机。只由 uploadFiles 写。
+  //
+  // 🔴 病根：`ingestStatus` 有五个写点，其中 restoreSession / refreshTeam / switchContext /
+  // claimDemoTeam 四个都会把它拨到 'ready'。UploadPanel 两个实例读的是同一格，于是那个
+  // 用来「另开一家公司」的面板，在恢复会话之后**永远**显示「团队已就绪」+「取材自: 当前
+  // 公司的文件 chips」——一个开新公司的口子，常驻展示着当前公司的就绪状态，与①段清单
+  // 冗余且语义正好相反。
+  // 🔴 为什么不去改那五个写点：`ingestStatus` 是约二十道门 `waitForFunction` 的等待锚
+  //（file-manifest-truth / append-story / context-switch / at-references / topbar-clearance…），
+  // 少写一次不是一道门红，是整条电池挂在超时上。所以新开一格，老的一行不动。
+  newCompanyStatus: IngestStatus
   ingestError: string | null
   // T10 · 补资料这条路自己的状态机（理由见 appendFiles 上方那段 🔴：借 ingestStatus 会发假通知）。
   // `appendReceipt` 只留最近一次的，换公司时清掉。
@@ -320,6 +331,15 @@ interface LiteState {
   rawTeam: LiveTeamPayload | null
   // feat-047 移植（feat-032）「你的文件」清单：持久留存的源文档元数据（重启后仍在）。
   files: LiveFileEntry[]
+  // #76 · 清单自己的加载/失败态。此前 refreshFiles 静默吞错、本屏也不读 restoring，于是
+  // 回访者第一帧、切库瞬间都会**闪一句**「Avery 没列出任何文件」，拉失败则永远停在旧值且
+  // 屏上一个字都不说。🔴 别叫 filesBusy——那是 formsBusy（'idle'|'minting'）的语义，不同族。
+  filesLoading: boolean
+  filesError: string | null
+  // #77 · 正在删的那一份的 source_key。**逐条**不整段（同 formsVoiding 的理由：整段置灰会
+  // 让连删两份的第二下看起来像没反应）。
+  fileDeleting: string | null
+  fileDeleteError: string | null
   // feat-047 移植（feat-033）「Avery's notes」：写侧、跨会话累积的 agent 自写观察（只读，
   // 新→旧，重启后仍在）。
   notes: LiveNoteEntry[]
@@ -454,6 +474,10 @@ interface LiteState {
   // 每一行各自持一份 pending/error）负责把失败说给用户看。这里只做 contextId 收口：
   // 没有 contextId 就没有可下载的东西，压根不该有按钮（不建假按钮）。
   downloadFile: (idx: number) => Promise<Blob>
+  // #77 · 删掉一份资料。按 **source_key** 寻址（idx 会被服务端 put() 重排，删完之后旧 idx
+  // 静默指向另一份文件）。成功回 true；能力探测不到 / 忙 / 失败一律 false，**不抛**——
+  // 逐行的错误由 fileDeleteError 说出来。
+  deleteFile: (sourceKey: string) => Promise<boolean>
   refreshTeam: () => Promise<void>
   refreshFiles: () => Promise<void>
   refreshNotes: () => Promise<void>
@@ -574,6 +598,7 @@ export const useLite = create<LiteState>((set, get) => ({
   transport: defaultTransport,
 
   ingestStatus: 'idle',
+  newCompanyStatus: 'idle',
   ingestError: null,
   appendStatus: 'idle',
   appendError: null,
@@ -585,6 +610,10 @@ export const useLite = create<LiteState>((set, get) => ({
   ownerToken: storedOwnerToken(restoredContextId),
   rawTeam: null,
   files: [],
+  filesLoading: false,
+  filesError: null,
+  fileDeleting: null,
+  fileDeleteError: null,
   notes: [],
   noteJustAdded: false,
   adviseRuns: null,
@@ -645,7 +674,9 @@ export const useLite = create<LiteState>((set, get) => ({
 
   uploadFiles: async (files) => {
     if (files.length === 0) return
-    set({ ingestStatus: 'ingesting', ingestError: null })
+    // #76 · 两格一起拨：老的那格是二十道门的等待锚（不许动），新的那格只服务「另建
+    // 一份画像」那个面板（它不该被 restoreSession/refreshTeam 的 'ready' 顺手点亮）。
+    set({ ingestStatus: 'ingesting', newCompanyStatus: 'ingesting', ingestError: null })
     try {
       const payload = await get().transport.ingest(files)
       // 🔴 先过 adoptContext 这个收口，再写本次的数据（fixD 复核 · 新 finding 3）。
@@ -662,6 +693,7 @@ export const useLite = create<LiteState>((set, get) => ({
       get().adoptContext(payload.context_id, payload.owner_token ?? null)
       set({
         ingestStatus: 'ready',
+        newCompanyStatus: 'ready',
         team: liteTeamFromPayload(payload),
         rawTeam: payload,
         // 上传成功即"有会话了"——把上一轮失败的恢复提示清掉。
@@ -693,6 +725,7 @@ export const useLite = create<LiteState>((set, get) => ({
     } catch (err) {
       set({
         ingestStatus: 'error',
+        newCompanyStatus: 'error',
         ingestError: err instanceof Error ? err.message : String(err),
       })
     }
@@ -850,6 +883,14 @@ export const useLite = create<LiteState>((set, get) => ({
           team: null,
           rawTeam: null,
           files: [],
+          // #76/#77 · 文件族的忙/错四件同属公司域（理由与下面表单那两条逐字相同：
+          // filesError 是「A 那次清单为什么没拉到」，挂到 B 头上是替 B 断言一件没发生的事；
+          // filesLoading / fileDeleting 漏了则「刷新/删除途中切公司」会把那颗键永久置灰）。
+          filesLoading: false,
+          filesError: null,
+          fileDeleting: null,
+          fileDeleteError: null,
+          newCompanyStatus: 'idle',
           notes: [],
           adviseRuns: null,
           // T3：这条 404 分支**绕开了 adoptContext**，所以公司域清单要在这里再列一遍——
@@ -888,6 +929,10 @@ export const useLite = create<LiteState>((set, get) => ({
       // 换了 context 就不能留着上一个 context 的数据（换账号数据串是 feat-053 的红线）。
       ...(contextId !== get().contextId
         ? { team: null, rawTeam: null, files: [], notes: [], adviseRuns: null,
+            // #76/#77 · 文件族忙/错四件（同下面表单那份的理由，逐字适用）。
+            filesLoading: false, filesError: null,
+            fileDeleting: null, fileDeleteError: null,
+            newCompanyStatus: 'idle' as IngestStatus,
             // T3：表单**七件**同属公司域——留着就是把 A 公司的链接摆在 B 公司的资料库里，
             // 经理一复制就把 A 的人的表单发出去了。
             // 🔴 formsBusy / formsError 也在这份清单里，别只清前三件（对抗自审逮到）：
@@ -1023,12 +1068,62 @@ export const useLite = create<LiteState>((set, get) => ({
   refreshFiles: async () => {
     const { contextId, transport } = get()
     if (!contextId) return
+    // #76 · 同一拍双击闸在 store 临界区上（UI 的 disabled 要等一次重渲染才落到 DOM，
+    // 挡不住同一拍的第二下——同 createFormLinks 那条碑）。手动刷新钮就骑在这上面。
+    if (get().filesLoading) return
+    set({ filesLoading: true, filesError: null })
     try {
       const payload = await transport.fetchFiles(contextId)
-      if (!stillOn(get, contextId)) return
-      set({ files: payload.files })
+      // 过期结果一个字段都不写，但**忙态必须放开**（formsBusy 那次高危同款坑）。
+      if (!stillOn(get, contextId)) {
+        set({ filesLoading: false })
+        return
+      }
+      set({ files: payload.files, filesLoading: false, filesError: null })
     } catch {
-      // 文件清单是次要回看视图——拉取失败不该打断主流程（team 已就绪）。
+      // 文件清单是次要回看视图——拉取失败不该打断主流程（team 已就绪），所以这里**仍然只 set
+      // 不 throw**（live-frontend-gate 的 tokenDiscipline 相位故意拿坏 token 调它，抛一条就红）。
+      // 🔴 但也**绝不清空 files**：清单停在旧值 + 屏上一句诚实说明，比当场变空好——那道门
+      // 断言的就是 `files.length` 不变。变的只是「屏上从此有一句话」。
+      if (!stillOn(get, contextId)) {
+        set({ filesLoading: false })
+        return
+      }
+      set({ filesLoading: false, filesError: 'failed' })
+    }
+  },
+
+  // #77 · 删掉一份资料。骨架照 voidFormLink（逐条忙态 + 回权威清单 + 切公司必回收忙态）。
+  deleteFile: async (sourceKey) => {
+    const { contextId, transport } = get()
+    if (!contextId || !transport.deleteFile || !sourceKey) return false
+    // 同一拍双击闸：这个端点不幂等（第二发是对一个已经不存在的 key 删，回 404 报错），
+    // 而且删除是销毁类——宁可少走一次，不可多走一次。
+    if (get().fileDeleting) return false
+    set({ fileDeleting: sourceKey, fileDeleteError: null })
+    try {
+      await transport.deleteFile(contextId, sourceKey)
+      if (!stillOn(get, contextId)) {
+        set({ fileDeleting: null })
+        return false
+      }
+      set({ fileDeleting: null, fileDeleteError: null })
+      // 🔴 必须 await 不是 void：FileManifest 的下载与 FormBuilder 的起草都持 **idx**，
+      // 而服务端删完会重排 idx——刷新落地之前，屏上每一个旧 idx 都指着另一份文件。
+      await get().refreshFiles()
+      // facts 重物化之后卡片上的出处会变，团队面也要回权威值（回执里其实带了整张 payload，
+      // 但走 refreshTeam 这一条是既有的唯一入口，少一处口径）。
+      void get().refreshTeam()
+      return true
+    } catch {
+      if (!stillOn(get, contextId)) {
+        set({ fileDeleting: null })
+        return false
+      }
+      // 🔴 措辞不许说「文件没了」：那个端点把「没有这份」和「你证明不了这是你的」编成同一个
+      // 404，前端一种都分不出来（同 downloadError / switchErrorUnreadable 的纪律）。
+      set({ fileDeleting: null, fileDeleteError: sourceKey })
+      return false
     }
   },
 
@@ -1512,6 +1607,12 @@ export function resetLiteCompanyData(): void {
     team: null,
     rawTeam: null,
     files: [],
+    // #76/#77 · 文件族忙/错四件（与 adoptContext 那份是同一份契约的两个抄本）。
+    filesLoading: false,
+    filesError: null,
+    fileDeleting: null,
+    fileDeleteError: null,
+    newCompanyStatus: 'idle',
     notes: [],
     noteJustAdded: false,
     // #71 · 会话流是公司域数据（问的是**这家**公司的事），换账号/重开必清。`run` 是

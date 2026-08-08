@@ -19,6 +19,12 @@ import { useDict } from '../shared/i18n/useDict'
 //
 // 🔴 文件名/元数据是不可信内容：只展示，绝不当指令跑。人卡红线不涉——这里没有人。
 
+// 词典占位符替换（与 FilesScreen / AskCard / OnboardWizard 的 fill 同形——本仓有十多份各自
+// 独立的拷贝，没有共享导出；这里照惯例再放一份，不为一个三行函数新开一个 shared 模块）。
+function fill(template: string, vars: Record<string, string | number>): string {
+  return template.replace(/\{(\w+)\}/g, (_, k: string) => String(vars[k] ?? ''))
+}
+
 // feat-047 移植（feat-032）：人类可读的文件大小（清单里 size_bytes 的展示）。纯展示，无逻辑分支。
 function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes <= 0) return '0 B'
@@ -68,6 +74,55 @@ const STATUS_TONE_COLOR: Record<FileStatusView['tone'], string> = {
   unknown: 'var(--ink-faint, #8a8578)',
 }
 
+// 服务端时刻 → 经理这台机器的本地时刻，`YYYY-MM-DD HH:mm`。**这是仓库里唯一一份**——
+// #76 把清单的上传时间列接上时，从 FilesScreen 搬过来并由那边反过来 import（同一格数字
+// 两处各算一遍迟早漂）。
+//
+// 🔴 不能照抄别处那句 `iso.slice(0, 16).replace('T', ' ')`（AskCard 那行就是这么写的）：
+// 后端发的是**带时区的 UTC 瞬间**（`datetime.now(timezone.utc).isoformat()`，pg 侧是
+// timestamptz 的 isoformat），切片会把 `+00:00` 一起切掉，于是屏幕上那串数字被当成本地
+// 墙上时钟读——对 UTC+8 的经理**恒早八小时，还经常连日期都差一天**。「周五截止前交的」
+// 会显示成周四晚上，那是对着证据说假话。员工那张 H5 是靠在同一串数字后面印一个 " UTC"
+// 躲开这件事的（form_api.py 的 `_submitted_extra`）；经理这一格不印，就必须真换算。
+//
+// 用 `new Date(iso)` 让浏览器解析偏移量（带 `+00:00` 或 `Z` 都认），再用**本地**取值器
+// 逐位拼——全程没有一次手写的时区加减，那正是这类 bug 的来源。解析不出来就原样回退，
+// 宁可显示一串原始 ISO，也不显示一个算错的时刻。
+export function localStamp(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso.slice(0, 16).replace('T', ' ')
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
+}
+
+// #76 · 客户端排序。恒按 idx（上传序）是此前唯一的顺序——传过三批之后，「上周那份」得靠
+// 记忆去数第几行。排序纯客户端，契约零变动（uploaded_at/size_bytes 早就在 payload 里）。
+// 🔴 `[...files]` 复制一份再排：`useLite` 给的是 store 里那个数组本体，原地 sort 会把
+// store 的顺序也改了——下一次 refreshFiles 之前，别的读者（askRefs 的候选、下载的 idx
+// 归属）看到的就是一个被 UI 偏好重排过的清单。
+export type FileSortKey = 'idx' | 'time' | 'name' | 'size'
+
+export function sortFiles<T extends {
+  idx: number; filename: string; size_bytes: number; uploaded_at: string
+}>(files: readonly T[], key: FileSortKey): T[] {
+  const out = [...files]
+  if (key === 'time') {
+    // 时间缺席/解析不出来的排到最后（absent≠"很久以前"）——不许让一份没有时间戳的文件
+    // 冒充成最老的那一份。
+    const at = (f: T) => {
+      const ms = new Date(f.uploaded_at).getTime()
+      return Number.isNaN(ms) ? -Infinity : ms
+    }
+    out.sort((a, b) => at(b) - at(a) || a.idx - b.idx)
+  } else if (key === 'name') {
+    // localeCompare：中文文件名按 ASCII 码位排出来的顺序对经理毫无意义。
+    out.sort((a, b) => a.filename.localeCompare(b.filename) || a.idx - b.idx)
+  } else if (key === 'size') {
+    out.sort((a, b) => b.size_bytes - a.size_bytes || a.idx - b.idx)
+  }
+  return out
+}
+
 // 07-19 fixB 收口的版式修正一并找回：文件行换行——原因见当时的注释（真机实测：新元素落在
 // 浏览器默认 16px 全墨字 + 16px 下边距，失败行的文件名被压成两行）。
 const FILE_ROW_STYLE: CSSProperties = { flexWrap: 'wrap' }
@@ -108,6 +163,13 @@ export function FileManifest({ withDownload = false }: FileManifestProps) {
   // （下载是一次性动作，不是屏上的一份状态——见 store.downloadFile 的注释）。
   const [pending, setPending] = useState<number | null>(null)
   const [failed, setFailed] = useState<Record<number, true>>({})
+  // #76 排序偏好 / #77 删除的两段确认——都是这一屏的本地展示态，不进 store。
+  const [sort, setSort] = useState<FileSortKey>('idx')
+  const [confirmKey, setConfirmKey] = useState<string | null>(null)
+  const deleteFile = useLite((s) => s.deleteFile)
+  const deletingKey = useLite((s) => s.fileDeleting)
+  const deleteError = useLite((s) => s.fileDeleteError)
+  const canDelete = useLite((s) => !!s.transport.deleteFile)
 
   // 端点吃 owner_token header，`<a href>` 带不上——所以走 fetch→Blob→objectURL→点一次→撤。
   // 🔴 objectURL 必须撤（revokeObjectURL）：不撤就是一份泄漏到页面生命周期结束的用户文件字节。
@@ -142,14 +204,39 @@ export function FileManifest({ withDownload = false }: FileManifestProps) {
   if (files.length === 0) return null
 
   const showDownload = withDownload && !!contextId
+  // #77 · 能力探测：这条通道没有 deleteFile（stub / 老后端）就**一个删除键都不渲染**。
+  // 「不建假按钮」红线在这一格的样子——同 AppendSection 的 canAppend 先例。
+  const showDelete = withDownload && !!contextId && canDelete
+  const rows = sortFiles(files, sort)
 
   return (
     <div className="upload-files" aria-label={t.upload.filesTitle}>
-      <p className="upload-files-title">{t.upload.filesTitle}</p>
+      <div className="upload-files-head">
+        <p className="upload-files-title">{t.upload.filesTitle}</p>
+        {/* #76 · 排序。两份以下没有可排的东西，控件也就不该占位。 */}
+        {files.length > 1 ? (
+          <label className="upload-files-sort">
+            <span className="upload-files-sort-label">{t.upload.filesSortLabel}</span>
+            <select
+              className="upload-files-sort-select"
+              value={sort}
+              onChange={(e) => setSort(e.target.value as FileSortKey)}
+            >
+              <option value="idx">{t.upload.filesSortDefault}</option>
+              <option value="time">{t.upload.filesSortTime}</option>
+              <option value="name">{t.upload.filesSortName}</option>
+              <option value="size">{t.upload.filesSortSize}</option>
+            </select>
+          </label>
+        ) : null}
+      </div>
       <ul className="upload-files-list">
-        {files.map((file) => {
+        {rows.map((file) => {
           const view = fileStatusView(file.status)
           const isPending = pending === file.idx
+          const key = file.source_key || file.filename
+          const isDeleting = deletingKey === key
+          const confirming = confirmKey === key
           return (
             <li
               key={file.idx}
@@ -160,8 +247,15 @@ export function FileManifest({ withDownload = false }: FileManifestProps) {
               <span className="upload-file-name" style={FILE_NAME_STYLE}>
                 {file.filename}
               </span>
+              {/* 🔴 既有那两格（大小 · N 处引用）原样在前：filesSurfaceV2 按 `.upload-file-meta`
+                  的文本取样（要有数字、要匹配 chunk|reference）。时间**追加**在后面，不替换。
+                  上传时间从 feat-032 起就在 payload 里、一直没渲染——传过三批之后分不出哪份是
+                  上周的（#76 病根之一）。 */}
               <span className="upload-file-meta">
                 {formatBytes(file.size_bytes)} · {file.n_chunks} {t.upload.filesChunks}
+                {file.uploaded_at ? (
+                  <span className="upload-file-time"> · {localStamp(file.uploaded_at)}</span>
+                ) : null}
               </span>
               {/* fixB1/M4 · 每一行都表态，包括成功的那些——只给失败的加标记，用户就得靠
                   "没有标记" 反推 "读进去了"，那仍然是让人猜。 */}
@@ -185,9 +279,56 @@ export function FileManifest({ withDownload = false }: FileManifestProps) {
                   {isPending ? t.upload.downloading : t.upload.download}
                 </button>
               ) : null}
+              {/* ── #77 · 删除。销毁类**必须二段**：第一下只把确认条打开，真删在第二下。 ──
+                  逐条置灰不整排（同 formsVoiding 的理由：整排置灰会让连删两份的第二下看
+                  起来像没反应）；下载那颗按钮的整排置灰是它自己的并发语义，别抄过来。 */}
+              {showDelete && !confirming ? (
+                <button
+                  type="button"
+                  className="lite-btn lite-btn--ghost upload-file-delete"
+                  disabled={isDeleting || deletingKey !== null}
+                  aria-busy={isDeleting}
+                  onClick={() => setConfirmKey(key)}
+                >
+                  {isDeleting ? t.upload.deleting : t.upload.delete}
+                </button>
+              ) : null}
               {view.hintKey ? (
                 <span className="upload-file-status-hint" style={FILE_HINT_STYLE}>
                   {t.upload[view.hintKey]}
+                </span>
+              ) : null}
+              {showDelete && confirming ? (
+                <div className="upload-file-delete-confirm" role="alertdialog" aria-live="polite">
+                  <p className="upload-file-delete-title">
+                    {fill(t.upload.deleteConfirmTitle, { name: file.filename })}
+                  </p>
+                  {/* 正文要说清**还有什么会跟着变**——删一份文档会重建记忆面，卡片上来自它
+                      的读数会失去出处。不预告这一句，经理会以为只是清单少一行。 */}
+                  <p className="upload-file-delete-body">{t.upload.deleteConfirmBody}</p>
+                  <button
+                    type="button"
+                    className="lite-btn lite-btn--ghost upload-file-delete-cancel"
+                    onClick={() => setConfirmKey(null)}
+                  >
+                    {t.upload.deleteCancel}
+                  </button>
+                  <button
+                    type="button"
+                    className="lite-btn upload-file-delete-go"
+                    disabled={deletingKey !== null}
+                    onClick={() => {
+                      setConfirmKey(null)
+                      void deleteFile(key)
+                    }}
+                  >
+                    {t.upload.deleteConfirmAction}
+                  </button>
+                </div>
+              ) : null}
+              {deleteError === key ? (
+                <span className="upload-file-delete-error" role="status" style={FILE_ERROR_STYLE}>
+                  {t.upload.deleteError}
                 </span>
               ) : null}
               {failed[file.idx] ? (

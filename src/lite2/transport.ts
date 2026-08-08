@@ -751,6 +751,14 @@ export interface LiveTransport {
   //（同 demoClaim 的先例——不做假按钮）。
   appendFiles?: (contextId: string, files: File[]) => Promise<LiveTeamPayload>
 
+  // issue #77 · 删掉一份已经传进来的资料。回执与 appendFiles 同形（整张 team payload，
+  // 前端拿它整屏刷新——删完之后卡片上来自那份资料的出处会变，让屏去读权威值别在前端猜）。
+  // 🔴 寻址是 **source_key** 不是 idx：服务端 put() 会重排 idx，删完之后前端手里的旧 idx
+  // 会静默指向另一份文件（不是 404，是下错文件）。
+  // 可选：老后端/stub 没有这个方法，调用方按 `!!transport.deleteFile` 探测能力——探测不到
+  // 就**一个删除键都不渲染**（不建假按钮红线的落点）。
+  deleteFile?: (contextId: string, sourceKey: string) => Promise<LiveTeamPayload>
+
   // 按 context_id 重新拉取 Your team（上传后填充/刷新）。
   fetchTeam: (contextId: string) => Promise<LiveTeamPayload>
 
@@ -1250,6 +1258,18 @@ export function createHttpTransport(base: string = apiBase()): LiveTransport {
         headers: { ...authHeader(contextId), ...accountHeader() },
       })
       if (!res.ok) throw transportError('ingest', res)
+      return (await res.json()) as LiveTeamPayload
+    },
+
+    // issue #77 · 删一份资料。同 appendFiles 的 owner_token 纪律；`source_key` 是文件名，
+    // 可能带中文/括号/斜杠 —— 必须 encodeURIComponent（服务端那条路由用 `:path` 转换器接）。
+    async deleteFile(contextId, sourceKey) {
+      const res = await send(
+        'file delete',
+        `${base}/team/${encodeURIComponent(contextId)}/files/${encodeURIComponent(sourceKey)}`,
+        { method: 'DELETE', headers: { ...authHeader(contextId), ...accountHeader() } },
+      )
+      if (!res.ok) throw transportError('file delete', res)
       return (await res.json()) as LiveTeamPayload
     },
 

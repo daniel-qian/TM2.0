@@ -70,6 +70,12 @@ def _route_for(path: str) -> str | None:
     #    （文件清单）与 `/team/{id}/files/{idx}`（下载，不以 /files 结尾）都照旧直通。
     if path.startswith("/team/") and path.endswith("/files"):
         return "ingest"
+    # issue #77 · 删除一份资料：`DELETE /team/{id}/files/{source_key}`。它与补传是同一张写脸
+    #（同一份资料库、同一个 owner_token 门），所以共用 'ingest' 那个表盘——写侧的限流不该因为
+    # 多开一个入口就少一份。⚠ 这条 `in` 判定也会命中 `GET /team/{id}/files/{idx}`（下载），
+    # 但下面的 `guarded` 只对 POST/DELETE 起闸，读侧照旧直通、行为逐字不变。
+    if path.startswith("/team/") and "/files/" in path:
+        return "ingest"
     if path == "/ask" or path.startswith("/ask/"):
         return "ask"
     if path.startswith("/r/"):
@@ -195,7 +201,9 @@ class IngestGuardMiddleware:
         method = scope.get("method", "GET").upper()
         # POST is guarded on every route; the employee H5 ('share') guards its GET too — the
         # /r/{token} page is the one PUBLIC unauthenticated surface (OG unfurlers hit it as well).
-        guarded = route is not None and (method == "POST" or (route == "share" and method == "GET"))
+        # issue #77: DELETE 也是写。它没有请求体，所以只吃限流那一半，下面的体积闸对它无意义。
+        guarded = route is not None and (
+            method in ("POST", "DELETE") or (route == "share" and method == "GET"))
         if not guarded:
             return await self.app(scope, receive, send)
 
@@ -212,7 +220,8 @@ class IngestGuardMiddleware:
                 "error": "rate limited",
                 "detail": f"too many {route} requests from your address - slow down and retry"})
 
-        if route != "ingest":
+        # 体积闸只对**带请求体的上传**有意义。DELETE 走到这里已经吃过限流，没有 body 可量。
+        if route != "ingest" or method != "POST":
             return await self.app(scope, receive, send)
 
         # 2) total-body size cap (ingest only)

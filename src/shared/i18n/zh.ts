@@ -258,7 +258,36 @@ export const zh: Dict = {
     // 编码成同一个 404（feat-038 租户隔离），前端一种都分不出来——同 switchErrorUnreadable 的纪律。
     "download": "下载",
     "downloading": "下载中…",
-    "downloadError": "这份文件刚才没能下下来，再试一次。"
+    "downloadError": "这份文件刚才没能下下来，再试一次。",
+    // ── #76 · 清单长出形状：列、排序、手动刷新、诚实的加载态 ──────────────────────
+    // uploaded_at / doc_kind 从 feat-032 起就在 payload 里，一直没渲染——传过三批之后
+    // 分不出哪份是上周的。
+    "filesRefresh": "刷新",
+    "filesRefreshing": "正在刷新…",
+    "filesLoading": "正在读取清单…",
+    // 🔴 刻意不说「你的文件没了」：拉不到只说明我们这次没读到，与服务端有没有是两件事
+    //（同 downloadError / filesCurrentEmptyRead 的纪律）。清单停在上一次的好结果上。
+    "filesLoadError": "刚才没连上服务器，下面这份清单可能不是最新的。",
+    "filesRetry": "再拉一次",
+    // 记账（#76）：**不设** fileTime / fileKind 表头键。时间挂在 `.upload-file-meta` 那一行里
+    // （逐行一句，不做表头）；「类型」单开一列是噪音——扩展名本来就在文件名里，而 doc_kind
+    // 是机器词（'company'），对经理没有意义。为「以后可能要用」先建键 = 制造孤儿。
+    "filesSortLabel": "排序",
+    "filesSortDefault": "上传顺序",
+    "filesSortTime": "最近传的在前",
+    "filesSortName": "按文件名",
+    "filesSortSize": "大的在前",
+    // ── #77 · 删除文件。v1 没有这颗按钮是因为后端根本没有这个口子。────────────────
+    // 🔴 销毁类：确认步不是装饰；正文必须说清**还有什么会跟着变**——删一份文档会重建
+    // 记忆面，卡片上来自它的读数会失去出处。deleteError 照 downloadError 的碑：那个端点
+    // 把「没有这份」和「你证明不了这是你的」编成同一个 404，前端一种都分不出来。
+    "delete": "删除",
+    "deleting": "正在删除…",
+    "deleteConfirmTitle": "删掉「{name}」？",
+    "deleteConfirmBody": "Avery 会忘掉这份文件里读到的全部内容。卡片上来自它的那些读数会失去出处。这一步撤不回来，要拿回来只能重新传一次。",
+    "deleteConfirmAction": "确认删除",
+    "deleteCancel": "先留着",
+    "deleteError": "这份文件刚才没能删掉，再试一次。"
   },
   // partner-docs-0728 ·「文件与表单」页。M3 生成，2026-07-28。
   // 🔴 langNote 在中文下是**有意的空串**：那句话说的是「文件正文只有中文、页面外壳不是」，
@@ -541,6 +570,16 @@ export const zh: Dict = {
     "formsLinksTitle": "{period} 的链接",
     "formsLinksNote": "链接由你自己转发给本人——Avery 不替你发消息。一人一链，七天过期，交完就锁上。",
     "formsCopy": "复制",
+    // #76 · 30 个人就是 30 轮「复制→切微信→粘贴→回来」。逐行那颗保留，这颗是加法；
+    // 🔴 必须自己一份 state：逐行的 copiedId 是**单值**，复用会把某一行误点亮成「已复制」。
+    // #76 · 四种静默蒸发形态给可见降级。这一条管「表单没拉到」——今天 token 失效与
+    // 「这条通道没有这个功能」长得一模一样：整段无声消失，一个字都不说。
+    "formsUnavailable": "这会儿没能读到你的表单。东西没丢，刷新一下再看。",
+    "formsCopyAll": "复制全部链接",
+    "formsCopiedAll": "已复制 {count} 条",
+    // 剪贴板会被拒（无 https / 无权限）。逐行那条按设计静默（URL 恒可见可选），
+    // 批量这颗不行——屏上什么都不变，经理会把上一次的剪贴板内容粘出去。
+    "formsCopyAllFailed": "没能复制。上面每条链接都可以手动选中。",
     "formsCopied": "已复制",
     "formsStatusTitle": "谁交了",
     "formsStatusOpen": "还没交",

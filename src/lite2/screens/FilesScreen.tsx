@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useDict } from '../../shared/i18n/useDict'
 import { useLite } from '../store'
-import { FileManifest } from '../FileManifest'
+import { FileManifest, localStamp } from '../FileManifest'
 import { KnownContextList } from '../KnownContextList'
 import { UploadPanel } from '../UploadPanel'
 import { FormBuilder } from '../FormBuilder'
@@ -33,7 +33,7 @@ function SwitchSection() {
   const known = useLite((s) => s.knownContexts)
   if (known.length < 2) return null
   return (
-    <section className="lite-files-section lite-files-switch-section" aria-label={t.upload.switchTitle}>
+    <section id="files-switch" className="lite-files-section lite-files-switch-section" aria-label={t.upload.switchTitle}>
       <h3 className="lite-files-section-title">{t.upload.switchTitle}</h3>
       <KnownContextList />
     </section>
@@ -53,14 +53,14 @@ function AppendSection() {
   // 一次性副本：不做假按钮，但也不装作这个功能不存在——说清楚为什么这儿没有口子。
   if (rawTeam?.ephemeral) {
     return (
-      <section className="lite-files-section lite-files-append" aria-label={l.filesAppendTitle}>
+      <section id="files-append" className="lite-files-section lite-files-append" aria-label={l.filesAppendTitle}>
         <h3 className="lite-files-section-title">{l.filesAppendTitle}</h3>
         <p className="lite-files-empty">{l.filesAppendDemoNote}</p>
       </section>
     )
   }
   return (
-    <section className="lite-files-section lite-files-append" aria-label={l.filesAppendTitle}>
+    <section id="files-append" className="lite-files-section lite-files-append" aria-label={l.filesAppendTitle}>
       <h3 className="lite-files-section-title">{l.filesAppendTitle}</h3>
       <p className="lite-files-empty">{l.filesAppendLede}</p>
       <UploadPanel showFiles={false} mode="append" />
@@ -78,23 +78,30 @@ function classNames(parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(' ')
 }
 
-// 服务端时刻 → 经理这台机器的本地时刻，`YYYY-MM-DD HH:mm`。
-//
-// 🔴 不能照抄别处那句 `iso.slice(0, 16).replace('T', ' ')`（AskCard 那行就是这么写的）：
-// 后端发的是**带时区的 UTC 瞬间**（`datetime.now(timezone.utc).isoformat()`，pg 侧是
-// timestamptz 的 isoformat），切片会把 `+00:00` 一起切掉，于是屏幕上那串数字被当成本地
-// 墙上时钟读——对 UTC+8 的经理**恒早八小时，还经常连日期都差一天**。「周五截止前交的」
-// 会显示成周四晚上，那是对着证据说假话。员工那张 H5 是靠在同一串数字后面印一个 " UTC"
-// 躲开这件事的（form_api.py 的 `_submitted_extra`）；经理这一格不印，就必须真换算。
-//
-// 用 `new Date(iso)` 让浏览器解析偏移量（带 `+00:00` 或 `Z` 都认），再用**本地**取值器
-// 逐位拼——全程没有一次手写的时区加减，那正是这类 bug 的来源。解析不出来就原样回退，
-// 宁可显示一串原始 ISO，也不显示一个算错的时刻。
-function localStamp(iso: string): string {
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return iso.slice(0, 16).replace('T', ' ')
-  const p = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
+// 服务端时刻 → 本地时刻的换算搬去了 `FileManifest.localStamp`（#76 把清单的上传时间列
+// 接上时，两处要用同一格数字，各算一遍迟早漂）。这里 import 那一份，**不再留副本**——
+// 那段「为什么不能 slice(0,16)」的长注释也跟着搬过去了，改口径只改一处。
+
+// 剪贴板写入的**唯一一条**降级链：clipboard API 可能被拒（headless / 无 https / 无权限），
+// 退 execCommand，两条都失败回 false 让调用方自己决定怎么说。逐行复制与「复制全部」共用
+// 这一份——两处各写一份 try/catch 迟早漂（#76 抽出来之前就是各写一份）。
+async function writeClipboard(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text)
+    return true
+  } catch {
+    try {
+      const ta = document.createElement('textarea')
+      ta.value = text
+      document.body.appendChild(ta)
+      ta.select()
+      const ok = document.execCommand('copy')
+      document.body.removeChild(ta)
+      return ok
+    } catch {
+      return false
+    }
+  }
 }
 
 // gap-design-0805 T3 · form-frontend-a1c · 第④段的外壳（抽成小组件的理由同 SwitchSection：
@@ -136,10 +143,16 @@ function StandingFormsSection() {
   const formsAutoFilled = useLite((s) => s.formsAutoFilled)
   const formsVoiding = useLite((s) => s.formsVoiding)
   const voidFormLink = useLite((s) => s.voidFormLink)
+  const canFetchForms = useLite((s) => !!s.transport.fetchForms)
 
   const [templateId, setTemplateId] = useState<string | null>(null)
   const [picked, setPicked] = useState<string[]>([])
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [copiedAll, setCopiedAll] = useState<number | null>(null)
+  const [copyAllFailed, setCopyAllFailed] = useState(false)
+  // #76 · 手动刷新钮自己的忙态。🔴 **不许借 formsBusy**：那一格同时管着「生成本期链接」
+  // 那颗主按钮的 disabled，借它会让刷新的两秒里生成键一起置灰（点了没反应=看起来坏了）。
+  const [refreshing, setRefreshing] = useState(false)
   // 「这个人的这份周报是关于哪个项目的」——键是人卡内部 id，值是项目标题（''=不绑）。
   // 逐人一格而不是整批一个：一批人本来就可能各扛各的项目，整批绑一个等于替经理断言。
   const [bindings, setBindings] = useState<Record<string, string>>({})
@@ -198,7 +211,20 @@ function StandingFormsSection() {
   // 还没解析出来的公司会命中它，于是「新建表单」在第一天不存在。两条改成各自包住自己那一块
   // （下面 `roster.length > 0` / `statusRows.length > 0` / `selected` 三处判空）。
   if (!contextId) return null
-  if (templates === null) return null
+  // #76 · 静默蒸发的可见降级。此前这里是一条裸 `if (templates === null) return null`：
+  // 🔴 **拉失败**（token 过期 / 服务端抖了一下）与**这条通道压根没有表单功能**（stub / 老
+  // 后端）在屏上长得一模一样——整段连标题一起无声消失，经理看到的是「表单功能不存在」。
+  // 这两件事现在分开：没有 fetchForms 这个方法才是真的"没有这个功能"，那时候照旧整段不出
+  //（同 AppendSection 的 canAppend 先例——不装作有）；有方法却没拉到，就诚实说一句。
+  if (templates === null) {
+    if (!canFetchForms) return null
+    return (
+      <section id="files-forms" className="lite-files-section lite-files-forms" aria-label={l.formsTitle}>
+        <h3 className="lite-files-section-title">{l.formsTitle}</h3>
+        <p className="lite-files-empty lite-files-forms-unavailable">{l.formsUnavailable}</p>
+      </section>
+    )
+  }
 
   const togglePicked = (personId: string) => {
     setPicked((prev) =>
@@ -244,24 +270,29 @@ function StandingFormsSection() {
 
   // clipboard 可能被拒（headless / 无 https / 权限）——降级 execCommand，两条都失败也不崩。
   // 链接文本本身恒可见可选，复制不了还能手动选（同 AskCard.copyLink 的姿态）。
-  const copyLink = async (link: string, rowId: string) => {
-    let ok = false
-    try {
-      await navigator.clipboard.writeText(link)
-      ok = true
-    } catch {
-      try {
-        const ta = document.createElement('textarea')
-        ta.value = link
-        document.body.appendChild(ta)
-        ta.select()
-        ok = document.execCommand('copy')
-        document.body.removeChild(ta)
-      } catch {
-        ok = false
-      }
+  // #76 · 「复制全部」。🔴 **独立 state**，不许复用 `copiedId`：那是单值，下面每一行按
+  // `copiedId === row.id` 三元切文案，复用会把某一行误点亮成「已复制」。
+  // 🔴 也必须有可见的失败态：逐行那条按设计静默（URL 恒可见可选，用户看得见自己没复制成），
+  // 批量这颗静默失败时屏上什么都不变，经理会直接把上一次的剪贴板内容粘给员工。
+  const copyAll = async () => {
+    const links = (minted?.links ?? []).map((r) => r.link ?? '').filter(Boolean)
+    if (links.length === 0) return
+    // 一人一行：粘进微信/邮件就是一份可读的名单，不是一坨。
+    const text = (minted?.links ?? [])
+      .filter((r) => r.link)
+      .map((r) => `${r.person_name} ${r.link}`)
+      .join('\n')
+    if (await writeClipboard(text)) {
+      setCopiedAll(links.length)
+      setCopyAllFailed(false)
+    } else {
+      setCopiedAll(null)
+      setCopyAllFailed(true)
     }
-    if (ok) setCopiedId(rowId)
+  }
+
+  const copyLink = async (link: string, rowId: string) => {
+    if (await writeClipboard(link)) setCopiedId(rowId)
   }
 
   // 🔴 缺席不等于成功：不认识的状态词说「状态未知」，绝不悄悄按 open/submitted 渲染
@@ -289,7 +320,7 @@ function StandingFormsSection() {
           : null
 
   return (
-    <section className="lite-files-section lite-files-forms" aria-label={l.formsTitle}>
+    <section id="files-forms" className="lite-files-section lite-files-forms" aria-label={l.formsTitle}>
       <h3 className="lite-files-section-title">{l.formsTitle}</h3>
       <p className="lite-files-empty">{l.formsLede}</p>
 
@@ -302,6 +333,88 @@ function StandingFormsSection() {
         <p className="lite-files-forms-autofilled" data-autofilled={autoFilledCount}>
           {fill(l.formsAutoFilled, { count: autoFilledCount, period: autoFilled.period })}
         </p>
+      ) : null}
+
+      {/* ── #76 · 「谁交了」提到 ④ 段最前 ────────────────────────────────────────────
+          频率倒挂是这一屏最大的病：铸链是**一周一次**的动作，却占着 ④ 的黄金位；而经理
+          周中天天要看的「谁交了」压在整块最底，要滚过建表入口、chips 墙、逐人绑项目下拉
+          才到。这里把它提到前面——下面的铸链/拼装器一个字没动，只是排在它后面。
+          🔴 计算量（statusRows / latestPeriod）本来就在早退之上、与位置无关，直接搬。 */}
+      {/* 谁交了。没有一条铸过的链接时整块不出——那时候「谁交了」的答案是「你还没发给谁」，
+          而上面那个生成按钮已经把这句话说完了。 */}
+      {statusRows.length > 0 ? (
+        <div className="lite-files-forms-status-block">
+          <p className="lite-files-forms-label">
+            {l.formsStatusTitle}
+            {latestPeriod ? <span className="lite-files-forms-period">{latestPeriod}</span> : null}
+            {/* #76 · 手动刷新。此前 refreshForms **只挂屏 mount**：员工交了表，经理这一屏
+                不动就永远是旧的，要靠切走再切回来触发 remount；铃铛的 'form' 通知也只在
+                refreshForms 跑过之后才 push（不开这屏就不响）。
+                🔴 自动轮询明确不做：GET submissions 是 T9 的**读时写**（顺手按上期名单铸
+                本期），裸轮询等于把那个写副作用变成常态后台流量——要做得先拆后端读写语义。
+                重呼的是既有的那个 GET，零后端改动。 */}
+            <button
+              type="button"
+              className="lite-btn lite-btn--ghost lite-files-forms-refresh"
+              disabled={refreshing}
+              aria-busy={refreshing}
+              onClick={() => {
+                if (refreshing) return
+                setRefreshing(true)
+                void Promise.resolve(refreshForms()).finally(() => setRefreshing(false))
+              }}
+            >
+              {refreshing ? t.upload.filesRefreshing : t.upload.filesRefresh}
+            </button>
+          </p>
+          <ul className="lite-files-forms-status">
+            {statusRows.map((row) => {
+              const view = statusView(row)
+              return (
+                <li key={row.id} className="lite-files-forms-status-row" data-tone={view.tone}>
+                  <span className="lite-files-forms-status-name">{row.person_name}</span>
+                  {/* 绑了项目就说出来——「绑了之后经理怎么看得出来」的答案就在这一行。
+                      没绑的什么都不写（absent≠none：不编一句「未绑定」）。 */}
+                  {row.project_ref ? (
+                    <span className="lite-files-forms-status-project">
+                      {fill(l.formsStatusAbout, { project: row.project_ref })}
+                    </span>
+                  ) : null}
+                  {/* 已交的给出时刻（服务端盖的章，切到分钟）。没交的这里什么都不写——
+                      编一句「等待中」只是把空白换成噪音。
+                      🔴 时间戳排在徽章**前面**：徽章恒为行尾，两种行的状态词才对得上一列。
+                      反过来（徽章在前）会让「已交」被时间戳往左推，人眼过时逮到过。 */}
+                  {row.submitted_at ? (
+                    <span className="lite-files-forms-status-when">
+                      {localStamp(row.submitted_at)}
+                    </span>
+                  ) : null}
+                  <span className="lite-badge lite-files-forms-status-badge" data-tone={view.tone}>
+                    {view.label}
+                  </span>
+                  {/* T9 · 「去调整」的落点：撤回一条还没交的链接。
+                      🔴 只在 `status === 'open'` 时渲染。已交的**不许动**（答案是员工本人的话，
+                      撤回按钮不该有机会碰它）；已过期的撤了也没意义（它本来就打不开了）。
+                      🔴 判据用的是服务端背书的 `row.status`，不是从 submitted_at 现推——
+                      「显示值和判据值必须分开」那条老规矩（AGENTS.md 易复发陷阱第一条）。
+                      撤回 = 服务端把到期时刻拨到此刻：行还在（所以自动补铸不会立刻发回来一条），
+                      员工那头看到的是现成的「这条链接已过期」页，不是一种新造的状态。 */}
+                  {row.status === 'open' && voidFormLink ? (
+                    <button
+                      type="button"
+                      className="lite-btn lite-btn--ghost lite-files-forms-void"
+                      disabled={formsVoiding !== null}
+                      aria-label={fill(l.formsVoidAria, { name: row.person_name })}
+                      onClick={() => void voidFormLink(row.id)}
+                    >
+                      {formsVoiding === row.id ? l.formsVoiding : l.formsVoid}
+                    </button>
+                  ) : null}
+                </li>
+              )
+            })}
+          </ul>
+        </div>
       ) : null}
 
       {/* 模板列表。只有一张时不给切换按钮——一个唯一选项的单选组是纯噪音；题面预览照给，
@@ -454,6 +567,26 @@ function StandingFormsSection() {
           <p className="lite-files-forms-label">
             {fill(l.formsLinksTitle, { period: minted.period })}
           </p>
+          {/* #76 · 一键全复制。逐行那颗保留（发给某一个人时仍然是最短的路），这颗解的是
+              「30 个人 30 轮复制→切微信→粘贴→回来」。一人一行的纯文本，粘出去就是名单。 */}
+          {minted.links.some((r) => r.link) ? (
+            <div className="lite-files-forms-copyall-row">
+              <button
+                type="button"
+                className="lite-btn lite-btn--soft lite-files-forms-copyall"
+                onClick={() => void copyAll()}
+              >
+                {copiedAll !== null
+                  ? fill(l.formsCopiedAll, { count: copiedAll })
+                  : l.formsCopyAll}
+              </button>
+              {copyAllFailed ? (
+                <span className="lite-files-forms-copyall-error" role="status">
+                  {l.formsCopyAllFailed}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
           <div className="lite-files-forms-links">
             {minted.links.map((row) => (
               <div key={row.id} className="lite-files-forms-link-row">
@@ -485,77 +618,52 @@ function StandingFormsSection() {
         </div>
       ) : null}
 
-      {/* 谁交了。没有一条铸过的链接时整块不出——那时候「谁交了」的答案是「你还没发给谁」，
-          而上面那个生成按钮已经把这句话说完了。 */}
-      {statusRows.length > 0 ? (
-        <div className="lite-files-forms-status-block">
-          <p className="lite-files-forms-label">
-            {l.formsStatusTitle}
-            {latestPeriod ? <span className="lite-files-forms-period">{latestPeriod}</span> : null}
-          </p>
-          <ul className="lite-files-forms-status">
-            {statusRows.map((row) => {
-              const view = statusView(row)
-              return (
-                <li key={row.id} className="lite-files-forms-status-row" data-tone={view.tone}>
-                  <span className="lite-files-forms-status-name">{row.person_name}</span>
-                  {/* 绑了项目就说出来——「绑了之后经理怎么看得出来」的答案就在这一行。
-                      没绑的什么都不写（absent≠none：不编一句「未绑定」）。 */}
-                  {row.project_ref ? (
-                    <span className="lite-files-forms-status-project">
-                      {fill(l.formsStatusAbout, { project: row.project_ref })}
-                    </span>
-                  ) : null}
-                  {/* 已交的给出时刻（服务端盖的章，切到分钟）。没交的这里什么都不写——
-                      编一句「等待中」只是把空白换成噪音。
-                      🔴 时间戳排在徽章**前面**：徽章恒为行尾，两种行的状态词才对得上一列。
-                      反过来（徽章在前）会让「已交」被时间戳往左推，人眼过时逮到过。 */}
-                  {row.submitted_at ? (
-                    <span className="lite-files-forms-status-when">
-                      {localStamp(row.submitted_at)}
-                    </span>
-                  ) : null}
-                  <span className="lite-badge lite-files-forms-status-badge" data-tone={view.tone}>
-                    {view.label}
-                  </span>
-                  {/* T9 · 「去调整」的落点：撤回一条还没交的链接。
-                      🔴 只在 `status === 'open'` 时渲染。已交的**不许动**（答案是员工本人的话，
-                      撤回按钮不该有机会碰它）；已过期的撤了也没意义（它本来就打不开了）。
-                      🔴 判据用的是服务端背书的 `row.status`，不是从 submitted_at 现推——
-                      「显示值和判据值必须分开」那条老规矩（AGENTS.md 易复发陷阱第一条）。
-                      撤回 = 服务端把到期时刻拨到此刻：行还在（所以自动补铸不会立刻发回来一条），
-                      员工那头看到的是现成的「这条链接已过期」页，不是一种新造的状态。 */}
-                  {row.status === 'open' && voidFormLink ? (
-                    <button
-                      type="button"
-                      className="lite-btn lite-btn--ghost lite-files-forms-void"
-                      disabled={formsVoiding !== null}
-                      aria-label={fill(l.formsVoidAria, { name: row.person_name })}
-                      onClick={() => void voidFormLink(row.id)}
-                    >
-                      {formsVoiding === row.id ? l.formsVoiding : l.formsVoid}
-                    </button>
-                  ) : null}
-                </li>
-              )
-            })}
-          </ul>
-        </div>
-      ) : null}
     </section>
   )
 }
+
+// #76 · 页内导航。整屏此前是一长条 4000px+ 的单列堆叠，零锚点零目录——经理要找「谁交了」
+// 只能滚。锚点是**纯加法**：段落 DOM 一个字节不动，只是各自补了 id。
+//
+// 🔴 刻意不做折叠（display:none）：playwright 在隐藏元素上会给出**四种并存的结局**——
+// `hasText` 照样命中（elementText 只递归 TEXT_NODE、从不查计算样式）于是随后的 .click()
+// 等到 30s 超时把门**崩**掉；`.innerText()` 返空串于是判据以「文案不对」**假红**；
+// `.count()` / `querySelectorAll().length` 完全免疫于是继续**假绿**；段级 `.screenshot()`
+// 直接抛错。一道门里四种结局并存，读日志的人会把它归因成四个不同的 bug。要折叠得同 commit
+// 给每道门补一步「先展开」，那是 #79 重冻那一趟一起做的事。
+type FilesNavItem = { id: string; label: string }
 
 export function FilesScreen() {
   const { t } = useDict()
   const l = t.lite2
   const files = useLite((s) => s.files)
   const contextId = useLite((s) => s.contextId)
+  const restoring = useLite((s) => s.restoring)
+  const filesLoading = useLite((s) => s.filesLoading)
+  const filesError = useLite((s) => s.filesError)
+  const refreshFiles = useLite((s) => s.refreshFiles)
+  const knownCount = useLite((s) => s.knownContexts.length)
+  const canAppend = useLite((s) => !!s.transport.appendFiles)
+  const rawTeam = useLite((s) => s.rawTeam)
 
   // 🔴「还没传过」和「传了但读不出来」是两件事，文案必须分得开。这里只判前者：
   // 有 contextId 但清单为空 = 后端确实没给出文件，那是 ② 段上传口要回答的问题，
   // 不是这一段该替它编一句"可能还在处理"。
   const hasFiles = files.length > 0
+  // 🔴 「还在读」与「读完了是空的」必须分得开：本屏此前不读 restoring/filesLoading，于是
+  // 回访者第一帧、切库那一瞬都会**闪**一句「Avery 没列出任何文件」——那是对着一个还没
+  // 发生的结论下判断。
+  const filesPending = (restoring || filesLoading) && !hasFiles
+
+  // 导航项跟着段落的真实存在性走：一条指向不存在的锚点比没有导航更糟。
+  const nav: FilesNavItem[] = [
+    { id: 'files-current', label: l.filesCurrentTitle },
+    ...(contextId ? [{ id: 'files-forms', label: l.formsTitle }] : []),
+    ...(contextId && canAppend && !rawTeam?.ephemeral
+      ? [{ id: 'files-append', label: l.filesAppendTitle }] : []),
+    { id: 'files-new', label: l.filesUploadTitle },
+    ...(knownCount >= 2 ? [{ id: 'files-switch', label: t.upload.switchTitle }] : []),
+  ]
 
   return (
     <section className="scene scene-nexus is-active lite-files" aria-label={l.tabFiles}>
@@ -566,14 +674,58 @@ export function FilesScreen() {
           <p className="lite-files-sub">{l.filesSub}</p>
         </header>
 
+        {/* #76 · 页内导航（锚点，非折叠——理由见 FilesNavItem 上面那段）。 */}
+        {nav.length > 1 ? (
+          <nav className="lite-files-nav" aria-label={l.tabFiles}>
+            {nav.map((item) => (
+              <a key={item.id} className="lite-files-nav-link" href={`#${item.id}`}>
+                {item.label}
+              </a>
+            ))}
+          </nav>
+        ) : null}
+
         {/* ── ① 当前资料 ─────────────────────────────────────────────────────────
             清单本体是共享件（与上传口底下那份同一个组件），这里多开下载列。
             🔴 下载走 fetch+blob+objectURL：端点吃 owner_token header，裸 <a href> 带不上
             （见 FileManifest.downloadOne 与 transport.downloadFile 的注释）。 */}
-        <section className="lite-files-section lite-files-current" aria-label={l.filesCurrentTitle}>
-          <h3 className="lite-files-section-title">{l.filesCurrentTitle}</h3>
+        <section id="files-current" className="lite-files-section lite-files-current" aria-label={l.filesCurrentTitle}>
+          <h3 className="lite-files-section-title">
+            {l.filesCurrentTitle}
+            {/* #76 · 手动刷新。真闸在 store 的临界区（同一拍双击 UI 的 disabled 顶不住）。 */}
+            {contextId ? (
+              <button
+                type="button"
+                className="lite-btn lite-btn--ghost lite-files-refresh"
+                disabled={filesLoading}
+                aria-busy={filesLoading}
+                onClick={() => void refreshFiles()}
+              >
+                {filesLoading ? t.upload.filesRefreshing : t.upload.filesRefresh}
+              </button>
+            ) : null}
+          </h3>
+          {/* 🔴 拉失败要说出来，但清单**停在上一次的好结果上**：清空会把「我这次没读到」
+              演成「你的文件没了」（absent≠none），而 live-frontend-gate 的 tokenDiscipline
+              相位断言的正是 files.length 不变。变的只是屏上多了这一句。 */}
+          {filesError ? (
+            <p className="lite-files-empty lite-files-error" role="status">
+              {t.upload.filesLoadError}{' '}
+              <button
+                type="button"
+                className="lite-btn lite-btn--ghost lite-files-retry"
+                onClick={() => void refreshFiles()}
+              >
+                {t.upload.filesRetry}
+              </button>
+            </p>
+          ) : null}
           {hasFiles ? (
             <FileManifest withDownload />
+          ) : filesPending ? (
+            <p className="lite-files-empty lite-files-loading" role="status">
+              {t.upload.filesLoading}
+            </p>
           ) : (
             <p className="lite-files-empty">
               {contextId ? l.filesCurrentEmptyRead : l.filesCurrentEmptyNone}
@@ -593,6 +745,20 @@ export function FilesScreen() {
                 🔴 判据取自后端每帧都发的 `ephemeral`，不是只在领取首帧出现的 `demo`——
                 后者刷新一次页面就没了，入口会自己冒出来（那读起来像 bug，不像功能）。
              ③ 这条通道没有 appendFiles（stub / 老后端）—— 同 demoClaim 的先例，能力探测判空。 */}
+        {/* ── #76 · 段落按**使用频率**重排 ─────────────────────────────────────────
+            旧序是 ①当前资料 → ②a补资料 → ②b另建公司 → ③切换 → ④常驻表单，按的是"先回看
+            再发起"的叙事。真实使用频率正好相反：④ 里的「谁交了」是**周中天天**要看的一格，
+            却被压在整屏最底（要滚过建表入口和 chips 墙）；而「另建一家公司」是一辈子点几次
+            的动作，占着第三段的黄金位。
+            新序 = ①当前资料 → ④常驻表单（「谁交了」已提到它的最前）→ ②a补资料 → ②b另建
+            公司 → ③切换。段内 DOM 一个字节没动，只是排列顺序变了——这也是重构代价最低的
+            那一刀（像素之外只碰几何类的门）。 */}
+        {/* ── ④ 常驻表单 ─────────────────────────────────────────────────────────
+            gap-design-0805 T3 · 常驻表单主线 3/3。同 ③ 的「没有内容整段不渲染」纪律，
+            四条否决写在 StandingFormsSection 里。摆在最后一段是因为它是**发起**动作
+            （生成链接发出去），而前三段是回看动作——先看到已有的，再决定要不要再收一轮。 */}
+        <StandingFormsSection />
+
         <AppendSection />
 
         {/* ── ②b 另建一份画像 ───────────────────────────────────────────────────
@@ -605,7 +771,7 @@ export function FilesScreen() {
             另一条会合并的路（就在上面 ②a），再说同一句话就是把经理往错的按钮上引。
             `showFiles={false}`：上面 ① 段已经有一份清单了，两处都渲染 = 两个
             `.upload-files`，门按类名全局取样会数出双倍行数。 */}
-        <section className="lite-files-section lite-files-upload" aria-label={l.filesUploadTitle}>
+        <section id="files-new" className="lite-files-section lite-files-upload" aria-label={l.filesUploadTitle}>
           <h3 className="lite-files-section-title">{l.filesUploadTitle}</h3>
           <div className="lite-files-again" role="note">
             <p className="lite-files-again-title">{t.upload.againTitle}</p>
@@ -620,11 +786,6 @@ export function FilesScreen() {
             小节（比不显示更让人以为出了问题）。 */}
         <SwitchSection />
 
-        {/* ── ④ 常驻表单 ─────────────────────────────────────────────────────────
-            gap-design-0805 T3 · 常驻表单主线 3/3。同 ③ 的「没有内容整段不渲染」纪律，
-            四条否决写在 StandingFormsSection 里。摆在最后一段是因为它是**发起**动作
-            （生成链接发出去），而前三段是回看动作——先看到已有的，再决定要不要再收一轮。 */}
-        <StandingFormsSection />
       </div>
     </section>
   )
