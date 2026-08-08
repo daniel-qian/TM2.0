@@ -62,6 +62,13 @@ const seedFiles = () => [
 
 for (const look of LOOKS) {
   test(`${look} 数据态三屏基线`, async ({ page }, testInfo) => {
+    // 🔴 时钟钉死（首冻当天人眼过 projects 屏时发现的时间炸弹）：决策定级/项目卡里
+    // 「14 天内到期」这类文案是拿 **墙上时钟 vs 文档日期** 算的——语料里的到期日
+    //（2026-08-15 / 2026-11-30…）一旦被真实日期追过，定级翻牌、home/projects 布局变，
+    // 基线无声腐烂（Docker PG 时钟跳的同族：别赌墙上时钟）。setFixedTime 只冻 Date、
+    // 计时器照跑（上传轮询/settle 不受影响）；空态 spec 不钉——那 36 张不含数据日期，
+    // 钉了反而要作废重冻。
+    await page.clock.setFixedTime(new Date('2026-08-08T12:00:00+08:00'))
     await page.goto(`${UI}/?v=2&mode=live&look=${look}&lang=zh`, { waitUntil: 'networkidle' })
     if (await page.locator('.lite-onboard').count()) {
       await page.keyboard.press('Escape')
