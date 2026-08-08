@@ -187,7 +187,12 @@
  * retired — the SAME cards (same class names, same actions) now render inside Today's
  * gap-summary block, behind an in-place expand (`.lite-home-gap-expand`). All three phases
  * below navigate via _openHomeGaps() instead of a tab click; a fourth phase (gapNotifRoute)
- * pins the rewired NOTIF_TARGET['gap'] -> home. Driven with `?v=2&mode=live&transport=stub`
+ * pins the rewired NOTIF_TARGET['gap'] -> home. ⚠ #65 (home-gaps-default-open, 2026-08-08):
+ * the block now defaults to EXPANDED (collapse button kept) — a fifth phase
+ * (gapsDefaultOpen) pins the initial value itself: fresh arrival on Today must show the
+ * comparison cards with zero clicks (run it BEFORE the other gap phases; it deliberately
+ * avoids _openHomeGaps, whose repair-click would mask a collapsed default).
+ * Driven with `?v=2&mode=live&transport=stub`
  * (dead under build+preview — see READ FIRST ①; the mechanical runner drives a real mock
  * backend instead). The stub corpus
  * (src/lite2/stubTransport.ts) carries exactly ONE genuine self-report/signal mismatch
@@ -196,6 +201,11 @@
  * (its own status already says at-risk, so its blocker is consistent, not a contradiction):
  *   [on `?v=2&mode=live&transport=stub`]
  *   __seedGate.defuseAnimations()
+ *   await __seedGate.assertGapsDefaultOpen()         // gapsDefaultOpen (#65): leave Today,
+ *                                                    // arrive fresh — comparison cards +
+ *                                                    // aria-expanded='true' with ZERO clicks,
+ *                                                    // summary chips absent (the two entrances
+ *                                                    // never coexist — #63 ruling carried over)
  *   await __seedGate.assertGapsDerive()              // gapsDerive: >=1 derived comparison card
  *                                                    // (claim pane + evidence pane + resolve/
  *                                                    // dismiss/ask/add-followup controls all
@@ -225,7 +235,9 @@
  *                                                    // composer pre-filled with that card's
  *                                                    // project title + claim/evidence context
  *                                                    // (not auto-submitted)
- *   __seedGate.gapVerdict()                          // aggregate (3 phases)
+ *   __seedGate.gapVerdict()                          // aggregate (5 phases — was mislabeled
+ *                                                    // "(3)" even after #63 made it 4; count
+ *                                                    // the keys in gapVerdict, not this line)
  *
  * feat-045 (lite-live-v02, PRD F5+F7 / decisions.md 拍板#1) — onboarding wizard + suggestion
  * chips + notification bell, SEPARATE aggregate (nudgeVerdict below, phase group D — same
@@ -789,6 +801,10 @@
     // behind an in-place expand. Every group-C phase used to `_clickTab('Worth noting')`; that
     // tab is gone — navigate to Today and open the block instead. Expanding is idempotent
     // (aria-expanded guards the click), so phases can call this back-to-back safely.
+    // #65 (home-gaps-default-open): the block now MOUNTS expanded, so the guarded click is
+    // normally a no-op — the guard stays because it's what makes that a no-op (and it still
+    // repairs the one legit case: a phase collapsed the block earlier in the same mount).
+    // 🔴 assertGapsDefaultOpen must NOT use this helper — see the comment there.
     async _openHomeGaps() {
       this._clickTab('Today');
       try {
@@ -2229,8 +2245,52 @@
       return out;
     },
 
+    async assertGapsDefaultOpen() {
+      // Phase gapsDefaultOpen (#65 · home-gaps-default-open): the gap block defaults to the
+      // EXPANDED comparison-card view — full cards visible on arrival, zero clicks. Leave
+      // Today FIRST (same discipline as gapNotifRoute: the state under test is a useState
+      // INITIAL value, and screens are mutually-exclusive mounts — arriving from another
+      // screen is what forces a fresh mount; asserting on an already-open Today would inherit
+      // whatever expand/collapse state earlier phases left behind and could mask a collapsed
+      // default). 🔴 No _openHomeGaps() here — that helper CLICKS the toggle when it finds
+      // the block collapsed, which is exactly the repair this phase must not perform
+      // (the mutation "initial value back to collapsed" has to land red somewhere; this is
+      // the phase that catches it). The summary chips (`.lite-home-gap-filter`) must be
+      // absent at the same time — #63's "the two entrances never coexist in one view"
+      // ruling carries over unchanged, #65 only flips which side you arrive on.
+      this._clickTab('Team');
+      try {
+        await poll(() => {
+          const shell = $('.lite2-shell');
+          return shell && shell.getAttribute('data-scene') === 'team' ? true : null;
+        }, 6000, 'team screen before the fresh-arrival check');
+      } catch (e) { /* fall through — the arrival assertions below still discriminate */ }
+      this._clickTab('Today');
+      try {
+        await poll(() => ($('.lite-home-gaps') ? true : null), 8000, 'home gap block to mount');
+      } catch (e) { /* fall through */ }
+      let sawCards = false;
+      try {
+        await poll(() => ($$('.lite-gap-card').length > 0 ? true : null), 4000, 'comparison cards on arrival (no click)');
+        sawCards = true;
+      } catch (e) { /* stays false — a collapsed default renders summary chips, never cards */ }
+      const toggle = $('.lite-home-gap-expand');
+      const out = {
+        togglePresent: !!toggle,
+        ariaExpanded: toggle ? toggle.getAttribute('aria-expanded') : null,
+        gapCards: $$('.lite-gap-card').length,
+        summaryChipsAbsent: !$('.lite-home-gap-filter'),
+        pass: !!toggle && toggle.getAttribute('aria-expanded') === 'true' && sawCards &&
+          $$('.lite-gap-card').length >= 1 && !$('.lite-home-gap-filter'),
+      };
+      results.gapsDefaultOpen = out;
+      return out;
+    },
+
     gapVerdict() {
       const phases = {
+        // #65 · 默认展开：进今天页零点击即见对照卡（排头——它断言的是"到达即所见"）。
+        gapsDefaultOpen: !!(results.gapsDefaultOpen && results.gapsDefaultOpen.pass),
         gapsDerive: !!(results.gapsDerive && results.gapsDerive.pass),
         gapsResolve: !!(results.gapsResolve && results.gapsResolve.pass),
         gapsToAsk: !!(results.gapsToAsk && results.gapsToAsk.pass),
