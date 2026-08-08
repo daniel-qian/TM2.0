@@ -32,6 +32,49 @@ export interface AskRef {
 // 候选上限：与 LiteSearch 的 MAX_RESULTS 同一个量级——引用菜单是挑一个，不是浏览全库。
 export const MAX_REF_OPTIONS = 8
 
+// 重名集合按**全量花名册**算，不按检索结果算——搜"林"只出一个林小满时，部门照样要挂
+//（另一个林小满只是没被这次搜出来，重名这个事实没变）。
+function dupeNamesOf(team: LiteTeam | null): Set<string> {
+  return new Set((team?.people ?? []).map((p) => p.name).filter((n, i, all) => all.indexOf(n) !== i))
+}
+
+// ── #67 · AskRef 构造的唯一一份尺 ─────────────────────────────────────────────
+// 弹层候选（searchAskRefs）与所有预填入口（人卡/项目卡/差距卡/分诊卡/决策卡的「去问
+// Avery」）都从这两个构造器拿五元组——label/meta/dupeTeam 的口径天然同源，调用点不许
+// 手拼（一处拼错就是第二把尺）。按 id 查 store.team（弹层检索的同一份数据面）；查不到
+//（归档/停用/悬空 id）返回 null：调用点退回纯文字预填，绝不硬造 chip——与后端对悬空
+// 引用「诚实 not-found」同一条纪律。
+
+export function refOfPerson(team: LiteTeam | null, personId: string): AskRef | null {
+  const person = (team?.people ?? []).find((p) => p.id === personId)
+  if (!person) return null
+  return {
+    kind: 'person',
+    id: person.id,
+    label: person.name,
+    meta: person.role,
+    dupeTeam: dupeNamesOf(team).has(person.name) ? (person.team ?? '') : '',
+  }
+}
+
+export function refOfProject(team: LiteTeam | null, projectId: string): AskRef | null {
+  const project = (team?.projects ?? []).find((p) => p.id === projectId)
+  if (!project) return null
+  // meta = ownerName（原值，缺失空串）——searchTeam 给候选的同一格（纪律①归渲染层兜底）。
+  return { kind: 'project', id: project.id, label: project.title, meta: project.ownerName, dupeTeam: '' }
+}
+
+/**
+ * 决策卡主体 → AskRef。kind 走映射不走字面量：transport 的 subject_type 今天恒 'project'
+ *（LiveDecisionCard），将来长出新主体类型时这里返回 null（入口不带 chip）、后端对未知
+ * kind 也是既有跳过逻辑——两层都不用改调用点。
+ */
+export function refOfSubject(team: LiteTeam | null, subjectType: string, subjectId: string): AskRef | null {
+  if (subjectType === 'person') return refOfPerson(team, subjectId)
+  if (subjectType === 'project') return refOfProject(team, subjectId)
+  return null
+}
+
 /**
  * 四类 @ 候选的统一检索。空 query = 返回全量（浏览语义，旧引用菜单的既有行为）。
  * person/project 走公共 selector `searchTeam`（顶栏搜索同源——同一个词两处同一个结果）；
@@ -48,21 +91,12 @@ export function searchAskRefs(
   const out: AskRef[] = []
 
   if (filter === 'all' || filter === 'person' || filter === 'project') {
-    // 重名集合按**全量花名册**算，不按检索结果算——搜"林"只出一个林小满时，
-    // 部门照样要挂（另一个林小满只是没被这次搜出来，重名这个事实没变）。
-    const dupeNames = new Set(
-      (team?.people ?? []).map((p) => p.name).filter((n, i, all) => all.indexOf(n) !== i),
-    )
     const teamKind = filter === 'all' ? 'all' : filter
+    // 命中判定归 searchTeam（顶栏同源）；五元组构造归 refOf*（#67 起预填入口共用的那把尺，
+    // 弹层候选走同一个构造器＝两处永不漂移）。
     for (const r of searchTeam(team, q, teamKind)) {
-      const person = r.kind === 'person' ? (team?.people ?? []).find((p) => p.id === r.id) : undefined
-      out.push({
-        kind: r.kind,
-        id: r.id,
-        label: r.label,
-        meta: r.meta,
-        dupeTeam: person && dupeNames.has(person.name) ? (person.team ?? '') : '',
-      })
+      const ref = r.kind === 'person' ? refOfPerson(team, r.id) : refOfProject(team, r.id)
+      if (ref) out.push(ref)
     }
   }
 

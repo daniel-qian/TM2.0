@@ -107,8 +107,9 @@ interface FlowState {
   // "带进议事室"：分诊条目一键飞进 The room——composer 预填该条目上下文（不自动提交，
   // manager 审过再发问；与 AskCard 的 authorship 原则同一条线：起草由 Avery，动手由人）。
   composerDraft: string | null
-  // #64 · 悬浮胶囊里选好的 @ 引用随问题文字一起中继进议事室（refs 可选，老调用点不传 =
-  // null——分诊/详情浮层那几条「带进议事室」仍是纯文字预填，票面明写不升级）。
+  // #64 · 悬浮胶囊里选好的 @ 引用随问题文字一起中继进议事室。#67 起**所有**预填入口
+  //（人卡/项目卡/分诊卡/差距卡/详情浮层；决策卡走 goScreen refs 中继）都传 refs——
+  // 构造一律走 askRefs.refOf*（与 @ 弹层候选同一把尺），调用点不许手拼五元组。
   composerDraftRefs: AskRef[] | null
   setComposerDraft: (text: string, refs?: AskRef[]) => void
   consumeComposerDraft: () => void

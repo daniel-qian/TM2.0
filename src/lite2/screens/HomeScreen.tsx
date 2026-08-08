@@ -28,6 +28,9 @@ import { deriveAttentionPeople, summarizeDecisions, type AttentionPerson } from 
 import { gapClaimText, type GapCard } from '../gapDerive'
 import type { LiveDecisionCard, LiveDecisionRuleHit } from '../transport'
 import type { Dict } from '../../shared/i18n'
+// #67 · 预填入口全量引用化：AskRef 构造一律走 refOf*（与 @ 弹层候选同一把尺），
+// 决策卡走 goScreen refs 中继（encodeRefsParam，AskAveryLauncher 同款）。
+import { encodeRefsParam, refOfPerson, refOfProject, refOfSubject, type AskRef } from '../askRefs'
 
 // feat-057（PRD G4 / decisions.md Q2「两个都极端 → 结合」）· 聚合首屏。
 //
@@ -209,7 +212,13 @@ export function HomeScreen() {
   function handleTakeToRoom(handoff: HandoffDisplay) {
     // 分隔符用 " — " 而非换行：composer 是 <input type="text">，换行被剥掉后两段文字会
     // 连成一坨不可读（feat-044 对抗验证发现的同根 bug，见下面 handleGapAsk 同款注释）。
-    setComposerDraft(`${handoff.action} — ${handoff.evidence}`)
+    // #67 · 分诊卡多引用：涉及的项目+人员全带上（查不到的 id 丢弃；超出后端 REF_MAX_COUNT
+    // 由后端既有封顶兜住，前端不另设限）。refs 空则整参不传＝纯文字预填，行为与旧口径同。
+    const refs = [
+      ...handoff.projectIds.map((id) => refOfProject(team, id)),
+      ...handoff.personIds.map((id) => refOfPerson(team, id)),
+    ].filter((r): r is AskRef => r !== null)
+    setComposerDraft(`${handoff.action} — ${handoff.evidence}`, refs.length > 0 ? refs : undefined)
     goScreen('room')
   }
 
@@ -229,7 +238,12 @@ export function HomeScreen() {
     // "带进议事室"的 authorship 原则（feat-036）。
     // 分隔符用 " — " 而非换行：composer 是 <input type="text">，换行被剥掉后三段文字会
     // 连成一坨不可读（对抗验证 redline 路发现，2026-07-14）。
-    setComposerDraft(`${gap.projectTitle} — ${gapClaimText(gap, t.lite2)} — ${gap.evidence}`)
+    // #67 · 差距卡带项目引用（gap.projectId → refOfProject，那把尺）。
+    const ref = refOfProject(team, gap.projectId)
+    setComposerDraft(
+      `${gap.projectTitle} — ${gapClaimText(gap, t.lite2)} — ${gap.evidence}`,
+      ref ? [ref] : undefined,
+    )
     goScreen('room')
   }
 
@@ -515,9 +529,16 @@ export function HomeScreen() {
                         key={cardKey}
                         card={card}
                         onOpenProject={() => openDetail('project', card.subject_id)}
-                        onTakeToRoom={() =>
-                          goScreen('room', { q: `${card.subject_title} — ${card.reason}` })
-                        }
+                        onTakeToRoom={() => {
+                          // #67 · 决策卡走 q+refs 中继（Lite2App useRoomQueryRelay 已能吃）。
+                          // kind 映射在 refOfSubject 里，这里不写 'project' 字面量——将来出新
+                          // 主体类型，映射不认识就退回纯文字（refs=null 是删除语义，URL 不挂空键）。
+                          const ref = refOfSubject(team, card.subject_type, card.subject_id)
+                          goScreen('room', {
+                            q: `${card.subject_title} — ${card.reason}`,
+                            refs: ref ? encodeRefsParam([ref]) : null,
+                          })
+                        }}
                         followupAdded={followupAddedKeys.has(cardKey)}
                         onAddFollowup={() => {
                           // B4 闭环：决策落成待办。标题走字典模板（对照卡那笔英文硬模板的

@@ -477,6 +477,11 @@
    （在包裹之外）仍绝对锚底，story 的 followup composer 一律不受影响。 */
 .lite2-shell .nexus-empty-composer-wrap {
   margin-top: 18px;
+  /* #66 · 空态包含块修复：下面那条 static 让 @ 弹层（absolute）的包含块误落到
+     `.nexus-empty`（40-nexus-empty absolute+transform）——`bottom:calc(100%+8px)` 算的是
+     整张空态卡，弹层与输入框脱节。wrap 补 relative（无偏移零几何变化）把锚拉回输入框本体；
+     🔴 那条 static 本身别动，它保的是空态文案不被 composer 盖住（本段注释头的历史理由）。 */
+  position: relative;
 }
 
 .lite2-shell .nexus-empty-composer-wrap .nexus-followup-composer {
@@ -8542,6 +8547,14 @@
   background: var(--lite2-surface);
   box-shadow: var(--shadow);
   z-index: 5;
+}
+
+/* #66 · 可用空间感知的翻转态：上方余量装不下整层且下方更宽裕时，AskRefComposer 量完
+   裁剪窗口（视口 ∩ overflow 祖先）打 is-down 向下弹；列表钳高走 inline max-height
+   （常数与 AskRefComposer.tsx 的 LIST_MAX_HEIGHT/PICKER_CHROME 一套）。 */
+.lite2-shell .lite-ref-picker.is-down {
+  bottom: auto;
+  top: calc(100% + 8px);
 }
 
 .lite2-shell .lite-ref-picker-filters {

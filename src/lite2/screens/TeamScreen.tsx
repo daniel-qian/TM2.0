@@ -19,6 +19,8 @@ import {
 } from '../teamDirectory'
 import { docFromSource } from '../teamData'
 import type { LitePerson } from '../teamData'
+// #67 · 人员卡「去问 Avery」带 person 引用——构造走 refOfPerson（与 @ 弹层候选同一把尺）。
+import { refOfPerson } from '../askRefs'
 
 // feat-024 · lite 屏 1+2：上传空态 · Your team——ADR-0022 决策 1。
 // 空态：左脊柱是 live 自己的引导文案（不渲染任何 scripted 占位——story 渗漏的第一现场）。
@@ -434,7 +436,9 @@ export function TeamScreen() {
                 onOpen={(id) => openDetail('person', id)}
                 onAsk={(person, read) => {
                   // 分隔符 " — "（composer 是 input[type=text]，换行会被剥掉——feat-044 同根）。
-                  setComposerDraft(`${person.name} — ${read}`)
+                  // #67 · person ref 同批带上（refOfPerson 那把尺，重名的 dupeTeam 随构造器来）。
+                  const ref = refOfPerson(team, person.id)
+                  setComposerDraft(`${person.name} — ${read}`, ref ? [ref] : undefined)
                   goScreen('room')
                 }}
               />
