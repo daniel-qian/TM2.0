@@ -70,6 +70,19 @@ def load_facts_head(memory_dir: Path, max_lines: int = 12) -> str:
     return "\n".join(body[:max_lines])
 
 
+def candidate_text(raw: str) -> str:
+    """一行原始文本 → 它在候选面里的**规范形**。
+
+    ONE RULER（doc_key_of 的同一条教训）：这把尺决定「两行算不算同一行」。`_candidates` 自己
+    要用它把 facts.md 的行规范化；`ingest/references.py` 反向查找时（材料块原文 → 它落在
+    facts.md 的哪一行）必须用**逐字符相同**的尺，否则 join 会在 `- ` 前缀这种小差别上整片落空
+    ——#70 的病根就是这个：materialize_memory 把材料块**原样**写进 facts.md（bullet 带着
+    `- `），而这里读出来时 `- ` 已经被剥掉，于是「块原文 in 候选文本」对所有 bullet 行恒假，
+    一份 19 块的纪要只 join 到 4 行样板话。
+    """
+    return raw.strip().lstrip("- ").strip()
+
+
 def _candidates(memory_dir: Path) -> list[tuple[str, str]]:
     """Every citable line of facts.md + notes.md as (source, text). Source is `<file>:<line>` with
     the TRUE 1-based line number so a cite() resolves; headings/quotes/blank lines are skipped —
@@ -83,7 +96,7 @@ def _candidates(memory_dir: Path) -> list[tuple[str, str]]:
             line = raw.strip()
             if not line or line.startswith(("#", ">")):
                 continue
-            cands.append((f"{fname}:{i}", line.lstrip("- ").strip()))
+            cands.append((f"{fname}:{i}", candidate_text(line)))
     return cands
 
 

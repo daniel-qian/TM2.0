@@ -32,6 +32,10 @@ export interface AskRef {
 // 候选上限：与 LiteSearch 的 MAX_RESULTS 同一个量级——引用菜单是挑一个，不是浏览全库。
 export const MAX_REF_OPTIONS = 8
 
+// 四类的显示优先序 = `pickRefOptions` 轮转发牌的圈序（每圈按这个序各发一条）。
+// 下面的中继解码白名单直接由它派生（一把尺——同一份四元组两处各写一份迟早漂）。
+export const REF_KIND_ORDER: readonly AskRefKind[] = ['person', 'project', 'file', 'playbook']
+
 // 重名集合按**全量花名册**算，不按检索结果算——搜"林"只出一个林小满时，部门照样要挂
 //（另一个林小满只是没被这次搜出来，重名这个事实没变）。
 function dupeNamesOf(team: LiteTeam | null): Set<string> {
@@ -127,6 +131,49 @@ export function searchAskRefs(
 }
 
 /**
+ * #70 · 候选上限内的**公平露出**：把 `searchAskRefs` 的全量结果收敛到 `limit` 条。
+ *
+ * 🔴 病根（0808 演习实收）：`searchAskRefs` 的追加顺序是 person/project → file → playbook，
+ * 调用点再 `slice(0, MAX_REF_OPTIONS)`。16 人 8 项目的真实团队里，8 个名额在第一类就被吃光——
+ * 「全部」视图**永远看不到文件和方法卡**，只有点「文件」筛选 chip 才露头。Danny 演习里
+ * 「提问的时候没办法引用文件对吧」问的就是这个：功能一直在，可发现性是零。
+ *
+ * 为什么不是「把 8 调大」：弹层高度有限（#66 刚为它做完可用空间感知 + 列表钳高），
+ * 拉高上限只是把溢出问题换个地方长；名额稀缺是前提，要改的是**怎么分**。
+ *
+ * 分法 = 按 `REF_KIND_ORDER` **轮转**发牌：一圈每类各一条，某类发完就跳过它，名额自动回流给
+ * 还有货的类目。只有一类有候选时（= 每个筛选 chip 视图）轮转退化成 slice，**逐条与旧行为相同**。
+ *
+ * 🔴 为什么是交错而不是「先算名额、再按类目成块吐」：弹层列表被 #66 钳在 240px（矮视口更狠，
+ * 地板 72px），一屏只看得见 4–5 行。成块吐出时文件是第三块——名额给到了，人却还是要滚动才
+ * 看得见，"可发现性"只修了一半。交错让**前四行就把四类都摆出来**，不滚即见。候选行在「全部」
+ * 视图本来就带类目词（AskRefComposer 的 .lite-ref-option-kind），混排读得出来。
+ *
+ * 总数没超上限时原样返回：装得下就不该重排（旧行为逐条保持）。
+ */
+export function pickRefOptions(refs: AskRef[], limit: number = MAX_REF_OPTIONS): AskRef[] {
+  if (limit <= 0) return []
+  if (refs.length <= limit) return refs
+
+  const buckets = REF_KIND_ORDER.map((kind) => refs.filter((r) => r.kind === kind))
+  const out: AskRef[] = []
+  for (let round = 0; out.length < limit; round += 1) {
+    let dealt = false
+    for (const bucket of buckets) {
+      if (out.length >= limit) break
+      if (round < bucket.length) {
+        out.push(bucket[round])
+        dealt = true
+      }
+    }
+    // 一圈一条都发不出去 = 所有类目都发完了。refs.length > limit 时到不了这里，但没有这个
+    // 出口，未知 kind（不在 REF_KIND_ORDER 里、被 buckets 漏掉）会让循环空转成死循环。
+    if (!dealt) break
+  }
+  return out
+}
+
+/**
  * 织文兜底（与旧 LiteComposer 同构）：引用标签接在问题文字后面。
  * 🔴 这不是装饰——「新前端 + 旧后端」的窗口里 references[] 会被静默忽略，这几个字就是
  * 具名实体帮 recall 命中语料行的全部机制；同时它进 advise_runs.question，历史里能看见
@@ -143,7 +190,7 @@ export function toWireRefs(refs: AskRef[]): AdviseReference[] {
 }
 
 // ── 悬浮胶囊 → 议事室的中继编解码（`/room?q=<问题>&refs=<JSON>`，两个都是一次性接力参数）──
-const REF_KINDS: readonly string[] = ['person', 'project', 'file', 'playbook']
+const REF_KINDS: readonly string[] = REF_KIND_ORDER
 
 export function encodeRefsParam(refs: AskRef[]): string {
   return JSON.stringify(refs.map((r) => ({ k: r.kind, i: r.id, l: r.label, t: r.dupeTeam || undefined })))
