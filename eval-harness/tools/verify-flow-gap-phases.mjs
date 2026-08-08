@@ -168,6 +168,13 @@ await reinjectSnippet(page)
 }
 
 // ── C 组：gaps（team 已由 reload 后的 restoreSession() 自动摆回来，坑① 对 C 组同样满足）──
+// #65 · 排头：进屏即见对照卡。判据在 snippet 侧刻意不走 _openHomeGaps（那个助手发现收起会
+// 顺手点开——正好把「初值改回 collapsed」的变异修复掉）；排在其余 gap 相位**之前**，此刻
+// 今天页还没被任何 gap 相位摸过，「到达即所见」测的才是初值不是残留。
+{
+  const out = await page.evaluate(() => window.__seedGate.assertGapsDefaultOpen())
+  rec('gapsDefaultOpen', !!out.pass, out.pass ? '' : JSON.stringify(out).slice(0, 200))
+}
 {
   const out = await page.evaluate(() => window.__seedGate.assertGapsDerive())
   rec('gapsDerive', !!out.pass, out.pass ? '' : JSON.stringify(out).slice(0, 200))

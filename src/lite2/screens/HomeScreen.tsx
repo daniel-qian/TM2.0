@@ -156,9 +156,10 @@ export function HomeScreen() {
   // #63（merge-closerlook）·「值得注意」屏并进本块，原地展开。浅合：只搬界面——对照卡/
   // 三态归宿（解决/忽略/放回来）/历史折叠/带去议事室预填，全部自 CloserLookScreen 迁入；
   // gapDerive 前端推导与 flowStore 的 gapMarks 一个字没动（深合另议，见票面「明确不做」）。
-  // 默认仍是摘要形态（chips + 前三条预览，与迁移前逐字节相同）；点「全部展开」原地换成
-  // 完整对照卡视图——不撑爆首屏靠的就是这个默认收起。
-  const [gapsOpen, setGapsOpen] = useState(false)
+  // #65（0808 演习第 2 轮拍板）：默认就是展开态——进今天页直接见完整对照卡，收起钮保留。
+  // 摘要形态（chips + 前三条预览）没删，是「收起」后的形态；切屏回来回到默认 = 回到展开
+  //（组件本地态，刻意不落盘——这是 #65 想要的语义，不是漏了持久化）。
+  const [gapsOpen, setGapsOpen] = useState(true)
   const [gapHistoryOpen, setGapHistoryOpen] = useState(false)
   const [gapFollowupIds, setGapFollowupIds] = useState<ReadonlySet<string>>(new Set())
   const resolveGap = useFlow((s) => s.resolveGap)
