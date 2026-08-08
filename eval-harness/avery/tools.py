@@ -44,6 +44,11 @@ class ToolContext:
     # 0729 输出形态战役 03（分流短答）：简单事实问的第二出口。与 advice 互斥地作为终局
     # artifact——同样吃 cite 闸（无凭据不许答），但不过 9 字段投影。
     answer: str | None = None
+    # #72 · 建议追问（两个终局出口共用的可选副产物，≤3 条短问题）。挂在 ctx 而不是 Advice
+    # 上，因为 answer 出口没有 dataclass 可挂——两条路一个家。红线逐条过滤在 contract 投影层
+    # （service/contract.py），不在这里：工具层只收形状，违规问题被投影层丢弃而不是让整次
+    # 建议失败。
+    followup_questions: list[str] = field(default_factory=list)
     read_case_called: bool = False
     # Optional embedder -> recall() ranks memory lines semantically (vs keyword). None = keyword.
     # Set by the service from env (key stays server-side); the offline gate leaves it None.
@@ -103,6 +108,14 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                 "read": {"type": "string", "description": "what is actually going on (the situation)"},
                 "move": {"type": "string", "description": "the concrete, decisive next step"},
                 "framing": {"type": "string", "description": "how to open the conversation (safe framing)"},
+                # #72 · 可选：建议追问（回答下方的可点 chips）。红线纪律与正文一致——
+                # 问"事"，不问"人"的评分/排名。
+                "followup_questions": {
+                    "type": "array", "items": {"type": "string"}, "maxItems": 3,
+                    "description": "OPTIONAL: up to 3 short follow-up questions the manager is "
+                                   "likely to ask next about this situation (never a request to "
+                                   "score or rank a person).",
+                },
             },
             "required": ["read", "move", "framing"],
         },
@@ -121,6 +134,14 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
             "properties": {
                 "text": {"type": "string",
                          "description": "the direct answer, one to three sentences"},
+                # #72 · 与 draft_advice 同一个可选槽（短答路今天零动作按钮——追问 chips
+                # 两条出口都要有）。
+                "followup_questions": {
+                    "type": "array", "items": {"type": "string"}, "maxItems": 3,
+                    "description": "OPTIONAL: up to 3 short follow-up questions the manager is "
+                                   "likely to ask next (never a request to score or rank a "
+                                   "person).",
+                },
             },
             "required": ["text"],
         },
@@ -174,6 +195,23 @@ def _cite(args: dict, ctx: ToolContext) -> str:
     return f"✓ cited: «{claim}» ⟵ {source_ref}  ({snippet})"
 
 
+def _coerce_followups(raw: Any) -> list[str]:
+    """#72 · 建议追问的形状归一：只收字符串、去空白、丢空条、封顶 3。坏形状（非数组/
+    非字符串条目）降级成"这次没有追问建议"，绝不让一次已经成功的建议因此失败。"""
+    if not isinstance(raw, list):
+        return []
+    out: list[str] = []
+    for item in raw:
+        if not isinstance(item, str):
+            continue
+        text = item.strip()
+        if text:
+            out.append(text)
+        if len(out) >= 3:
+            break
+    return out
+
+
 def _draft_advice(args: dict, ctx: ToolContext) -> str:
     # THE un-skippable evidence gate. Tool-side, not prompt-side.
     resolved = [c for c in ctx.cites if c.resolved]
@@ -186,6 +224,7 @@ def _draft_advice(args: dict, ctx: ToolContext) -> str:
     if not (read and move and framing):
         raise ToolError("draft_advice needs non-empty `read`, `move`, and `framing`.")
     ctx.advice = Advice(read=read.strip(), move=move.strip(), framing=framing.strip())
+    ctx.followup_questions = _coerce_followups(args.get("followup_questions"))
     return "✓ advice drafted. You may now give your final answer."
 
 
@@ -196,10 +235,12 @@ def _answer_direct(args: dict, ctx: ToolContext) -> str:
         raise ToolError(
             "REFUSED: you have not cited any evidence yet. Call cite(claim, source_ref) — at "
             "least one resolved cite — before answer_direct.")
-    text = ((args or {}).get("text") or "").strip()
+    args = args or {}
+    text = (args.get("text") or "").strip()
     if not text:
         raise ToolError("answer_direct needs a non-empty `text`.")
     ctx.answer = text
+    ctx.followup_questions = _coerce_followups(args.get("followup_questions"))
     return "✓ answered. You may now finish."
 
 

@@ -211,9 +211,15 @@ def test_locale_rides_the_request_not_a_mock_only_switch():
         en_text = Path(en_case.path).read_text(encoding="utf-8")
         zh_mock = json.loads(zh_text.split("<!-- MOCK", 1)[1].rsplit("-->", 1)[0])
         en_mock = json.loads(en_text.split("<!-- MOCK", 1)[1].rsplit("-->", 1)[0])
-        zh_advice = " ".join(zh_mock["avery"]["advice"].values())
-        en_advice = " ".join(en_mock["avery"]["advice"].values())
-        assert _has_cjk(zh_advice) and not _has_cjk(en_advice)
+        # #72 起 advice 块里多了 list 形状的 followup_questions——正文三段仍是 str，
+        # 追问单独摊平后并进同一个语言判据（罐头的每一段都得跟着 locale 走）。
+        def _flat(advice: dict) -> str:
+            parts = [v for v in advice.values() if isinstance(v, str)]
+            parts += [q for v in advice.values() if isinstance(v, list)
+                      for q in v if isinstance(q, str)]
+            return " ".join(parts)
+        assert _has_cjk(_flat(zh_mock["avery"]["advice"]))
+        assert not _has_cjk(_flat(en_mock["avery"]["advice"]))
     finally:
         live_input.discard(zh_case)
         live_input.discard(en_case)
@@ -222,10 +228,18 @@ def test_locale_rides_the_request_not_a_mock_only_switch():
 def test_mock_prose_passes_the_red_line_in_both_languages():
     """罐头也过红线。它会原样出现在门的截图和演示里——不给人打分/排名这条线一视同仁。"""
     from avery import redline
-    from service.live_input import _MOCK_ADVICE, _MOCK_SHORT_ANSWER
+    from service.live_input import (
+        _MOCK_ADVICE, _MOCK_FOLLOWUPS_ADVICE, _MOCK_FOLLOWUPS_ANSWER, _MOCK_SHORT_ANSWER,
+    )
     for locale, advice in _MOCK_ADVICE.items():
         for slot, text in advice.items():
             res = redline.validate(text, cited_snippets=[])
             assert res.passed, f"{locale}/{slot} 触了红线：{res}"
         res = redline.validate(_MOCK_SHORT_ANSWER[locale], cited_snippets=[])
         assert res.passed, f"{locale}/short-answer 触了红线：{res}"
+        # #72 · 追问罐头一视同仁（它们会以可点 chips 的形态出现在回答下方）。
+        for fam, table in (("followup-advice", _MOCK_FOLLOWUPS_ADVICE),
+                           ("followup-answer", _MOCK_FOLLOWUPS_ANSWER)):
+            for q in table[locale]:
+                res = redline.validate(q, cited_snippets=[])
+                assert res.passed, f"{locale}/{fam} 触了红线：{res}"

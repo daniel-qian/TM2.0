@@ -3014,6 +3014,23 @@
   outline: none;
 }
 
+/* ── #72 · 回答下方「建议追问」chips（会话流内、只挂尾轮）。chip 本体复用 .lite-room-chip
+   的 pill 语法（按钮族门的白名单条目一并覆盖）；容器左对齐——它是回答卡的下摆，
+   不是空态那块居中的引导。 ─────────────────────────────────────────────────── */
+.lite2-shell .lite-room-followups {
+  margin-top: 12px;
+}
+
+.lite2-shell .lite-room-followups-label {
+  margin: 0 0 8px;
+}
+
+.lite2-shell .lite-room-followups .lite-room-chip-row {
+  justify-content: flex-start;
+  margin: 0;
+  max-width: none;
+}
+
 /* ── 通知铃铛（LiteTopbar 内；.prototype-topbar 是 pointer-events:none 容器，
    铃铛同 .scene-tabs/.mode-switch 的规矩自己 auto 回来）──────────────────────── */
 .lite2-shell .lite-bell {

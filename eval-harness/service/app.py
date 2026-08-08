@@ -309,15 +309,19 @@ def _with_ask_frame(events: Iterator[dict[str, Any]], req: "AdviseRequest") -> I
     deterministic heuristic; no hit = no frame). This is the SERVICE-layer assembly point the
     stage-C contract pins: the frozen advisor engine emits exactly what it always did; old
     consumers ignore the extra frame (`kind` defaults to advice). Frame-building problems are
-    swallowed — a quick-ask proposal must never break an advise that already succeeded."""
-    saw_advice = False
+    swallowed — a quick-ask proposal must never break an advise that already succeeded.
+
+    #72：整个终局 manifest 交给 maybe_ask_draft_frame（不再只是"看见过 manifest"这一位布尔）
+    ——短答终局（answer_kind='answer'，事实已从记录里直接读出）不再弹快问卡，判据收敛的
+    语义半边在那边实现。"""
+    terminal: dict[str, Any] | None = None
     for ev in events:
         if ev.get("type") == "manifest" and ev.get("kind") in (None, "advice"):
-            saw_advice = True
+            terminal = ev
         yield ev
-    if saw_advice:
+    if terminal is not None:
         try:
-            frame = maybe_ask_draft_frame(req.company_context_id, req.situation)
+            frame = maybe_ask_draft_frame(req.company_context_id, req.situation, terminal)
         except Exception:
             frame = None
         if frame:

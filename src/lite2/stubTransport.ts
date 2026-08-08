@@ -132,6 +132,12 @@ const STUB_ADVICE = {
   metrics_to_track: ['Vendor quote signed', 'Fixture install start date'],
   conversation_script:
     'I want the launch to land without a scramble — what does the date look like from your side, honestly?',
+  // #72 · 建议追问（真后端由 contract 投影透传、逐条过红线；stub 只为 dev 手测把 chips
+  // 撑起来——问"事"不问"人"的纪律同真罐头）。
+  followup_questions: [
+    'How should I bring up the vendor quote with the owners? (stub sample)',
+    'What should I check again once the quote is signed? (stub sample)',
+  ],
 }
 
 // agent 起草的 Quick ask —— 问"事"（这次上线、这个日期），不问"人"。

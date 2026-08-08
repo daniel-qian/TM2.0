@@ -153,6 +153,8 @@ def stream_advice(brain: Brain, case: Case, system_prompt: str, *, agent_name: s
                        "violations": [asdict(v) for v in rl.violations]}
                 ctx.advice = None
                 ctx.answer = None
+                # #72 · 被打回的那版建议附带的追问一并作废——重发的 draft 会重写这个槽。
+                ctx.followup_questions = []
                 continue
 
             steps.append({"type": "final", "text": final_text})
@@ -222,6 +224,9 @@ def _finish_transcript(ctx: ToolContext, steps: list[dict], case: Case, agent_na
         # 0729/03：短答终局（answer_direct）。advice/answer 互斥；batch 侧 run_loop 不产出
         # 这个键（服务端专属路径），parity 测试只比对共有键。
         "answer": ctx.answer,
+        # #72 · 建议追问（两个终局出口共用；沿 `answer` 键的先例——run_loop 不产出这个键）。
+        # 红线逐条过滤在 contract 投影层，这里原样带出工具收到的形状归一结果。
+        "followup_questions": list(ctx.followup_questions),
         "final_text": final_answer,
         "redline": {
             "passed": rl.passed,

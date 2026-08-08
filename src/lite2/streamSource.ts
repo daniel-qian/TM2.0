@@ -91,6 +91,9 @@ export interface LiveRunState {
   advice: LiteAdvice | null // manifest.advice（契约 payload）——ready 后填
   // 0729/03 分流短答：manifest.answer_kind='answer' 时的一段话直答（与 advice 互斥）。
   answer: string | null
+  // #72 · 建议追问（回答下方的可点 chips，≤3 条）。advice 与短答两条路都可能带；
+  // 后端没发键（absent≠[]）就是空数组——UI 整块不渲染，绝不编造建议。
+  followups: string[]
   // feat-034：manifest{kind:'ask-draft'} 落进来的 Quick ask 草稿（出生帧）。
   // 后续编辑/分享/回执的活体状态归 store 持有——这里只是"流里出生了一张草稿"的快照。
   askDraft: AskDraft | null
@@ -112,6 +115,7 @@ export function emptyRunState(): LiveRunState {
     lines: [],
     advice: null,
     answer: null,
+    followups: [],
     askDraft: null,
     contractOk: null,
     redlinePassed: null,
@@ -244,6 +248,8 @@ export function applyEvent(
         const a = ev.answer as Record<string, unknown> | null | undefined
         state.answer = a && typeof a === 'object' && typeof a.text === 'string' && a.text ? a.text : null
         state.advice = null
+        // #72 · 短答路的建议追问（advice 与短答两条路都要有 chips）。
+        state.followups = coerceFollowups(a?.followup_questions)
         state.contractOk = ev.contract_ok ?? null
         state.redlinePassed = ev.redline_passed ?? null
         push('system', 'manifest', '', state.answer ? 'advice-ready' : 'advice-done')
@@ -255,6 +261,9 @@ export function applyEvent(
       const advice = coerceAdvice(ev.advice)
       state.advice = advice
       state.answer = null
+      // #72 · advice 路的建议追问（payload 可选键；缺席=空数组，UI 不渲染）。
+      state.followups = coerceFollowups(
+        (ev.advice as Record<string, unknown> | null | undefined)?.followup_questions)
       state.contractOk = ev.contract_ok ?? null
       state.redlinePassed = ev.redline_passed ?? null
       push('system', 'manifest', '', advice ? 'advice-ready' : 'advice-done')
@@ -410,6 +419,20 @@ function formatToolCall(name: string | undefined, input: Record<string, unknown>
 // 两条 code 都刻意只描述"在重新找依据"这件事，不暴露 rule id，也不提任何一个人。
 function nudgeCode(gate: 'chain' | 'redline' | undefined): LiteLineCode {
   return gate === 'redline' ? 'nudge-redline' : 'nudge-chain'
+}
+
+// #72 · 建议追问的防御性形状归一：只收字符串、去空白、丢空条、封顶 3（与后端投影层同一
+// 套上限——真后端已滤过红线，这里只管形状；坏形状降级成"没有建议"，绝不崩渲染）。
+export function coerceFollowups(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return []
+  const out: string[] = []
+  for (const item of raw) {
+    if (typeof item !== 'string') continue
+    const text = item.trim()
+    if (text) out.push(text)
+    if (out.length >= 3) break
+  }
+  return out
 }
 
 // manifest.advice 可能来自真后端——做防御性形状归一，缺字段补空（终端仍渲染，卡按有的字段显）。

@@ -1243,6 +1243,7 @@ export const zh: Dict = {
     "adviceEyebrow": "Avery 的分析",
     "roomAnswerLabel": "Avery 的回答",
     "roomTurnQuestionLabel": "你问的",
+    "roomFollowupsLabel": "接着可以问",
     "roomHistoryTitle": "之前问过的",
     "adviceReadTitle": "判读",
     "adviceSignOff": "由你拍板",

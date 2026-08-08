@@ -178,7 +178,166 @@ rec('③ 自证：第二轮也跑到终局（后端真吃下了带 history 的�
     status.length === 2 && status.every((s) => s === 'complete'), JSON.stringify(status))
 }
 
-// ── ⑥ 离开议事室＝这场对话结束（票面拍板：刻意不持久化）────────────────────────────────────
+// ═══ #72 · 建议追问 chips + 快问触发收敛 ═══════════════════════════════════════════════════
+// 语料（花名册在 ⓪ 上传：周雅婷 / 林小满）：
+const Q_FACT = '周雅婷负责的项目截止日期是什么时候'    // 事实查询 + 点名 → 短答、不弹快问卡
+const Q_NAME = '周雅婷负责的推广最近有点吃紧，我该怎么帮她理顺' // 判断类 + 点名 → 弹快问卡
+const Q_NAME2 = '周雅婷手上的事是不是压太多了，我该怎么调配'
+const Q_PLAIN = '这周整体节奏该怎么排'
+const Q_PLAIN2 = '我下一步该把精力放在哪儿'
+const Q_PLAIN3 = '今天还有哪些要收尾的'
+
+// ── ⑦ chips 在场（advice 路，mock 罐头固定 2 条）──────────────────────────────────────────
+const chipsAfter2 = await page.evaluate(() => ({
+  containers: document.querySelectorAll('[data-followup-chips]').length,
+  chips: Array.from(document.querySelectorAll('[data-followup-chip]'))
+    .map((c) => (c.textContent ?? '').trim()),
+}))
+rec('⑦ #72 · 回答下方出建议追问 chips（mock 罐头 2 条；抹掉 followup 槽这条必红）',
+  chipsAfter2.containers === 1 && chipsAfter2.chips.length === 2 &&
+  chipsAfter2.chips.every((t) => t.length > 0), JSON.stringify(chipsAfter2))
+
+// ── ⑧ 点击即发（网络层判据：situation=chip 原文 + 带 history）────────────────────────────
+const chipText = chipsAfter2.chips[0] ?? ''
+await page.locator('[data-followup-chip="0"]').click()
+const got3 = await waitForPosts(3)
+const post3 = advisePosts[2]
+rec('⑧ #72 · 点击 chip 即发为追问：situation === chip 原文（点击=选择，不是预填）',
+  got3 && post3?.situation === chipText,
+  JSON.stringify({ chipText, situation: post3?.situation ?? null }))
+rec('⑧ #72 · chip 追问带上了前两轮 history（含第二问原文——chips 走的就是会话流的上下文）',
+  Array.isArray(post3?.history) && post3.history.length >= 2 &&
+  post3.history.some((h) => (h?.question ?? '').includes(Q2)),
+  JSON.stringify((post3?.history ?? []).map((h) => h?.question)))
+rec('⑧ 自证：chip 追问跑到终局', await waitSettled())
+const turn3 = await page.evaluate(() => {
+  const turns = Array.from(document.querySelectorAll('.lite-room-board .lite-room-turn'))
+  return { count: turns.length,
+    q: turns[2]?.querySelector('.lite-room-turn-question-text')?.textContent ?? '' }
+})
+rec('⑧ #72 · chip 的问题以新一轮回显（问题行 = chip 原文）',
+  turn3.count === 3 && turn3.q === chipText, JSON.stringify(turn3))
+
+// ── ⑨ 只挂尾轮（三轮全完成，chips 仍只有一组——历史轮上的"接着可以问"是假的此刻）────────
+const chipsAfter3 = await page.evaluate(() => ({
+  containers: document.querySelectorAll('[data-followup-chips]').length,
+  turns: document.querySelectorAll('.lite-room-board .lite-room-turn').length,
+}))
+rec('⑨ #72 · chips 只挂尾轮（拆掉 isLast 条件这条必红）',
+  chipsAfter3.turns === 3 && chipsAfter3.containers === 1, JSON.stringify(chipsAfter3))
+
+// ── ⑩ busy 闸在 store 临界区（chips 双击/同拍重复触发的真防线）───────────────────────────
+// 🔴 为什么不用真双击钉：React 重渲染发生在两次 click 之间，chips 早就随尾轮切换卸载了，
+//    Playwright 的第二下点在空处——那样的"绿"验不到临界区。判据直接落在 store 的闸上
+//    （UI 的 disabled 要等一次重渲染，同一拍的第二下它挡不住——createFormLinks 同款教训）。
+const postsBefore10 = advisePosts.length
+const guard = await page.evaluate(({ seam, q }) => {
+  const st = window[seam].getState()
+  const before = st.turns.length
+  st.askLive({ situation: q })
+  window[seam].getState().askLive({ situation: '第二发不该出去' })
+  return { before, after: window[seam].getState().turns.length }
+}, { seam: SEAM, q: Q_PLAIN })
+rec('⑩ #72 · 同一拍连发两问只开一轮（拆掉 askLive 的 busy 闸这条必红）',
+  guard.after === guard.before + 1, JSON.stringify(guard))
+rec('⑩ 自证：这一轮跑到终局', await waitSettled())
+await page.waitForTimeout(300)
+rec('⑩ 自证：网络上也只多了一发 /advise（第二发真的没出去）',
+  advisePosts.length === postsBefore10 + 1,
+  JSON.stringify({ before: postsBefore10, now: advisePosts.length }))
+
+// ── ⑪ 短答路 chips + 快问收敛「不该弹」（中文语料真跑）──────────────────────────────────
+const posts11 = advisePosts.length
+await input().click()
+await input().pressSequentially(Q_FACT, { delay: 15 })
+await input().press('Enter')
+await waitForPosts(posts11 + 1)
+rec('⑪ 自证：事实查询跑到终局', await waitSettled())
+const factState = await page.evaluate((seam) => {
+  const st = window[seam].getState()
+  const last = (st.turns ?? [])[st.turns.length - 1]
+  const els = Array.from(document.querySelectorAll('.lite-room-board .lite-room-turn'))
+  const lastEl = els[els.length - 1]
+  return {
+    answer: !!(last?.run.answer), advice: !!(last?.run.advice),
+    answerCard: lastEl ? lastEl.querySelectorAll('.lite-room-answer-card').length : 0,
+    chips: lastEl ? lastEl.querySelectorAll('[data-followup-chip]').length : 0,
+    askCard: document.querySelectorAll('.lite-room-ask').length,
+    storeAsk: st.ask !== null,
+  }
+}, SEAM)
+rec('⑪ 自证：这条语料真走了短答出口（answer 非空、无判读卡——语义闸判据的前提）',
+  factState.answer && !factState.advice && factState.answerCard === 1, JSON.stringify(factState))
+rec('⑪ #72 · 短答下方也有追问 chips（两条出口都要有——只接 advice 路这条必红）',
+  factState.chips === 2, JSON.stringify(factState))
+rec('⑪ #72 · 收敛「不该弹」：提到人名但走短答（事实已从记录直接读出）不弹快问卡' +
+  '（拆掉 answer_kind 语义闸这条必红）',
+  factState.askCard === 0 && !factState.storeAsk, JSON.stringify(factState))
+
+// ── ⑫ 收敛「该出仍出」：判断类 + 点名（中文词边界不许误杀）────────────────────────────────
+const posts12 = advisePosts.length
+await input().click()
+await input().pressSequentially(Q_NAME, { delay: 15 })
+await input().press('Enter')
+await waitForPosts(posts12 + 1)
+rec('⑫ 自证：判断类提问跑到终局', await waitSettled())
+// ask-draft 帧在 manifest 之后一帧——落定后再给它一步落地的时间。
+await page.waitForFunction((seam) => window[seam].getState().ask !== null, SEAM,
+  { timeout: 5000 }).catch(() => {})
+const askState = await page.evaluate((seam) => {
+  const st = window[seam].getState()
+  return { askCard: document.querySelectorAll('.lite-room-ask').length,
+    status: st.ask?.status ?? null,
+    recipients: (st.ask?.recipients ?? []).map((r) => r.name) }
+}, SEAM)
+rec('⑫ #72 · 收敛「该出仍出」：判断类提问点名周雅婷 → 快问卡照旧出、收件人=她' +
+  '（词边界杀掉中文触发/收敛过头这条必红）',
+  askState.askCard === 1 && askState.status === 'draft' && askState.recipients.includes('周雅婷'),
+  JSON.stringify(askState))
+
+// ── ⑬ 撤卡重裁（progress.md Notes 拍板落地）：没动过的撤、动过的保 ─────────────────────────
+const posts13a = advisePosts.length
+await input().click()
+await input().pressSequentially(Q_PLAIN2, { delay: 15 })
+await input().press('Enter')
+await waitForPosts(posts13a + 1)
+rec('⑬ 自证：追问跑到终局', await waitSettled())
+const untouched = await page.evaluate((seam) => ({
+  askCard: document.querySelectorAll('.lite-room-ask').length,
+  storeAsk: window[seam].getState().ask !== null,
+}), SEAM)
+rec('⑬ #72 · 没动过的草稿仍随新一轮退场（保护不扩大化——上一问的过期提案不粘屏）',
+  untouched.askCard === 0 && !untouched.storeAsk, JSON.stringify(untouched))
+
+const posts13b = advisePosts.length
+await input().click()
+await input().pressSequentially(Q_NAME2, { delay: 15 })
+await input().press('Enter')
+await waitForPosts(posts13b + 1)
+await waitSettled()
+await page.waitForFunction((seam) => window[seam].getState().ask !== null, SEAM,
+  { timeout: 5000 }).catch(() => {})
+// 真 UI 编辑：往草稿第一道题面里打字（editAskQuestion → askDirty）。
+const qInput = page.locator('.lite-room-ask .ask-q-input').first()
+rec('⑬ 自证：快问卡再次出生且题面可编辑', (await qInput.count()) === 1)
+await qInput.click()
+await qInput.pressSequentially('补一句', { delay: 20 })
+const posts13c = advisePosts.length
+await input().click()
+await input().pressSequentially(Q_PLAIN3, { delay: 15 })
+await input().press('Enter')
+await waitForPosts(posts13c + 1)
+rec('⑬ 自证：再追一问跑到终局', await waitSettled())
+const dirtyKept = await page.evaluate((seam) => {
+  const st = window[seam].getState()
+  return { askCard: document.querySelectorAll('.lite-room-ask').length,
+    status: st.ask?.status ?? null, dirty: st.askDirty === true }
+}, SEAM)
+rec('⑬ #72 · manager 动过的草稿不被追问杀掉（重裁拍板：拆掉保护这条必红）',
+  dirtyKept.askCard === 1 && dirtyKept.status === 'draft' && dirtyKept.dirty,
+  JSON.stringify(dirtyKept))
+
+// ── ⑥ 离开议事室＝这场对话结束（票面拍板：刻意不持久化；#72：受保护的卡也随对话散场）────
 await page.evaluate((seam) => window[seam].getState().goScreen('home'), SEAM)
 await page.waitForTimeout(500)
 await page.evaluate((seam) => window[seam].getState().goScreen('room'), SEAM)
@@ -187,6 +346,8 @@ const afterLeave = await page.evaluate((seam) => ({
   turns: (window[seam].getState().turns ?? []).length,
   domTurns: document.querySelectorAll('.lite-room-turn').length,
   empty: document.querySelectorAll('.nexus-empty .nexus-empty-composer-wrap form').length,
+  ask: window[seam].getState().ask !== null,
+  askCard: document.querySelectorAll('.lite-room-ask').length,
   storageHit: Object.keys(window.localStorage)
     .filter((k) => {
       const v = window.localStorage.getItem(k) ?? ''
@@ -196,10 +357,13 @@ const afterLeave = await page.evaluate((seam) => ({
 rec('⑥ 离开再回来＝这场对话结束（turns 清空、屏上回到空态）',
   afterLeave.turns === 0 && afterLeave.domTurns === 0 && afterLeave.empty === 1,
   JSON.stringify(afterLeave))
+rec('⑥ #72 · 受保护的快问卡也随对话散场（clearTurns 清 ask——卡不跨场复活成假"此刻"）',
+  !afterLeave.ask && afterLeave.askCard === 0, JSON.stringify(afterLeave))
 rec('⑥ **刻意不持久化**：localStorage 里找不到任何一问的正文（别顺手加持久化）',
   afterLeave.storageHit.length === 0, JSON.stringify(afterLeave.storageHit))
 
 rec('无 pageerror（整程零未捕获异常）', pageErrors.length === 0, JSON.stringify(pageErrors))
 
 void rows
-await finish({ rows }, { browser, label: '#71 room-conversation（会话流 → 不覆盖 → history 进请求体）', listFailures: true })
+await finish({ rows }, { browser,
+  label: '#71+#72 room-conversation（会话流 → history → 追问 chips → 快问收敛）', listFailures: true })

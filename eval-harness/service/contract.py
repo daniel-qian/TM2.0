@@ -52,6 +52,9 @@ OPTIONAL_FIELDS = [
     "escalation",
     "metrics_to_track",
     "conversation_script",
+    # #72 · 建议追问（≤3 条短问题，回答下方的可点 chips）。真值透传：引擎的
+    # draft_advice/answer_direct 收到才有；投影层绝不编造。
+    "followup_questions",
 ]
 
 CONFIDENCE_LEVELS = {"low", "medium", "high"}
@@ -83,6 +86,38 @@ def _actions_from_move(move: str) -> list[str]:
     sents = _sentences(move)
     # Group into at most a handful of actions so the card stays readable.
     return sents[:6] if sents else ([move.strip()] if move.strip() else [])
+
+
+def _followup_passes_gate(text: str) -> bool:
+    """#72 · 建议追问的问题门——与 ask_api._question_passes_gate 同款纪律（两级门）：
+    问"事"的问题恒过；问"人评分"的只在公司开关（ADR-0030 过滤语义）打开时放行。
+    独立抄一份而不是 import ask_api：service 层 ask_api 依赖 ingest 全家桶，contract 是
+    引擎侧最薄的一层，反向引它会把投影层拖进快问面的依赖图。"""
+    from avery.scoring_policy import person_scoring_allowed
+    if person_scoring_allowed():
+        return True
+    return redline.validate(text).passed
+
+
+def _project_followups(transcript: dict) -> list[str]:
+    """#72 · 从 transcript 取建议追问并**逐条**过红线门——违规的丢弃（ask_api
+    generate_questions 同款：drop violators, keep the rest），绝不因一条坏建议让整次
+    已经通过红线的建议失败。刻意**不**把它们并进 `_redline_text` 的整块复验：并进去的
+    话，一条违规追问的失败模式就从「少一个 chip」升级成「整张判读卡不发」。"""
+    raw = transcript.get("followup_questions")
+    if not isinstance(raw, list):
+        return []
+    out: list[str] = []
+    for item in raw:
+        if not isinstance(item, str):
+            continue
+        text = item.strip()
+        if not text or not _followup_passes_gate(text):
+            continue
+        out.append(text)
+        if len(out) >= 3:
+            break
+    return out
 
 
 def project_advice(transcript: dict) -> dict[str, Any]:
@@ -132,6 +167,10 @@ def project_advice(transcript: dict) -> dict[str, Any]:
         payload["detected_signals"] = detected_signals
     if conversation_script:
         payload["conversation_script"] = conversation_script
+    # #72 · 建议追问透传（红线逐条过滤后仍有货才发键——absent≠[]，与其余可选字段同纪律）。
+    followups = _project_followups(transcript)
+    if followups:
+        payload["followup_questions"] = followups
     return payload
 
 
@@ -183,9 +222,13 @@ def check_schema(payload: dict[str, Any]) -> list[str]:
 def enforce_answer(transcript: dict, cited_snippets: list[str] | None = None) -> ContractResult:
     """0729/03 分流短答的契约闸：短答不过 9 字段投影，但三条地板一条不松——
     ① 非空文本；② 红线全文复验（与 advice 同一把尺）；③ cite 闸（引擎 tool 侧已执法，
-    这里复核 transcript 里确有 resolved cite）。payload = {"text": ...}。"""
+    这里复核 transcript 里确有 resolved cite）。payload = {"text": ...}。
+    #72：短答同样可带 followup_questions（advice 与短答两条路都要有追问 chips）。"""
     text = (transcript.get("answer") or "").strip()
     payload: dict[str, Any] = {"text": text}
+    followups = _project_followups(transcript)
+    if followups:
+        payload["followup_questions"] = followups
 
     missing = [] if text else ["text"]
     cites = transcript.get("cites") or []

@@ -106,16 +106,25 @@ def make_mock_brain(case, persona: str) -> MockBrain:
             plan.append(_Step(tool=_tc(n, "cite",
                         {"claim": c["claim"], "source_ref": c["source_ref"]}))); n += 1
         # 0729/03 分流：MOCK 块给了 answer 就走短答出口（answer_direct），否则照旧 advice。
+        # #72：MOCK 块带 followup_questions 时随工具入参带上；没带则入参一个键都不多
+        # （既有 case fixture 的计划逐字节不变）。
         ans = spec.get("answer")
         if ans:
             text = ans.get("text", "") if isinstance(ans, dict) else str(ans)
-            plan.append(_Step(tool=_tc(n, "answer_direct", {"text": text}))); n += 1
+            args: dict = {"text": text}
+            fu = ans.get("followup_questions") if isinstance(ans, dict) else None
+            if fu:
+                args["followup_questions"] = fu
+            plan.append(_Step(tool=_tc(n, "answer_direct", args))); n += 1
             plan.append(_Step(final=text))
             return MockBrain("avery(mock)", plan)
         adv = spec.get("advice", {})
-        plan.append(_Step(tool=_tc(n, "draft_advice", {
+        adv_args: dict = {
             "read": adv.get("read", ""), "move": adv.get("move", ""),
-            "framing": adv.get("framing", "")}))); n += 1
+            "framing": adv.get("framing", "")}
+        if adv.get("followup_questions"):
+            adv_args["followup_questions"] = adv.get("followup_questions")
+        plan.append(_Step(tool=_tc(n, "draft_advice", adv_args))); n += 1
         final = Advice(adv.get("read", ""), adv.get("move", ""), adv.get("framing", "")).render()
         plan.append(_Step(final=final))
         return MockBrain("avery(mock)", plan)

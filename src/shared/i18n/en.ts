@@ -1731,6 +1731,8 @@ export const en = {
     roomAnswerLabel: "Avery's answer",
     // #71 · 会话流里每一轮的提问行标签。与 roomAnswerLabel 成对——一问一答两个 eyebrow。
     roomTurnQuestionLabel: 'You asked',
+    // #72 · 回答下方「建议追问」chips 的标题/aria（chips 文字本身是后端产文，零新键）。
+    roomFollowupsLabel: 'Suggested follow-ups',
     // issue #49 · 议事室历史（advise_runs 只读回看面）的入口/抽屉标题。
     roomHistoryTitle: 'Asked before',
     adviceReadTitle: 'The read',

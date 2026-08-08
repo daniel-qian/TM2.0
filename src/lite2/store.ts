@@ -376,6 +376,11 @@ interface LiteState {
   ask: AskDraft | null
   askBusy: 'idle' | 'saving' | 'refreshing'
   askError: string | null
+  // #72 · manager 动过这张草稿没有（改过题面/增删题/点过受访者）。决定新一轮开跑时
+  // 撤不撤卡：没动过的 draft 是上一问的过期提案，照旧撤；动过的草稿和已发出的卡
+  // （shared/collecting/closed）是 manager 手上的活，追问不该杀掉它（progress.md Notes
+  // 重裁拍板，#72 顺手落地）。
+  askDirty: boolean
 
   // ── 常驻表单（gap-design-0805 T3 · 资料库第④段）─────────────────────────────────────
   // 🔴 三态，不是两态（同 adviseRuns 的取舍，不是 files 的 `[]` 初值）：
@@ -603,6 +608,7 @@ export const useLite = create<LiteState>((set, get) => ({
   ask: null,
   askBusy: 'idle',
   askError: null,
+  askDirty: false,
 
   // T3 · 常驻表单。两份清单起手是 null 而不是 []——「没拉过」与「拉到了确实是空的」在
   // 数据里必须分得开（见 LiteState 里那段）。
@@ -893,6 +899,10 @@ export const useLite = create<LiteState>((set, get) => ({
             formsBusy: 'idle' as const, formsError: null,
             formsAutoFilled: null, formsVoiding: null,
             formBuilderBusy: 'idle' as const, formBuilderError: null,
+            // #72 · 快问卡四件同属公司域（本清单的注释一直点名 ask，实际一直漏——此前被
+            // 「askLive 开跑即撤卡」掩着；撤卡改成保护式后，A 公司的问卷草稿/回执卡会活到
+            // 切进 B 公司之后，必须在这儿清）。
+            ask: null, askBusy: 'idle' as const, askError: null, askDirty: false,
             ingestStatus: 'idle' as IngestStatus,
             // T10：补资料那一组同属公司域（「A 公司那次补传为什么没成」挂到 B 头上，
             // 就是替 B 断言一件没发生的事——与上面 formsError 逐字同一条理由）。
@@ -1263,13 +1273,25 @@ export const useLite = create<LiteState>((set, get) => ({
   resetProjectWrite: () => set({ projectWriteBusy: false, projectWriteError: null }),
 
   askLive: (req, question) => {
-    // 中止在飞的那条流（`_abort` 在 run 落定后不会自己归 null，对已收尾的流是无操作）。
-    // 🔴 #71 起 UI 层在 running 时把发送键置灰，所以「打断上一轮」这条路在产品里已经走不到；
-    //    这一发留着是给 resetRun / 换公司那几条路兜底，别当成"支持中途换问题"的实现。
-    // 新一轮开跑即撤旧 Ask 卡——与 #71 之前同规格（一个提问一张快问卡，旧草稿随旧轮退场）。
-    get()._abort?.()
     const { agentSource, contextId, notes, turns } = get()
+    // #72 · busy 闸在 store 的临界区上，不只在 UI 的 disabled 上：React 的 disabled 要等一次
+    // 重渲染才落到 DOM，同一拍里的第二次 click（发送键/追问 chip 双击）发生在那之前——
+    // createFormLinks / switchContext 同款教训。上一轮还在流就静默丢弃这一发（UI 层本来
+    // 就置灰了，走到这儿的只能是同一拍的重复触发）。
+    const tail = turns[turns.length - 1]
+    if (tail && tail.run.status === 'running') return
+    // 中止在飞的那条流（`_abort` 在 run 落定后不会自己归 null，对已收尾的流是无操作）。
+    // 🔴 上面的 busy 闸挡掉了"打断上一轮"这条路；这一发留着是给 error 终局后的收尾兜底，
+    //    别当成"支持中途换问题"的实现。
+    get()._abort?.()
     const notesBefore = notes.length
+    // #72 · 撤卡重裁（progress.md Notes）：**没动过的 draft** 才随新一轮退场（它是上一问的
+    // 过期提案）；manager 动过的草稿（askDirty）和已发出的卡（shared/collecting——链接可能
+    // 还没粘完；closed——回执还在看）都不撤。追问 chips 让"回答完马上再问"成了常态，
+    // 不该每问一次就杀掉 manager 手上正要发的问卷。
+    const currentAsk = get().ask
+    const askProtected =
+      currentAsk !== null && (currentAsk.status !== 'draft' || get().askDirty)
     // 🔴 history 从**已落定且真答出东西**的前几轮组装（askHistory.buildAdviseHistory）。
     //    组装点在这里而不是调用方：屏底 composer、空态建议 chips、将来的建议追问 chips
     //    是三个入口，逐个记得带上下文＝给"新入口忘了带"留位置（同 withLocale 的一处补全）。
@@ -1284,10 +1306,8 @@ export const useLite = create<LiteState>((set, get) => ({
     set({
       turns: [...turns, turn],
       run: turn.run,
-      ask: null,
-      askBusy: 'idle',
-      askError: null,
       noteJustAdded: false,
+      ...(askProtected ? {} : { ask: null, askBusy: 'idle', askError: null, askDirty: false }),
     })
     let settled = false
     const handle = agentSource.run(
@@ -1308,16 +1328,21 @@ export const useLite = create<LiteState>((set, get) => ({
           const next = list.slice()
           next[idx] = { ...next[idx], run: state }
           // 流里出生 ask-draft（一次性收养）：之后的编辑/分享/回执活体在 store，不再被流覆盖。
+          // #72 · 收养同样让位于保护中的卡：manager 动过的草稿/已发出的卡不被新提案顶掉
+          //（顶掉和撤掉是同一种销毁）。新提案这时静默丢弃——一次只有一张活体卡。
           const current = get().ask
-          const adopt = state.askDraft && (!current || current.id !== state.askDraft.id)
+          const currentProtected =
+            current !== null && (current.status !== 'draft' || get().askDirty)
+          const adopt = state.askDraft && !currentProtected &&
+            (!current || current.id !== state.askDraft.id)
           set(
             // `run` 是尾轮镜像：只有当这一轮就是尾轮时才同步（旧轮收尾不该把界面拉回去）。
             idx === next.length - 1
               ? adopt
-                ? { turns: next, run: state, ask: state.askDraft }
+                ? { turns: next, run: state, ask: state.askDraft, askDirty: false }
                 : { turns: next, run: state }
               : adopt
-                ? { turns: next, ask: state.askDraft }
+                ? { turns: next, ask: state.askDraft, askDirty: false }
                 : { turns: next },
           )
         }
@@ -1353,17 +1378,23 @@ export const useLite = create<LiteState>((set, get) => ({
       ask: null,
       askBusy: 'idle',
       askError: null,
+      askDirty: false,
     })
   },
 
   // #71 · 离开议事室 / 换公司即散场。turns 是本场对话的**全部**载体，清它就等于结束对话
   // （没有第二份拷贝在 localStorage 或库里等着复活——这是拍板的刻意设计）。
+  // #72 · ask 卡随对话一起散场：此前不清是被「askLive 开跑即撤卡」掩着的——撤卡改成
+  // 保护式之后，不在这儿清的话，上一场对话的卡会挂到下一场对话的第一轮底下（假的"此刻"）。
   clearTurns: () => {
     get()._abort?.()
-    set({ turns: [], run: emptyRunState(), _abort: null })
+    set({ turns: [], run: emptyRunState(), _abort: null,
+      ask: null, askBusy: 'idle', askError: null, askDirty: false })
   },
 
   // ── Ask 草稿态编辑（只在 draft 生效——shared 之后题目/受访者即定格）──────────────
+  // #72 · 四个编辑动作都标 askDirty：manager 一动手，这张草稿就从"上一问的过期提案"
+  // 变成"他手上的活"，新一轮开跑不再撤它（见 askLive 里那段）。
   editAskQuestion: (questionId, text) => {
     const { ask } = get()
     if (!ask || ask.status !== 'draft') return
@@ -1372,6 +1403,7 @@ export const useLite = create<LiteState>((set, get) => ({
         ...ask,
         questions: ask.questions.map((q) => (q.id === questionId ? { ...q, text } : q)),
       },
+      askDirty: true,
     })
   },
 
@@ -1388,13 +1420,17 @@ export const useLite = create<LiteState>((set, get) => ({
         ...ask,
         questions: [...ask.questions, { id: `q${maxN + 1}`, kind, text: '' }],
       },
+      askDirty: true,
     })
   },
 
   removeAskQuestion: (questionId) => {
     const { ask } = get()
     if (!ask || ask.status !== 'draft' || ask.questions.length <= 1) return
-    set({ ask: { ...ask, questions: ask.questions.filter((q) => q.id !== questionId) } })
+    set({
+      ask: { ...ask, questions: ask.questions.filter((q) => q.id !== questionId) },
+      askDirty: true,
+    })
   },
 
   toggleAskRecipient: (personId, name) => {
@@ -1408,6 +1444,7 @@ export const useLite = create<LiteState>((set, get) => ({
           ? ask.recipients.filter((r) => r.id !== personId)
           : [...ask.recipients, { id: personId, name }],
       },
+      askDirty: true,
     })
   },
 
@@ -1483,6 +1520,11 @@ export function resetLiteCompanyData(): void {
     turns: [],
     run: emptyRunState(),
     adviseRuns: null,   // issue #49：历史是公司域数据，换账号/重开必清
+    // #72 · 快问卡四件（与 adoptContext 清单同一份契约的两个抄本——那边补了这边必须补）。
+    ask: null,
+    askBusy: 'idle',
+    askError: null,
+    askDirty: false,
     // T3 · 常驻表单**九件**全清（gap2 T11 加了拼装器那两件，T9 又加了自动补铸那两件）。
     // 两个 busy 都要归位——换账号时卡在 'minting'/'saving' 等于把那个键永久置灰成一个死按钮
     // （那次请求属于上一个账号，永远不会回来解锁它）；formsVoiding 同理。

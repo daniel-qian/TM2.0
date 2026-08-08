@@ -270,12 +270,16 @@ function LiteTurnView({
   ask,
   noteJustAdded,
   onGoNotes,
+  onAskFollowup,
 }: {
   turn: LiveTurn
   isLast: boolean
   ask: boolean
   noteJustAdded: boolean
   onGoNotes: () => void
+  // #72 · 建议追问 chip 点击即发（走 RoomScreen 的 askWithRefs → 同一个 askLive 路径，
+  // history 由 store 组装）。
+  onAskFollowup: (question: string) => void
 }) {
   const { t } = useDict()
   const l = t.lite2
@@ -283,6 +287,11 @@ function LiteTurnView({
   // 🔴 「在跑」只对尾轮成立：历史轮的 run 状态是它当时的定格，不该再有光标在闪。
   const running = isLast && run.status === 'running'
   const advice = run.advice
+  // #72 · 建议追问 chips：只挂尾轮（与实时状态条/快问卡同族——"接着可以问"说的是此刻，
+  // 摆在历史轮上就是假的）、只在本轮真答完之后（running/error 没有可追问的结论）、
+  // 且必须真有回答卡在场（advice 或短答——chips 是回答的下摆，不是独立漂浮物）。
+  const followups =
+    isLast && run.status === 'complete' && (advice || run.answer) ? run.followups : []
 
   return (
     <article className="lite-room-turn" data-room-turn={turn.id}>
@@ -356,8 +365,32 @@ function LiteTurnView({
         </div>
       ) : null}
 
+      {/* #72 · 建议追问 chips（advice 与短答两路共用——两种回答卡下方都要有）。
+          文字就是完整问题，点击=发出去（点击即发是票面拍板；上一轮在跑时本块整个不渲染
+          ——渲染条件见上方 followups 的推导——双击/同拍重复触发由 store.askLive 的
+          busy 闸兜底，UI 的 disabled 挡不住同一拍的第二下）。 */}
+      {followups.length > 0 ? (
+        <div className="lite-room-followups" data-followup-chips="" aria-label={l.roomFollowupsLabel}>
+          <p className="eyebrow lite-room-followups-label">{l.roomFollowupsLabel}</p>
+          <div className="lite-room-chip-row">
+            {followups.map((q, i) => (
+              <button
+                key={`${turn.id}-fu-${i}`}
+                type="button"
+                className="lite-room-chip"
+                data-followup-chip={i}
+                onClick={() => onAskFollowup(q)}
+              >
+                {q}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
       {/* feat-034：第二种 artifact 卡——agent 起草的 Quick ask（manager 确认后出门）。
-          store 里恒只有一张活体草稿、新一轮开跑即撤旧卡，所以它永远属于尾轮。 */}
+          store 里恒只有一张活体卡；#72 起「没动过的草稿随新一轮退场、动过的/已发出的
+          受保护不撤」（store.askLive），渲染仍恒挂尾轮。 */}
       {isLast && ask ? (
         <div className="lite-room-card lite-room-ask">
           <AskCard />
@@ -570,6 +603,9 @@ export function RoomScreen() {
                   ask={ask !== null}
                   noteJustAdded={noteJustAdded}
                   onGoNotes={() => goScreen('notes')}
+                  /* #72 · chip 文字就是完整问题——refs 为空走 askWithRefs 的无引用分支，
+                     situation 恒等于 chip 原文（门的网络层判据钉这条）。 */
+                  onAskFollowup={(q) => askWithRefs(q, [])}
                 />
               ))}
             </div>

@@ -645,14 +645,67 @@ async def share_answer(token: str, request: Request, lang: str | None = None):
 
 # ── the ask-draft SSE frame (service-layer injection — the frozen engine is untouched) ──────────
 
-def maybe_ask_draft_frame(company_context_id: str | None, situation: str | None) -> dict | None:
+def _latin_word_char(ch: str) -> bool:
+    """#72 · 词边界只对「以字母连写成词」的文字有意义（拉丁/数字）。CJK 无空格、无词界——
+    相邻汉字不构成"同一个词"的证据，所以汉字**永远不算**边界阻断字符。裸抄英文 `\\b` 的话
+    Python 会把汉字也算 word char，「小王」在「问一下小王这周的排班」里就匹配不上了——
+    词边界升级反手把中文触发整个杀死（该出的卡全没了）。"""
+    if not ch:
+        return False
+    if "⺀" <= ch:   # CJK 及其后的东亚区段（含扩展/兼容区）——一律不算拉丁词字符
+        return False
+    return ch.isalnum()
+
+
+def _name_mentioned(name: str, situation: str) -> bool:
+    """#72 · 触发判据从裸子串升级为**文种感知的词边界匹配**（大小写不敏感）。
+
+    病根（0808 演习 Danny 实测「一直弹」）：`p.name.lower() in hay` 是裸子串——两字符起步、
+    不看边界，"Li" 命中 "the list"、"Marcus Reid" 命中 "Marcus Reidenbach"。16 人花名册下
+    几乎问啥都中。
+
+    规则：某次出现算命中，当且仅当匹配段的**拉丁字母边**没有紧贴着另一个拉丁字母/数字
+    （那说明它只是长词的一截）。CJK 邻接不阻断（中文本来就连写）。已知边界：两个中文名
+    互为前缀时（「王力」vs「王力宏」）仍会双中——中文无词界，不做分词猜测，宁多勿漏。"""
+    hay = (situation or "").lower()
+    needle = (name or "").lower()
+    if not needle:
+        return False
+    start = 0
+    while True:
+        idx = hay.find(needle, start)
+        if idx < 0:
+            return False
+        before = hay[idx - 1] if idx > 0 else ""
+        after_i = idx + len(needle)
+        after = hay[after_i] if after_i < len(hay) else ""
+        blocked = (_latin_word_char(before) and _latin_word_char(needle[0])) or \
+                  (_latin_word_char(after) and _latin_word_char(needle[-1]))
+        if not blocked:
+            return True
+        start = idx + 1
+
+
+def maybe_ask_draft_frame(company_context_id: str | None, situation: str | None,
+                          manifest: dict | None = None) -> dict | None:
     """Decide (deterministically, honestly) whether this /advise warrants drafting a quick ask,
-    and build the `manifest{kind:'ask-draft'}` frame if so. The heuristic: the manager's situation
-    NAMES at least one roster person (full-name hit against the ingested context) — the exact case
-    where the missing evidence lives in that person's own mouth. No hit -> no frame (never force a
-    card). The draft is a PROPOSAL only — nothing persists until the manager confirms via POST
-    /ask. Every question passed the two-tier gate before the frame goes out the door."""
+    and build the `manifest{kind:'ask-draft'}` frame if so. Two-part heuristic (#72 收敛):
+
+      1. the manager's situation NAMES at least one roster person — word-boundary matched
+         (`_name_mentioned`, script-aware; the pre-#72 bare-substring hit almost anything
+         against a 16-person roster) — the exact case where the missing evidence lives in
+         that person's own mouth;
+      2. the run's terminal artifact is a JUDGMENT (advice), not a factual lookup: a run that
+         ended in `answer_kind == 'answer'` read the fact straight out of the record — there
+         is nothing to survey anyone about, so no card (#72 语义闸；此前短答后也弹卡，
+         是「一直弹」的另一半病根).
+
+    No hit -> no frame (never force a card). The draft is a PROPOSAL only — nothing persists
+    until the manager confirms via POST /ask. Every question passed the two-tier gate before
+    the frame goes out the door."""
     if not company_context_id or not (situation or "").strip():
+        return None
+    if manifest is not None and manifest.get("answer_kind") == "answer":
         return None
     try:
         reg = active_registry()
@@ -661,9 +714,8 @@ def maybe_ask_draft_frame(company_context_id: str | None, situation: str | None)
         return None
     if ctx is None:
         return None
-    hay = situation.lower()
     matched = [p for p in ctx.extraction.people
-               if p.name and len(p.name) >= 2 and p.name.lower() in hay]
+               if p.name and len(p.name) >= 2 and _name_mentioned(p.name, situation)]
     if not matched:
         return None
     questions, mode = generate_questions("", situation)

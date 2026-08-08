@@ -127,6 +127,23 @@ _MOCK_SHORT_ANSWER = {
            "走通给你看；真 brain 在这里读的是你文档里那个实际的事实）。"),
 }
 
+# #72 · 建议追问的罐头（固定 2 条，离线门可跑）。与 _MOCK_ADVICE/_MOCK_SHORT_ANSWER 同一套
+# 纪律：① 按 locale 取（离线电池只有 mock，罐头不双语则 zh 判据永远采不到样）；② 文案自报
+# mock 身份（诚实口径——真 brain 在这个槽里产出的才是贴合语境的追问）；③ 红线一视同仁：
+# 问"事"，不问"人"的评分/排名——这两对问题会逐条过 contract._project_followups 的问题门。
+_MOCK_FOLLOWUPS_ADVICE = {
+    "en": ["How should I open that conversation? (mock sample)",
+           "What if nothing changes after the talk? (mock sample)"],
+    "zh": ["这场谈话我该怎么开场？（mock 示例追问）",
+           "谈完之后情况没改善，下一步怎么办？（mock 示例追问）"],
+}
+_MOCK_FOLLOWUPS_ANSWER = {
+    "en": ["What other records touch on this? (mock sample)",
+           "Is there anything here I should verify in person? (mock sample)"],
+    "zh": ["相关的记录还有哪些可以看？（mock 示例追问）",
+           "这件事还有哪里需要当面核实？（mock 示例追问）"],
+}
+
 
 def _default_mock_block(memory_dir: Path, situation: str, locale: str = DEFAULT_LOCALE) -> dict:
     """A minimal deterministic plan for MockBrain on the live path.
@@ -165,7 +182,10 @@ def _default_mock_block(memory_dir: Path, situation: str, locale: str = DEFAULT_
             "avery": {
                 "recall_queries": recall_queries,
                 "cites": cites,
-                "answer": {"text": _MOCK_SHORT_ANSWER[lang]},
+                # #72 · followup_questions 与 text 同层：make_mock_brain 会把它带进
+                # answer_direct 的工具入参（短答路的追问 chips 由此可离线测到）。
+                "answer": {"text": _MOCK_SHORT_ANSWER[lang],
+                           "followup_questions": list(_MOCK_FOLLOWUPS_ANSWER[lang])},
             },
         }
 
@@ -174,7 +194,9 @@ def _default_mock_block(memory_dir: Path, situation: str, locale: str = DEFAULT_
         "avery": {
             "recall_queries": recall_queries,
             "cites": cites,
-            "advice": dict(_MOCK_ADVICE[lang]),
+            "advice": {**_MOCK_ADVICE[lang],
+                       # #72 · 同上：advice 路的罐头追问（draft_advice 工具入参）。
+                       "followup_questions": list(_MOCK_FOLLOWUPS_ADVICE[lang])},
         },
     }
 
