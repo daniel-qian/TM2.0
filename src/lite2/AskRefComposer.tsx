@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -63,6 +64,17 @@ const KIND_LABEL: Record<AskRef['kind'], (l: Dict['lite2']) => string> = {
   playbook: (l) => l.refPlaybooks,
 }
 
+// ── #66 · 弹层可用空间感知的常数（px）────────────────────────────────────────
+// PICKER_GAP 对应 CSS `bottom/top: calc(100% + 8px)` 的 8；LIST_MAX_HEIGHT 与 lite2.css
+// `.lite-ref-picker-list { max-height: 240px }` 同值（CSS 那条是静态兜底，这里是动态钳制
+// 的上限，改一处必须同步另一处）；PICKER_CHROME 是弹层里列表之外的固定高度（padding 20 +
+// 筛选行 ~26 + gap 8 + 边框 2，取 64 留余量）；LIST_MIN_HEIGHT 是钳制地板——比它还矮就
+// 没法挑候选了，极端矮窗口宁可溢出也不给一条缝。
+const PICKER_GAP = 8
+const PICKER_CHROME = 64
+const LIST_MAX_HEIGHT = 240
+const LIST_MIN_HEIGHT = 72
+
 export function AskRefComposer({
   formClassName,
   formAriaLabel,
@@ -117,9 +129,54 @@ export function AskRefComposer({
   const [filter, setFilter] = useState<AskRefFilter>('all')
   const [activeIndex, setActiveIndex] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
+  const formRef = useRef<HTMLFormElement>(null)
 
   const menuOpen = token !== null
   const listId = `${idPrefix}-ref-list`
+
+  // #66 · 弹层朝向与列表钳高。null = 还没量（层刚开，layout effect 在首帧 paint 前补上）。
+  const [placement, setPlacement] = useState<{ down: boolean; listMax: number } | null>(null)
+
+  // #66 · 可用空间感知：默认上弹（既有审美）；量「锚点 → 裁剪窗口」的上下余量，上边装不下
+  // 整层且下边更宽裕就翻转向下（is-down），哪边都不够就把列表 max-height 钳进余量。
+  // 🔴 裁剪窗口 = 视口 ∩ 一切 overflow 非 visible 的祖先——议事室宿主在 `.scene`
+  //   （overflow:hidden + 非 none transform，00-base.css）里，只看视口会漏掉硬裁（票 #66
+  //   病根 2：rect 在视口内 ≠ 真的画出来了）。
+  // 只在开层与 resize 时量：锚点不随打字移动，选中即关层；胶囊是 fixed、议事室两态的
+  // composer 也不在滚动区里，不用监听 scroll。
+  useLayoutEffect(() => {
+    if (!menuOpen) {
+      setPlacement(null)
+      return
+    }
+    const measure = () => {
+      const form = formRef.current
+      if (!form) return
+      let clipTop = 0
+      let clipBottom = window.innerHeight
+      for (let el = form.parentElement; el; el = el.parentElement) {
+        const cs = window.getComputedStyle(el)
+        if (cs.overflowY !== 'visible' || cs.overflowX !== 'visible') {
+          const r = el.getBoundingClientRect()
+          clipTop = Math.max(clipTop, r.top)
+          clipBottom = Math.min(clipBottom, r.bottom)
+        }
+      }
+      const rect = form.getBoundingClientRect()
+      const spaceAbove = rect.top - clipTop - PICKER_GAP
+      const spaceBelow = clipBottom - rect.bottom - PICKER_GAP
+      const full = LIST_MAX_HEIGHT + PICKER_CHROME
+      const down = spaceAbove < full && spaceBelow > spaceAbove
+      const avail = down ? spaceBelow : spaceAbove
+      setPlacement({
+        down,
+        listMax: Math.max(LIST_MIN_HEIGHT, Math.min(LIST_MAX_HEIGHT, avail - PICKER_CHROME)),
+      })
+    }
+    measure()
+    window.addEventListener('resize', measure)
+    return () => window.removeEventListener('resize', measure)
+  }, [menuOpen])
 
   useEffect(() => {
     if (autoFocusInput) inputRef.current?.focus()
@@ -220,9 +277,18 @@ export function AskRefComposer({
   const formClasses = `${formClassName}${refs.length > 0 ? ' has-refs' : ''}${menuOpen ? ' is-picking' : ''}`
 
   return (
-    <form className={formClasses} aria-label={formAriaLabel} onSubmit={handleSubmit} data-ask-refs="">
+    <form
+      ref={formRef}
+      className={formClasses}
+      aria-label={formAriaLabel}
+      onSubmit={handleSubmit}
+      data-ask-refs=""
+    >
       {menuOpen ? (
-        <div className="lite-ref-picker" data-ref-picker="">
+        <div
+          className={placement?.down ? 'lite-ref-picker is-down' : 'lite-ref-picker'}
+          data-ref-picker=""
+        >
           <div className="lite-ref-picker-filters" role="group" aria-label={l.composerFilterAria}>
             {FILTERS.map((f) => (
               <button
@@ -241,7 +307,13 @@ export function AskRefComposer({
               </button>
             ))}
           </div>
-          <div className="lite-ref-picker-list" role="listbox" id={listId} aria-label={l.refMenuAria}>
+          <div
+            className="lite-ref-picker-list"
+            role="listbox"
+            id={listId}
+            aria-label={l.refMenuAria}
+            style={placement ? { maxHeight: placement.listMax } : undefined}
+          >
             {options.length === 0 ? (
               <p className="lite-ref-empty">{filterHasAny ? l.searchEmpty : l.refEmpty}</p>
             ) : (

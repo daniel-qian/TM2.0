@@ -31,6 +31,7 @@ function fillDoc(template: string, source: string): string {
 }
 import type { LitePerson, LiteTeam } from './teamData'
 import type { LiveTeamPayload, PersonPatchInput, ProjectPatchInput } from './transport'
+import { refOfPerson, refOfProject } from './askRefs'
 
 // feat-024 · 薄只读详情浮层——ADR-0022 决策 2（v1 范围拍板）。
 // 点人卡/项目卡开 ~百行纯 live payload 浮层：名字/角色/owns/来源文件——零 fixtures，
@@ -213,10 +214,14 @@ function ProjectDetailBody({
   const resetProjectWrite = useLite((s) => s.resetProjectWrite)
   // #48 · 带着这个项目去问 Avery：composerDraft 预填（projectAskPrefill 与项目屏卡面
   // 共用一份）+ 关浮层 + 跳议事室。只预填不自动发。
+  // #67 · 结构化引用随预填一起走（setComposerDraft 第二参，#64 通路）。构造走 refOfProject
+  // （唯一那把尺）；查不到（如归档卡）给 null → 退回纯文字预填，不硬造 chip。
   const goScreen = useLite((s) => s.goScreen)
   const setComposerDraft = useFlow((s) => s.setComposerDraft)
+  const team = useLite((s) => s.team)
   const askAvery = () => {
-    setComposerDraft(projectAskPrefill(project))
+    const ref = refOfProject(team, project.id)
+    setComposerDraft(projectAskPrefill(project), ref ? [ref] : undefined)
     closeDetail()
     goScreen('room')
   }
@@ -593,10 +598,14 @@ function PersonDetailBody({
   const resetProjectWrite = useLite((s) => s.resetProjectWrite)
   // #48 · 带着这个人去问 Avery：预填 = 姓名 + 读数句（localizePersonRead 的文档真派生，
   // 与人员卡同一份预填口径）。只预填不自动发。
+  // #67 · person ref 同批带上（refOfPerson 那把尺，重名消歧的 dupeTeam 随构造器来）；
+  // 停用的人查不到 → 纯文字预填。
   const goScreen = useLite((s) => s.goScreen)
   const setComposerDraft = useFlow((s) => s.setComposerDraft)
+  const team = useLite((s) => s.team)
   const askAvery = () => {
-    setComposerDraft(`${person.name} — ${localizePersonRead(person, l)}`)
+    const ref = refOfPerson(team, person.id)
+    setComposerDraft(`${person.name} — ${localizePersonRead(person, l)}`, ref ? [ref] : undefined)
     closeDetail()
     goScreen('room')
   }

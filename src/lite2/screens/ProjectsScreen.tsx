@@ -15,6 +15,8 @@ import {
 } from '../projectView'
 import type { Dict } from '../../shared/i18n'
 import type { ProjectAddInput } from '../transport'
+// #67 · 卡面「去问 Avery」带项目引用——构造走 refOfProject（与 @ 弹层候选同一把尺）。
+import { refOfProject } from '../askRefs'
 
 // rich-align-0722/05a：某卡是否含手编字段（origin==='manual'）——卡面挂一枚「手动编辑」小角标。
 // 逐字段出处在详情浮层（DetailOverlay）逐行标；卡面只给一个「这张卡有人手动改过」的整体提示。
@@ -271,6 +273,9 @@ export function ProjectsScreen() {
   const goScreen = useLite((s) => s.goScreen)
   // #48 · 卡面快问：预填走 flowStore.composerDraft（与分诊卡「去问 Avery」同一条通道）。
   const setComposerDraft = useFlow((s) => s.setComposerDraft)
+  // #67 · refOfProject 按 id 查的是 store.team（@ 弹层候选的同一份数据面）——本屏渲染用
+  // rawTeam 的 view，id 两边同源（liteTeamFromPayload 不换 id）。
+  const team = useLite((s) => s.team)
   // feat-050 · 会话不丢：空态要分清「正在取回上次会话」和「真没有会话」（与 TeamScreen 同口径）。
   const restoring = useLite((s) => s.restoring)
   const restoreError = useLite((s) => s.restoreError)
@@ -379,7 +384,9 @@ export function ProjectsScreen() {
                       view={view}
                       onOpen={(id) => openDetail('project', id)}
                       onAsk={(v) => {
-                        setComposerDraft(projectAskPrefill(v))
+                        // #67 · 引用随预填走；查不到（不该发生，防御）退纯文字。
+                        const ref = refOfProject(team, v.id)
+                        setComposerDraft(projectAskPrefill(v), ref ? [ref] : undefined)
                         goScreen('room')
                       }}
                     />
