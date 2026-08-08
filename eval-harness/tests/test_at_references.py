@@ -37,6 +37,7 @@ from avery.brain import BrainResponse
 from avery.ingest.references import (
     REF_MAX_BLOCK_CHARS,
     REF_MAX_COUNT,
+    REF_MAX_LINE_CHARS,
     REF_MIN_DOC_LINES_PER_REF,
     REF_TOTAL_DOC_LINES,
     build_reference_block,
@@ -147,6 +148,161 @@ def test_file_reference_injects_that_documents_lines(ctx):
     assert lines, "a file reference must pin the lines materialized from THAT document"
     joined = "\n".join(lines)
     assert "别墅套餐推广" in joined or "周雅婷" in joined
+
+
+# ── #70 · file 引用注入的是**该文档的原文行**（不是元数据、不是兜底） ────────────────────────
+# 病根实测（0808）：注入路以前用「候选行文本 == 材料块原文」做 join，而 materialize_memory 把
+# 材料块**原样**写进 facts.md（bullet 带 `- `）、`memory._candidates` 读出来时 `- ` 已被剥掉——
+# 于是 bullet 行恒不命中。demo-seed 的婚宴纪要 19 块只 join 到 4 行样板话（日期/场地/桌数一条
+# 没进）；周报 24 块只进 4 行前言。文档正文几乎全是 bullet，所以「引了也没用」。
+#
+# 🔴 判据一律落在**引到的那一行原文文本**上（verifiers-that-lie 碑：兜底/元数据会把「一行正文
+# 都没召回」伪装成「块非空」——断言 `lines` 非空、断言 "File: x" 在场，全都能对着零召回全绿）。
+
+BEO = "\n".join([
+    "# 婚宴通知单与协调会纪要", "",
+    "## 宴会通知单",
+    "- 宴会日期：2026 年 8 月 8 日（周六）晚宴",
+    "- 场地：阳光草坪主场地 + 多功能厅备用（雨天启用）",
+    "- 桌数与台型：主桌一席，圆桌二十七席",
+    "", "## 协调会决议",
+    "- 会前一到两天复核人数、菜单与台型，避免临场变更",
+    "- 尾款结算条款仍需与法务对齐后写入合同",
+])
+# 这五行就是判据本体：全是 bullet（旧 join 一条都够不着），且**没有一个字**出现在人卡/项目卡
+# 的结构化读数里——所以它们只可能来自「读了原文」这一条路。
+BEO_SOURCE_LINES = [
+    "- 宴会日期：2026 年 8 月 8 日（周六）晚宴",
+    "- 场地：阳光草坪主场地 + 多功能厅备用（雨天启用）",
+    "- 桌数与台型：主桌一席，圆桌二十七席",
+    "- 会前一到两天复核人数、菜单与台型，避免临场变更",
+    "- 尾款结算条款仍需与法务对齐后写入合同",
+]
+
+
+@pytest.fixture()
+def beo_ctx(clean_registry, tmp_path):
+    """一份 bullet 体的纪要 + 花名册（让文档既有正文、又有实体，两段路都能被采样）。"""
+    from avery.ingest.pipeline import ingest_paths
+    paths = []
+    for name, text in {"花名册.md": ROSTER, "婚宴纪要.md": BEO}.items():
+        p = tmp_path / name
+        p.write_text(text, encoding="utf-8")
+        paths.append(str(p))
+    rep = ingest_paths(paths, registry=clean_registry, context_id="ctx_file70",
+                       work_dir=tmp_path / "mem70")
+    assert rep.ok
+    c = clean_registry.get("ctx_file70")
+    assert c is not None
+    # 自证：这份语料真的把「bullet 正文」切成了材料块——否则下面全是空判据。
+    chunks = [m for m in c.extraction.materials
+              if (getattr(m, "source", "") or "").startswith("婚宴纪要.md:")]
+    assert len(chunks) >= len(BEO_SOURCE_LINES), f"corpus must chunk the memo's body: {len(chunks)}"
+    return c
+
+
+def test_file_reference_injects_the_documents_own_source_lines(beo_ctx):
+    """引 @婚宴纪要.md ⇒ 块里必须有**那几行原文**（逐字），不是「File: … status ingested」。"""
+    block = build_reference_block(
+        beo_ctx, [{"kind": "file", "id": "婚宴纪要.md", "label": "婚宴纪要.md"}])
+    for original in BEO_SOURCE_LINES:
+        assert original in block, f"注入块必须带上原文行：{original!r}\n---\n{block}"
+
+
+def test_file_reference_source_lines_are_not_the_metadata_card(beo_ctx):
+    """讨伐位：卡片行（File: …）在场**不算**注入到位——原文行必须自己在记录段里。"""
+    block = build_reference_block(
+        beo_ctx, [{"kind": "file", "id": "婚宴纪要.md", "label": "婚宴纪要.md"}])
+    lines = _record_lines(block)
+    assert lines, "file 引用必须带记录行"
+    joined = "\n".join(lines)
+    hit = [o for o in BEO_SOURCE_LINES if o in joined]
+    assert len(hit) == len(BEO_SOURCE_LINES), \
+        f"记录行里只找到 {len(hit)}/{len(BEO_SOURCE_LINES)} 条原文：\n{joined}"
+
+
+def test_file_reference_pointers_still_resolve(beo_ctx):
+    """原文进块了，可引用性一条都不许丢：每个注入指针都要 resolve_ref 得到。"""
+    block = build_reference_block(
+        beo_ctx, [{"kind": "file", "id": "婚宴纪要.md", "label": "婚宴纪要.md"}])
+    lines = _record_lines(block)
+    assert lines
+    for ln in lines:
+        ref, body = ln.split(None, 1)
+        got = memory.resolve_ref(ref, beo_ctx.memory_dir, None)
+        assert got is not None, f"{ref} 必须 resolve（cite 闸骑在这上面）"
+        # 指针指的那一行就是块里印的那一行——不是"能 resolve 但指向别处"。
+        assert got.strip() == body.strip(), f"{ref} 指到的是 {got!r}，块里印的是 {body!r}"
+
+
+def test_file_reference_keeps_entity_lines_as_filler(beo_ctx):
+    """花名册这类文档的正文被结构化进了人卡 facts 行——实体补位那一段不许被新路挤没。"""
+    block = build_reference_block(
+        beo_ctx, [{"kind": "file", "id": "花名册.md", "label": "花名册.md"}])
+    joined = "\n".join(_record_lines(block))
+    assert "周雅婷" in joined and "林小满" in joined, joined
+
+
+# ── #70 · 配额边界：原文进块了，配额一条都不许被掏空 ──────────────────────────────────────
+# 🔴 REF_TOTAL_DOC_LINES 为什么**没有**跟着上调（票面允许「单文件引用行预算适度上调」）：
+# 24 × REF_MAX_LINE_CHARS(200) = 4800，是**可证明**装得进 REF_MAX_BLOCK_CHARS(6000) 的最大
+# 预算（实测 200 行大部头单引用 = 5443 字符、零截断）。调到 30 就是 6000+，硬顶会在正文中间
+# 把块切断——「多给几行」换来的是最后一条引用被腰斩。要涨预算得先涨硬顶，那是另一张票。
+
+BIG_DOC = "\n".join(["# 大部头材料"] + [f"- 第{i}条：{'很长的一句话' * 40}" for i in range(200)])
+
+
+@pytest.fixture()
+def big_ctx(clean_registry, tmp_path):
+    """200 行、每行远超单行截断长度的文档——配额与硬顶的压力面。"""
+    from avery.ingest.pipeline import ingest_paths
+    paths = []
+    for name, text in {"花名册.md": ROSTER, "大部头.md": BIG_DOC}.items():
+        p = tmp_path / name
+        p.write_text(text, encoding="utf-8")
+        paths.append(str(p))
+    rep = ingest_paths(paths, registry=clean_registry, context_id="ctx_big70",
+                       work_dir=tmp_path / "mem_big70")
+    assert rep.ok
+    c = clean_registry.get("ctx_big70")
+    assert c is not None
+    chunks = [m for m in c.extraction.materials
+              if (getattr(m, "source", "") or "").startswith("大部头.md:")]
+    assert len(chunks) > REF_TOTAL_DOC_LINES * 2, f"压力语料必须远超配额才压得到边界：{len(chunks)}"
+    return c
+
+
+def test_big_file_reference_stays_within_the_doc_line_budget(big_ctx):
+    """拉原文不是拉全文：200 块的文档单引用也只出 REF_TOTAL_DOC_LINES 条。"""
+    block = build_reference_block(big_ctx, [{"kind": "file", "id": "大部头.md", "label": "大部头.md"}])
+    assert len(_record_lines(block)) <= REF_TOTAL_DOC_LINES
+
+
+def test_big_file_reference_never_breaks_the_hard_ceiling(big_ctx):
+    """单文件引用 + 满配额 + 每行都撞单行上限 ⇒ 仍在 6000 硬顶内，且**没有**被截断。
+
+    「没被截断」是这条的重点：只断言 `<= 6000` 的话，一个把块腰斩的实现也全绿。"""
+    block = build_reference_block(big_ctx, [{"kind": "file", "id": "大部头.md", "label": "大部头.md"}])
+    assert len(block) <= REF_MAX_BLOCK_CHARS
+    assert "(reference block truncated at quota)" not in block, \
+        f"满配额单文件引用不该撞硬顶（实测 {len(block)} 字符）——撞上说明预算被调过头了"
+    for ln in _record_lines(block):
+        body = ln.split(None, 1)[1]
+        assert len(body) <= REF_MAX_LINE_CHARS, "单行截断照旧生效"
+
+
+def test_many_file_references_split_the_budget_with_a_floor(big_ctx):
+    """八条文件引用共享总预算：每条不超按份配额，且都拿到保底行数（不许有引用空手）。"""
+    refs = [{"kind": "file", "id": "大部头.md", "label": "大部头.md"}] * REF_MAX_COUNT
+    block = build_reference_block(big_ctx, refs)
+    assert len(block) <= REF_MAX_BLOCK_CHARS + 64
+    per_ref = max(REF_MIN_DOC_LINES_PER_REF, REF_TOTAL_DOC_LINES // REF_MAX_COUNT)
+    entries = block.split("### @")[1:]
+    assert len(entries) == REF_MAX_COUNT
+    for entry in entries:
+        got = len(_record_lines(entry))
+        assert got <= per_ref, f"单条引用吃超了按份配额：{got} > {per_ref}"
+        assert got >= REF_MIN_DOC_LINES_PER_REF, f"引用空手（保底没兑现）：{got}"
 
 
 def test_playbook_reference_injects_method_card(ctx):

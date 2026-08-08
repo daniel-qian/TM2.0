@@ -48,12 +48,23 @@ const UI = process.env.VERIFY_BASE || 'http://127.0.0.1:5173'
 const SEAM = '__lite2Store'
 const { rows, rec } = makeRec()
 
+// 🔴 花名册人数 > MAX_REF_OPTIONS(8) 是 ⑤b 的**前提**，不是凑数：3 人 2 项目的旧语料里
+// 8 个名额本来就有 3 个漏给文件，「打 @ 看得见文件」在**没修的代码上照样绿**（假绿）。
+// 真实团队是 16 人 8 项目——人员一类就能吃光名额，那才是 Danny 演习撞上的现场。
+// 加的六行有三条硬约束（都是既有判据的地雷）：不带「林」（①的 `@林` 要恰好两条命中）、
+// 不进「客房」部（③的 `@客房` 要唯一命中）、不带「别墅」（⑥的 `@别墅` 要唯一命中项目）。
 const ROSTER = [
   '# 别墅酒店 员工花名册', '',
   '姓名 | 人员ID | 部门 | 职位 | 司龄',
   '周雅婷 | MKT-001 | 市场推广部 | 市场专员 | 3年',
   '林小满 | FO-0422 | 前厅部 | 前厅主管 | 2年',
   '林小满 | HK-0301 | 客房部 | 客房领班 | 4年',
+  '高见 | FB-1101 | 餐饮部 | 餐饮主管 | 5年',
+  '钱多 | ENG-2201 | 工程部 | 工程主管 | 6年',
+  '孙悦 | HR-3301 | 人力资源部 | 培训专员 | 1年',
+  '吴桐 | BQ-4401 | 宴会销售部 | 宴会销售 | 3年',
+  '郑好 | REC-5501 | 康乐部 | 康乐主管 | 2年',
+  '冯雷 | SEC-6601 | 安保部 | 安保主管 | 7年',
 ].join('\n')
 const PROJECT = ['# 别墅套餐推广', '负责人：周雅婷', '状态：受阻', '截止：2026-10-15', '进度：55%',
   '阻塞：雨季无备选场地'].join('\n')
@@ -227,9 +238,60 @@ const post2 = advisePosts[1]
 rec('④ 无引用提交：请求体**没有** references 键', gotSecond && post2 && !('references' in post2),
   JSON.stringify(Object.keys(post2 ?? {})))
 
-// ── ⑤ 文件 tab：四类候选轴的第三类真的有货 ──────────────────────────────────────────────
+// ── ⑤b · #70 「全部」视图公平曝光：人多不许把文件/方法整类挤出候选 ─────────────────────
+// 🔴 这一段必须排在 ⑤ 之前：⑤ 点了「文件」筛选 chip，filter 是组件 state、会一直留着。
+// 判据分四条，各防一种走样：自证语料真能复现病根 / 四类都在场 / 别把上限调大了事 /
+// **不滚就看得见**（弹层列表被 #66 钳在 240px，一屏 4–5 行；只断言「在 DOM 里」等于允许
+// 一个把文件排在第九行、要滚才见的实现全绿——那是修了一半）。
 await input().pressSequentially('@', { delay: 40 })
-await page.waitForTimeout(200)
+await page.waitForTimeout(300)
+const fairness = await page.evaluate(() => {
+  const picker = document.querySelector('.lite-ref-picker')
+  const list = picker?.querySelector('.lite-ref-picker-list')
+  const opts = Array.from(picker?.querySelectorAll('[role="option"]') ?? [])
+  const kinds = opts.map((o) => o.getAttribute('data-ref-kind'))
+  const firstFile = opts.find((o) => o.getAttribute('data-ref-kind') === 'file') ?? null
+  let fileVisible = false
+  let fileRect = null
+  if (firstFile && list) {
+    const r = firstFile.getBoundingClientRect()
+    const lr = list.getBoundingClientRect()
+    // 不滚即见：整行落在列表的可视带里（开层时 scrollTop=0，所以「在带内」= 不用滚）。
+    const inBand = r.top >= lr.top - 1 && r.bottom <= lr.bottom + 1
+    // 🔴 rect 不管裁剪/遮挡（verifiers-that-lie 碑）：中心点 hit-test 才是"真画出来了"。
+    const probe = document.elementFromPoint(
+      Math.round(r.left + r.width / 2), Math.round(r.top + r.height / 2))
+    fileVisible = inBand && !!probe && firstFile.contains(probe)
+    fileRect = { top: Math.round(r.top), bottom: Math.round(r.bottom),
+                 listTop: Math.round(lr.top), listBottom: Math.round(lr.bottom),
+                 scrollTop: Math.round(list.scrollTop) }
+  }
+  return {
+    total: opts.length,
+    kinds,
+    labels: opts.map((o) => o.querySelector('.lite-ref-option-label')?.textContent ?? ''),
+    activeFilter: picker?.querySelector('.lite-composer-filter.is-active')?.textContent ?? null,
+    fileVisible,
+    fileRect,
+  }
+})
+const rosterSize = await page.evaluate((seam) => ({
+  people: (window[seam].getState().team?.people ?? []).length,
+  projects: (window[seam].getState().team?.projects ?? []).length,
+}), SEAM)
+rec('⑤b 自证：语料真能复现病根（人员+项目 ≥ 候选上限 8——否则文件本来就挤不掉，判据是空跑）',
+  rosterSize.people + rosterSize.projects >= 8, JSON.stringify(rosterSize))
+rec('⑤b 自证：这一屏确实是「全部」视图（零筛选——不是被上一段的文件 chip 带过来的）',
+  fairness.activeFilter === '全部', String(fairness.activeFilter))
+rec('⑤b 打 @ 零筛选：四类候选**都在场**（文件不许被人员挤光——Danny 演习「没法引用文件」的讨伐位）',
+  ['person', 'project', 'file', 'playbook'].every((k) => fairness.kinds.includes(k)),
+  JSON.stringify({ kinds: fairness.kinds, labels: fairness.labels }))
+rec('⑤b 公平曝光没把弹层撑大：候选总数仍 ≤ 8（「把 8 调大了事」这条路必红）',
+  fairness.total > 0 && fairness.total <= 8, `n=${fairness.total}`)
+rec('⑤b 文件候选**不滚就看得见**（整行在列表可视带内 + 中心点 hit-test 真命中）',
+  fairness.fileVisible, JSON.stringify(fairness.fileRect))
+
+// ── ⑤ 文件 tab：四类候选轴的第三类真的有货 ──────────────────────────────────────────────
 await page.locator('.lite-ref-picker .lite-composer-filter', { hasText: '文件' }).click()
 await page.waitForTimeout(200)
 const fileOpts = await page.evaluate(() =>
@@ -237,6 +299,38 @@ const fileOpts = await page.evaluate(() =>
     .map((n) => n.textContent))
 rec('⑤ 「文件」tab 里能看到上传过的文件名', fileOpts.includes('项目周报.md'),
   JSON.stringify(fileOpts))
+
+// ── ⑤c · #70 文件引用真的走完整条链到请求体（kind=file + 中文 id）─────────────────────
+// 补的是既有覆盖洞：在这之前**没有一条 kind=file 的引用**穿过 toWireRefs 进过网络层——
+// 非 ASCII 的 id（文件名就是 id）最容易在编码上出事的那一段一直没被采样过。
+// ⚠ 这条**不是** born-red 判据：它不测公平曝光（走的是文件 tab），恢复旧顺序它照绿。
+await page.locator('.lite-ref-picker [role="option"][data-ref-kind="file"]')
+  .filter({ hasText: '项目周报.md' }).first().click()
+await page.waitForTimeout(200)
+const fileChip = await page.evaluate(() => {
+  const chip = document.querySelector('.lite-room .lite-ref-chip')
+  return { kind: chip?.getAttribute('data-ref-chip') ?? null, id: chip?.getAttribute('data-ref-id') ?? null }
+})
+rec('⑤c 选中文件候选 → file chip 在场（id = 文件名）',
+  fileChip.kind === 'file' && fileChip.id === '项目周报.md', JSON.stringify(fileChip))
+await input().pressSequentially('这份周报里写了什么', { delay: 20 })
+const postsBeforeFile = advisePosts.length
+await input().press('Enter')
+const gotFile = await waitForPosts(postsBeforeFile + 1)
+const postFile = advisePosts[postsBeforeFile]
+rec('⑤c POST /advise 请求体带 references=[{kind:file, id:项目周报.md}]（中文 id 原样过网络层）',
+  gotFile && Array.isArray(postFile?.references) &&
+  postFile.references.some((r) => r.kind === 'file' && r.id === '项目周报.md' &&
+    r.label === '项目周报.md'),
+  JSON.stringify(postFile?.references ?? null))
+await page.waitForTimeout(500)
+
+// 把筛选还原成「全部」：filter 是组件 state，留着「文件」会让后面 ⑧ 的几何段在一个
+// 与产品默认不同的候选面上量（同一个 composer 实例）。
+await input().pressSequentially('@', { delay: 40 })
+await page.waitForTimeout(200)
+await page.locator('.lite-ref-picker .lite-composer-filter', { hasText: '全部' }).click()
+await page.waitForTimeout(200)
 await input().press('Escape')
 await page.evaluate(() => {
   const inp = document.querySelector('.lite-room .nexus-followup-composer input[type="text"]')
