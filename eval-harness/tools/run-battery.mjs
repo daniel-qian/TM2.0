@@ -140,7 +140,7 @@ const ROSTER = [
   // ── B 区 · 自带服务器 / 像素基线（3 道，中段）───────────────────────────────
   { zone: 'B', name: 'data-boundary',         cmd: ['.issues/v02-partner-align-0718/verify-data-boundary.mjs'],   host: 'self',    backend: false, dist: false, note: '自起 dev server :5304（VERIFY_PORT 可改）；可选 VERIFY_OLD_STORE=<git-ref> 做 born-red' },
   { zone: 'B', name: 'null-owner',            cmd: ['.issues/v02-joint-0719/verify-null-owner.mjs'],              host: 'preview', backend: true,  dist: false, note: '⚠️ battle-map 把它归在「自带服务器」的 B 区，但它其实写死打共享 5173（:28 `const UI`，无 VERIFY_BASE）。位置照抄 battle-map 不动（换序＝换风险），此处记档口径' },
-  { zone: 'B', name: 'visual-baseline',       cmd: ['node_modules/playwright/cli.js', 'test', '-c', 'eval-harness/visual'], host: 'preview', backend: true, dist: false, note: '像素基线 36 张（9屏×2皮×2视口；#63 起 closerlook 出列、并进 home）；🔴 序错（dist 被调包）时这道必假红；重冻要 --update-snapshots 且只在人审对照板通过后' },
+  { zone: 'B', name: 'visual-baseline',       cmd: ['node_modules/playwright/cli.js', 'test', '-c', 'eval-harness/visual'], host: 'preview', backend: true, dist: false, note: '像素基线两套：36 张空态（visual.spec，9屏×2皮×2视口）+ 12 张数据态（visual-data.spec，#68：真上传 demo-seed+gap 种子后采 home/team/projects——数据态部件此前零像素覆盖）；🔴 数据态那套要后端带 AVERY_DEMO_SEED_DIR；🔴 序错（dist 被调包）时这道必假红；重冻要 --update-snapshots 且只在人审对照板通过后' },
 
   // ── C 区 · 🔴 dist 调包者，殿后且独占跑（3 道）────────────────────────────
   { zone: 'C', name: 'auth-capability',       cmd: ['eval-harness/tools/verify-auth-capability.mjs'],             host: 'rebuild', backend: false, dist: true,  note: 'spawn(vite build) 带假 Supabase key + VITE_AVERY_API_BASE=127.0.0.1:8281，自起 preview 5281；**不还原 dist**' },
