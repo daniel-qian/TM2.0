@@ -13,6 +13,7 @@ import { useDict } from '../shared/i18n/useDict'
 import type { Dict } from '../shared/i18n'
 import {
   MAX_REF_OPTIONS,
+  pickRefOptions,
   searchAskRefs,
   type AskRef,
   type AskRefFilter,
@@ -184,8 +185,11 @@ export function AskRefComposer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // #70 · 收敛到上限走 pickRefOptions（按类目轮转分配名额）而不是裸 slice——裸 slice 在
+  // 16 人 8 项目的团队里把文件/方法卡整类挤出「全部」视图。筛选 chip 视图只有一类候选，
+  // 轮转退化成 slice，行为不变。
   const options = useMemo(
-    () => searchAskRefs(team, files, playbooks, token?.query ?? '', filter).slice(0, MAX_REF_OPTIONS),
+    () => pickRefOptions(searchAskRefs(team, files, playbooks, token?.query ?? '', filter), MAX_REF_OPTIONS),
     [team, files, playbooks, token, filter],
   )
   // 零候选的两句话必须分开：这一类根本没数据（refEmpty）vs 有数据但这个词没搜到

@@ -203,31 +203,86 @@ def _doc_lines_matching(cands: list[tuple[str, str]], terms: list[str], quota: i
     return out
 
 
-def _file_doc_lines(ctx, source_key: str, cands: list[tuple[str, str]], quota: int) -> list[str]:
-    """A file's related lines, from TWO joins over the same citable candidate iteration:
+def _doc_chunks(ctx, source_key: str) -> list:
+    """This document's own MaterialChunks, in DOCUMENT order (`<doc_key>:<line>` → line no.).
 
-    ① material chunks whose `<doc_key>:<line>` source starts with this document — matched by
-      text (facts.md's Company-material section doesn't carry the doc name inline; we join
-      chunk text -> line the same way materialize_memory wrote them, dedup included);
-    ② entities BORN from this document (`doc_key_of(entity.source)` — people/projects mostly
-      structure INTO entity facts lines and leave few residual materials, so a file reference
-      that only pinned residuals would pin almost nothing for a roster/plan doc) — matched by
-      the entity's name/title appearing in the line."""
+    The chunk text is the closest thing the workspace keeps to the uploaded file's raw line
+    (`HeuristicExtractor._materials`: `ln.strip().lstrip('#').strip()`, one chunk per content
+    line), so this — not the facts/notes scan — is where "the document's own words" live."""
+    from .extract import doc_key_of
+    mine = [m for m in getattr(ctx.extraction, "materials", [])
+            if doc_key_of(getattr(m, "source", "") or "") == source_key]
+
+    def lineno(m) -> int:
+        tail = (getattr(m, "source", "") or "").rsplit(":", 1)
+        try:
+            return int(tail[1]) if len(tail) == 2 else 0
+        except ValueError:
+            return 0
+
+    return sorted(mine, key=lineno)
+
+
+def _file_doc_lines(ctx, source_key: str, cands: list[tuple[str, str]], quota: int) -> list[str]:
+    """A file's related lines — the document's OWN text first, entity lines only as filler.
+
+    #70 病根（0808 演习 Danny：「引了也没用」）：这条路以前**只**扫 facts/notes 候选面，用
+    「候选行文本 == 某个材料块原文」做 join。但 `materialize_memory` 把材料块原样写进 facts.md
+    （bullet 带着 `- `），`memory._candidates` 读出来时 `- ` 已被剥掉——于是所有 bullet 行恒不
+    命中。实测：19 块的婚宴纪要只 join 到 4 行样板话（日期/场地/桌数一条没进），24 块的周报只
+    进 4 行前言（每个人的负载自述全丢）。文档的正文恰恰几乎都是 bullet。
+
+    现在的两段：
+    ① **该文档自己的材料块**，按原文行序，文本取块原文（含 `- `，与 resolve_ref 读回来的那行
+      逐字符一致）。指针仍取候选面里那一行的 `facts.md:<n>`——正文进块了，可引用性一点没丢：
+      注入的每个指针照旧 resolve 得到（block 头承诺的就是这个）。查不到对应候选行的块**跳过**
+      而不是编一个指针：宁可少一行，也不给模型一个 cite 不动的出处（`resolve_ref` 只认
+      facts.md/notes.md/case，`婚宴纪要.md:7` 一定 resolve 失败，模型会被卡在重 cite 上）。
+    ② 从该文档**长出来的实体**（`doc_key_of(entity.source)`）的名字/标题命中的候选行——花名册、
+      项目计划这类文档的正文被结构化进了人卡/项目卡的 facts 行，只钉①会钉不到那些结构化读数。
+      只在①没吃满配额时补位。
+
+    去重按**指针**（不是文本）：materialize 的按文本去重会让两个文档的同一句话共用一行，同一
+    指针塞两次是噪音。"""
     if quota <= 0:
         return []
+    from avery.memory import candidate_text
     from .extract import doc_key_of
-    wanted = {m.text for m in getattr(ctx.extraction, "materials", [])
-              if (getattr(m, "source", "") or "").startswith(f"{source_key}:")}
+
+    # 规范形 → 候选面里第一个出现它的可 cite 指针（materialize 按文本去重，第一处就是那一处）。
+    index: dict[str, str] = {}
+    for source, text in cands:
+        index.setdefault(text, source)
+
+    out: list[str] = []
+    seen: set[str] = set()
+
+    # ① 文档正文
+    for m in _doc_chunks(ctx, source_key):
+        raw = (getattr(m, "text", "") or "").strip()
+        if not raw:
+            continue
+        source = index.get(candidate_text(raw))
+        if source is None or source in seen:
+            continue
+        seen.add(source)
+        out.append(f"{source}  {_clip(raw)}")
+        if len(out) >= quota:
+            return out
+
+    # ② 该文档长出来的实体（结构化读数的补位）
     terms = [p.name for p in getattr(ctx.extraction, "people", [])
              if doc_key_of(getattr(p, "source", "")) == source_key]
     terms += [pr.title for pr in getattr(ctx.extraction, "projects", [])
               if doc_key_of(getattr(pr, "source", "")) == source_key]
     terms = [t for t in terms if t]
-    if not wanted and not terms:
-        return []
-    out: list[str] = []
+    if not terms:
+        return out
     for source, text in cands:
-        if text in wanted or any(t in text for t in terms):
+        if source in seen:
+            continue
+        if any(t in text for t in terms):
+            seen.add(source)
             out.append(f"{source}  {_clip(text)}")
             if len(out) >= quota:
                 break
