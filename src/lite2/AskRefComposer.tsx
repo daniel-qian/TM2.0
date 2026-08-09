@@ -36,6 +36,29 @@ import {
 // 🔴 按钮族：筛选 chip / 候选行 / 移除键复用 .lite-composer-filter / .lite-composer-option /
 // .lite-composer-remove 三个族类名（verify-button-family 白名单既有条目，"筛选/切换 chip"
 // 类目语义原样成立）；提交键由调用方给 .lite-btn 族类。
+//
+// ── #75 · Claude 化改造（2026-08-09）─────────────────────────────────────────────────
+// 正文控件从 `<input type="text">` 换成 `<textarea>`（Enter 发送 / Shift+Enter 换行 / 自动长高）。
+//
+// 🔴 稳定钩子（不绑标签名）：门里所有抓手改用 data-composer-*，别再写 `input[type="text"]`
+//    或 `button[type="submit"]`。开工侦察实测：那两个选择器换控件后命中 0 个 / 命中 2 个，
+//    Playwright 是**抛错**不是判负——整份门 crash，连汇总行都不打印。
+//      · [data-composer-input]  正文控件
+//      · [data-composer-send]   发送键
+//      · [data-composer-stop]   停止键（**type="button"**，不进 submit 计数）
+//      · [data-composer-attach] 附件键（**type="button"**）
+//      · [data-composer-file]   隐藏的 file input，**永远放在 form 的最后**
+//
+// 🔴 为什么 file input 必须垫底：`scripts/gates/live-frontend-gate.snippet.js` 的 F2 相位
+//    （:689）选择器末尾有个没有类型限定的裸 `input` 子句，而 querySelector 按**文档序**取第一个
+//    匹配任一子句的节点（不按子句书写顺序）。file input 若排在正文控件之前会被选中，紧接着
+//    :694-702 用 HTMLInputElement value setter 往 type=file 上写字符串 → InvalidStateError，
+//    那段没有 try/catch → composerAskLive() 整个 reject。垫底 + 同批改判 snippet 选择器，两道都做。
+//
+// 🔴 输入法：Enter 提交必须让开 IME 合成中的确认键（中文语境下这是必修课，不是可选项）。
+//    合成态判据取 `nativeEvent.isComposing` 与自持的 composingRef 的并集——Safari 在
+//    compositionend 那一拍的 isComposing 取值历史上不一致，两个都看更稳。
+//    门用 pressSequentially 打字不触发合成，所以既有的裸 Enter 判据行为不变。
 
 function fill(template: string, vars: Record<string, string | number>): string {
   return template.replace(/\{(\w+)\}/g, (_, k: string) => String(vars[k] ?? ''))
@@ -76,6 +99,12 @@ const PICKER_CHROME = 64
 const LIST_MAX_HEIGHT = 240
 const LIST_MIN_HEIGHT = 72
 
+// #75 · textarea 自动长高的封顶（px）。与 lite2.css `.nexus-followup-composer textarea`
+// 的 max-height 同值——改一处必须同步另一处（同 LIST_MAX_HEIGHT ↔ .lite-ref-picker-list 的
+// 既有双份义务）。超过就内滚，不再顶高整个 composer（顶高会吃掉会话流的可视高度，
+// 而 room-usability 的让位判据量的正是 composer 顶沿）。
+const TEXTAREA_MAX_HEIGHT = 168
+
 export function AskRefComposer({
   formClassName,
   formAriaLabel,
@@ -93,6 +122,17 @@ export function AskRefComposer({
   idPrefix,
   onSubmit,
   onEscapeClosed,
+  onStop,
+  stopLabel,
+  stopAriaLabel,
+  attachments,
+  attachAriaLabel,
+  attachAccept,
+  attachBusy = false,
+  attachError,
+  onAttach,
+  onRemoveAttachment,
+  removeAttachmentAria,
 }: {
   formClassName: string
   formAriaLabel?: string
@@ -116,6 +156,24 @@ export function AskRefComposer({
   idPrefix: string
   onSubmit: (text: string, refs: AskRef[]) => void
   onEscapeClosed?: () => void
+  // #75 · 停止生成。给了 onStop 才长出停止键（悬浮胶囊没有在飞的流，不给）。
+  // 🔴 停止键与发送键**并存**，且是 type="button"：form 内 `button[type="submit"]` 恒只有
+  //    一个（room-conversation:66/95 的 count()===1 自证 + snippet:1796/2208 都锚在这上面）。
+  onStop?: () => void
+  stopLabel?: ReactNode
+  stopAriaLabel?: string
+  // #73 · 现场附件。给了 onAttach 才长出附件键与隐藏 file input。
+  // 🔴 预览用 .lite-attachment-pill / [data-attachment-pill]，**零射程重叠**于
+  //    .lite-room-chip（nomaterial 门数 4）与 [data-followup-chip]（conversation 门数 2）。
+  attachments?: Array<{ key: string; label: string; state: 'uploading' | 'ready' | 'failed'; note?: string }>
+  attachAriaLabel?: string
+  attachAccept?: string
+  attachBusy?: boolean
+  /** 整批级的诚实报错（预检没过 / 这一趟上传失败）。行内、就地，不弹 toast。 */
+  attachError?: string | null
+  onAttach?: (files: File[]) => void
+  onRemoveAttachment?: (key: string) => void
+  removeAttachmentAria?: (label: string) => string
 }) {
   const { t } = useDict()
   const l = t.lite2
@@ -137,8 +195,13 @@ export function AskRefComposer({
   const mutedRef = useRef<number | null>(null)
   const [filter, setFilter] = useState<AskRefFilter>('all')
   const [activeIndex, setActiveIndex] = useState(0)
-  const inputRef = useRef<HTMLInputElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
   const formRef = useRef<HTMLFormElement>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
+  // #75 · IME 合成位。中文/日文输入法按 Enter 是「确认候选词」，不是「发送」——没有这道闸，
+  // 经理打完拼音按 Enter 会把半截候选直接发出去（@ 弹层开着时更糟：Enter 归选中）。
+  // 用 ref 不用 state：与 mutedRef 同款理由，同一批事件里要立即可见。
+  const composingRef = useRef(false)
 
   const menuOpen = token !== null
   const listId = `${idPrefix}-ref-list`
@@ -192,6 +255,15 @@ export function AskRefComposer({
     // 只在挂载时聚焦一次（悬浮胶囊展开的既有行为）。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // #75 · 自动长高：先归零再按 scrollHeight 量，否则缩短文本时高度只增不减（scrollHeight
+  // 恒 >= 当前 height）。用 layout effect 在 paint 前落地，避免长高那一帧的跳动。
+  useLayoutEffect(() => {
+    const el = inputRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${Math.min(el.scrollHeight, TEXTAREA_MAX_HEIGHT)}px`
+  }, [draft])
 
   // #70 · 收敛到上限走 pickRefOptions（按类目轮转分配名额）而不是裸 slice——裸 slice 在
   // 16 人 8 项目的团队里把文件/方法卡整类挤出「全部」视图。筛选 chip 视图只有一类候选，
@@ -251,7 +323,12 @@ export function AskRefComposer({
     inputRef.current?.focus()
   }
 
-  function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+  // 输入法正在合成候选词时，Enter 属于输入法（确认候选），一律不归我们。
+  function isComposing(event: KeyboardEvent<HTMLTextAreaElement>): boolean {
+    return composingRef.current || (event.nativeEvent as { isComposing?: boolean }).isComposing === true
+  }
+
+  function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     if (menuOpen) {
       if (event.key === 'ArrowDown') {
         event.preventDefault()
@@ -260,6 +337,7 @@ export function AskRefComposer({
         event.preventDefault()
         setActiveIndex(Math.max(active - 1, 0))
       } else if (event.key === 'Enter') {
+        if (isComposing(event)) return
         // 层开着时 Enter 归选中，不归提交——半个 @词 掉进问题里发出去是最难看的失手。
         event.preventDefault()
         if (options[active]) pick(options[active])
@@ -268,23 +346,50 @@ export function AskRefComposer({
         if (token) mutedRef.current = token.start
         closeMenu()
       }
-    } else if (event.key === 'Escape' && onEscapeClosed) {
+      return
+    }
+    if (event.key === 'Escape' && onEscapeClosed) {
       event.preventDefault()
       onEscapeClosed()
+      return
+    }
+    // #75 · 多行输入的键位：Enter 发送、Shift+Enter 换行。
+    // 🔴 为什么不是「Enter 换行 / Ctrl+Enter 发送」：at-references 的共享探针 submitRoom()
+    //    用的是裸 Enter，被 ⑨ 段 7 个入口全复用；改键位后那一行不会报错，只会往框里敲个
+    //    换行符，7 个入口的 waitForPosts 全超时，28 条判据以「入口没接上引用」的**误诊断
+    //    形态**假红。键位选择本身就是在保护这 28 条判据的可读性。
+    // textarea 不会像 input 那样把 Enter 变成隐式提交，所以这里必须自己发。
+    if (event.key === 'Enter' && !event.shiftKey) {
+      if (isComposing(event)) return
+      event.preventDefault()
+      submitDraft()
     }
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
+  // 提交的唯一实现。表单 onSubmit（点发送键）与 Enter 两条路都收口到这里。
+  function submitDraft() {
     const text = draft.trim()
     // 🔴 这两句是**兜底**不是主闸：主闸在下面 submit 键的 disabled 上（#69 判据落在
-    // 那个属性上）。留着是因为表单还能被 Enter 隐式提交——Chrome 在默认提交键 disabled
-    // 时会拦掉隐式提交，但这个行为在浏览器间不是铁板一块，键盘那条路不能只靠它。
+    // 那个属性上）。留着是因为 Enter 那条路绕不过它——textarea 上的 Enter 由我们自己
+    // 派发，浏览器不会替我们看 disabled。
     if (busy || !text) return
     onSubmit(text, refs)
     setDraft('')
     setRefs([])
     closeMenu()
+  }
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    submitDraft()
+  }
+
+  // #73 · 附件选择。file input 的 value 每次用完必须清空，否则连着选同一个文件不触发 change。
+  function handleFilePicked(event: { currentTarget: HTMLInputElement }) {
+    const el = event.currentTarget
+    const picked = Array.from(el.files ?? [])
+    el.value = ''
+    if (picked.length > 0) onAttach?.(picked)
   }
 
   // 静息态（无 chip、层没开）className 与改造前逐字节相同；状态类只在交互态出现——
@@ -388,9 +493,44 @@ export function AskRefComposer({
         </div>
       ) : null}
 
-      <input
+      {/* #73 · 附件预览。类名/属性族与 .lite-room-chip、[data-followup-chip] 零重叠——
+          那两套各自被 nomaterial（数 4）与 conversation（数 2）当计数判据用，蹭一下就撑破。 */}
+      {attachments && attachments.length > 0 ? (
+        <div className="lite-attachment-row" aria-label={l.roomAttachRowAria}>
+          {attachments.map((a) => (
+            <span
+              key={a.key}
+              className={`lite-attachment-pill is-${a.state}`}
+              data-attachment-pill={a.state}
+            >
+              <span className="lite-attachment-name">{a.label}</span>
+              {a.note ? <small className="lite-attachment-note">{a.note}</small> : null}
+              {onRemoveAttachment && a.state !== 'uploading' ? (
+                <button
+                  type="button"
+                  className="lite-composer-remove"
+                  aria-label={removeAttachmentAria?.(a.label)}
+                  onClick={() => onRemoveAttachment(a.key)}
+                >
+                  ×
+                </button>
+              ) : null}
+            </span>
+          ))}
+        </div>
+      ) : null}
+
+      {/* 诚实报错就地说，不弹 toast——经理的注意力就在这一行上，错就错在他刚做的动作。 */}
+      {attachError ? (
+        <p className="lite-attachment-error" data-attachment-error="" role="status">
+          {attachError}
+        </p>
+      ) : null}
+
+      <textarea
         ref={inputRef}
-        type="text"
+        rows={1}
+        data-composer-input=""
         className={inputClassName}
         role="combobox"
         aria-expanded={menuOpen}
@@ -401,6 +541,12 @@ export function AskRefComposer({
         placeholder={placeholder}
         aria-label={inputAriaLabel}
         autoComplete="off"
+        onCompositionStart={() => {
+          composingRef.current = true
+        }}
+        onCompositionEnd={() => {
+          composingRef.current = false
+        }}
         onChange={(event) => {
           setDraft(event.currentTarget.value)
           const next = detectToken(
@@ -413,17 +559,85 @@ export function AskRefComposer({
         onSelect={redetect}
         onKeyDown={handleKeyDown}
       />
+
+      {/* #73 · 附件键。type="button" 是硬约束：漏写的话 HTML 默认它就是 submit，
+          form 内 `button[type="submit"]` 从 1 变 2，门里的 count()===1 自证会**抛错**
+          （strict mode 命中多个），不是判负。 */}
+      {onAttach ? (
+        <button
+          type="button"
+          className="lite-btn lite-btn--ghost lite-composer-attach"
+          data-composer-attach=""
+          aria-label={attachAriaLabel}
+          disabled={attachBusy ? true : undefined}
+          onClick={() => fileRef.current?.click()}
+        >
+          <PaperclipIcon />
+        </button>
+      ) : null}
+
+      {/* #75 · 停止生成。只在真有流在跑时出现；同样 type="button"。 */}
+      {onStop && busy ? (
+        <button
+          type="button"
+          className="lite-btn lite-btn--ghost lite-composer-stop"
+          data-composer-stop=""
+          aria-label={stopAriaLabel}
+          onClick={onStop}
+        >
+          {stopLabel}
+        </button>
+      ) : null}
+
       <button
         type="submit"
         className={submitClassName}
+        data-composer-send=""
         aria-label={submitAriaLabel}
         // #69/#71：空文本置灰（`disableEmptySubmit`）或上一轮还在跑时置灰（`busy`）。
+        // 🔴 显式合取，别改成替换或 OR/AND 写反——写坏了的现象是「有文本却仍然灰」，
+        //    很容易被误诊成生成态判断出问题，其实是空闲态那一半被污染了。
         // 两者都不成立时给 undefined 而不是 false——静息态 DOM 上一个属性都不多长，
         // 像素基线与 button-family 的既有判据都锚在那个静息态上。
         disabled={busy || (disableEmptySubmit && draft.trim() === '') ? true : undefined}
       >
         {submitLabel}
       </button>
+
+      {/* 🔴 隐藏 file input **必须垫底**：snippet F2(:689) 的选择器末尾有个没有类型限定的
+          裸 `input` 子句，querySelector 按文档序取第一个匹配——它若排在 textarea 之前会被
+          选中，随后那段往 type=file 上写 value 抛 InvalidStateError 且无 try/catch，
+          整个 composerAskLive() reject。放最后 + 同批改判 snippet，两道都做。 */}
+      {onAttach ? (
+        <input
+          ref={fileRef}
+          type="file"
+          multiple
+          hidden
+          data-composer-file=""
+          accept={attachAccept}
+          onChange={handleFilePicked}
+        />
+      ) : null}
     </form>
+  )
+}
+
+// 回形针（aria-hidden；显式尺寸避开 sweep D6c 零尺寸 svg 判据，同 AskAveryLauncher 的 SparkIcon）。
+function PaperclipIcon() {
+  return (
+    <svg
+      className="lite-composer-attach-icon"
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path
+        d="M9.6 3.1a2.6 2.6 0 0 1 3.7 3.7l-5.6 5.6a4 4 0 0 1-5.7-5.7l5.3-5.3a.6.6 0 1 1 .9.9L2.9 7.6a2.8 2.8 0 0 0 4 4l5.6-5.6a1.4 1.4 0 0 0-2-2L5.2 9.3a.5.5 0 0 0 .7.7l4.6-4.6a.6.6 0 0 1 .9.9L6.8 10.8a1.7 1.7 0 0 1-2.4-2.4l5.2-5.3z"
+        fill="currentColor"
+      />
+    </svg>
   )
 }

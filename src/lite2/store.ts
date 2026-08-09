@@ -499,6 +499,8 @@ interface LiteState {
   // 没有"织文前的原话"这回事，两者本来就相等）。history 由 store 自己从 turns 组装，
   // 调用方不传（少一个"新入口忘了带上下文"的位置，同 withLocale 的一处补全纪律）。
   askLive: (req: AdviseRequest, question?: string) => void
+  /** #75 · 停止在飞的这一轮，落成诚实的 `interrupted` 终态（不是销毁，屏上内容全留）。 */
+  stopLive: () => void
   resetRun: () => void
   /** #71 · 清空会话流（离开议事室 / 换公司）。顺手中止在飞的那条流。 */
   clearTurns: () => void
@@ -706,8 +708,13 @@ export const useLite = create<LiteState>((set, get) => ({
   //   ④ 走自己的状态机（见 LiteState 里那段 🔴：借 ingestStatus 会发一条假的「团队已就绪」通知）。
   appendFiles: async (files) => {
     if (files.length === 0) return
-    const { transport, contextId } = get()
+    const { transport, contextId, appendStatus } = get()
     const append = transport.appendFiles
+    // #73 · 重入闸放在 store 的临界区上，不只在 UI 上（同 askLive / createFormLinks 的教训：
+    // React 的 disabled 要等一次重渲染才落到 DOM，同一拍里的第二次触发发生在那之前）。
+    // 议事室 composer 的附件键是这条路的**第二个入口**，此前只有资料库那一个入口、
+    // 靠 UI 封口就够；两个入口之后不封在 store 里，就是两趟并发写同一个 context。
+    if (appendStatus === 'ingesting') return
     // 没有这个方法的通道（stub / 老后端）本就不该显示入口——这里再兜一层诚实报错，不做假按钮。
     if (!contextId || !append) {
       set({ appendStatus: 'error', appendError: 'append is not available on this transport' })
@@ -1348,7 +1355,12 @@ export const useLite = create<LiteState>((set, get) => ({
         }
         // 一次 advise 落定后：拉一次笔记，**后端确认新笔记落库**（计数增长）才亮 nudge——
         // 观察被红线门丢弃时后端不落库、计数不变、nudge 不出（诚实降级，不显占位）。
-        if (!settled && (state.status === 'complete' || state.status === 'error')) {
+        // #75 · interrupted 也算落定：不加它的话 settled 永不置位、latch 常开、
+        // 这一轮的 fetchNotes 永远不触发（被砍那一轮也可能已经在服务端落了笔记）。
+        if (
+          !settled &&
+          (state.status === 'complete' || state.status === 'error' || state.status === 'interrupted')
+        ) {
           settled = true
           const { contextId: cid, transport } = get()
           if (cid) {
@@ -1367,6 +1379,19 @@ export const useLite = create<LiteState>((set, get) => ({
       },
     )
     set({ _abort: handle.abort })
+  },
+
+  // #75 · 停止生成。与 clearTurns/resetRun 的区别：那两个是**销毁**这场对话，
+  // 这个只是把在飞的这一轮落成诚实的 interrupted 终态——问题行、已经流出来的分析过程、
+  // 部分引用全都留在屏上，因为它们是真发生过的。
+  // 🔴 `_abort` 现在指向 createLiveAgentSource 的包装版：它会先把 run 落成 interrupted
+  //    再往下砍传输层，所以这里一发就够，不需要在 store 里再写一次状态（写第二遍反而会
+  //    与流回调按 turn.id 认领的那条路抢写）。
+  stopLive: () => {
+    const { turns } = get()
+    const tail = turns[turns.length - 1]
+    if (!tail || tail.run.status !== 'running') return
+    get()._abort?.()
   },
 
   resetRun: () => {

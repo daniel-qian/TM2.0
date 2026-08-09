@@ -10,6 +10,8 @@ import { AskRefComposer } from '../AskRefComposer'
 import { toWireRefs, weaveRefs, type AskRef } from '../askRefs'
 import { localizeStreamLine } from '../../shared/streamCopy'
 import { coerceAdvice } from '../streamSource'
+import { renderMarkdown } from '../markdown'
+import { ATTACH_ACCEPT, precheckAttachments, type AttachPrecheckFail } from '../uploadLimits'
 import type {
   LiteStreamLine,
   LiteSpeaker,
@@ -195,6 +197,15 @@ function LiteThinkingFlow({ run, running }: { run: LiveRunState; running: boolea
             </p>
           ) : null}
 
+          {/* #75 · 中断也必须在面板里说一句。不说的话现象是「四相停在半路、没有任何解释」——
+              与 SSE 断流那一条（上面 error 分支）当初的病根一模一样：看不出是失败、是还在跑、
+              还是被自己按停了。这里说的是「你按的」，所以措辞与 roomFlowFailed 不同。 */}
+          {run.status === 'interrupted' ? (
+            <p className="lite-flow-stopped" data-flow-stopped="" role="status">
+              {l.roomFlowInterrupted}
+            </p>
+          ) : null}
+
           {showCites && cites.length > 0 ? (
             <ul className="lite-flow-cite-list" aria-label={l.roomFlowCitesLabel}>
               {cites.map((cite, i) => (
@@ -217,6 +228,16 @@ function LiteThinkingFlow({ run, running }: { run: LiveRunState; running: boolea
   )
 }
 
+// #73 · 议事室现场附件的一格。`ref` 只在 ready 之后才有——它是**回执里那个服务端权威名**
+// 构出来的，不是用户当初选的文件名（见下方 attach 那段 🔴）。
+type RoomAttachment = {
+  key: string
+  label: string
+  state: 'uploading' | 'ready' | 'failed'
+  note?: string
+  ref?: AskRef
+}
+
 // live 提问 composer（空态 + 运行后追问共用）。走 store.askLive → feat-015 /advise SSE。
 // feat-036：initialValue 承接"带进议事室"的预填上下文（flowStore.composerDraft，挂载时
 // 读一次——只预填、不自动提交，manager 审过再问）。
@@ -232,6 +253,12 @@ function LiteAskComposer({
   initialValue,
   initialRefs,
   busy,
+  onStop,
+  attachments,
+  attachBusy,
+  attachError,
+  onAttach,
+  onRemoveAttachment,
 }: {
   placeholder: string
   submitLabel: string
@@ -239,13 +266,20 @@ function LiteAskComposer({
   initialValue?: string
   initialRefs?: AskRef[]
   busy?: boolean
+  onStop?: () => void
+  attachments?: RoomAttachment[]
+  attachBusy?: boolean
+  attachError?: string | null
+  onAttach?: (files: File[]) => void
+  onRemoveAttachment?: (key: string) => void
 }) {
   const { t } = useDict()
+  const l = t.lite2
   return (
     <AskRefComposer
       formClassName="nexus-followup-composer"
-      formAriaLabel={t.lite2.roomAskAria}
-      inputAriaLabel={t.lite2.roomLiveQuestionAria}
+      formAriaLabel={l.roomAskAria}
+      inputAriaLabel={l.roomLiveQuestionAria}
       placeholder={placeholder}
       submitClassName="lite-btn lite-btn--primary"
       submitLabel={submitLabel}
@@ -255,6 +289,17 @@ function LiteAskComposer({
       disableEmptySubmit
       busy={busy}
       onSubmit={onAsk}
+      onStop={onStop}
+      stopLabel={l.roomStopLabel}
+      stopAriaLabel={l.roomStopAria}
+      attachments={attachments}
+      attachAriaLabel={l.roomAttachAria}
+      attachAccept={ATTACH_ACCEPT}
+      attachBusy={attachBusy}
+      attachError={attachError}
+      onAttach={onAttach}
+      onRemoveAttachment={onRemoveAttachment}
+      removeAttachmentAria={(label) => fill(l.roomAttachRemoveAria, { label })}
     />
   )
 }
@@ -294,7 +339,9 @@ function LiteTurnView({
     isLast && run.status === 'complete' && (advice || run.answer) ? run.followups : []
 
   return (
-    <article className="lite-room-turn" data-room-turn={turn.id}>
+    // #75 · data-run-status 让门直接采到这一轮的终态（不必读 store 的镜像 run）——
+    // 「停止」的判据要能钉在**这一轮**上，而不是全局最后一次运行上。
+    <article className="lite-room-turn" data-room-turn={turn.id} data-run-status={run.status}>
       <section className="lite-room-turn-question" aria-label={l.roomTurnQuestionLabel}>
         <p className="eyebrow">{l.roomTurnQuestionLabel}</p>
         {/* 回显的是 manager 自己打的那句原话——不是提交层织过「涉及：」的 situation。
@@ -322,13 +369,27 @@ function LiteTurnView({
       {isLast ? (
         <div className="nexus-brief-hud">
           <div className="nexus-brief-bar" aria-label={t.nexus.liveThinking}>
-            <span className="nexus-brief-bar-eyebrow">{t.nexus.liveThinking}</span>
+            {/* 🔴 #75 人眼过逮到的自相矛盾：这条眉标写死「正在仔细梳理中 · 实时」，于是
+                中断态的状态条会并排显示「正在仔细梳理中」＋「已停止，这轮没答完」——
+                同一个部件同时说两件相反的事。（ready 态其实早就有这毛病：「正在梳理」＋
+                「分析好了」；本票新增的中断态只是把它顶到了脸上。）
+                只在**真的在跑**的时候才渲染它：说的是此刻，此刻没在跑就别说。
+                改的是渲染条件不是字典值——文案批改归 #79，这里不越界。
+                aria-label 留在容器上不动（读屏那条路仍有名字，aria-zh 门照旧采得到）。 */}
+            {running ? (
+              <span className="nexus-brief-bar-eyebrow">{t.nexus.liveThinking}</span>
+            ) : null}
+            {/* 🔴 #75 · 这个三元曾经是全库最毒的一处静默走错分支：新加的 'interrupted'
+                会掉进最后那个 else，屏上写「分析好了，可以看了」——manager 刚亲手按停。
+                四态一一显式列出，不留兜底 else 吃掉未来的新状态。 */}
             <span className="nexus-brief-step">
               {run.status === 'error'
                 ? t.nexus.liveError
-                : running
-                  ? t.nexus.liveRunning
-                  : t.nexus.liveReady}
+                : run.status === 'interrupted'
+                  ? t.nexus.liveInterrupted
+                  : running
+                    ? t.nexus.liveRunning
+                    : t.nexus.liveReady}
             </span>
           </div>
         </div>
@@ -340,7 +401,16 @@ function LiteTurnView({
         <div className="lite-room-card lite-room-answer">
           <section className="lite-room-answer-card" aria-label={l.roomAnswerLabel}>
             <p className="eyebrow">{l.roomAnswerLabel}</p>
-            <p className="lite-room-answer-text">{run.answer}</p>
+            {/* #75 · 短答走 markdown 渲染（分点/表格/强调不再糊成一坨）。
+                🔴 只有**回答**渲染 markdown，提问回显（.lite-room-turn-question-text）
+                   一律保持纯文本：room-conversation 有几条判据是拿原话做**精确相等**比对的，
+                   语料一旦含 `*_#[]()` 就会因为字符被解析/包进标签而漂移。今天的 fixture
+                   不含特殊字符，所以那是颗隐性地雷而不是即时地雷——别去踩它。
+                🔴 渲染器不产 HTML 字符串、不碰 dangerouslySetInnerHTML：正文全走文本节点，
+                   注入面只剩链接 href，scheme 白名单 fail closed（见 markdown.tsx 头）。 */}
+            <div className="lite-room-answer-text" data-answer-md="">
+              {renderMarkdown(run.answer, `ans-${turn.id}`)}
+            </div>
           </section>
           {/* nudge 是「刚刚这一轮落了新笔记」的瞬态提示，只可能属于尾轮。 */}
           {isLast && noteJustAdded ? (
@@ -502,6 +572,7 @@ export function RoomScreen() {
   const turns = useLite((s) => s.turns)
   const ask = useLite((s) => s.ask)
   const askLive = useLite((s) => s.askLive)
+  const stopLive = useLite((s) => s.stopLive)
   const clearTurns = useLite((s) => s.clearTurns)
   const noteJustAdded = useLite((s) => s.noteJustAdded)
   const goScreen = useLite((s) => s.goScreen)
@@ -545,10 +616,98 @@ export function RoomScreen() {
   // #64 · 提交层的双通道：refs 结构化进契约（新后端保证注入），同时织进 situation 文字
   //（旧后端静默忽略 references 的窗口期，答案不比今天差——askRefs.weaveRefs 文件头）。
   // #71 · 第二参是**织文前的原话**，会话流回显它；history 由 store 从 turns 自己组装。
+  // ── #73 · 现场附件 ────────────────────────────────────────────────────────────────
+  // 上传即入当前公司资料库（append 语义，与资料库那个入口同一条 store 路径）；转换完把
+  // **回执里的服务端权威名**构成 file 引用，随这一问一起发出去。
+  const appendFiles = useLite((s) => s.appendFiles)
+  const [attachments, setAttachments] = useState<RoomAttachment[]>([])
+  const [attachError, setAttachError] = useState<string | null>(null)
+  const attachBusy = attachments.some((a) => a.state === 'uploading')
+
+  const precheckMessage = (fail: AttachPrecheckFail): string => {
+    if (fail.kind === 'too-many') return fill(t.lite2.roomAttachTooMany, { max: fail.max })
+    if (fail.kind === 'too-large') return fill(t.lite2.roomAttachTooLarge, { name: fail.name, max: fail.max })
+    return fill(t.lite2.roomAttachBatchTooLarge, { max: fail.max })
+  }
+
+  const handleAttach = async (picked: File[]) => {
+    setAttachError(null)
+    // 🔴 选文件那一刻就判，不等 413（票面原话）。判不过整批拒收、一个字节都不发。
+    const fail = precheckAttachments(picked)
+    if (fail) {
+      setAttachError(precheckMessage(fail))
+      return
+    }
+    const batch: RoomAttachment[] = picked.map((f, i) => ({
+      key: `at-${Date.now()}-${i}-${f.name}`,
+      label: f.name,
+      state: 'uploading',
+      note: t.lite2.roomAttachBusy,
+    }))
+    setAttachments((prev) => [...prev, ...batch])
+    const batchKeys = new Set(batch.map((b) => b.key))
+
+    await appendFiles(picked)
+    // 抽取是在**同一次 HTTP 请求**里同步跑完再返回的（ingest_api.py 的 run_in_threadpool），
+    // 所以这个 await 回来就是「读完了」，不需要再轮询什么完成信号。
+    const { appendStatus, appendError, appendReceipt } = useLite.getState()
+    if (appendStatus === 'error') {
+      setAttachError(appendError ?? t.lite2.roomAttachFailed)
+      setAttachments((prev) =>
+        prev.map((a) =>
+          batchKeys.has(a.key) ? { ...a, state: 'failed', note: t.lite2.roomAttachFailed } : a,
+        ),
+      )
+      return
+    }
+    // 🔴 用**回执**的 documents[] 构 ref，不用刷新后的 store.files[].filename：
+    //    回执给的是 `sd.source_key or sd.filename`（ingest_api.py:833）＝服务端消歧后的
+    //    权威名；而 `GET /team/{id}/files` 回填的是 `sd.filename`＝用户当初选的原始名
+    //    （registry.py:797），撞名时两行字面完全相同、只靠 idx 区分。后端解引用是
+    //    `source_key == want or filename == want` 的 `next(...)`**取第一个命中**
+    //    （references.py:155）——拿原始名去指，撞名时指到的不一定是刚传的这一份。
+    //    （id 契约的根治归 #74 / S2，本票只走今天能对的那条路。）
+    const served = appendReceipt?.documents ?? []
+    setAttachments((prev) => {
+      let cursor = 0
+      return prev.map((a) => {
+        if (!batchKeys.has(a.key)) return a
+        const authoritative = served[cursor++] ?? a.label
+        return {
+          ...a,
+          state: 'ready',
+          note: undefined,
+          label: authoritative,
+          ref: { kind: 'file', id: authoritative, label: authoritative, meta: '', dupeTeam: '' },
+        }
+      })
+    })
+  }
+
+  const removeAttachment = (key: string) => {
+    setAttachError(null)
+    setAttachments((prev) => prev.filter((a) => a.key !== key))
+  }
+
+  // #64 · 提交层的双通道：refs 结构化进契约（新后端保证注入），同时织进 situation 文字
+  //（旧后端静默忽略 references 的窗口期，答案不比今天差——askRefs.weaveRefs 文件头）。
+  // #71 · 第二参是**织文前的原话**，会话流回显它；history 由 store 从 turns 自己组装。
+  // #73 · 已经读完的附件随这一问一起进 references（还在读的不进——它还没有权威名，
+  //       硬塞一个用户选的原始名进去就是在赌撞名，见 handleAttach 里那段 🔴）。
   const askWithRefs = (text: string, refs: AskRef[]) => {
-    const situation = weaveRefs(text, refs, t.lite2.refWeavePrefix, t.lite2.refWeaveSeparator)
-    if (refs.length > 0) askLive({ situation, references: toWireRefs(refs) }, text)
+    const attached = attachments
+      .filter((a) => a.state === 'ready' && a.ref)
+      .map((a) => a.ref as AskRef)
+    const all = [...refs, ...attached].filter(
+      (r, i, arr) => arr.findIndex((x) => x.kind === r.kind && x.id === r.id) === i,
+    )
+    const situation = weaveRefs(text, all, t.lite2.refWeavePrefix, t.lite2.refWeaveSeparator)
+    if (all.length > 0) askLive({ situation, references: toWireRefs(all) }, text)
     else askLive({ situation }, text)
+    // 附件是「这一问」的附件：发完就从 composer 上撤下来（文件本身已经在资料库里，
+    // 之后照常能用 @ 引用到——撤的是这一问的挂载，不是把文件删了）。
+    setAttachments([])
+    setAttachError(null)
   }
 
   // nudge-clear-only-on-goscreen-path：离开 Room 的三条路径（goScreen tab 切换 / Topbar
@@ -568,8 +727,12 @@ export function RoomScreen() {
   useEffect(() => {
     void refreshAdviseRuns()
   }, [refreshAdviseRuns, contextId])
+  // #75 · interrupted 也拉一次——这是**唯一**一处 interrupted 该跟着 complete 走的分支。
+  // 理由是后端那个窄窗口：中止若恰好落在「manifest 已生成、帧还没送到浏览器」之间，
+  // 服务端已经落了一条完整的 advise_run（app.py 的 on_manifest 在 yield 之前就调了），
+  // 那条记录立刻出现在「之前问过的」里，比让它悄悄躺到下次进屋才冒出来少一次惊吓。
   useEffect(() => {
-    if (lastStatus === 'complete') void refreshAdviseRuns()
+    if (lastStatus === 'complete' || lastStatus === 'interrupted') void refreshAdviseRuns()
   }, [lastStatus, refreshAdviseRuns])
 
   // #71 · 新一轮起跑就把滚动区带到底部（对齐常见 AI chat：新消息进来跟着走）。
@@ -585,41 +748,94 @@ export function RoomScreen() {
 
   return (
     <section className="scene scene-nexus is-active lite-room" aria-label={t.lite2.tabRoom}>
-      {hasStarted ? (
+      {contextId !== null ? (
+        // ── #75 · docked composer 三态统一 ────────────────────────────────────────
+        // 空态与对话态从此**同一棵树**：滚动区 + 屏底常驻 composer。改造前空态是 story 的
+        // `.nexus-empty` 居中卡（absolute top:42%）里塞一个 static 化的 composer，第一问发出
+        // 就整屏重排、composer 瞬移到屏底换了宽度换了锚点——那不是设计，是地质层。
+        //
+        // 🔴 三条结构纪律，每条背后都有一道门：
+        //   ① composer 必须是 `.lite-room` 的**直接子元素**——`.lite-room > .nexus-followup-composer`
+        //      是 CSS(:8197 run 态归位) 与 room-usability 结构判据的双承重选择器。
+        //   ② composer 必须在 `.lite-room-board` **之外**——room-usability 取
+        //      `board.children[last]` 当「最后一轮卡」，把 composer 塞进 board（sticky 贴底那种
+        //      常见简易写法）会让它抓到 composer 自己跟自己比，**对着任何真回归都全绿**。
+        //   ③ 全树 `.nexus-followup-composer` 恒**只有一个实例**——snippet 相位 H 的
+        //      composerInScroll/composerOutside 与 room-conversation 的 count()===1 都靠这条；
+        //      拿两份 DOM 做 crossfade 过渡会同时打破它们。
         <>
           {/* 0729 输出形态战役 01 · 画板退役（Danny 拍板，kickoff 见 .issues/output-form-0729/）：
               pan/zoom 画布换成全站统一的 scroll→frame 纵向语法。⚠ .lite-room-board 类名保留——
-              它同时承担「解除 story 绝对定位」的职责（lite2.css board 段），改的只是它自己的
-              布局规则（1180px 世界宽 → 纵向列）。composer 仍在滚动区外恒可点。 */}
+              它同时承担「解除 story 绝对定位」的职责（lite2.css board 段）。 */}
           <div className="lite-room-scroll" aria-label={t.lite2.roomBoardAria} ref={scrollRef}>
             {/* #71 · 会话流：一轮一个 <article>，按提问顺序堆叠，尾部是当前这一轮。
-                第二问不再覆盖第一问——覆盖此前是结构性的（store 只有一个 run 单槽）。 */}
+                第二问不再覆盖第一问——覆盖此前是结构性的（store 只有一个 run 单槽）。
+                turns 为空时这里放开场块，于是「发第一问」只是往同一个容器里追加内容，
+                composer 一个像素都不动。 */}
             <div className="lite-room-board" data-room-turns={turns.length}>
-              {turns.map((turn, i) => (
-                <LiteTurnView
-                  key={turn.id}
-                  turn={turn}
-                  isLast={i === turns.length - 1}
-                  ask={ask !== null}
-                  noteJustAdded={noteJustAdded}
-                  onGoNotes={() => goScreen('notes')}
-                  /* #72 · chip 文字就是完整问题——refs 为空走 askWithRefs 的无引用分支，
-                     situation 恒等于 chip 原文（门的网络层判据钉这条）。 */
-                  onAskFollowup={(q) => askWithRefs(q, [])}
-                />
-              ))}
+              {hasStarted ? (
+                turns.map((turn, i) => (
+                  <LiteTurnView
+                    key={turn.id}
+                    turn={turn}
+                    isLast={i === turns.length - 1}
+                    ask={ask !== null}
+                    noteJustAdded={noteJustAdded}
+                    onGoNotes={() => goScreen('notes')}
+                    /* #72 · chip 文字就是完整问题——refs 为空走 askWithRefs 的无引用分支，
+                       situation 恒等于 chip 原文（门的网络层判据钉这条）。 */
+                    onAskFollowup={(q) => askWithRefs(q, [])}
+                  />
+                ))
+              ) : (
+                <section className="lite-room-welcome" data-room-welcome="" aria-label={t.lite2.roomEmptyAria}>
+                  {/* eyebrow 刻意**删掉**（不是改字）：这里原来挂的是 `t.nexus.liveThinking`
+                      「正在仔细梳理中 — 实时」，而此刻并没有任何东西在被梳理——nomaterial 态
+                      早就修过同款问题，空态漏了网。删元素而不动字典，是为了不越界进 #79 的
+                      文案批改地盘；顺带也满足「一屏别处处挂 eyebrow」的克制。 */}
+                  <h2>{t.lite2.roomEmptyTitle}</h2>
+                  <p>{t.lite2.roomEmptyBody}</p>
+                  {/* feat-045：建议问题 chips——点击即发问（同一个 askLive 路径，真 SSE）。
+                      ⚠ `.lite-room-chip` 的**数量**是 room-nomaterial 的判据（世界 A 数 0、
+                      世界 B 数 4），新部件一律别蹭这个类名。 */}
+                  <div className="lite-room-chips" aria-label={t.lite2.roomChipsLabel}>
+                    <p className="eyebrow lite-room-chips-label">{t.lite2.roomChipsLabel}</p>
+                    <div className="lite-room-chip-row">
+                      {ROOM_CHIPS.map((chip) => (
+                        <button
+                          key={chip.id}
+                          type="button"
+                          className="lite-room-chip"
+                          data-chip-id={chip.id}
+                          onClick={() => askLive({ situation: chip.text(t.lite2) })}
+                        >
+                          {chip.text(t.lite2)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </section>
+              )}
             </div>
           </div>
-          {/* 追问 composer：常驻屏底、在滚动区外。预填只属于**空态**那一份（进屋那一刻
-              才有卡片上下文），所以这里恒是默认提示 + 空正文。 */}
+          {/* 常驻 composer：屏底、滚动区外、两态同一份。预填（灰提示/正文/refs）只在进屋那
+              一刻有意义，所以仍然只喂给它一次——turns 已经开跑之后 entry 早被消费空了。 */}
           <LiteAskComposer
-            placeholder={t.nexus.askPlaceholder}
+            placeholder={entry.hint ?? t.nexus.askPlaceholder}
             submitLabel={t.nexus.ask}
             onAsk={askWithRefs}
+            initialValue={entry.draft ?? undefined}
+            initialRefs={entry.refs ?? undefined}
             busy={running}
+            onStop={stopLive}
+            attachments={attachments}
+            attachBusy={attachBusy}
+            attachError={attachError}
+            onAttach={(picked) => void handleAttach(picked)}
+            onRemoveAttachment={removeAttachment}
           />
         </>
-      ) : contextId === null ? (
+      ) : (
         /* 0721 · 无材料诚实空态（合伙人实测：零数据提问被呈现成「中途断了」系统故障样，
            实际要么烧默认英文 demo 语料的真 LLM、要么 LLM 侧断流——两种都不是网络问题）。
            没有材料就不给「注定失败的输入」：composer 和建议 chips 一并收起，只留引导。
@@ -637,40 +853,6 @@ export function RoomScreen() {
           >
             {t.lite2.roomNoMaterialCta} →
           </button>
-        </section>
-      ) : (
-        <section className="nexus-empty" aria-label={t.lite2.roomEmptyAria}>
-          <p className="eyebrow">{t.nexus.liveThinking}</p>
-          <h2>{t.lite2.roomEmptyTitle}</h2>
-          <p>{t.lite2.roomEmptyBody}</p>
-          <div className="nexus-empty-composer-wrap">
-            {/* #69 · 卡片入口带来的模板句落在 placeholder 上（灰、不占正文、发送不带、
-                一打字就消失）；chips 照旧是真 refs。正文只有悬浮胶囊中继那一条路会填。 */}
-            <LiteAskComposer
-              placeholder={entry.hint ?? t.nexus.askPlaceholder}
-              submitLabel={t.nexus.ask}
-              onAsk={askWithRefs}
-              initialValue={entry.draft ?? undefined}
-              initialRefs={entry.refs ?? undefined}
-            />
-          </div>
-          {/* feat-045：建议问题 chips——点击即发问（同一个 askLive 路径，真 SSE）。 */}
-          <div className="lite-room-chips" aria-label={t.lite2.roomChipsLabel}>
-            <p className="eyebrow lite-room-chips-label">{t.lite2.roomChipsLabel}</p>
-            <div className="lite-room-chip-row">
-              {ROOM_CHIPS.map((chip) => (
-                <button
-                  key={chip.id}
-                  type="button"
-                  className="lite-room-chip"
-                  data-chip-id={chip.id}
-                  onClick={() => askLive({ situation: chip.text(t.lite2) })}
-                >
-                  {chip.text(t.lite2)}
-                </button>
-              ))}
-            </div>
-          </div>
         </section>
       )}
       {/* issue #49 · 历史入口+抽屉：absolute 定位，不进 board/empty 两棵门锚树；

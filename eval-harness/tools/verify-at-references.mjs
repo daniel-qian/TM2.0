@@ -136,12 +136,29 @@ rec('⓪ 自证：语料上传成功且两位林小满都在（重名消歧的�
 // ── ① 议事室 composer：@ 弹层 + 键盘选中 ─────────────────────────────────────────────────
 await page.evaluate((seam) => window[seam].getState().goScreen('room'), SEAM)
 await page.waitForTimeout(600)
-const input = () => page.locator('.lite-room .nexus-followup-composer input[type="text"]')
+const input = () => page.locator('.lite-room .nexus-followup-composer [data-composer-input]')
+const ROOM_INPUT = '.lite-room .nexus-followup-composer [data-composer-input]'
+// 清空正文控件的唯一实现（此前文件里有两份内联拷贝，textarea 化时漏改一份就当场
+// `Illegal invocation` 崩掉——合成一份就不会再漏）。
+const clearInputEl = (sel) => page.evaluate((s) => {
+  const inp = document.querySelector(s)
+  if (inp) {
+    // #75：正文控件可能是 textarea——setter 必须按真实 tag 取。取错原型链上的那个：
+    // 在 textarea 上直接抛 `Illegal invocation`（崩），在别的控件上则可能**静默无效**
+    // （值看着清了、React 的 state 没动），后面所有「输入框已清空」的前提就全是假的。
+    const proto = inp.tagName === 'TEXTAREA'
+      ? window.HTMLTextAreaElement.prototype
+      : window.HTMLInputElement.prototype
+    const setter = Object.getOwnPropertyDescriptor(proto, 'value').set
+    setter.call(inp, '')
+    inp.dispatchEvent(new Event('input', { bubbles: true }))
+  }
+}, sel)
 rec('① 自证：议事室常驻 composer 在屏上', (await input().count()) === 1)
 // #69 · 无预填时的默认提示——⑨ 用它当"这条提示确实来自入口"的对照（只判非空会被
 // 「提示恒等于默认文案」的假实现蒙混过去）。
 const DEFAULT_PLACEHOLDER = await page.evaluate(() =>
-  document.querySelector('.lite-room .nexus-followup-composer input[type="text"]')
+  document.querySelector('.lite-room .nexus-followup-composer [data-composer-input]')
     ?.getAttribute('placeholder') ?? '')
 rec('① 自证：默认 placeholder 采到了（⑨ 的对照基准）', DEFAULT_PLACEHOLDER.length > 0,
   JSON.stringify(DEFAULT_PLACEHOLDER))
@@ -150,7 +167,7 @@ await input().click()
 await input().pressSequentially('@林', { delay: 40 })
 await page.waitForTimeout(300)
 const menu = await page.evaluate(() => {
-  const inp = document.querySelector('.lite-room .nexus-followup-composer input[type="text"]')
+  const inp = document.querySelector('.lite-room .nexus-followup-composer [data-composer-input]')
   const picker = document.querySelector('.lite-ref-picker')
   const opts = Array.from(picker?.querySelectorAll('[role="option"]') ?? []).map((o) => ({
     label: o.querySelector('.lite-ref-option-label')?.textContent ?? '',
@@ -182,7 +199,7 @@ await input().press('Enter')
 await page.waitForTimeout(200)
 const picked = await page.evaluate(() => {
   const chip = document.querySelector('.lite-room .lite-ref-chip')
-  const inp = document.querySelector('.lite-room .nexus-followup-composer input[type="text"]')
+  const inp = document.querySelector('.lite-room .nexus-followup-composer [data-composer-input]')
   return {
     chipLabel: chip?.querySelector('.lite-ref-chip-label')?.textContent ?? null,
     chipTeam: chip?.querySelector('.lite-ref-chip-team')?.textContent ?? null,
@@ -332,14 +349,10 @@ await page.waitForTimeout(200)
 await page.locator('.lite-ref-picker .lite-composer-filter', { hasText: '全部' }).click()
 await page.waitForTimeout(200)
 await input().press('Escape')
-await page.evaluate(() => {
-  const inp = document.querySelector('.lite-room .nexus-followup-composer input[type="text"]')
-  if (inp) {
-    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set
-    setter.call(inp, '')
-    inp.dispatchEvent(new Event('input', { bubbles: true }))
-  }
-})
+// #75：这里原本是 clearInputEl 的第二份**内联拷贝**，写死了 HTMLInputElement 原型——
+// textarea 化之后 setter.call 直接抛 `Illegal invocation`（是崩不是红）。改成调那个助手，
+// 顺手把两份合成一份，省得下次控件再变又漏一处。
+await clearInputEl(ROOM_INPUT)
 
 // ── ⑥ 悬浮胶囊中继：q + refs 一起进屋 ───────────────────────────────────────────────────
 await page.evaluate((seam) => window[seam].getState().goScreen('home'), SEAM)
@@ -348,7 +361,7 @@ rec('⑥ 自证：home 屏上悬浮胶囊在（room 屏上它刻意收起）',
   (await page.locator('.lite-ask-avery-pill').count()) === 1)
 await page.locator('.lite-ask-avery-pill').click()
 await page.waitForTimeout(300)
-const pillInput = () => page.locator('.lite-ask-avery-form input[type="text"]')
+const pillInput = () => page.locator('.lite-ask-avery-form [data-composer-input]')
 await pillInput().pressSequentially('@别墅', { delay: 40 })
 await page.waitForTimeout(300)
 await pillInput().press('Enter') // 唯一命中：项目「别墅套餐推广」
@@ -357,27 +370,37 @@ const pillChip = await page.evaluate(() =>
   document.querySelector('.lite-ask-avery-form .lite-ref-chip')?.getAttribute('data-ref-chip') ?? null)
 rec('⑥ 胶囊里选中项目变 chip', pillChip === 'project', String(pillChip))
 await pillInput().pressSequentially('这个项目下一步怎么排', { delay: 20 })
-await pillInput().press('Enter')
-await page.waitForTimeout(800)
-const relay = await page.evaluate(() => ({
-  path: window.location.pathname,
-  value: document.querySelector('.lite-room .nexus-followup-composer input[type="text"]')?.value ?? null,
-  chipKind: document.querySelector('.lite-room .lite-ref-chip')?.getAttribute('data-ref-chip') ?? null,
-  chipLabel: document.querySelector('.lite-room .lite-ref-chip .lite-ref-chip-label')?.textContent ?? null,
-}))
-rec('⑥ 中继链：落在 /room 且 composer 预填了问题 + project chip（只预填不自动发）',
-  relay.path === '/room' && relay.value === '这个项目下一步怎么排' &&
-  relay.chipKind === 'project' && (relay.chipLabel ?? '').includes('别墅套餐'),
-  JSON.stringify(relay))
+
+// ── #75 改判 · 胶囊从「预填中继」改成「即发」──────────────────────────────────────────
+// 原来这里的记账是：胶囊 Enter 只搬运（零 POST）→ 落地 /room 后读 composer.value 断言
+// 「预填了但没发」→ 脚本自己再按一次 Enter 才真提交，然后按下标取那一发。
+// 改成即发之后那套记账**整体错位**：POST 在胶囊这一按就打出去了，早于原来的 postsBefore
+// 采样点；落地时 composer 已被清空，`value === '这个项目下一步怎么排'` 会读到空串。
+// 🔴 这条红是「改对了」不是回归——所以判据跟着票面重写，而不是想办法让旧断言继续绿。
+// 新记账：**先**记基线，**再**按胶囊那一发，直接抓它自己打出去的那个 POST。
 const postsBefore = advisePosts.length
-await input().press('Enter')
+await pillInput().press('Enter')
 const gotThird = await waitForPosts(postsBefore + 1)
 const post3 = advisePosts[postsBefore]
-rec('⑥ 胶囊带来的 refs 随提交进了请求体（project ref + 织文）',
+rec('⑥ #75 · 胶囊按发送＝**真发出去**（不再是预填中继，那一按就有 POST /advise）',
+  gotThird, `postsBefore=${postsBefore} now=${advisePosts.length}`)
+rec('⑥ 胶囊带来的 refs 随那一发进了请求体（project ref + 织文）',
   gotThird && Array.isArray(post3?.references) && post3.references[0]?.kind === 'project' &&
   post3.references[0]?.id === base.projectId &&
   post3.situation.includes('涉及：') && post3.situation.includes('别墅套餐推广'),
   JSON.stringify(post3?.references ?? null))
+await page.waitForTimeout(800)
+const relay = await page.evaluate(() => ({
+  path: window.location.pathname,
+  turns: document.querySelectorAll('.lite-room-turn').length,
+  question: document.querySelector('.lite-room-turn-question-text')?.textContent ?? null,
+  // 发完之后 composer 必须是空的——问题已经在会话流里了，还留在输入框里就是「发了没发」两说。
+  value: document.querySelector('.lite-room .nexus-followup-composer [data-composer-input]')?.value ?? null,
+}))
+rec('⑥ #75 · 落地即在议事室里成了**一轮真对话**（不是一个待发的草稿）',
+  relay.path === '/room' && relay.turns >= 1 &&
+  (relay.question ?? '').includes('这个项目下一步怎么排') && relay.value === '',
+  JSON.stringify(relay))
 
 // ── ⑦ Esc 分层（胶囊）─────────────────────────────────────────────────────────────────────
 await page.evaluate((seam) => window[seam].getState().goScreen('home'), SEAM)
@@ -410,7 +433,11 @@ rec('⑦ 再 Esc 才收胶囊（回到 pill 态）',
 const pickerGeom = () => page.evaluate(() => {
   const picker = document.querySelector('.lite-ref-picker')
   const form = picker?.closest('form')
-  const inp = form?.querySelector('input[type="text"]')
+  // #75：正文控件是 textarea 了，`input[type="text"]` 在这里会返回 null，⑧ 整段（9 条 rec）
+  // 会因为 pickerGeom() 恒 null 而**整批变红**，且红得像「弹层几何坏了」。锚到稳定钩子上。
+  // ⚠ `picker.closest('form')` 这一跳仍是本段的地基：弹层必须留在 composer 的 form 内部，
+  //   哪天把它挪进 portal，这里要一起改。
+  const inp = form?.querySelector('[data-composer-input]')
   if (!picker || !inp) return null
   const p = picker.getBoundingClientRect()
   const i = inp.getBoundingClientRect()
@@ -429,16 +456,6 @@ const pickerGeom = () => page.evaluate(() => {
     top: Math.round(p.top), bottom: Math.round(p.bottom), vh: window.innerHeight,
   }
 })
-const clearInputEl = (sel) => page.evaluate((s) => {
-  const inp = document.querySelector(s)
-  if (inp) {
-    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set
-    setter.call(inp, '')
-    inp.dispatchEvent(new Event('input', { bubbles: true }))
-  }
-}, sel)
-const ROOM_INPUT = '.lite-room .nexus-followup-composer input[type="text"]'
-
 // (a) 议事室运行态 @ 1280×900（bootPage 默认视口）
 // 🔴 #71：离开议事室 = 这场对话结束（turns 清空），所以「运行态宿主」得**当场问一句**造出来
 //    ——⑦ 那一段刚把人带去 home，上一段留下的对话已经散了。
@@ -449,8 +466,11 @@ await input().pressSequentially('这周有什么要紧的', { delay: 20 })
 await input().press('Enter')
 await waitForPosts(advisePosts.length + 1)
 await waitRoomSettled()
-rec('⑧ 自证：议事室在运行态（对话已开始，composer 在场景底）',
-  (await page.locator('.lite-room-scroll').count()) === 1)
+// #75 改判：`.lite-room-scroll` 现在**两态都在**（空态与对话态同一棵树），拿它当「运行态
+// 自证」已经恒真＝判据空转。换成真正区分两态的那件事：这一态里已经有轮次了。
+rec('⑧ 自证：议事室在运行态（已有轮次在屏上，composer 在场景底）',
+  (await page.locator('.lite-room-board[data-room-turns="0"]').count()) === 0 &&
+  (await page.locator('.lite-room-turn').count()) >= 1)
 await input().click()
 await input().pressSequentially('@', { delay: 40 })
 await page.waitForTimeout(300)
@@ -500,15 +520,22 @@ await pillInput().press('Escape')
 await pillInput().press('Escape')
 await page.waitForTimeout(200)
 
-// (e) 议事室空态 @ 1280×900——重载把 run 归 idle（composer 回空态卡），team 经会话恢复取回
+// (e) 议事室空态 @ 1280×900——重载把 turns 清空（内存态，刻意零持久化），team 经会话恢复取回。
+// ⚠ #75 起「空态宿主」与「运行态宿主」的 composer **几何已经一样**（三态统一的目的就是这个），
+//    所以 (a)/(b) 与 (e)/(f) 不再是两种几何、只是两种内容量下的同一种几何。矩阵留着仍有价值
+//    （视口档位 + 胶囊宿主那两档是真不同），但别再把它读成「四种宿主」。
 await page.setViewportSize({ width: 1280, height: 900 })
 await page.goto(`${UI}/?v=2&mode=live&look=paper&lang=zh`, { waitUntil: 'networkidle' })
 await dismissOnboard(page)
 await page.waitForFunction((seam) => !!window[seam]?.getState().team, SEAM, { timeout: 30000 })
 await page.evaluate((seam) => window[seam].getState().goScreen('room'), SEAM)
 await page.waitForTimeout(600)
-rec('⑧ 自证：议事室回到空态（.nexus-empty 卡 + wrap 里的 composer）',
-  (await page.locator('.nexus-empty .nexus-empty-composer-wrap form').count()) === 1)
+// #75 改判：空态不再是 story 的 `.nexus-empty` 居中卡 + `.nexus-empty-composer-wrap` 包裹
+// （那两层随 docked composer 三态统一一起退役了）。空态的新身份判据 = **零轮对话**
+// 且 composer 在场——判的是「现在屏上是哪一态」这件事本身，不是某个包裹壳的类名。
+rec('⑧ 自证：议事室回到空态（零轮对话 + docked composer 在场）',
+  (await page.locator('.lite-room-board[data-room-turns="0"]').count()) === 1 &&
+  (await page.locator('.lite-room > .nexus-followup-composer').count()) === 1)
 await input().click()
 await input().pressSequentially('@', { delay: 40 })
 await page.waitForTimeout(300)
@@ -544,8 +571,8 @@ const roomChips = () => page.evaluate(() =>
   })))
 // #69 · 进屋那一刻 composer 的四件事：正文 / 灰提示 / 发送键 / chip。
 const composerEntry = () => page.evaluate(() => {
-  const inp = document.querySelector('.lite-room .nexus-followup-composer input[type="text"]')
-  const btn = document.querySelector('.lite-room .nexus-followup-composer button[type="submit"]')
+  const inp = document.querySelector('.lite-room .nexus-followup-composer [data-composer-input]')
+  const btn = document.querySelector('.lite-room .nexus-followup-composer [data-composer-send]')
   return {
     value: inp?.value ?? null,
     placeholder: inp?.getAttribute('placeholder') ?? '',

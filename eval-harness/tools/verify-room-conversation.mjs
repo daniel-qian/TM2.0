@@ -62,8 +62,8 @@ const waitSettled = (ms = 30000) => page.waitForFunction(
     return !!last && ['complete', 'error'].includes(last.run.status)
   }, SEAM, { timeout: ms }).then(() => true).catch(() => false)
 
-const input = () => page.locator('.lite-room .nexus-followup-composer input[type="text"]')
-const submitBtn = () => page.locator('.lite-room .nexus-followup-composer button[type="submit"]')
+const input = () => page.locator('.lite-room .nexus-followup-composer [data-composer-input]')
+const submitBtn = () => page.locator('.lite-room .nexus-followup-composer [data-composer-send]')
 
 // ── ⓪ 铺语料（store 只在这一段当搬运工；被测部件全走真键盘）──────────────────────────────
 await page.evaluate(async ({ files, seam }) => {
@@ -345,7 +345,11 @@ await page.waitForTimeout(600)
 const afterLeave = await page.evaluate((seam) => ({
   turns: (window[seam].getState().turns ?? []).length,
   domTurns: document.querySelectorAll('.lite-room-turn').length,
-  empty: document.querySelectorAll('.nexus-empty .nexus-empty-composer-wrap form').length,
+  // #75 改判：空态不再有 `.nexus-empty-composer-wrap` 这层壳（docked composer 三态统一后
+  // 它整个退役）。语义也顺势正名——原来的变量名 `empty` 暗示「空态是一棵独立的树」，
+  // 现在空态与对话态是同一棵树，区别只在 turns 有没有。判据换成「零轮 + composer 在场」。
+  emptyBoard: document.querySelectorAll('.lite-room-board[data-room-turns="0"]').length,
+  composer: document.querySelectorAll('.lite-room > .nexus-followup-composer').length,
   ask: window[seam].getState().ask !== null,
   askCard: document.querySelectorAll('.lite-room-ask').length,
   storageHit: Object.keys(window.localStorage)
@@ -355,7 +359,8 @@ const afterLeave = await page.evaluate((seam) => ({
     }),
 }), SEAM)
 rec('⑥ 离开再回来＝这场对话结束（turns 清空、屏上回到空态）',
-  afterLeave.turns === 0 && afterLeave.domTurns === 0 && afterLeave.empty === 1,
+  afterLeave.turns === 0 && afterLeave.domTurns === 0 &&
+  afterLeave.emptyBoard === 1 && afterLeave.composer === 1,
   JSON.stringify(afterLeave))
 rec('⑥ #72 · 受保护的快问卡也随对话散场（clearTurns 清 ask——卡不跨场复活成假"此刻"）',
   !afterLeave.ask && afterLeave.askCard === 0, JSON.stringify(afterLeave))

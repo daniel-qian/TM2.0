@@ -657,7 +657,13 @@
       const text = composer.innerText || '';
       // Main ask input first (.composer-main-row) — `input[type="text"]` alone misses inputs
       // with no explicit type attribute (caught live on the S2 gate run, 2026-07-08).
-      const input = composer.querySelector('.composer-main-row input, textarea, input[type="text"]');
+      // 🔴 #75 (2026-08-09): the untyped `input` clause is now a trap, not a safety net.
+      //    querySelector picks the first node in DOCUMENT order that matches ANY clause,
+      //    not the first clause that matches. The room composer now carries a hidden
+      //    `<input type="file">` for attachments, so a bare `input` clause can select the
+      //    file picker instead of the prose control. Prefer the explicit hook.
+      const input = composer.querySelector(
+        '[data-composer-input], .composer-main-row textarea, .composer-main-row input[type="text"], textarea, input[type="text"]');
       const prefill = input ? (input.value || input.placeholder || '') : '';
       const storyHits = STORY_NOUNS.filter((n) => text.includes(n) || prefill.includes(n));
       const out = { prefill, storyHits, pass: storyHits.length === 0 };
@@ -685,8 +691,16 @@
         await poll(() => ($('.lite-room .nexus-followup-composer') ? true : null), 6000, 'room composer to mount');
         composer = $('.lite-room .nexus-followup-composer');
       }
+      // 🔴 #75 (2026-08-09): the trailing bare `input` clause used to be the fallback of last
+      //    resort; it is now the most likely way to grab the WRONG node. querySelector returns
+      //    the first match in DOCUMENT order across all clauses, and the room composer now
+      //    carries a hidden `<input type="file">`. Writing a string through the
+      //    HTMLInputElement value setter (below) onto a file input throws InvalidStateError,
+      //    and nothing here catches it — composerAskLive() would reject outright rather than
+      //    return pass:false. Explicit hook first, no untyped `input` clause at all.
       const input =
-        composer && composer.querySelector('.composer-main-row input, textarea, input[type="text"], input');
+        composer && composer.querySelector(
+          '[data-composer-input], .composer-main-row textarea, .composer-main-row input[type="text"], textarea, input[type="text"]');
       const form = input ? input.closest('form') : null;
       if (!input || !form) {
         return (results.composerLive = { pass: false, error: 'no composer input/form to drive' });
@@ -1790,10 +1804,10 @@
         if (roomBtn) {
           roomBtn.click();
           try {
-            await poll(() => ($('.nexus-followup-composer input') ? true : null), 6000, 'room composer to mount');
+            await poll(() => ($('.nexus-followup-composer [data-composer-input]') ? true : null), 6000, 'room composer to mount');
           } catch (e) { /* fall through */ }
-          const input = $('.nexus-followup-composer input');
-          const send = $('.nexus-followup-composer button[type="submit"]');
+          const input = $('.nexus-followup-composer [data-composer-input]');
+          const send = $('.nexus-followup-composer [data-composer-send]');
           composerHint = input ? (input.getAttribute('placeholder') || '') : '';
           composerValue = input ? input.value : '';
           sendDisabled = !!(send && send.disabled);
@@ -2202,10 +2216,10 @@
       let composerValue = '';
       let sendDisabled = false;
       try {
-        await poll(() => ($('.lite-room') && $('.nexus-followup-composer input') ? true : null), 6000, 'room + composer to mount');
+        await poll(() => ($('.lite-room') && $('.nexus-followup-composer [data-composer-input]') ? true : null), 6000, 'room + composer to mount');
         switchedToRoom = true;
-        const input = $('.nexus-followup-composer input');
-        const send = $('.nexus-followup-composer button[type="submit"]');
+        const input = $('.nexus-followup-composer [data-composer-input]');
+        const send = $('.nexus-followup-composer [data-composer-send]');
         composerHint = input ? (input.getAttribute('placeholder') || '') : '';
         composerValue = input ? input.value : '';
         sendDisabled = !!(send && send.disabled);
@@ -2637,8 +2651,8 @@
       this._clickTab('Ask Avery');
       let runOk = false;
       try {
-        await poll(() => ($('.nexus-followup-composer input') ? true : null), 6000, 'room composer to mount');
-        const input = $('.nexus-followup-composer input');
+        await poll(() => ($('.nexus-followup-composer [data-composer-input]') ? true : null), 6000, 'room composer to mount');
+        const input = $('.nexus-followup-composer [data-composer-input]');
         const form = input.closest('form');
         this._setInput(input, 'How does the pilot look this week?');
         if (typeof form.requestSubmit === 'function') form.requestSubmit();

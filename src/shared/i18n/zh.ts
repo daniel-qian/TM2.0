@@ -289,6 +289,11 @@ export const zh: Dict = {
     "liveRunning": "正在思考…",
     "liveReady": "分析好了，可以看了",
     "liveError": "暂时连不上，再试一次？",
+    // ⚠ HAND-WRITTEN, act-first（#75 · 议事室停止生成）：manager 自己按停之后的状态词。
+    // 与 liveReady 互斥——改造前中止被收成 complete，屏上会写「分析好了，可以看了」，
+    // 而他刚亲手按停。措辞刻意只说「没答完」，不说「已省下」：后端对客户端断开零处理，
+    // 当前那一步 LLM 调用照样跑完，说省下就是撒谎。
+    "liveInterrupted": "已停止，这轮没答完",
     "askPlaceholder": "向你的团队提问…",
     "ask": "提问"
   },
@@ -1087,6 +1092,26 @@ export const zh: Dict = {
     "roomFlowCitesLabel": "它引用的原文",
     "roomFlowUnresolved": "没对上真实的原文行",
     "roomFlowFailed": "这一趟中途断了，没走完。展开原始流可以看到断在哪一步。",
+    // ⚠ HAND-WRITTEN, act-first（#75 · 议事室 Claude 化 + #73 现场附件）：
+    // 新部件的新键。停止生成一族（roomStop*/roomFlowInterrupted）+ 附件一族（roomAttach*）。
+    // 🔴 所有 *Aria 值必须纯中文：verify-aria-zh 判「≥2 个连续拉丁词、或单个长度≥4 的拉丁词」
+    //    即红，白名单只有 Avery|demo。所以「Enter / Shift」这类键名一个字都不许进 aria。
+    // 与 roomFlowFailed 分开写而不是共用一句：断流是「它断了」，中断是「你按的」，
+    // 把两件事说成同一句会让人以为自己按停时系统出了故障。
+    "roomFlowInterrupted": "你按了停止，分析停在这里了。",
+    "roomStopLabel": "停止",
+    "roomStopAria": "停止本次生成",
+    "roomAttachAria": "上传文件一起问",
+    "roomAttachRowAria": "这一问带上的文件",
+    // 100 到 120 秒是实测区间，所以说「一两分钟」而不是「马上好」。
+    "roomAttachBusy": "正在读，大概要一两分钟",
+    "roomAttachFailed": "这份文件没读进来",
+    // 移除只是「这一问不引用它」——文件已经进资料库了，删文件是另一回事（#77）。
+    // 措辞照这个事实写，别让人以为按 × 就撤销了上传。
+    "roomAttachRemoveAria": "这一问不引用 {label}",
+    "roomAttachTooMany": "一次最多传 {max} 个文件",
+    "roomAttachTooLarge": "{name} 超过 {max}，传不了",
+    "roomAttachBatchTooLarge": "这一批加起来超过 {max}，传不了",
     "bellAria": "通知",
     "bellTitle": "收到的消息",
     "bellEmpty": "还没有。文件读完了，或 Avery 想完了一轮，都会落到这里。",

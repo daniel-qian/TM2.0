@@ -3,14 +3,16 @@ import { useLite } from './store'
 import { useDict } from '../shared/i18n/useDict'
 import { useCurrentScreen } from './routes'
 import { AskRefComposer } from './AskRefComposer'
-import { encodeRefsParam, type AskRef } from './askRefs'
+import { toWireRefs, weaveRefs, type AskRef } from './askRefs'
 
 // 棒F · 悬浮「问 Avery」入口（布局与真部件战役 2026-07-22 · Danny 拍板命名）。
 //
 // 裁决（battle-map §2.3）：不移/不复制 LiteComposer。用 goScreen 中继链——输入问题 →
 // goScreen('room', { q }) → 现成中继把它预填进议事室 composer（routes.ts:115 EPHEMERAL_PARAMS
 // → Lite2App useRoomQueryRelay → flowStore.composerDraft → RoomScreen initialValue）。
-// 🔴 只预填不自动发（Lite2App.tsx:195「不自动发问、不伪造回答」）。transport 零改动。
+// ~~🔴 只预填不自动发~~ **已于 #75（2026-08-09）推翻**：按钮上写着发送、做的却是搬运，
+// 一个问题要按两次。现在 submit() 直接 askLive 进房（见下方 submit）。`q` 正文中继链本身
+// 一行没动——决策卡等**别的**入口仍然走它，只是胶囊不再用它了。
 //
 // 🔴 硬约束（逐条来自 battle-map §棒F / plan §5）：
 //   · 挂载：Lite2App 里 .scene-stage 的兄弟、.lite2-shell 的直接子元素——绝不进屏组件内部
@@ -52,6 +54,7 @@ export function AskAveryLauncher() {
   const l = t.lite2
   const contextId = useLite((s) => s.contextId)
   const goScreen = useLite((s) => s.goScreen)
+  const askLive = useLite((s) => s.askLive)
   const screen = useCurrentScreen()
 
   const [open, setOpen] = useState(false)
@@ -76,10 +79,19 @@ export function AskAveryLauncher() {
   //     LiteComposer 退役后，team 屏的提问入口就是本胶囊，不再收起。
   if (screen === 'room') return null
 
+  // ── #75 · 胶囊即发（推翻 battle-map §2.3 / Lite2App:195 的「只预填不自动发」）─────────
+  // 病根（recon §4-3）：经理在胶囊里打完**整个问题**、按了发送键「→」，落到议事室却只是
+  // 预填，还得再按一次「提问」。一个问题两次发送，新手必懵——按钮上写着发送，做的却是搬运。
+  // #69 那条拍板（「提示不是替 manager 打的字」）没有被破：胶囊里的字本来就是他自己打的原话，
+  // 走的是 `q` 正文通道，语义正是「这是我要问的」。改的只是**兑现**它。
   function submit(text: string, refs: AskRef[]) {
-    // 中继：goScreen('room',{q,refs}) → useRoomQueryRelay 把两者灌进 composerDraft（只预填
-    // 不自动发）。refs 空时**整参不挂**（carrySearch 对 null 是删除语义），URL 不多一个空键。
-    goScreen('room', { q: text, refs: refs.length > 0 ? encodeRefsParam(refs) : null })
+    // 先切屏再发问：两个都是同一拍里的同步调用，React 一起 flush，RoomScreen 挂载时
+    // turns 里已经有这一轮了。反过来先发后切也能work，但万一导航被拦，人会停在原屏而
+    // 屏外有一条看不见的流在跑。
+    goScreen('room')
+    const situation = weaveRefs(text, refs, l.refWeavePrefix, l.refWeaveSeparator)
+    if (refs.length > 0) askLive({ situation, references: toWireRefs(refs) }, text)
+    else askLive({ situation }, text)
     setOpen(false)
   }
 

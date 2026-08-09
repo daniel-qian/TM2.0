@@ -223,6 +223,10 @@ export function initNotifications() {
     }
 
     // ② run 完成——议事室把这一轮想完了。
+    // 🔴 #75 · 判据是**白名单**（只认 'complete'），别改成 `!== 'running'` 之类的反向写法：
+    //    新增的 'interrupted' 终态（manager 自己按了停止）必须**不响**——他人就在屏前，
+    //    刚亲手按停，再弹一条「议事室的解读好了」是双重撒谎（既没好，也不用通知）。
+    //    改造前这里会真响一声，因为中止那时被收成了 complete。
     if (prev.run.status === 'running' && state.run.status === 'complete') {
       notify._push('run')
     }

@@ -469,27 +469,17 @@
   display: none;
 }
 
-/* ── The room 空态 composer 不再盖住描述文字（试玩 bug：空态 UI 重叠）───────────
-   空态复用了 .nexus-followup-composer——它默认 position:absolute; left:16px; bottom:20px
-   （run 态锚场景底用）。塞进 .nexus-empty 卡（本身 absolute）后，composer 绝对定位到卡底、
-   盖住正常流里的 h2/subtitle。空态里让它回到正常流、卡内自然堆叠。
-   仅作用于 lite 空态包裹（.nexus-empty-composer-wrap 是 lite 专有）——run 态 composer
-   （在包裹之外）仍绝对锚底，story 的 followup composer 一律不受影响。 */
-.lite2-shell .nexus-empty-composer-wrap {
-  margin-top: 18px;
-  /* #66 · 空态包含块修复：下面那条 static 让 @ 弹层（absolute）的包含块误落到
-     `.nexus-empty`（40-nexus-empty absolute+transform）——`bottom:calc(100%+8px)` 算的是
-     整张空态卡，弹层与输入框脱节。wrap 补 relative（无偏移零几何变化）把锚拉回输入框本体；
-     🔴 那条 static 本身别动，它保的是空态文案不被 composer 盖住（本段注释头的历史理由）。 */
-  position: relative;
-}
+/* ── ⛔ 已退役（#75，2026-08-09）· 原「The room 空态 composer 不再盖住描述文字」段 ──
+   这里曾有 `.nexus-empty-composer-wrap` 的两条规则：把 composer 从 story 空态卡的
+   absolute 里拽回正常流、再补一个 relative 把 @ 弹层的包含块拉回输入框本体（#66）。
 
-.lite2-shell .nexus-empty-composer-wrap .nexus-followup-composer {
-  position: static;
-  left: auto;
-  bottom: auto;
-  width: 100%;
-}
+   整段连同那个包裹一起没了，因为**病根被拔掉了**：空态不再复用 story 的 `.nexus-empty`
+   居中卡，空态与对话态现在是同一棵树（滚动区 + 屏底常驻 composer，见文件尾 #75 room 段）。
+   composer 只剩一套几何，也就不需要「先绝对定位再解除」这一层来回。
+
+   留这段碑不是怀旧：`.nexus-empty-composer-wrap` 这个类名当时被两道门当**空态自证**用
+   （at-references:511、room-conversation:348），同批已改判到 `[data-room-composer]` +
+   `[data-room-turns="0"]`。谁要是把它加回来，先去看那两处判据。 */
 
 /* ── 顶栏 mode 开关（Story/Live）补样式（S4 · 试玩 bug 5「按钮风格丢失」）──────
    根因：`.mode-switch-btn` 由 feat-017（fae493f，WIP 被 session limit 截断）引入却
@@ -8191,9 +8181,13 @@
    （absolute left:16 bottom:20）。空态分支有 .nexus-empty-composer-wrap 拉回正常流
    （本文件 482），run 态分支漏了——于是有对话后 composer 掉回左下角孤零零一小条。
    基类是 story/v1 共用的冻结面，不动 55-ask-composer.css，只在 lite2 壳内覆盖。
-   选择器用 `>`：run 态 composer 是 .lite-room 直接子元素（滚动区外，门盯着这个结构），
-   空态的在 .nexus-empty 里层级更深，不受此规则影响。
-   宽度对齐 board 内容列（900px - 2×36 padding），让位页脚与胶囊同式。 */
+   选择器用 `>`：composer 是 .lite-room 直接子元素（滚动区外，门盯着这个结构）。
+   宽度对齐 board 内容列（900px - 2×36 padding），让位页脚与胶囊同式。
+
+   ⚠ #75（2026-08-09）更新：上面那句「空态分支有 .nexus-empty-composer-wrap 拉回正常流、
+   run 态漏了」的历史已经作废——空态与对话态合一后，**两态走的都是这条规则**，
+   `.nexus-empty-composer-wrap` 整个退役（见本文件 472 那块碑）。这条从「run 态归位」
+   升级成了 composer 的唯一几何来源，动它就是同时动两态。 */
 .lite2-shell .lite-room > .nexus-followup-composer {
   left: 50%;
   transform: translateX(-50%);
@@ -8756,4 +8750,329 @@
 .lite2-shell .lite-ref-chip .lite-composer-remove:focus-visible {
   color: var(--ink);
   background: rgba(var(--lite2-ink-rgb), 0.08);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════════
+   #75 · 议事室 Claude 化 + #73 现场附件（2026-08-09 · redesign-0808 wave 1 / S1）
+   ═══════════════════════════════════════════════════════════════════════════════════
+   本段是 room 改版的**唯一新增落点**（APPEND-ONLY 纪律：本块在文件尾，同权重后写者胜）。
+   被它替掉的两处旧规则各自留了碑：`.nexus-empty-composer-wrap` 那块（本文件 472 一带）
+   与 #45 段 `.lite-room > .nexus-followup-composer` 的注释。
+
+   ── 顺手记两笔既有样式债（本票不改取值，改值＝改视觉，归 #79 那一波）──────────────
+   ① `--lite2-bottom-band` 是个**幽灵 token**：全文件没有任何一处 `--lite2-bottom-band:`
+      赋值行，三处消费全都只走 `var(..., 120px)` 的兜底，也就是说它恒等于硬编码 120px。
+      谁哪天真给它赋了值，会同时挪动三个屏的滚动口下边界。
+   ② `--lite2-clear-top` 的 ≤860 覆盖写了两遍：早段那条 72px 已被后段那条 24px
+      **静默架空**（同选择器同媒体查询同特异性，后写者胜），只是没人删。 */
+.lite2-shell .lite-room {
+  /* 会话流内容列宽 = board 的 max-width(900) 减两侧 padding(36×2)。composer 与内容列同宽，
+     「输入的地方」和「读到的地方」才在同一条竖线上。 */
+  --lite2-room-col: min(828px, calc(100vw - 48px));
+  /* composer 与页脚之间的呼吸。 */
+  --lite2-room-composer-gap: 12px;
+  /* 滚动区底部要给 composer 留出的量。⚠ 这是**估值不是实测**：composer 会因为附件预览行
+     与多行输入长高。room-usability 有一条判据量的正是「滚到底时卡尾有没有被 composer
+     压住」——它是这个数字的真裁判，改小了它会红。 */
+  --lite2-room-dock-clear: 168px;
+}
+
+/* ── docked composer：空态与对话态同一份几何 ──────────────────────────────────────── */
+.lite2-shell .lite-room > .nexus-followup-composer {
+  width: var(--lite2-room-col);
+  bottom: calc(var(--lite2-footer-h, 56px) + var(--lite2-room-composer-gap));
+  /* 多了附件行/多行文本之后 composer 会长高，内部改成可换行的横排 + 控件贴底。
+     `align-items: end` 让按钮贴着 textarea 的最后一行，而不是随文本长高飘到中间。 */
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 8px;
+}
+
+/* board 底部让位跟着 token 走（原来是写死的 150）。 */
+.lite2-shell .lite-room-board {
+  padding-bottom: var(--lite2-room-dock-clear);
+}
+
+/* ── 空态开场块：在滚动区内，不再是 story 的 absolute 居中卡 ────────────────────────
+   改造前这里是 `.nexus-empty`（40-nexus-empty.css: absolute; top:42%; translate(-50%,-50%)），
+   composer 塞在卡里，第一问发出去整屏重排。现在它就是 board 里的第一块内容，
+   发问＝往同一个容器追加，composer 一个像素都不动。
+   🔴 刻意**不做垂直居中**：居中会让「发第一问」时开场块从屏中跳到顶部——那正是这一票
+   要消灭的那种跳变，只是换了个部件在跳。 */
+.lite2-shell .lite-room-welcome {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 8px;
+}
+
+.lite2-shell .lite-room-welcome h2 {
+  margin: 0;
+  font-family: var(--lite2-heading-font, inherit);
+  font-size: 26px;
+  line-height: 1.25;
+  color: var(--ink);
+}
+
+.lite2-shell .lite-room-welcome > p {
+  margin: 0;
+  max-width: 62ch;
+  color: var(--ink-soft, var(--ink));
+}
+
+.lite2-shell .lite-room-welcome .lite-room-chips {
+  margin-top: 8px;
+}
+
+/* 🔴 人眼过逮到的：基座 `.lite-room-chip-row` 是 `justify-content:center; max-width:640px;
+   margin:0 auto`——那是**给 story 那张居中空态卡写的**。现在开场块是左对齐的文档流内容，
+   标题/正文贴左、chips 却居中，桌面上是别扭，390px 手机上直接在左边留出一大条空档。
+   #72 的追问 chips 早就为同一个理由覆盖过一次（本文件 3018 一带），这里是第二个用户。 */
+.lite2-shell .lite-room-welcome .lite-room-chip-row {
+  justify-content: flex-start;
+  max-width: none;
+  margin: 0;
+}
+
+/* ── 多行输入 ────────────────────────────────────────────────────────────────────── */
+.lite2-shell .nexus-followup-composer textarea {
+  flex: 1 1 240px;
+  min-width: 0;
+  /* 一行起步，随内容长高；封顶后内滚。🔴 168 与 AskRefComposer.tsx 的
+     TEXTAREA_MAX_HEIGHT 同值——改一处必须同步另一处（同 LIST_MAX_HEIGHT ↔
+     .lite-ref-picker-list 的既有双份义务）。 */
+  max-height: 168px;
+  overflow-y: auto;
+  resize: none;
+  line-height: 1.5;
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  outline: none;
+  padding: 6px 0;
+}
+
+/* ── composer 里的两枚新按钮（附件 / 停止）────────────────────────────────────────
+   ⚠ verify-button-family：`.lite2-shell` 下每个可见 <button> 要么挂 .lite-btn 族类、
+   要么进白名单。这两枚都挂了 `.lite-btn .lite-btn--ghost`，所以白名单不用动。 */
+.lite2-shell .lite-composer-attach,
+.lite2-shell .lite-composer-stop {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 34px;
+}
+
+.lite2-shell .lite-composer-attach {
+  width: 34px;
+  padding: 0;
+  border-radius: 999px;
+}
+
+.lite2-shell .lite-composer-attach:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.lite2-shell .lite-composer-attach-icon {
+  display: block;
+}
+
+/* 停止键：ghost 壳 + danger 描边。它是「打断」不是「危险操作」，所以只借颜色不借实心填充。 */
+.lite2-shell .lite-composer-stop {
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(var(--lite2-danger-rgb), 0.5);
+  color: rgba(var(--lite2-danger-rgb), 0.95);
+}
+
+.lite2-shell .lite-composer-stop:hover,
+.lite2-shell .lite-composer-stop:focus-visible {
+  background: rgba(var(--lite2-danger-rgb), 0.1);
+}
+
+/* ── #73 · 附件预览 ────────────────────────────────────────────────────────────────
+   🔴 类名与属性族**零射程重叠**于 `.lite-room-chip`（room-nomaterial 数 4）与
+   `[data-followup-chip]`（room-conversation 数 2）。视觉做成同款胶囊没问题，
+   但一定要另起类名——蹭一下就把那两套计数判据撑破了。 */
+.lite2-shell .lite-attachment-row {
+  flex: 1 1 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  order: -2;
+}
+
+.lite2-shell .lite-attachment-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 3px 6px 3px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: rgba(var(--lite2-surface-rgb), 0.7);
+  font-size: 13px;
+}
+
+.lite2-shell .lite-attachment-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 22ch;
+}
+
+.lite2-shell .lite-attachment-note {
+  color: var(--ink-soft, var(--ink));
+  opacity: 0.75;
+}
+
+/* 读取中：不转圈。转圈在这儿是撒谎——它暗示「快好了」，而实测要一两分钟。
+   虚线边就够说明「还没定下来」。 */
+.lite2-shell .lite-attachment-pill.is-uploading {
+  border-style: dashed;
+}
+
+.lite2-shell .lite-attachment-pill.is-failed {
+  border-color: rgba(var(--lite2-danger-rgb), 0.55);
+  color: rgba(var(--lite2-danger-rgb), 0.95);
+}
+
+.lite2-shell .lite-attachment-error {
+  flex: 1 1 100%;
+  order: -1;
+  margin: 0;
+  font-size: 13px;
+  color: rgba(var(--lite2-danger-rgb), 0.95);
+}
+
+/* ── #75 · 中断态说明（与 .lite-flow-failed 同族，措辞与颜色都不同）────────────────
+   断流是「它断了」（failed，报错色）；中断是「你按的」（stopped，中性色）——
+   把中断也染成报错色，等于告诉经理他自己的操作让系统出了故障。 */
+.lite2-shell .lite-flow-stopped {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--ink-soft, var(--ink));
+}
+
+/* ── #75 · 回答里的 markdown ────────────────────────────────────────────────────── */
+.lite2-shell .lite-md {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.lite2-shell .lite-md-p {
+  margin: 0;
+  /* 单个换行在聊天语境里是有意义的（渲染器刻意不折叠它），靠这条把它显示出来。 */
+  white-space: pre-wrap;
+}
+
+.lite2-shell .lite-md-heading {
+  margin: 4px 0 0;
+  font-family: var(--lite2-heading-font, inherit);
+  font-size: 16px;
+  line-height: 1.4;
+}
+
+.lite2-shell .lite-md-list {
+  margin: 0;
+  padding-left: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.lite2-shell .lite-md-code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(var(--lite2-ink-rgb), 0.07);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.92em;
+}
+
+.lite2-shell .lite-md-pre {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(var(--lite2-ink-rgb), 0.06);
+  /* 长代码横向自己滚，绝不把整个回答卡撑宽。 */
+  overflow-x: auto;
+}
+
+.lite2-shell .lite-md-pre code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  white-space: pre;
+}
+
+.lite2-shell .lite-md-quote {
+  margin: 0;
+  padding-left: 12px;
+  border-left: 2px solid var(--rule);
+  color: var(--ink-soft, var(--ink));
+  white-space: pre-wrap;
+}
+
+.lite2-shell .lite-md-link {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* 表格自己横滚（同 #61 花名册表格的既有口径）。 */
+.lite2-shell .lite-md-table-wrap {
+  overflow-x: auto;
+}
+
+.lite2-shell .lite-md-table {
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.lite2-shell .lite-md-table th,
+.lite2-shell .lite-md-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--rule);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.lite2-shell .lite-md-table th {
+  font-weight: 600;
+}
+
+/* ── ≤860 手机态 ────────────────────────────────────────────────────────────────
+   ⚠ 这段的前提是**读码推断，不是结论**：`.scene` 在窄屏转 position:relative、
+   min-height:1500px，absolute 家具锚的是那 1500px 而不是视口。按「包含块/裁剪必须浏览器
+   实测」的纪律，实测结果记在回执里，不靠这段注释背书。 */
+@media (max-width: 860px) {
+  .lite2-shell .lite-room {
+    --lite2-room-col: calc(100vw - 32px);
+    --lite2-room-dock-clear: 148px;
+  }
+
+  .lite2-shell .lite-room-welcome h2 {
+    font-size: 22px;
+  }
+
+  .lite2-shell .lite-attachment-name {
+    max-width: 14ch;
+  }
+
+  /* 🔴 人眼过逮到的（390×844 实拍）：桌面那套「textarea + 附件 + 发送」单行排版在窄屏会
+     换行崩掉——textarea 的 `flex: 1 1 240px` 基准加两枚按钮塞不进 358px，于是发送键被挤到
+     第二行**左下角**，看着像坏了。窄屏改成公认的两行：正文占满一行，控件另起一行**靠右**。
+     靠右靠的是给第一枚控件 `margin-left:auto`（换行之后它是那一行的第一个 flex item）。 */
+  .lite2-shell .nexus-followup-composer textarea {
+    flex: 1 1 100%;
+  }
+
+  .lite2-shell .lite-composer-attach {
+    margin-left: auto;
+  }
 }

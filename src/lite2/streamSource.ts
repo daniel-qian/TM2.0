@@ -86,7 +86,14 @@ export interface LiteAdvice {
 
 // 一次 live 运行的快照（LiveAgentSource 逐事件累积，供终端 + 卡渲染）。
 export interface LiveRunState {
-  status: 'idle' | 'running' | 'complete' | 'error'
+  // #75 · 'interrupted' = manager 自己按了停止。**刻意不复用 'complete'**：
+  // 被砍掉的一轮在会话流里如果标成 complete，就是一条「看着答完了其实被砍了」的假记录。
+  // 为什么是加枚举值而不是加一个 `interrupted: boolean` 旁挂字段：后者是 fail-open——
+  // 十几处 `=== 'complete'` 的消费者会原样把被砍的一轮当答完的一轮（铃铛照响、HUD 照说
+  // 「分析好了」、四相照封 done、chips 照渲染），你仍得逐处补 `&& !interrupted`，
+  // 编辑面一样大，但漏掉一处的后果是**继续撒谎**。加枚举值漏掉一处的后果是「少显示一点」，
+  // 方向是安全的。
+  status: 'idle' | 'running' | 'complete' | 'interrupted' | 'error'
   lines: LiteStreamLine[] // 逐拍累积的终端流行
   advice: LiteAdvice | null // manifest.advice（契约 payload）——ready 后填
   // 0729/03 分流短答：manifest.answer_kind='answer' 时的一段话直答（与 advice 互斥）。
@@ -174,19 +181,46 @@ export function createLiveAgentSource(transport: LiveTransport): LiveAgentSource
           emit()
         },
         (error) => {
-          if (error) {
-            state.status = 'error'
-            state.error = error.message
-          } else if (state.status !== 'error' && state.status !== 'complete') {
-            // 流正常结束但没 manifest（罕见）——收成 complete，避免卡在 running。
-            state.status = 'complete'
+          // 🔴 #75 · 黑名单改白名单。这一行是「假 complete」的确切出生地：
+          //    原来问的是「还没落成 error/complete 吗」，于是任何**没带 error 的收尾**都被
+          //    收成 complete——而 transport 的 abort 恰好就走「无 error 的 onDone」
+          //    （transport.ts:1201-1207，判据是 controller.signal.aborted）。两条纪律一叠，
+          //    按下停止就成了「答完了」。改成只有**还在跑**的流才由 onDone 落定，
+          //    任何已落定的终态（complete / error / interrupted）都不再被覆写。
+          //    变异靶子：把它改回 `!== 'error' && !== 'complete'`，中止判据必红。
+          if (state.status === 'running') {
+            if (error) {
+              state.status = 'error'
+              state.error = error.message
+            } else {
+              // 流正常结束但没 manifest（罕见）——收成 complete，避免卡在 running。
+              state.status = 'complete'
+            }
           }
           // feat-059：流收尾后没有活着的相位（在跑的那一相封成 done；从没亮过的保持 pending）。
+          // interrupted 走的是与 error 同一档待遇：refreshPhases:342 只对 complete 封 done，
+          // 所以被砍那一相**留在 active**——它确实没跑完，不给它盖成功章。
           sealPhases(state)
           emit()
         },
       )
-      return handle
+      // #75 · 中止要由 source 自己记账，不能等 transport 那条通道告诉我们。
+      // 两个理由：① onDone 的契约只有「完了 / 炸了」两态，没有「被砍了」；
+      // ② stubTransport 的 abort 一次 onDone 都不调（stubTransport.ts:278-283），
+      //    真 HTTP 通道 abort→假 complete、stub 通道 abort→永久 running，两条路今天对不上。
+      //    在这里同步落一帧，两条通道就都对了。
+      return {
+        abort: () => {
+          if (state.status === 'running') {
+            state.status = 'interrupted'
+            // 不是 sealPhases 的语义差别：这里同样只调 refreshPhases，在跑的那一相留 active。
+            refreshPhases(state)
+            // 同步 emit，抢在 transport 那个微任务之前把诚实终态落到界面上。
+            emit()
+          }
+          handle.abort()
+        },
+      }
     },
   }
 }

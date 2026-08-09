@@ -170,6 +170,10 @@ export const en = {
     liveRunning: 'Thinking…',
     liveReady: 'The read is ready',
     liveError: 'Something went wrong reaching the room.',
+    // #75 · Stop generating. Deliberately says "did not finish", not "saved you a call":
+    // the backend does not watch for client disconnect, so the LLM step already in flight
+    // still runs to completion. Claiming a saving here would be a lie.
+    liveInterrupted: 'Stopped before it finished',
     askPlaceholder: 'Ask about your team…',
     ask: 'Ask',
   },
@@ -1497,6 +1501,24 @@ export const en = {
     // Honest failure state inside the flow panel itself (feat-059 review finding 4): when the
     // stream breaks mid-run the simplified view must say so, not leave a phase silently stalled.
     roomFlowFailed: 'This run broke off partway and never finished. Open the raw stream to see where.',
+    // #75 + #73 · New parts: stop-generating family and inline-attachment family.
+    // Kept separate from roomFlowFailed on purpose: a broken stream is "it failed",
+    // an interrupted one is "you stopped it". Saying both with one sentence would make
+    // people think their own stop button caused a fault.
+    roomFlowInterrupted: 'You stopped this. The analysis ends here.',
+    roomStopLabel: 'Stop',
+    roomStopAria: 'Stop generating this answer',
+    roomAttachAria: 'Attach a file to this question',
+    roomAttachRowAria: 'Files attached to this question',
+    // 100 to 120 seconds measured, so say "a minute or two" rather than "almost done".
+    roomAttachBusy: 'Reading it, usually a minute or two',
+    roomAttachFailed: 'This file could not be read',
+    // Removing only drops the reference from this question. The file is already in the
+    // library; deleting files is a separate thing (#77). Word it to match that fact.
+    roomAttachRemoveAria: 'Do not reference {label} in this question',
+    roomAttachTooMany: 'Up to {max} files at a time',
+    roomAttachTooLarge: '{name} is over {max} and cannot be sent',
+    roomAttachBatchTooLarge: 'This batch adds up to more than {max} and cannot be sent',
 
     // ── Notification bell (feat-045, PRD F5 — REAL events only; zero hardcoded items; copy
     // never names an employee) ──
