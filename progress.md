@@ -14,7 +14,8 @@
   回执三份：`.issues/redesign-0808/receipt-76-77-74-files.md`（S2）·
   `receipt-75-room-claude.md`（S1）· **`receipt-78-threads.md`（S3）**；
   开工裁定 `design-78-threads.md`。
-  `main...origin/main` **ahead 63**，**没有 push**（见 Blockers）。
+  `main...origin/main` **ahead 60+**，**没有 push**（见 Blockers）。
+  ⚠ 别在这儿写死数字——它每提交一次就自己作废。要数就跑：`git rev-list --count origin/main..HEAD`。
 - **像素基线现状**：两套共 52 张（room 4 + files 4 + 其余）。**#78 对着主检出真基线比对：8/8 绿、
   50 张 md5 逐字节一致**（比对前后各存一次全表 md5 做 diff ＝ 真比对不是首写）。
   🔴 **但那个「零漂移」是判据够不着**：`visual.spec.mjs` 的 room 四张采的是 `contextId===null`
@@ -144,7 +145,8 @@ null-owner **15/0（真跑到了）** · visual **8/8 · 50 张 md5 未变** · 
 ## Blockers / Risks
 
 - 无硬 blocker。
-- 🟠 **别单独 push main**（ahead 63）：前端 push 即自动上产、后端容器要人手换，同窗口做。
+- 🟠 **别单独 push main**（ahead 60+，实数跑 `git rev-list --count origin/main..HEAD`）：
+  前端 push 即自动上产、后端容器要人手换，同窗口做。
 - 🔴 **像素基线目录是 gitignored**（`.gitignore:34`），**每棵树各一份**：worktree 里那份是空的，
   在 worktree 跑 visual = 首写，证明不了任何事。#78 的真比对做法：**在主检出 `D:\avery` 跑
   playwright（用它的真基线），用 `VERIFY_BASE` 指向 worktree 的 preview**——两份 spec 都读
