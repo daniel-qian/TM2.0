@@ -3,193 +3,184 @@
 > 📢 本文件是**当前状态快照，整体重写不追加**。历史都在 git（`git log` + 各 `.issues/*/receipt*.md`），别在这儿堆编年史。
 > 启动路径见 `AGENTS.md` Startup Workflow：读本文件 + `feature_list.json`，跑 `./init.sh` 确认绿，再开工。
 
-**Last Updated:** 2026-08-09（**0808 UIUX 重构战役 wave 2 落地**：#78 真线程 —— 带**迁移 0016**。
-仍未 push、未上产）
+**Last Updated:** 2026-08-09（**0808 UIUX 重构战役 wave 3 落地 = 战役四波全部收口**：#79 文案全量批改
++ 像素全量重冻。仍未 push、未上产）
 
 ## Current State
 
-- **git**：`main` = 差距战役八票 + gap2 三票 + 三轮演习批 + #68 + #70 + #69+#71 + #72 + **wave 1 整波**
-  （S2 `702287a`/`b3b56ce`/`3aa77e5`/`021bc58`，S1 `fdfb98e`）。
-  **wave 2 = #78（`2cfe44c`）已 fast-forward 合入 main**（本波单线，无合流冲突）。
-  回执三份：`.issues/redesign-0808/receipt-76-77-74-files.md`（S2）·
-  `receipt-75-room-claude.md`（S1）· **`receipt-78-threads.md`（S3）**；
-  开工裁定 `design-78-threads.md`。
-  `main...origin/main` **ahead 60+**，**没有 push**（见 Blockers）。
-  ⚠ 别在这儿写死数字——它每提交一次就自己作废。要数就跑：`git rev-list --count origin/main..HEAD`。
-- **像素基线现状**：两套共 52 张（room 4 + files 4 + 其余）。**#78 对着主检出真基线比对：8/8 绿、
-  50 张 md5 逐字节一致**（比对前后各存一次全表 md5 做 diff ＝ 真比对不是首写）。
-  🔴 **但那个「零漂移」是判据够不着**：`visual.spec.mjs` 的 room 四张采的是 `contextId===null`
-  的无材料态（历史面板在那里直接 `return null`），`visual-data.spec.mjs` 的 `SCREENS` 压根不含
-  room。**议事室历史面在像素里零覆盖**——#79 全量重冻时值得补一张数据态 room 基线。
+- **git**：`main` = 差距战役八票 + gap2 三票 + 三轮演习批 + #68 + #70 + #69+#71 + #72 +
+  **wave 1 整波**（S2 `702287a`/`b3b56ce`/`3aa77e5`/`021bc58`，S1 `fdfb98e`）+
+  **wave 2 = #78（`2cfe44c`）** + **wave 3 = #79（`38fac66`，fast-forward，无合流冲突）**。
+  回执四份：`receipt-75-room-claude.md`（S1）· `receipt-76-77-74-files.md`（S2）·
+  `receipt-78-threads.md`（S3）· **`receipt-79-copy-sweep.md`（S4）**。
+  ⚠ 别在这儿写死 ahead 数字——它每提交一次就自己作废。要数就跑：
+  `git rev-list --count origin/main..HEAD`。
+- **像素基线现状**：**54 张**（原 50 + #79 新增 4 张议事室数据态）。#79 做的是**真比对 → 全量重冻**：
+  比对时 0 张「snapshot doesn't exist」、基线字节未被比对跑改写；重冻后复跑 **8 passed · 0 首写**。
+  **50/50 全漂**（tab 主名在每一屏顶栏上），漂移清单带「同一份 main 构建连冻两次逐字节一致」的
+  确定性对照，不是噪声。
+  ✅ **「议事室数据态零像素覆盖」已部分解决**：`visual-data.spec` 的 `SCREENS` 加了 `'room'`，
+  拍**有材料 + 零轮次**那一态（无 LLM 方差、无墙钟文案），两条自证防「把无材料态当数据态冻」，
+  born-red 按视口逐个验过（改 h2 或改 chips 标题 → 恰好红这 4 张、其余 50 张一张不红）。
+  🔴 **带轮次的那一态仍无覆盖**，且**刻意不补**：历史面板会印「8月9日 19:52」这种墙钟文案，
+  而判读卡的 confidence/script/metrics/escalation 四段在 mock 语料下根本不渲染——冻它等于
+  把一张**残缺的卡**当满态基线。要补先解决这两件事（详见 receipt-79 §4.4）。
 - **✅ 生产仍停在 08-07 白天那一版**（`main-20260807-190332` = main `99d83f7`）。
-  gap2 三票 + 三轮演习批 + #68 + #70 + #69/#71 + #72 + wave 1 + **wave 2** 都没有上产。
+  gap2 三票 + 三轮演习批 + #68 + #70 + #69/#71 + #72 + **重构战役四波全部**都没有上产。
 - 🔴 **迁移账（上产时按这个来）**：
   - **T9 需要 `0015_form_submissions_auto_key.sql`**（increment-only、`_ensure_schema()` 自动重放）。
-  - **#78 需要 `0016_advise_runs_thread.sql`**（`ADD COLUMN IF NOT EXISTS thread_id` + `(context_id,
-    thread_id, seq)` 索引；**无回填 UPDATE**）。已在本地 throwaway 库 `redesign0808` 真跑过
-    needs_db 115 passed，`\d avery.advise_runs` 见到列与索引、且列**追加在末尾**。
-  - **#77 / #76 / #74 / #75 / #73 都不需要迁移**。
+  - **#78 需要 `0016_advise_runs_thread.sql`**（`ADD COLUMN IF NOT EXISTS thread_id` +
+    `(context_id, thread_id, seq)` 索引；**无回填 UPDATE**）。已在本地 throwaway 库真跑过。
+  - **#79 / #77 / #76 / #74 / #75 / #73 都不需要迁移**（#79 是纯前端 + 门改动）。
   - 判据一句话：**动 dataclass 里被整块 jsonb 装着的字段 → 免迁移；动表的顶层列 → 必须迁移。**
-    #78 就是后者的正面案例。
 - 🔴 **合的都是本地 main，没有 push**。前端 push main 即自动构建上产，push + 换后端容器
   必须在统一上产 session 的**同一个窗口**里做。
 
-## 本轮做完的（2026-08-09 · wave 2 · #78 advise-threads 真线程）
+## 本轮做完的（2026-08-09 · wave 3 · #79 copy-sweep）
 
-回执 `.issues/redesign-0808/receipt-78-threads.md`（含全部行号复核、变异台账、两个门洞的复盘）。
+回执 `.issues/redesign-0808/receipt-79-copy-sweep.md`（含全部行号复核、变异台账、像素三段账、
+人眼过证据 `_px79/`）。
 
-- **迁移 0016**：`advise_runs` 加 `thread_id text`（可空）+ `(context_id, thread_id, seq)` 索引。
-  **不回填**——每次 bootstrap 全量重放，回填＝每次开机全表扫；且给存量行编一个场就是编事实。
-  `NULL`/空串 ⟺ **无场归属**，读侧一律按「自成一场的单轮」呈现。
-- **thread_id 由服务端铸、经 SSE 回传**（贴在 `started` + `manifest` 两帧，additive 顶层键）。
-  **不是**前端自己发 uuid：`references` 有「织进 situation」的文字兜底，thread_id **没有**——
-  老后端忽略这个键时前端会一边显示在续场、一边每问开一场新的，**没有任何信号**。
-  服务端回传就是那条对账通道（没回传 → `store.threadId` 停在 null → 界面老实地每问自成一场）。
-- **新端点** `GET /team/{id}/advise-threads`（平铺那条一个字节不动，它的四条契约测试留作回归网）。
-  🔴 **limit 的单位是「场」不是「行」**：沿用行数上限会把最老那场腰斩成半截对话，
-  而调用方分辨不出「这场只有 3 轮」和「这场有 7 轮只给了 3 轮」。
-- **前端**：`LiteRoomHistory` 从「只读回看抽屉」重写成「按场列表 + 点一场打开」；
-  `hydrateThread`（替换 + busy 闸 + 幂等闸 + 尾轮镜像同步）；`askLive` 条件展开带 thread_id；
-  公司域清理**三抄本**各加 `adviseThreads` / `threadId`。
-- **回灌轮诚实降级**：不渲染四相面板（emptyRunState 四相全 pending 会渲染成 4×「待命」，
-  对一条早就答完的记录是纯假话）· 不挂实时状态条 · 无引用 chips（refs 结构性没落库）·
-  一行「这轮是从历史载入的，当时的分析过程没有留存」· `data-turn-hydrated` 抓手。
-- **三个政策拍板**（票内定并记档）：hydrate **替换**不追加 · 尾轮 running 时**禁点**（两把锁
-  配两条判据）· 同场重复点**幂等**（防的是「把刚问的那轮抹掉」，不是防抖）。
-- **短答路 followups 不补存**（票内裁）：`answer` 列是纯 text，要存就得再加一列或把它改成
-  jsonb（后者打破 advice/answer 互斥这条既有契约）。缺失是可辨的，且 #78 给的正是「直接接着问」。
-  **advice 路的 followups 可以恢复**（在 jsonb 里）——历史场尾轮 advice 路会出 chips、短答路不会。
-- **门**：新门 `verify-room-threads` **40 判据**入册 A 区（A 区 33 → **34**）。**既有门零改判**
-  （`.lite-room-history*` / `adviseRuns` 在既有门里 grep 零命中）。8 条变异逐条独立跑。
-  20 张双视口双皮截图人眼过。
-- **顺手修（都在本票血缘内，各配一道门）**：
-  - `ContextRegistry.clear()` 自 #49 起**漏清 `_advise_runs`**（既有测试每次用新 cid 才没被咬到）。
-  - `test_registry_protocol.py` 的暗区：它只比两个 adapter 互相，**够不着 Protocol 自己**——
-    只改 Protocol、两 adapter 都不改，三条测试全绿。补了一条三方比对，**born-red 验过**。
-  - `verify-null-owner.mjs` 的 `const UI` 写死 5173 → 改成认 `VERIFY_BASE`（缺省不变）。
-    问题不是"跑不到别的端口"，而是**跑到别的树**：本轮 5173 上就是主检出 `D:\avery` 的 preview。
+- **zh.ts 137 键改值 + 2 新键**（必改 34 + 建议改 84 + 见仁见智 6 条 + 零星词族统一）；
+  **en.ts 28 改 + 2 新**。`lite.*`（v01 冻结壳）与 `decisionRules` 块**一个字节没动**。
+  **全程手工 Edit，一个 `scripts/i18n-zh*.mjs` 都没跑**；只读的 `i18n-orphans` 跑了：孤儿 0。
+- **见仁见智 8 条照 Danny 0809 勾选施工（改 6 留 2）**：tabRoom→「对话」/EN `Chat` ·
+  皮肤名→浅色/深色 · 笔记标题（连 eyebrow）· 速读版→摘要 ·「长出来」隐喻族 6 处 · 骨架屏缩短。
+  「快问」词族与页脚合规长句**保留不动**。
+- 🔴 **tabRoom 改名立了一条碑**：**名字引用跟着改，动词短语不改**。
+  改的是「在叫这个屏的名字」的那几条（followupsSourceRoom / homeTodayEmpty /
+  followupsEmptyActive / roomBoardAria / formsBuilderGoesToLibrary）；
+  「去问 Avery」是**动作**不是屏名，悬浮胶囊 `askAveryLabel` 仍叫「问 Avery」——
+  同 Claude 的「产品叫 Claude、导航项叫 Chats、按钮照写 Ask Claude」。
+- **4 个真 bug**（票面 3 个 + 本票新查出 1 个）：
+  ① `formsBuilderGoesToLibrary` 泄漏 v01 tab 名「议事室」；
+  ② `gapFollowupTitle`「多看一眼」旧词族（会永久落 localStorage）；
+  ③ RoomScreen 空态 eyebrow —— **已被 #75 消灭**（删元素不是改字），本票核实后没重复施工，
+     只补了同族漏网的 aria 那半（`roomEmptyAria`）；
+  ④ 🔴 **`gapAskLabel`「直接问本人」是句谎**：`handleGapAsk` 走 `goScreen('room')`，
+     一个字都不会发给那个人。→「去问 Avery」。
+- **两处 recon 归类/转述错误，本票实收并订正**：
+  - `verify-switchers.mjs:74/86` **有两条硬判据直接比对皮肤按钮文本**，recon §4 写的「门不红」是错的。
+  - `team.emptyTitle`「你的团队会在这里长出来」被记成「v01/共享段不动」，
+    **它其实一直渲染在 v02 团队屏 h1 上**（人眼过在重冻的 team 基线里逮到）。
+- **组件层三处**（都为「不动冻结壳」而分叉，先例 `teamEmptyLead ← team.emptyBody`）：
+  新键 `lite2.roomAskPlaceholder` ← `nexus.askPlaceholder`；
+  新键 `lite2.teamEmptyHeadline` ← `team.emptyTitle`；六处陈旧注释与文案对齐。
+- **门连改 6 组，逐条独立变异**：room-claude-rework 的负向针跟着 `liveReady` 改值（M1 42/4，
+  原病根逐字复现）· switchers 两条硬判据（M2/M3 各 26/1）· restart-09 的「找按钮」正则
+  （M5 红在 `look=null`，正是「静默跳过点击→下游假红」那种最难诊断的形态）·
+  snippet 的 v2Boots 期望数组 + 6 处 `_clickTab`（M4 2/1）。
+  另跑三条「证明既有钉子在改写后的新串上仍咬得住」：M7（G9 片段）42/1 · M8（骨架屏零数字）16/1 ·
+  M9b（aria 拉丁门）3/1。
+- **先做了一个「死针探测器」**再动手：抽出所有门文件里的字面量，逐条问「它在 HEAD 的字典值里
+  出现过、改完之后在任何字典值里都不出现了吗」——正向词表版的「改了门不红、门会瞎」。
+  查出 **4 根死针**，与手工分析完全吻合、没有第五根。
 
 ### 验证账
 
-`npm run typecheck` 绿 · 离线 pytest **4045 passed**（基线 4028 + 17）· needs_db **115 passed**
-（本地 throwaway `redesign0808`，**绝不碰 5432 的预检容器**）· 新门 **40/0** ·
-A 区 **34/34**（改完人眼过的 CSS 后又复跑一遍，仍 34/34）· B 区 data-boundary **37/37** ·
-null-owner **15/0（真跑到了）** · visual **8/8 · 50 张 md5 未变** · C 区 **3/3**。
+`npm run typecheck` 绿 · `i18n-orphans` 孤儿 0 · css 双检绿 · 离线 pytest **4045 passed**
+（`TZ=UTC`，与 #78 基线严丝合缝，本票零后端行为改动）· A 区 **34/34**（首跑/行尾归一后/收尾后
+共三次复跑都是 34/34）· B 区 data-boundary 绿 · null-owner **15/0 真跑到了** ·
+C 区 **3/3**（跑完重打 dist 并在浏览器里验过 apiBase）· 不在册的 `verify-restart-09` **15/15** ·
+像素 **8 passed · 0 首写 · 54 张**。
 
 ## 上几轮做完的（详情全在各自回执，这里只留会影响下一个人的）
 
+- **wave 2 · S3 = #78 真线程**——`receipt-78-threads.md`。迁移 0016（`advise_runs.thread_id`，
+  不回填）· thread_id **由服务端铸、经 SSE 两帧回传**（不是前端发 uuid：那样「老后端忽略这个键」
+  没有任何信号）· 新端点 `GET /team/{id}/advise-threads`（**limit 的单位是「场」不是「行」**）·
+  历史面板按场分组 + 点一场恢复整场 · 回灌轮诚实降级 · 新门 `verify-room-threads` 40 判据。
 - **wave 1 · S1 = #75 议事室 Claude 化 + #73 现场附件**——`receipt-75-room-claude.md`。
-  docked composer 三态统一（发问零跳变量 x/y/宽）· 停止生成落成第五状态 `interrupted`（不是
-  旁挂布尔——那是 fail-open）· 多行输入 + IME 让位 · markdown 自渲染最小子集（零新依赖、
-  零 `dangerouslySetInnerHTML`）· 胶囊即发 · 附件选文件时就预检上限。
+  docked composer 三态统一 · 停止生成落成第五状态 `interrupted` · 多行输入 + IME 让位 ·
+  markdown 自渲染最小子集 · 胶囊即发 · 附件选文件时就预检上限。
 - **wave 1 · S2 = #74 + #77 + #76**——`receipt-76-77-74-files.md`。
-  `file_cards()` 补发 `source_key` → @ 引用按服务端权威名寻址 · 删除文件走**独立模块**
-  `file_delete.py`（不进 mixin、不进 Protocol）· 资料库段落按频率重排 + 锚点导航。
-- **#72 建议追问 chips + 快问收敛**——chips 点击即发；触发判据走文种感知词边界；`askLive` store 级 busy 闸。
-- **#69+#71 会话流+灰提示**——`turns: LiveTurn[]`；离开议事室/刷新=对话结束（刻意不持久化）；
-  文案长度闸开显示宽度不开字符数（碑）。
-- **#70 @ 文件引用两修** · **#68 数据态像素基线** · **#66+#67** · **#65 / #64 / #63 / #61 / T9–T11**。
+  `file_cards()` 补发 `source_key` · 删除文件走独立模块 `file_delete.py` · 资料库按频率重排 + 锚点导航。
+- **#72 建议追问 chips + 快问收敛** · **#69+#71 会话流+灰提示**（文案长度闸开显示宽度不开字符数）·
+  **#70 @ 文件引用两修** · **#68 数据态像素基线** · **#66+#67** · **#65 / #64 / #63 / #61 / T9–T11**。
 
 ## What's Next（按优先级）
 
-1. **wave 2 收口已全部完成**（#78 全绿、回执已落、已合入本地 main `2cfe44c`）。
-   保留在这里是因为下一个人需要知道口径：本波单线、fast-forward、无合流冲突，
-   所以没有「后合者复跑全电池」那一步——全电池是在合之前就跑完的（A 34/34 · B 3/3 · C 3/3）。
-2. **0808 UIUX 重构战役续跑**（档案 `.issues/redesign-0808/`，四路侦察正源都在）：
-   - **wave 3（卡片已发）**：#79 文案全量批改 + 像素全量重冻（只来一次）。wave 2 主检出独立
-     复核另绿一轮：pytest 4045/0（TZ=UTC，+17 严丝合缝）、init.sh 绿、基线未动、#78 已关。
-     见仁见智 8 条在 `tickets.md` 末尾待 Danny 勾。
-     ⚠ #79 §5 表里 `upload.againBody` 那句「用**上面**那个口子」在 #76 重排之后方位词要按新序复核。
-     ⚠ #79 要改 `roomHistoryTitle`（「之前问过的」→「历史对话」）——**#78 已经把它旁边的计数
-     单位从「条」改成「场」**（新键 `roomHistoryCount`），改标题时两者要读顺。
-     ⚠ 重冻时考虑给议事室补一张**数据态 + 历史面板展开**的基线（现在那一面零像素覆盖）。
-3. **复演（第 5 轮）**：战役各波落地后全内容演习；顺带补验第 4 轮遗留两点——真 brain 往
-   followup_questions 里填什么（离线只证管道）、快问收敛的真实手感。
-4. **统一上产**（gap2 三票 + 三轮演习批 + #68 + 重构战役全部）。🔴 push 与换后端容器同窗口；
+1. **0808 UIUX 重构战役四波全部收口**（#73/#74/#75/#76/#77/#78/#79 全落本地 main）。
+   档案 `.issues/redesign-0808/`：四路侦察正源 + 两份开工裁定 + **四份回执**。
+   ⚠ 给下一个人的口径：recon-copy 是好正源，但它**有两处已证的错**（见本轮「recon 归类/转述错误」）——
+   任何票面/侦察里的「这道门不会红」，都要自己打开那道门读到判据为止。
+2. **复演（第 5 轮）**：战役各波落地后全内容演习。这一轮尤其要看**文案**：
+   137 条中文改动第一次连在一起被人读。顺带补验第 4 轮遗留两点——真 brain 往
+   `followup_questions` 里填什么（离线只证管道）、快问收敛的真实手感。
+3. **统一上产**（gap2 三票 + 三轮演习批 + #68 + 重构战役四波全部）。🔴 push 与换后端容器同窗口；
    **0015 + 0016 必须落地**；上产后先设 `AVERY_PUBLIC_BASE` 再验表单。
-5. **T8 两条记录**：① 议事室引用编号形状；② 今天页证据行机器形状（ADR-0033）。
-6. **给 `/health` 加版本字段**。
-7. carry-over：**Claude 式会话侧栏（0808 拍板不做；#78 真线程落地后它已是自然延伸——
-   数据层齐了，缺的只是壳级布局）** · 判读卡 4 段死渲染 + 后端已发前端未消费 7 类字段 ·
-   r2 未开票发现 · gate-run 迁移 · files-hub #26–#29 · 换血抢救 #31/#32 · v01 退役 #33 ·
-   真机零覆盖（iOS/微信，最高优）· 成本票 #30 · 真 brain 分流取证 · 全量 feat-063。
+4. **T8 两条记录**：① 议事室引用编号形状；② 今天页证据行机器形状（ADR-0033）。
+5. **给 `/health` 加版本字段**。
+6. carry-over：**Claude 式会话侧栏（0808 拍板不做；#78 真线程落地后已是自然延伸）** ·
+   判读卡 4 段死渲染 + 后端已发前端未消费 7 类字段 · r2 未开票发现 · gate-run 迁移 ·
+   files-hub #26–#29 · 换血抢救 #31/#32 · v01 退役 #33 · 真机零覆盖（iOS/微信，最高优）·
+   成本票 #30 · 真 brain 分流取证 · 全量 feat-063。
 
 ## Notes（顺手发现，没顺手修）
 
-- **短答路 followups 落库仍被丢**（`app.py` 的 `_persist_advise_run` 只取 `answer.text`）。
-  #78 票内裁**不补存**（要存就得再加一列或把 answer 改成 jsonb，后者打破 advice/answer 互斥）。
-  后果：hydrate 出的**短答**轮没有追问 chips，**advice** 轮有（它们在 jsonb 里）。
-- **`fetchAdviseRuns` / `refreshAdviseRuns` 前端已无消费者**（界面改读分组那条）。没删——
-  后端平铺读面仍是公开契约、四条测试盯着它。
-- **议事室历史面在像素里零覆盖**（room 四张是无材料态、visual-data 无 room）。#79 重冻时补。
-- **`--lite2-bottom-band` 是幽灵 token**（全文件无赋值行，消费全走 `var(…,120px)` 兜底
-  ＝恒等于硬编码 120px）；**`--lite2-clear-top` 的 ≤860 覆盖写了两遍**，早段 72px 已被后段
-  24px 静默架空。#78 的历史面板 `max-height` 沿用了这两个表达式，值不变。
+- 🔴 **aria 硬门对短拉丁黑话是瞎的**：`verify-aria-zh` 的 `suspiciousLatin` 要求
+  「≥2 个连续拉丁词 **或** 单词长度 ≥4」，`HR`（2 字母）、`1:1`（无字母）**永远不报**。
+  #79 把它们从 aria 里改掉是执行 zh-purity 的产品口径，**不是门逼的**；加回来一样零门会红（M9 实证）。
+- **`gapCardClaimLabel`「文件里的说法」与已改的「资料里的实际情况」在同一张差距卡上不对仗**
+  （文件 vs 资料）；**`projectsTitle`「你文件里的项目」**与同屏已改的 lede 词族不齐。都是 §5 表没列的。
+- **mock 语料下判读卡的信号行是英文**（`Grounded in the record: …`）——mock brain 产物不是字典漏网。
+- **mock 语料不产判读卡的 confidence / script / metrics / escalation 四段**：
+  要给它们取证得往 `run.advice` 注一份满态（`escalation.level` 要写 `'HRBP'` 大写，
+  且必须给 `note` / `confirmWith`，否则组件在 `.length` 上抛错、整张卡消失）。
+- **短答路 followups 落库仍被丢**（`app.py` 的 `_persist_advise_run` 只取 `answer.text`）。#78 票内裁不补存。
+- **`fetchAdviseRuns` / `refreshAdviseRuns` 前端已无消费者**；没删（后端平铺读面仍是公开契约）。
+- **`--lite2-bottom-band` 是幽灵 token**；**`--lite2-clear-top` 的 ≤860 覆盖写了两遍**，早段已被后段架空。
 - **`.issues/gap-design-0805/t8-e2e.mjs:514` 是 `room.status !== 'error'` 反向判断**，
-  `interrupted` 与 #78 的 hydrated 轮都会被它当成通过。一次性门，未改。
-- **`data-room-composer` 从未落地**：`lite2.css:481-482` 与 `design-75-73.md` 的注释都声称门已
-  改判到它，全仓 grep 只有那三处**注释**命中，DOM 上没有这个属性。写新门别照注释抄选择器。
-- **at-references ⑧ 的宿主矩阵缩水**：三态统一后空态与运行态 composer 几何一样，
-  (a)/(b) 与 (e)/(f) 不再是两种几何。矩阵在视口档位与胶囊宿主上仍有价值。
-- **`nexus-brief-hud` 与四相面板仍在说同一件事**（recon §4-11）；#75 只修了眉标撒谎那半。
-- **switchContext 换公司时 `turns`/`run` 不清**——只有 `resetLiteCompanyData` 清。
-  #78 给三抄本都补了 `threadId`/`adviseThreads`，但 `turns`/`run` 那半仍只在第三份里清。
-  今天被 RoomScreen 卸载清场掩着；哪天 turns 能跨挂载存活，这个洞会立刻从潜伏变成真串数据。
+  `interrupted` 与 hydrated 轮都会被它当成通过。一次性门，未改。
+- **`data-room-composer` 从未落地**（三处**注释**声称门已改判到它，DOM 上没有）。写新门别照注释抄选择器。
+- **at-references ⑧ 的宿主矩阵缩水**（三态统一后空态与运行态 composer 几何一样）。
+- **`nexus-brief-hud` 与四相面板仍在说同一件事**；#75 只修了眉标撒谎那半。
+- **switchContext 换公司时 `turns`/`run` 不清**——只有 `resetLiteCompanyData` 清（三抄本只有第三份全）。
 - **中文名互为前缀仍双中**（「王力」vs「王力宏」）：词边界对 CJK 刻意不阻断，宁多勿漏。
-- **真 brain 的 followup 质量离线采不到样**；**历史轮没有折叠**；**决策卡 `reason` 在 mock 语料下是空的**。
-- **`tests/test_at_references.py:90` 潜伏 typo**：`rep.errors` 应为 `parse_errors`。
+- **`tests/test_at_references.py:90` 潜伏 typo**（`rep.errors` 应为 `parse_errors`）。
 - **`>` 开头的材料块结构性不可引用**；**facts.md 指针不是单射**。
 - 🔴 **`AVERY_PUBLIC_BASE` 必须指后端自己的口**（#63 实收）。
 - **粒度闸够不着跨批次**（T10）；**`_people_from_roster` 位置兜底会顶掉空格子**（#61）。
+- **`KeywordStore` 分词器是 `[a-z0-9]+`（纯 ASCII），对无空格中文 `query()` 恒空**——
+  任何拿中文串断言「检索得到/不到」的判据都是空跑。
 - bellIsReal / nudgeVerdict 等手册协议相位仍无机械 runner。
 
 ## Blockers / Risks
 
 - 无硬 blocker。
-- 🟠 **别单独 push main**（ahead 60+，实数跑 `git rev-list --count origin/main..HEAD`）：
+- 🟠 **别单独 push main**（实数跑 `git rev-list --count origin/main..HEAD`）：
   前端 push 即自动上产、后端容器要人手换，同窗口做。
 - 🔴 **像素基线目录是 gitignored**（`.gitignore:34`），**每棵树各一份**：worktree 里那份是空的，
-  在 worktree 跑 visual = 首写，证明不了任何事。#78 的真比对做法：**在主检出 `D:\avery` 跑
-  playwright（用它的真基线），用 `VERIFY_BASE` 指向 worktree 的 preview**——两份 spec 都读
-  这个环境变量，不必动主检出的 dist 或分支。
-  ⚠ 顺带订正一条长期记档：**`visual*.spec.mjs` 并没有写死 5173**（它们读 `VERIFY_BASE`）；
-  真写死的只有 `verify-null-owner.mjs`，#78 已把它改成同一口径。
-- 🔴 **5173 可能被别的树占着**（本轮就是主检出 `D:\avery` 的 preview）。照抄默认端口跑门 =
-  **验的是别人的构建**。隔离端口 + `VERIFY_BASE` + `AVERY_CORS_ORIGINS` 三件套一起给。
-- 🔴 **改完后端必须按端口杀掉重起 uvicorn**：它不热重载，新路由跑在旧进程上会以
-  「面板空的 / 删了没反应」这种误诊断形态假红（#75/#76/#78 各栽过一次）。
-- 🔴 **变异活下来 ≠ 门有洞，也 ≠ 代码有 bug —— 先看变异有没有真的碰到被判的性质**。
-  #78 两条活下来的变异复盘：一条是 **belt-and-braces**（外层幂等闸让内层 busy 闸免疫变异，
-  判据要拿"另一场"去试）；一条是**尺子太宽**（判「3 轮且最后一句是 Q4」分辨不出
-  「没重灌」和「用刷新过的快照重灌了」，要判"刚问那轮还是不是活轮"）。
-- 🔴 **门崩掉比门变红难诊断得多**：选择器命中 0 个时 `.getAttribute()`/`.click()` 会**抛错**，
-  整份门 crash、连汇总行都不打印。先判 `count()` 再动它（#78 实收，M-E 第一版就是这么崩的）。
-- 🔴 **门全绿 ≠ 真部件被验到**：#78 在 A 区 34/34 之后，人眼过仍逮到两处（面板是个很高的空盒子、
-  半透明背景真的透字）。改完布局必须双视口 × 双皮截图人眼过。
-- 🔴 **「必漂」预判会反着骗**：#78 开工前的预判是「改历史面板必漂像素基线」，实证是**零覆盖**
-  （room 四张是无材料态、visual-data 无 room）。零漂移不等于没影响。
-- 🔴 **PostgreSQL 的 text 不允许 NUL 字节**：拿 `E'\x00…'` 当「肯定不冲突」的哨兵是**直接报错
-  不是安全**（#78 差点种下）。
-- 🔴 **pg 的 SELECT 列序与元组解包裸耦合**：加列一律**追加在末尾**；插中间是 text↔text 对调，
-  Postgres 与 pytest 都不会吭声。#78 已照 `_FORM_SUB_COLS` 先例把 advise 那组提成常量 + 单点解包。
-- 🔴 **离线套对 pg 持久层是瞎的**：动 schema 必跑 `@needs_db`（本地 throwaway 库，
-  **绝不对 5432 的预检容器跑**）。
-- 🔴 **源文件是 CRLF**：任何按字符串锚点做的批量改写都要先按目标文件真实行尾归一，
-  「锚点找不到」被静默当成「跑完了」会直接得出错误结论（#78 的变异跑器第一版就栽在这，
-  好在它是 fail-loud 的）。
-- 🔴 **本机 curl / argv / stdout 都按 GBK 啃中文**：中文只走文件（`git commit -F` / `gh api --input`）。
-  ⚠ 同族：`subprocess` 不写 `encoding='utf-8'` 会在读子进程输出时 `UnicodeDecodeError`，
-  **输出丢一半而命令看起来跑完了**（#78 实收，吃掉过一条变异的汇总行）。
+  在 worktree 跑 visual = **首写**，证明不了任何事（#79 又实证一轮：50 张全是
+  「snapshot doesn't exist, writing actual」）。真比对做法：**在主检出 `D:\avery` 跑 playwright
+  （用它的真基线），`VERIFY_BASE` 指向 worktree 的 preview**——两份 spec 都读这个变量。
+  ⚠ **但 spec 文件本身用的是主检出那一份**：改了 spec（比如给 `SCREENS` 加屏）必须先把改动合进
+  本地 main，主检出才看得见（#79 实收：spec 改完直接重冻，新基线一张没生成、还 8 passed 骗了一次）。
+- 🔴 **`md5sum … | sed 's|.*/||'` 是贪婪的，会把哈希一起吃掉**——于是「重冻前后 md5 全表 diff」
+  变成只比文件名的**空判**（#79 实收）。任何「比对前后 md5」的做法，先看一眼表里有没有哈希。
+- 🔴 **一个 test 串着跑 N 次 `toHaveScreenshot`，第一处不匹配就中止整条**——
+  一次红跑给出的漂移清单是**残缺的**。要全量清单只能重冻前后比 md5，并给重建做一次
+  「同一份构建连冻两次是否逐字节一致」的确定性对照，否则分不清真漂移和噪声。
+- 🔴 **多行插入时忘了把新文本也转成 CRLF，会造出混行尾文件**（#79 实收 4 个门文件、13 处裸 LF）。
+  `git status` 的 "LF will be replaced by CRLF" 警告是唯一信号。
+- 🔴 **变异活下来 ≠ 门有洞，也 ≠ 代码有 bug —— 先看变异有没有真的碰到被判的性质**
+  （#79 的 M9：拿 `HR` 去试 aria 门，而那把尺子根本照不到 2 字母词）。
+- 🔴 **门崩掉比门变红难诊断得多**；**改判扫描的暗区**：`scripts/gates/live-frontend-gate.snippet.js`
+  不在 `*verify-*.mjs` glob 里（#79 又在它里面改了 7 处）。
+- 🔴 **门全绿 ≠ 真部件被验到**：#79 在 A 区 34/34 之后，人眼过仍逮到 v02 团队屏 h1 上一句
+  「会在这里长出来」——它是**共享键**，全票的 grep 口径都按「v01 段不动」把它放过了。
+- 🔴 **改完后端必须按端口杀掉重起 uvicorn**（不热重载）。
 - 🔴 **`./init.sh` 和 run-battery 的收尾重建都 `vite build` 不带 api base** → dist 落回生产域名。
-  跑任何上传型门/截图之前先重打带 `VITE_AVERY_API_BASE` 的 dist**并验 apiBase**。
+  跑任何上传型门/截图之前先重打带 `VITE_AVERY_API_BASE` 的 dist**并在浏览器里验 apiBase**。
 - 🔴 **cwd 残留会把命令打到别的树**；worktree 会话里 git 与构建命令一律显式指定路径。
-- 🔴 **杀 npx 包装进程杀不死 vite 子进程**；stale 进程按端口杀、CommandLine 认领后只杀自己的。
+- 🔴 **杀 npx 包装进程杀不死 vite 子进程**；stale 进程按端口杀。
 - 🔴 **本机 Docker PG 容器时钟来回跳 ~115s**：`created_at < now()` 判据间歇假红。
-  写测试别赌墙上时钟（#78 的生成窗口一律用**路由延迟**造）。
-- 🔴 **选择器绑标签名会让门「崩」而不是「红」**；新部件一律挂 `data-*` 稳定钩子。
-- 🔴 **改判扫描的暗区**：`scripts/gates/live-frontend-gate.snippet.js` 不在 `*verify-*.mjs` glob 里。
+- 🔴 **本机 curl / argv / stdout 都按 GBK 啃中文**：中文只走文件（`git commit -F` / `gh api --input`）。
+  ⚠ 同族：Python 脚本里 `print()` 中文会直接 `UnicodeEncodeError` 炸掉——**结果写文件、stdout 只打 ASCII**
+  （#79 的变异跑器第一版就是这么炸的，而变异其实已经跑完了）。
+- 🔴 **离线套对 pg 持久层是瞎的**：动 schema 必跑 `@needs_db`（本地 throwaway 库）。
 - 🔴 **CSS 包含块/裁剪读码推断必须浏览器实测**（#66）。
 - 🔴 `e535ec9` commit message 是错的（真相在 `03a9824` erratum）；rebase 与否归 Danny。
 - 🔴 repo 级 stash 两条别人的存货；处置归 Danny。
-- 多个战役 worktree 仍挂着（29 个上下）——删分支/worktree 属删除闸，归 Danny。
+- 多个战役 worktree 仍挂着（30 个上下）——删分支/worktree 属删除闸，归 Danny。
 - ⚠ **各票收尾必须重写本文件**（AGENTS.md DoD）。
