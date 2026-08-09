@@ -10,7 +10,7 @@
 
 - **git**：`main` = 差距战役八票 + gap2 三票 + 三轮演习批 + #68 + #70 + #69+#71 + #72 +
   **0808 重构战役四波全部**（#73/#74/#75/#76/#77/#78/#79）。
-  **本批 #80+#81 落在 worktree 分支 `claude/sharp-dirac-eedec3`，尚未合 main。**
+  + **wave 4 = #80+#81（`8bd3c1d`，fast-forward，无合流冲突）**。
   回执五份：`receipt-75-room-claude.md` · `receipt-76-77-74-files.md` · `receipt-78-threads.md` ·
   `receipt-79-copy-sweep.md` · **`receipt-80-81-sidebar-composer.md`（本批）**。
   ⚠ 别在这儿写死 ahead 数字——它每提交一次就自己作废。要数就跑：
@@ -81,10 +81,9 @@ B 区 `data-boundary` 37/37 + `null-owner` 15/0 · C 区 **3/3**（跑完重打 
 
 ## What's Next（按优先级）
 
-1. **把 `claude/sharp-dirac-eedec3` 合进本地 main**（#80+#81）。合并在自己的 worktree 里做
-   （主检出常脏且不一定在 main）；合完 `.issues/redesign-0808/` 就是五份回执 + 四路侦察 + 两份开工裁定。
-2. **复演第 6 轮**（重点：侧栏动线 + 新输入框手感）——0809 反馈批的两票已落地，可以开演。
-   ⚠ 给下一个人的口径：recon-sidebar / recon-composer 是好正源，但它们**各有一处已证的错**
+1. **复演第 6 轮**（重点：侧栏动线 + 新输入框手感）——#80+#81 已落本地 main，可以开演。
+   档案 `.issues/redesign-0808/` 现在是**五份回执** + 四路侦察 + 两份开工裁定。
+2. ⚠ **给下一个人的口径**：recon-sidebar / recon-composer 是好正源，但它们**各有一处已证的错**
    （见本轮「实测推翻」两条）——任何侦察里的「这个值是 X」都要自己在浏览器里量到为止。
 3. **统一上产**（gap2 三票 + 三轮演习批 + #68 + 重构战役四波 + 本批）。🔴 push 与换后端容器同窗口；
    **0015 + 0016 必须落地**；上产后先设 `AVERY_PUBLIC_BASE` 再验表单。
