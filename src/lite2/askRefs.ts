@@ -19,13 +19,16 @@ export type AskRefFilter = 'all' | AskRefKind
 
 export interface AskRef {
   kind: AskRefKind
-  // person/project = 实体 id；file = 文件名（source_documents 的展示键）；playbook = 标题
-  //（方法卡契约里没有 id，标题就是它的稳定键——同 PlaybooksScreen 的 key 口径）。
+  // person/project = 实体 id；playbook = 标题（方法卡契约里没有 id，标题就是它的稳定键——同
+  // PlaybooksScreen 的 key 口径）；**file = 服务端 `source_key`**（消歧后的每文档键；老后端缺
+  // 这个字段时退回 `filename`）。#74：file 这一格曾经取 `filename`，补传重名时两份文档撞成
+  // 同一个 id——展示名不是键，别再退回去。
   id: string
   label: string
   // 展示次串（原值，可空串）：人=角色、项目=负责人原值、方法=适用行。渲染层对空串自己兜底。
   meta: string
-  // 重名消歧：仅当**真有重名**时 = 部门原值（FilesScreen dupeNames 口径——不重名补了只是噪音）。
+  // 重名消歧：仅当**真有重名**时才挂——人 = 部门原值（FilesScreen dupeNames 口径）、
+  // 文件 = 服务端改名后的真名（#74）。不重名补了只是噪音。
   dupeTeam: string
 }
 
@@ -105,9 +108,31 @@ export function searchAskRefs(
   }
 
   if (filter === 'all' || filter === 'file') {
+    // #74 · 重名文件集合按**全量清单**算，不按检索结果算——同 dupeNamesOf 那条口径（搜"周报"
+    // 只出一份时，另一份只是没被这次搜出来，重名这个事实没变）。
+    const dupeFileNames = new Set(
+      files.map((f) => f.filename).filter((n, i, all) => all.indexOf(n) !== i),
+    )
     for (const f of files) {
       if (!q || f.filename.toLowerCase().includes(q)) {
-        out.push({ kind: 'file', id: f.filename, label: f.filename, meta: '', dupeTeam: '' })
+        // 🔴 id 走服务端消歧键，不走 filename。补传重名时后端把 source_key 改成「周报(1).md」
+        // 而 filename 保持「周报.md」；按 filename 送 id，后端匹配对两份都成立、恒取第一份
+        // ——引用得干干净净、读到的却是另一份文档（#74，实证见 receipt-70 第六节）。
+        // `||` 不是 `??`：老后端整个不发这个键（undefined），真要有哪条路发了空串也得退回去。
+        const key = f.source_key || f.filename
+        out.push({
+          kind: 'file',
+          id: key,
+          // label 仍是展示名——用户认的是自己传上去的那个名字，不是服务端的改名结果。
+          label: f.filename,
+          meta: '',
+          // 消歧位复用 person 的 dupeTeam 那一格（AskRefComposer 对 kind 无感地渲染它）：**只有
+          // 真重名**时才挂服务端名，不重名挂了只是噪音。第一份的 key == filename 不挂，第二份
+          // 挂「周报(1).md」——两行由此可读地分得开，两个 data-ref-id 也天然不同。
+          // ⚠ pre-032 的老行 source_key 本来就是空的，两份同名老文档会共用同一个 id、被
+          // (kind,id) 去重塌成一个 chip。那是历史数据的边界，不是这里能修的。
+          dupeTeam: dupeFileNames.has(f.filename) && key !== f.filename ? key : '',
+        })
       }
     }
   }

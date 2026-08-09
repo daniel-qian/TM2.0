@@ -7545,7 +7545,11 @@
   overflow-x: hidden;
 }
 
+/* 🔴 这是一组**逐个子元素点名**的选择器，不是 `.lite-files-scroll > *`——往滚动壳里加
+   任何新的直接子元素，都必须把它加进这份名单，否则它会掉出 820px 的居中列、贴到屏幕最
+   左边（#76 加导航条时真发生过：DOM 判据全绿、桌面截图上导航跑到了内容列外面）。 */
 .lite2-shell .lite-files-head,
+.lite2-shell .lite-files-nav,
 .lite2-shell .lite-files-section {
   width: min(100%, 820px);
   margin: 0 auto;
@@ -7568,6 +7572,39 @@
   line-height: 1.65;
   color: var(--ink-soft);
   max-width: 68ch;
+}
+
+/* #76 · 页内锚点导航。**必须有样式**：只给类名不给样式，浏览器会把它渲染成一串裸的蓝色
+   下划线链接、彼此之间零间距（「当前资料另建一份画像」挤成一个词）——DOM 判据全绿而屏幕上
+   根本读不出这是导航。截图人眼过逮到的，门一条都没红（"门全绿≠真部件被验到"）。
+   横向可滚：段落多起来时手机上一行放不下，宁可推着滚也不换行——换行会把它读成一段正文。 */
+.lite2-shell .lite-files-nav {
+  display: flex;
+  gap: 8px;
+  /* 顶距写成 margin-block-start：上面那条居中规则用的是简写 `margin: 0 auto`，谁在后面谁赢
+     ——写成 margin-top 会被它清零（或反过来把居中清掉），取决于声明顺序。 */
+  margin-block-start: 14px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.lite2-shell .lite-files-nav::-webkit-scrollbar { display: none; }
+
+.lite2-shell .lite-files-nav-link {
+  flex: 0 0 auto;
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--hairline);
+  background: var(--lite2-surface);
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.5;
+  text-decoration: none;      /* 裸 <a> 的默认下划线在这里读起来像正文里的外链 */
+  white-space: nowrap;
+}
+
+.lite2-shell .lite-files-nav-link:hover {
+  color: var(--ink);
+  border-color: var(--ink-faint);
 }
 
 .lite2-shell .lite-files-section {

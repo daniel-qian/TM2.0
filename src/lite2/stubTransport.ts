@@ -297,6 +297,10 @@ export function createStubTransport(): LiveTransport {
       stubFiles = files.map((f, i) => ({
         idx: i,
         filename: f.name,
+        // #74 · 形状对称：真后端发的是消歧后的每文档键。stub 里没有重名消歧这条路（每个 File
+        // 名字直接当键），所以恒等于 filename——**别拿它当判据来源**，`?transport=stub` 在
+        // build+preview 的产物上是死的（store 的 DEV 闸静态 false）。
+        source_key: f.name,
         size_bytes: f.size,
         mime: f.type || 'application/octet-stream',
         doc_kind: 'document',

@@ -775,7 +775,109 @@ rec('⑨ 入口·决策卡：中继落 /room、chip 在场且 POST 带 project r
   (entryPost.references ?? []).some((r) => r.kind === 'project' && r.id === ids.villaId),
   JSON.stringify({ chips, refs: entryPost?.references ?? null }))
 
+// ── ⑩ · issue #74：补传重名之后，两份文档在 @ 菜单里分得开、各自送**自己**那把 id ──────────
+// 病根：`AskRef.id` 取 `LiveFileEntry.filename`，而服务端补传重名时改的是 `source_key`
+//（「周报.md」→「周报(1).md」）、`filename` 原样保留。于是两份文档共用一个 id：
+//   · 弹层里**两条都画得出来**（候选列表不去重），但两条的 id 一模一样——点哪条都是同一个 ref，
+//     再点另一条被 `AskRefComposer` 的 (kind,id) 去重当重复丢掉，用户永远选不到第二份；
+//   · 送到后端的 want 对两份都成立、`_file_entry` 恒取第一份 → @ 刚补传的周报，读到的是上一版。
+// 🔴 判据落在**两个 data-ref-id 互不相同**和**请求体里的 id 是消歧键**上。反过来说：
+//    「候选有两条」「候选里有『项目周报.md』」这两条在病根代码上**都是绿的**（实测：改前跑本段，
+//    "各占一条" PASS、id 那条 FAIL）——所以它们只能当自证前提，不能当 #74 的判据。
+// ⚠ 这一段放在全门最后：它往 context 里真补一份文件，会改变 files 清单与卡片读数。
+const APPEND_V2 = ['# 别墅套餐推广', '负责人：周雅婷', '状态：正常', '进度：80%',
+  '本周新增：渠道分销协议改到分成制'].join('\n')
+await page.evaluate(async ({ text, seam }) => {
+  const enc = new TextEncoder()
+  await window[seam].getState().appendFiles(
+    [new File([enc.encode(text)], '项目周报.md', { type: 'text/markdown' })])
+}, { text: APPEND_V2, seam: SEAM })
+await page.waitForFunction(
+  (seam) => ['ready', 'error'].includes(window[seam].getState().appendStatus), SEAM,
+  { timeout: 45000 }).catch(() => {})
+// refreshFiles 是 appendFiles 尾部的 void 调用（次要视图），等清单真的长出第二行再采样。
+await page.waitForFunction(
+  (seam) => (window[seam].getState().files ?? [])
+    .filter((f) => f.filename === '项目周报.md').length === 2, SEAM,
+  { timeout: 20000 }).catch(() => {})
+const dupeFiles = await page.evaluate((seam) => {
+  const st = window[seam].getState()
+  return {
+    appendStatus: st.appendStatus,
+    rows: (st.files ?? []).filter((f) => f.filename === '项目周报.md')
+      .map((f) => ({ filename: f.filename, source_key: f.source_key ?? null })),
+  }
+}, SEAM)
+rec('⑩ 自证：补传真的成功了，清单里有两行同名「项目周报.md」（判据的前提，不成立则整段空跑）',
+  dupeFiles.appendStatus === 'ready' && dupeFiles.rows.length === 2,
+  JSON.stringify(dupeFiles))
+rec('⑩ 契约：两行各自带**互不相同**的 source_key（file_cards 把消歧键发出来了）',
+  dupeFiles.rows.length === 2 && dupeFiles.rows.every((r) => !!r.source_key) &&
+  dupeFiles.rows[0].source_key !== dupeFiles.rows[1].source_key,
+  JSON.stringify(dupeFiles.rows))
+
+await page.evaluate((seam) => window[seam].getState().goScreen('room'), SEAM)
+await page.waitForTimeout(600)
+await waitRoomSettled()
+await input().click()
+await input().pressSequentially('@项目周报', { delay: 40 })
+await page.waitForTimeout(400)
+const dupeOpts = await page.evaluate(() => {
+  const picker = document.querySelector('.lite-ref-picker')
+  return Array.from(picker?.querySelectorAll('[role="option"]') ?? [])
+    .filter((o) => o.getAttribute('data-ref-kind') === 'file')
+    .map((o) => ({
+      id: o.getAttribute('data-ref-id'),
+      label: o.querySelector('.lite-ref-option-label')?.textContent ?? '',
+      // 消歧位复用 person 的那一格（.lite-ref-option-team）——重名时挂服务端名。
+      disambig: o.querySelector('.lite-ref-option-team')?.textContent ?? '',
+    }))
+})
+rec('⑩ @ 弹层里两份同名文档各占一条（(kind,id) 去重没把它们塌成一条）',
+  dupeOpts.length === 2 && dupeOpts.every((o) => o.label === '项目周报.md'),
+  JSON.stringify(dupeOpts))
+rec('⑩ 🔴 两条候选的 data-ref-id 互不相同（把 id 改回 filename，这条必红）',
+  dupeOpts.length === 2 && dupeOpts[0].id !== dupeOpts[1].id &&
+  dupeOpts.every((o) => !!o.id),
+  JSON.stringify(dupeOpts.map((o) => o.id)))
+rec('⑩ 人眼分得开：其中恰好一条挂出了服务端改名后的键（另一条名字没被改，不挂才对）',
+  dupeOpts.filter((o) => o.disambig !== '').length === 1 &&
+  dupeOpts.some((o) => o.disambig !== '' && o.disambig === o.id),
+  JSON.stringify(dupeOpts))
+
+// 选**第二份**（服务端改过名的那份）→ 判据落在真的发出去的请求体上。
+const secondId = dupeOpts.find((o) => o.disambig !== '')?.id ?? null
+if (secondId) {
+  await page.evaluate((id) => {
+    const el = document.querySelector(`.lite-ref-picker [role="option"][data-ref-id="${id}"]`)
+    el?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+  }, secondId)
+  await page.waitForTimeout(300)
+}
+const dupeChip = await page.evaluate(() => {
+  const chip = document.querySelector('.lite-ref-chips .lite-ref-chip[data-ref-chip="file"]')
+  return {
+    id: chip?.getAttribute('data-ref-id') ?? null,
+    label: chip?.querySelector('.lite-ref-chip-label')?.textContent ?? '',
+  }
+})
+rec('⑩ 选中第二份 → chip 的 id 是消歧键、label 仍是用户认得的原名',
+  dupeChip.id === secondId && dupeChip.label === '项目周报.md',
+  JSON.stringify({ dupeChip, secondId }))
+const dupePost = await (async () => {
+  const before = advisePosts.length
+  await input().fill('这份周报里写了什么')
+  await input().press('Enter')
+  await waitForPosts(before + 1)
+  return advisePosts[advisePosts.length - 1]
+})()
+rec('⑩ 🔴 消歧键一路走到网络请求体（references[0].id === 服务端改名后的键，不是 filename）',
+  !!dupePost && (dupePost.references ?? []).some((r) => r.kind === 'file' && r.id === secondId) &&
+  secondId !== '项目周报.md',
+  JSON.stringify({ refs: dupePost?.references ?? null, secondId }))
+await waitRoomSettled()
+
 rec('无 pageerror（整程零未捕获异常）', pageErrors.length === 0, JSON.stringify(pageErrors))
 
 void rows
-await finish({ rows }, { browser, label: '#64/#66/#67 at-references（@ 引用 → 几何 → 入口 → 网络请求体）', listFailures: true })
+await finish({ rows }, { browser, label: '#64/#66/#67/#74 at-references（@ 引用 → 几何 → 入口 → 网络请求体 → 重名消歧）', listFailures: true })

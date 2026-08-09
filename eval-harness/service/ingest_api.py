@@ -41,6 +41,7 @@ from starlette.concurrency import run_in_threadpool
 
 from avery.ingest import guards, ingest_paths
 from avery.ingest.file_append import append_paths_to_context, existing_source_keys
+from avery.ingest.file_delete import delete_document_from_context
 from avery.ingest.registry import CompanyContext, ContextRegistry, SourceDocument, active_registry
 
 from . import account, embedding_factory, extractor_factory, upload_guard
@@ -891,3 +892,42 @@ def team_file_download(context_id: str, idx: int,
     return Response(content=data, media_type="application/octet-stream",
                     headers={"Content-Disposition": disposition,
                              "X-Content-Type-Options": "nosniff"})
+
+
+@router.delete("/team/{context_id}/files/{source_key:path}")
+def team_file_delete(context_id: str, source_key: str,
+                     x_avery_token: str | None = Header(None),
+                     authorization: str | None = Header(None),
+                     x_avery_account: str | None = Header(None)) -> dict:
+    """issue #77 — 删掉一份传上来的资料：原件字节 + 它孵出的材料面一起收走。
+
+    v1 刻意没有这个端点（「不建假按钮」红线的另一半：后端没有，UI 上就一个都不许出现）。
+    本票正式翻案——经理误传一份带工资的表，此前**只能整库重开**。
+
+    🔴 寻址是 `source_key` 不是 `idx`（编排层 docstring 记了完整理由）：put() 会重排 idx，
+    删完之后前端手里的旧 idx 会静默指向另一份文件——不是 404，是下错文件。
+    `:path` 转换器是**必须**的：source_key 是文件名，可能自带斜杠/中文/括号。
+
+    feat-038/053 姿态与本族其余端点逐字相同：owner_token（header）或已验证账号，否则 404。
+    「这家公司不存在」与「这家公司没有这份资料」都回 404，且**同体**——不给存在性 oracle
+    （同 files 端点族的既有纪律）。"""
+    reg = active_registry()
+    ctx = authorize_context(reg, context_id, extract_owner_token(x_avery_token, authorization),
+                            account.resolve_account(x_avery_account))
+    try:
+        report = delete_document_from_context(reg, ctx.context_id, source_key)
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"no file with key {source_key}")
+
+    # 回执 = 与 /team/{id} 同一张 payload（前端拿它整屏刷新——facts 重物化之后卡片的出处会变，
+    # 让屏自己去读权威值，别在前端猜）。🔴 同 append：**不发** owner_token。
+    payload = _team_payload(report.context, reg=reg)
+    payload["deleted"] = {
+        "source_key": report.removed.source_key or report.removed.filename,
+        "filename": report.removed.filename,
+        "materials_removed": report.materials_removed,
+        "signals_removed": report.signals_removed,
+        "conflicts_removed": report.conflicts_removed,
+        "remaining": report.remaining_documents,
+    }
+    return payload

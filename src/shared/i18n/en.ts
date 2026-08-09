@@ -128,6 +128,41 @@ export const en = {
     download: 'Download',
     downloading: 'Downloading…',
     downloadError: "Couldn't download that file just now. Try again.",
+
+    // ── #76 · the manifest grows a shape: columns, sorting, a refresh, honest load states ──
+    // uploaded_at / doc_kind have been in the payload since feat-032 and were never rendered,
+    // so three batches in you could not tell which file was last week's.
+    filesRefresh: 'Refresh',
+    filesRefreshing: 'Refreshing…',
+    filesLoading: 'Loading your files…',
+    // Deliberately NOT "your files are gone": a failed fetch says nothing about what the server
+    // holds (same discipline as downloadError). The list keeps showing the last good answer.
+    filesLoadError: "Couldn't reach the server just now — this list may not be up to date.",
+    filesRetry: 'Try again',
+    // NOTE (#76): no `fileTime` / `fileKind` column-header keys. The timestamp rides inside
+    // `.upload-file-meta` (one line per row, no table head), and a separate "type" column would be
+    // noise — the extension is already in the filename, and `doc_kind` is a machine word ('company')
+    // that means nothing to a manager. Adding the keys "for later" just manufactures orphans.
+    filesSortLabel: 'Sort',
+    filesSortDefault: 'Upload order',
+    filesSortTime: 'Newest first',
+    filesSortName: 'Name',
+    filesSortSize: 'Largest first',
+
+    // ── #77 · delete a file. v1 shipped no button because the endpoint did not exist. ──
+    // 🔴 Destructive: the confirm step is not decoration, and the body must tell the manager
+    // what ELSE changes — deleting a document re-materializes the memory surface, so readings
+    // sourced from it lose their citation. `deleteError` follows downloadError: the endpoint
+    // answers "no such file" and "you can't prove this is yours" with the same 404.
+    delete: 'Delete',
+    deleting: 'Deleting…',
+    deleteConfirmTitle: 'Delete “{name}”?',
+    deleteConfirmBody: 'Avery forgets everything it read in this file. Readings on your cards '
+      + 'that came from it lose their source. This cannot be undone — to get it back you upload '
+      + 'it again.',
+    deleteConfirmAction: 'Delete it',
+    deleteCancel: 'Keep it',
+    deleteError: "Couldn't delete that file just now. Try again.",
   },
 
   // ── Paperwork (partner-docs-0728) ─────────────────────────────────────────
@@ -630,6 +665,19 @@ export const en = {
     formsLinksNote:
       'You forward each link to that person yourself — Avery does not send messages for you. One person, one link; it expires in seven days and locks once they send it in.',
     formsCopy: 'Copy',
+    // #76 — 30 people meant 30 rounds of copy → switch to WeChat → paste → come back.
+    // The per-row buttons stay: this one is additive, and it needs its OWN state (the
+    // per-row `copiedId` is a single value — reusing it would light up one arbitrary row).
+    // #76 — the four silent-vanish shapes get a visible fallback. This one covers 'the
+    // forms fetch failed' (an expired token reads exactly like 'this feature does not
+    // exist' today: the whole section disappears with nothing said).
+    formsUnavailable: "Couldn't load your forms just now. Nothing is lost — try refreshing.",
+    formsCopyAll: 'Copy all links',
+    formsCopiedAll: 'Copied {count} links',
+    // The clipboard can be refused (no https / no permission). The per-row path stays
+    // silent on failure by design (the URL is always selectable); a bulk action cannot —
+    // nothing visible would change and the manager would paste stale clipboard content.
+    formsCopyAllFailed: "Couldn't copy — the links above can still be selected by hand.",
     formsCopied: 'Copied',
     formsStatusTitle: 'Who has sent one in',
     formsStatusOpen: 'Not yet',

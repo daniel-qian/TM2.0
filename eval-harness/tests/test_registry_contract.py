@@ -246,6 +246,11 @@ def test_source_documents_round_trip(impl, tmp_path):
     by_name = {c["filename"]: c for c in cards}
     assert by_name[HANDBOOK.name]["size_bytes"] == HANDBOOK.stat().st_size
     assert by_name[HANDBOOK.name]["mime"] == "text/markdown"
+    # issue #74 — these fixtures carry NO source_key (the pre-032 row shape: the column defaults to
+    # '' , not NULL). The manifest must publish the RESOLVED key, i.e. fall back to filename — an
+    # empty string here would hand the client an id that matches no document at all.
+    assert [c["source_key"] for c in cards] == [HANDBOOK.name, ROSTER.name], (
+        f"a pre-032 row must fall back to its filename, never publish '': {cards}")
     # n_chunks links a file to the material chunks it produced (materials.source '<filename>:<line>').
     assert by_name[HANDBOOK.name]["n_chunks"] > 0, "handbook produced material but manifest shows 0"
     assert sum(c["n_chunks"] for c in cards) == len(got.extraction.materials), (
@@ -340,6 +345,12 @@ def test_source_documents_with_duplicate_filenames_survive_the_round_trip(impl, 
     cards = got.file_cards()
     assert [c["filename"] for c in cards] == ["report.txt", "report.txt"], (
         "duplicate-named uploads were dropped/reordered")
+    # issue #74 — the manifest must PUBLISH the disambiguated key, not just join on it internally.
+    # The display name is ambiguous by construction here; source_key is the only thing a client can
+    # use to address the second document (an @ mention carrying the display name resolves to the
+    # FIRST one, silently). Both adapters must round-trip it identically.
+    assert [c["source_key"] for c in cards] == ["report.txt", "report(1).txt"], (
+        f"the manifest hid the per-document key clients need to address these apart: {cards}")
     # Each row attributes ONLY its own document's chunks (>0 each); a filename merge would double one
     # row and zero the other, or sum both onto both.
     assert all(c["n_chunks"] > 0 for c in cards), f"a duplicate-named file lost its chunks: {cards}"

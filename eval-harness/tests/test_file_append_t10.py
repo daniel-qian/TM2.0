@@ -789,11 +789,18 @@ def test_the_edge_guard_actually_covers_the_new_route():
     """🔴 `_GUARDED` 是**精确匹配**字典，带路径参数的路由永远命不中它。漏了这条分支，新端点在
     ASGI 边缘就是零防护（无限流、无 Content-Length 预检、无流式总量兜底），而处理器内部的闸
     照旧生效——「看起来有闸」正是这种漏法最难被发现的原因。"""
-    from service.upload_guard import _route_for
+    from service.upload_guard import _route_for, is_guarded
     assert _route_for("/team/ctx_abc/files") == "ingest"
     assert _route_for("/ingest") == "ingest"
-    # 读侧不受影响（中间件只对 POST 起闸，下载路径也不以 /files 结尾）。
-    assert _route_for("/team/ctx_abc/files/0") is None
+    # issue #77 改判：`/team/{id}/files/{key}` 现在**也**归 'ingest' 表盘——DELETE 走这条路径，
+    # 不认它就等于删除口在边缘零限流。判据同时改成落在**行为**上（route + method 的组合），
+    # 不再落在 `_route_for` 的返回值上：被测的那件事一直是「读侧会不会被顺带闸住」，而
+    # `_route_for` 只回答「属于哪个表盘」。旧写法让一次正当的路由扩张看起来像回归。
+    assert _route_for("/team/ctx_abc/files/0") == "ingest"
+    assert is_guarded("ingest", "POST") and is_guarded("ingest", "DELETE")
+    # 🔴 读侧仍然直通：文件清单与逐份下载一个字节没变。
+    assert not is_guarded("ingest", "GET")
+    assert not is_guarded(None, "POST")
 
 
 def test_the_team_payload_flags_a_disposable_clone(client):

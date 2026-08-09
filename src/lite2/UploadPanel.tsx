@@ -77,7 +77,7 @@ export function UploadPanel({ showFiles = true, mode = 'new' }: UploadPanelProps
   const appending = mode === 'append'
   const uploadFiles = useLite((s) => s.uploadFiles)
   const appendFiles = useLite((s) => s.appendFiles)
-  const ingestStatus = useLite((s) => s.ingestStatus)
+  const newCompanyStatus = useLite((s) => s.newCompanyStatus)
   const ingestError = useLite((s) => s.ingestError)
   const appendStatus = useLite((s) => s.appendStatus)
   const appendError = useLite((s) => s.appendError)
@@ -88,11 +88,19 @@ export function UploadPanel({ showFiles = true, mode = 'new' }: UploadPanelProps
 
   // 🔴 两条路各有各的状态机：`notifyStore` 只认 ingest 的 `ingesting → ready` 并据此弹
   // 「你的团队已就绪」——补一份周报借它的状态就是发一条假通知（store.ts 的 appendFiles 上有碑）。
-  const status = appending ? appendStatus : ingestStatus
+  //
+  // #76 · 'new' 这条读的是 `newCompanyStatus` 而**不是** `ingestStatus`：后者有五个写点，
+  // restoreSession / refreshTeam / switchContext / claimDemoTeam 都会把它拨到 'ready'，于是
+  // 「另建一份画像」这个面板在恢复会话之后恒显示「团队已就绪」+「取材自: 当前公司的文件」
+  // ——一个开新公司的口子，常驻展示着当前公司的就绪状态。新那格只由 uploadFiles 写。
+  const status = appending ? appendStatus : newCompanyStatus
   const error = appending ? appendError : ingestError
   const send = appending ? appendFiles : uploadFiles
   const sourceFiles = team?.sourceFiles ?? []
   const busy = status === 'ingesting'
+  // 🔴 两个面板同屏，闸必须看**两条**状态机：此前 append 跑着的那两分钟里，下面那个框不置灰
+  // ——经理可以在等待中再发一发 /ingest，当场开出第二家公司。
+  const anyBusy = appendStatus === 'ingesting' || newCompanyStatus === 'ingesting'
   const elapsed = useIngestElapsedSeconds(busy)
 
   const onPick = (event: ChangeEvent<HTMLInputElement>) => {
@@ -109,7 +117,7 @@ export function UploadPanel({ showFiles = true, mode = 'new' }: UploadPanelProps
   const onDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault()
     setDragOver(false)
-    if (busy) return
+    if (anyBusy) return
     const files = Array.from(event.dataTransfer.files ?? [])
     if (files.length > 0) {
       clearIngestStart()
@@ -124,7 +132,7 @@ export function UploadPanel({ showFiles = true, mode = 'new' }: UploadPanelProps
   // 在这两分钟里回车两下就能打出第二发 POST /ingest。每一发都新铸一个 context_id 和一个
   // owner_token，后落地的覆盖 store，先前那个 token 服务端只返一次 = 永久丢失。
   const openPicker = () => {
-    if (busy) return
+    if (anyBusy) return
     inputRef.current?.click()
   }
 
@@ -258,7 +266,9 @@ export function UploadPanel({ showFiles = true, mode = 'new' }: UploadPanelProps
           <div className="upload-error">
             <p className="upload-error-label">{t.upload.errorLabel}</p>
             {error ? <p className="upload-error-detail">{error}</p> : null}
-            <button type="button" className="lite-btn lite-btn--ghost upload-retry" onClick={() => inputRef.current?.click()}>
+            {/* 🔴 走 openPicker 不裸 click()：裸调绕开了那道 busy 闸，于是「append 报错 +
+                new 正在跑」时这颗重试键能打出第二发 /ingest（openPicker 存在的全部理由）。 */}
+            <button type="button" className="lite-btn lite-btn--ghost upload-retry" onClick={openPicker}>
               {t.upload.retry}
             </button>
           </div>

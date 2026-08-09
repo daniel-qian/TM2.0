@@ -243,6 +243,112 @@ def test_file_reference_keeps_entity_lines_as_filler(beo_ctx):
     assert "周雅婷" in joined and "林小满" in joined, joined
 
 
+# ── issue #74 · 补传重名之后，两份文档各自引得到**自己**那一份 ────────────────────────────
+# 病根（#70 核实时实证，比悬空糟）：`_file_entry` 的 `d.source_key == want or d.filename == want`
+# 对两份同名文档都成立、`next()` 恒取第一份。当时前端只拿得到 `filename`，于是 @ 刚补传的那份
+# 周报，模型读到的是上一版——卡片行真、status 真、指针全 resolve 得到，**只是每一行都属于另一
+# 份文件**。修法是让 `file_cards()` 把消歧过的 `source_key` 发出去，前端按它送 id。
+#
+# 🔴 判据落在**两份文档各自独有的那行原文**上：断言「块非空」/「File: 周报.md 在场」对着病根
+#    代码全绿（两次引用都会返回第一份的完整内容，看起来健康得很）。唯一能把病根照红的，是
+#    「引 id₂ 时块里有 B 的独有行、且**没有** A 的独有行」这条对偶判据。
+
+WEEKLY_V1 = "\n".join([
+    "# 别墅套餐推广 周报", "",
+    "## 本周进展",
+    "- 第一版样张已交付市场部复核，等待反馈",
+    "- 草坪场地档期确认到十月中旬",
+])
+WEEKLY_V2 = "\n".join([
+    "# 别墅套餐推广 周报", "",
+    "## 本周进展",
+    "- 渠道分销协议改到分成制，法务已出具意见",
+    "- 雨季备用场地敲定多功能厅，押金本周付讫",
+])
+# 每份各挑两行**只在自己那份里出现**的正文。两份的标题与小节名刻意逐字相同（真实的补传重名
+# 就长这样），所以只有正文行分得开——这正是判据必须落在正文上的理由。
+V1_ONLY = ["- 第一版样张已交付市场部复核，等待反馈", "- 草坪场地档期确认到十月中旬"]
+V2_ONLY = ["- 渠道分销协议改到分成制，法务已出具意见", "- 雨季备用场地敲定多功能厅，押金本周付讫"]
+
+
+@pytest.fixture()
+def dupe_ctx(clean_registry, tmp_path):
+    """先 /ingest 一份「周报.md」，再走**真正的补传路**再传一份同名的。
+
+    补传替身照抄 test_file_append_t10 的 `_append`：端点把临时文件写成去重后的 parse_name，
+    `ParsedDoc.name == source_key` 是构造保证——不照做就测不到真实那条路。
+    """
+    from avery.ingest.pipeline import ingest_paths
+    from avery.ingest.file_append import append_paths_to_context
+    from avery.ingest.registry import SourceDocument
+
+    p1 = tmp_path / "周报.md"
+    p1.write_text(WEEKLY_V1, encoding="utf-8")
+    sd1 = SourceDocument(filename="周报.md", source_key="周报.md", mime="text/markdown",
+                         size_bytes=p1.stat().st_size, content=p1.read_bytes(),
+                         uploaded_at="2026-08-01T00:00:00+00:00")
+    rep = ingest_paths([str(p1)], registry=clean_registry, context_id="ctx_dupe74",
+                       work_dir=tmp_path / "mem74", source_documents=[sd1])
+    assert rep.ok, f"第一份必须进得去：{rep.parse_errors}"
+
+    # 第二份：display 名仍是「周报.md」，parse name / source_key 被服务端消歧成「周报(1).md」。
+    p2 = tmp_path / "周报(1).md"
+    p2.write_text(WEEKLY_V2, encoding="utf-8")
+    sd2 = SourceDocument(filename="周报.md", source_key="周报(1).md", mime="text/markdown",
+                         size_bytes=p2.stat().st_size, content=p2.read_bytes(),
+                         uploaded_at="2026-08-08T00:00:00+00:00")
+    rep2 = append_paths_to_context(clean_registry, "ctx_dupe74", [str(p2)], [sd2])
+    assert rep2.ok, f"补传必须成功：{rep2.parse_errors}"
+
+    c = clean_registry.get("ctx_dupe74")
+    assert c is not None
+    # 自证语料：两份文档**各自**都真的切出了材料块，否则下面全是空判据（verifiers-that-lie 碑）。
+    for key in ("周报.md", "周报(1).md"):
+        chunks = [m for m in c.extraction.materials
+                  if (getattr(m, "source", "") or "").startswith(f"{key}:")]
+        assert chunks, f"{key} 一个材料块都没有，判据够不着"
+    return c
+
+
+def test_file_cards_publish_the_disambiguated_key(dupe_ctx):
+    """清单必须把消歧过的 source_key 发出去——这是前端唯一拿得到第二份文档的途径。"""
+    cards = dupe_ctx.file_cards()
+    assert [c["filename"] for c in cards] == ["周报.md", "周报.md"], cards
+    keys = [c["source_key"] for c in cards]
+    assert keys == ["周报.md", "周报(1).md"], f"两行的 source_key 必须互不相同：{keys}"
+
+
+def test_each_duplicate_name_reference_reads_its_own_document(dupe_ctx):
+    """对偶判据：按各自的 source_key 引用，各自读到自己那份的独有原文行。"""
+    block1 = build_reference_block(
+        dupe_ctx, [{"kind": "file", "id": "周报.md", "label": "周报.md"}])
+    block2 = build_reference_block(
+        dupe_ctx, [{"kind": "file", "id": "周报(1).md", "label": "周报.md"}])
+
+    for original in V1_ONLY:
+        assert original in block1, f"引第一份必须带它自己的原文行：{original!r}\n---\n{block1}"
+    for original in V2_ONLY:
+        assert original in block2, f"引第二份必须带它自己的原文行：{original!r}\n---\n{block2}"
+
+    # 🔴 讨伐位：病根代码下 block2 会是第一份的内容——V2_ONLY 一行都不在、V1_ONLY 全在。
+    for foreign in V2_ONLY:
+        assert foreign not in block1, f"引第一份却读到了第二份的原文：{foreign!r}\n---\n{block1}"
+    for foreign in V1_ONLY:
+        assert foreign not in block2, f"引第二份却读到了第一份的原文：{foreign!r}\n---\n{block2}"
+
+
+def test_duplicate_name_reference_by_display_name_is_not_silently_ambiguous(dupe_ctx):
+    """退化路存档：按裸 display 名引用仍只能拿到第一份（后端匹配口径没变，本票不动它）。
+
+    钉住它是为了说清**修的是哪一层**：后端对「周报.md」这个 want 的行为一如既往（第一份），
+    真正变的是前端不再送这个有歧义的 want。哪天有人想在后端做消歧，这条会红、逼他来读这段。
+    """
+    block = build_reference_block(
+        dupe_ctx, [{"kind": "file", "id": "周报.md", "label": "周报.md"}])
+    assert all(o in block for o in V1_ONLY)
+    assert all(o not in block for o in V2_ONLY)
+
+
 # ── #70 · 配额边界：原文进块了，配额一条都不许被掏空 ──────────────────────────────────────
 # 🔴 REF_TOTAL_DOC_LINES 为什么**没有**跟着上调（票面允许「单文件引用行预算适度上调」）：
 # 24 × REF_MAX_LINE_CHARS(200) = 4800，是**可证明**装得进 REF_MAX_BLOCK_CHARS(6000) 的最大
