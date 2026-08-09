@@ -24,6 +24,15 @@
 //   ⑩ 幂等：同一场重复点不得重灌——用户可能已经在这场里续问过新轮，而手上的 adviseThreads
 //      快照里还没有它们，重灌等于把刚问的抹掉。
 //
+// ── issue #80（2026-08-09）· 侧栏常显 + 新对话 ─────────────────────────────────────────
+//   ⑫ 「常显」本身。这组判据是新长出来的网：「有场才显」在**所有既有判据上都是绿的**——
+//      包括 room-claude-rework 的「发问零跳变」，因为它两个采样点都在首场答完之前。
+//      等首场答完把侧栏带进来、内容列与 composer 被挤，那是对话中途的布局跳变而无人报警。
+//   ⑬ 「新对话」三层判据（store 值 / **网络请求体** / 侧栏列表），见该段就地注释。
+//   ⑭ 生成中禁点新对话：同 ⑨ 的两把锁两条判据。
+//   🔴 driver **分形态**：桌面侧栏常显 → 没有 toggle 可点（CSS display:none），裸 click()
+//      会超时抛错让整份门 crash 而不是变红。三处点击全部改走 openHistory()。
+//
 // ## 变异台账（逐条**独立**跑，结果记回执）
 //   M-A 去掉 store.askLive 请求体里的 `...(threadId ? { thread_id: threadId } : {})` → ③⑧ 红
 //   M-B 去掉历史条目的 disabled                                                     → ⑨a 红
@@ -32,6 +41,10 @@
 //   M-E 后端 _with_thread_id 不注入                                                  → ② 红
 //   M-F 去掉 hydrateThread 的幂等闸                                                  → ⑩ 红
 //   M-G 后端分组按 seq DESC 回（照抄平铺那条的 ORDER BY）                            → ⑥ 顺序判据红
+//   M-H 侧栏退回「有场才显」（adviseThreads 空就 return null）                       → ⑫ 红
+//   M-I newConversation 不清 threadId（只清 turns）                                  → ⑬ 网络层那条红
+//   M-J 去掉「新对话」钮的 disabled                                                  → ⑭a 红
+//   M-K 去掉 store.newConversation 的 busy 闸                                        → ⑭b 红
 //
 // ## 怎么跑
 // 🔴 **上传型门**（真发 POST /ingest 造 context + 四发真 /advise）；**绝不能排在 C 区之后**
@@ -100,6 +113,20 @@ const threadsOf = () => st((seam) => {
 const input = () => page.locator('.lite-room .nexus-followup-composer [data-composer-input]')
 const historyToggle = () => page.locator('[data-history-toggle]')
 const threadRows = () => page.locator('[data-history-thread]')
+const newChatBtn = () => page.locator('[data-room-new]')
+
+// #80 · driver **分形态**。侧栏改成常显之后，桌面（本门视口 1280×900）压根没有 toggle 可点：
+// 那枚钮还在 DOM 上（`data-history-toggle` 是本门三处 driver 的抓手，属性不能丢），但被
+// CSS `display:none` 收起了。裸 `.click()` 会一路等它可见、等到超时**抛错**——整份门 crash、
+// 连汇总行都不打印，比变红难诊断得多（#75 立的「会崩不会红」家族）。
+// 所以：可见就点（≤860 抽屉形态），不可见就什么都不做（≥861 常显侧栏，行本来就在屏上）。
+// 🔴 判据不能写成 `if (await historyToggle().count())`：桌面态那个节点**是在的**，只是不可见。
+const openHistory = async () => {
+  if (await historyToggle().isVisible()) {
+    await historyToggle().click()
+    await page.waitForTimeout(300)
+  }
+}
 
 const ask = async (text) => {
   await input().click()
@@ -127,6 +154,44 @@ await st((seam) => window[seam].getState().goScreen('room'))
 await page.waitForTimeout(600)
 rec('⓪ 自证：进屋时还没有场（threadId 为 null——不是上一次残留的）',
   (await threadIdOf()) === null)
+
+// ── ⑫ #80 · 侧栏「常显」自证（零历史态）───────────────────────────────────────────────────────
+// 为什么这组判据必须存在：「有场才显」的实现在**所有既有判据**上都是绿的——包括
+// room-claude-rework 的「发问零跳变」，因为它的两个采样点（空态 / 第一问 POST 后 400ms）
+// 都在首场答完之前，那时侧栏还没长出来。等首场答完 refreshAdviseThreads 把它带进来，
+// 内容列与 composer 被挤——**对话中途布局自己跳一下，一条门都不红**。
+// 所以判据落在「零会话时侧栏就已经在屏上且有宽度」这条性质本身上。
+await page.waitForFunction((seam) => window[seam].getState().adviseThreads !== null, SEAM,
+  { timeout: 20000 }).catch(() => {})
+const asideEmpty = await page.evaluate(() => {
+  const vis = (el) => {
+    if (!el) return false
+    const cs = getComputedStyle(el)
+    const r = el.getBoundingClientRect()
+    return cs.display !== 'none' && cs.visibility !== 'hidden' && r.width > 0 && r.height > 0
+  }
+  const aside = document.querySelector('[data-room-aside]')
+  return {
+    asideVisible: vis(aside),
+    asideW: aside ? Math.round(aside.getBoundingClientRect().width) : null,
+    newBtn: document.querySelectorAll('[data-room-new]').length,
+    rows: document.querySelectorAll('[data-history-thread]').length,
+    emptyLine: document.querySelectorAll('[data-history-empty]').length,
+    toggleVisible: vis(document.querySelector('[data-history-toggle]')),
+    toggleInDom: document.querySelectorAll('[data-history-toggle]').length,
+  }
+})
+rec('⑫ 侧栏**常显**：零会话时不点任何东西，它就已经在屏上且有宽度'
+  + '（「有场才显」的实现在既有判据上全绿，却会在首场答完时把 composer 挤走——那是没网）',
+  asideEmpty.asideVisible && asideEmpty.asideW > 0, JSON.stringify(asideEmpty))
+rec('⑫ 空态形状 = 空列表 + 「新对话」钮（票面拍板的空态）',
+  asideEmpty.newBtn === 1 && asideEmpty.rows === 0, JSON.stringify(asideEmpty))
+rec('⑫ 空历史说的是**诚实空态**（拉到了确实为空 → 有一行说明；'
+  + 'null/stub 那一态该留白，两者不许合并成一句）',
+  asideEmpty.emptyLine === 1, JSON.stringify(asideEmpty))
+rec('⑫ 桌面态没有抽屉开关可点，但那枚钮仍在 DOM 上'
+  + '（这就是 openHistory() 必须分形态的依据：裸 click 会超时抛错让整门 crash 而不是变红）',
+  asideEmpty.toggleVisible === false && asideEmpty.toggleInDom === 1, JSON.stringify(asideEmpty))
 
 // ── ① 第一问：additive 契约 ─────────────────────────────────────────────────────────────────
 await ask(Q1)
@@ -189,8 +254,7 @@ rec('⑥ 自证：新场拿到的是**另一个** thread_id', typeof tidB === 's
 
 await page.waitForFunction((seam) => (window[seam].getState().adviseThreads ?? []).length >= 2,
   SEAM, { timeout: 20000 }).catch(() => {})
-await historyToggle().click()
-await page.waitForTimeout(300)
+await openHistory()
 const rowCount = await threadRows().count()
 const rowIds = await threadRows().evaluateAll((els) => els.map((e) => e.getAttribute('data-history-thread')))
 rec('⑥ 面板列出两**场**（不是三条）', rowCount === 2, JSON.stringify(rowIds))
@@ -258,8 +322,7 @@ rec('⑧ 落库确实进了同一场（那场从两轮变三轮，而不是多�
   (afterFollowup ?? []).length === 2 && reopened?.n === 3, JSON.stringify(afterFollowup))
 
 // ── ⑩ 幂等：同一场重复点 ────────────────────────────────────────────────────────────────────
-await historyToggle().click()
-await page.waitForTimeout(300)
+await openHistory()
 await page.locator(`[data-history-thread="${tidA}"]`).click()
 await page.waitForTimeout(600)
 const afterReclick = await turnsOf()
@@ -283,8 +346,7 @@ await page.waitForFunction((seam) => {
   const turns = window[seam].getState().turns ?? []
   return turns[turns.length - 1]?.run.status === 'running'
 }, SEAM, { timeout: 15000 }).catch(() => {})
-await historyToggle().click()
-await page.waitForTimeout(250)
+await openHistory()
 const rowsNow = threadRows()
 const disabledCount = await rowsNow.evaluateAll((els) => els.filter((e) => e.disabled).length)
 const rowsTotal = await rowsNow.count()
@@ -311,6 +373,83 @@ rec('⑨b 锁② 生成中绕开 UI 直调 hydrateThread（且是**另一场**�
   JSON.stringify({ before: beforeBypass, after: afterBypass }))
 await page.unroute('**/advise')
 }
+
+// ── ⑬ #80 · 新对话（新 action：store 闸 + 同步 run 镜像 + 后端零改动）─────────────────────────
+// 🔴 判据分三层，缺一层就有一种假实现能活下来：
+//    · store 层（turns/threadId/run 镜像）——「按钮点了屏上清了，但 threadId 还留着」＝下一问
+//      悄悄落回上一场，用户看不见的错归档。
+//    · **网络层**（下一问的请求体没有 thread_id 键）——这是「后端零改动」的全部含义：服务端
+//      靠这个键的缺席自铸新场。只判 store 的话，一个「清了 store 却仍把旧 id 塞进请求体」的
+//      实现照样绿（同 ③ 对 thread_id 的纪律：不落 store，T10 门洞教训）。
+//    · 列表层（答完之后新场真出现在侧栏里）——否则「新对话」可能只是把屏擦干净而没真开新场。
+await waitSettled()
+const beforeNew = await turnsOf()
+const tidBeforeNew = await threadIdOf()
+rec('⑬ 自证：点「新对话」之前屏上真有一场（否则会先撞上幂等闸，整段变成空跑）',
+  beforeNew.length > 0 && typeof tidBeforeNew === 'string',
+  JSON.stringify({ turns: beforeNew.length, threadId: tidBeforeNew }))
+await newChatBtn().click()
+await page.waitForTimeout(400)
+const afterNew = await turnsOf()
+rec('⑬ 点「新对话」：turns 清空', afterNew.length === 0, JSON.stringify(afterNew))
+rec('⑬ 点「新对话」：threadId 也一起清（留孤儿 = 屏上空白、下一问却落进上一场）',
+  (await threadIdOf()) === null)
+rec('⑬ 自证：DOM 也回到空态（data-room-turns="0"）',
+  (await page.locator('.lite-room-board[data-room-turns="0"]').count()) === 1)
+rec('⑬ 尾轮镜像同步回 idle（#78 纪律：新 action 必须同步顶层 run——十道门与通知都读它）',
+  (await st((seam) => window[seam].getState().run.status)) === 'idle')
+const postsBeforeNew = advisePosts.length
+await ask('新的一问，这周先盯哪一头')
+await waitForPosts(postsBeforeNew + 1)
+const postNew = advisePosts[postsBeforeNew]
+rec('⑬ 🔴 新对话之后的下一问请求体**没有** thread_id 键（服务端据此自铸新场＝后端零改动的'
+  + '全部含义；只清 store 而请求体照旧带旧 id 的实现在这条红）',
+  !!postNew && !('thread_id' in postNew), JSON.stringify(Object.keys(postNew ?? {})))
+rec('⑬ 自证：这一问跑到终局', await waitSettled())
+const tidC = await threadIdOf()
+rec('⑬ 新对话拿到的是一个**全新的**场 id（既不是被打开过的那场，也不是它之前那场）',
+  typeof tidC === 'string' && tidC !== tidBeforeNew, JSON.stringify({ tidBeforeNew, tidC }))
+await page.waitForFunction(
+  (seam) => (window[seam].getState().adviseThreads ?? []).some((t) => t.runs.length > 0),
+  SEAM, { timeout: 20000 }).catch(() => {})
+await openHistory()
+const rowIdsAfterNew = await threadRows()
+  .evaluateAll((els) => els.map((e) => e.getAttribute('data-history-thread')))
+rec('⑬ 答完之后这场新对话出现在侧栏列表里（否则「新对话」只是把屏擦干净，没真开出一场）',
+  rowIdsAfterNew.includes(tidC), JSON.stringify({ tidC, rowIdsAfterNew }))
+
+// ── ⑭ #80 · 生成中禁点新对话：两把锁、两条判据 ───────────────────────────────────────────────
+// 打断的那一轮**通常不落库**（没走到 manifest 就不会调 _post_advise_hooks），所以点下去
+// 等于「刚问的问题人间蒸发、历史里也找不回」——票面据此拍板禁点。
+// 🔴 生成窗口靠**路由延迟**造，不赌后端快慢（本仓有 Docker 时钟跳 115 秒的先例）。
+await page.route('**/advise', async (route) => {
+  await new Promise((r) => setTimeout(r, 5000))
+  try { await route.continue() } catch { /* Route is already handled — 预期内 */ }
+})
+await ask('再看一眼下周的安排')
+await page.waitForFunction((seam) => {
+  const turns = window[seam].getState().turns ?? []
+  return turns[turns.length - 1]?.run.status === 'running'
+}, SEAM, { timeout: 15000 }).catch(() => {})
+const newBtnDisabled = await newChatBtn().evaluate((el) => el.disabled)
+rec('⑭a 锁① 生成中「新对话」钮**属性上** disabled（拆掉置灰这条必红；'
+  + '只判「点了没反应」会被 store 那把锁掩护成假绿）',
+  newBtnDisabled === true, JSON.stringify({ newBtnDisabled }))
+const beforeNewBypass = await turnsOf()
+// 锁②：绕开 UI 直调 action。同一拍双击够不着 React 的重渲染，disabled 落到 DOM 之前那一发
+// 必须被 store 挡住。
+// 🔴 这里**不会**被幂等闸掩护（#78 M-C 那种 belt-and-braces 门洞）：此刻 turns 非空，
+//    而 newConversation 的幂等闸只在 `turns 空 && threadId 为 null` 时才提前返回——
+//    也就是说这一发唯一能拦住它的就是 busy 闸本身，判据落得准。
+await st((seam) => window[seam].getState().newConversation())
+await page.waitForTimeout(300)
+const afterNewBypass = await turnsOf()
+rec('⑭b 锁② 生成中绕开 UI 直调 newConversation 也不动 turns（拆掉 store 的 busy 闸这条必红；'
+  + '此刻 turns 非空，幂等闸够不着，掩护不了它）',
+  JSON.stringify(afterNewBypass) === JSON.stringify(beforeNewBypass),
+  JSON.stringify({ before: beforeNewBypass, after: afterNewBypass }))
+await page.unroute('**/advise')
+await waitSettled()
 
 rec('⑪ 无 pageerror（整程零未捕获异常）', pageErrors.length === 0, JSON.stringify(pageErrors))
 

@@ -1197,6 +1197,11 @@ export const zh: Dict = {
     "roomFlowInterrupted": "你按了停止，分析停在这里了。",
     "roomStopLabel": "停止",
     "roomStopAria": "停止本次生成",
+    // ⚠ HAND-WRITTEN（#81 · composer 现代化）：发送键从文字钮「提问」换成箭头 icon 之后，
+    //  它的可及名从「可见文字」变成了这条 aria-label。🔴 忘了传的话**一道门都不会红**——
+    //  verify-aria-zh 只扫「已经存在的属性值」，扫不到「该有而没有」（recon-composer §4.2 暗区）。
+    //  所以 room-claude-rework 里另加了一条「composer 每枚 icon-only 钮都有纯中文 aria」的判据。
+    "roomSendAria": "发送这一问",
     "roomAttachAria": "上传文件一起问",
     "roomAttachRowAria": "这一问带上的文件",
     // 100 到 120 秒是实测区间，所以说「一两分钟」而不是「马上好」。
@@ -1389,6 +1394,22 @@ export const zh: Dict = {
     "roomHistoryOpenAria": "打开这场对话，接着往下问",
     "roomHistoryCurrent": "就是眼下这场",
     "roomHistoryBusy": "这一轮还在答，答完才能切",
+    // ── issue #80 · 常显侧栏 + 新对话 ──────────────────────────────────────────────
+    // ⚠ 这一族全是**手工 Edit** 加的（`scripts/i18n-zh-lite2-delta.mjs` 会整个重写本文件，
+    //  memory 碑；只读的 i18n-orphans 才可以跑）。
+    // 侧栏空态：拉到了确实没有历史（adviseThreads === []）才说这句。null（还没拉/stub 通道）
+    // 时列表区留白——「还没问过」和「还不知道有没有问过」是两件事，不许合并成一句。
+    "roomHistoryEmpty": "还没有历史对话",
+    // 按日期分组的三个组标。分组键取**场内最后一轮**的 created_at（与列表排序键同源，
+    // 不打架）；比较的是浏览器本地时区的日历日。
+    "roomHistoryToday": "今天",
+    "roomHistoryYesterday": "昨天",
+    "roomHistoryEarlier": "更早",
+    // 新对话钮。语义＝把屏上这场散掉、下一问开新的一场（下一问不带 thread_id，服务端自铸）。
+    "roomNewLabel": "新对话",
+    // 生成中禁点的原因（title 属性，不是 aria——它是解释不是名字）。同 roomHistoryBusy 的
+    // 措辞纪律：说清楚为什么点不动，不留静默。
+    "roomNewBusy": "这一轮还在答，答完才能开新的",
     "roomTurnFromHistory": "这轮是从历史载入的，当时的分析过程没有留存",
     "adviceReadTitle": "结论",
     "adviceSignOff": "最终由你决定",

@@ -10,6 +10,7 @@ import {
 } from 'react'
 import { useLite } from './store'
 import { useDict } from '../shared/i18n/useDict'
+import { AttachIcon, StopIcon } from './icons'
 import type { Dict } from '../shared/i18n'
 import {
   MAX_REF_OPTIONS,
@@ -560,49 +561,71 @@ export function AskRefComposer({
         onKeyDown={handleKeyDown}
       />
 
-      {/* #73 · 附件键。type="button" 是硬约束：漏写的话 HTML 默认它就是 submit，
-          form 内 `button[type="submit"]` 从 1 变 2，门里的 count()===1 自证会**抛错**
-          （strict mode 命中多个），不是判负。 */}
-      {onAttach ? (
-        <button
-          type="button"
-          className="lite-btn lite-btn--ghost lite-composer-attach"
-          data-composer-attach=""
-          aria-label={attachAriaLabel}
-          disabled={attachBusy ? true : undefined}
-          onClick={() => fileRef.current?.click()}
-        >
-          <PaperclipIcon />
-        </button>
-      ) : null}
+      {/* ── #81 · 控件行 ────────────────────────────────────────────────────────────
+          Claude 式双行 composer：正文占满上面一行，控件另起一行（附件靠左、停止/发送靠右）。
+          改造前是单行 flex-wrap，桌面上 `[textarea][📎][停止][提问]` 挤在一条线上，
+          ≤860 才被动换行——那不是版式，是塞不下之后的结果。
 
-      {/* #75 · 停止生成。只在真有流在跑时出现；同样 type="button"。 */}
-      {onStop && busy ? (
-        <button
-          type="button"
-          className="lite-btn lite-btn--ghost lite-composer-stop"
-          data-composer-stop=""
-          aria-label={stopAriaLabel}
-          onClick={onStop}
-        >
-          {stopLabel}
-        </button>
-      ) : null}
+          🔴 多包这一层 div **不破任何既有门**：room-claude-rework ① 判的是
+             `.nexus-followup-composer` 的 count / 是不是 `.lite-room` 直接子 / 在不在 board 与
+             滚动区外 / form 内 `button[type="submit"]` 恰 1，全是计数与祖先关系，不是子序。
+          🔴 但它必须排在**隐藏 file input 之前**：snippet F2(:689) 的选择器末尾有个没有类型
+             限定的裸 `input` 子句，querySelector 按文档序取第一个匹配——file input 只要还是
+             form 里最后一个，那条兜底就仍然轮不到它。
+          🔴 胶囊（.lite-ask-avery-form）用同一棵树但**不换行**：CSS 里给它
+             `.lite-composer-actions { flex: 0 0 auto }`，输入与发送钮仍在同一行。 */}
+      <div className="lite-composer-actions">
+        {/* #73 · 附件键。type="button" 是硬约束：漏写的话 HTML 默认它就是 submit，
+            form 内 `button[type="submit"]` 从 1 变 2，门里的 count()===1 自证会**抛错**
+            （strict mode 命中多个），不是判负。 */}
+        {onAttach ? (
+          <button
+            type="button"
+            className="lite-btn lite-btn--ghost lite-composer-attach"
+            data-composer-attach=""
+            aria-label={attachAriaLabel}
+            disabled={attachBusy ? true : undefined}
+            onClick={() => fileRef.current?.click()}
+          >
+            <AttachIcon />
+          </button>
+        ) : null}
 
-      <button
-        type="submit"
-        className={submitClassName}
-        data-composer-send=""
-        aria-label={submitAriaLabel}
-        // #69/#71：空文本置灰（`disableEmptySubmit`）或上一轮还在跑时置灰（`busy`）。
-        // 🔴 显式合取，别改成替换或 OR/AND 写反——写坏了的现象是「有文本却仍然灰」，
-        //    很容易被误诊成生成态判断出问题，其实是空闲态那一半被污染了。
-        // 两者都不成立时给 undefined 而不是 false——静息态 DOM 上一个属性都不多长，
-        // 像素基线与 button-family 的既有判据都锚在那个静息态上。
-        disabled={busy || (disableEmptySubmit && draft.trim() === '') ? true : undefined}
-      >
-        {submitLabel}
-      </button>
+        {/* #75 · 停止生成。只在真有流在跑时出现；同样 type="button"。
+            #81 · 换成 icon-only（方块停止符），壳仍是 danger 描边。
+            🔴 与发送键**并存**（不做「原位变身」）：`[data-composer-stop]` 在场 +
+               `button[type="submit"]` 恒 1 是 room-claude-rework ①③ 的硬约束，变身要连
+               三处判据一起改判，本票不做——并存形态本来就有门背书。
+            🔴 icon-only 之后可见文字没了，`stopAriaLabel` 就是它的可及名；`stopLabel` 退成
+               tooltip（title），值一个字没改。 */}
+        {onStop && busy ? (
+          <button
+            type="button"
+            className="lite-btn lite-btn--ghost lite-composer-stop"
+            data-composer-stop=""
+            aria-label={stopAriaLabel}
+            title={typeof stopLabel === 'string' ? stopLabel : undefined}
+            onClick={onStop}
+          >
+            <StopIcon />
+          </button>
+        ) : null}
+
+        <button
+          type="submit"
+          className={submitClassName}
+          data-composer-send=""
+          aria-label={submitAriaLabel}
+          // #69/#71：空文本置灰（`disableEmptySubmit`）或上一轮还在跑时置灰（`busy`）。
+          // 🔴 显式合取，别改成替换或 OR/AND 写反——写坏了的现象是「有文本却仍然灰」，
+          //    很容易被误诊成生成态判断出问题，其实是空闲态那一半被污染了。
+          // 两者都不成立时给 undefined 而不是 false——静息态 DOM 上一个属性都不多长，
+          // 像素基线与 button-family 的既有判据都锚在那个静息态上。
+          disabled={busy || (disableEmptySubmit && draft.trim() === '') ? true : undefined}
+        >
+          {submitLabel}
+        </button>
+      </div>
 
       {/* 🔴 隐藏 file input **必须垫底**：snippet F2(:689) 的选择器末尾有个没有类型限定的
           裸 `input` 子句，querySelector 按文档序取第一个匹配——它若排在 textarea 之前会被
@@ -623,21 +646,6 @@ export function AskRefComposer({
   )
 }
 
-// 回形针（aria-hidden；显式尺寸避开 sweep D6c 零尺寸 svg 判据，同 AskAveryLauncher 的 SparkIcon）。
-function PaperclipIcon() {
-  return (
-    <svg
-      className="lite-composer-attach-icon"
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      aria-hidden="true"
-      focusable="false"
-    >
-      <path
-        d="M9.6 3.1a2.6 2.6 0 0 1 3.7 3.7l-5.6 5.6a4 4 0 0 1-5.7-5.7l5.3-5.3a.6.6 0 1 1 .9.9L2.9 7.6a2.8 2.8 0 0 0 4 4l5.6-5.6a1.4 1.4 0 0 0-2-2L5.2 9.3a.5.5 0 0 0 .7.7l4.6-4.6a.6.6 0 0 1 .9.9L6.8 10.8a1.7 1.7 0 0 1-2.4-2.4l5.2-5.3z"
-        fill="currentColor"
-      />
-    </svg>
-  )
-}
+// #81 · 手绘 `PaperclipIcon` 已退役 —— 改用 `./icons` 的 Phosphor 包装（一族一个 weight）。
+// 手绘那份是 16×16 viewBox 的单 path fill，与铃铛的 24 viewBox stroke 1.8 画风本来就不是一家；
+// 「绝不手绘新 icon」是设计技能的硬纪律，这里是执行它的第一处。

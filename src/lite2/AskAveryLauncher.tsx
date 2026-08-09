@@ -3,6 +3,7 @@ import { useLite } from './store'
 import { useDict } from '../shared/i18n/useDict'
 import { useCurrentScreen } from './routes'
 import { AskRefComposer } from './AskRefComposer'
+import { SendIcon } from './icons'
 import { toWireRefs, weaveRefs, type AskRef } from './askRefs'
 
 // 棒F · 悬浮「问 Avery」入口（布局与真部件战役 2026-07-22 · Danny 拍板命名）。
@@ -104,7 +105,12 @@ export function AskAveryLauncher() {
           inputAriaLabel={l.askAveryAria}
           placeholder={l.askAveryPlaceholder}
           submitClassName="lite-btn lite-btn--primary lite-ask-avery-send"
-          submitLabel={'→'}
+          /* #81 · unicode `→` 退役：字形当 icon 跨字体基线不一致（Windows/安卓各画各的），
+             这是「icon 不好看」的另一半病根。换成与议事室发送键**同一枚** Phosphor 箭头，
+             两个宿主从此是同一个动作的同一个符号。
+             ⚠ 只动展开态；收起态 pill 上的手绘 SparkIcon 与文字一个像素都不动
+             （像素数据态 14 张里胶囊全是收起 pill，动它 14 张全漂）。 */
+          submitLabel={<SendIcon />}
           submitAriaLabel={l.askAveryAria}
           disableEmptySubmit
           autoFocusInput

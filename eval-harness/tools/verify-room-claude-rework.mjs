@@ -409,6 +409,160 @@ if (becameReady) {
   await waitSettled()
 }
 
+// ── ⑨ #81 · icon-only 钮的可及名（既有门够不着的暗区之一）────────────────────────────
+// 🔴 为什么必须在这里另长一条判据：`verify-aria-zh` 只扫「**已经存在**的 aria-label/title/alt
+//    的值」——它抓得到「写了但是英文」，抓不到「**该有而没有**」。改造前议事室发送钮本来就
+//    没有 aria-label（可及名 = 可见文字「提问」）；#81 把文字换成箭头 icon 之后，忘传
+//    submitAriaLabel 就等于把它变成一枚**没有名字的按钮**，而一道门都不会红。
+//    所以判据落在「凡是 icon-only 的钮，aria-label 必须在场且非空」这条性质上。
+// 尺子与 verify-aria-zh 的 `suspiciousLatin` 逐字同源（≥2 个连续拉丁词，或单个长度 ≥4 的
+// 拉丁词；ALLOW 只有 Avery|demo）——两道门用同一把尺，免得这里放行的串在那边红。
+await page.evaluate((seam) => window[seam].getState().goScreen('home'), SEAM)
+await page.waitForTimeout(300)
+await page.evaluate((seam) => window[seam].getState().goScreen('room'), SEAM)
+await page.waitForTimeout(600)
+const ICON_BTN_FN = `(() => {
+  const ALLOW = /^(Avery|demo)$/
+  function suspiciousLatin(value) {
+    const hits = []
+    for (const frag of value.match(/[A-Za-z][A-Za-z'()\\-]*(?:\\s+[A-Za-z][A-Za-z'()\\-]*)*/g) || []) {
+      const words = frag.trim().split(/\\s+/)
+      if (words.length >= 2 || (words[0] && words[0].length >= 4)) hits.push(frag.trim())
+    }
+    return hits.filter((frag) => !frag.split(/\\s+/).every((w) => ALLOW.test(w)))
+  }
+  const form = document.querySelector('.lite-room .nexus-followup-composer')
+  if (!form) return null
+  const out = []
+  for (const b of form.querySelectorAll('button')) {
+    const cs = getComputedStyle(b)
+    const r = b.getBoundingClientRect()
+    if (cs.display === 'none' || cs.visibility === 'hidden' || r.width === 0 || r.height === 0) continue
+    const svg = b.querySelector('svg')
+    const text = (b.innerText || '').trim()
+    if (!svg || text !== '') continue
+    const sr = svg.getBoundingClientRect()
+    const aria = b.getAttribute('aria-label')
+    out.push({
+      hook: b.getAttributeNames().find((n) => n.startsWith('data-composer-')) || '(无抓手)',
+      aria,
+      ariaOk: typeof aria === 'string' && aria.trim() !== '',
+      latin: aria ? suspiciousLatin(aria) : [],
+      svgW: Math.round(sr.width),
+      svgH: Math.round(sr.height),
+    })
+  }
+  return out
+})()`
+const idleIcons = await page.evaluate(ICON_BTN_FN)
+rec('⑨ 自证：composer 上真的采到了 icon-only 钮（采不到样的采样器是恒绿的，那种绿最骗人）',
+  Array.isArray(idleIcons) && idleIcons.length >= 2,
+  JSON.stringify(idleIcons))
+rec('⑨ 自证：采到的正是发送键与附件键（抓手对得上，不是随便两枚钮）',
+  Array.isArray(idleIcons)
+  && idleIcons.some((b) => b.hook === 'data-composer-send')
+  && idleIcons.some((b) => b.hook === 'data-composer-attach'),
+  JSON.stringify((idleIcons ?? []).map((b) => b.hook)))
+rec('⑨ 🔴 每一枚 icon-only 钮都有非空 aria-label（aria-zh 只扫已存在的属性值，'
+  + '「该有而没有」是它结构上够不着的暗区——发送钮 icon 化时忘传就是零门会红）',
+  Array.isArray(idleIcons) && idleIcons.length > 0 && idleIcons.every((b) => b.ariaOk),
+  JSON.stringify((idleIcons ?? []).map((b) => ({ hook: b.hook, aria: b.aria }))))
+rec('⑨ 每一枚 icon-only 钮的 aria-label 是**纯中文**（尺子与 verify-aria-zh 同源）',
+  Array.isArray(idleIcons) && idleIcons.every((b) => b.latin.length === 0),
+  JSON.stringify((idleIcons ?? []).map((b) => ({ hook: b.hook, latin: b.latin }))))
+// 🔴 尺寸尺子**不能**写成「>0」——M-M 变异实测把它当场推翻：Phosphor 的 IconContext 默认
+//    size 是 `1em` 而不是 undefined，忘传 size 得到的不是 0×0 而是「跟着按钮字号走」的 13px，
+//    照样 >0。也就是说「一族一个尺寸」那把锁被拆了，而尺子看不见。
+//    换成两条：① 落在 icon 尺寸区间里（既排掉 0、也排掉 1em/跑飞）；② 同一排**逐像素相等**
+//    （一族一个尺寸——这正是 src/lite2/icons.tsx 那层包装存在的全部理由）。
+const iconSizes = (idleIcons ?? []).map((b) => b.svgW)
+rec('⑨ 每一枚 icon 渲染在 icon 尺寸区间（14-22px）：不传 size 时 Phosphor 退回 `1em`，'
+  + '它跟着按钮字号走（实测 13px）而不是 0——写成「尺寸 >0」的尺子对这条病根是瞎的',
+  iconSizes.length > 0 && iconSizes.every((w) => w >= 14 && w <= 22),
+  JSON.stringify((idleIcons ?? []).map((b) => ({ hook: b.hook, w: b.svgW, h: b.svgH }))))
+rec('⑨ 同一排 icon 尺寸**逐像素一致**（一族一个尺寸；一枚忘传 size 就在这条上现形）',
+  iconSizes.length > 0 && new Set(iconSizes).size === 1
+  && new Set((idleIcons ?? []).map((b) => b.svgH)).size === 1,
+  JSON.stringify(iconSizes))
+
+// ── ⑩ #81 · icon-only 钮的对比度（既有门够不着的暗区之二）──────────────────────────────
+// 🔴 verify-contrast-smalltext 全量扫的是**有 innerText 的叶子**；icon-only 钮没有 innerText，
+//    整枚逃出它的采样面。也就是说「发送钮换成实底 + 白字形」这件事在既有门里既不会被证实
+//    也不会被证伪。WCAG 1.4.11 对图形/UI 部件的口径是 **3:1**（不是正文的 4.5:1）。
+//    这里量两组：图形 vs 钮底、钮底 vs 它身后的面——两者都过才算这枚钮真的看得见。
+// ⚠ 只量**可用**的钮：1.4.11 明确豁免 inactive 部件，而发送钮在空文本时本来就是 disabled。
+//    所以先打字让它亮起来再量。
+const CONTRAST_FN = `((sel) => {
+  function parse(c) { const m = c.match(/rgba?\\(([\\d.]+), ?([\\d.]+), ?([\\d.]+)(?:, ?([\\d.]+))?\\)/); return m ? [+m[1],+m[2],+m[3], m[4]===undefined?1:+m[4]] : null }
+  function lum(rgb) { const f = (v) => { v/=255; return v<=0.03928 ? v/12.92 : Math.pow((v+0.055)/1.055,2.4) }; return 0.2126*f(rgb[0])+0.7152*f(rgb[1])+0.0722*f(rgb[2]) }
+  function ratio(a,b){ const l1=lum(a), l2=lum(b); return Math.round(((Math.max(l1,l2)+0.05)/(Math.min(l1,l2)+0.05))*100)/100 }
+  function bgOf(el){ let cur = el; while (cur && cur !== document.documentElement) { const c = parse(getComputedStyle(cur).backgroundColor); if (c && c[3] > 0.5) return c; cur = cur.parentElement } return [247,244,238,1] }
+  const b = document.querySelector(sel)
+  if (!b) return null
+  const cs = getComputedStyle(b)
+  const own = parse(cs.backgroundColor)
+  const btnBg = own && own[3] > 0.5 ? own : bgOf(b.parentElement)
+  const behind = bgOf(b.parentElement)
+  return {
+    disabled: b.disabled === true,
+    glyphVsButton: ratio(parse(cs.color) || [0,0,0,1], btnBg),
+    buttonVsBehind: own && own[3] > 0.5 ? ratio(btnBg, behind) : null,
+  }
+})`
+await input().click()
+await input().pressSequentially('量一下按钮对比度', { delay: 12 })
+await page.waitForTimeout(200)
+const sendC = await page.evaluate(`(${CONTRAST_FN})('.lite-room .nexus-followup-composer [data-composer-send]')`)
+const attachC = await page.evaluate(`(${CONTRAST_FN})('.lite-room .nexus-followup-composer [data-composer-attach]')`)
+rec('⑩ 自证：量的是**可用**态的发送钮（disabled 的部件按 WCAG 1.4.11 是豁免的，'
+  + '拿它当样本＝一条恒过的空判据）',
+  sendC !== null && sendC.disabled === false, JSON.stringify(sendC))
+rec('⑩ 🔴 发送钮：箭头字形 vs 钮底 ≥ 3:1（icon-only 钮没有 innerText，整枚逃出 contrast 门的'
+  + '采样面——这是本仓唯一看着它的判据）',
+  !!sendC && sendC.glyphVsButton >= 3, JSON.stringify(sendC))
+rec('⑩ 发送钮：实底 vs 它身后的面 ≥ 3:1（底色与背景糊在一起时，字形对比再高也看不出这是个钮）',
+  !!sendC && sendC.buttonVsBehind !== null && sendC.buttonVsBehind >= 3, JSON.stringify(sendC))
+// ⚠ 上面那条**不是**「别用 accent」的机械化身——M-N 变异实测把这个想当然打掉了：把发送钮换成
+//    accent 实底之后 paper 皮量出 4.18:1（底 vs 面）与 4.28:1（白字形 vs 底），两条都过 3:1，
+//    变异安然活下来。票面那句「~3.9:1 过不了」说的是**正文 4.5:1** 的口径，而 icon-only 钮算
+//    图形、地板就是 3:1。所以真正看着「primary=ink 实底」这条拍板的是下面这条**一致性锁**：
+//    发送钮的实底必须与本壳 primary 按钮族同色——新开一种按钮色阶（accent 也好、别的也好）
+//    在这里当场红。
+const primaryParity = await page.evaluate(() => {
+  const send = document.querySelector('.lite-room .nexus-followup-composer [data-composer-send]')
+  if (!send) return null
+  // 探针挂在同一个父节点下，吃同一套 token 与继承链（换个地方挂就可能量到别的皮）。
+  const probe = document.createElement('button')
+  probe.className = 'lite-btn lite-btn--primary'
+  send.parentElement.appendChild(probe)
+  const want = getComputedStyle(probe).backgroundColor
+  probe.remove()
+  return { send: getComputedStyle(send).backgroundColor, primary: want }
+})
+rec('⑩ 🔴 发送钮的实底与本壳 primary 按钮族**同色**（票面拍板 primary=ink 实底；改成 accent '
+  + '等于新开一种按钮色阶，而对比度地板拦不住它——上面那段注释是实测账）',
+  !!primaryParity && primaryParity.send === primaryParity.primary, JSON.stringify(primaryParity))
+rec('⑩ 附件钮：回形针字形 vs 钮底 ≥ 3:1（ghost 壳，字形与底同族，最容易糊）',
+  !!attachC && attachC.glyphVsButton >= 3, JSON.stringify(attachC))
+// 停止钮只在生成中存在，单独造一次窗口来量——不量它的话，三枚 icon 钮里恰好漏掉颜色最特殊
+// 的那一枚（danger 描边 + danger 字形，两个都不是常规 ink）。
+await page.route('**/advise', async (route) => {
+  await new Promise((r) => setTimeout(r, 4000))
+  try { await route.continue() } catch { /* 已被中止/收尾：预期内 */ }
+})
+await input().press('Enter')
+await page.waitForTimeout(700)
+const stopC = await page.evaluate(`(${CONTRAST_FN})('.lite-room .nexus-followup-composer [data-composer-stop]')`)
+rec('⑩ 自证：停止钮此刻真在屏上（不在的话下一条是拿 null 判 false，方向对但理由错）',
+  stopC !== null && stopC.disabled === false, JSON.stringify(stopC))
+rec('⑩ 停止钮：方块字形 vs 钮底 ≥ 3:1（它借的是 danger 色，与另外两枚不同族，'
+  + '恰好是最容易被漏掉的那一枚）',
+  !!stopC && stopC.glyphVsButton >= 3, JSON.stringify(stopC))
+await page.locator('[data-composer-stop]').click().catch(() => {})
+await page.waitForTimeout(400)
+await page.unroute('**/advise')
+await input().fill('')
+
 rec('无 pageerror（整程零未捕获异常）', pageErrors.length === 0, JSON.stringify(pageErrors))
 
 void rows

@@ -1583,6 +1583,10 @@ export const en = {
     roomFlowInterrupted: 'You stopped this. The analysis ends here.',
     roomStopLabel: 'Stop',
     roomStopAria: 'Stop generating this answer',
+    // #81 · the send button lost its visible label ("Ask") when it became an arrow icon,
+    // so this aria-label IS its accessible name now. Forgetting it turns the control into an
+    // unnamed button and no existing gate goes red (aria-zh only scans attributes that exist).
+    roomSendAria: 'Send this question',
     roomAttachAria: 'Attach a file to this question',
     roomAttachRowAria: 'Files attached to this question',
     // 100 to 120 seconds measured, so say "a minute or two" rather than "almost done".
@@ -1853,6 +1857,16 @@ export const en = {
     roomHistoryCurrent: 'You are in this one',
     // 生成中禁点的原因（title 属性，不是 aria——它是解释不是名字）。
     roomHistoryBusy: 'Wait for this answer to finish',
+    // ── issue #80 · always-on sidebar + new conversation ────────────────────────
+    // Only say "nothing here yet" once we actually fetched and got an empty list
+    // (adviseThreads === []). While it is still null (not fetched / stub transport) the list
+    // area stays blank: "never asked anything" and "don't know yet" are different claims.
+    roomHistoryEmpty: 'No past conversations yet',
+    roomHistoryToday: 'Today',
+    roomHistoryYesterday: 'Yesterday',
+    roomHistoryEarlier: 'Earlier',
+    roomNewLabel: 'New chat',
+    roomNewBusy: 'Wait for this answer to finish',
     // 回灌轮的说明行。诚实降级：过程态结构性没落库（0012 拍板不存原始流/四相/结构化引用），
     // 所以这里说的是"没留存"，不是"没有"。
     roomTurnFromHistory: 'Loaded from history. The steps behind it were not stored.',

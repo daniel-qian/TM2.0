@@ -563,6 +563,24 @@ interface LiteState {
   resetRun: () => void
   /** #71 · 清空会话流（离开议事室 / 换公司）。顺手中止在飞的那条流。 */
   clearTurns: () => void
+  /**
+   * issue #80 · 「新对话」——侧栏置顶那枚钮的 action。
+   *
+   * 🔴 为什么不裸复用 `clearTurns`：clearTurns 是**销毁类**（unmount cleanup 用它），
+   *    刻意无闸；而这一枚是**用户可见入口**，#78 立的纪律是「新 action 自带 store 闸 +
+   *    同步 run 尾轮镜像」。裸复用等于把闸全押在 UI 的 disabled 上——一把锁，
+   *    而同一拍里的第二次 click 发生在 disabled 落到 DOM 之前（askLive/hydrateThread 同款教训）。
+   *
+   * 两条闸（各配一条独立判据，别指望一把）：
+   *   · busy：尾轮还在跑就拒绝。被打断的那一轮**通常不落库**（无 manifest → 不调
+   *     `_post_advise_hooks`），点下去等于「刚问的问题人间蒸发、历史里也找不回」——
+   *     与「停止」（stopLive：停但留屏上）是两种销毁力度，票面拍板选禁点。
+   *   · 幂等：本来就是空场（turns 空且没有 threadId）就什么都不做——别开出第二个空场堆叠。
+   *
+   * 后端零改动：threadId 清掉之后，下一问的 askLive 条件展开就**不带** `thread_id` 键，
+   * 服务端据此自铸新场（absent≠none 纪律，见 askLive 里那段碑）。
+   */
+  newConversation: () => void
 
   // Ask 草稿态编辑（status==='draft' 才生效；manager 逐字改题、1~3 内增删、点选受访者）
   editAskQuestion: (questionId: string, text: string) => void
@@ -1641,6 +1659,35 @@ export const useLite = create<LiteState>((set, get) => ({
     get()._abort?.()
     set({ turns: [], run: emptyRunState(), threadId: null, _abort: null,
       ask: null, askBusy: 'idle', askError: null, askDirty: false })
+  },
+
+  // issue #80 · 「新对话」。政策拍板见 LiteState 上那段 doc（禁点 / 幂等 / 后端零改动）。
+  newConversation: () => {
+    const { turns, threadId } = get()
+    // 锁②（store 级 busy 闸）——UI 那把 disabled 是锁①。两把锁不是一把锁加一层：disabled
+    // 要等一次重渲染才落到 DOM，同一拍里的第二次 click 发生在那之前。
+    // ⚠ 两把锁必须配两条独立判据，否则外层那把会让内层免疫变异（#78 M-C 的教训）。
+    const tail = turns[turns.length - 1]
+    if (tail && tail.run.status === 'running') return
+    // 幂等：已经是一场空的新对话，什么都不做。判据取 turns 与 threadId 的**并**——
+    // 只看 turns 会漏掉「hydrate 过一场又被清空」留下的孤儿 threadId。
+    if (turns.length === 0 && threadId === null) return
+    get()._abort?.()
+    set({
+      turns: [],
+      // 尾轮镜像跟着走：十道门与 notifyStore 读的是这个顶层 run（turns 空时它就是 emptyRunState）。
+      run: emptyRunState(),
+      threadId: null,
+      _abort: null,
+      // 这条 nudge 属于刚被散掉的那场对话（「刚刚那一轮落了新笔记」）。留着它，
+      // 新对话第一屏就会挂一句关于上一场的瞬态提示——那是假的「此刻」。
+      // clearTurns 不清它是因为离开议事室那条路上另有 clearNoteNudge 兜着；这枚钮不换屏，没人兜。
+      noteJustAdded: false,
+      ask: null,
+      askBusy: 'idle',
+      askError: null,
+      askDirty: false,
+    })
   },
 
   // ── Ask 草稿态编辑（只在 draft 生效——shared 之后题目/受访者即定格）──────────────

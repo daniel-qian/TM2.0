@@ -72,6 +72,16 @@ const WHITELIST = [
   '.lite-flow-toggle', '.lite-flow-cites-toggle', '.lite-room-chip',
   '.lite-gap-project-link', '.lite-gap-history-toggle',
   '.lite-notes-entry-source', '.lite-notes-group-head',
+  // issue #80 · 议事室会话侧栏的一行 = 一场对话。与 .lite-notes-group-head /
+  // .home-people-group-head / .lite-followups-subtab 同属白名单既有的**列表项**类目：
+  // 它有自己的专属语法（两行式排版、10px 圆角、is-current 的 accent 软底、生成中 disabled），
+  // 不是「普通动作按钮」。
+  // 🔴 这条不是为了让门闭嘴——它此前**从来没被审过**：#78 时代它只在弹出面板打开时才存在，
+  //    而这道门从不点开那个面板。#80 把面板改成常显侧栏，它第一次进入下面 AUDIT_FN 的审计面：
+  //    本门在 :127-134 真发了一问并等到 complete，RoomScreen 随即 refreshAdviseThreads，
+  //    于是轮到 `room` 屏受审时侧栏里**确实有一行**。少这一条，[room] 那条判据当场变红。
+  //    （拆掉本条 = 一条现成的变异，回执里逐条跑过。）
+  '.lite-room-history-head',
 ]
 
 const AUDIT_FN = `((whitelist) => {

@@ -9138,3 +9138,300 @@
     margin-left: auto;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════════════
+   #80 会话侧栏（常显 / ≤860 抽屉）+ #81 composer 现代化
+   （2026-08-09 · redesign-0808 · 0809 反馈批 · wave 4）
+   ═══════════════════════════════════════════════════════════════════════════════════
+   APPEND-ONLY：本块在文件尾，同权重后写者胜。被它改写取值的地方各自在原处留了碑。
+
+   ── 顺手记一笔死规则账 ──────────────────────────────────────────────────────────
+   `.lite-room-history-panel` 那一族（本文件 8288-8312）随 #80 **整段变死**：弹出面板已被
+   常显侧栏取代，组件不再渲染 `.lite-room-history-panel` / `data-history-panel`，全仓 grep
+   只剩 CSS 自己一处命中。照 `.nexus-empty-composer-wrap`（472 一带）的先例留碑不删。
+   ⚠ 它的两条几何公式仍在**被抄用**：下面手机抽屉态的 max-height 与侧栏底沿让位，抄的就是
+     8296-8299 那一份。 */
+
+/* ── #80 · 让位：内容列与 composer 一起让开左栏 ──────────────────────────────────── */
+.lite2-shell .lite-room {
+  /* 🔴 侧栏宽是**写死的常量**，不随内容自适应。理由是门不是审美：
+     verify-room-claude-rework 的「发问零跳变」量 composer 的 x/y/宽，两个采样点之间侧栏的
+     会话列表可能刚好从 0 条变 1 条——宽度若跟着内容走，那条判据会以「跑十次红三次」的
+     间歇形态红，而那种红最难诊断。 */
+  --lite2-room-aside-w: 264px;
+  /* 内容列宽扣掉侧栏。不扣的话，900 上下的桌面窗口里 828px 的 composer 会直接压在栏上：
+     composer 是 `position:absolute; left:50%; translateX(-50%)`，普通流里的 <aside>
+     **推不动它**（这正是 recon 点名的「侧栏做出来了、composer 仍压在它底下」那种
+     一条门都不红的坏实现）。 */
+  --lite2-room-col: min(828px, calc(100vw - var(--lite2-room-aside-w) - 48px));
+}
+
+/* 滚动口整体右移，让出侧栏那一列。
+   🔴 只加 `left`，绝不把 `.lite-room-scroll` 从 `position:absolute; inset:0`（791-796）
+      改成 flex/grid 子项：那样 8184 的 `bottom: max(band, footer+76)` 会静默失效、滚动口
+      高度退成 auto，room-usability 的「有得滚」与「滚到底不被压住」会一起红。 */
+.lite2-shell .lite-room-scroll {
+  left: var(--lite2-room-aside-w);
+}
+
+/* composer 的中线：从「整幅 .lite-room 的中点」挪到「让开侧栏之后那块的中点」。
+   🔴 `transform: translateX(-50%)`（8230）原样留着，这里只换 left 的基准。
+   🔴 选择器仍是 `.lite-room > .nexus-followup-composer`（**直接子**）：这个 `>` 是 8228 与
+      8843 两处几何规则、外加 room-claude-rework ①/at-references ⑧(e)/room-usability 的
+      共同承重位。侧栏**不能**把滚动口与 composer 包进一个新的主列容器——包了那一刻
+      composer 会掉回 55-ask-composer.css:3 的 v01「左下角 440px 小浮标」。 */
+.lite2-shell .lite-room > .nexus-followup-composer {
+  left: calc(50% + var(--lite2-room-aside-w) / 2);
+}
+
+/* ── #80 · 侧栏本体：`.lite-room` 的第四个 absolute 兄弟 ─────────────────────────── */
+.lite2-shell .lite-room-aside {
+  position: absolute;
+  left: 0;
+  top: var(--lite2-clear-top, 96px);
+  /* 底沿让位抄历史面板那一份（8296-8299）：与滚动口下沿同一条线。 */
+  bottom: max(var(--lite2-bottom-band, 120px), calc(var(--lite2-footer-h, 56px) + 76px));
+  width: var(--lite2-room-aside-w);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 14px 0 24px;
+  /* 🔴 **不透明**底色。verify-contrast-smalltext 的 bgOf 把 alpha>0.5 当实底、≤0.5 当
+     完全透明跳过——半透明的栏会让它量出一个屏上根本不存在的比值（0.6 可能假绿放过真违规、
+     0.4 可能对着合规配色假红）。#78 给历史面板定的也是这条规矩（8307-8309）。 */
+  background: rgb(var(--lite2-surface-rgb));
+  border-right: 1px solid var(--rule);
+  /* z 账沿用历史面板的 44：压过空态卡 40，让位悬浮胶囊 45 / 顶栏 50。 */
+  z-index: 44;
+}
+
+.lite2-shell .lite-room-aside-top {
+  flex: none;
+}
+
+/* 新对话钮：整宽、图标+文字左对齐（Claude 侧栏同位的形态）。 */
+.lite2-shell .lite-room-new {
+  width: 100%;
+  justify-content: flex-start;
+  gap: 8px;
+  min-height: 34px;
+}
+
+.lite2-shell .lite-room-aside-list {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  /* 负外边距 + 同量内边距：行的 hover 底色能铺满栏宽，焦点环又不会被 overflow 裁掉。 */
+  margin: 0 -6px;
+  padding: 2px 6px;
+}
+
+.lite2-shell .lite-room-aside-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* 日期组标（今天/昨天/更早）。🔴 吃 --ink-soft 不吃 --ink-faint：见下面 meta 那条的理由。 */
+.lite2-shell .lite-room-aside-group-label {
+  margin: 0;
+  padding: 0 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+/* 诚实空态：只有「拉到了确实是空」才渲染（null 态列表区留白，见 RoomScreen 的碑）。 */
+.lite2-shell .lite-room-aside-empty {
+  margin: 0;
+  padding: 0 10px;
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+/* 侧栏里的会话行：去掉面板时代那圈描边，改 hover 底色（列表在栏里，边框会变成一堆盒子）。 */
+.lite2-shell .lite-room-aside .lite-room-history-head {
+  padding: 8px 10px;
+  border-color: transparent;
+}
+
+.lite2-shell .lite-room-aside .lite-room-history-head:hover:not(:disabled),
+.lite2-shell .lite-room-aside .lite-room-history-head:focus-visible {
+  border-color: transparent;
+  background: rgba(var(--lite2-ink-rgb), 0.06);
+}
+
+/* 就是屏上这一场：accent 软底（同 .lite-ref-chip 的既有 rgba(accent,.12) 语法，不新开色阶）。 */
+.lite2-shell .lite-room-aside .lite-room-history-list li.is-current .lite-room-history-head {
+  border-color: transparent;
+  background: rgba(var(--lite2-accent-rgb), 0.12);
+}
+
+/* 🔴 侧栏常显之后，这一行第一次进入 verify-contrast-smalltext 的采样面——面板时代它默认
+   收起、门从不点开，那不是「验过了」是**没被采过**。11px 的 --ink-faint 在 paper 上只有
+   ~4.7:1（余量 0.2），aurora 的 #667085 更薄且从来没验过。一律改吃 --ink-soft
+   （那道门抬头注释点名的小字安全色，同位 >10:1）。 */
+.lite2-shell .lite-room-aside .lite-room-history-meta {
+  color: var(--ink-soft);
+}
+
+/* ≥861 桌面：侧栏本来就在，没有可开的东西 → 抽屉开关钮收起。
+   🔴 用 display:none 而**不是**不渲染：`data-history-toggle` 是 verify-room-threads 三处
+      driver 点击的抓手，DOM 上必须一直在（同拍已把门的 driver 改成「可见才点」，两头都做）。
+      display:none 的元素既不进 verify-button-family 的可见性审计面（它按 rect 尺寸与
+      display 过滤），也不进 a11y 树——不是「藏了一个还能点的钮」。 */
+.lite2-shell .lite-room-history-toggle {
+  display: none;
+}
+
+/* ── #81 · composer 容器：圆角恒定 ─────────────────────────────────────────────────
+   病灶：静息态 999px（55-ask-composer.css:5 冻结基座继承来的）——多行长高之后是个
+   「体育场」形；has-refs/is-picking 又跳到 18px（8649-8655）。三态跳是「不够现代」最具体的
+   那一处。收敛到既有体系里的 `--lite2-radius-lg`（aurora 定义 16px、paper 无此 token 走
+   同值兜底，口径抄 6099 的既有消费点）——**不发明新数**。
+   ⚠ 这动的是**静息态**，8641-8643 那块碑写着「像素基线锚在静息态上」：room-data 4 张必漂，
+     属预期漂移，本批与 #80 同一批重冻。 */
+.lite2-shell .lite-room > .nexus-followup-composer,
+.lite2-shell .lite-room > .nexus-followup-composer.has-refs,
+.lite2-shell .lite-room > .nexus-followup-composer.is-picking {
+  border-radius: var(--lite2-radius-lg, 16px);
+  /* 6px → 10/12：双行版式要给控件行留呼吸。
+     ⚠ 上界不是随便定的：at-references ⑧ 的 adjacent 尺子是 `gapUp <= 64`，而
+       gapUp ≡ 8 + form 的 padding-top + 边框——padding-top 只要远小于 ~56px 就安全。 */
+  padding: 10px 12px;
+}
+
+/* focus 态：基座只有一句 `border-color: var(--ink)`（55-ask-composer.css:39-41），在墨色
+   描边的皮上几乎看不出来。补一圈焦点环，色走全族统一的 sky（6146-6149 的既有口径），
+   不新开颜色。⚠ box-shadow 用合成写法保住基座的 `var(--shadow)`，别整条替换掉。 */
+.lite2-shell .lite-room > .nexus-followup-composer:focus-within {
+  border-color: rgba(var(--lite2-sky-rgb), 0.9);
+  box-shadow: var(--shadow), 0 0 0 3px rgba(var(--lite2-sky-rgb), 0.28);
+}
+
+/* ── #81 · 控件行（Claude 式双行版式）──────────────────────────────────────────── */
+.lite2-shell .lite-composer-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 议事室：正文独占一行，控件另起一行。附件靠左、停止/发送靠右。
+   靠右靠的是给**附件钮** `margin-right:auto`（它是控件行的第一个 flex item）——不是给发送钮
+   `margin-left:auto`：停止钮只在生成中存在，把 auto 挂在发送钮上会让停止钮被留在左边，
+   与它旁边的发送钮分家。 */
+.lite2-shell .nexus-followup-composer textarea,
+.lite2-shell .nexus-followup-composer .lite-composer-actions {
+  flex: 1 1 100%;
+}
+
+.lite2-shell .nexus-followup-composer .lite-composer-attach {
+  margin-right: auto;
+}
+
+/* 🔴 三枚控件的宽度一直是**假的**（本票浏览器实测逮到，不是读码推断）：冻结基座
+   `55-ask-composer.css:43-44` 有一条 `.nexus-followup-composer button { min-width: 64px }`，
+   而 min-width 恒压过 width——8933 那句 `.lite-composer-attach { width: 34px }` 自 #73 起
+   就没生效过，屏上一直是 64px 宽的胶囊（recon-composer §1.3「34px 圆」是读码推断，实测推翻）。
+   icon-only 钮要的是等边方钮，所以这里把地板收掉。
+   ⚠ 不去改基座（55-ask-composer.css 是 story 冻结资产，v01 仍在用它那套文字钮）。 */
+.lite2-shell .lite-composer-attach,
+.lite2-shell .lite-composer-stop,
+.lite2-shell .lite-composer-send {
+  min-width: 0;
+}
+
+/* 发送钮：与附件/停止等尺的圆钮（改造前它只有 .lite-btn 的 min-height 26，比旁边两枚矮一截，
+   `align-items:end` 下底对齐、顶不齐——recon 读码时点名、本票顺手结掉）。 */
+.lite2-shell .lite-composer-send {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  min-height: 34px;
+  padding: 0;
+  border-radius: 999px;
+}
+
+/* 停止钮 icon 化：从文字 pill 收成与附件钮等尺的圆钮。
+   🔴 选择器**刻意多挂一个 .lite-btn**（0,3,0）。本票浏览器实测逮到的第二处死规则：
+      8948 那条 `.lite2-shell .lite-composer-stop`（0,2,0）一直被
+      `.lite2-shell .lite-btn.lite-btn--ghost { color: var(--ink-soft); border-color: var(--rule) }`
+      （0,3,0）压着——也就是说 #75 写在 8947 的那句「ghost 壳 + danger 描边」**从来没在屏上
+      出现过**，停止钮一直长得和附件钮一模一样（实测两者 color/border/bg 逐字节相同）。
+      这是本票之前就有的 bug，不是本票造出来的；因为停止钮正在本票刀口上，顺手结清。
+      ⚠ 一道门都没红过：它是纯呈现差异，而 icon-only 钮又整枚逃出 contrast 门的采样面
+      （新加的 ⑩ 判据也放行——ink-soft 在 surface 上 6.76:1，本来就过 3:1）。 */
+.lite2-shell .lite-btn.lite-composer-stop {
+  width: 34px;
+  padding: 0;
+  border-color: rgba(var(--lite2-danger-rgb), 0.5);
+  color: rgba(var(--lite2-danger-rgb), 0.95);
+}
+
+/* 悬浮胶囊**不**换行：420px 宽的胶囊做成两行是浪费，它本来就只有一枚发送钮。
+   （议事室那条 `flex:1 1 100%` 只咬 `.nexus-followup-composer`，够不着这里；
+   这一条是把控件簇钉成「不撑满」的正向声明。） */
+.lite2-shell .lite-ask-avery-form .lite-composer-actions {
+  flex: 0 0 auto;
+}
+
+/* ── ≤860 手机态 ────────────────────────────────────────────────────────────────── */
+@media (max-width: 860px) {
+  .lite2-shell .lite-room {
+    /* 手机上没有常显侧栏可让——它退化成抽屉浮层，内容列与 composer 回到满宽。
+       侧栏宽归 0 之后，上面那两条 calc 自动退回原值，不需要在这里逐条复写。 */
+    --lite2-room-aside-w: 0px;
+    --lite2-room-col: calc(100vw - 32px);
+  }
+
+  /* 抽屉开关钮回到桌面时代历史入口的那个位置（position/top/right/z 由 8280-8286 给）。 */
+  .lite2-shell .lite-room-history-toggle {
+    display: inline-flex;
+  }
+
+  /* 抽屉 = 侧栏换一副几何，**不是第二棵 DOM**。
+     🔴 一个节点 + CSS 切换是刻意的：两棵树的话，桌面视口上那棵隐藏副本的叶子仍会被
+        verify-contrast-smalltext 采样（innerText 在未渲染子树里回落成 textContent，
+        而它的渲染态自查只看元素**自身**的 display）——量出来的是一个屏上不存在的比值。 */
+  .lite2-shell .lite-room-aside {
+    display: none;
+    left: auto;
+    right: 24px;
+    top: calc(var(--lite2-clear-top, 96px) + 46px);
+    bottom: auto;
+    /* 高度跟着内容走、让位余量当上限（抄 8296-8299 的 #78 人眼过结论：面板顶天立地时，
+       两三场对话就是一个七百多像素高的空盒子）。 */
+    max-height: calc(
+      100vh - var(--lite2-clear-top, 96px) - 46px
+        - max(var(--lite2-bottom-band, 120px), calc(var(--lite2-footer-h, 56px) + 76px))
+    );
+    width: min(360px, calc(100vw - 48px));
+    padding: 12px;
+    border: 1px solid var(--rule);
+    border-radius: 14px;
+    box-shadow: var(--shadow);
+  }
+
+  .lite2-shell .lite-room-aside.is-open {
+    display: flex;
+  }
+
+  /* 🔴 人眼过逃到的（390×844 实拍）：抽屉开关是 absolute 右上角，而开场块的 h2 起笔就在同一
+     排高度上——「历史对话 · 1 场」比光秃的「历史对话」宽，正好压到标题末尾的 Avery 上。
+     这个重叠 #78 就存在，只是那时候开关「有场才出」、碰上的概率低；#80 改成常显之后它变成常态，
+     属本票刀口，就地结掉。只给开场块让位（不动 board 的 padding）：对话起来之后内容是滚的，
+     再搞一段恒定顶距只是白白吃掉竖向空间。
+     ⚠ 它会让 room-data 的**两张手机基线**漂（开场块在画面里），与本批其余漂移同一批重冻。 */
+  .lite2-shell .lite-room-welcome {
+    padding-top: 44px;
+  }
+
+  /* 9137 那条 `margin-left:auto` 是**单行版式**时代的：窄屏被动换行之后，附件钮是控件行的
+     第一个 item，靠它把整簇推到右边。现在两行是常态、附件钮该在左边（margin-right:auto
+     由上面那条给），这里把旧的那半归零。 */
+  .lite2-shell .lite-composer-attach {
+    margin-left: 0;
+  }
+}

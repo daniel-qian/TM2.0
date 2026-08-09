@@ -1,12 +1,14 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useLite, type LiveTurn } from '../store'
+import type { LiveAdviseThread } from '../transport'
 import { useFlow } from '../flowStore'
 import { useDict } from '../../shared/i18n/useDict'
 import type { Dict } from '../../shared/i18n'
 import { LiteAdviceCard } from '../LiteAdviceCard'
 import { AskCard } from '../AskCard'
 import { AskRefComposer } from '../AskRefComposer'
+import { NewChatIcon, SendIcon } from '../icons'
 import { toWireRefs, weaveRefs, type AskRef } from '../askRefs'
 import { localizeStreamLine } from '../../shared/streamCopy'
 import { renderMarkdown } from '../markdown'
@@ -260,7 +262,8 @@ function LiteAskComposer({
   onRemoveAttachment,
 }: {
   placeholder: string
-  submitLabel: string
+  // #81 · 从 string 放宽到 ReactNode：发送键现在是一枚 icon（可及名走 submitAriaLabel）。
+  submitLabel: ReactNode
   onAsk: (text: string, refs: AskRef[]) => void
   initialValue?: string
   initialRefs?: AskRef[]
@@ -280,8 +283,16 @@ function LiteAskComposer({
       formAriaLabel={l.roomAskAria}
       inputAriaLabel={l.roomLiveQuestionAria}
       placeholder={placeholder}
-      submitClassName="lite-btn lite-btn--primary"
+      /* #81 · 发送键 icon 化：`lite-composer-send` 是新样式的抓手（等高控件行里的圆钮）。
+         🔴 底色仍走 primary＝`--ink` 实底（lite2.css:6152 既有语法），**刻意不用 accent**：
+            paper 皮的 accent 是 sage 绿 #69806d，白字上去只有 ~3.9:1，过不了 AA 4.5。
+            换 accent 等于为了好看新开一种按钮色阶再顺手破一次对比度。 */
+      submitClassName="lite-btn lite-btn--primary lite-composer-send"
       submitLabel={submitLabel}
+      /* 🔴 icon 化之后可见文字没了，可及名只剩这条 aria-label。忘了传是一道门都不会红的
+         暗区（verify-aria-zh 只扫已存在的属性值），所以 room-claude-rework 里另加了一条
+         「composer 每枚 icon-only 钮 aria-label 在场且纯中文」的判据看着它。 */
+      submitAriaLabel={l.roomSendAria}
       idPrefix="room"
       initialValue={initialValue}
       initialRefs={initialRefs}
@@ -502,11 +513,29 @@ function LiteTurnView({
 //     不一致」正是这么来的）。这条账在这里**靠删掉那个渲染面**结清——回放统一走
 //     LiteTurnView，短答自然跟着走 markdown，不存在第二处实现可以再漂。
 //
-// 渲染门槛：adviseThreads 为 null（stub 通道/未拉取）或空数组时整块不出——三态语义与
-// adviseRuns 逐字相同，stub 下零渲染保住离线门的 DOM 现状。
-function LiteRoomHistory() {
+// ── issue #80 · 从「右上角弹出面板」改成「常显侧栏」（2026-08-09）────────────────────
+// Danny 0809 拍板：①侧栏**常显**（空态＝空列表 + 新对话钮）②v1 只做「列表 + 新对话 +
+// 点击载入」三件套（改名/删除明确后排）③手机 ≤860 收抽屉。
+//
+// 🔴 为什么是「常显」而不是「有场才长出来」——这条不是审美，是门与跳变的账：
+//   verify-room-claude-rework 的「发问零跳变」量的是 composer 的 x/y/宽，两个采样点分别在
+//   **空态**与**第一问 POST 后 400ms**，都在首场答完之前。侧栏若「有场才显」，这两点都还没有
+//   侧栏 → 门全绿；等首场答完 refreshAdviseThreads 把侧栏带进来，内容列与 composer 被挤——
+//   **对话中途布局自己跳一下，一条门都不红**。那正是 #75 消灭掉的那类病根换个部件重演。
+//   常显则两个采样点几何一致，代价是 room-data 4 张像素必漂（预期漂移，本批重冻）。
+//
+// 🔴 三态语义（null ≠ []）**不许被常显塌掉**：adviseThreads 为 null 是「还没拉/stub 通道
+//   没有 fetchAdviseThreads」，不是「没有历史」。侧栏壳（新对话钮 + 列表区）照常在场——它是
+//   家具不是数据；但列表区在 null 时**留白**，只有 [] 才说「还没有历史对话」。
+//   把 null 也渲染成空态文案，等于让离线门与 stub 通道冒出一个假的「你没问过」。
+//
+// 🔴 挂载层仍是 `.lite-room` 屏内（第四个 absolute 兄弟），不是壳级 fixed：
+//   `.scene.is-active` 带非 none 的 transform，会给 fixed 后代**劫持包含块**（#66 碑，
+//   AskAveryLauncher 头注同款）。壳级还要重算九个屏的让位账，而侧栏只对议事室有意义。
+function LiteRoomAside() {
   const adviseThreads = useLite((s) => s.adviseThreads)
   const hydrateThread = useLite((s) => s.hydrateThread)
+  const newConversation = useLite((s) => s.newConversation)
   const currentThreadId = useLite((s) => s.threadId)
   // 🔴 禁点闸读的是**尾轮**的状态，不是顶层镜像 run：顶层是尾轮的镜像没错，但判据落在
   //    真相（turns）上比落在镜像上少一层可能不同步的东西。
@@ -515,8 +544,11 @@ function LiteRoomHistory() {
     return tail ? tail.run.status === 'running' : false
   })
   const { t, locale } = useDict()
+  const l = t.lite2
+  // 只有 ≤860 的抽屉形态读它（桌面侧栏由 CSS 恒显，与这个 state 无关）。
+  // 折叠态刻意**不落 localStorage**：verify-room-conversation ⑥ 钉着「这场对话不进本地存储」，
+  // 存一个布尔本身不触那条判据，但按 session-state 纪律，能不存就不存。
   const [open, setOpen] = useState(false)
-  if (!adviseThreads || adviseThreads.length === 0) return null
   const stampOf = (iso: string) => {
     const d = new Date(iso)
     if (Number.isNaN(d.getTime())) return ''
@@ -524,8 +556,60 @@ function LiteRoomHistory() {
       month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
     })
   }
+  const groups = groupThreads(adviseThreads ?? [], new Date())
+  const count = adviseThreads?.length ?? 0
+
+  const renderThread = (thread: LiveAdviseThread) => {
+    // 无场归属的存量单轮（thread_id 为空）用它自己的 run id 当 key——绝不让它们
+    // 因为"共用空串这个键"在 React 里塌成一个。
+    const key = thread.thread_id || thread.runs[0]?.id || ''
+    const first = thread.runs[0]
+    const isCurrent = !!thread.thread_id && thread.thread_id === currentThreadId
+    if (!first) return null
+    return (
+      <li key={key} className={isCurrent ? 'is-current' : undefined}>
+        <button
+          type="button"
+          className="lite-room-history-head"
+          data-history-thread={key}
+          data-history-turns={thread.runs.length}
+          // 锁①：生成中禁点。政策拍板 (b) —— 打开一场是**替换**当前 turns，
+          // 在跑的那一轮会被顶掉且它还没落库，所以只能等它答完。
+          // 锁②在 store.hydrateThread 里（同一拍双击够不着 React 的重渲染）。
+          disabled={busy || undefined}
+          title={busy ? l.roomHistoryBusy : undefined}
+          aria-label={isCurrent ? l.roomHistoryCurrent : l.roomHistoryOpenAria}
+          onClick={() => {
+            hydrateThread(thread)
+            // 手机抽屉：打开一场就把抽屉收回去（桌面 open 恒 false，这一句是无操作）。
+            setOpen(false)
+          }}
+        >
+          {/* 场的标题就是它的**第一问**——一场对话是从哪句话开始的，比它最后聊到
+              哪儿更能让人认出它。v1 不征用 title 列（它在**行**上而且 lite2 恒空写，
+              要改名得新端点 + registry 双腿 + Protocol 锁步，是独立票）。 */}
+          <span className="lite-room-history-q">{first.question}</span>
+          <span className="lite-room-history-meta">
+            <span className="lite-room-history-turns">
+              {thread.runs.length > 1
+                ? fill(l.roomHistoryTurns, { n: thread.runs.length })
+                : l.roomHistoryEmptyThread}
+            </span>
+            {/* 时间戳取**最后一轮**：列表是按最近活动排的，标一个开场时间会和
+                排序打架（老场被追问后浮到最前、却显示着最老的时间）。 */}
+            <span className="lite-room-history-date">{stampOf(lastRunOf(thread).created_at)}</span>
+          </span>
+        </button>
+      </li>
+    )
+  }
+
   return (
     <>
+      {/* 抽屉开关。桌面（≥861）被 CSS `display:none` 收起——侧栏本来就在那儿，没有可开的东西。
+          🔴 `data-history-toggle` 这个抓手**必须留着**：verify-room-threads 有三处 driver 点它，
+             属性没了那三处会**超时抛错 → 整份门 crash 而不是变红**（最难诊断的那一类）。
+             同拍已把门的 driver 改成「可见才点」，两头都做。 */}
       <button
         type="button"
         className="lite-btn lite-btn--ghost lite-room-history-toggle"
@@ -533,67 +617,101 @@ function LiteRoomHistory() {
         data-history-toggle
         onClick={() => setOpen((o) => !o)}
       >
-        {/* 计数的单位跟着变了（条→场），所以这里显式说出「场」：沿用光秃秃的 · N
-            会让同一句话在语义变了之后继续看起来没变。文案批改本身归 #79。 */}
-        {t.lite2.roomHistoryTitle} · {fill(t.lite2.roomHistoryCount, { n: adviseThreads.length })}
+        {/* 计数的单位是**场**不是条（#78 改的）。0 场时不挂那个「· 0 场」的尾巴——
+            空态说「历史对话 · 0 场」比不说更吵。 */}
+        {count > 0
+          ? `${l.roomHistoryTitle} · ${fill(l.roomHistoryCount, { n: count })}`
+          : l.roomHistoryTitle}
       </button>
-      {open ? (
-        <section
-          className="lite-room-history-panel"
-          aria-label={t.lite2.roomHistoryTitle}
-          data-history-panel
-        >
-          <ol className="lite-room-history-list">
-            {adviseThreads.map((thread) => {
-              // 无场归属的存量单轮（thread_id 为空）用它自己的 run id 当 key——绝不让它们
-              // 因为"共用空串这个键"在 React 里塌成一个。
-              const key = thread.thread_id || thread.runs[0]?.id || ''
-              const first = thread.runs[0]
-              const last = thread.runs[thread.runs.length - 1]
-              const isCurrent = !!thread.thread_id && thread.thread_id === currentThreadId
-              if (!first) return null
-              return (
-                <li key={key} className={isCurrent ? 'is-current' : undefined}>
-                  <button
-                    type="button"
-                    className="lite-room-history-head"
-                    data-history-thread={key}
-                    data-history-turns={thread.runs.length}
-                    // 锁①：生成中禁点。政策拍板 (b) —— 打开一场是**替换**当前 turns，
-                    // 在跑的那一轮会被顶掉且它还没落库，所以只能等它答完。
-                    // 锁②在 store.hydrateThread 里（同一拍双击够不着 React 的重渲染）。
-                    disabled={busy || undefined}
-                    title={busy ? t.lite2.roomHistoryBusy : undefined}
-                    aria-label={
-                      isCurrent ? t.lite2.roomHistoryCurrent : t.lite2.roomHistoryOpenAria
-                    }
-                    onClick={() => {
-                      hydrateThread(thread)
-                      setOpen(false)
-                    }}
-                  >
-                    {/* 场的标题就是它的**第一问**——一场对话是从哪句话开始的，比它最后聊到
-                        哪儿更能让人认出它。 */}
-                    <span className="lite-room-history-q">{first.question}</span>
-                    <span className="lite-room-history-meta">
-                      <span className="lite-room-history-turns">
-                        {thread.runs.length > 1
-                          ? fill(t.lite2.roomHistoryTurns, { n: thread.runs.length })
-                          : t.lite2.roomHistoryEmptyThread}
-                      </span>
-                      {/* 时间戳取**最后一轮**：列表是按最近活动排的，标一个开场时间会和
-                          排序打架（老场被追问后浮到最前、却显示着最老的时间）。 */}
-                      <span className="lite-room-history-date">{stampOf(last.created_at)}</span>
-                    </span>
-                  </button>
-                </li>
-              )
-            })}
-          </ol>
-        </section>
-      ) : null}
+      <aside
+        className={classNames(['lite-room-aside', open ? 'is-open' : ''])}
+        aria-label={l.roomHistoryTitle}
+        data-room-aside=""
+      >
+        <div className="lite-room-aside-top">
+          <button
+            type="button"
+            className="lite-btn lite-btn--ghost lite-room-new"
+            data-room-new=""
+            // 锁①：生成中禁点（票面拍板）。被打断的那一轮**通常不落库**（无 manifest →
+            // 不调 _post_advise_hooks），点下去 = 刚问的问题人间蒸发、历史里也找不回。
+            // 锁②在 store.newConversation 的临界区里，两把锁配两条独立判据。
+            disabled={busy || undefined}
+            title={busy ? l.roomNewBusy : undefined}
+            onClick={() => {
+              newConversation()
+              setOpen(false)
+            }}
+          >
+            <NewChatIcon />
+            <span>{l.roomNewLabel}</span>
+          </button>
+        </div>
+        <div className="lite-room-aside-list" data-history-list="">
+          {/* null（还没拉/stub 通道）→ 留白：**不说** 「还没有历史对话」。
+              「不知道有没有」和「确实没有」是两句不同的话，合并成一句就是替后端撒谎。 */}
+          {adviseThreads === null ? null : count === 0 ? (
+            <p className="lite-room-aside-empty" data-history-empty="">{l.roomHistoryEmpty}</p>
+          ) : (
+            groups.map((g) => (
+              <section key={g.id} className="lite-room-aside-group">
+                <p className="lite-room-aside-group-label" data-history-group={g.id}>
+                  {g.id === 'today' ? l.roomHistoryToday
+                    : g.id === 'yesterday' ? l.roomHistoryYesterday
+                      : l.roomHistoryEarlier}
+                </p>
+                <ol className="lite-room-history-list">{g.threads.map(renderThread)}</ol>
+              </section>
+            ))
+          )}
+        </div>
+      </aside>
     </>
   )
+}
+
+// 场内最后一轮（分组键与时间戳都取它——与服务端的排序键同源，标开场时间会和排序打架）。
+// 服务端保证 runs 非空（分组是从行聚出来的），但取值仍走兜底：一个空数组换来的
+// `undefined.created_at` 会整屏白，而它本来只该是一行没有时间戳。
+function lastRunOf(thread: LiveAdviseThread): { created_at: string } {
+  return thread.runs[thread.runs.length - 1] ?? { created_at: '' }
+}
+
+// 本地日历日的序号。用「减掉时区偏移再整除一天」而不是比 getDate()——后者跨月/跨年就废了。
+function localDayIndex(d: Date): number {
+  return Math.floor((d.getTime() - d.getTimezoneOffset() * 60000) / 86400000)
+}
+
+type ThreadGroup = { id: 'today' | 'yesterday' | 'earlier'; threads: LiveAdviseThread[] }
+
+// issue #80 · 按日期分组（今天/昨天/更早）。**纯前端**，零后端改动。
+//
+// 🔴 两个钟的坑，写在这儿免得下一个人在门里赌它：`created_at` 是**服务器** UTC 时钟铸的，
+//    而这里比的是浏览器的 `now`。本机 Docker PG 容器有过时钟来回跳 ~115 秒的先例，服务器
+//    比浏览器**快**一点是常态——所以「今天」那一支判的是 `delta <= 0` 而不是 `=== 0`：
+//    一条「未来 2 分钟」的记录该归今天，不该掉进 else 变成「更早」。
+// 🔴 门里别断言标签归属（那要求两个钟对齐），只断言**分组函数**与 DOM 结构；像素基线也只
+//    冻空历史态——把「今天」冻进基线就是埋一颗随时炸的墙钟炸弹。
+function groupThreads(threads: LiveAdviseThread[], now: Date): ThreadGroup[] {
+  const today: LiveAdviseThread[] = []
+  const yesterday: LiveAdviseThread[] = []
+  const earlier: LiveAdviseThread[] = []
+  const nowIdx = localDayIndex(now)
+  for (const thread of threads) {
+    const d = new Date(lastRunOf(thread).created_at)
+    // 时间戳解析不出来的（存量脏数据/空串）归「更早」——绝不假装它是今天的。
+    const delta = Number.isNaN(d.getTime()) ? Number.POSITIVE_INFINITY : nowIdx - localDayIndex(d)
+    if (delta <= 0) today.push(thread)
+    else if (delta === 1) yesterday.push(thread)
+    else earlier.push(thread)
+  }
+  // 组序固定 今天→昨天→更早；组内保持服务端给的「按最近活动新→旧」。两者叠起来，
+  // 拍平后的 DOM 顺序仍是全局最近活动序（room-threads ⑥ 的顺序判据靠这条继续成立）。
+  return ([
+    { id: 'today', threads: today },
+    { id: 'yesterday', threads: yesterday },
+    { id: 'earlier', threads: earlier },
+  ] as ThreadGroup[]).filter((g) => g.threads.length > 0)
 }
 
 // feat-045（PRD F5）· 空态建议问题 chips——4 个泛化开场问（不预设语料内容），点击即发问
@@ -878,7 +996,10 @@ export function RoomScreen() {
                的键。共享那条留给冻结壳一个字节不动——v01 的屏叫「议事室」、隐喻是一屋子人；
                v02 问的对象是 Avery 本身。分叉先例：teamEmptyLead ← team.emptyBody（zh.ts:703-704）。 */
             placeholder={entry.hint ?? t.lite2.roomAskPlaceholder}
-            submitLabel={t.nexus.ask}
+            /* #81 · 文字钮「提问」→ 箭头 icon（可及名走 submitAriaLabel，见 LiteAskComposer）。
+               `t.nexus.ask` 这个键**没被删**：v01 冻结壳仍在用它，且它是「提问」这个词本身，
+               不是这枚钮的所有物。 */
+            submitLabel={<SendIcon />}
             onAsk={askWithRefs}
             initialValue={entry.draft ?? undefined}
             initialRefs={entry.refs ?? undefined}
@@ -890,13 +1011,16 @@ export function RoomScreen() {
             onAttach={(picked) => void handleAttach(picked)}
             onRemoveAttachment={removeAttachment}
           />
-          {/* issue #49 → #78 · 历史入口+面板：absolute 定位，不进 board/empty 两棵门锚树。
+          {/* issue #49 → #78 → #80 · 会话侧栏（+ ≤860 的抽屉开关）：absolute 定位，
+              不进 board/empty 两棵门锚树。
               🔴 #78 把它从 `.lite-room` 的末尾**挪进了 contextId !== null 这一支**：它现在
               是「打开一场对话」的入口，而 hydrate 的目标（滚动区 + composer）只在这一支里
               存在——挂在外面就有一条「无材料态点历史 → 灌进一棵不存在的树」的路。
               无材料态本来也拉不到历史（refreshAdviseThreads 判 contextId 即返回），所以这
-              一挪不删除任何真实可达的功能，只是把不可达的那半也从 DOM 上关掉。 */}
-          <LiteRoomHistory />
+              一挪不删除任何真实可达的功能，只是把不可达的那半也从 DOM 上关掉。
+              🔴 #80 常显之后这条更要紧了：留在这一支里，`visual.spec` 的 room 四张
+              （contextId===null 无材料态）与 verify-room-nomaterial 才**一个像素都不动**。 */}
+          <LiteRoomAside />
         </>
       ) : (
         /* 0721 · 无材料诚实空态（合伙人实测：零数据提问被呈现成「中途断了」系统故障样，
