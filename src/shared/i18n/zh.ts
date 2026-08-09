@@ -219,7 +219,7 @@ export const zh: Dict = {
     "privacyNote": "默认不给人打分——除非你们公司主动开启。Avery 只看每个人做了什么、在负责什么。",
     "empty": "还没有文件。上传几份，团队就会出现。",
     "filesTitle": "你的文件",
-    "filesChunks": "处引用",
+    "filesChunks": "处可引用片段",
     "acceptedExts": ".pdf · .docx · .xlsx · .csv · .tsv · .md · .txt",
     "acceptedLegacyNote": "旧版 .doc 和 .xls 需要先另存为新格式再上传。",
     "fileStatusIngested": "已读取",
@@ -231,19 +231,19 @@ export const zh: Dict = {
     // ⚠ HAND-WRITTEN, NOT YET M3（T10 · 2026-08-07）：这两句必须跟着改口。以前"合并"根本不存在，
     // 说"不会并进"是全部真相；现在**存在**一条会合并的路（就在这一段上面的「补资料」），
     // 再说同一句话就是把经理往错的按钮上引。
-    "againTitle": "这个口子会另起一家公司",
-    "againBody": "从这里传，Avery 会当作另一家公司从头读一遍，不并进你现在看的这一份。要给现在这家补资料，用上面那个口子。两份都留着，可以在这里来回切。",
+    "againTitle": "从这里上传会新建一家公司",
+    "againBody": "从这里传，Avery 会当作另一家公司从头读一遍，不会并进你现在看的这一份。要给现在这家补资料，用上面的「给这家公司补资料」。两份都留着，随时可以来回切。",
     // ⚠ HAND-WRITTEN, NOT YET M3（T10 · 补资料口）。
     "appendTitle": "给这家公司补资料",
     "appendCaption": "新文件会并进你现在看的这家公司。读到的新情况直接更新到卡片上；和旧资料对不上的地方，会出现在今天页等你确认。",
     "appendReadyLabel": "新资料已经并进来了",
-    "appendAddedLead": "这次加进来的",
+    "appendAddedLead": "这次新增的",
     "appendConflicts": "有 {count} 处和旧资料对不上，去「今天」页看两边分别怎么写的。",
-    "switchTitle": "这台电脑上传过的",
+    "switchTitle": "这台电脑上传过的公司",
     "switchAction": "打开这一份",
     "switchOpening": "打开中…",
     "switchCurrent": "当前打开的",
-    "switchFilesLabel": "读自",
+    "switchFilesLabel": "来自",
     "switchForget": "从这个列表里移除",
     "switchForgetNote": "只是把这台电脑上的入口去掉，服务端的数据不会被删。",
     "switchErrorMissingCredential": "这台电脑上已经没有打开那一份的钥匙了。公司数据本身还在服务端——用当初绑定的账号登录就能拿回来。",
@@ -314,9 +314,15 @@ export const zh: Dict = {
     "emptyBody": "把几个文件拖到右边——人和项目会从里头浮现，Avery 会带着一份能用的解读回来：哪里值得留意，哪里值得再看一眼。什么也不用配置。"
   },
   "nexus": {
-    "liveThinking": "正在仔细梳理中 — 实时",
-    "liveRunning": "正在思考…",
-    "liveReady": "分析好了，可以看了",
+    // ⚠ #79 · 这三条是**共享段**：v01 冻结壳的 RoomScreen（:133/134/186）与 v02 同用。
+    //  改它们两壳一起变——但两壳此前就是同一句，改完仍是同一句，不制造「两壳分叉」。
+    // ⚠ liveThinking 的新值**不是** recon §5 表里的「正在分析」：#75 之后 v02 的眉标只在
+    //  `running` 时渲染（RoomScreen:399-401），照表改会让眉标「正在分析」与下面那行状态
+    //  「正在分析…」逐字撞车、上下堆着说同一句话。这里改成**给这条状态条命名**（它是什么）
+    //  而不是重复它的状态（它在干嘛）：容器 aria-label 也用这个键，四态下都不撒谎。
+    "liveThinking": "实时进度",
+    "liveRunning": "正在分析…",
+    "liveReady": "分析完成",
     "liveError": "暂时连不上，再试一次？",
     // ⚠ HAND-WRITTEN, act-first（#75 · 议事室停止生成）：manager 自己按停之后的状态词。
     // 与 liveReady 互斥——改造前中止被收成 complete，屏上会写「分析好了，可以看了」，
@@ -520,7 +526,13 @@ export const zh: Dict = {
   },
   "lite2": {
     "tabTeam": "团队",
-    "tabRoom": "问 Avery",
+    // ⚠ #79 · Danny 2026-08-09 逐条勾选时**亲自推翻**自己 07-29 的定名（ADR-0031「问 Avery」）：
+    //  tab 主名改「对话」。不是笔误，别劝回、别顺手改回去。
+    //  连带纪律（本票立的碑）：**名字引用**跟着改（followupsSourceRoom / homeTodayEmpty /
+    //  followupsEmptyActive / roomBoardAria / formsBuilderGoesToLibrary），**动词短语不改**
+    //  （「去问 Avery」是动作不是屏名；悬浮胶囊 askAveryLabel 仍叫「问 Avery」，同 Claude 的
+    //  「Claude 是谁 / Chats 是哪儿」分工）。EN 取更短的 `Chat`（tab 宽度闸只许等长或变短）。
+    "tabRoom": "对话",
     "tabPlaybooks": "操作手册",
     "tabVision": "完整版预告",
     "tabFollowups": "待办清单",
@@ -536,18 +548,18 @@ export const zh: Dict = {
     // 不等于客户那边没有（本轮总纪律 absent≠none）。
     "tabFiles": "资料库",
     "filesEyebrow": "资料库",
-    "filesHeading": "资料库",
-    "filesSub": "你传给 Avery 的材料都在这里，也能看到现在读的是哪一批。文件存在服务器上，这一页是你回头看它们的地方。",
+    "filesHeading": "你传给 Avery 的资料",
+    "filesSub": "你传给 Avery 的资料都在这里。也能看到它现在读的是哪一批。",
     "filesCurrentTitle": "当前资料",
-    "filesCurrentEmptyNone": "还没传过材料。在下面发几份给 Avery，团队就会长出来。",
-    "filesCurrentEmptyRead": "这一批里 Avery 没列出任何文件。如果刚传完，等一会儿再刷新；要是一直是空的，多半是这些文件没读出内容，重新传一次是最快的解法。",
-    "filesUploadTitle": "另建一份画像",
+    "filesCurrentEmptyNone": "还没传过资料。在下面发几份给 Avery，团队信息就会整理出来。",
+    "filesCurrentEmptyRead": "Avery 没有列出这一批里的任何文件。刚传完的话稍等一下再刷新；如果一直是空的，多半是这些文件没读出内容，重新传一次最快。",
+    "filesUploadTitle": "新建一家公司",
     // ⚠ HAND-WRITTEN, NOT YET M3（T10 · 补资料这一段的小节壳）。
     // 🔴 demoNote 说的是「为什么这儿没有口子」，不是「这个功能不存在」——示例副本本来就是随手可弃的，
     //    往里补资料会随清理一起没，那才是真正该讲清楚的一句。
     "filesAppendTitle": "给这家公司补资料",
     "filesAppendLede": "又拿到新周报、新纪要、新名册？从这里传，它们会并进现在这家公司，卡片直接更新到新读数。",
-    "filesAppendDemoNote": "示例团队是一份随时会被清理掉的副本，往里补的资料留不住。要正式用起来，在下面另建一份属于你自己公司的画像。",
+    "filesAppendDemoNote": "示例团队是一份随时会被清理掉的副本，往里补的资料留不住。要正式用起来，在下面新建一家属于你自己公司的。",
     // ⚠ HAND-WRITTEN（gap-design-0805 T3 · form-frontend-a1c）：资料库第④段「常驻表单」。
     // 词族锁定：这一族统一说「表单」，不混用「问卷/表格/打卡/考勤」。
     // 🔴 表单是**员工本人对自己这段工作的说法**，不是对人的评分——后端 gate_form_red_line
@@ -561,7 +573,7 @@ export const zh: Dict = {
     // 🔴 分隔符写进字符串本身，不写在 JSX 里：初版是 `{l.formsFieldsLead}：{preview}`，
     // 那个全角冒号硬编码在组件里，英文壳上就多出一个中文标点，而 i18n 门看不见它
     //（它扫的是这份文件里的键，不是 tsx 里的字面量）。
-    "formsFieldsLead": "问这几格：",
+    "formsFieldsLead": "会问这几题：",
     "formsPickLabel": "这次发给谁",
     "formsPickHint": "点名字选中，一次最多 30 个人。每人一条自己的链接，谁也看不到别人写了什么。",
     // 绑项目（0807 HITL 补的入口）。措辞刻意是「关于哪个项目」而不是「归属/分配」——
@@ -626,7 +638,7 @@ export const zh: Dict = {
     "formsBuilderDraftReview": "这些题目只是提案。要等你保存这张表、再生成链接，才会发出去。",
     "formsBuilderTitleLabel": "表名",
     "formsBuilderQuestionN": "第 {n} 题",
-    "formsBuilderKind": "怎么答",
+    "formsBuilderKind": "答题方式",
     "formsBuilderKindText": "自己写一段",
     "formsBuilderKindChoice": "从几个选项里挑一个",
     "formsBuilderKindNumber": "填一个数",
@@ -638,12 +650,15 @@ export const zh: Dict = {
     "formsBuilderDropChoice": "去掉",
     "formsBuilderMin": "最小",
     "formsBuilderMax": "最大",
-    "formsBuilderHelp": "题目下面的一行说明",
+    "formsBuilderHelp": "题目说明（可选）",
     "formsBuilderSwitchSituational": "这题问的是哪儿卡住了",
     "formsBuilderSwitchLoad": "这题问的是他自己觉得有多忙",
     "formsBuilderSwitchMood": "这题问的是他自己的状态",
     "formsBuilderGoesToCard": "这一格的答案还会上他的人卡，带着一条能点回原话的出处。",
-    "formsBuilderGoesToLibrary": "这一格的答案只进资料库——搜得到、议事室引得到，但不上任何卡。",
+    // 🔴 #79 真 bug①：「议事室」是 v01 冻结壳的 tab 名，v02 里根本没有这个地方（全 lite2 段
+    //  仅此一处泄漏）。改成 v02 的屏名（本票同时把它从「问 Avery」改成「对话」）。
+    //  ⚠ G9 钉的是「只进资料库」与「不上任何卡」两个片段（verify-form-builder.mjs:122），逐字保留。
+    "formsBuilderGoesToLibrary": "这一格的答案只进资料库——搜得到、在对话里引得到，但不上任何卡。",
     "formsBuilderRetire": "以后不问这一题了",
     // 这一句是「这里为什么没有删除键」的答案。
     "formsBuilderLockedHint": "已经有人答过这一题了，所以它得留在表上——留着，他那句答案才说得清自己在回答什么。",
@@ -658,7 +673,7 @@ export const zh: Dict = {
     // 🔴 与 formsError* 分成两族：同一个 422 在这两件事上意思完全不同，
     // 保存失败之后接一句「一次发给 1 到 30 个人」就是对经理撒谎。
     "formsBuilderErrorRejected": "Avery 没有收下这张表。它给的原因是：",
-    "formsBuilderErrorUnavailable": "建表要连上你的工作区才能做。",
+    "formsBuilderErrorUnavailable": "要先连上你的工作区才能建表。",
     "formsBuilderErrorUnreadable": "那份文件读不出来，没有可起草的东西。",
     "formsBuilderErrorFailed": "这会儿没能保存。过一会儿再试。",
     // 上限镜像（formShape.ts）。每一条都用**题号**指路——那正是编辑器里每一格标着的那个数。
@@ -687,19 +702,33 @@ export const zh: Dict = {
     // absent≠none 在这一格的样子。
     // teamEmptyLead = v02 版的 team.emptyBody。共用那句写的是「拖到右边」，v01 仍然为真
     // （它的团队屏还留着上传口），v02 撤走之后就成了假话——所以在这儿分叉，不改共用键。
+    // ⚠ #79 · **新键**：v02 版的 `team.emptyTitle`。见仁见智⑥（「长出来」隐喻族）拍板时
+    //  recon 把它记成「v01/共享段 3 处，随冻结壳不动」——**那个归类是错的**：
+    //  `t.team.emptyTitle` 同时渲染在 src/lite/screens/TeamScreen.tsx:218 **和**
+    //  src/lite2/screens/TeamScreen.tsx:362，也就是说那句「会在这里长出来」一直印在
+    //  v02 团队空态的 h1 上（本票重冻的 team-desktop 基线里肉眼可见）。
+    //  不改共享键、在 lite2 这边分叉——与紧邻的 teamEmptyLead 同一条先例、同一个理由。
+    "teamEmptyHeadline": "你的团队会出现在这里",
     "teamEmptyLead": "等 Avery 读过你的几份文件——一份花名册、一份计划、几篇周报——人和项目就会出现在这里。什么也不用配置。",
-    "teamEmptyTitle": "还没有可读的材料",
-    "teamEmptyBody": "这一屏是 Avery 读你给它的文件长出来的——一份花名册、一份计划、几篇周报。现在还什么都没进来，所以没有团队可显示。这说的是 Avery 手上有什么，不是你们公司有什么。",
+    "teamEmptyTitle": "还没有可读的资料",
+    // ⚠ #79 见仁见智⑥「长出来」隐喻族：只换掉隐喻那半句，**末句逐字保留**——那是 absent≠none
+    //  红线本身（§6.1 点名不许动的语义），换隐喻不许把它一起改写。
+    "teamEmptyBody": "这一屏的内容来自 Avery 读过的资料——一份花名册、一份计划、几篇周报。现在还什么都没进来，所以没有团队可显示。这说的是 Avery 手上有什么，不是你们公司有什么。",
     "teamEmptyCta": "去资料库",
     "homeFilesLink": "资料库",
-    "homeFilesManageLink": "去资料库管理",
+    "homeFilesManageLink": "管理资料",
     "langSwitchAria": "语言",
     "langSwitchZh": "中文",
     "langSwitchEn": "英文",
     "lookSwitchAria": "观感",
     "settingsAria": "设置",
-    "lookSwitchPaper": "暖纸",
-    "lookSwitchAurora": "极光",
+    // ⚠ #79 · 见仁见智②拍板：皮肤名从品牌语汇改大白话。`look` 的取值（paper/aurora）、
+    //  URL 参数、data-look、localStorage 一个字节没动——改的只是这两颗按钮的标签。
+    //  🔴 recon §4 写着「verify-switchers 读 URL 参数不读文本 → 门不红」，**那条转述是错的**：
+    //  verify-switchers.mjs:74/86 有两条硬判据直接比对按钮文本，rich-align-0722/verify-restart-09.mjs:56
+    //  还拿 /暖纸|Paper/ 找按钮。三处已在同一 commit 里同步。
+    "lookSwitchPaper": "浅色",
+    "lookSwitchAurora": "深色",
     // rich-align-0722/09 · 3 键手写 draft 待 Danny 审字（同 01-08 手写键口径）。
     "restartAction": "重新开始",
     "restartConfirm": "确认重新开始？",
@@ -737,26 +766,27 @@ export const zh: Dict = {
     "groupCollapse": "收起",
     "groupExpand": "展开",
     "followupsEyebrow": "跟进",
-    "followupsTitle": "所有要跟进的事，收在一处",
+    "followupsTitle": "所有要跟进的事都在这里",
     "followupsGroupToday": "今天",
     "followupsGroupWeek": "本周",
     "followupsGroupLater": "稍后",
     "followupsActiveTab": "进行中",
     "followupsHistoryTab": "已完成",
-    "followupsEmptyActive": "跟进列表还是空的——在下面加一条，或者把今早清单、问 Avery、快问里的事挪过来。",
+    // ⚠ 原文写「今早清单」——界面上没有任何东西叫这个名字，那一块叫「今日提醒」。
+    "followupsEmptyActive": "还没有待跟进的事。可以在下面直接加一条，或者从今日提醒、对话、快问里加过来。",
     "followupsEmptyHistory": "还没有已完成项——做完的事会落到这里。",
-    "followupsSourceTriage": "来自今早",
-    "followupsSourceRoom": "来自问 Avery",
+    "followupsSourceTriage": "来自今日提醒",
+    "followupsSourceRoom": "来自对话",
     "followupsSourceAsk": "来自快问",
     // #63：source id 'closer-look' 不变（已落盘的旧条目终身带着它），标签改指卡片现在住的块。
-    "followupsSourceCloserLook": "来自一处资料对不上",
+    "followupsSourceCloserLook": "来自「资料对不上的地方」",
     "followupsSourceManual": "你手动加的",
     "followupsSourceDecision": "来自一条决策",
     "followupsAddTitlePlaceholder": "要跟进什么？",
     "followupsAddGroupLabel": "时间",
     "followupsAddSubmit": "加到待办",
     "followupsDone": "完成",
-    "followupsRestore": "放回来",
+    "followupsRestore": "恢复",
     "followupsDelete": "删除",
     "followupsEdit": "编辑",
     "followupsSave": "保存",
@@ -769,25 +799,38 @@ export const zh: Dict = {
     // #63（merge-closerlook）：独立屏退休，对照卡搬进「今天」差距摘要块的展开态；
     // 页头三键（gapPageEyebrow/Title/Body）随屏死掉，下面的卡片/动作/历史/空态/预告键原样搬家。
     "gapCardClaimLabel": "文件里的说法",
-    "gapCardEvidenceLabel": "实际信号",
+    "gapCardEvidenceLabel": "资料里的实际情况",
     "gapOwnerPrefix": "负责人",
-    "gapResolveLabel": "厘清",
+    "gapResolveLabel": "已核实",
     "gapDismissLabel": "先放一放",
-    "gapAskLabel": "直接问本人",
+    // 🔴 #79 真 bug④（本票新查出来的，recon 只把它列进「tab 改名连带」没说破）：这颗按钮的
+    //  handleGapAsk（HomeScreen.tsx:236-249）走的是 setComposerHint + goScreen('room')——
+    //  它把你带去问 **Avery**，一个字都不会发给那个人。「直接问本人」是界面在撒谎。
+    "gapAskLabel": "去问 Avery",
     "gapAddFollowupLabel": "加到待办",
     // #63：这个动作铸出的待办标题。原屏写死英文模板（记档过的债），搬家顺手入字典。
-    "gapFollowupTitle": "多看一眼{title}",
-    "gapHistoryToggleLabel": "已查看过",
-    "gapResolvedBadge": "已厘清",
+    // 🔴 #79 真 bug②：「多看一眼」是 v01 冻结壳的词，v02 全站是「值得注意」（ADR-0031）。
+    //  这条铸出来的待办标题会**永久落进 localStorage**，改晚一天就多一批带旧词的历史待办。
+    //  ⚠ G4 钉的「多看一眼」只作用于 `.lite-handoffs-empty` 的文本（verify-handoffs-empty-honesty.mjs:105
+    //  按壳分词），与本键无关 → 门不红。新值取动作句而不是「值得注意{title}」：待办要能读成一件事。
+    "gapFollowupTitle": "确认一下{title}",
+    "gapHistoryToggleLabel": "已处理的",
+    "gapResolvedBadge": "已核实",
     "gapDismissedBadge": "已搁置",
-    "gapRestoreLabel": "放回来",
-    "gapEmptyTitle": "现在没什么值得注意的",
+    "gapRestoreLabel": "恢复",
+    // ⚠ 原文与「今日提醒」的 handoffToneLabel「值得注意」撞词——经理会以为今日提醒也空了。
+    //  新值与同块标题 homeGapsTitle「资料对不上的地方」同词；G6（snippet BANNED_TERMS）
+    //  禁的是「差距/现实差距/gap/Nexus」，「对不上」不在表里 → 门不红。
+    "gapEmptyTitle": "暂时没有对不上的地方",
     "gapEmptyBody": "等项目自报的进度和它遇到的卡点说法不一致时，会出现在这里。",
-    "gapRealtimeTitle": "这个页面会变成什么",
+    "gapRealtimeTitle": "接上你们的系统之后",
     "gapRealtimeBody": "此刻它读的是你已经上传的文件。接上你们公司的数据源后，这个页面就变成了实时视图——报告和现实之间的偏差会自己浮现，不用等下一次上传。",
-    "notesEyebrow": "观察记录",
-    "notesTitle": "Avery 记下的、关于你公司的观察",
-    "notesLede": "每当你问 Avery 一个真实的问题，它都会用自己的话把观察到的记下来，供你翻阅。你们合作得越久，这本笔记就越厚。",
+    // ⚠ #79 · 见仁见智③拍板改标题。eyebrow 同时从「观察记录」改成「笔记」是本票裁量：
+    //  NotesScreen:153-154 把 eyebrow 与 h2 上下贴着渲染，新标题以「观察记录」结尾——
+    //  不改 eyebrow 就是 §3.3 给 Files 治过的同一种「同一屏连着说两遍」。「笔记」与 tab 名同族。
+    "notesEyebrow": "笔记",
+    "notesTitle": "Avery 关于你公司的观察记录",
+    "notesLede": "每次你问 Avery 一个真实的问题，它都会把观察到的记下来，供你回看。用得越久，这里的内容越多。",
     "notesRedlineNote": "这些笔记写的是工作本身——项目、交接、负荷。至于「会不会给人打分」，是公司握着的开关，不是一句聪明的提示词能翻动的；任何一条笔记都不能单独作为人事决定的依据。",
     "notesCountSince": "条观察 · 始于",
     "notesCountOne": "条观察",
@@ -798,9 +841,12 @@ export const zh: Dict = {
     "notesEmptyTitle": "Avery 还没写下第一条笔记",
     "notesEmptyBody": "去问 Avery 一个关于你团队的真实管理问题。当 Avery 注意到值得留存的东西——一个模式、一处风险、一条依赖——它就会记在这里。",
     "notesEmptyCta": "去问 Avery",
-    "notesNudge": "Avery 记了一条笔记",
+    "notesNudge": "Avery 新记了一条",
     "playbooksEyebrow": "即将推出",
-    "playbooksTitle": "操作手册从团队已有的工作方式中生长出来",
+    // ⚠ #79 见仁见智⑥：lite2 段的「长出来/生长出来」隐喻族共 6 处（本行 + filesCurrentEmptyNone /
+    //  teamEmptyBody / playbooksLibraryTitle / visionNowBody / projectsLede），统一换「来自 / 整理出来」。
+    //  v01 段与共享 team.emptyTitle 那 3 处随冻结壳纪律**不动**（zh.ts:313/361/374 一带）。
+    "playbooksTitle": "操作手册来自团队已有的工作方式",
     "playbooksBody": "当 Avery 接入了你自己的 SOP、检查清单和过往决策后，会把它们提炼成可复用的操作手册——下次遇到类似情况，Avery 已经知道你的行事规则。",
     "playbooksSlotRoster": "入职与交接的 SOP 自动转成一步步可执行的操作手册。",
     "playbooksSlotIncident": "反复出现的情况沉淀为固定打法，Avery 每次都按同一套路走。",
@@ -810,7 +856,7 @@ export const zh: Dict = {
     "playbooksEmptyTag": "暂无操作手册",
     // rich-align-0722/08 · 满态方法库——以下 5 键手写 draft，待 Danny 审字（同 01-06 手写键口径）。
     "playbooksLibraryEyebrow": "操作手册",
-    "playbooksLibraryTitle": "从你团队 SOP 里长出的操作手册",
+    "playbooksLibraryTitle": "从你团队 SOP 整理出的操作手册",
     "playbooksLibrarySub": "Avery 读了你们的标准作业流程（SOP），把它们提炼成一张张方法卡——Avery 早已在跑的那些打法。",
     "playbooksLibraryAria": "操作手册——方法库",
     "playbooksCardTagsAria": "标签",
@@ -820,7 +866,7 @@ export const zh: Dict = {
     "visionLede": "其它标签页里跑的一切，都基于你自己上传的文件。这是有意为之——这是最快的方式，让你感受到 Avery 是如何读懂一个团队的。真正的产品，比这再往前走一步。",
     "visionNowLabel": "你刚才用的",
     "visionNowTitle": "一份用你自己的文件驱动的 demo",
-    "visionNowBody": "你丢进来一份花名册和一份计划，看着团队从中长出来，并向 Avery 提了一个真正的问题。这里没有为你写好的脚本——它读的是你给它的内容。这是一个公开的、可自助试用的版本，不是已部署的产品。",
+    "visionNowBody": "你丢进来一份花名册和一份计划，看着团队信息被整理出来，并向 Avery 提了一个真正的问题。这里没有为你写好的脚本——它读的是你给它的内容。这是一个公开的、可自助试用的版本，不是已部署的产品。",
     "visionRealLabel": "Avery 真正是什么",
     "visionRealTitle": "为一家公司量身打造的定制 agent",
     "visionRealBody": "在生产环境里，Avery 是为你的公司专门配置的——接入你自己的系统与文档，部署在你自己的安全环境内，而不是一个共享环境。它始终是一个聚焦的、领域专属的 agent，只认识你的团队，所以访问是有边界的、可审计的，而不是一个大模型到处伸手。",
@@ -829,7 +875,7 @@ export const zh: Dict = {
     "visionProofUiux": "界面——一支团队、一场实时解读，动起来到底是什么手感。",
     "visionProofJudgment": "判断——Avery 对一个真实情境的解读，是不是你愿意信的那种。",
     "visionProofRedline": "这道边界——Avery 能不能给人打分，是公司自己握着的一道开关，默认关着，要开得有人显式去拧。关着时，涉及给人打分的内容在入口就被挡回去；开着时，它会带着证据一起递进来，作为决策支持——但绝不单独构成人事决定的依据。",
-    "visionSummaryLabel": "速读版",
+    "visionSummaryLabel": "摘要",
     "visionSummary1": "Avery 把团队的真实文件，读成管理者能落地的判断——谁在扛什么事、项目到哪一步、哪些事需要你过目。",
     "visionSummary2": "你今天在试的，是这条路的演示端：上传、阅读、决策。真正的产品，是接上你公司自己的数据、私有化部署的专属 agent。",
     "visionSummary3": "边界交给你来定：给员工打分这件事，是一个由公司掌控的开关；Avery 的任何一句话，都不会成为人事决策的唯一依据。",
@@ -877,22 +923,26 @@ export const zh: Dict = {
     "streamNudgeRedline": "再核对一遍，只描述工作本身，不给任何人贴标签。",
     "streamNudgeChain": "先把回答落到证据上，再动手起草。",
     "streamAskDrafted": "一条快问已拟好，等你确认",
-    "streamAdviceReady": "判读好了",
-    "streamAdviceDone": "好了",
+    "streamAdviceReady": "分析完成",
+    // ⚠ 原值就两个字「好了」——这是「advise 跑完但没出结论卡」那一路的唯一收尾提示，
+    //  两个字说不出**什么**好了、更说不出「其实没结论」。
+    "streamAdviceDone": "这一轮跑完了，没有得出结论",
     "streamFailed": "连上 Avery 时出了点状况。",
     "streamErrorUnknown": "暂时没拿到失败详情。",
-    "triageRemaining": "{pending} / {total} 还值得看一眼",
+    "triageRemaining": "还有 {pending}/{total} 待处理",
     "triageDoneAria": "已完成 — {action}",
-    "triageDiscardLabel": "今天先放放",
+    "triageDiscardLabel": "今天先跳过",
     "triageTakeToRoomLabel": "去问 Avery",
     "triageAddFollowupLabel": "加到待办",
     "triageDraftMailLabel": "起草消息",
-    "triageDrawerLabel": "今天已照料",
+    "triageDrawerLabel": "今天已处理",
     "triageSetAsideLabel": "已搁置",
-    "triageRestoreLabel": "放回来",
-    "triageAllDone": "今早那批，都按你的安排处理完了。",
-    "restoringLabel": "正在取回你上次的会话…",
-    "restoreFailed": "暂时连不上服务器，没能取回上次的会话。",
+    "triageRestoreLabel": "恢复",
+    "triageAllDone": "今天的提醒都处理完了。",
+    // ⚠「会话」在这两句里指的是**公司数据**不是对话——经理会以为在恢复聊天记录，
+    //  #78 落地真线程之后这个歧义更贵了。统一说「资料」。
+    "restoringLabel": "正在载入你上次的资料…",
+    "restoreFailed": "暂时连不上服务器，没能载入上次的资料。",
     "restoreRetry": "重试",
     "emptyEyebrow": "开始上手",
     "emptyHintRoster": "团队花名册或几份简历都可以——成员会以卡片形式出现。",
@@ -900,11 +950,11 @@ export const zh: Dict = {
     "emptyHintPrivacy": "给人打分这件事，是公司握着的开关——在打开之前，Avery 只记大家做了什么、在负责什么。",
     "peopleLane": "人员",
     "projectLane": "项目",
-    "roomEmptyTitle": "把眼前的事拿来问 Avery",
-    "roomEmptyBody": "把团队里让你放心不下的事写下来——它会对照你上传的文件想清楚，再给你一份判断。",
-    "roomNoMaterialTitle": "眼下还没有可推理的依据",
+    "roomEmptyTitle": "把眼下的问题交给 Avery",
+    "roomEmptyBody": "把团队里让你放心不下的事写下来——它会对照你上传的资料想清楚，再给你一份判断。",
+    "roomNoMaterialTitle": "还没有可参考的资料",
     "roomNoMaterialBody": "Avery 还没读到你们团队的任何文件，没有事实可以支撑判断——它也不会瞎编。先上传一份花名册、一份项目计划，或者一份周报。",
-    "roomNoMaterialCta": "去添加材料",
+    "roomNoMaterialCta": "去上传资料",
     "refAll": "全部",
     "refPeople": "人员",
     "refProjects": "项目",
@@ -942,7 +992,9 @@ export const zh: Dict = {
     "tabProjects": "项目",
     "projectsEyebrow": "项目",
     "projectsTitle": "你文件里的项目",
-    "projectsLede": "这一屏只由你上传的文件长出来。文档没写的状态、日期和数字，这里会明确标成「文档未提及」——不是 0，也不是空白。",
+    // ⚠「文档未提及」逐字保留——G1（verify-locale-parity.mjs:62）与 G2（verify-status-truth.mjs:274）
+    //  两道门都钉着它，且它本身就是 absent≠none 红线的字面。
+    "projectsLede": "这一页的内容全部来自你上传的资料。文档里没写的状态、日期和数字，这里会明确标成「文档未提及」——不是 0，也不是空白。",
     "projectsCountOne": "从你的文件里读出 1 个项目",
     "projectsCountMany": "从你的文件里读出 {count} 个项目",
     "projectsCoverageTitle": "文件里没写的部分",
@@ -1041,13 +1093,13 @@ export const zh: Dict = {
     "onboardFinish": "进入",
     "onboardStepsAria": "设置步骤",
     "onboardStepOf": "第 {n} 步，共 {total} 步",
-    "onboardBrowse": "先随便看看",
+    "onboardBrowse": "先自己逛逛",
     "onboardDoorsTitle": "想从哪里开始？",
     "onboardDoorsBody": "两条路。示例团队最快看到全貌；用自己的文件起步，Avery 读的就是你们公司的现实。",
     "onboardDoorsBodySolo": "用自己的文件起步，Avery 读的就是你们公司的现实。",
     "onboardDoorDemoTitle": "用一份示例团队先看看",
     "onboardDoorDemoBody": "一份真实的示例团队（已脱敏）——花名册、项目和文档，Avery 已经读完。点一下就进，不用上传。",
-    "onboardDoorDemoBusy": "正在为你准备示例副本…",
+    "onboardDoorDemoBusy": "正在准备示例团队…",
     "onboardDoorDemoErrorLead": "没法取到示例团队——",
     "onboardDoorUploadTitle": "用自己的文件开始",
     "onboardDoorUploadBody": "把花名册、计划、周报交给 Avery——它会读成一张能用的图。大概三步。",
@@ -1063,7 +1115,7 @@ export const zh: Dict = {
     // partner-docs-0728 · 闸门上传步的那条链接（新标签页打开，理由见 en.ts）。M3 生成，2026-07-28。
     "onboardUploadFormsLink": "不知道该发什么？拿一份标准表单",
     "onboardTeamTitle": "关于你的一点信息",
-    "onboardTeamBody": "这里的字段用于产品里的招呼语，仅保存在本浏览器——只有最后那一格例外：它会交给 Avery，让它的判读从你们公司的现实出发。",
+    "onboardTeamBody": "这几项只用来在界面上称呼你，只存在这台浏览器里。只有最后一栏例外：它会交给 Avery，让分析贴着你们公司的实际情况。",
     "onboardCompanyLabel": "公司",
     "onboardCompanyPlaceholder": "如：Harbor & Co.",
     "onboardDeptLabel": "团队或部门",
@@ -1080,14 +1132,14 @@ export const zh: Dict = {
     "onboardCompanyNoteHintLater": "这段话会和你的文件一起交给 Avery——等你的工作区建好就发出。",
     "onboardNoteText": "来自初始设置——你向 Avery 介绍的公司情况：{note}",
     "onboardNoteSource": "初始设置 · 关于公司",
-    "homeDemoNote": "真实的匿名材料，已经读过一遍——这是你自己的私有副本，点一下就有。",
+    "homeDemoNote": "一份已脱敏的真实资料，Avery 已经读完。点一下就能用，是你自己的一份。",
     "onboardPlaybooksTitle": "挑几套适合你做事方式的打法",
     "onboardPlaybooksBody": "你挑的打法会决定「操作手册」标签页的样子 —— 它会显示每一套打法在接入你自己的 SOP 之后会长成什么样。目前还没接入，页面上也写明了。",
     "onboardDoneTitle": "准备好了",
     "onboardDoneGreeting": "{name}，很高兴见到你。",
     "onboardDoneGreetingNoName": "很高兴见到你。",
     "onboardDoneSummaryLead": "你挑的打法：",
-    "onboardDoneNoPicks": "没有挑打法 —— 「操作手册」标签页保持通用预览。",
+    "onboardDoneNoPicks": "没有选打法——「操作手册」页会保持通用预览。",
     "playbookOnboardingTitle": "新人第一个月",
     "playbookOnboardingBody": "你的入职与交接流程，落成一步步可走的打法。",
     "playbookWeeklyTitle": "每周一回看",
@@ -1107,30 +1159,35 @@ export const zh: Dict = {
     "playbooksChosenLabel": "设置时挑的",
     "playbooksChosenTag": "即将",
     "playbooksForCompany": "为 {company} 设置。",
-    "roomChipsLabel": "几个常见的开场",
+    "roomChipsLabel": "试试这样问",
     "roomChipAttention": "这周团队里有谁可能需要我搭把手？",
     "roomChipRisk": "哪个项目最可能延期，为什么？",
     "roomChipHandoff": "目前有没有哪个交接正等着某个人？",
     "roomChipPlanning": "帮我列一下下周的重点。",
     "roomFlowTitle": "分析过程",
-    "roomFlowRawTitle": "原始流",
-    "roomFlowShowRaw": "展开原始流",
-    "roomFlowHideRaw": "回到简化视图",
+    // ⚠「原始流」是 raw stream 的直译，开发者词。三条一起改，`roomFlowFailed` 里那句
+    //  「展开原始流可以看到…」也必须同步——否则文案自己指着一个已经不存在的按钮名。
+    "roomFlowRawTitle": "原始日志",
+    "roomFlowShowRaw": "查看原始日志",
+    "roomFlowHideRaw": "收起日志",
     "roomToolLabel": "工具",
     "roomManifestLabel": "结果",
-    "roomPhaseRead": "读取事实",
-    "roomPhaseCrosscheck": "交叉验证",
-    "roomPhaseMethod": "匹配方法",
-    "roomPhaseAct": "生成动作",
-    "roomPhasePending": "还没走到这一步",
-    "roomFlowSteps": "走了 {count} 步",
-    "roomFlowSources": "读了 {count} 份原始材料",
-    "roomFlowRecall": "从你的文件里翻出 {count} 条记录",
-    "roomFlowReady": "结论已经出来了",
-    "roomFlowCites": "依据 {count} 条原文",
-    "roomFlowCitesLabel": "它引用的原文",
-    "roomFlowUnresolved": "没对上真实的原文行",
-    "roomFlowFailed": "这一趟中途断了，没走完。展开原始流可以看到断在哪一步。",
+    "roomPhaseRead": "读取资料",
+    // 「交叉验证」是统计/ML 的 cross-validation，这里含义完全不同，别借词。
+    "roomPhaseCrosscheck": "核对信息",
+    "roomPhaseMethod": "选定处理方式",
+    "roomPhaseAct": "给出建议",
+    // 与「已完成／进行中」同族的短词，且更短——帮窄屏。
+    "roomPhasePending": "未开始",
+    "roomFlowSteps": "{count} 步",
+    "roomFlowSources": "读了 {count} 份资料",
+    "roomFlowRecall": "从资料里找到 {count} 条相关内容",
+    "roomFlowReady": "已给出结论",
+    // 这是个可点按钮（RoomScreen.tsx:174-182），动词开头更像按钮。
+    "roomFlowCites": "引用了 {count} 处原文",
+    "roomFlowCitesLabel": "引用的原文",
+    "roomFlowUnresolved": "没找到对应原文",
+    "roomFlowFailed": "这次分析中断了。查看原始日志可以看到停在哪一步。",
     // ⚠ HAND-WRITTEN, act-first（#75 · 议事室 Claude 化 + #73 现场附件）：
     // 新部件的新键。停止生成一族（roomStop*/roomFlowInterrupted）+ 附件一族（roomAttach*）。
     // 🔴 所有 *Aria 值必须纯中文：verify-aria-zh 判「≥2 个连续拉丁词、或单个长度≥4 的拉丁词」
@@ -1153,13 +1210,16 @@ export const zh: Dict = {
     "roomAttachBatchTooLarge": "这一批加起来超过 {max}，传不了",
     "bellAria": "通知",
     "bellTitle": "收到的消息",
-    "bellEmpty": "还没有。文件读完了，或 Avery 想完了一轮，都会落到这里。",
+    "bellEmpty": "暂无消息。资料读完、或者 Avery 分析完一轮，都会通知你。",
     "bellMarkAll": "全部标为已读",
     "bellUnreadAria": "{count} 条未读",
     "notifIngest": "团队已就绪 —— 你带来的文件都读完了。",
-    "notifRun": "Avery 想完了这一轮 —— 解读好了。",
+    "notifRun": "分析完成 —— 结果可以看了。",
     "notifAsk": "你的快问，回复都收齐了。",
-    "notifGap": "文件里有一处值得注意。",
+    // ⚠ 原文与「今日提醒」的 handoffToneLabel「值得注意」撞词，点进去却跳到差距块。
+    //  ⚠ G10 禁的是 notifForm 不许含「值得注意」（verify-forms-proactive.mjs:178），本键不受它管，
+    //  但把这个词从这里拿走顺带让那条判据的语义面更干净。
+    "notifGap": "资料里有一处对不上。",
     // T9 · 表单这一路。🔴 与上面四条同一条红线：泛化文案，永不点名员工个人——结构上也没有
     // 携带人名的槽位（NotifItem 只有 kind）。「有人交了」而不是「周雅交了」是刻意的。
     "notifForm": "表单收集有新进展 —— 去「文件与表单」看一眼。",
@@ -1174,16 +1234,17 @@ export const zh: Dict = {
     "draftSubject": "主题",
     "draftBody": "正文",
     "draftBodyHint": "这份草稿出自你文件里真实写着的内容。发之前先改成你自己的口气——最后是你在发这条消息。",
-    "draftCopy": "复制到聊天应用",
+    "draftCopy": "复制",
     "draftCopied": "已复制",
     "draftCopiedStatus": "已复制——去你们平时说话的地方粘贴就行。",
     "draftCopyFailed": "没能写进剪贴板——请手动选中上面的正文复制。",
     "draftMailto": "改用邮件",
-    "draftDoneAdd": "完成 · 加进跟进",
-    "draftDoneComplete": "完成 · 这条已办",
-    "draftAddedStatus": "已写进你的跟进队列。",
-    "draftCompletedStatus": "已在跟进队列里标记为办完。",
-    "draftGoFollowups": "去跟进队列",
+    "draftDoneAdd": "完成并加入待办",
+    "draftDoneComplete": "完成并标记已办",
+    // ⚠「队列」是开发词；那个 tab 的名字是「待办清单」（tabFollowups），照它说。
+    "draftAddedStatus": "已加入待办清单。",
+    "draftCompletedStatus": "已在待办清单里标记为完成。",
+    "draftGoFollowups": "去待办清单",
     // ⚠ 手写中文，非 M3 生成（feat-057）：聚合首屏一段。源键在 en.ts。
     // AGENTS.md 已授权 act-first 直接定稿，不标"待审"。
     // 🔴 这一屏上的每个数字都由 homeDerive.ts 从真 payload 数出来——文案里绝不写死任何统计数
@@ -1194,31 +1255,39 @@ export const zh: Dict = {
     // 所以两种都摊开讲，不替客户挑一个。
     "tabHome": "今天",
     "homeEyebrow": "今天",
-    "homeTitle": "今天有几件事等你定",
+    "homeTitle": "今天有几件事需要你确认",
     "homeLede": "都是从你上传的文件里读出来的。每一块都能点进去看细节。",
     "homeSkeletonTitle": "你每天从这里开始",
-    "homeSkeletonLede": "它现在还没有可用的素材。下面每一块内容都只来自你提供的文件，绝不会凭空编造。",
-    "homeSkeletonDecisions": "今天最值得你花时间的决策会在这里排开——按规则分级，每一条都带着触发它的那几行原文。",
-    "homeSkeletonGaps": "当项目自己说的状态和它的卡点各说各话时，这种不一致会在这里浮出来。",
-    "homeSkeletonAttention": "文件里反复提到的人会出现在这里——数的是被提到的次数，不是对任何人的评价。",
-    "homeSkeletonOverview": "人、项目、文件、备忘、待办——每一个数字都是 Avery 实际读到过的。",
+    // ⚠ #79 见仁见智⑧拍板：**只缩字数、不改结构**（每条仍然只讲「这一块将来会显示什么」）。
+    //  理由是 1366×768 上空态卡垂直居中、让位余量是视口高度的函数——原文每条 33-41 字，
+    //  五条叠起来会把眉题顶进顶栏。三句带红线语义的（不会编造 / 只数次数不作评价 /
+    //  数字都是实际读到的）**一个字都不许删掉那半句**，所以它们的缩幅小于一半。
+    //  🔴 verify-home-skeleton.mjs:45-46 判 `.lite-home-skeleton-blocks` 整块**零数字**
+    //  （`/[0-9０-９]/`）——下面四条里一个阿拉伯数字都不能有。
+    "homeSkeletonLede": "下面每一块都只来自你上传的资料，不会编造。",
+    "homeSkeletonDecisions": "今天值得你定的事会排在这里，每条都带着原文。",
+    "homeSkeletonGaps": "项目自报的状态和卡点对不上时，会出现在这里。",
+    "homeSkeletonAttention": "反复被提到的人会出现在这里，只数次数，不作评价。",
+    "homeSkeletonOverview": "人、项目、文件、笔记、待办——数字都是实际读到的。",
     "homeGuestNote": "不用注册账号也能用——所有功能对访客都开放。登录只是让你在不同设备上还能找回自己上传过的东西。",
     "homeTodayTitle": "今日待办",
-    "homeTodayEmpty": "今天还没有排队的事项。决策、问 Avery、「资料对不上的地方」冒出来的待办，都会落到这里。",
+    "homeTodayEmpty": "今天还没有待办。从决策、对话、「资料对不上的地方」加进来的事都会出现在这里。",
     "homeTodayDoneAria": "把「{title}」标记为已完成",
     "homeTodayMore": "列表里还有 {count} 项",
     "homeDecisionAddFollowup": "加到待办",
     "homeDecisionFollowupTitle": "决策：{title}",
     "homeDecisionsTitle": "今天要决策的",
     "homeDecisionsCount": "共 {total} 条",
-    "homeDecisionsOrderNote": "按定级规则排序，最要紧的在最前。",
-    "homeDecisionsAbsentTitle": "这份数据里没带决策定级",
-    "homeDecisionsAbsentBody": "两种可能，这份数据本身分不出是哪一种。一种是这家公司的资料在定级功能上线之前就读进来了，那么重新上传一次就会有；另一种是当前后端还没上定级这个能力，那么重新传多少次都不会有，得等后端跟上。",
+    // ⚠「定级」是后端词（decision_grading.py），界面上没有任何地方叫「定级」；
+    //  「后端」更是**开发词直接印给了客户**（原文出现两次）。三条一起换成经理的话。
+    "homeDecisionsOrderNote": "按重要程度排序，最要紧的在最前。",
+    "homeDecisionsAbsentTitle": "这份资料还没有分级结果",
+    "homeDecisionsAbsentBody": "两种可能，这份资料本身分不出是哪一种。一种是它在分级功能上线之前就读进来了，重新上传一次就会有；另一种是当前服务还不支持分级，那么重传多少次都不会有，只能等我们跟上。",
     "homeDecisionsEmptyTitle": "今天没有要你定夺的事",
     "homeDecisionsEmptyBody": "等文件里出现卡点、过期的日子或风险信号，它会带着命中的规则出现在这里。",
     "homeDecisionOwner": "负责人",
     "homeDecisionReasonRule": "按规则判定",
-    "homeDecisionReasonAvery": "Avery 自己的判断",
+    "homeDecisionReasonAvery": "Avery 的判断",
     // ⚠ HAND-WRITTEN, act-first（票 #38 · ADR-0033，2026-08-03）：以下 decisionGrades /
     //  homeDecisionReasonByRule / homeDecisionReasonNoRule / homeDecisionRuleJoin / decisionRules
     //  这一整块，是从后端搬过来的——在此之前这些句子由 decision_grading.py / decision_rules.py
@@ -1263,7 +1332,7 @@ export const zh: Dict = {
       "R-DONE": { "title": "项目自报已完成，且无风险信号", "basis": "状态" },
       "R-CLEAR": { "title": "项目自报正常，无未解阻塞、无风险信号", "basis": "状态 + 阻塞" }
     },
-    "homeDecisionEscalated": "Avery 把等级往上调了",
+    "homeDecisionEscalated": "Avery 调高了这条的等级",
     // B2b（#56）· 冲突卡的关闭出口。🔴 措辞红线（ADR-0018）：这不是错误提示，是请经理确认
     // ——两份都是他自己的资料，绝不说「你写错了」，也不替他断定哪份是对的。
     // 收起只影响他自己的看板（前端分桶），等级与资料原文一字不动。
@@ -1284,18 +1353,18 @@ export const zh: Dict = {
     "listJoin": "、",
     "labelSep": "：",
     "homeGapsTitle": "资料对不上的地方",
-    "homeGapsCount": "{count} 处待看",
+    "homeGapsCount": "{count} 处待确认",
     "homeGapsEmpty": "现在没有自相矛盾的地方。",
     "homeGapsFilterEmpty": "这个状态下暂时没有。",
     "homeGapFilterActive": "活跃",
     // #63：homeGapsLink（跳去已退休 tab 的链接）换成原地展开/收起一对。
     "homeGapsExpand": "全部展开",
     "homeGapsCollapse": "收起",
-    "homeAttentionTitle": "文件里反复提到的人",
+    "homeAttentionTitle": "资料里反复提到的人",
     "homeAttentionCaption": "数的是文件里提到的次数，不是对任何人的评价。",
     "homeAttentionWhySignals": "出现在 {count} 条信号里",
     "homeAttentionWhyBlockers": "名下项目挂着 {count} 条卡点",
-    "homeAttentionEmpty": "现在文件没有特别指向某个人。",
+    "homeAttentionEmpty": "目前资料里没有特别集中提到某个人。",
     "homeAttentionLink": "团队",
     "homeOverviewTitle": "资料概览",
     "homeOverviewPeople": "人",
@@ -1303,12 +1372,17 @@ export const zh: Dict = {
     "homeOverviewFiles": "份文件已读",
     "homeOverviewNotes": "条笔记",
     "homeOverviewFollowups": "条待跟进",
-    "adviceCardAria": "Avery 的分析 —— 判读",
+    // ⚠「判读」是气象/雷达/影像的专业词，日常中文里没人用它指「分析结论」。本票统一改「结论」，
+    //  同族五个键（adviceReadTitle / adviceCardAria / adviceSummaryAria /
+    //  adviceConfidenceWouldChange / streamAdviceReady）一起走，别只改一半。
+    "adviceCardAria": "Avery 的分析",
     "adviceEyebrow": "Avery 的分析",
     "roomAnswerLabel": "Avery 的回答",
-    "roomTurnQuestionLabel": "你问的",
-    "roomFollowupsLabel": "接着可以问",
-    "roomHistoryTitle": "之前问过的",
+    "roomTurnQuestionLabel": "你的提问",
+    "roomFollowupsLabel": "继续追问",
+    // ⚠ #78 已把它旁边的计数单位从「条」改成「场」（roomHistoryCount「{n} 场」），
+    //  两者渲染成「历史对话 · 3 场」，读得顺。
+    "roomHistoryTitle": "历史对话",
     "roomHistoryCount": "{n} 场",
     "roomHistoryTurns": "{n} 轮问答",
     "roomHistoryEmptyThread": "单独问过一次",
@@ -1316,39 +1390,56 @@ export const zh: Dict = {
     "roomHistoryCurrent": "就是眼下这场",
     "roomHistoryBusy": "这一轮还在答，答完才能切",
     "roomTurnFromHistory": "这轮是从历史载入的，当时的分析过程没有留存",
-    "adviceReadTitle": "判读",
-    "adviceSignOff": "由你拍板",
-    "adviceSummaryAria": "摘要 —— 判读",
-    "adviceSignalsLabel": "事实——它捕捉到的信号",
-    "adviceHypothesesLabel": "推断——可能在发生什么，不是定论",
+    "adviceReadTitle": "结论",
+    "adviceSignOff": "最终由你决定",
+    "adviceSummaryAria": "结论摘要",
+    // ⚠ 下面这五条 section label 原本全是「认识论前缀 + 破折号 + 解释」（事实——／推断——／
+    //  建议——／置信度——），那是设计稿的概念结构，每张卡要读五遍。改成直接说这一段是什么。
+    //  它们同时是可见 label 和 aria-label（LiteAdviceCard.tsx:56-57/67-68/89-90/100-102/133-134），
+    //  新值仍是纯中文，过 verify-aria-zh 的拉丁门。
+    //  ⚠ lite 段有同名 v01 副本（zh.ts:481-503），随冻结壳纪律**一个都不动**。
+    "adviceSignalsLabel": "读到的信号",
+    "adviceHypothesesLabel": "可能的原因（推测，不是结论）",
     "adviceMostLikely": "最可能的情况",
     "adviceAlsoPossible": "也存在这种可能",
     "adviceBackingLabel": "依据",
-    "adviceEvidenceLabel": "事实——这条意见所依据的原文行",
-    "adviceConfidenceLabel": "置信度——它有多确定",
-    "adviceConfidenceWouldChange": "什么会让判读改变",
+    "adviceEvidenceLabel": "依据的原文",
+    "adviceConfidenceLabel": "可信度",
+    "adviceConfidenceWouldChange": "什么情况下结论会变",
     "adviceMoveLabel": "下一步",
-    "adviceActionsLabel": "建议——推荐的下一步动作",
-    "adviceScriptLabel": "如果你要开 1:1",
-    "adviceWatchLabel": "看什么来判断奏效了",
-    "adviceHrAria": "HR / 谁来把关",
-    "adviceHrLabel": "何时拉上 HR",
+    "adviceActionsLabel": "建议的下一步",
+    // ⚠ `1:1` 与 `HR` 是外企黑话，国内经理未必懂。zh-purity 门的收尾纪律写得很直白：
+    //  「HR→人事 是**改文案**解决的，没有塞进白名单——放宽纯度门去迁就一句能改好的中文，
+    //  是把门本身花掉。」这三条正是那条纪律点名的例子，本票兑现它。
+    "adviceScriptLabel": "如果你要找他单独谈",
+    "adviceWatchLabel": "怎么判断有没有效果",
+    "adviceHrAria": "人事 / 谁来把关",
+    "adviceHrLabel": "什么时候找人事",
     "adviceEscalationNotYet": "暂时不用",
     "adviceConfirmsLabel": "谁来把关",
     "adviceConfidenceLow": "较低",
     "adviceConfidenceMedium": "中等",
     "adviceConfidenceHigh": "较高",
-    "adviceEscalationHRBP": "人力伙伴",
+    // 「人力伙伴」是 HRBP 的半译，中文里不成词（原注释自认是为了对齐徽章长度硬裁的）。
+    //  「人事」与同排的「法务／员工关怀／薪酬／高管层」同为 2-4 字，徽章宽度只变短。
+    "adviceEscalationHRBP": "人事",
     "adviceEscalationLegal": "法务",
     "adviceEscalationWellbeing": "员工关怀",
     "adviceEscalationCompensation": "薪酬",
     "adviceEscalationExecutive": "高管层",
     "topbarAria": "Avery 控制栏",
     "screenNavAria": "屏幕导航",
-    "roomBoardAria": "问 Avery —— 输出区",
-    "roomAskAria": "向你的团队提问",
+    "roomBoardAria": "对话 —— 回答区",
+    "roomAskAria": "向 Avery 提问",
+    // ⚠ #79 · **新键**：v02 版的 `nexus.askPlaceholder`。共享那条写的是「向你的团队提问…」，
+    //  那是 v01 的框架（它的屏叫「议事室」、隐喻是一屋子人）；v02 的对象是 Avery 本身。
+    //  在这儿分叉而不是改共享键，是照 teamEmptyLead 从 team.emptyBody 分出来的先例
+    //  （理由写在 zh.ts:703-704）——冻结壳一个字节不动。
+    "roomAskPlaceholder": "向 Avery 提问…",
     "roomLiveQuestionAria": "当前提问",
-    "roomEmptyAria": "还在梳理中 —— 向你的团队提问",
+    // ⚠ 原值「还在梳理中 —— …」挂在**空态** section 上，而空态什么都没在跑（同族的组件层
+    //  病灶 #75 已经修掉：RoomScreen:845 那颗 eyebrow 是删的不是改的）。这里只留名字。
+    "roomEmptyAria": "向 Avery 提问",
     "notesEmptyAria": "Avery 的笔记 —— 暂无内容",
     "playbooksEmptyAria": "操作手册 —— 即将上线",
     "teamLiveAria": "团队 —— 实时",
@@ -1359,8 +1450,8 @@ export const zh: Dict = {
   },
   "ask": {
     "eyebrow": "快问",
-    "draftTitle": "值得直接问问他们",
-    "draftLede": "缺的那一块不在文件里，而在他们自己怎么看这件事。看看这些问题，再把各自的链接交给本人。",
+    "draftTitle": "直接问问本人",
+    "draftLede": "资料里缺的那一块，在他们自己怎么看这件事。看一下这些问题，然后把各自的链接发给本人。",
     "redlineNote": "问题针对的是工作本身。能不能给人打分，是你们公司握着的开关——每条问题在每次保存时，仍会过一遍服务端的这道检查。",
     "redlineNoteOffline": "问题针对的是工作本身。这条服务端校验会在你保存时执行；本次离线预览不会写入任何内容，所以这里不跑。",
     "kindScale": "1–5",
@@ -1375,21 +1466,21 @@ export const zh: Dict = {
     "recipientsHint": "从你团队名单里选人——每人一条独立链接。",
     "confirm": "确认，生成链接",
     "confirmBusy": "正在生成链接…",
-    "sharedTitle": "链接备好了——你来发",
+    "sharedTitle": "链接已生成——由你转发",
     "sharedLede": "你亲手把链接发给对应的人，在你们平时聊的地方都行——你没发，谁也收不到。",
     "copy": "复制链接",
     "copied": "已复制",
     "repliesChip": "{answered}/{total} 已回复",
     "closedChip": "回复收齐了",
-    "refresh": "查一下新回复",
-    "refreshing": "正在查看…",
-    "receiptsTitle": "他们怎么说",
+    "refresh": "查看新回复",
+    "refreshing": "正在刷新…",
+    "receiptsTitle": "大家的回答",
     "selfReported": "本人自述",
     "selfReportedHint": "他们自己对这件事的描述——不是给他们的打分。",
     "receiptYes": "是",
     "receiptNo": "否",
     "receiptScaleSuffix": "/ 5",
-    "summaryTitle": "放在一起看",
+    "summaryTitle": "汇总",
     "answeredAt": "回复于",
     "errorGeneric": "连不上快问服务——再试一次。",
     "offlinePreview": "离线预览——这些链接只是示意，点不开。",

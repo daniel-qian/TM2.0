@@ -359,7 +359,11 @@ export function TeamScreen() {
               /* ── 上传空态：live 自己的引导文案，零 scripted 占位 ── */
               <header className="home-greeting lite-empty-greeting">
                 <p className="eyebrow">{t.lite2.emptyEyebrow}</p>
-                <h1>{t.team.emptyTitle}</h1>
+                {/* #79 · 从共享的 `t.team.emptyTitle`（「你的团队会在这里长出来」）换成 lite2 自己的键。
+                    理由与下面 teamEmptyLead 那段注释逐字相同：那个键 v01 也在读（src/lite/screens/
+                    TeamScreen.tsx:218），而 v01 是冻结壳。「长出来」隐喻族是 #79 见仁见智⑥拍板要退的，
+                    但拍板时这一处被归成了「v01/共享段不动」——那个归类是错的，它一直印在 v02 这一屏上。 */}
+                <h1>{t.lite2.teamEmptyHeadline}</h1>
                 {/* files-hub-0729/03 · 这里**不能**再用 `t.team.emptyBody`：那句话写的是
                     「把几个文件拖到右边」，而右边的上传口本片已经撤走了——它会当场变成一句
                     假话（本战役修的正是这一类）。

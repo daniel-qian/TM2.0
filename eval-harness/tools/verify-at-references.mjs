@@ -748,7 +748,7 @@ st = await composerEntry()
 recEntryPrefill('差距卡', st, '亲子乐园改造')
 entryPost = await submitRoom()
 recNoHintInBody('差距卡', st.placeholder, entryPost)
-rec('⑨ 入口·差距卡「直接问本人」：chip 在场且 POST 带 project reference（id=亲子乐园）',
+rec('⑨ 入口·差距卡「去问 Avery」：chip 在场且 POST 带 project reference（id=亲子乐园）',
   chips.length === 1 && chips[0].kind === 'project' && chips[0].id === ids.parkId &&
   !!entryPost && entryPost.references?.length === 1 && entryPost.references[0].id === ids.parkId,
   JSON.stringify({ chips, refs: entryPost?.references ?? null }))

@@ -891,12 +891,12 @@
 
     async assertRoomCanvas() {
       // Phase H（0729 输出形态战役 01 · 画板退役——本相位从「画布必须在」**翻转**为
-      // 「画布必须绝迹」）：Ask Avery 的输出改全站统一 scroll→frame 纵向语法
+      // 「画布必须绝迹」）：对话屏（Chat）的输出改全站统一 scroll→frame 纵向语法
       // （.lite-room-scroll 滚动容器 + .lite-room-board 纵向列）。LitePanZoom /
       // .lite-room-canvas / .lite-panzoom-* 在 v02 DOM 里必须绝迹（v01 冻结壳的画布
       // 不归本相位管）。composer 仍在滚动区外恒可点。
       // NOTE: board 只在 run 开始后挂载（hasStarted）——仍必须在 composerAskLive 之后调。
-      this._clickTab('Ask Avery');
+      this._clickTab('Chat');
       try {
         await poll(() => ($('.lite-room-scroll') ? true : null), 8000, 'room scroll frame to mount');
       } catch (e) { /* fall through */ }
@@ -1045,7 +1045,7 @@
       // Phase K1: after composerAskLive the advise stream carried manifest{kind:'ask-draft'} —
       // the AskCard mounts in DRAFT state: 1..3 questions each verbatim-editable, named roster
       // recipients, and the HONEST red-line note (check happens at save, server-side, not yet run).
-      this._clickTab('Ask Avery');
+      this._clickTab('Chat');
       try { await poll(() => ($('.lite-ask-card') ? true : null), 20000, 'ask card to mount'); } catch (e) { /* report below */ }
       const card = $('.lite-ask-card');
       if (!card) return (results.askDraft = { pass: false, error: 'no .lite-ask-card in DOM' });
@@ -1234,7 +1234,7 @@
     async assertAskSingleFlow() {
       // Phase K5: a FRESH ask (composerAskLive re-ran) — deselect down to ONE recipient,
       // share (1 link), collect, then the single-receipt shape: number + self-reported + verbatim.
-      this._clickTab('Ask Avery');
+      this._clickTab('Chat');
       try {
         await poll(() => {
           const c = $('.lite-ask-card');
@@ -1535,7 +1535,7 @@
       // Phase v2Boots: `?v=2&mode=live` must render the .lite2-shell root with all 9 tabs
       // Tab order = feat-057's aggregate entry + PRD order + feat-047's "Avery's notes"
       // + feat-055's "Projects" + files-hub-0729's "Files" − #63's "Worth noting":
-      //   Today · Team · Projects · Ask Avery · To-do list/Follow-ups · Avery's notes ·
+      //   Today · Team · Projects · Chat · To-do list/Follow-ups · Avery's notes ·
       //   Playbooks · Files   (0729 大白话命名 ADR-0031 + 资料库 ADR-0032 + merge-closerlook #63)
       //
       // "Avery's notes" was ported from `lite` and placed after Follow-ups per feat-047's
@@ -1582,7 +1582,9 @@
       // 0729 大白话命名（ADR-0031，Danny 审字）：5 个主名换企业大白话；home 副小字取消。
       // #63（merge-closerlook）：'Worth noting' 退 tab（9→8），与 LiteTopbar.tsx 的 tabs 数组
       // 同一 commit 同步——这是那个数组注释里点名的碑。
-      const expected = ['Today', 'Team', 'Projects', 'Ask Avery', 'To-do list', "Avery's notes", 'Playbooks', 'Files'];
+      // 🔴 #79 · tabRoom 改名 'Ask Avery' → 'Chat'（Danny 2026-08-09 推翻 ADR-0031 定名）。
+      // 这一行与 LiteTopbar.tsx 的 tabs 数组同一 commit 同步，且 verify-v2boots 是它的机械 runner。
+      const expected = ['Today', 'Team', 'Projects', 'Chat', 'To-do list', "Avery's notes", 'Playbooks', 'Files'];
       const expectedSubs = [null, null, null, null, 'Follow-ups', null, null, null];
       const out = {
         shellPresent: !!shell,
@@ -2553,7 +2555,7 @@
         if (skip) skip.click();
         try { await poll(() => (!this._wizard() ? true : null), 5000, 'wizard to close before chips'); } catch (e) { /* fall through */ }
       }
-      this._clickTab('Ask Avery');
+      this._clickTab('Chat');
       try { await poll(() => ($('.nexus-empty') ? true : null), 8000, 'room empty state to mount'); } catch (e) { /* report below */ }
       const chips = $$('.lite-room-chip');
       const chipIds = chips.map((c) => c.getAttribute('data-chip-id')).filter(Boolean);
@@ -2648,7 +2650,7 @@
       const ingestExact = JSON.stringify(afterIngestKinds) === JSON.stringify(['gap', 'ingest']);
 
       // ── 3) run to completion -> exactly {gap, ingest, run} ──
-      this._clickTab('Ask Avery');
+      this._clickTab('Chat');
       let runOk = false;
       try {
         await poll(() => ($('.nexus-followup-composer [data-composer-input]') ? true : null), 6000, 'room composer to mount');
@@ -3272,7 +3274,7 @@
       const prevScene = prevShell ? prevShell.getAttribute('data-scene') : null;
       if (terminal) {
         store.setState({ run: { ...prevRun, status: 'complete' }, ask: terminal, askBusy: 'idle' });
-        this._clickTab('Ask Avery');
+        this._clickTab('Chat');
         // TRAP #2 (cost this probe a second red herring): the run above already left a DRAFT
         // ask-card mounted, so polling for `.lite-ask-card` PRESENCE resolves on the first tick
         // and reads STALE DOM before React commits the setState — the probe then reports the old

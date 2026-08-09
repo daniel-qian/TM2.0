@@ -317,7 +317,7 @@ interface LiteState {
 
   // ── Your team（feat-016 ingestion 产出）──
   ingestStatus: IngestStatus
-  // #76 · 「另建一份画像」那个口子**自己**的状态机。只由 uploadFiles 写。
+  // #76 · 「新建一家公司」那个口子**自己**的状态机。只由 uploadFiles 写。
   //
   // 🔴 病根：`ingestStatus` 有五个写点，其中 restoreSession / refreshTeam / switchContext /
   // claimDemoTeam 四个都会把它拨到 'ready'。UploadPanel 两个实例读的是同一格，于是那个

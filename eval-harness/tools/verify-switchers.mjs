@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-// 设置菜单里的两个开关（语言 中文/英文 · 观感 暖纸/极光）的判据门 —— open-loop-0720 立门，
+// 设置菜单里的两个开关（语言 中文/英文 · 观感 浅色/深色）的判据门 —— open-loop-0720 立门，
 // 0721 对齐棒改版：Danny 拍板 7B——①切换器从顶栏常驻收进次级设置菜单（.lite-settings-toggle
 // 齿轮开合，收起时按钮**不在 DOM 里**——这是新判据，不是破坏）；②默认观感 paper→aurora
 // （command-room 对齐，aurora 是指挥室观感基底）。本门的默认态/方向断言全部随之翻转：
-// 现在验证「默认极光 → 点暖纸 → 记住暖纸 → 深链 aurora 赢回来」。
+// 现在验证「默认深色 → 点浅色 → 记住浅色 → 深链 aurora 赢回来」。
 //
 // 判据（open-loop-0720 kickoff 需求 + 0721 增补）：
 //   ⓪ 次级菜单：收起时 .lang-switch/.look-switch 不在 DOM；点齿轮展开后两组按钮齐；
@@ -71,10 +71,13 @@ const initial = await page.evaluate(() => ({
   lookActiveText: document.querySelector('.look-switch-btn.is-active')?.textContent ?? null,
   langActiveText: document.querySelector('.lang-switch-btn.is-active')?.textContent ?? null,
 }))
-rec('默认态：极光是 active', initial.lookActiveText === '极光', JSON.stringify(initial))
+// 🔴 #79 同步：这两条判据比的是**按钮标签文本**，lookSwitch{Paper,Aurora} 一改它们必红。
+//    （recon-copy §4 写着「这道门读 URL 参数不读文本→门不红」——那条转述是错的。）
+//    look 的**取值** paper/aurora 一个字节没变，下面所有 data-look / localStorage 判据原样。
+rec('默认态：深色是 active', initial.lookActiveText === '深色', JSON.stringify(initial))
 rec('默认态：中文是 active（?lang=zh 显式给了）', initial.langActiveText === '中文', JSON.stringify(initial))
 
-// 点「暖纸」（nth(0)）——class 换到第一个按钮，壳根 data-look 立即变 paper，写 localStorage。
+// 点「浅色」（nth(0)）——class 换到第一个按钮，壳根 data-look 立即变 paper，写 localStorage。
 await page.locator('.look-switch-btn').nth(0).click()
 await page.waitForTimeout(200)
 const afterLook = await page.evaluate(() => ({
@@ -83,8 +86,8 @@ const afterLook = await page.evaluate(() => ({
   shellLook: document.querySelector('.lite2-shell')?.getAttribute('data-look') ?? null,
   storage: localStorage.getItem('lite2:look:v1'),
 }))
-rec('点击换 class：暖纸按钮变 is-active', afterLook.activeText === '暖纸', JSON.stringify(afterLook))
-rec('点击换 class：极光按钮掉 is-active（互斥，不是叠加）', afterLook.secondBtnStillActive === false)
+rec('点击换 class：浅色按钮变 is-active', afterLook.activeText === '浅色', JSON.stringify(afterLook))
+rec('点击换 class：深色按钮掉 is-active（互斥，不是叠加）', afterLook.secondBtnStillActive === false)
 rec('点击立即生效：壳根 data-look 跟着变 paper（不必刷新）', afterLook.shellLook === 'paper')
 rec('点击写 localStorage（lite2:look:v1 = paper）', afterLook.storage === 'paper', `实得 "${afterLook.storage}"`)
 
@@ -117,7 +120,7 @@ const remembered = await page.evaluate(() => ({
   langStorage: localStorage.getItem('lite2:lang:v1'),
 }))
 rec(
-  '裸链重进（无 ?look=/?lang=）：观感仍是上次选的暖纸（localStorage 记住了，没弹回新默认 aurora）',
+  '裸链重进（无 ?look=/?lang=）：观感仍是上次选的浅色（localStorage 记住了，没弹回新默认 aurora）',
   remembered.shellLook === 'paper',
   JSON.stringify(remembered),
 )
@@ -176,7 +179,7 @@ await dismissOnboardIfAny(page)
 // 先造一个"用户改过偏好"的态：切到 paper + en，确认 localStorage 落值。
 await page.locator('.lite-settings-toggle').click()
 await page.waitForTimeout(150)
-await page.locator('.look-switch-btn').nth(0).click() // 暖纸 paper
+await page.locator('.look-switch-btn').nth(0).click() // 浅色 paper
 await page.waitForTimeout(120)
 await page.locator('.lang-switch-btn').nth(1).click() // 英文 en
 await page.waitForTimeout(120)

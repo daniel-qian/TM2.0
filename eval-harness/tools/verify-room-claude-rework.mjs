@@ -209,8 +209,12 @@ rec('③ DOM 上也能采到这一轮的中断态（门不必读 store 才看得
 rec('③ 分析过程面板出「你按了停止」说明块（半亮的四相不能没有解释）', stopped.stoppedNote)
 rec('③ 中断**不复用**断流的报错块（断流是「它断了」、中断是「你按的」，不是同一件事）',
   !stopped.failedNote, String(stopped.failedNote))
-rec('③ 🔴 HUD 不再说「分析好了」（改造前这里是全库最毒的一处静默走错分支）',
-  !!stopped.hud && !stopped.hud.includes('分析好了'), JSON.stringify(stopped.hud))
+// 🔴 #79 同步：这根针铉的是 `nexus.liveReady` 的**值**（不是一个固定的词）。
+//    #79 把它从「分析好了，可以看了」改成「分析完成」——不同步的话，这条判据会变成
+//    「找一个全库已经不存在的字符串」——**恒真**，即正向词表版的「改了门不红、门会瞎」。
+//    变异实证：把 onDone 的白名单改回黑名单（原病根）→ 这条必红。
+rec('③ 🔴 HUD 不再说「分析完成」（改造前这里是全库最毒的一处静默走错分支）',
+  !!stopped.hud && !stopped.hud.includes('分析完成'), JSON.stringify(stopped.hud))
 // ⚠ 判据能力边界，写明白免得下一个人高估它：本段用路由延迟造生成窗口，所以中止发生时
 //    这一轮**一个 SSE 事件都还没收到**，四相 steps 全是 0、按 refreshPhases 的规则本来就都是
 //    pending。也就是说这条判据在当前编排下**分辨不出**「有没有被盖成 done」那个病根——它只是
@@ -221,7 +225,7 @@ rec('③ 自证：被中止那一轮的相位里没有 done（它一步都没跑
   stopped.phases.length === 4 && !stopped.phases.includes('done'),
   JSON.stringify(stopped.phases))
 rec('③ 中断后停止键收起（没有流在跑就不该留一个停不了的停止键）', stopped.stopGone)
-rec('③ 中断的一轮**不出**建议追问 chips（没有结论就没有「接着可以问」）',
+rec('③ 中断的一轮**不出**建议追问 chips（没有结论就没有「继续追问」）',
   stopped.followups === 0, String(stopped.followups))
 await page.unroute('**/advise')
 

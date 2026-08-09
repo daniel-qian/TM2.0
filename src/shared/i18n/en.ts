@@ -201,9 +201,14 @@ export const en = {
 
   // ── Nexus, live ───────────────────────────────────────────────────────────
   nexus: {
-    liveThinking: 'Working it through — live',
-    liveRunning: 'Thinking…',
-    liveReady: 'The read is ready',
+    // ⚠ #79 · Shared with the frozen v01 shell (src/lite/screens/RoomScreen.tsx:133/134/186).
+    // Both shells said the same sentence before and still do — no fork is created here.
+    // liveThinking now NAMES the bar instead of restating the state: after #75 the eyebrow only
+    // renders while running, so "Analyzing" over "Analyzing…" would stack the same words twice;
+    // and the container aria-label uses this key in all four states, where a state word lies.
+    liveThinking: 'Live progress',
+    liveRunning: 'Analyzing…',
+    liveReady: 'Analysis complete',
     liveError: 'Something went wrong reaching the room.',
     // #75 · Stop generating. Deliberately says "did not finish", not "saved you a call":
     // the backend does not watch for client disconnect, so the LLM step already in flight
@@ -584,7 +589,14 @@ export const en = {
   // and v02 wording can diverge independently without touching v01's committed strings) ─────────
   lite2: {
     tabTeam: 'Team',
-    tabRoom: 'Ask Avery',
+    // ⚠ #79 · Danny overturned his own 07-29 naming (ADR-0031 'Ask Avery') on 2026-08-09.
+    // Not a typo — do not argue it back. zh takes 「对话」, en takes the shorter 'Chat'
+    // (the tab-width gate only allows same-or-shorter, so a shorter name is safe).
+    // 🔴 assertV2Boots' expected array in scripts/gates/live-frontend-gate.snippet.js AND the
+    // six _clickTab('Ask Avery') call sites were updated in the SAME commit.
+    // Discipline: NAME references follow the tab; VERB phrases ('Ask Avery' as an action, and
+    // the floating capsule askAveryLabel) stay — same split as Claude's product vs. 'Chats'.
+    tabRoom: 'Chat',
     tabPlaybooks: 'Playbooks',
     tabVision: "What's coming",
 
@@ -612,9 +624,9 @@ export const en = {
     filesEyebrow: 'Files',
     // Page name: the zh side is 「资料库」, deliberately the same word family as the home
     // screen's 「资料概览」 — one product, one word for the thing.
-    filesHeading: 'Files',
+    filesHeading: 'What you have given Avery',
     filesSub:
-      'Everything you have uploaded, and which batch Avery is reading right now. Files stay on the server; this page is how you look back at them.',
+      'Everything you have uploaded is here. You can also see which batch Avery is reading right now.',
     filesCurrentTitle: 'What Avery is reading now',
     // 🔴 Two different empty states, because they mean different things to a user. Neither one
     // is allowed to say "your files are gone" — see the switchErrorUnreadable note above for the
@@ -803,6 +815,12 @@ export const en = {
     // which is still TRUE in v01 (its team screen keeps the upload panel) and became FALSE in v02
     // the moment the panel moved to the Files hub. Diverging here rather than editing the shared
     // key is the whole reason lite2 has its own namespace.
+    // ⚠ #79 · NEW key: the v02 fork of shared `team.emptyTitle`. zh's copy of that key carries
+    // the 「长出来」 growth metaphor Danny asked to retire, and recon had mis-filed it as
+    // "v01/shared, frozen" — it actually renders on the v02 team screen too
+    // (src/lite2/screens/TeamScreen.tsx:362). Forked here rather than changing the shared key,
+    // same precedent and same reason as teamEmptyLead right below.
+    teamEmptyHeadline: 'Your team will appear here',
     teamEmptyLead:
       'People and projects appear here once Avery has read a few of your files — a roster, a plan, some weekly notes. Nothing to configure.',
     teamEmptyTitle: 'Nothing to read yet',
@@ -823,8 +841,11 @@ export const en = {
     lookSwitchAria: 'Look',
     // 0721 · 7B：切换器收进设置菜单——齿轮按钮的 aria/title。
     settingsAria: 'Settings',
-    lookSwitchPaper: 'Paper',
-    lookSwitchAurora: 'Aurora',
+    // ⚠ #79 · Labels only. The `look` values (paper/aurora), the ?look= param, data-look and
+    // localStorage are byte-identical. Gates that COMPARE THE LABEL TEXT were updated in the
+    // same commit: verify-switchers.mjs:74/86 and rich-align-0722/verify-restart-09.mjs:56.
+    lookSwitchPaper: 'Light',
+    lookSwitchAurora: 'Dark',
     // rich-align-0722/09 · 设置菜单第三行「重新开始」：清空全部（含语言/观感偏好）+ 回到闸门。
     // 两击确认防误触（首击变确认态）。
     restartAction: 'Start over',
@@ -895,10 +916,10 @@ export const en = {
     followupsGroupLater: 'Later',
     followupsActiveTab: 'Active',
     followupsHistoryTab: 'History',
-    followupsEmptyActive: "Nothing on your follow-up list yet — add one below, or bring one over from this morning's list, Ask Avery, or a quick ask.",
+    followupsEmptyActive: "Nothing to follow up on yet. Add one below, or bring one over from Today's nudges, Chat, or a quick ask.",
     followupsEmptyHistory: "Nothing completed yet — finished items land here.",
     followupsSourceTriage: 'From this morning',
-    followupsSourceRoom: 'From Ask Avery',
+    followupsSourceRoom: 'From Chat',
     followupsSourceAsk: 'From a quick ask',
     // #63: the source id stays 'closer-look' (persisted entries carry it forever); the label
     // now points at the block the cards live in, not the retired tab.
@@ -937,11 +958,15 @@ export const en = {
     // Card actions (memo-voiced, not SaaS "Resolve"/"Dismiss" verbs).
     gapResolveLabel: 'Settled',
     gapDismissLabel: 'Let it go',
-    gapAskLabel: 'Ask them directly',
+    // 🔴 #79 real bug: handleGapAsk (HomeScreen.tsx:236-249) prefills the composer and goes to
+    // the room. It asks AVERY. Nothing is ever sent to the person. The old label lied.
+    gapAskLabel: 'Ask Avery',
     gapAddFollowupLabel: 'Add to to-dos',
     // #63: the to-do title minted by that action. Was a hard-coded English template in the
     // old screen (a documented debt) — moved into the dict on the way over.
-    gapFollowupTitle: 'Take a closer look at {title}',
+    // 🔴 #79 real bug: "a closer look" is the FROZEN v01 word family; v02 says "worth noting".
+    // This title is minted into localStorage permanently, so a stale word here outlives the fix.
+    gapFollowupTitle: 'Confirm {title}',
 
     // History (resolved + dismissed, collapsed by default — same drawer language as the
     // morning-triage "Taken care of today" pattern, feat-036).
@@ -1528,9 +1553,11 @@ export const en = {
     // stream events: a phase that got no event stays "not started yet". No fake progress, no
     // scripted beats, no invented timing. The raw stream stays one click away, complete. ──
     roomFlowTitle: 'How Avery got here',
-    roomFlowRawTitle: 'Raw stream',
-    roomFlowShowRaw: 'Show raw stream',
-    roomFlowHideRaw: 'Back to the summary',
+    // ⚠ #79 · "Raw stream" is developer vocabulary. roomFlowFailed below points at this button
+    // by name — the two must move together or the copy names a button that no longer exists.
+    roomFlowRawTitle: 'Raw log',
+    roomFlowShowRaw: 'Show raw log',
+    roomFlowHideRaw: 'Hide the log',
     // avery-sync zh-purity (open-loop-0720, group b) — v01 twin above has the full reasoning.
     roomToolLabel: 'TOOL',
     roomManifestLabel: 'MANIFEST',
@@ -1548,7 +1575,7 @@ export const en = {
     roomFlowUnresolved: 'did not match a real line',
     // Honest failure state inside the flow panel itself (feat-059 review finding 4): when the
     // stream breaks mid-run the simplified view must say so, not leave a phase silently stalled.
-    roomFlowFailed: 'This run broke off partway and never finished. Open the raw stream to see where.',
+    roomFlowFailed: 'This analysis broke off partway. Open the raw log to see where it stopped.',
     // #75 + #73 · New parts: stop-generating family and inline-attachment family.
     // Kept separate from roomFlowFailed on purpose: a broken stream is "it failed",
     // an interrupted one is "you stopped it". Saying both with one sentence would make
@@ -1635,16 +1662,22 @@ export const en = {
     // 不该是拖文件」）。四块骨架文案全是**预告**：描述的每个产出面都真实存在（决策卡/
     // 多看一眼/需关注的人/概览计数），零数字、零装加载。 ──
     homeSkeletonTitle: 'This is where your day starts',
+    // ⚠ #79 · Shortened, structure untouched (each line still says only what this block WILL
+    // show). Five long lines stacked push the heading into the topbar at 1366×768 — the empty
+    // card is vertically centred, so its clearance is a function of viewport HEIGHT.
+    // The three red-line halves (nothing is invented / counted, never scored / counts Avery
+    // actually read) are kept verbatim in meaning, which is why those cut less than half.
+    // 🔴 verify-home-skeleton.mjs:45-46 asserts ZERO digits inside .lite-home-skeleton-blocks.
     homeSkeletonLede:
-      'It has nothing to work from yet. Every block below fills from files you bring in — and only from them. Nothing here is ever invented.',
+      'Every block below fills only from files you bring in. Nothing is invented.',
     homeSkeletonDecisions:
-      'The decisions worth your time today will line up here — graded by rules, each carrying the document lines that triggered it.',
+      'The decisions worth your time land here, each with its document lines.',
     homeSkeletonGaps:
-      "Where a project's own status and its blockers tell different stories, the mismatch surfaces here.",
+      'Projects whose status and blockers disagree surface here.',
     homeSkeletonAttention:
-      'People your files keep pointing at show up here — counted from mentions, never scored.',
+      'Names your files keep repeating appear here — counted, never scored.',
     homeSkeletonOverview:
-      'People, projects, files, notes, to-dos — every count is something Avery actually read.',
+      'People, projects, files, notes, to-dos — counts Avery actually read.',
     // 登录提示前置（合伙人反馈 A6）：AuthPanel 弹层里的 authGuestNote 藏得太深，这句在
     // 空态首屏常驻（仅 status==='guest' 时渲染——登录按钮真的在顶栏上才说这句话）。
     homeGuestNote:
@@ -1653,7 +1686,7 @@ export const en = {
     // ── 0721 · B4 闭环：首页今日待办块 + 决策卡「加入跟进」。 ──
     homeTodayTitle: 'To do today',
     homeTodayEmpty:
-      'Nothing queued for today. Decisions, Ask Avery, and the document mismatches can all drop items here.',
+      'Nothing queued for today. Decisions, Chat, and the document mismatches can all drop items here.',
     homeTodayDoneAria: 'Mark "{title}" done',
     homeTodayMore: '+{count} more in the list',
     homeDecisionAddFollowup: 'Add to to-dos',
@@ -1795,7 +1828,7 @@ export const en = {
     // avery-sync zh-purity slice; see the comment on lite.adviceCardAria for the full why).
     // Kept in its own lite2 namespace per kickoff-dev.md §6 so v01/v02 copy can diverge
     // independently later, even though today the two cards render identical labels.
-    adviceCardAria: "Avery's analysis — the read",
+    adviceCardAria: "Avery's analysis",
     adviceEyebrow: "Avery's analysis",
     // 0729/03 分流短答：事实查询的一段话直答气泡（与判读卡互斥）。
     roomAnswerLabel: "Avery's answer",
@@ -1806,7 +1839,7 @@ export const en = {
     // issue #49 · 议事室历史（advise_runs 只读回看面）的入口/抽屉标题。
     // ⚠ #78 起这个计数的单位是**场**不是条（见 roomHistoryCount）。值本身不动——
     // 文案批改归 #79（recon-copy §5 建议改成「历史对话」）。
-    roomHistoryTitle: 'Asked before',
+    roomHistoryTitle: 'History',
     // ── issue #78 · 历史按场分组 + 打开一场接着问 ───────────────────────────────
     // 入口计数的单位。单独一个键（而不是把「场」写死进 roomHistoryTitle）是因为
     // roomHistoryTitle 的值归 #79 改，两件事不该锁在一起。
@@ -1823,22 +1856,24 @@ export const en = {
     // 回灌轮的说明行。诚实降级：过程态结构性没落库（0012 拍板不存原始流/四相/结构化引用），
     // 所以这里说的是"没留存"，不是"没有"。
     roomTurnFromHistory: 'Loaded from history. The steps behind it were not stored.',
-    adviceReadTitle: 'The read',
-    adviceSignOff: 'Yours to sign off',
-    adviceSummaryAria: 'Summary — the read',
-    // 0721 对齐棒 · Danny 拍板 6A（合伙人反馈 A4/C5）：结构标签显式携带「事实/推断/建议/
-    // 置信度」词汇族——8 字段卡本来就是这个结构，缺的只是把结构"说出来"。纯文案层，
-    // 后端 contract 一字未动；语气仍走 ADR-0015 的人话（前缀 + 破折号，不是冷冰冰的裸标签）。
-    adviceSignalsLabel: 'Fact — signals it picked up',
-    adviceHypothesesLabel: 'Inference — what might be going on, not a verdict',
+    adviceReadTitle: 'Conclusion',
+    adviceSignOff: 'The final call is yours',
+    adviceSummaryAria: 'Conclusion summary',
+    // ⚠ #79 · The 0721 decision below (spell the Fact/Inference/Suggestion/Confidence structure
+    // out in the labels) is REVERSED here, on the same grounds it was made: it is the design
+    // doc's concept model, and a manager reads it five times per card. The structure is still
+    // visible — it is the section order — it just no longer narrates itself.
+    // ⚠ The frozen v01 twins (en.ts:520-535) keep the old labels. Do not sync them.
+    adviceSignalsLabel: 'Signals it read',
+    adviceHypothesesLabel: 'Possible causes (a read, not a verdict)',
     adviceMostLikely: 'Most likely',
     adviceAlsoPossible: 'Also possible',
     adviceBackingLabel: 'The backing',
-    adviceEvidenceLabel: 'Fact — the document lines this leans on',
-    adviceConfidenceLabel: 'Confidence — how sure it is',
-    adviceConfidenceWouldChange: 'What would change it',
+    adviceEvidenceLabel: 'The document lines behind this',
+    adviceConfidenceLabel: 'Confidence',
+    adviceConfidenceWouldChange: 'What would change this conclusion',
     adviceMoveLabel: 'The move',
-    adviceActionsLabel: 'Suggestion — recommended actions',
+    adviceActionsLabel: 'Suggested next steps',
     adviceScriptLabel: 'If you open the 1:1',
     adviceWatchLabel: 'What to watch to know it worked',
     adviceHrAria: 'HR / who confirms',
@@ -1861,10 +1896,16 @@ export const en = {
     topbarAria: 'Avery controls',
     screenNavAria: 'Screen',
     // composer*Aria 四键随 LiteComposer 退役删除（#47）——v01 的 lite.composer*Aria 不动。
-    roomBoardAria: 'Ask Avery — output', // 0729 画板退役：board→纵向输出区（output-form-0729/01）
-    roomAskAria: 'Ask your team',
+    roomBoardAria: 'Chat — answers', // 0729 画板退役：board→纵向输出区（output-form-0729/01）
+    roomAskAria: 'Ask Avery',
     roomLiveQuestionAria: 'Live question',
-    roomEmptyAria: 'Working it through — ask your team',
+    // ⚠ #79 · This sits on the EMPTY state, where nothing is being worked through.
+    // (#75 already deleted the twin lie on the visible eyebrow; this is the aria half.)
+    roomEmptyAria: 'Ask Avery',
+    // ⚠ #79 · NEW key: the v02 fork of shared `nexus.askPlaceholder` ('Ask about your team…').
+    // v01 is a room full of people; v02 asks Avery itself. Forked rather than changing the
+    // shared key so the frozen shell stays byte-identical (precedent: teamEmptyLead).
+    roomAskPlaceholder: 'Ask Avery…',
     notesEmptyAria: "Avery's notes — nothing yet",
     playbooksEmptyAria: 'Playbooks — coming soon',
     teamLiveAria: 'Team — live',

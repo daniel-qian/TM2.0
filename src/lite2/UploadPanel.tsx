@@ -91,7 +91,7 @@ export function UploadPanel({ showFiles = true, mode = 'new' }: UploadPanelProps
   //
   // #76 · 'new' 这条读的是 `newCompanyStatus` 而**不是** `ingestStatus`：后者有五个写点，
   // restoreSession / refreshTeam / switchContext / claimDemoTeam 都会把它拨到 'ready'，于是
-  // 「另建一份画像」这个面板在恢复会话之后恒显示「团队已就绪」+「取材自: 当前公司的文件」
+  // 「新建一家公司」这个面板在恢复会话之后恒显示「团队已就绪」+「取材自: 当前公司的文件」
   // ——一个开新公司的口子，常驻展示着当前公司的就绪状态。新那格只由 uploadFiles 写。
   const status = appending ? appendStatus : newCompanyStatus
   const error = appending ? appendError : ingestError

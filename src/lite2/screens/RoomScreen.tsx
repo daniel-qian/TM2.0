@@ -491,7 +491,7 @@ function LiteTurnView({
 }
 
 // ── issue #49 → #78 · 议事室历史：按**场**分组的对话列表 ────────────────────────────
-// 右上一枚「之前问过的 · N 场」入口 + 内滚面板——刻意不进 .lite-room-board / .nexus-empty
+// 右上一枚「历史对话 · N 场」入口 + 内滚面板——刻意不进 .lite-room-board / .nexus-empty
 // 的既有 DOM（好几道门锚在那两棵树上）。
 //
 // #78 改了它的性质：从「只读回看抽屉」变成「打开一场对话」的入口。
@@ -783,7 +783,7 @@ export function RoomScreen() {
   // #75 · interrupted 也拉一次——这是**唯一**一处 interrupted 该跟着 complete 走的分支。
   // 理由是后端那个窄窗口：中止若恰好落在「manifest 已生成、帧还没送到浏览器」之间，
   // 服务端已经落了一条完整的 advise_run（app.py 的 on_manifest 在 yield 之前就调了），
-  // 那条记录立刻出现在「之前问过的」里，比让它悄悄躺到下次进屋才冒出来少一次惊吓。
+  // 那条记录立刻出现在「历史对话」里，比让它悄悄躺到下次进屋才冒出来少一次惊吓。
   useEffect(() => {
     if (lastStatus === 'complete' || lastStatus === 'interrupted') void refreshAdviseThreads()
   }, [lastStatus, refreshAdviseThreads])
@@ -874,7 +874,10 @@ export function RoomScreen() {
           {/* 常驻 composer：屏底、滚动区外、两态同一份。预填（灰提示/正文/refs）只在进屋那
               一刻有意义，所以仍然只喂给它一次——turns 已经开跑之后 entry 早被消费空了。 */}
           <LiteAskComposer
-            placeholder={entry.hint ?? t.nexus.askPlaceholder}
+            /* #79 · 从共享 `nexus.askPlaceholder`（v01 的「向你的团队提问…」）分叉到 lite2 自己
+               的键。共享那条留给冻结壳一个字节不动——v01 的屏叫「议事室」、隐喻是一屋子人；
+               v02 问的对象是 Avery 本身。分叉先例：teamEmptyLead ← team.emptyBody（zh.ts:703-704）。 */
+            placeholder={entry.hint ?? t.lite2.roomAskPlaceholder}
             submitLabel={t.nexus.ask}
             onAsk={askWithRefs}
             initialValue={entry.draft ?? undefined}

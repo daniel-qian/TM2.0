@@ -109,7 +109,7 @@ const entry = await page.evaluate(() => {
     mode: section?.querySelector('[data-upload-mode]')?.getAttribute('data-upload-mode') ?? null,
     hasInput: !!section?.querySelector('input.upload-input'),
     title: section?.querySelector('.lite-files-section-title')?.textContent?.trim() ?? '',
-    // 「另建一份画像」那个口子必须同时在场，且是另一个模式——两个动作分得开才叫分得清。
+    // 「新建一家公司」那个口子必须同时在场，且是另一个模式——两个动作分得开才叫分得清。
     otherModes: Array.from(document.querySelectorAll('[data-upload-mode]'))
       .map((n) => n.getAttribute('data-upload-mode')),
   }

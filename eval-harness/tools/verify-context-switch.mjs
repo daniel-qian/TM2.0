@@ -95,7 +95,7 @@ await page.evaluate((seam) => window[seam].getState().goScreen('files'), S)
 await page.waitForTimeout(600)
 
 const rows = await page.locator('.lite-files-switch-row').count()
-rec('资料库屏「你上传过的几批」列出两条（UI 真的渲染了，不只是 store 里有）', rows === 2, `实得 ${rows}`)
+rec('资料库屏「这台电脑上传过的公司」列出两条（UI 真的渲染了，不只是 store 里有）', rows === 2, `实得 ${rows}`)
 const currentMarked = await page.locator('.lite-files-switch-row[data-current="1"]').count()
 rec('当前正在用的那一条被标出来（且只有一条）', currentMarked === 1, `实得 ${currentMarked}`)
 const currentIsB = await page.evaluate(() => {

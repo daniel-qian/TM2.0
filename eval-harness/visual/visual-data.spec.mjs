@@ -44,8 +44,16 @@ Summary: Rebuilding the internal onboarding portal around the new checklist flow
 - The new checklist flow still needs sign-off from Ops; blocked on their review this week.
 `
 
-// 数据密度最高的三屏（票面方案 B）；room/followups 等交互态屏仍归各票交互态截图人眼过。
-const SCREENS = ['home', 'team', 'projects']
+// 数据密度最高的三屏（票面方案 B）。
+// 🔴 #79 加 'room'：#75/#78 两份回执都点名「议事室数据态零像素覆盖」——
+//    visual.spec 的 room 四张拍的是 `contextId === null` 的**无材料态**（LiteRoomHistory 在
+//    那里直接 return null，composer 与 board 都不在画面里），而本 spec 的 SCREENS 压根不含 room。
+//    于是 #75 重写的 docked composer、开场块、建议 chips 这一整面，改成什么样都不会有一张基线红。
+//    只拍【有材料 + 零轮次】那一态：它不需要真跑 /advise（无 LLM 方差），也不带历史面板
+//    （adviseRuns 为空 → 面板不渲染），因此**不带墙上时钟文案**。带轮次的那一态仍不入基线：
+//    历史面板会印「8月9日 19:52」这种墙钟文案，而判读卡的 confidence/escalation 四段在 mock
+//    语料下根本不渲染——冻它等于把一张**残缺的卡**当成满态基线（#79 实测，见回执）。
+const SCREENS = ['home', 'team', 'projects', 'room']
 const LOOKS = ['aurora', 'paper']
 
 const seedFiles = () => [
@@ -83,6 +91,13 @@ for (const look of LOOKS) {
     await page.evaluate(() => document.fonts.ready)
     for (const sc of SCREENS) {
       await page.evaluate((s) => window.__lite2Store.getState().goScreen(s), sc)
+      if (sc === 'room') {
+        // 自证：必须是**有材料**的空会话态（开场块 + 屏底常驻 composer）。
+        // 不写这两条的话，上传没生效时会把「还没有可参考的资料」那张无材料态当数据态冻进去
+        // ——而那正是 visual.spec 已经有的四张，等于新基线什么都没多盖、却看着多了四张。
+        await page.locator('.lite-room-welcome').first().waitFor({ timeout: 10000 })
+        await expect(page.locator('.lite-room-nomaterial'), 'room 数据态不允许拍到无材料态').toHaveCount(0)
+      }
       if (sc === 'home') {
         // 自证：#65 后差距对照卡默认展开，是本 spec 的核心覆盖对象——不在场就红，绝不拍假数据态。
         await page.locator('.lite-gap-card').first().waitFor({ timeout: 10000 })

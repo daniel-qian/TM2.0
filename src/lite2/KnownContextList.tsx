@@ -1,7 +1,7 @@
 import { useLite } from './store'
 import { useDict } from '../shared/i18n/useDict'
 
-// files-hub-0729/02 ·「你上传过的几批」——多库切换 UI。
+// files-hub-0729/02 ·「这台电脑上传过的公司」——多库切换 UI。
 //
 // ## 这块 UI 曾经存在过，然后被一次合并整块吃掉
 // store 侧（`knownContexts` / `switchContext` / `forgetContext` / `switchPending` /

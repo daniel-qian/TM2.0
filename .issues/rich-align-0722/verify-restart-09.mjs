@@ -53,7 +53,10 @@ await page.click('.lite-settings-toggle')
 await page.waitForTimeout(150)
 await page.evaluate(() => {
   const btns = [...document.querySelectorAll('.look-switch-btn')]
-  const paper = btns.find((b) => /暖纸|Paper/i.test(b.textContent || ''))
+  // 🔴 #79 同步：皮肤标签改成了「浅色/深色」（en: Light/Dark）。旧正则找不到按钮时
+  // find 返回 undefined、if 守卫让点击整个跳过，于是下面那条 look=paper 判据以
+  // 「偏好没落盘」的形态假红——不是崩、不是跳过，是最难诊断的那一类。
+  const paper = btns.find((b) => /浅色|Light/i.test(b.textContent || ''))
   if (paper) paper.click()
 })
 await page.waitForTimeout(150)
