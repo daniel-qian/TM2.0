@@ -63,10 +63,15 @@
 
 ### 合流账（S1 是后合者）
 
-代码层**零冲突**（两线段落真的不同：S2 动 `askRefs`/`FilesScreen`/`FileManifest`/`transport`，
-S1 动 `AskRefComposer`/`RoomScreen`/`streamSource`；`store.ts`/`lite2.css`/i18n 各自追加段落
-自动合上）。唯一冲突是 `progress.md`，本文件即合并结果。
-🔴 **合流后的全电池复跑见 What's Next 第 1 条——那是后合者的义务，还没做完。**
+代码层**零冲突**（两线段落真的不同：S2 动 `askRefs`/`FilesScreen`/`FileManifest`/`transport`/
+`registry.py`，S1 动 `AskRefComposer`/`RoomScreen`/`streamSource`；`store.ts`/`lite2.css`/i18n
+各自追加段落自动合上）。唯一冲突是 `progress.md`，本文件即合并结果。
+口径复核：#74 把 file `AskRef.id` 改成服务端 `source_key`；#73 的附件 chip 用 append 回执的
+`documents[]`，值同样是 `sd.source_key or sd.filename`——**同一把尺，一致**。
+
+**合流后复跑（后合者义务，已做）：A 33/33 · B 3/3 · C 3/3 · pytest 4028/0**。
+⚠ 先红过 at-references(5) 与 files-ia(整道)，**根因是陈旧后端进程**（uvicorn 是合流前起的，
+`file_cards()` 还没发 `source_key`、DELETE 路由不存在），按端口杀掉重起即 71/0 与 17/0。
 
 ## 上几轮做完的（详情全在各自回执，这里只留会影响下一个人的）
 
@@ -81,13 +86,12 @@ S1 动 `AskRefComposer`/`RoomScreen`/`streamSource`；`store.ts`/`lite2.css`/i18
 
 ## What's Next（按优先级）
 
-1. 🔴 **wave 1 合流后的收口（欠账，最优先）**：
-   - **在主检出跑全电池 A→B→C**——两线合流后**还没有一次两线一起的全绿记录**
-     （各自单线全绿：S1 A 32/32·B 3/3·C 3/3·pytest 4010；S2 A 32/32·C 3/3·pytest 4028）。
-     合流后 A 区应是 **33 道**（S1 与 S2 各加一道新门）。
-   - **在主检出对真基线比对像素**：S1 改了议事室布局，room 那 4 张空态基线（nomaterial 态）
-     与家具让位连带面都要真比对；漂移属预期，人审后重冻。
-     ⚠ **worktree 里比对不算数**（S1 又实证一轮，见 Blockers）。
+1. 🔴 **wave 1 合流后的像素收口（唯一欠账）**：
+   **在主检出对真基线比对像素**。S1 改了议事室布局，room 那 4 张空态基线（nomaterial 态）
+   与家具让位连带面都要真比对；漂移属预期，人审后重冻。
+   ⚠ **worktree 里比对不算数**（S1 又实证一轮，见 Blockers）——S1 在 worktree 里跑的是
+   「清空 → 首写 → 复跑 8/8 绿」，那只证稳定不证零漂移。
+   （行为门与后端电池的合流复跑**已完成**：A 33/33 · B 3/3 · C 3/3 · pytest 4028/0。）
 2. **0808 UIUX 重构战役续跑**（档案 `.issues/redesign-0808/`，四路侦察正源都在）：
    - **wave 2**：#78 真线程（**依赖 #75 落 main ✅ 已满足**；带**迁移 0016**）。
    - **wave 3**：#79 文案全量批改（**等 #75-#78 全落**，像素全量重冻只来一次）；

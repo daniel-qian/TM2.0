@@ -138,6 +138,23 @@ mtime 是当时的 PNG——差一点就被当成「基线在、比对过了」�
   四相 steps 全 0，所以「有没有被盖成 done」那半分辨不出。真正钉住它的是 M-C 变异。
   要让它有牙得先让流吐几帧再中止，而那样就得赌墙上时钟（本仓有 Docker 时钟跳 115 秒的先例），不赌。
 
+## 合流（S1 是后合者）
+
+S2（#74+#77+#76）在本票收尾期间已先落 main。按拍板「冲突由后合者处理并复跑全电池」：
+
+- **代码层零冲突**。两线段落真的不同：S2 动 `askRefs`/`FilesScreen`/`FileManifest`/`transport`/
+  `registry.py`，S1 动 `AskRefComposer`/`RoomScreen`/`streamSource`；`store.ts`、`lite2.css`、
+  两份 i18n 各自追加段落，git 自动合上。唯一冲突是 `progress.md`（本来就是整体重写的文件）。
+- **口径复核**：#74 把 file `AskRef.id` 改成服务端 `source_key`；#73 的现场附件 chip 用的是
+  append 回执的 `documents[]`，值同样是 `sd.source_key or sd.filename`——**同一把尺，一致**。
+  （回执里那条「id 契约根治归 #74」现在已经由 S2 落地了，两边不打架。）
+- **合流后复跑：A 33/33 · B 3/3 · C 3/3 · pytest 4028/0**（A 区 33 道＝两线各加一道新门）。
+
+⚠ 复跑时先红了 at-references（5 条）与 files-ia（整道），**根因不是合流冲突，是陈旧后端进程**：
+uvicorn 是合流前起的，`registry.py` 的 `file_cards()` 还没发 `source_key`、DELETE 路由也不存在。
+按端口杀掉重起之后两道各自 71/0 与 17/0。这是「改了后端却跑到旧行为」的又一次实收——
+**别信 ps，信行为**。
+
 ## 环境与跑法（复现用）
 
 ```
