@@ -10,11 +10,11 @@
 
 - **git**：`main` = 差距战役八票 + gap2 三票 + 三轮演习批 + #68 + #70 + #69+#71 + #72 + **wave 1 整波**
   （S2 `702287a`/`b3b56ce`/`3aa77e5`/`021bc58`，S1 `fdfb98e`）。
-  **wave 2（#78）在分支 `claude/gracious-pasteur-633678`，尚未合 main**。
+  **wave 2 = #78（`2cfe44c`）已 fast-forward 合入 main**（本波单线，无合流冲突）。
   回执三份：`.issues/redesign-0808/receipt-76-77-74-files.md`（S2）·
   `receipt-75-room-claude.md`（S1）· **`receipt-78-threads.md`（S3）**；
   开工裁定 `design-78-threads.md`。
-  `main...origin/main` **ahead 62**，**没有 push**（见 Blockers）。
+  `main...origin/main` **ahead 63**，**没有 push**（见 Blockers）。
 - **像素基线现状**：两套共 52 张（room 4 + files 4 + 其余）。**#78 对着主检出真基线比对：8/8 绿、
   50 张 md5 逐字节一致**（比对前后各存一次全表 md5 做 diff ＝ 真比对不是首写）。
   🔴 **但那个「零漂移」是判据够不着**：`visual.spec.mjs` 的 room 四张采的是 `contextId===null`
@@ -91,8 +91,9 @@ null-owner **15/0（真跑到了）** · visual **8/8 · 50 张 md5 未变** · 
 
 ## What's Next（按优先级）
 
-1. **wave 2 收口已完成**（#78 全绿、回执已落）。**尚未合 main**——下一步是把
-   `claude/gracious-pasteur-633678` 合进 main（合流在自己 worktree 做，后合者复跑全电池）。
+1. **wave 2 收口已全部完成**（#78 全绿、回执已落、已合入本地 main `2cfe44c`）。
+   保留在这里是因为下一个人需要知道口径：本波单线、fast-forward、无合流冲突，
+   所以没有「后合者复跑全电池」那一步——全电池是在合之前就跑完的（A 34/34 · B 3/3 · C 3/3）。
 2. **0808 UIUX 重构战役续跑**（档案 `.issues/redesign-0808/`，四路侦察正源都在）：
    - **wave 3**：#79 文案全量批改（**等 #75-#78 全落** ✅ 已满足）+ 像素全量重冻（只来一次）；
      见仁见智 8 条在 `tickets.md` 末尾待 Danny 勾。
@@ -143,7 +144,7 @@ null-owner **15/0（真跑到了）** · visual **8/8 · 50 张 md5 未变** · 
 ## Blockers / Risks
 
 - 无硬 blocker。
-- 🟠 **别单独 push main**（ahead 62）：前端 push 即自动上产、后端容器要人手换，同窗口做。
+- 🟠 **别单独 push main**（ahead 63）：前端 push 即自动上产、后端容器要人手换，同窗口做。
 - 🔴 **像素基线目录是 gitignored**（`.gitignore:34`），**每棵树各一份**：worktree 里那份是空的，
   在 worktree 跑 visual = 首写，证明不了任何事。#78 的真比对做法：**在主检出 `D:\avery` 跑
   playwright（用它的真基线），用 `VERIFY_BASE` 指向 worktree 的 preview**——两份 spec 都读
