@@ -71,7 +71,8 @@ def test_advise_persists_one_run_with_the_projected_advice(client):
     runs = client.get(f"/team/{cid}/advise-runs", headers=hdr).json()["runs"]
     assert len(runs) == 1, "one advise round should leave one run"
     run = runs[0]
-    for k in ("id", "created_at", "question", "title", "locale", "advice", "answer"):
+    for k in ("id", "created_at", "question", "title", "locale", "advice", "answer",
+              "thread_id"):   # issue #78 · thread_id 是 additive 新键（asdict 自动带上）
         assert k in run, f"run contract missing {k}"
     assert run["question"] == q, "the question is stored verbatim"
     assert run["title"] == "onboarding"

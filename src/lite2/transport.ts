@@ -97,6 +97,14 @@ export interface AdviseRequest {
   // 旧前端一个字节都不改也照常工作（后端 default None）。**不落库、不持久化**——它只
   // 活在这次请求里。
   history?: AdviseHistoryTurn[]
+  // #78 · 可选（additive，同上）：这一问接在哪一场后面。缺键 = 开新的一场。
+  // 🔴 与 `history` 分工明确，别混：**thread_id 管归档**（落库时这一行挂在哪一场下），
+  // **history 管推理**（这一问带多少上下文）。服务端不会因为收到 thread_id 就去库里补历史轮，
+  // 两者同时出现不冲突。
+  // 🔴 它没有 references 那种「织进 situation」的文字兜底——老后端忽略这个键时**没有任何
+  // 信号**。对账通道是服务端在 started/manifest 帧回传 thread_id：没回传，store 的 threadId
+  // 就停在 null，界面老老实实每问自成一场，不谎称在续场。
+  thread_id?: string
 }
 
 // 🔴 一处补全，不要在每个调用点各写一遍。
@@ -547,11 +555,28 @@ export interface LiveAdviseRunEntry {
   locale: string
   advice: Record<string, unknown> | null // manifest.advice 投影——回放时经 coerceAdvice 归一
   answer: string // 0729/03 分流短答（与 advice 互斥）
+  // #78 · 这一轮属于哪一场。空串 = 无场归属（#78 之前的存量行），读侧按「自成一场的单轮」呈现。
+  thread_id: string
 }
 
 export interface LiveAdviseRunsPayload {
   context_id: string
   runs: LiveAdviseRunEntry[]
+}
+
+// ── 议事室历史 · 按场分组（issue #78：GET /team/{id}/advise-threads 契约）──────────────
+// 场按**最近活动**新→旧，场内 runs 按**对话顺序**（seq 升序）。上限 20 **场**（不是 20 行：
+// 按行截会把最老那场腰斩成半截对话，而调用方分辨不出「这场只有 3 轮」和「这场有 7 轮只给了
+// 3 轮」）。空历史是 200 + `threads: []`，**绝不是 404**——已鉴权读路径上的 404 语义是
+// 「token 缺失/过期」，拿它表达空态会让界面把「没问过」显示成「登录失效」。
+export interface LiveAdviseThread {
+  thread_id: string // "" = 无场归属的单轮；稳定 key 用 `thread_id || runs[0].id`
+  runs: LiveAdviseRunEntry[]
+}
+
+export interface LiveAdviseThreadsPayload {
+  context_id: string
+  threads: LiveAdviseThread[]
 }
 
 // ── 常驻表单（T1 · form-backend-a1a：`/team/{id}/forms*` 契约，gap-design-0805 §A1）────────
@@ -797,7 +822,13 @@ export interface LiveTransport {
 
   // issue #49 · 议事室历史（只读、新→旧）。可选：stub 通道无持久层，判空即整块不渲染
   //（与 fetchAccountContexts 同款降级纪律）。
+  // ⚠ #78 起议事室界面读的是下面按场分组的那条；这条平铺读法留着是因为它仍是后端的公开读面
+  // （四条契约测试盯着它），前端目前无人调用。
   fetchAdviseRuns?: (contextId: string) => Promise<LiveAdviseRunsPayload>
+
+  // issue #78 · 议事室历史**按场分组**。同为可选（stub 通道没有它 → 判空即整块不渲染，
+  // 这正是离线门看到「零历史面板」的原因，不是 bug）。
+  fetchAdviseThreads?: (contextId: string) => Promise<LiveAdviseThreadsPayload>
 
   // ── 常驻表单（gap-design-0805 T3）。同为可选：联网后端能力，stub 天然没有；判空即整段
   // 不渲染（与 fetchAdviseRuns 同款降级纪律）。三条全走 owner_token/账号双通道 header。────
@@ -1487,6 +1518,18 @@ export function createHttpTransport(base: string = apiBase()): LiveTransport {
       })
       if (!res.ok) throw transportError('history', res)
       return (await res.json()) as LiveAdviseRunsPayload
+    },
+
+    // issue #78 · 议事室历史**按场分组**——同一张门、同一个 endpoint 身份（'history'）。
+    // ⚠ 空历史一定是 200 + `threads: []`；这里的 404 与上面那条一样只意味着 token 缺/错。
+    async fetchAdviseThreads(contextId) {
+      const res = await send(
+        'history',
+        `${base}/team/${encodeURIComponent(contextId)}/advise-threads`,
+        { headers: authHeader(contextId) },
+      )
+      if (!res.ok) throw transportError('history', res)
+      return (await res.json()) as LiveAdviseThreadsPayload
     },
 
     // ── 常驻表单（gap-design-0805 T3）——同上 header-only 纪律（owner_token 缺/错一律 404）。

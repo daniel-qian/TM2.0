@@ -39,6 +39,7 @@ from sse_starlette.sse import EventSourceResponse
 from avery import skills
 from avery.env import load_dotenv
 from avery.locale import DEFAULT_LOCALE, normalize_locale  # ADR-0033: locale 是请求字段
+from avery.ingest.registry import new_thread_id  # #78: 服务端铸场 id（理由见 _with_thread_id）
 
 from . import account  # feat-053: verify a Supabase access token -> user id (header-only)
 from . import brain_factory, embedding_factory, extractor_factory, live_input, llm_budget, mem_sentinel
@@ -50,6 +51,7 @@ from .engine import stream_advice
 from .form_api import router as form_router  # T1: 常驻表单 manager 端点 + /f/{token} 员工 H5
 from .ingest_api import router as ingest_router  # feat-018: /ingest + /team/{id} (compose over feat-016)
 from .ingest_api import authorize_context, extract_owner_token  # feat-038: reuse the read-path gate
+from .threads import normalize_thread_id  # #78: advise-thread id 的形状闸（坏值当没带，不 422）
 from .upload_guard import IngestGuardMiddleware  # feat-039: edge rate-limit + total-body size cap
 
 logger = logging.getLogger(__name__)
@@ -172,6 +174,16 @@ class AdviseRequest(BaseModel):
         None, description="#71 conversation so far: [{question, answer}], oldest first. "
                           "Prepended as plain user/assistant turns before this question; "
                           "quota-capped and truncation-marked server-side.")
+    # #78 · additive optional, same discipline as `references`/`history`: 这一问接在哪一场后面。
+    # 缺键 = 开新的一场（旧前端一个字节不改照常工作）。坏值当没带，绝不 422（同 locale 的降级
+    # 纪律）——形状闸在 service/threads.py。
+    # 🔴 它**只管归档**：服务端不会因为收到 thread_id 就去库里补历史轮。推理面的上下文仍然只
+    # 来自上面那个 `history` 数组（service/history.py 的配额闸原样生效）。两者同时出现不冲突，
+    # 因为它们回答的是两个问题：thread_id = 这一行属于哪一场，history = 这一问带多少上下文。
+    thread_id: str | None = Field(
+        None, description="#78 advise-thread this turn belongs to. Absent = start a new thread; "
+                          "the server mints one and echoes it back on the `started` and "
+                          "`manifest` frames. Malformed values are treated as absent.")
 
 
 def _system_prompt(locale: str = DEFAULT_LOCALE) -> str:
@@ -328,6 +340,28 @@ def _with_ask_frame(events: Iterator[dict[str, Any]], req: "AdviseRequest") -> I
             yield frame
 
 
+def _with_thread_id(events: Iterator[dict[str, Any]], thread_id: str) -> Iterator[dict[str, Any]]:
+    """issue #78 — 把这一场的 id 贴到 `started` 与 `manifest` 两种帧上（additive 顶层键）。
+
+    为什么是这两种、为什么不新开一种帧：
+      * `started` 是第一帧 —— 前端一开口就知道自己在写哪一场（早期对账）。
+      * `manifest` 是 stream:false 那条缓冲路**唯一**回给调用方的东西（handler 末尾返回
+        `{**manifest, "events": collected}`），不贴它，缓冲调用方就永远拿不到 id。
+      * 🔴 绝不新开一种事件类型：前端 applyEvent 是 `switch (ev.type)` + `default: break`
+        （src/lite2/streamSource.ts），未知帧型**整帧静默丢弃**，症状是「后端日志里发了、
+        前端一点反应没有、没有任何报错」。
+
+    🔴 也绝不塞进 `manifest["advice"]`：tests/test_service_contract.py 对 advice 载荷有一条
+    `set(payload) <= REQUIRED|OPTIONAL` 的闭包断言，多一个键当场红。顶层是安全的。
+
+    注入点在这里而不是 `_sse` 的 on_manifest hook 里：那个 hook 被 `except Exception: pass`
+    整个包着，在那里赋值失败会静默——而「前端拿不到 thread_id」正是本票最不该静默的一件事。"""
+    for ev in events:
+        if thread_id and ev.get("type") in ("started", "manifest"):
+            ev["thread_id"] = thread_id
+        yield ev
+
+
 def _post_advise_note(company_context_id: str | None, situation: str, manifest: dict) -> None:
     """feat-033 post-advise hook: append Avery's observation to the company notebook (write-side red
     line inside). Best-effort — a failure here never affects the advise response."""
@@ -342,7 +376,7 @@ def _post_advise_note(company_context_id: str | None, situation: str, manifest: 
 
 
 def _persist_advise_run(company_context_id: str | None, situation: str, title: str | None,
-                        locale: str, manifest: dict) -> None:
+                        locale: str, manifest: dict, thread_id: str = "") -> None:
     """issue #49 post-advise hook: persist this room Q&A (question + projected advice card / short
     answer) so the room's history survives a refresh. Rides the SAME manifest moment as the notes
     hook. Best-effort — a persistence problem never affects the advise response.
@@ -362,21 +396,26 @@ def _persist_advise_run(company_context_id: str | None, situation: str, title: s
         advice = None
     if advice is None and not answer:
         return   # 没有可回看的产出（异常收尾）——不落空行
+    # ⚠ issue #78 的一条语义，写在这里因为它是这几行的直接后果：被按停的那一轮通常**不进历史**
+    # （中止时根本没有 manifest，本 hook 一次都不会被调）。唯一的例外是「服务端已经答完、帧还
+    # 没送到浏览器」那个窗口——那一轮会落库，于是它出现在历史场里而前端当时显示的是已中断。
+    # 所以：历史场里只有完整轮，但「我按停的那轮一定不在」不是绝对保证。
     try:
         from avery.ingest.registry import active_registry
         active_registry().append_advise_run(company_context_id, situation,
                                             title=title or "", locale=locale,
-                                            advice=advice, answer=answer)
+                                            advice=advice, answer=answer,
+                                            thread_id=thread_id)
     except Exception:   # lazy import / registry problems must not surface to the caller
         pass
 
 
 def _post_advise_hooks(company_context_id: str | None, situation: str, title: str | None,
-                       locale: str, manifest: dict) -> None:
-    """The one post-advise assembly point: notes (feat-033) + run history (issue #49). Each hook
-    swallows its own failures — one must never starve the other."""
+                       locale: str, manifest: dict, thread_id: str = "") -> None:
+    """The one post-advise assembly point: notes (feat-033) + run history (issue #49; threads #78).
+    Each hook swallows its own failures — one must never starve the other."""
     _post_advise_note(company_context_id, situation, manifest)
-    _persist_advise_run(company_context_id, situation, title, locale, manifest)
+    _persist_advise_run(company_context_id, situation, title, locale, manifest, thread_id)
 
 
 @app.get("/health")
@@ -437,13 +476,20 @@ def advise(req: AdviseRequest,
         company_context_id=req.company_context_id, locale=locale,
         # #64: authorize_context 已在上面把过门——这里解析引用只可能读到**本公司**的卡。
         reference_block=_build_reference_block(req.company_context_id, req.references))
+    # #78 · 这一问属于哪一场。归一在 service/threads.py（坏值当没带，绝不 422）；没带就**服务端
+    # 铸一个**并经 started/manifest 回传。铸点在 handler 而不是 _sse 的 on_manifest hook 里：
+    # 那个 hook 被 `except Exception: pass` 整个包着，在那儿铸失败会静默，而「前端拿不到
+    # thread_id」恰恰是本票最不该静默的一件事（前端会以为在续场、实际每问一场新的）。
+    thread_id = normalize_thread_id(req.thread_id) or new_thread_id()
     events, case = _run_events(sit, req.history)
     events = _with_ask_frame(events, req)   # feat-034: maybe one ask-draft frame after the manifest
+    events = _with_thread_id(events, thread_id)   # #78: additive 顶层键，贴 started + manifest
 
     if req.stream:
         return _sse(events, case,
                     on_manifest=lambda m: _post_advise_hooks(
-                        req.company_context_id, req.situation, req.title, locale, m))
+                        req.company_context_id, req.situation, req.title, locale, m,
+                        thread_id))
 
     # Buffered: drain to the terminal manifest (or error) and return one JSON body.
     try:
@@ -456,7 +502,8 @@ def advise(req: AdviseRequest,
                      if e["type"] == "manifest" and e.get("kind") in (None, "advice")), None)
     # feat-033 notes + issue #49 run history: the same post-advise assembly point as the SSE path.
     if manifest is not None:
-        _post_advise_hooks(req.company_context_id, req.situation, req.title, locale, manifest)
+        _post_advise_hooks(req.company_context_id, req.situation, req.title, locale, manifest,
+                           thread_id)
     if manifest is None:
         err = next((e for e in collected if e["type"] == "error"), None)
         return JSONResponse(status_code=502,

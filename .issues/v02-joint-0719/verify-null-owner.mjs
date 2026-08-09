@@ -25,7 +25,11 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
-const UI = 'http://127.0.0.1:5173'
+// #78：改成与全仓其余门（含 eval-harness/visual/*.spec.mjs）同一个口径 —— 认 VERIFY_BASE、
+// 缺省仍是 5173，行为一个字节不变。此前写死 5173 的后果不是"跑到别的端口"，而是**跑到别的树**：
+// 隔离端口的 session 一跑它，验的是碰巧占着 5173 的那份构建（本轮 5173 上就是主检出 D:\avery
+// 的 preview）。那种绿是假绿，而 progress.md 里它长期被记成「没跑」。
+const UI = process.env.VERIFY_BASE || 'http://127.0.0.1:5173'
 const R = []
 const rec = (n, ok, d) => { R.push({ n, ok }); console.log(`  [${ok ? 'PASS' : 'FAIL'}] ${n}${d ? ' — ' + d : ''}`) }
 

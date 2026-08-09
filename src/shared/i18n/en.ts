@@ -1804,7 +1804,25 @@ export const en = {
     // #72 · 回答下方「建议追问」chips 的标题/aria（chips 文字本身是后端产文，零新键）。
     roomFollowupsLabel: 'Suggested follow-ups',
     // issue #49 · 议事室历史（advise_runs 只读回看面）的入口/抽屉标题。
+    // ⚠ #78 起这个计数的单位是**场**不是条（见 roomHistoryCount）。值本身不动——
+    // 文案批改归 #79（recon-copy §5 建议改成「历史对话」）。
     roomHistoryTitle: 'Asked before',
+    // ── issue #78 · 历史按场分组 + 打开一场接着问 ───────────────────────────────
+    // 入口计数的单位。单独一个键（而不是把「场」写死进 roomHistoryTitle）是因为
+    // roomHistoryTitle 的值归 #79 改，两件事不该锁在一起。
+    roomHistoryCount: '{n} threads',
+    roomHistoryTurns: '{n} exchanges',
+    // 只有一轮的那种「场」——也包括 #78 之前落库的存量行（它们没有场归属，各自单轮）。
+    roomHistoryEmptyThread: 'One question',
+    // aria：打开这一场。⚠ 必须是纯中文（zh 侧），verify-aria-zh 禁拉丁词——所以这两句
+    // 里都不许出现 Avery。
+    roomHistoryOpenAria: 'Open this conversation and keep asking',
+    roomHistoryCurrent: 'You are in this one',
+    // 生成中禁点的原因（title 属性，不是 aria——它是解释不是名字）。
+    roomHistoryBusy: 'Wait for this answer to finish',
+    // 回灌轮的说明行。诚实降级：过程态结构性没落库（0012 拍板不存原始流/四相/结构化引用），
+    // 所以这里说的是"没留存"，不是"没有"。
+    roomTurnFromHistory: 'Loaded from history. The steps behind it were not stored.',
     adviceReadTitle: 'The read',
     adviceSignOff: 'Yours to sign off',
     adviceSummaryAria: 'Summary — the read',

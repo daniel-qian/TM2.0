@@ -462,6 +462,107 @@ def test_advise_runs_list_caps_at_limit(impl, tmp_path):
     assert [r.question for r in got] == ["question 4", "question 3", "question 2"]
 
 
+# ---- issue #78 · 真线程：同一个 seam 上的「按场分组」读法（两腿共用一份契约）--------------
+
+def test_advise_runs_round_trip_the_thread_id(impl, tmp_path):
+    """thread_id 是 AdviseRun 的第八个字段，写进去什么读回来什么；不带就是空串。
+
+    这条盯的是 pg 那边的**列序错位**：SELECT 列表与元组解包是手写对齐的，thread_id 插错位置
+    是 text↔text 对调（question/title/locale/answer 互换），Postgres 一声不吭。
+    所以判据落在「每个字段各自的值」上，不是「有八个字段」。
+    """
+    reg, cid, _ = _ingest(impl, tmp_path / "mem")
+    r = reg.append_advise_run(cid, "带场的一问", title="标题", locale="zh",
+                              answer="短答正文", thread_id="thr_abc123")
+    assert r.thread_id == "thr_abc123"
+    got = reg.list_advise_runs(cid)[0]
+    assert (got.question, got.title, got.locale, got.answer, got.thread_id) == (
+        "带场的一问", "标题", "zh", "短答正文", "thr_abc123"), "列序错位/字段串位"
+    reg.append_advise_run(cid, "不带场的一问", answer="x")
+    assert reg.list_advise_runs(cid)[0].thread_id == "", "不带 thread_id 读回来是空串，不是 None"
+
+
+def test_advise_threads_group_by_thread_newest_activity_first(impl, tmp_path):
+    """场按最近活动新->旧、场内按对话顺序（seq 升序）。
+
+    两种假实现各钉一半：① 场内照抄平铺那条的 `ORDER BY seq DESC` → hydrate 出来的对话是倒着的；
+    ② 场按**首轮**排 → 一个老场被追问之后仍沉在底下，而它恰恰是用户刚碰过的那一场。
+    """
+    reg, cid, _ = _ingest(impl, tmp_path / "mem")
+    reg.append_advise_run(cid, "A1", answer="a1", thread_id="thr_a")
+    reg.append_advise_run(cid, "B1", answer="b1", thread_id="thr_b")
+    reg.append_advise_run(cid, "A2", answer="a2", thread_id="thr_a")
+
+    threads = reg.list_advise_threads(cid)
+    assert [t.thread_id for t in threads] == ["thr_a", "thr_b"], "A 被追问后要浮到最前"
+    assert [r.question for r in threads[0].runs] == ["A1", "A2"], "场内是对话顺序，不是新->旧"
+    assert [r.question for r in threads[1].runs] == ["B1"]
+
+
+def test_advise_threads_limit_counts_threads_not_rows(impl, tmp_path):
+    """🔴 limit 的单位是**场**不是行——而且返回的场必须是**整场**。
+
+    沿用行数上限的实现会把最老那一场腰斩：调用方拿到半截对话却分辨不出「这场只有 2 轮」
+    和「这场有 5 轮只给了 2 轮」，hydrate 出来就是一段没有开头的聊天记录。
+    """
+    reg, cid, _ = _ingest(impl, tmp_path / "mem")
+    for i in range(5):
+        reg.append_advise_run(cid, f"old{i}", answer="x", thread_id="thr_old")
+    reg.append_advise_run(cid, "mid", answer="x", thread_id="thr_mid")
+    for i in range(4):
+        reg.append_advise_run(cid, f"new{i}", answer="x", thread_id="thr_new")
+
+    got = reg.list_advise_threads(cid, limit=2)
+    assert [t.thread_id for t in got] == ["thr_new", "thr_mid"], "limit=2 要的是最近两**场**"
+    assert len(got[0].runs) == 4, "场必须整场回，不许被行数腰斩"
+    # limit 放开之后最老那场也是整整五轮（不是被前面几场挤掉的残余）。
+    full = reg.list_advise_threads(cid, limit=10)
+    assert [len(t.runs) for t in full] == [4, 1, 5]
+
+
+def test_advise_threads_treat_unthreaded_rows_as_standalone(impl, tmp_path):
+    """存量行（thread_id 空 / 列侧 NULL）每条自成一场，绝不因为「共用空串这个键」被缝成一场。"""
+    reg, cid, _ = _ingest(impl, tmp_path / "mem")
+    reg.append_advise_run(cid, "老行一", answer="x")
+    reg.append_advise_run(cid, "老行二", answer="x")
+    reg.append_advise_run(cid, "新行", answer="x", thread_id="thr_new")
+
+    threads = reg.list_advise_threads(cid)
+    assert len(threads) == 3, f"两条老行 + 一条新行 = 三场，实得 {len(threads)}"
+    assert [t.thread_id for t in threads] == ["thr_new", "", ""]
+    assert [t.runs[0].question for t in threads] == ["新行", "老行二", "老行一"]
+    assert all(len(t.runs) == 1 for t in threads)
+
+
+def test_advise_threads_never_cross_contexts(impl, tmp_path):
+    """两家公司用了同一个 thread_id：各读各的，一行都不串。"""
+    reg, cid_a, _ = _ingest(impl, tmp_path / "a")
+    reg, cid_b, _ = _ingest(impl, tmp_path / "b")
+    reg.append_advise_run(cid_a, "A 的问题", answer="x", thread_id="thr_shared")
+    reg.append_advise_run(cid_b, "B 的问题", answer="x", thread_id="thr_shared")
+
+    a = reg.list_advise_threads(cid_a)
+    b = reg.list_advise_threads(cid_b)
+    assert len(a) == 1 and [r.question for r in a[0].runs] == ["A 的问题"]
+    assert len(b) == 1 and [r.question for r in b[0].runs] == ["B 的问题"]
+
+
+def test_memory_clear_drops_advise_runs():
+    """issue #78 · `clear()` 此前漏了 `_advise_runs`（自 #49 起就漏）。没被咬到纯属运气：
+    既有测试每次都用新铸的 context_id，残留够不着。补进来之后配这条门，免得下次又漏。
+
+    只对内存腿有意义（pg 那边的清扫是另一件事：FK CASCADE + 测试的 track-and-delete），
+    所以这条不进 `impl` 参数化 —— 它直接对着内存实现说话，也不需要真 ingest 一个 context
+    （内存腿的 append 不校验 context 存在，pg 腿才有那道 FK）。"""
+    reg = ContextRegistry()
+    cid = _new_cid()
+    reg.append_advise_run(cid, "问过的一句", answer="x", thread_id="thr_x")
+    assert reg.list_advise_runs(cid), "自证：清之前确实有行"
+    reg.clear()
+    assert reg.list_advise_runs(cid) == [], "clear() 之后历史必须一起没"
+    assert reg.list_advise_threads(cid) == []
+
+
 # ==============================================================================================
 # feat-033 POLICY PIVOT (2026-07-13) — the AVERY_ALLOW_PERSON_SCORING switch, tested BIDIRECTIONALLY
 # at the storage door. The in-memory and Postgres registries share ONE gate (gate_note_red_line), so
@@ -628,6 +729,33 @@ def test_pg_advise_runs_survive_a_new_registry_instance(pg, tmp_path):
         "run history vanished/reordered across a new registry instance")
     assert got[1].advice == _RUN_ADVICE, "the stored advice payload must survive the restart intact"
     assert got[0].answer.startswith("二期"), "the short answer must survive the restart intact"
+
+
+@needs_db
+def test_pg_advise_threads_survive_a_new_registry_instance(pg, tmp_path):
+    """issue #78 真线程的重启故事：一场对话（含它的顺序）跨新 registry 实例读回来还是一场。
+
+    这条是**离线套看不到**的那一半：分组读法在 pg 侧是两趟 SQL（先定最近 N 场、再取整场）+
+    `COALESCE(thread_id, 'run:' || id)` 的合成键，内存腿是 Python 字典分组 —— 两种完全不同的
+    实现共用一份契约。0016 迁移本身也只有在这条腿上才真被执行过（_ensure_schema 全量重放）。
+    """
+    reg_a, cid, _ = _ingest(pg, tmp_path / "mem")
+    reg_a.append_advise_run(cid, "A1 排班怎么排？", answer="a1", thread_id="thr_a")
+    reg_a.append_advise_run(cid, "B1 谁需要搭把手？", answer="b1", thread_id="thr_b")
+    reg_a.append_advise_run(cid, "A2 那先动哪一头？", answer="a2", thread_id="thr_a")
+    reg_a.append_advise_run(cid, "没有场归属的一问", answer="legacy")   # thread_id 落成 NULL
+
+    reg_b = pg.fresh()
+    threads = reg_b.list_advise_threads(cid)
+    assert [t.thread_id for t in threads] == ["", "thr_a", "thr_b"], (
+        "最近活动新->旧：无场归属的那条最新、其次是被追问过的 A、最后是 B")
+    assert [r.question for r in threads[1].runs] == ["A1 排班怎么排？", "A2 那先动哪一头？"], (
+        "场内必须是对话顺序（seq 升序）——照抄平铺那条的 seq DESC 会让 hydrate 出来的对话倒着")
+    assert len(threads[0].runs) == 1 and threads[0].runs[0].thread_id == "", (
+        "NULL 列读回来是空串，且自成一场")
+    # 0016 的列真在库上（而不是只在 dataclass 里）：平铺读法也带得回来。
+    flat = {r.question: r.thread_id for r in reg_b.list_advise_runs(cid)}
+    assert flat["A2 那先动哪一头？"] == "thr_a" and flat["没有场归属的一问"] == ""
 
 
 @needs_db

@@ -114,6 +114,11 @@ export interface LiveRunState {
   recallHits: number // recall 真翻出的记忆行数
   // 派生用的内部游标——不参与渲染：把紧随 tool 的 observe 归到发起它的那一相。
   pendingTool: string | null
+  // #78 · 服务端回传的「这一场」的 id（started / manifest 两帧都带）。null = 这条流没回传过
+  // ——**只可能是后端比前端老**，那时界面必须老实地每问自成一场，不谎称在续场。
+  // 🔴 必须有这个显式槽位：`LiveAgentEvent` 有索引签名（transport.ts），后端多发的键 TS 不报、
+  // 运行时不崩，而 applyEvent 是白名单取键——不开槽的话「后端发了、前端没接」不会有任何一层红。
+  threadId: string | null
 }
 
 export function emptyRunState(): LiveRunState {
@@ -132,7 +137,14 @@ export function emptyRunState(): LiveRunState {
     sourcesRead: 0,
     recallHits: 0,
     pendingTool: null,
+    threadId: null,
   }
+}
+
+/** #78 · 从一帧里取 thread_id。宽松取值（后端多发/不发都不炸），但**只认非空字符串**——
+ *  空串/非字符串一律当没回传，绝不让一个假 id 冒充「在续场」。 */
+function coerceThreadId(raw: unknown): string | null {
+  return typeof raw === 'string' && raw.trim() ? raw.trim() : null
 }
 
 // ── LiveAgentSource：持有 transport，逐事件把 SSE 转成终端行 + LiteAdvice。──
@@ -231,6 +243,13 @@ export function applyEvent(
   ev: LiveAgentEvent,
   push: (speaker: LiteSpeaker, type: LiteLineType, text: string, code?: LiteLineCode) => void,
 ): void {
+  // #78 · 这一场的 id 由服务端在 started（早期对账）与 manifest（缓冲路唯一看得到的那帧）
+  // 上回传。放在 switch **之前**统一取，是因为两个 case 都要认它，而漏掉任何一个的后果都是
+  // 「续问悄悄开了新场」。取不到就保持原值——一帧没带不代表这场没有 id。
+  {
+    const tid = coerceThreadId((ev as Record<string, unknown>).thread_id)
+    if (tid) state.threadId = tid
+  }
   switch (ev.type) {
     case 'started':
       // 元数据帧——不落终端行（question 首行由 RoomScreen 从提问态派生）。

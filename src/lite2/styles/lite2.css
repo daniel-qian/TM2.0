@@ -8268,9 +8268,15 @@
   font-size: 12px;
 }
 
-/* ═══ issue #49 · 议事室历史（advise_runs 只读回看抽屉）═══════════════════════════════
+/* ═══ issue #49 → #78 · 议事室历史（按**场**分组的对话列表）═══════════════════════════
    入口与面板都 absolute 挂在 .lite-room 场景层——刻意不进 .lite-room-board / .nexus-empty
-   两棵门锚树。面板内滚,底沿让位到 composer 之上（同 room 滚动口的让位式）。 */
+   两棵门锚树。面板内滚,底沿让位到 composer 之上（同 room 滚动口的让位式）。
+
+   #78 改了它的性质:从「就地展开回看判读卡」变成「点一场,整场进议事室」。于是
+   `.lite-room-history-body` 那一族（含它那份「解除 story 绝对定位」的 board 抄本）**整段
+   退役**——面板里不再有第二个判读卡渲染面,回放统一走 LiteTurnView。少一处抄本就是少一处
+   会漂的地方（#75 留下的「历史里的短答仍是纯文本」正是那份抄本漂出来的）。
+   面板宽度也跟着收窄:列表行不再需要判读卡的 680px 读宽。 */
 .lite2-shell .lite-room-history-toggle {
   position: absolute;
   top: var(--lite2-clear-top, 96px);
@@ -8283,14 +8289,24 @@
   position: absolute;
   top: calc(var(--lite2-clear-top, 96px) + 46px);
   right: 24px;
-  bottom: max(var(--lite2-bottom-band, 120px), calc(var(--lite2-footer-h, 56px) + 76px));
-  /* 680：判读卡的 clamp 字号按 board 宽设计,440 会挤成一列大字——抽屉给到接近 board 的读宽。 */
-  width: min(680px, calc(100vw - 48px));
+  /* #78 人眼过修①：高度**跟着内容走**，不再拉满到底沿。原来写的是 `bottom: …`（面板永远
+     顶天立地），那是为就地展开判读卡定的；现在里面只剩几行「场」，两三场时屏上就是一个
+     七百多像素高的空盒子（双视口截图逐个看见的，门一条都不会红）。让位余量原样保留成
+     max-height 的上限，超出照旧内滚。 */
+  max-height: calc(
+    100vh - var(--lite2-clear-top, 96px) - 46px
+      - max(var(--lite2-bottom-band, 120px), calc(var(--lite2-footer-h, 56px) + 76px))
+  );
+  /* #78：面板里只剩「场」的列表行（判读卡已不在这里渲染），420 足够放下一行问题 + 元信息;
+     680 那个宽度是为就地展开的判读卡定的,那个渲染面已经退役。 */
+  width: min(420px, calc(100vw - 48px));
   overflow-y: auto;
   padding: 12px;
   border: 1px solid var(--rule);
   border-radius: 14px;
-  background: rgba(var(--lite2-surface-rgb), 0.96);
+  /* #78 人眼过修②：**不透明**。0.96 在议事室这种满屏内容的背景上真的透字（手机态尤其明显
+     ——下面那张判读卡的标题能从面板里读出来）。浮层不是玻璃，它盖住的东西不该还看得见。 */
+  background: rgb(var(--lite2-surface-rgb));
   box-shadow: var(--shadow);
   z-index: 44;
 }
@@ -8304,10 +8320,13 @@
   gap: 8px;
 }
 
+/* #78：一行 = 一场。两行式（第一问一行,轮数+时间一行）——单行 baseline 排法在 420 宽下
+   会把时间戳挤没,而时间戳是认出「哪一场」的第二根拐杖。 */
 .lite2-shell .lite-room-history-head {
   display: flex;
-  align-items: baseline;
-  gap: 10px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
   width: 100%;
   padding: 10px 12px;
   border: 1px solid var(--rule);
@@ -8320,50 +8339,56 @@
   cursor: pointer;
 }
 
-.lite2-shell .lite-room-history-head:hover,
+.lite2-shell .lite-room-history-head:hover:not(:disabled),
 .lite2-shell .lite-room-history-head:focus-visible {
   border-color: var(--rule-strong, var(--ink));
   outline: none;
 }
 
+/* 生成中禁点（政策拍板 b）。诚实地看起来点不动——不是"点了没反应"的静默。 */
+.lite2-shell .lite-room-history-head:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* 就是屏上这一场：左侧一道 accent 标出来,省掉一行「你在这场」的文字。 */
+.lite2-shell .lite-room-history-list li.is-current .lite-room-history-head {
+  border-color: var(--accent, var(--ink));
+}
+
 .lite2-shell .lite-room-history-q {
-  flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.lite2-shell .lite-room-history-list li.is-open .lite-room-history-q {
-  white-space: normal;
-}
-
-.lite2-shell .lite-room-history-date {
-  flex: none;
+.lite2-shell .lite-room-history-meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
   color: var(--ink-faint);
   font-size: 11px;
 }
 
-.lite2-shell .lite-room-history-body {
-  padding: 10px 4px 4px;
-  overflow-x: hidden;
+.lite2-shell .lite-room-history-turns {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-/* 回放的判读卡与 board 同款「解除 story 绝对定位」（board 段 848 的同规格抄本——
-   抽屉不在 .lite-room-board 里,吃不到那条,不解除就会内部元素互叠+横向溢出,截图实测）。 */
-.lite2-shell .lite-room-history-body .lite-room-card {
-  position: static;
-  inset: auto;
-  width: 100%;
-  min-width: 0;
-  max-height: none;
-  overflow: visible;
+.lite2-shell .lite-room-history-date {
+  flex: none;
 }
 
-.lite2-shell .lite-room-history-body > * {
-  max-width: 100%;
-  min-width: 0;
-  box-sizing: border-box;
+/* #78 · 回灌轮的说明行（顶掉四相面板的那一行）。刻意低调:它是一句"这里本来有东西、
+   但当时没留存"的交代,不是内容。 */
+.lite2-shell .lite-room-turn.is-hydrated .lite-room-turn-hydrated {
+  margin: 6px 0 2px;
+  color: var(--ink-faint);
+  font-size: 11px;
 }
 
 /* ── gap2 T11 · 模板拼装器（FilesScreen 第④段里的建/改表编辑器）────────────────────────

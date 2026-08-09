@@ -57,7 +57,7 @@ from .extract import (
 )
 from .redline_extract import validate_extraction
 from .registry import (
-    AdviseRun, CompanyContext, CompanyNote, ProjectWriteMixin, SourceDocument, data_root,
+    AdviseRun, AdviseThread, CompanyContext, CompanyNote, ProjectWriteMixin, SourceDocument, data_root,
     gate_note_red_line, materialize_memory, new_note_id, new_run_id,
 )
 from .store import Embedder, KeywordStore, PgVectorStore, VectorStore, _vec_literal
@@ -712,27 +712,46 @@ class PostgresContextRegistry(ProjectWriteMixin):
                 for nid, ca, txt, se in rows]
 
     # --- issue #49: advise-run history — the postgres twin of the registry run seam ---------------
+    # ⚠ 列序就是 `_advise_run_from_row` 的解包顺序 —— 加列一律**追加在末尾**。#78 加 thread_id
+    # 时把这里从「SELECT 字面量 + 就地七元组解包」提成了常量 + 单点解包，理由与 _FORM_SUB_COLS
+    # （:874-879）那次一模一样：question / title / locale / answer / thread_id 全是 text，插错
+    # 位置是 text↔text 对调，**Postgres 不会吭声、pytest 也不会红**。列表分叉过一次就够了。
+
+    _ADVISE_COLS = "id, created_at, question, title, locale, advice, answer, thread_id"
+
+    @staticmethod
+    def _advise_run_from_row(row) -> AdviseRun:
+        rid, ca, q, t, loc, adv, ans, tid = row
+        return AdviseRun(id=rid, created_at=ca.isoformat(), question=q, title=t or "",
+                         locale=loc or "en", advice=adv, answer=ans or "",
+                         thread_id=tid or "")
 
     def append_advise_run(self, context_id: str, question: str, *, title: str = "",
                           locale: str = "en", advice: dict | None = None,
-                          answer: str = "") -> AdviseRun:
+                          answer: str = "", thread_id: str = "") -> AdviseRun:
         """Persist one completed room Q&A to avery.advise_runs. No content gate BY DESIGN (see the
         in-memory twin's docstring: the service hook only calls this for redline_passed manifests,
         and the question is self-facing). The FK to avery.contexts refuses unknown contexts by
-        construction; the ON DELETE CASCADE ties a run's lifetime to its context (ephemeral GC)."""
+        construction; the ON DELETE CASCADE ties a run's lifetime to its context (ephemeral GC).
+
+        issue #78: 空 thread_id 落成 **NULL**（沿用本文件 title/answer 的空串->NULL 惯例）。
+        这与「NULL = #78 之前的存量行」不冲突——两者读回来都是空串、读侧都按「自成一场的单轮」
+        呈现，是同一个语义的两种来路，不需要分辨。"""
         from psycopg.types.json import Jsonb
         self._ensure_schema()
         run_id = new_run_id()
         with self._connect() as conn, conn.transaction():
             row = conn.execute(
-                "INSERT INTO avery.advise_runs (id, context_id, question, title, locale, advice, answer) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING created_at",
+                "INSERT INTO avery.advise_runs "
+                "(id, context_id, question, title, locale, advice, answer, thread_id) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING created_at",
                 (run_id, context_id, question, title or None, locale or "en",
-                 Jsonb(advice) if advice is not None else None, answer or None)).fetchone()
+                 Jsonb(advice) if advice is not None else None, answer or None,
+                 thread_id or None)).fetchone()
         created_at = row[0]
         return AdviseRun(id=run_id, created_at=created_at.isoformat(), question=question,
                          title=title or "", locale=locale or "en", advice=advice,
-                         answer=answer or "")
+                         answer=answer or "", thread_id=thread_id or "")
 
     def list_advise_runs(self, context_id: str, limit: int = 50) -> list[AdviseRun]:
         """This company's persisted Q&A, NEWEST FIRST, capped (ORDER BY seq DESC — same
@@ -740,12 +759,42 @@ class PostgresContextRegistry(ProjectWriteMixin):
         self._ensure_schema()
         with self._connect() as conn:
             rows = conn.execute(
-                "SELECT id, created_at, question, title, locale, advice, answer "
+                f"SELECT {self._ADVISE_COLS} "
                 "FROM avery.advise_runs WHERE context_id = %s ORDER BY seq DESC LIMIT %s",
                 (context_id, max(1, int(limit)))).fetchall()
-        return [AdviseRun(id=rid, created_at=ca.isoformat(), question=q, title=t or "",
-                          locale=loc or "en", advice=adv, answer=ans or "")
-                for rid, ca, q, t, loc, adv, ans in rows]
+        return [self._advise_run_from_row(r) for r in rows]
+
+    def list_advise_threads(self, context_id: str, limit: int = 20) -> list[AdviseThread]:
+        """issue #78 — 这家公司的对话**按场分组**：场按最近活动新->旧，场内按 seq 升序。
+
+        🔴 `limit` 数的是**场**，不是行（与 list_advise_runs 的 limit 是两种单位）。所以这里是
+        两趟：先只查「最近 N 个场」的 key，再把这些场的行整批取回。一趟带 LIMIT 的写法会把最老
+        那一场腰斩成半截对话，而调用方分辨不出「这场只有 3 轮」和「这场有 7 轮只给了 3 轮」。
+
+        分组键：`COALESCE(thread_id, 'run:' || id)` —— 无场归属的行（NULL = #78 之前的存量行）
+        各自成一场，绝不并成假对话。冒号保证这个合成键撞不上任何真 thread_id：形状闸
+        （service/threads.py）只放行 [A-Za-z0-9_-]。⚠ 别把前缀写成 NUL 字节那种「肯定不冲突」的
+        哨兵——**Postgres 的 text 不允许 \\x00**，`E'\\x00...'` 是直接报错不是安全。"""
+        self._ensure_schema()
+        with self._connect() as conn:
+            keys = conn.execute(
+                "SELECT COALESCE(thread_id, 'run:' || id) AS k, max(seq) AS last_seq "
+                "FROM avery.advise_runs WHERE context_id = %s "
+                "GROUP BY k ORDER BY last_seq DESC LIMIT %s",
+                (context_id, max(1, int(limit)))).fetchall()
+            if not keys:
+                return []
+            wanted = [k for k, _ in keys]
+            rows = conn.execute(
+                f"SELECT {self._ADVISE_COLS}, COALESCE(thread_id, 'run:' || id) AS k "
+                "FROM avery.advise_runs WHERE context_id = %s AND "
+                "COALESCE(thread_id, 'run:' || id) = ANY(%s) ORDER BY seq ASC",
+                (context_id, wanted)).fetchall()
+        grouped: dict[str, list[AdviseRun]] = {}
+        for row in rows:
+            grouped.setdefault(row[-1], []).append(self._advise_run_from_row(row[:-1]))
+        return [AdviseThread(thread_id=grouped[k][0].thread_id, runs=grouped[k])
+                for k in wanted if k in grouped]
 
     # --- feat-034: Ask ("Quick ask") storage — the postgres twin of the registry ask seam --------
 

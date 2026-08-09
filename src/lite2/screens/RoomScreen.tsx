@@ -9,7 +9,6 @@ import { AskCard } from '../AskCard'
 import { AskRefComposer } from '../AskRefComposer'
 import { toWireRefs, weaveRefs, type AskRef } from '../askRefs'
 import { localizeStreamLine } from '../../shared/streamCopy'
-import { coerceAdvice } from '../streamSource'
 import { renderMarkdown } from '../markdown'
 import { ATTACH_ACCEPT, precheckAttachments, type AttachPrecheckFail } from '../uploadLimits'
 import type {
@@ -332,6 +331,14 @@ function LiteTurnView({
   // 🔴 「在跑」只对尾轮成立：历史轮的 run 状态是它当时的定格，不该再有光标在闪。
   const running = isLast && run.status === 'running'
   const advice = run.advice
+  // #78 · 从历史场回灌出来的一轮。过程态**结构性没落库**（原始流/四相/结构化引用/计数，
+  // 0012 头注拍板不存），所以这里的降级不是"少显示点"而是"别撒谎"：
+  //   · 四相面板：emptyRunState 的四相全 pending，phaseMeta 会把它们渲染成 4×「待命」——
+  //     对一条早就答完的记录那是纯假话，整块不渲染。
+  //   · 实时状态条（HUD）：它说的是"此刻这一轮跑得怎么样"，而回灌轮此刻什么都没在跑。
+  //   · 引用 chips 行：refs 是 null，本来就不渲染（缺失不是"没引用"，见 store 的注释）。
+  // 换上一行明说"这是从历史载入的、当时的过程没留存"，让缺失可辨而不是看起来像空。
+  const hydrated = turn.hydrated === true
   // #72 · 建议追问 chips：只挂尾轮（与实时状态条/快问卡同族——"接着可以问"说的是此刻，
   // 摆在历史轮上就是假的）、只在本轮真答完之后（running/error 没有可追问的结论）、
   // 且必须真有回答卡在场（advice 或短答——chips 是回答的下摆，不是独立漂浮物）。
@@ -341,7 +348,12 @@ function LiteTurnView({
   return (
     // #75 · data-run-status 让门直接采到这一轮的终态（不必读 store 的镜像 run）——
     // 「停止」的判据要能钉在**这一轮**上，而不是全局最后一次运行上。
-    <article className="lite-room-turn" data-room-turn={turn.id} data-run-status={run.status}>
+    <article
+      className={classNames(['lite-room-turn', hydrated ? 'is-hydrated' : ''])}
+      data-room-turn={turn.id}
+      data-run-status={run.status}
+      {...(hydrated ? { 'data-turn-hydrated': '' } : {})}
+    >
       <section className="lite-room-turn-question" aria-label={l.roomTurnQuestionLabel}>
         <p className="eyebrow">{l.roomTurnQuestionLabel}</p>
         {/* 回显的是 manager 自己打的那句原话——不是提交层织过「涉及：」的 situation。
@@ -363,10 +375,18 @@ function LiteTurnView({
         ) : null}
       </section>
 
-      <LiteThinkingFlow run={run} running={running} />
+      {/* #78 · 回灌轮换成一行诚实说明；本次现问的轮照旧渲染四相面板。 */}
+      {hydrated ? (
+        <p className="lite-room-turn-hydrated" data-hydrated-note>
+          {l.roomTurnFromHistory}
+        </p>
+      ) : (
+        <LiteThinkingFlow run={run} running={running} />
+      )}
 
-      {/* 实时状态条只挂尾轮：它说的是"此刻"，历史轮上摆一条就是假的。 */}
-      {isLast ? (
+      {/* 实时状态条只挂尾轮：它说的是"此刻"，历史轮上摆一条就是假的。
+          #78 · 回灌轮即使是尾轮也不挂：它此刻没在跑，那条状态条无话可说。 */}
+      {isLast && !hydrated ? (
         <div className="nexus-brief-hud">
           <div className="nexus-brief-bar" aria-label={t.nexus.liveThinking}>
             {/* 🔴 #75 人眼过逮到的自相矛盾：这条眉标写死「正在仔细梳理中 · 实时」，于是
@@ -470,18 +490,33 @@ function LiteTurnView({
   )
 }
 
-// ── issue #49 · 议事室历史：后端 advise_runs 的只读回看面（新→旧）─────────────────────
-// 右上一枚「之前问过的 · N」入口 + 内滚抽屉面板——刻意不进 .lite-room-board / .nexus-empty
-// 的既有 DOM（好几道门锚在那两棵树上），空态与对话态都可达（F5 后 run 回 idle、历史必须
-// 还够得着，这正是本功能要解决的丢失面）。
-// 渲染门槛：adviseRuns 为 null（stub 通道/未拉取）或空数组时整块不出——历史不该在没有
-// 历史的第一天就摆一个空抽屉，stub 下零渲染保住离线门的 DOM 现状。
+// ── issue #49 → #78 · 议事室历史：按**场**分组的对话列表 ────────────────────────────
+// 右上一枚「之前问过的 · N 场」入口 + 内滚面板——刻意不进 .lite-room-board / .nexus-empty
+// 的既有 DOM（好几道门锚在那两棵树上）。
+//
+// #78 改了它的性质：从「只读回看抽屉」变成「打开一场对话」的入口。
+//   * 列表单位从**条**变成**场**（一场 = 一个 thread_id 下的全部轮次）。
+//   * 点一场 → hydrateThread 把整场灌进议事室 → 在那里接着问，新轮落回同一场。
+//   * 面板里**不再就地展开判读卡**：详情视图就是议事室本身，两处渲染同一份内容是
+//     两套要各自维护的代码（#75 留下的账「历史里的短答仍是纯文本、与会话流的 markdown
+//     不一致」正是这么来的）。这条账在这里**靠删掉那个渲染面**结清——回放统一走
+//     LiteTurnView，短答自然跟着走 markdown，不存在第二处实现可以再漂。
+//
+// 渲染门槛：adviseThreads 为 null（stub 通道/未拉取）或空数组时整块不出——三态语义与
+// adviseRuns 逐字相同，stub 下零渲染保住离线门的 DOM 现状。
 function LiteRoomHistory() {
-  const adviseRuns = useLite((s) => s.adviseRuns)
+  const adviseThreads = useLite((s) => s.adviseThreads)
+  const hydrateThread = useLite((s) => s.hydrateThread)
+  const currentThreadId = useLite((s) => s.threadId)
+  // 🔴 禁点闸读的是**尾轮**的状态，不是顶层镜像 run：顶层是尾轮的镜像没错，但判据落在
+  //    真相（turns）上比落在镜像上少一层可能不同步的东西。
+  const busy = useLite((s) => {
+    const tail = s.turns[s.turns.length - 1]
+    return tail ? tail.run.status === 'running' : false
+  })
   const { t, locale } = useDict()
   const [open, setOpen] = useState(false)
-  const [openId, setOpenId] = useState<string | null>(null)
-  if (!adviseRuns || adviseRuns.length === 0) return null
+  if (!adviseThreads || adviseThreads.length === 0) return null
   const stampOf = (iso: string) => {
     const d = new Date(iso)
     if (Number.isNaN(d.getTime())) return ''
@@ -495,45 +530,62 @@ function LiteRoomHistory() {
         type="button"
         className="lite-btn lite-btn--ghost lite-room-history-toggle"
         aria-expanded={open}
+        data-history-toggle
         onClick={() => setOpen((o) => !o)}
       >
-        {t.lite2.roomHistoryTitle} · {adviseRuns.length}
+        {/* 计数的单位跟着变了（条→场），所以这里显式说出「场」：沿用光秃秃的 · N
+            会让同一句话在语义变了之后继续看起来没变。文案批改本身归 #79。 */}
+        {t.lite2.roomHistoryTitle} · {fill(t.lite2.roomHistoryCount, { n: adviseThreads.length })}
       </button>
       {open ? (
-        <section className="lite-room-history-panel" aria-label={t.lite2.roomHistoryTitle}>
+        <section
+          className="lite-room-history-panel"
+          aria-label={t.lite2.roomHistoryTitle}
+          data-history-panel
+        >
           <ol className="lite-room-history-list">
-            {adviseRuns.map((run) => {
-              const expanded = openId === run.id
-              // 展开才 coerce——列表滚动时不为收着的条目做形状归一。
-              const advice = expanded ? coerceAdvice(run.advice) : null
+            {adviseThreads.map((thread) => {
+              // 无场归属的存量单轮（thread_id 为空）用它自己的 run id 当 key——绝不让它们
+              // 因为"共用空串这个键"在 React 里塌成一个。
+              const key = thread.thread_id || thread.runs[0]?.id || ''
+              const first = thread.runs[0]
+              const last = thread.runs[thread.runs.length - 1]
+              const isCurrent = !!thread.thread_id && thread.thread_id === currentThreadId
+              if (!first) return null
               return (
-                <li key={run.id} className={expanded ? 'is-open' : undefined}>
+                <li key={key} className={isCurrent ? 'is-current' : undefined}>
                   <button
                     type="button"
                     className="lite-room-history-head"
-                    aria-expanded={expanded}
-                    onClick={() => setOpenId(expanded ? null : run.id)}
+                    data-history-thread={key}
+                    data-history-turns={thread.runs.length}
+                    // 锁①：生成中禁点。政策拍板 (b) —— 打开一场是**替换**当前 turns，
+                    // 在跑的那一轮会被顶掉且它还没落库，所以只能等它答完。
+                    // 锁②在 store.hydrateThread 里（同一拍双击够不着 React 的重渲染）。
+                    disabled={busy || undefined}
+                    title={busy ? t.lite2.roomHistoryBusy : undefined}
+                    aria-label={
+                      isCurrent ? t.lite2.roomHistoryCurrent : t.lite2.roomHistoryOpenAria
+                    }
+                    onClick={() => {
+                      hydrateThread(thread)
+                      setOpen(false)
+                    }}
                   >
-                    <span className="lite-room-history-q">{run.question}</span>
-                    <span className="lite-room-history-date">{stampOf(run.created_at)}</span>
-                    <span aria-hidden="true">{expanded ? '▴' : '▾'}</span>
+                    {/* 场的标题就是它的**第一问**——一场对话是从哪句话开始的，比它最后聊到
+                        哪儿更能让人认出它。 */}
+                    <span className="lite-room-history-q">{first.question}</span>
+                    <span className="lite-room-history-meta">
+                      <span className="lite-room-history-turns">
+                        {thread.runs.length > 1
+                          ? fill(t.lite2.roomHistoryTurns, { n: thread.runs.length })
+                          : t.lite2.roomHistoryEmptyThread}
+                      </span>
+                      {/* 时间戳取**最后一轮**：列表是按最近活动排的，标一个开场时间会和
+                          排序打架（老场被追问后浮到最前、却显示着最老的时间）。 */}
+                      <span className="lite-room-history-date">{stampOf(last.created_at)}</span>
+                    </span>
                   </button>
-                  {expanded ? (
-                    <div className="lite-room-history-body">
-                      {advice ? (
-                        /* .lite-room-card 包裹与 board 同款——它承担「解除 story 绝对定位」
-                           的职责（lite2.css board 段 + history 段各一份同规格规则）。 */
-                        <div className="lite-room-card">
-                          <LiteAdviceCard advice={advice} />
-                        </div>
-                      ) : run.answer ? (
-                        <section className="lite-room-answer-card" aria-label={t.lite2.roomAnswerLabel}>
-                          <p className="eyebrow">{t.lite2.roomAnswerLabel}</p>
-                          <p className="lite-room-answer-text">{run.answer}</p>
-                        </section>
-                      ) : null}
-                    </div>
-                  ) : null}
                 </li>
               )
             })}
@@ -719,21 +771,22 @@ export function RoomScreen() {
     clearNoteNudge()
   }, [pathname, search, clearNoteNudge])
 
-  // issue #49 · 历史拉取：挂载/换公司拉一次；一次 run 完成后再拉（服务端在 manifest 时刻
-  // 已落库，complete 时刷新即可把刚问的这条带进列表）。stub/无 context 下是无操作。
-  const refreshAdviseRuns = useLite((s) => s.refreshAdviseRuns)
+  // issue #49 → #78 · 历史拉取：挂载/换公司拉一次；一次 run 完成后再拉（服务端在 manifest
+  // 时刻已落库，complete 时刷新即可把刚问的这条带进列表）。stub/无 context 下是无操作。
+  // #78 起拉的是**按场分组**那条（界面读它）；平铺那条前端不再调用。
+  const refreshAdviseThreads = useLite((s) => s.refreshAdviseThreads)
   const lastRun = turns.length > 0 ? turns[turns.length - 1].run : null
   const lastStatus = lastRun?.status ?? 'idle'
   useEffect(() => {
-    void refreshAdviseRuns()
-  }, [refreshAdviseRuns, contextId])
+    void refreshAdviseThreads()
+  }, [refreshAdviseThreads, contextId])
   // #75 · interrupted 也拉一次——这是**唯一**一处 interrupted 该跟着 complete 走的分支。
   // 理由是后端那个窄窗口：中止若恰好落在「manifest 已生成、帧还没送到浏览器」之间，
   // 服务端已经落了一条完整的 advise_run（app.py 的 on_manifest 在 yield 之前就调了），
   // 那条记录立刻出现在「之前问过的」里，比让它悄悄躺到下次进屋才冒出来少一次惊吓。
   useEffect(() => {
-    if (lastStatus === 'complete' || lastStatus === 'interrupted') void refreshAdviseRuns()
-  }, [lastStatus, refreshAdviseRuns])
+    if (lastStatus === 'complete' || lastStatus === 'interrupted') void refreshAdviseThreads()
+  }, [lastStatus, refreshAdviseThreads])
 
   // #71 · 新一轮起跑就把滚动区带到底部（对齐常见 AI chat：新消息进来跟着走）。
   // 只在**轮数**变化时跑——流式过程中每帧都滚会把 manager 正在读的历史轮拽走。
@@ -834,6 +887,13 @@ export function RoomScreen() {
             onAttach={(picked) => void handleAttach(picked)}
             onRemoveAttachment={removeAttachment}
           />
+          {/* issue #49 → #78 · 历史入口+面板：absolute 定位，不进 board/empty 两棵门锚树。
+              🔴 #78 把它从 `.lite-room` 的末尾**挪进了 contextId !== null 这一支**：它现在
+              是「打开一场对话」的入口，而 hydrate 的目标（滚动区 + composer）只在这一支里
+              存在——挂在外面就有一条「无材料态点历史 → 灌进一棵不存在的树」的路。
+              无材料态本来也拉不到历史（refreshAdviseThreads 判 contextId 即返回），所以这
+              一挪不删除任何真实可达的功能，只是把不可达的那半也从 DOM 上关掉。 */}
+          <LiteRoomHistory />
         </>
       ) : (
         /* 0721 · 无材料诚实空态（合伙人实测：零数据提问被呈现成「中途断了」系统故障样，
@@ -855,9 +915,6 @@ export function RoomScreen() {
           </button>
         </section>
       )}
-      {/* issue #49 · 历史入口+抽屉：absolute 定位，不进 board/empty 两棵门锚树；
-          对话态与空态都渲染（F5 后历史必须仍可达）。无历史/stub 下自身返回 null。 */}
-      <LiteRoomHistory />
     </section>
   )
 }

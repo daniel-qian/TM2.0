@@ -483,6 +483,33 @@ def team_advise_runs(context_id: str,
             "runs": [asdict(r) for r in reg.list_advise_runs(context_id)]}
 
 
+@router.get("/team/{context_id}/advise-threads")
+def team_advise_threads(context_id: str,
+                        x_avery_token: str | None = Header(None),
+                        authorization: str | None = Header(None),
+                        x_avery_account: str | None = Header(None)) -> dict:
+    """issue #78 — 议事室历史**按场分组**：`{context_id, threads:[{thread_id, runs:[...]}]}`。
+    场按最近活动 NEWEST FIRST，场内 runs 按对话顺序（seq 升序）。上限 20 **场**。
+
+    为什么是新端点而不是把 /advise-runs 改成分组：那条路的四条契约测试
+    （tests/test_advise_runs_http.py）是现成的回归网，改它的顶层结构等于把网拆了换新的。
+    平铺那条原样留着（`thread_id` 靠 asdict 自动 additive 进它的每一条），这条只加不减。
+
+    🔴 上限数的是**场**不是行——见 registry.list_advise_threads 的 docstring：沿用行数上限会
+    把最老那一场腰斩成半截对话，而调用方分辨不出「这场只有 3 轮」和「这场有 7 轮只给了 3 轮」。
+
+    空历史是 **200 + `threads: []`**，绝不用 404 表达「这里没有场」：404 在已鉴权的读路径上
+    的既有语义是「token 缺失/过期」（transport.ts 的 httpErrorMessage 就是这么解释给用户的），
+    拿它表达空态会让前端把「没问过」显示成「登录失效」。
+
+    门与 notes / advise-runs 同一张：owner_token（header）或持有账号——否则 404，无存在性 oracle。"""
+    reg = active_registry()
+    authorize_context(reg, context_id, extract_owner_token(x_avery_token, authorization),
+                      account.resolve_account(x_avery_account))
+    return {"context_id": context_id,
+            "threads": [asdict(t) for t in reg.list_advise_threads(context_id)]}
+
+
 class NoteIn(BaseModel):
     """input-side-0721 · 8A：onboarding 闸门页采集的「公司现状」口述。上限收紧（4000 字）——
     这是一段自我介绍，不是文件上传通道；大材料走 /ingest。"""

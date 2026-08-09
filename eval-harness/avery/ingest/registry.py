@@ -104,10 +104,32 @@ class AdviseRun:
     locale: str = "en"
     advice: dict | None = None
     answer: str = ""
+    # issue #78 — 这一轮属于哪一「场」对话。"" ⟺ 列侧 NULL ⟺ **无场归属**：既包括 #78 之前
+    # 的存量行，也包括任何没带 thread_id 的调用。读侧对这两者一视同仁（各自单轮成一场），
+    # 所以这里不需要区分它们——统一成空串就够了，别为此再引一个 None 态。
+    thread_id: str = ""
 
 
 def new_run_id() -> str:
     return "run_" + uuid.uuid4().hex[:16]
+
+
+def new_thread_id() -> str:
+    """issue #78 — 一场对话的对外句柄。由**服务端**在 /advise 铸造并经 SSE 回传（理由见
+    db/migrations/0016_advise_runs_thread.sql 头注：客户端自铸时「老后端忽略了这个键」没有
+    任何信号）。同 new_run_id 的模子，前缀不同好在日志里一眼分得开。"""
+    return "thr_" + uuid.uuid4().hex[:16]
+
+
+@dataclass
+class AdviseThread:
+    """issue #78 — 一场对话：同一个 thread_id 下的全部轮次，**按对话顺序（seq 升序）**。
+
+    `thread_id` 为空串表示「无场归属的单轮」（#78 之前的存量行，或任何没带 thread_id 的写入）。
+    这类行每一条自成一个 AdviseThread、runs 恰好一条——绝不把它们并成一场假对话。
+    调用方要一个稳定 key 时用 `thread_id or runs[0].id`（前端 LiteRoomHistory 就是这么 key 的）。"""
+    thread_id: str
+    runs: list[AdviseRun]
 
 
 # rich-align-0722/05a · 真 CRUD 项目（手编赢 + 逐字段出处，ADR-0028）.
@@ -858,18 +880,22 @@ class ContextRegistry(ProjectWriteMixin):
 
     def append_advise_run(self, context_id: str, question: str, *, title: str = "",
                           locale: str = "en", advice: dict | None = None,
-                          answer: str = "") -> AdviseRun:
+                          answer: str = "", thread_id: str = "") -> AdviseRun:
         """Persist one completed room Q&A. No content gate here BY DESIGN (unlike append_note /
         put_ask): the advice payload already passed the advisor red line (the service hook only
         calls this for redline_passed manifests), and the question is the manager's own words
         shown back to the same manager — the surfaces that ship content to OTHER eyes (notes,
         asks) keep their storage-door scans unchanged. In-memory holds runs for the process;
-        the Postgres twin persists them across restarts (same duck-typed API)."""
+        the Postgres twin persists them across restarts (same duck-typed API).
+
+        issue #78: `thread_id` 是这一轮所属的场（空串 = 无场归属，见 AdviseRun.thread_id）。
+        这里**不校验它是否已在本 context 出现过**——被中止/被红线拦下的第一轮根本不落行，
+        那时客户端已经握着 id，硬校验会把用户眼里的一场劈成两场。归属由写入方说了算。"""
         import copy
         run = AdviseRun(id=new_run_id(), created_at=_now_iso(), question=question,
                         title=title or "", locale=locale or "en",
                         advice=copy.deepcopy(advice) if advice is not None else None,
-                        answer=answer or "")
+                        answer=answer or "", thread_id=thread_id or "")
         self._advise_runs.setdefault(context_id, []).append(run)
         return copy.deepcopy(run)
 
@@ -879,6 +905,31 @@ class ContextRegistry(ProjectWriteMixin):
         import copy
         runs = self._advise_runs.get(context_id, [])
         return [copy.deepcopy(r) for r in list(reversed(runs))[: max(1, int(limit))]]
+
+    def list_advise_threads(self, context_id: str, limit: int = 20) -> list[AdviseThread]:
+        """issue #78 — 这家公司的对话**按场分组**：场按最近活动新->旧，场内按 seq 升序（对话顺序）。
+
+        🔴 `limit` 数的是**场**，不是行——这与 list_advise_runs 的 limit 是两种单位，故意的。
+        沿用行数上限会让最老那一场被腰斩成半截：hydrate 出来就是一段没有开头的聊天记录，
+        而调用方无从分辨「这场只有 3 轮」和「这场有 7 轮但只给了 3 轮」。先定场、再取整场。
+
+        无场归属的行（thread_id 为空 = #78 之前的存量行）每条自成一场，绝不并成假对话。"""
+        import copy
+        runs = self._advise_runs.get(context_id, [])
+        groups: dict[str, list[AdviseRun]] = {}
+        last_at: dict[str, int] = {}   # 场 -> 场内最后一轮的全局序号
+        for i, r in enumerate(runs):   # 存储顺序即 seq 升序
+            # 空场归属：用 run id 造一个独立键。冒号保证撞不上任何真 thread_id（形状闸
+            # service/threads.py 只放行 [A-Za-z0-9_-]）。pg 腿用同一个前缀，两腿分组键同解。
+            key = r.thread_id or f"run:{r.id}"
+            groups.setdefault(key, []).append(r)
+            last_at[key] = i
+        # 「最近活动」= 场内**最后一轮**的位置，不是首轮：一个老场被追问之后应当浮到最前面，
+        # 按首轮排会让它永远沉在底下（而它恰恰是用户最可能想接着问的那一场）。
+        ranked = sorted(groups, key=lambda k: last_at[k], reverse=True)[: max(1, int(limit))]
+        return [AdviseThread(thread_id=groups[k][0].thread_id,
+                             runs=[copy.deepcopy(r) for r in groups[k]])
+                for k in ranked]
 
     # --- feat-034: Ask ("Quick ask") storage — the same seam style as notes ---------------------
 
@@ -1235,6 +1286,10 @@ class ContextRegistry(ProjectWriteMixin):
     def clear(self) -> None:
         self._by_id.clear()
         self._notes.clear()
+        # issue #78: `_advise_runs` 此前**不在这份清单里**（自 #49 起就漏了）。没被咬到纯属
+        # 运气——现有测试每次都用新铸的 context_id，残留够不着。按场分组的测试一旦复用固定
+        # cid 就会读到上一条测试的轮次，是假红/假绿的现成温床。补进来并配一条门。
+        self._advise_runs.clear()
         self._asks.clear()
         self._ask_tokens.clear()
         self._form_templates.clear()
@@ -1276,11 +1331,13 @@ class ContextRegistryProtocol(Protocol):
     def append_note(self, context_id: str, text: str, source_excerpt: str = "") -> CompanyNote: ...
     def list_notes(self, context_id: str) -> list[CompanyNote]: ...
 
-    # advise-run history (issue #49)
+    # advise-run history (issue #49; threads = issue #78)
     def append_advise_run(self, context_id: str, question: str, *, title: str = "",
                           locale: str = "en", advice: dict | None = None,
-                          answer: str = "") -> AdviseRun: ...
+                          answer: str = "", thread_id: str = "") -> AdviseRun: ...
     def list_advise_runs(self, context_id: str, limit: int = 50) -> list[AdviseRun]: ...
+    # ⚠ limit 在这两个方法上是**两种单位**：runs 数行、threads 数场。见实现的 docstring。
+    def list_advise_threads(self, context_id: str, limit: int = 20) -> list[AdviseThread]: ...
 
     # ask cards
     def put_ask(self, ask): ...

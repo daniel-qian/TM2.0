@@ -62,6 +62,30 @@ def test_member_parameter_lists_identical_across_adapters():
     assert not diffs, f"parameter-list drift between adapters: {diffs}"
 
 
+def test_protocol_signatures_match_the_adapters():
+    """issue #78 补的暗区：上面那条只把两个 **adapter** 互相比，从不拿 Protocol 自己那份签名
+    当基准。于是「只在 ContextRegistryProtocol 里加了参数、两个 adapter 都忘了改」这一幕，
+    整份文件三条测试全绿——而 Protocol 恰恰是本仓声称的「seam 的唯一成文面」（registry.py
+    的 `Growing the seam: add the method HERE first, then to both adapters`）。
+    成文面与实现漂了却没人红，那句话就是空的。
+
+    只比参数表，不比返回标注：Protocol 写 `-> AdviseRun: ...`、实现可能写具体子类或省略，
+    那属于正常自由度；参数名/kind/默认值才是调用方真正依赖的东西。"""
+    diffs = []
+    for member in protocol_members():
+        proto_fn = getattr(ContextRegistryProtocol, member, None)
+        if proto_fn is None or not callable(proto_fn):
+            continue   # 纯属性型成员（今天没有），不在本条射程内
+        want = [(p.name, p.kind, p.default)
+                for p in inspect.signature(proto_fn).parameters.values()]
+        for cls_name, cls in ADAPTERS.items():
+            got = [(p.name, p.kind, p.default)
+                   for p in inspect.signature(getattr(cls, member)).parameters.values()]
+            if got != want:
+                diffs.append((member, cls_name, want, got))
+    assert not diffs, f"Protocol 与实现的参数表漂了（成文面失效）: {diffs}"
+
+
 def test_delete_stays_a_pg_only_deliberate_asymmetry():
     assert callable(getattr(PostgresContextRegistry, "delete", None)), (
         "pg delete() vanished — if that is intended, update pg_registry docstring + this pin"
