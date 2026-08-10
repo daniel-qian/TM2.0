@@ -25,10 +25,11 @@ Extractor is pluggable (mirrors the pluggable brain):
 """
 from __future__ import annotations
 
+import hashlib
 import os
 import re
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field, is_dataclass
 from typing import Protocol
 
 from .granularity import (Ruling, apply_gate, project_header_title, segment_projects,
@@ -194,11 +195,18 @@ class PersonEntity:
     #     自述通道，写端点禁键→422），故 provenance 只覆定性字段（name/role/team/tenure/owns/collaboration）。
     archived: bool = False
     provenance: dict = field(default_factory=dict)
+    # issue #87 · 实体血缘 —— 「这张卡来自哪几份文件、每一格是哪一份给的」。形状与两条不变式写在
+    # 文件下半段「#87 · 实体血缘」一节（`_init_lineage` 上面那段长注释），**别在这里再抄一份**。
+    # 🔴 它刻意**不在** `redline_extract._person_text_fields` 的扫描面里：装的是文档名与出处行
+    # （`旺季排班协调纪要.md:12`），与 `source` / `person_id` 同类，不是「会被当成对这个人的描述
+    # 读出来的自由文本」。
+    lineage: dict = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         # Coerce a dict (pg_registry asdict round-trip) into the dataclass; see PersonSelfReport.
         if isinstance(self.self_report, dict):
             self.self_report = PersonSelfReport(**self.self_report)
+        _init_lineage(self, "person")
 
     def as_facts_lines(self) -> list[str]:
         """Render this person as line-addressable company-memory facts (qualitative sentences)."""
@@ -337,6 +345,9 @@ class ProjectEntity:
     #     value 仍活在实体本字段（不双存），前端读实体值 + provenance[field] 出处。
     archived: bool = False
     provenance: dict = field(default_factory=dict)
+    # issue #87 · 实体血缘。人卡那一格的项目孪生——同一个形状、同一套不变式，说明只住在
+    # `_init_lineage` 上面（ONE DEFINITION：两处各写一份注释就是下一次口径漂移的种子）。
+    lineage: dict = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         # pg_registry stores asdict(self); the DB read (_entity -> ProjectEntity(**payload)) hands the
@@ -349,6 +360,9 @@ class ProjectEntity:
             self.risk = ProjectRisk(**self.risk)
         self.milestones = [
             ProjectMilestone(**m) if isinstance(m, dict) else m for m in self.milestones]
+        # #87：血缘的播种放在**强转之后**——`risk`/`milestones` 在强转前是 dict/list-of-dict，
+        # 播种要按「这一格说话了吗」判在场，两种形状下答案必须是同一个。
+        _init_lineage(self, "project")
 
     def as_facts_lines(self) -> list[str]:
         head = f"Project '{self.title}'"
@@ -2031,22 +2045,31 @@ def _absorb_person(cur: PersonEntity, p: PersonEntity) -> bool:
       · `form_reflow.merge_person_reading` —— 表单回流时把**一条**新读数并进已经归并过的清单。
     提出来不是为了好看：两处各写一遍「怎么合一个人」，就是 `_person_key` / `_link_owners` 当年那种
     「两把尺量同一件事」的复发，而这一次两把尺分别长在上传路和表单路上，谁也不会在对方的门里红。
+
+    #87：keep-first 的三个标量从 `cur.x = cur.x or p.x` 改写成显式的 if —— **结果逐字未变**
+    （`test_dedupe_characterization_b2a` 是它的钉子），改的只是「这一格到底是不是 p 填的」现在
+    有人问得出来，血缘才搬得动（`adopt_field_lineage`）。上传路**不记 prev**：keep-first 下
+    活着的是先到那个值，没有任何读数被覆盖——输家去 `conflicts`，不去 prev。
     """
     grew_id = False
     # T5/A2 — 工号是**补上就补上**（花名册没工号、表单带工号），补上之后这条卡从此按工号认人。
     if not _person_id_key(cur.person_id) and _person_id_key(p.person_id):
         cur.person_id = p.person_id
         grew_id = True
-    cur.role = cur.role or p.role
-    cur.team = cur.team or p.team
-    cur.tenure = cur.tenure or p.tenure
-    cur.source = cur.source or p.source
+    for fname in ("role", "team", "tenure"):
+        if not getattr(cur, fname, "") and getattr(p, fname, ""):
+            setattr(cur, fname, getattr(p, fname))
+            adopt_field_lineage(cur, p, fname)
+    cur.source = cur.source or p.source          # 实体级 keep-first 出处，不是某一格的血缘
     _absorb_self_report(cur, p)
     # union, order-preserving, capped at the same 6 _slist/_build use
-    cur.owns = (cur.owns + [o for o in p.owns if o and o not in cur.owns])[:6]
-    cur.collaboration = (
-        cur.collaboration + [c for c in p.collaboration if c and c not in cur.collaboration]
-    )[:6]
+    for fname in ("owns", "collaboration"):
+        held = getattr(cur, fname)
+        fresh = [x for x in getattr(p, fname) if x and x not in held]
+        if fresh:
+            setattr(cur, fname, (held + fresh)[:6])
+            adopt_field_lineage(cur, p, fname)
+    absorb_sources(cur, p)                       # 这份文档提到过这张卡（改不改得动一格都算数）
     return grew_id
 
 
@@ -2065,23 +2088,36 @@ def _absorb_project(cur: ProjectEntity, pr: ProjectEntity) -> None:
       · `risk` 整个对象 keep-first、`milestones` 整张列表 keep-first（rich-align-0722/01、02）；
       · blockers/dependsOn 保序并集，与 `_absorb_person` 的 owns/collaboration 同一个 6 上限；
       · `id` / `title` / `archived` / `provenance` **一个都不碰**。
+
+    #87：与 `_absorb_person` 同一次改写——`or` 换成显式 if（结果逐字未变），只为让「这一格是不是
+    pr 填的」问得出来，好把血缘搬过去。`ownerId` 刻意不记血缘：它是 `_link_owners` 解出来的派生
+    join key，不是一条读数。
     """
-    cur.ownerId = cur.ownerId or pr.ownerId
-    cur.ownerName = cur.ownerName or pr.ownerName
-    cur.status = cur.status or pr.status
-    cur.dueDate = cur.dueDate or pr.dueDate
-    cur.summary = cur.summary or pr.summary
+    cur.ownerId = cur.ownerId or pr.ownerId   # 派生 join key —— 不是读数，不记血缘
+    for fname in ("ownerName", "status", "dueDate", "summary"):
+        if not getattr(cur, fname, "") and getattr(pr, fname, ""):
+            setattr(cur, fname, getattr(pr, fname))
+            adopt_field_lineage(cur, pr, fname)
     cur.source = cur.source or pr.source
     if cur.progress is None:
         cur.progress = pr.progress
+        if pr.progress is not None:
+            adopt_field_lineage(cur, pr, "progress")
     if cur.risk is None:                      # rich-align-0722/01: keep-first risk across docs
         cur.risk = pr.risk
+        if pr.risk is not None:
+            adopt_field_lineage(cur, pr, "risk")
     if not cur.milestones:                    # rich-align-0722/02: keep-first milestones across docs
         cur.milestones = pr.milestones
-    cur.blockers = (cur.blockers + [b for b in pr.blockers if b and b not in cur.blockers])[:6]
-    cur.dependsOn = (
-        cur.dependsOn + [d for d in pr.dependsOn if d and d not in cur.dependsOn]
-    )[:6]
+        if pr.milestones:
+            adopt_field_lineage(cur, pr, "milestones")
+    for fname in ("blockers", "dependsOn"):
+        held = getattr(cur, fname)
+        fresh = [x for x in getattr(pr, fname) if x and x not in held]
+        if fresh:
+            setattr(cur, fname, (held + fresh)[:6])
+            adopt_field_lineage(cur, pr, fname)
+    absorb_sources(cur, pr)                   # 这份文档提到过这张卡
 
 
 def _disambiguate_project_ids(survivors: list[ProjectEntity]) -> None:
@@ -2170,6 +2206,257 @@ def _reading_absent(value) -> bool:
     return False
 
 
+# ── issue #87 · 实体血缘 —— 「这张卡来自哪几份文件、每一格是哪一份给的」 ───────────────────────
+#
+# 病（design-0810 §6.1 + `file_delete.py` 头）：Avery 读一份文件时干两件事——①把原文与切片存起来
+# ②**从原文得出结论写到卡片上**。`delete_document_from_context` 只收走①，②留在卡上。于是删掉
+# 《旺季排班协调纪要.md》之后：文件没了、原话搜不到了，**项目卡负责人还是「小马」**，
+# `materialize_memory` 每次还把 `Project '婚宴对接' (owner: 小马)` 写回 facts.md，顾问继续引用它。
+# #77 当时的裁定是「诚实的降级」，理由是**血缘不够**：实体只有一个**单值** `source`、归并是
+# keep-first，删完只知道「少了一份来源」，不知道「少了之后该变成什么」。本节补的就是那句话，
+# 也是「逐条撤回」（票 7）唯一缺的那块地基——旧值在 `AppendLedger.absorb` 里被 `setattr` 抹掉，
+# `reg.put()` 是整快照 DELETE+INSERT，无历史无 journal。
+#
+# ## 形状
+#   lineage = {
+#     "docs":   ["旺季排班协调纪要.md", "项目台账.md"],       # 提到过这张卡的文档（doc_key 粒度）
+#     "fields": {"ownerName": {"source": "旺季排班协调纪要.md:12",
+#                              "batch_id": "b-…",            # 这一格是哪一批补传写的（首次上传没有）
+#                              "seeded": True,               # 见下「推出来的 vs 记下来的」
+#                              "prev": {"value": "老周", "source": "项目台账.md:7", "prev": {...}}}}
+#   }
+#
+# ## 两个键回答**两个不同的问题**，别混着用
+#   · `docs`   —— 「**哪些文档提到过这张卡**」。凡是有一条读数落到这张卡上（哪怕它一格都没改写、
+#     哪怕它输给了 keep-first、哪怕手编赢了），那份文档就在这里。它答的是「删光之后这张卡还有没有
+#     文档依据」，**不是**「删掉它卡上要改什么」。
+#   · `fields` —— 「**这一格现在这个值是哪一份文档的哪一行给的**」。它才是「删掉之后该变成什么」
+#     的判据。
+#
+# ## 推出来的 vs 记下来的（`seeded`）
+# 一张卡刚被抽取器铸出来时，它每一格都来自 `source` 那一份文档——所以 `__post_init__` 就地播种
+# 一次，那一趟是**精确**的。同一条路顺带把 **#87 之前落库的存量卡**接住（它们没有 lineage 键，
+# 回读时照 `source` 推一次）。存量多文档卡上 enrichment 来的那几格可能记错文档，所以打 `seeded`
+# 标：`docs` 只有一条时它恒精确，多于一条时消费方自己决定信不信。写路（归并/补传）真记下来的
+# 记录**不带**这个标。
+#
+# ## 🔴 为什么不写进 `provenance`（订正 design-plan §7.2 的第一条建议——三条都是读码核过的）
+#   1. `registry._one_person_card` / `_one_project_card` 把 `dict(pr.provenance)` **原样**投给
+#      浏览器，而 `LiveFieldProvenance`（transport.ts:270）是 `{origin, source, updated_at}` 的
+#      **闭**契约；往里塞 prev 链等于把一串旧值送上线，还要穿过 `stripPersonNumbers`
+#      （它对 `provenance` 整键放行）。
+#   2. **首次上传的格子根本没有 provenance**——`stamp()` 只在补传/手编/表单回流三处开火。而本票
+#      要修的正是首次上传铸出来的那张卡：provenance 结构上装不下它。
+#   3. `origin:'doc'` 在屏幕上的意思是「**被后来的上传顶掉过**」（`projectView.provenanceBadgeKind`
+#      + `DetailOverlay.tsx:314`），也正是 #85 只读清单便宜的全部理由（design-plan §7.1①）。
+#      首次上传就写 provenance，会把那枚角标变成一句集体谎话。
+# 代价是**一次迁移**：`lineage` 是 `PersonEntity` 的顶层键，`0009` 的 allowlist 必须就地加上它
+# （`test_person_keys_allowlist_covers_exactly_person_fields` 一加字段就红，那个红就是这句话的
+# 可执行版本），而动了 pg 腿就必须跑 `@needs_db`。
+#
+# ⚠ 与 `provenance` 的分工：provenance 答「这一格现在归谁」（doc/manual/form，手编赢），
+# lineage 答「这一格的**文档**出处是什么」。手编改一格**不动** lineage——那不是发明，是这两个问题
+# 的正确答案：经理接管一格之后，那一格的文档血缘并没有变，只是不再由文档说了算。
+_LINEAGE_CHAIN_DEPTH = 8
+
+
+def _lineage_fields(kind: str) -> tuple[str, ...]:
+    """血缘只跟**文档写得动的那些格子**——恰好是 `_APPEND_REFRESHABLE` + `_APPEND_UNIONED`。
+
+    刻意不跟的：`id`/`name`/`title`（身份，不是读数，删掉一份文档也不该让一张卡改名）、
+    `source`/`person_id`（join key）、`archived`/`provenance`（手编领域）、
+    `ownerId`（派生 join key，由 `_link_owners` 解）、`self_report`（**自带出处**：
+    `SelfReportLoad.source` / `SelfReportMood.source` 就是那一格的血缘，再记一份就是两份抄本）。
+    """
+    return _APPEND_REFRESHABLE.get(kind, ()) + _APPEND_UNIONED.get(kind, ())
+
+
+def _jsonable(value):
+    """把一个字段值拍平成 JSON 原生形状 —— `prev.value` 写进去之前必过这一道。
+
+    🔴 理由是这个仓库吃过的那口：`pg_registry` 存 `asdict(entity)`、回读走 `ProjectEntity(**payload)`，
+    于是内存里是 `ProjectRisk` 对象、库里回来是 dict。`risk`/`milestones` 当年就是这么在**持久化
+    那条路上**炸的（rich-align-0722 的血教训，两个 `__post_init__` 强转是它的补丁）。血缘是
+    side-car、没有强转的地方，所以只能在**写入那一刻**就消除这个差别：两条腿由构造相同。
+    """
+    if is_dataclass(value) and not isinstance(value, type):
+        return asdict(value)
+    if isinstance(value, (list, tuple)):
+        return [_jsonable(v) for v in value]
+    if isinstance(value, dict):
+        return {k: _jsonable(v) for k, v in value.items()}
+    return value
+
+
+def _lineage_of(entity) -> dict:
+    """拿到（必要时就地建出）这张卡的 lineage dict。脏数据（不是 dict）就重开一本，不炸。"""
+    lin = getattr(entity, "lineage", None)
+    if not isinstance(lin, dict):
+        lin = {}
+        try:
+            entity.lineage = lin
+        except Exception:                       # 只读对象——血缘记不下来，但绝不因此毁掉一次抽取
+            return {}
+    return lin
+
+
+def note_source_doc(entity, source: str) -> None:
+    """把 `source` 那份文档记进这张卡的**来源文档集合**（`lineage["docs"]`）。
+
+    粒度是 `doc_key_of` 切出来的**文档名**——与 `file_delete` 逐条判「这条读数算哪份文档的」
+    用的是同一把尺（ONE RULER；漂开的下场是删除漏切/多切且没有一道门会红）。
+    保序、去重、**不设上限**：上限会让「这张卡不是这份文档喂的」变成一句假话，正是
+    `_APPEND_LIST_CAP` 在并集字段上那条已知的、票面点名过的伤（第 7 项起不可恢复）。
+    """
+    key = doc_key_of(source or "")
+    if not key:
+        return
+    lin = _lineage_of(entity)
+    docs = lin.get("docs")
+    if not isinstance(docs, list):
+        docs = []
+        lin["docs"] = docs
+    if key not in docs:
+        docs.append(key)
+
+
+def _trim_chain(link: dict, budget: int) -> dict:
+    """prev 链封顶：最多留 `budget` 环，砍掉**最老**的那一头（撤回从最新往回走，老的先失效）。
+
+    🔴 砍掉的地方打 `truncated: True`。静默截断会让「第 N 次之前的旧值还在」读成一句真话——
+    与 `[:6]` 那条并集截断同一族的错误，只是这一次我们自己有得选。
+    """
+    out = {k: v for k, v in link.items() if k != "prev"}
+    inner = link.get("prev")
+    if not isinstance(inner, dict):
+        return out
+    if budget <= 1:
+        out["truncated"] = True
+        return out
+    out["prev"] = _trim_chain(inner, budget - 1)
+    return out
+
+
+def prev_link(entity, fname: str, held) -> dict:
+    """把这一格**即将被毁掉**的读数打成一条 prev —— 必须在 `setattr` **之前**调。
+
+    值取自实体（`held`，调用方手里那个即将被覆盖的值），出处取自 lineage 里这一格现有的记录；
+    这一格原来那条 prev 自然接在后面成链。链在 `_LINEAGE_CHAIN_DEPTH` 处封顶。
+    """
+    rec = (_lineage_of(entity).get("fields") or {}).get(fname) or {}
+    link: dict = {"value": _jsonable(held), "source": str(rec.get("source") or "")}
+    for k in ("batch_id", "seeded"):
+        if rec.get(k):
+            link[k] = rec[k]
+    inner = rec.get("prev")
+    if isinstance(inner, dict):
+        link["prev"] = inner
+    return _trim_chain(link, _LINEAGE_CHAIN_DEPTH)
+
+
+def note_field_source(entity, fname: str, source: str, *,
+                      batch_id: str = "", prev: dict | None = None) -> None:
+    """记下「**最后一次文档/表单读数**写这一格时，出处是 `source`」，被它顶掉的挂进 `prev`。
+
+    🔴 口径要连读，别单读：手编写一格**不经过这里**（`_mark_manual` 只动 `provenance`），所以
+    经理接管过的格子上，这条记录说的是「上一次由文档说了算时是谁说的」，**不是**「屏幕上那个值
+    的出处」。判「这一格现在归谁」永远看 `provenance[f].origin`（doc/manual/form，手编赢）。
+    两个 side-car 答两个问题，谁也不覆盖谁 —— 票 7 正好两个都要：origin 判该不该给撤回钮，
+    lineage 判撤回之后写回什么。
+
+    空 `source` 直接不记：编一个不存在的出处比没有出处坏得多（`doc_key_of` 的同一条纪律）。
+    """
+    src = (source or "").strip()
+    if not fname or not src:
+        return
+    lin = _lineage_of(entity)
+    fields = lin.get("fields")
+    if not isinstance(fields, dict):
+        fields = {}
+        lin["fields"] = fields
+    rec: dict = {"source": src}
+    if batch_id:
+        rec["batch_id"] = batch_id
+    if isinstance(prev, dict):
+        rec["prev"] = prev
+    fields[fname] = rec
+    note_source_doc(entity, src)
+
+
+def adopt_field_lineage(cur, incoming, fname: str) -> None:
+    """`cur` 这一格刚被 `incoming` 的读数填上 —— 把血缘一并搬过来（不是重新推一次）。
+
+    🔴 出处取 `incoming` 那一格的血缘记录，取不到才退回 `incoming.source`。差别在 keep-first
+    的 enrichment 上：花名册给了身份、周报补上了 owns，那一格的出处是**周报**那一行，不是
+    活下来那条实体的整条 `source` —— 正是 `_append_conflict` 那条 ⚠ 讲的「引用一份从没说过
+    这件事的文档」，换到血缘这一侧。
+    搬过来的记录**不带** `seeded`：这是真记下来的，不是推出来的。
+    """
+    rec = (_lineage_of(incoming).get("fields") or {}).get(fname) or {}
+    note_field_source(cur, fname, str(rec.get("source") or "")
+                      or str(getattr(incoming, "source", "") or ""))
+
+
+def absorb_sources(cur, incoming) -> None:
+    """`incoming` 这条读数落到了 `cur` 上 —— 那份文档从此**提到过**这张卡。
+
+    🔴 无条件调用，与「有没有改写任何一格」无关：keep-first 输掉的读数、手编赢挡下来的读数、
+    逐字复述的读数，都证明那份文档谈的就是这个主体。`docs` 答的是「删光之后这张卡还有没有
+    文档依据」——把输家漏掉，就会在删掉胜出文档时把一张仍有依据的卡判成无依据。
+    """
+    for key in list((_lineage_of(incoming).get("docs") or [])):
+        note_source_doc(cur, key)
+    note_source_doc(cur, str(getattr(incoming, "source", "") or ""))
+
+
+def _init_lineage(entity, kind: str) -> None:
+    """构造一张卡时播一次种：`docs` 的下限 + `fields` 的推定值。见本节顶部的长注释。
+
+    两条不变式：
+      · `docs` ⊇ {doc_key_of(source)} —— 恒成立，每次构造都补一次（幂等）。
+      · `fields` 只在**整个 lineage 还没有这个键**时播种，播完的记录带 `seeded: True`。
+        已经有 `fields` 的（写路记过、或 pg 回读的新数据）一个字节都不碰。
+
+    🔴 手编/表单写过的格子不认领：`provenance[f].origin` 不是 'doc' 就跳过。否则一张文档卡上
+    经理手填的那一格，会在下一次 `get()` 回读时被推成「某份文档说的」——一句凭空造出来的出处。
+    """
+    src = str(getattr(entity, "source", "") or "").strip()
+    if not src:
+        # 手编卡（`um-…`/`pm-…`，source 恒空）：血缘为空**就是**正确答案——没有任何文档喂过它，
+        # 所以删光所有文档也不该动它一根汗毛。⚠ 空 lineage 有两种成因（手编卡 / 没有出处的老卡），
+        # 区分它们要看 `provenance`，不要看这里。
+        return
+    lin = _lineage_of(entity)
+    note_source_doc(entity, src)
+    if "fields" in lin:
+        return
+    prov = getattr(entity, "provenance", None)
+    prov = prov if isinstance(prov, dict) else {}
+    seeded: dict = {}
+    for fname in _lineage_fields(kind):
+        if _reading_absent(getattr(entity, fname, None)):
+            continue
+        rec = prov.get(fname)
+        origin = str((rec or {}).get("origin") or "") if isinstance(rec, dict) else ""
+        if origin and origin != DOC_PROVENANCE_ORIGIN:
+            continue
+        seeded[fname] = {"source": src, "seeded": True}
+    lin["fields"] = seeded
+
+
+def batch_id_for(source_keys) -> str:
+    """一次补传的批次号 —— 「这一批文件」的确定性名字，给票 7 的「撤回这一批」当抓手。
+
+    刻意是**确定性**的（对 source_key 集合取哈希），不是 uuid：同一批文件重放出同一个 id，
+    测试可以逐字断言它，也不给这条路引进一个墙上时钟/随机源（#82 的钟炸弹是同族教训）。
+    空批次回空串 —— 缺就不发键（absent≠none，全仓姿态）。
+    """
+    names = sorted({(k or "").strip() for k in (source_keys or ()) if (k or "").strip()})
+    if not names:
+        return ""
+    return "b-" + hashlib.sha1("\n".join(names).encode("utf-8")).hexdigest()[:12]
+
+
 class AppendLedger:
     """补传这一趟的账本：「这一格现在的值是哪份资料给的」+「这个 (主体,字段) 已经开过冲突没有」。
 
@@ -2178,8 +2465,12 @@ class AppendLedger:
     第一份刚写进去的值，账本自然把它记成同一条 FieldConflict 的第三个读数。
     """
 
-    def __init__(self, extraction: "ExtractionResult", source_documents=()) -> None:
+    def __init__(self, extraction: "ExtractionResult", source_documents=(),
+                 batch_keys=()) -> None:
         self.extraction = extraction
+        # #87 · 这一趟是哪一批文件（**只有新来的那几份**，不是 source_documents 全表）。血缘里
+        # 每条本趟写下的记录都带上它，票 7 的「撤回这一批」才有一个不用猜的抓手。
+        self.batch_id = batch_id_for(batch_keys)
         # source_key -> (那份资料的上传瞬间 | None, 原始 uploaded_at 串)
         self._docs: dict[str, tuple[object, str]] = {}
         from ..decision_grading import _uploaded_moment   # 全仓唯一的 uploaded_at 解析器
@@ -2308,7 +2599,16 @@ class AppendLedger:
           3. 两边不一样吗 —— 一样就什么都不做（不为一次复述改出处）。不一样：**先记冲突再改值**
              （改完输的那条就不存在了，这是 `_note_conflicts` 那句「必须在合并之前」），
              然后只有 `outranks` 为真才让新值顶掉旧值。
+
+        #87 血缘在这里落两笔，与上面三问**正交**（别把它们并进某一支）：
+          · `absorb_sources` 无条件先记 —— 这份文档谈的就是这个主体，改不改得动一格都算数；
+          · 每一处真 `setattr` 之前先 `prev_link` 把即将被毁掉的读数拍下来，写完再
+            `note_field_source` 指到新资料上。**顺序不可换**：`setattr` 之后输的那条就不存在了，
+            与「先记冲突再改值」逐字同一条纪律。
         """
+        # 血缘第一笔：先于任何一问。手编赢挡下来的、逐字复述的、输给 keep-first 的读数，
+        # 都证明这份文档提到过这张卡（见 `absorb_sources` 的 🔴）。
+        absorb_sources(cur, incoming)
         conflict_fields = _CONFLICT_FIELD_ALLOWLIST.get(kind, ())
         for fname in _APPEND_REFRESHABLE.get(kind, ()):
             new = getattr(incoming, fname, None)
@@ -2327,6 +2627,9 @@ class AppendLedger:
             if _reading_absent(held):
                 setattr(cur, fname, new)
                 self.stamp(cur, fname, getattr(incoming, "source", ""))
+                # enrichment：空格子被填上，**没有任何读数被毁掉** → 不挂 prev（absent≠none）。
+                note_field_source(cur, fname, getattr(incoming, "source", ""),
+                                  batch_id=self.batch_id)
                 continue
             if held == new:
                 continue
@@ -2337,12 +2640,19 @@ class AppendLedger:
                                    getattr(incoming, "source", ""), fresh_wins=fresh_wins)
             if not fresh_wins:
                 continue
+            # #87：**先拍照再毁尸**。这一行必须在 `setattr` 之前，理由与「先记冲突再改值」
+            # 逐字相同——改完之后 `held` 在这张卡上就不存在了，而票 7 的撤回要的正是它。
+            prev = prev_link(cur, fname, held)
             if fname == "ownerName":
                 # 换了负责人：`ownerId` 是**派生**的 join key，不是独立读数——清空让 `_link_owners`
                 # 按当前花名册重新解一次。留着旧 id 会让这张卡显示新名字、信号却还挂在旧人身上。
+                # ⚠ 票 7 注意：撤回 ownerName **不是撤回一个字段**——写回名字之后 `ownerId` 仍是
+                #   空的，得再跑一次 `_link_owners` 才把信号挂回原来那个人（回执里记着这笔账）。
                 cur.ownerId = ""
             setattr(cur, fname, new)
             self.stamp(cur, fname, getattr(incoming, "source", ""))
+            note_field_source(cur, fname, getattr(incoming, "source", ""),
+                              batch_id=self.batch_id, prev=prev)
         for fname in _APPEND_UNIONED.get(kind, ()):
             new_items = getattr(incoming, fname, None) or []
             if not new_items or self.is_manual(cur, fname):
@@ -2353,8 +2663,14 @@ class AppendLedger:
             fresh_items = [x for x in new_items if x and x not in held_items]
             if not fresh_items:
                 continue
+            # 并集也拍照：撤回一次补料要把整张列表还原成补料之前那张。
+            # ⚠ 已知边界（票面点名、这里只是它的落点）：`[:_APPEND_LIST_CAP]` 会把第 7 项起**扔掉**，
+            #   prev 存的是补料前那张完整列表（还原得回去），但这一趟被截掉的新条目谁也捡不回来。
+            prev = prev_link(cur, fname, held_items) if held_items else None
             setattr(cur, fname, (held_items + fresh_items)[:_APPEND_LIST_CAP])
             self.stamp(cur, fname, getattr(incoming, "source", ""))
+            note_field_source(cur, fname, getattr(incoming, "source", ""),
+                              batch_id=self.batch_id, prev=prev)
 
 
 def merge_project_reading(projects: list[ProjectEntity], incoming: ProjectEntity,
