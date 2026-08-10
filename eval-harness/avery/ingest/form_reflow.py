@@ -50,6 +50,7 @@ import logging
 from .extract import (
     PersonEntity, PersonIndex, PersonSelfReport, ProjectEntity, SignalEntity,
     _project_key, _slug, doc_key_of, merge_person_reading,
+    note_field_source, prev_link,
     read_selfreport_load, read_selfreport_mood,
 )
 from .form import FormSubmission, FormTemplate, answers_by_field
@@ -352,11 +353,18 @@ def reflow_submission(ctx, template: FormTemplate, submission: FormSubmission,
         added = [b for b in blockers_from_submission(template, submission)
                  if b not in project.blockers]
         if added:
+            # #87 血缘：先拍照再覆盖（与 `AppendLedger.absorb` 逐字同一条纪律）。一份**提交**
+            # 也是一份 SourceDocument（`form_append.build_submission_document` 把它落进
+            # source_documents，source_key = `<文件名>#<提交id>`），所以它与上传来的资料在血缘
+            # 里是同一类公民：删掉那份提交时，这一格该退回 prev 那张列表。
+            prev = prev_link(project, "blockers", list(project.blockers)) \
+                if project.blockers else None
             project.blockers = (project.blockers + added)[:MAX_BLOCKERS]
             # 字段级出处 side-car（extract.ProjectEntity.provenance）。origin='form' 是第三个取值，
             # 与 'doc'（抽取）/'manual'（手编）并列：这一格最后一次是**一份表单提交**改的。
             project.provenance["blockers"] = {
                 "origin": FORM_PROVENANCE_ORIGIN, "source": doc.name,
                 "updated_at": submission.submitted_at or ""}
+            note_field_source(project, "blockers", doc.name, prev=prev)
             outcome["blockers"] = len(added)
     return outcome

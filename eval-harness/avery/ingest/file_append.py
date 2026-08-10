@@ -158,7 +158,11 @@ def append_docs_to_context(reg, context_id: str, docs: list[ParsedDoc],
 
     # 账本必须在**追加实体之前**构造：它要按当前这份清单反查「已经开过的冲突归哪个主体」，
     # 而新来的那些人/项目此刻还不该在清单里。
-    ledger = AppendLedger(ctx.extraction, ctx.source_documents)
+    # ⚠ 两个参数问的是**两件事**，别把 `finalized` 也传给第二个：`source_documents` 是「时刻表」
+    # （账本要拿全表判新旧，只给新来的这几份会让每一次比较都退回 keep-first）；`batch_keys` 是
+    # 「这一批是谁」（#87 血缘的 batch_id，票 7 靠它「撤回这一批」，传全表就等于每批都叫同一个名字）。
+    ledger = AppendLedger(ctx.extraction, ctx.source_documents,
+                          batch_keys=[(sd.source_key or sd.filename) for sd in finalized])
     conflicts_before = len(ctx.extraction.conflicts)
 
     for person in fresh.people:

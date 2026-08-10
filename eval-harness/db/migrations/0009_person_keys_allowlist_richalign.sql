@@ -18,6 +18,13 @@
 --                    把尺（`extract._resolve_person_slot`）。**结构上仍是同一条护城河**：它是一个
 --                    join key，不是可以塞进数字的自由格；每一个不在 PersonEntity 自有字段里的顶层键
 --                    照旧被这条 CHECK 拒掉。
+--   * lineage      (issue #87) — 实体血缘 side-car：{"docs":[文档名…],"fields":{格子:{source,prev…}}}。
+--                    「这张卡来自哪几份文件、每一格是哪一份给的」，是「删文件收回结论」与「逐条撤回」
+--                    共同缺的那块地基（说明只住在 extract.py 的「#87 · 实体血缘」一节）。
+--                    **同样不破护城河**：装的是文档名与出处行，是 join key 一族，与 source/person_id
+--                    同类；里面塞不进人身数字这件事由 PersonEntity 的字段表管，不由这条 CHECK 管。
+--                    🔴 它是**顶层**键，所以必须出现在下面的数组里——嵌进 provenance 里的东西不用
+--                    （那条 CHECK 只看顶层）。为什么没嵌进 provenance：见 extract.py 那一节的三条理由。
 --
 -- pg_registry.put() writes `asdict(PersonEntity)`, which ALWAYS emits every field (self_report/
 -- archived/provenance appear even at their defaults None/False/{}). So a stale allowlist rejects EVERY
@@ -50,7 +57,7 @@ DECLARE
     -- the ADD below (test_person_keys_allowlist_covers_exactly_person_fields pins both to PersonEntity).
     want text := 'CHECK (kind <> ''person'' OR (payload - ARRAY['
         '''id'',''name'',''person_id'',''role'',''team'',''tenure'',''owns'',''collaboration'','
-        '''source'',''self_report'',''archived'',''provenance'']::text[]) = ''{}''::jsonb)';
+        '''source'',''self_report'',''archived'',''provenance'',''lineage'']::text[]) = ''{}''::jsonb)';
 BEGIN
     SELECT pg_get_constraintdef(oid) INTO have
     FROM pg_constraint
@@ -70,7 +77,7 @@ BEGIN
             kind <> 'person'
             OR (payload - ARRAY[
                 'id', 'name', 'person_id', 'role', 'team', 'tenure', 'owns', 'collaboration',
-                'source', 'self_report', 'archived', 'provenance'
+                'source', 'self_report', 'archived', 'provenance', 'lineage'
             ]::text[]) = '{}'::jsonb
         );
     END IF;
