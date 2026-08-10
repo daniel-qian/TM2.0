@@ -10518,6 +10518,204 @@
   display: none;
 }
 
+/* ── #85 ·「资料更新」流水 ───────────────────────────────────────────────────────
+   🔴 这一区的视觉分寸由拍板③ 定：**安静**。所以没有任何警示色、没有未读圆点、没有
+      左缘墨条——那些语汇属于今天页那三张卡（terracotta/honey/sage 语气温度）。这里是
+      一本流水账，读起来该像文件清单的续页，不像一屏待办。
+   🔴 复用表格那一族的排版常数（13px 正文 / 11px meta / tabular-nums），不新开尺寸阶。 */
+.lite2-shell .lite-changes-lede {
+  margin: 0 0 14px;
+  max-width: 62ch;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+}
+
+.lite2-shell .lite-changes-hint {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.lite2-shell .lite-changes-foldbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+.lite2-shell .lite-btn.lite-changes-fold {
+  min-height: 26px;
+  padding: 0 8px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+
+.lite2-shell .lite-changes-group {
+  margin-bottom: 18px;
+  /* 与文件表格**同一条**阅读上限（#84 定的那个变量），不是第二把尺：两区在同一块工作台上
+     左边界对齐、右边界也该对齐，各写一个常数下次只会改动其中一个。 */
+  max-width: var(--lite2-files-read-max, 1120px);
+}
+
+/* 组头 = 一份文件。文件名与它的上传时刻同一行，时刻右对齐、tabular-nums——与文件表格
+   那一列读起来是同一种数字（同一把尺，不是第二种时间写法）。 */
+.lite2-shell .lite-changes-group-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0 0 6px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.lite2-shell .lite-changes-doc {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.lite2-shell .lite-changes-at {
+  flex: none;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-soft);
+}
+
+.lite2-shell .lite-changes-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 一行 = 一处改动。两栏：左边「谁的哪一格、从什么到什么」，右边「依据 + 已查阅」。
+   行动作**恒占位**（不靠 hover 现身）：这一区的两颗键都是要读的信息，不是 hover 才需要的
+   工具——文件表格那条"hover 才现"的规矩管的是删除/下载，不该抄到这里。 */
+.lite2-shell .lite-changes-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 7px 0;
+  border-bottom: 1px solid rgba(var(--lite2-ink-rgb), 0.05);
+}
+
+.lite2-shell .lite-changes-row:last-child {
+  border-bottom: 0;
+}
+
+/* 已查阅：整行**退到背景里**，但绝不 display:none（折叠区打开时它得读得出来），
+   也绝不划删除线——那读起来像"这条是错的"，而它当时是对的。 */
+.lite2-shell .lite-changes-row[data-change-read='1'] {
+  opacity: 0.55;
+}
+
+.lite2-shell .lite-changes-what {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+}
+
+.lite2-shell .lite-changes-subject {
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.lite2-shell .lite-changes-delta {
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+  font-size: 13px;
+}
+
+.lite2-shell .lite-changes-prev {
+  color: var(--ink-soft);
+}
+
+.lite2-shell .lite-changes-arrow {
+  color: var(--ink-soft);
+}
+
+.lite2-shell .lite-changes-filled {
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+
+.lite2-shell .lite-changes-next {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.lite2-shell .lite-changes-tail {
+  flex: 0 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+/* 引文按钮：看起来是一句可点的出处，不是一颗按钮壳。下划线只在 hover 出现——常驻下划线
+   会让每一行都长出一条蓝线，把一页流水读成一页链接。
+   🔴 `display:inline-block` 不是随手写的：`.lite-btn` 基类是 `inline-flex` +
+      `justify-content:center`，而**居中的 flex 文本溢出时朝两头同时溢**——于是
+      「依据《旺季排班协调纪要.md》第 1 行」在屏上被**两端各切掉一个字**，长成
+      「d据《…》第 1 彳」，而且 `text-overflow:ellipsis` 对 flex 容器里的匿名文本压根不生效
+      （省略号一个都不出现）。
+      ⚠ 这一条是**人眼看图**逮到的，不是门逮到的：门读的是 `textContent`，它完整得很，
+      对裁剪一无所知（「门扫 innerText 看不见裁剪」的同族）。同拍给它补了一条量**文字矩形
+      有没有跑到盒子左边以外**的判据（verify-change-log ⑧），拿 Range 实测。 */
+.lite2-shell .lite-btn.lite-changes-cite {
+  display: inline-block;
+  max-width: 32ch;
+  min-width: 0;
+  min-height: 24px;
+  padding: 0 4px;
+  overflow: hidden;
+  border-color: transparent;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 11px;
+  line-height: 24px;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lite2-shell .lite-btn.lite-changes-cite:hover:not(:disabled),
+.lite2-shell .lite-btn.lite-changes-cite:focus-visible:not(:disabled) {
+  border-color: transparent;
+  background: transparent;
+  color: var(--ink);
+  text-decoration: underline;
+}
+
+.lite2-shell .lite-btn.lite-changes-mark {
+  min-height: 24px;
+  padding: 0 8px;
+  border-color: var(--rule);
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.lite2-shell .lite-btn.lite-changes-mark[aria-pressed='true'] {
+  border-color: transparent;
+  color: var(--ink-soft);
+}
+
 /* 桌面兜底：抽屉开关与遮罩即使被渲染出来也不许上屏（组件层已条件渲染，这里是第二道）。
    🔴 这两条必须写在下面那个 @media **之前**：媒体查询不加特异性，写在后面会连手机态
       一起压死——抽屉当场打不开、遮罩消失，而一条门都不会红（#83 立过这块碑）。 */
@@ -10671,5 +10869,36 @@
   .lite2-shell .lite-files-pane .lite-files-upload,
   .lite2-shell .lite-files-pane .lite-files-switch-section {
     max-width: none;
+  }
+
+  /* #85 · 流水行在 390px 上退化成**结构固定的两行**：第一行说改了什么，第二行是依据 +
+     已查阅。与文件行同一条治法（#84 病根④）——桌面那个 baseline 两栏在窄屏会让右边那两颗
+     键被挤成一列一字宽，折行位置由主体名长短决定，正是我们刚治好的那锅汤。 */
+  .lite2-shell .lite-changes-group {
+    max-width: none;
+  }
+
+  .lite2-shell .lite-changes-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: baseline;
+    gap: 4px 8px;
+  }
+
+  .lite2-shell .lite-changes-what {
+    grid-column: 1 / 3;
+    grid-row: 1;
+  }
+
+  .lite2-shell .lite-changes-tail {
+    grid-column: 1 / 3;
+    grid-row: 2;
+    justify-content: space-between;
+  }
+
+  .lite2-shell .lite-btn.lite-changes-cite {
+    max-width: 100%;
+    min-width: 0;
+    padding-left: 0;
   }
 }

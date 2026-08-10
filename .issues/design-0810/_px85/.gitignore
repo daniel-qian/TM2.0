@@ -1,0 +1,2 @@
+# anchor-check.py import mutate.py 时留下的字节码，不入库
+__pycache__/

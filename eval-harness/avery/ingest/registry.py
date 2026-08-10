@@ -404,6 +404,12 @@ class CompanyContext:
         # origin='manual'/source='手动编辑'，前端据此渲染逐字段「手动编辑」出处角标。
         if getattr(p, "provenance", None):
             card["provenance"] = dict(p.provenance)
+        # #85 · 文档血缘 side-car（#87 建的那本）。缺就不发键（absent≠none，同 provenance）。
+        # 这是「这次补料改了什么」那张只读清单的**唯一**数据源：`fields[f].prev` 给「从 X 改成 Y」
+        # 的前一半，`added_in` 给「这批新增了谁」。原样透传、不在这里裁剪——见 _one_project_card
+        # 上那段（口径只写一份）。
+        if getattr(p, "lineage", None):
+            card["lineage"] = dict(p.lineage)
         return card
 
     def archived_people_cards(self) -> list[dict]:
@@ -450,6 +456,18 @@ class CompanyContext:
         # 带 origin='manual'/source='手动编辑'，前端据此渲染「手动编辑」出处角标。
         if getattr(pr, "provenance", None):
             card["provenance"] = dict(pr.provenance)
+        # #85 · 文档血缘 side-car（#87 建的那本），投给「这次补料改了什么」那张只读清单。
+        # 缺就不发键（absent≠none，同 provenance）。
+        #
+        # 🔴 为什么**整本原样透传**、不在这里挑出「变过的那几格」：
+        #  ① 「变过」的判据要同时读 provenance（这一格现在归谁）与 lineage（它的文档血缘），
+        #     两本账缺一不可（#87 §3 的分工）。在投影层复刻那条判据 = 同一条口径长在两处，
+        #     而前端那份是屏幕上真正在用的那份 —— 这里挑漏一条，谁也不会红。
+        #  ② `prev` 链是票 7（逐条撤回）要写回去的东西。现在裁掉，票 7 得把这条路重修一遍。
+        # ⚠ 代价记明：链在 `_LINEAGE_CHAIN_DEPTH`(8) 处封顶，所以每格最坏 8 环旧值随卡上线。
+        #    这是**用户自己公司的资料**、走 owner_token 同一道鉴权，与 provenance 同级。
+        if getattr(pr, "lineage", None):
+            card["lineage"] = dict(pr.lineage)
         return card
 
     def project_cards(self) -> list[dict]:

@@ -638,8 +638,13 @@ def test_the_wire_contract_for_provenance_is_untouched(tmp_path):
 
     `_one_person_card`/`_one_project_card` 把 `dict(provenance)` **原样**投给浏览器，而
     `LiveFieldProvenance`（transport.ts）是 `{origin, source, updated_at}` 的闭契约；往里加键
-    等于让载荷违约，而前端不报错、只是不显示。同时 `lineage` 也**不该**被投出去（本票是纯后端
-    地基，投影归 #85／票 7）。
+    等于让载荷违约，而前端不报错、只是不显示。
+
+    ⚠ **2026-08-10 由 #85 改判后半句**：本票落地时这里还断言 `"lineage" not in card`
+    （#87 是纯地基，投影归它的消费者）。#85 就是那个消费者，它把 `lineage` 作为 additive key
+    投上线了——所以那半句翻面成「血缘走**自己**那个键」。前半句一个字没动，而它才是这条判据
+    真正守的东西：M17（把血缘挤进 provenance）照旧一动就红。
+    两个 side-car 各走各的键，是 #87 那三条理由的落点，不是这次顺手改的。
     """
     reg = ContextRegistry()
     cid = _seed(tmp_path, reg)
@@ -652,7 +657,11 @@ def test_the_wire_contract_for_provenance_is_untouched(tmp_path):
     for card in cards:
         for rec in (card.get("provenance") or {}).values():
             assert set(rec) <= {"origin", "source", "updated_at"}, f"provenance 载荷违约：{rec}"
-        assert "lineage" not in card, "血缘是后端地基，本票不上线"
+    lineaged = [c for c in cards if c.get("lineage")]
+    assert lineaged, "#85 之后补料过的卡该带血缘上线 —— 一张都没有说明投影没接上"
+    for card in lineaged:
+        assert set(card["lineage"]) <= {"docs", "fields", "added_in"}, (
+            f"血缘载荷长出了没人认识的键：{sorted(card['lineage'])}")
 
 
 def test_deleting_a_document_still_keeps_the_cards_and_now_says_what_it_would_take(tmp_path):

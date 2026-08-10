@@ -24,8 +24,8 @@
 //    ⚠ #84 追加了一族「资料库」icon（左栏分区 + 表格行动作）。范围仍然守着上面那条线：
 //      顶栏/铃铛/齿轮一个没碰，所以 54 张基线里只有 files 那 4 张会漂（票面预期内）。
 import {
-  ArrowUp, Buildings, CaretDown, DotsThreeOutline, DownloadSimple, FileText, FolderSimple,
-  MagnifyingGlass, NotePencil, Notepad, Paperclip, Stop, Trash, UploadSimple,
+  ArrowUp, ArrowsClockwise, CaretDown, DotsThreeOutline, DownloadSimple, FileText,
+  FolderSimple, MagnifyingGlass, NotePencil, Notepad, Paperclip, Stop, Trash, UploadSimple,
 } from '@phosphor-icons/react'
 
 // 一族一个笔触。改这个常量＝改整套 icon 的观感，改之前先看上面那段。
@@ -69,6 +69,13 @@ export function FilesZoneIcon() {
 /** 左栏「常驻表单」分区。 */
 export function FormsZoneIcon() {
   return <Notepad size={RAIL_SIZE} weight={WEIGHT} aria-hidden="true" focusable="false" />
+}
+
+/** #85 · 左栏「资料更新」分区（补料改了什么的只读流水）。
+ *  用「转了一圈」而不是铃铛/感叹号：拍板③ 定的是**安静更新**，一枚警示形状的 icon 会把
+ *  一条事后流水读成一堆待办。 */
+export function ChangesZoneIcon() {
+  return <ArrowsClockwise size={RAIL_SIZE} weight={WEIGHT} aria-hidden="true" focusable="false" />
 }
 
 /** 销毁类：清空这份档案 / 删除一份文件。 */

@@ -235,6 +235,12 @@ export interface LivePersonCard {
   // collaboration），value=出处。缺席=纯文档抽取卡。🔴 self_report **不在** provenance 里（禁经手编通道）。
   // stripPersonNumbers 放行本键（是对象非裸数字、非血条键），两世界都留——出处角标与人身数字开关无关。
   provenance?: Record<string, LiveFieldProvenance>
+  // #85 · 文档血缘 side-car。缺席=这张卡没有任何文档血缘（手编卡恒缺席）。
+  // 🔴 人卡血缘里**结构上没有数字的位置**：后端 `_lineage_fields('person')` 只跟
+  //    role/team/tenure/owns/collaboration，刻意不含 self_report（那一格自带出处）。
+  //    stripPersonNumbers 只剥顶层裸数字、对象整键放行，所以护栏必须长在跟踪面那一侧——
+  //    后端 `test_no_person_number_can_ride_in_on_the_lineage` 扫真 payload 的每个叶子钉着它。
+  lineage?: LiveEntityLineage
 }
 
 // rich-align-0722 · issue 01：项目级风险（PRD A1）。这是**项目**属性（进度/范围/资源风险），
@@ -273,6 +279,37 @@ export interface LiveFieldProvenance {
   updated_at: string // ISO8601
 }
 
+// ── #87 建的文档血缘 side-car，#85 起投给浏览器（additive key，缺就不发）────────────────
+// 🔴 与 `provenance` 是**两本账，答两个问题**，别混着用（extract.py 那一节的长注释是正源）：
+//   · `provenance[f].origin` —— 这一格**现在归谁**（doc/manual/form，手编赢）。
+//   · `lineage.fields[f]`    —— 这一格的**文档血缘**：哪份文档的哪一行给的、它顶掉了什么。
+// 手编改一格**不动** lineage，所以经理接管过的格子上，lineage 说的是「上一次由文档说了算时
+// 是谁说的」，不是屏幕上那个值的出处。#85 的流水正因如此要同时读两本（changeLog.ts 边界②）。
+//
+// ⚠ 契约是**开的**（后端 `dict(entity.lineage)` 原样投）：这里描述的是今天的形状，不是闭集。
+// 新键出现时前端只会忽略它，不会崩——这与 `LiveFieldProvenance` 那个**闭**契约刻意相反。
+export interface LiveLineageLink {
+  value?: unknown // 被顶掉的那个读数（写入时就拍平成 JSON 原生形状）
+  source?: string // 它当时的出处 <filename>:<line>
+  prev?: LiveLineageLink // 再往前一次；链在后端封顶 8 环
+  truncated?: boolean // 🔴 链在这里被砍过——「更早的旧值还在」不成立
+  batch_id?: string
+  seeded?: boolean
+}
+
+export interface LiveLineageField {
+  source?: string // <filename>:<line>
+  batch_id?: string // 这一格是哪一批补传写的；首次上传没有
+  seeded?: boolean // 记录是**推**出来的（构造时按实体 source 播的），不是写路记下来的
+  prev?: LiveLineageLink // 缺席 = 这一次没毁掉任何读数（enrichment）
+}
+
+export interface LiveEntityLineage {
+  docs?: string[] // 提到过这张卡的文档（doc_key 粒度，不设上限）
+  fields?: Record<string, LiveLineageField>
+  added_in?: string // 这张卡是哪一批补传**新建**的；缺席=首次上传铸的/手编建的
+}
+
 export interface LiveProjectCard {
   id: string
   title: string
@@ -288,6 +325,9 @@ export interface LiveProjectCard {
   // rich-align-0722/05a：字段级出处 side-car。key=字段名（title/ownerName/status/dueDate/summary/
   // progress/blockers/risk/milestones），value=出处。缺席=纯文档抽取的老卡（前端一律当 doc 出处，不挂角标）。
   provenance?: Record<string, LiveFieldProvenance>
+  // #85 · 文档血缘 side-car（同人卡）。⚠ 它跟的格子比这张卡投出来的**多一个**：`dependsOn`
+  // 在血缘里有、在卡上没有。changeLog.ts 的边界① 就是为它写的——卡上读不出现值的格子不进流水。
+  lineage?: LiveEntityLineage
 }
 
 // ── rich-align-0722 · issue 05a：项目手编 CRUD 写端点契约（后端 f1ca46d，service/ingest_api.py）──

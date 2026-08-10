@@ -676,6 +676,53 @@ export const en = {
     filesEmptyBusy: 'Emptying…',
     filesEmptyError: "Couldn't empty it just now — nothing was deleted. Try again.",
 
+    // ── #85 · the read-only "what the new material changed" trail ────────────────────────────
+    // 🔴 This section lives in the gap between two rulings: 拍板③ (2026-08-07, "an append
+    //    updates the cards QUIETLY, no nagging") and ruling B ("I want to be able to look it up
+    //    afterwards"). The agreed shape: no notification, nothing on the today screen, ONE place
+    //    in the archive where it can be read. So the lede leads with "Avery already did it" —
+    //    writing this as a pile of to-dos would overturn 拍板③ all over again.
+    // 🔴 Not one word from the conflict/contradiction family: that is the today screen's job.
+    //    This is a log, not a queue.
+    changesTitle: 'Updates',
+    changesLede:
+      'When you add newer material, Avery updates the cards to match it and stays out of your way. What changed — and which file said so — is recorded here.',
+    changesCountLine: '{n} changes · from {files} files',
+    // 🔴 "none" and "hasn't happened yet" are different things, but the way out is the same:
+    //    state the fact and the way out, don't diagnose which one it is (same discipline as
+    //    filesCurrentEmptyRead).
+    changesEmpty:
+      'Nothing recorded yet. Upload another batch and anything Avery revises to match it shows up here.',
+    changesEmptyHint:
+      'A first upload does not count as a change — every card was newly read at that point.',
+    changesFieldOf: '{subject} · {field}',
+    changesFilled: 'filled in',
+    changesAddedPerson: 'Added {subject} to the team',
+    changesAddedProject: 'Added the project {subject}',
+    changesFromDoc: 'per {doc}',
+    changesFromDocLine: 'per {doc}, line {line}',
+    // The citation is clickable: it jumps to the Documents section filtered to that file.
+    // 🔴 Do not promise what we cannot do — there is no source reader, so we cannot land on the
+    //    line itself. The aria label says exactly what the click does.
+    changesJumpAria: 'Find {doc} in Documents',
+    changesMarkRead: 'Mark as read',
+    changesUnmark: 'Undo',
+    changesReadFold: 'Read ({n})',
+    changeListJoin: ', ',
+    changeFieldRole: 'Role',
+    changeFieldTeam: 'Team',
+    changeFieldTenure: 'Tenure',
+    changeFieldOwns: 'Owns',
+    changeFieldCollaboration: 'Works with',
+    changeFieldOwner: 'Owner',
+    changeFieldStatus: 'Status',
+    changeFieldDueDate: 'Due',
+    changeFieldSummary: 'Summary',
+    changeFieldProgress: 'Progress',
+    changeFieldRisk: 'Risk',
+    changeFieldMilestones: 'Milestones',
+    changeFieldBlockers: 'Blockers',
+
     // ── gap-design-0805 T3 · form-frontend-a1c · the standing-forms section (④) ──────────────
     // 🔴 What a standing form IS, in copy: the employee's own account of their own stretch of
     // work. It is NOT a rating of a person — the backend's `gate_form_red_line` refuses to even
