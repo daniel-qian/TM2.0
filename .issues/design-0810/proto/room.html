@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>原型 · 对话页侧栏（0810 设计轮）</title>
+<link rel="stylesheet" href="_shell.css">
+<style>
+/* ── 会话侧栏 ────────────────────────────────────────────────────────────
+   现状的四条病根（都在真机截图上量到的，不是读码推断）：
+   ① 栏比画布更亮 → 读成"浮在页面上的白卡片"，且上下各有一道悬空的截断边；
+   ② 每场占两行（标题行 + 左右分栏的 meta 行）≈ 85px，一屏只装得下 9 场；
+   ③ meta 行上「单独问过一次」9 条里有 8 条一模一样——满行的墨，零信息；
+   ④「新对话」是一枚描边胶囊，长得像个表单控件，不像本栏的主动作。 */
+
+.new-chat {
+  /* 与会话行同一节奏（34px / 同 padding / 同圆角），不是一枚外挂的胶囊。
+     用 accent 文字色把它从灰扑扑的列表里拎出来，但不做实底——实底会把
+     视觉重心永久钉在栏顶，而经理真正要点的是下面那些会话。 */
+  color: rgb(var(--accent-deep-rgb));
+  font-weight: 600;
+}
+.new-chat:hover { background: rgba(var(--accent-rgb), 0.1); }
+
+.thread-list { flex: 1 1 auto; overflow-y: auto; margin: 0 -2px; padding: 0 2px; }
+
+/* 会话行：**单行**。轮数只在 >1 时才占墨（多轮才是有信息的那一半）；
+   时刻整条撤掉——日期组标已经说了是哪一天，逐行再报一次时分是重复劳动。
+   ⚠ `data-history-thread` / `data-history-turns` 两个属性照旧挂在 button 上，
+     verify-room-threads 的 5 条属性判据零改判；被撤掉的只是**可见文本**。 */
+.thread .label { font-size: 13px; }
+.thread .turns {
+  flex: none;
+  padding: 0 6px;
+  height: 17px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: rgba(var(--ink-rgb), 0.07);
+  color: var(--ink-soft);
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 10px;
+}
+.thread .stamp {
+  flex: none;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  color: var(--ink-faint);
+  opacity: 0;              /* 时刻只在 hover 时替补出现，静息态零噪声 */
+  transition: opacity 120ms;
+}
+.thread:hover .stamp { opacity: 1; }
+
+.rail-empty { padding: 8px 10px; font-size: 12px; color: var(--ink-soft); }
+
+/* ── 正文：开场块在「composer 以上那块」里居中 ──────────────────────────
+   现状开场块钉在滚动口顶端，底下拖着 ~700px 空白，再是 composer——一屏里有
+   两块内容和一大片虚无。
+
+   🔴 但**不能**把 composer 一起收进来居中：verify-room-claude-rework 的
+      「发问零跳变」判据逐像素比对 composer 的 x/y/宽在第一问前后是否一致
+      （采样点都在首场 complete 之前）。空态居中 + 有话之后下沉 = 正中那条判据，
+      也正是 #75 花了一整票消灭的那类病根。
+   ✅ 正解：composer **原地钉死**在底部（几何一个字节不动），只让开场块在
+      「顶栏以下、composer 以上」这块矩形里垂直居中。视觉上的虚无被吃掉，
+      而门量的那三个数一个没变。 */
+.room-main {
+  position: fixed;
+  left: var(--rail-w);
+  right: 0;
+  top: var(--clear-top);
+  bottom: 168px;            /* = --lite2-room-dock-clear，给 composer 让位 */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;  /* ← 只居中开场块 */
+  padding: 0 24px;
+  overflow-y: auto;
+}
+.welcome { width: min(828px, 100%); }
+
+/* composer：绝对定位钉在底部，与现状**同一套几何**（.lite-room 的直接子元素、
+   left:50% + translateX(-50%) 挪到让开侧栏之后那块的中点）。 */
+.composer-dock {
+  position: fixed;
+  left: calc(var(--rail-w) + (100vw - var(--rail-w)) / 2);
+  transform: translateX(-50%);
+  bottom: calc(var(--footer-h) + 12px);
+  width: min(828px, calc(100vw - var(--rail-w) - 48px));
+}
+.welcome h1 {
+  font-family: var(--font-head);
+  font-size: 32px;
+  font-weight: 600;
+  margin: 0 0 10px;
+  letter-spacing: -0.01em;
+}
+.welcome p { margin: 0 0 22px; font-size: 15px; color: var(--ink-soft); line-height: 1.6; }
+.welcome .try { font-size: 12px; font-weight: 700; color: var(--ink-soft); margin-bottom: 10px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip {
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--rule);
+  background: rgba(255, 255, 255, 0.55);
+  font-size: 13px;
+  color: var(--ink);
+  cursor: pointer;
+}
+.chip:hover { border-color: var(--rule-strong); background: rgba(255, 255, 255, 0.85); }
+
+.composer {
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-lg);
+  background: rgba(var(--surface-rgb), 0.92);
+  box-shadow: var(--shadow-soft);
+  padding: 10px 12px;
+}
+.composer .ph { font-size: 15px; color: var(--ink-faint); padding: 6px 2px 14px; }
+.composer .bar { display: flex; align-items: center; gap: 8px; }
+.icon-btn {
+  width: 34px; height: 34px; flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 999px; border: 1px solid var(--rule);
+  background: transparent; cursor: pointer; color: var(--ink-soft);
+}
+.icon-btn:hover { background: rgba(var(--ink-rgb), 0.05); }
+.send {
+  margin-left: auto; width: 34px; height: 34px;
+  border-radius: 999px; border: 0; background: var(--ink); color: #fff;
+  display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+}
+
+/* ── 手机 ≤860：栏退化为抽屉 ────────────────────────────────────────────
+   ⚠ 现状的手机抽屉态在**所有既有门里零覆盖**——contrast / aria-zh /
+     at-references / room-claude-rework 四道门的视口都硬钉 1280×900 或最小 900>860。
+     抽屉里的配色、11px 小字对比度、开关钮的 aria 全是盲区。本轮要补门。
+   🔴 开关钮必须挂 `data-history-toggle`：那是 verify-room-threads 三处 driver 的
+     点击抓手，桌面常显下它 `display:none`（门已改成「可见才点」），手机下它现身。 */
+@media (max-width: 860px) {
+  .rail {
+    width: min(320px, 86vw);
+    padding-top: 60px;
+    z-index: 46;
+    transform: translateX(-101%);          /* 默认收起 */
+    transition: transform 180ms ease;
+    box-shadow: none;
+    /* 🔴 抽屉是**浮层**，底色必须**不透明**——桌面那份 `rgba(ink,.035)` 是
+       "并排的一列"，盖到正文上就成了透明玻璃：正文会从字缝里透出来
+       （这一版原型真就这么长出来了，见下面那张废图的成因）。
+       另一半理由是门：verify-contrast-smalltext 的 bgOf 把 alpha>0.5 当实底、
+       ≤0.5 当完全透明跳过——半透明的抽屉会让它量出一个屏上根本不存在的比值。
+       #78 给历史面板定的就是这条规矩。 */
+    background: rgb(var(--surface-rgb));
+    border-right: 1px solid var(--rule);
+  }
+  .rail.open { transform: none; box-shadow: var(--shadow); }
+  /* 遮罩：点它即收起。没有遮罩的抽屉，用户不知道点哪儿能关。 */
+  .rail.open + .scrim { opacity: 1; pointer-events: auto; }
+  .scrim {
+    position: fixed; inset: 0; z-index: 44;
+    background: rgba(var(--ink-rgb), 0.28);
+    opacity: 0; pointer-events: none; transition: opacity 180ms;
+  }
+  .room-main { left: 0; top: 64px; bottom: 150px; padding: 0 16px; }
+  .composer-dock {
+    left: 50%;
+    width: calc(100vw - 32px);
+    bottom: calc(var(--footer-h) + 8px);
+  }
+  .welcome h1 { font-size: 24px; }
+  .welcome p { font-size: 14px; margin-bottom: 16px; }
+  .chip { font-size: 12px; padding: 7px 12px; }
+  /* 抽屉开关：手机上现身，钉在顶栏下方左上角。 */
+  .drawer-btn {
+    display: inline-flex !important;
+    position: fixed; left: 12px; top: 56px; z-index: 45;
+    width: 34px; height: 34px; align-items: center; justify-content: center;
+    border-radius: 9px; border: 1px solid var(--rule);
+    background: rgba(var(--surface-rgb), 0.94); color: var(--ink-soft);
+  }
+}
+.drawer-btn { display: none; }
+</style>
+</head>
+<body>
+
+<nav class="topbar">
+  <a>今天</a><a>团队</a><a>项目</a><a class="on">对话</a><a>待办清单</a>
+  <a>Avery 的笔记</a><a>操作手册</a><a>资料库</a>
+  <span class="spacer"></span>
+  <span class="search">搜索成员、项目…</span>
+</nav>
+
+<button class="drawer-btn" data-history-toggle aria-expanded="true" aria-label="历史对话">
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+    <path d="M2.5 4h11M2.5 8h11M2.5 12h11"/>
+  </svg>
+</button>
+
+<aside class="rail open">
+  <button class="row new-chat">
+    <svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4">
+      <path d="M11.3 2.2 13.8 4.7 5.6 12.9l-3.1.6.6-3.1z"/>
+    </svg>
+    <span class="label">新对话</span>
+  </button>
+
+  <div class="rail-sep"></div>
+
+  <div class="thread-list">
+    <div class="group-label">今天</div>
+    <button class="row thread on"><span class="label">本周前厅部的排班有没有明显缺口？</span><span class="turns">2</span></button>
+    <button class="row thread"><span class="label">婚宴那单的对接人现在是谁？</span><span class="stamp">08:08</span></button>
+    <button class="row thread"><span class="label">帮我看看这周有哪几个项目可能会延期</span><span class="stamp">06:08</span></button>
+
+    <div class="group-label">昨天</div>
+    <button class="row thread"><span class="label">小马最近的工作量是不是有点高了</span><span class="stamp">09:08</span></button>
+    <button class="row thread"><span class="label">客房部谁还没交这周的周报？</span><span class="stamp">07:08</span></button>
+
+    <div class="group-label">更早</div>
+    <button class="row thread"><span class="label">旺季排班协调会上定了哪几件事</span><span class="stamp">8月7日</span></button>
+    <button class="row thread"><span class="label">新来的前台需要多久能独立顶班</span><span class="stamp">8月4日</span></button>
+    <button class="row thread"><span class="label">管理规范里关于客诉升级的红线是怎么写的？</span><span class="stamp">8月1日</span></button>
+    <button class="row thread"><span class="label">中秋前后的房态预测能不能拉一份</span><span class="stamp">7月29日</span></button>
+    <button class="row thread"><span class="label">小徐转正的材料齐了吗</span><span class="turns">3</span></button>
+    <button class="row thread"><span class="label">上个月客诉最集中的是哪个环节</span><span class="stamp">7月22日</span></button>
+    <button class="row thread"><span class="label">宴会部和前厅的交接卡在哪一步</span><span class="stamp">7月20日</span></button>
+  </div>
+</aside>
+<div class="scrim"></div>
+
+<main class="room-main">
+  <div class="welcome">
+    <h1>把眼下的问题交给 Avery</h1>
+    <p>把团队里让你放心不下的事写下来——它会对照你上传的资料想清楚，再给你一份判断。</p>
+    <div class="try">试试这样问</div>
+    <div class="chips">
+      <button class="chip">这周团队里有谁可能需要我搭把手？</button>
+      <button class="chip">哪个项目最可能延期，为什么？</button>
+      <button class="chip">目前有没有哪个交接正等着某个人？</button>
+      <button class="chip">帮我列一下下周的重点。</button>
+    </div>
+  </div>
+</main>
+
+<div class="composer-dock">
+  <div class="composer">
+    <div class="ph">向 Avery 提问…</div>
+    <div class="bar">
+      <button class="icon-btn">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4">
+          <path d="M9.5 3.5 5 8a2.1 2.1 0 0 0 3 3l4.5-4.5a3.5 3.5 0 0 0-5-5L3 6"/>
+        </svg>
+      </button>
+      <button class="send">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8">
+          <path d="M8 13V3M4 7l4-4 4 4"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="footer">Avery 只辅助你的判断，不替你做决定。</div>
+</body>
+</html>

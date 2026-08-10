@@ -1,0 +1,198 @@
+/* 0810 设计轮 · 静态原型共用底座
+   ------------------------------------------------------------------
+   令牌逐位抄自 src/lite2/styles/look-paper.css，好让原型上的颜色/阴影就是
+   落地后屏上的颜色/阴影——原型骗人的最常见方式就是自己另配一套好看的色。
+   本目录是**纯静态 mock**，不 import 任何应用代码，也不会被打包。 */
+
+:root {
+  --ink: #1d1b17;
+  --ink-soft: #5e5a51;
+  --ink-faint: #736c5f;
+  --rule: rgba(52, 48, 40, 0.15);
+  --rule-strong: rgba(52, 48, 40, 0.28);
+  --shadow: 0 22px 70px rgba(50, 45, 36, 0.13);
+  --shadow-soft: 0 12px 40px rgba(50, 45, 36, 0.08);
+
+  --surface-rgb: 255, 253, 248;
+  --ink-rgb: 29, 27, 23;
+  --accent-rgb: 105, 128, 109;
+  --accent-deep-rgb: 74, 96, 78;
+  --danger-rgb: 188, 92, 73;
+  --warn-rgb: 178, 123, 43;
+  --sky-rgb: 82, 123, 145;
+
+  --radius-lg: 16px;
+  --clear-top: 96px;
+  --footer-h: 56px;
+
+  /* 新令牌（本轮提案）：两块屏共用同一根导航栏宽度。 */
+  --rail-w: 264px;
+  --rail-w-files: 208px;
+
+  --font-ui: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+    'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  --font-head: Georgia, 'Times New Roman', serif;
+  --font-num: ui-monospace, 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: var(--font-ui);
+  color: var(--ink);
+  background:
+    radial-gradient(circle at 24% 18%, rgba(255, 255, 255, 0.9), transparent 28%),
+    linear-gradient(135deg, #fbf8f0 0%, #f0eadf 52%, #f9f6ef 100%);
+  background-attachment: fixed;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── 顶栏胶囊（未改，照抄现状好让原型看起来是同一个应用）───────────────── */
+.topbar {
+  position: fixed;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(1480px, calc(100vw - 48px));
+  height: 56px;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 10px;
+  border-radius: var(--radius-lg);
+  background: rgba(var(--surface-rgb), 0.82);
+  backdrop-filter: blur(18px);
+  border: 1px solid var(--rule);
+  box-shadow: var(--shadow-soft);
+  font-size: 14px;
+}
+.topbar a {
+  padding: 7px 14px;
+  border-radius: 999px;
+  color: var(--ink-soft);
+  text-decoration: none;
+}
+.topbar a.on { background: var(--ink); color: #fff; font-weight: 600; }
+.topbar .spacer { margin-left: auto; }
+.topbar .search {
+  width: 240px; height: 34px; border-radius: 10px;
+  border: 1px solid var(--rule); background: rgba(255, 255, 255, 0.5);
+  display: flex; align-items: center; padding: 0 12px;
+  color: var(--ink-faint); font-size: 13px;
+}
+
+.footer {
+  position: fixed; left: 0; right: 0; bottom: 0; height: var(--footer-h);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; color: var(--ink-faint); z-index: 30;
+}
+
+/* ── 导航栏（两块屏共用的视觉语言）─────────────────────────────────────
+   🔴 与现状最大的差别：**下陷**而不是**凸起**。
+   现状 `background: rgb(255,253,248)` 比暖纸画布更亮 → 栏在视觉上是浮在页面上的
+   一张白卡片；参照物（Claude / 访达 / Notion）的边栏一律比正文区更**暗**一档。 */
+.rail {
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: var(--rail-w);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  padding: calc(var(--clear-top) - 22px) 8px 12px;
+  background: rgba(var(--ink-rgb), 0.035);
+  border-right: 1px solid var(--rule);
+}
+.rail-eyebrow {
+  margin: 0 0 10px;
+  padding: 0 10px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--ink-faint);
+}
+
+/* 行：单行、34px、整栏可点。所有导航/会话/分区行共用这一条节奏。 */
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  position: relative;
+}
+.row:hover { background: rgba(var(--ink-rgb), 0.05); }
+.row .label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.row .tail {
+  flex: none;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+/* 选中：accent 软底 + 2px 左封条。左封条是「这一条是当前」最省墨的说法。 */
+.row.on { background: rgba(var(--accent-rgb), 0.13); font-weight: 600; }
+.row.on::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 6px; bottom: 6px;
+  width: 2px;
+  border-radius: 2px;
+  background: rgb(var(--accent-deep-rgb));
+}
+.row .ico { flex: none; width: 15px; height: 15px; opacity: 0.75; }
+.row.on .ico { opacity: 1; }
+
+.rail-sep { height: 1px; background: var(--rule); margin: 10px 10px; }
+.rail-foot { margin-top: auto; }
+.rail-foot .row { color: var(--ink-faint); font-size: 12px; }
+
+.group-label {
+  margin: 16px 0 2px;
+  padding: 0 10px;
+  font-size: 11px;
+  font-weight: 700;
+  /* 🔴 吃 --ink-soft 不吃 --ink-faint：11px 的 faint 在 paper 上只有 ~4.7:1，
+     verify-contrast-smalltext 的 AA 地板余量仅 0.2，aurora 侧更薄。#80 已立此碑。 */
+  color: var(--ink-soft);
+}
+.group-label:first-of-type { margin-top: 4px; }
+
+/* 正文区 */
+.main { margin-left: var(--rail-w); padding-top: var(--clear-top); }
+
+/* 手机上顶栏横向滚动（现状就是这么做的，原型照抄，免得 mock 自己长出一个
+   现实里不存在的三行折行顶栏、把人眼过的注意力骗走）。 */
+@media (max-width: 860px) {
+  .topbar {
+    width: calc(100vw - 20px);
+    height: 46px;
+    padding: 0 8px;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    scrollbar-width: none;
+  }
+  .topbar::-webkit-scrollbar { display: none; }
+  .topbar a { white-space: nowrap; flex: none; padding: 6px 11px; font-size: 13px; }
+  .topbar .spacer, .topbar .search { display: none; }
+  .footer { height: 44px; font-size: 11px; padding: 0 16px; text-align: center; }
+}

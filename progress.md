@@ -3,8 +3,8 @@
 > 📢 本文件是**当前状态快照，整体重写不追加**。历史都在 git（`git log` + 各 `.issues/*/receipt*.md`），别在这儿堆编年史。
 > 启动路径见 `AGENTS.md` Startup Workflow：读本文件 + `feature_list.json`，跑 `./init.sh` 确认绿，再开工。
 
-**Last Updated:** 2026-08-10（**#82 墙钟炸弹拆弹**：表单测试语料三红结清，产品零改动。
-仍未 push、未上产）
+**Last Updated:** 2026-08-10（**0810 设计轮：方案已过审、六票已开**。#82 拆弹已复核绿。
+本轮**零产品代码改动**；仍未 push、未上产）
 
 ## Current State
 
@@ -88,14 +88,33 @@
 
 ## What's Next（按优先级）
 
-0. **🔴 0810 设计轮已 handoff——新 session 从 `.issues/design-0810/handoff.md` 起步**（正源
-   任务书：plan 先行不 grill、允许推倒对话页/资料库样式层重做、六条问题清单含两个产品拍板项
-   〔「新建一家公司」定位 /「自动更新+已查阅/撤回」模型〕、W33 链接「过期」异常核实、
-   #82 落地复核也归新 session）。缘起：复演第 6 轮四样验过后，Danny 判 0808/0809 两轮 UIUX
-   「效果一般、原地兜圈」——旧 session 复盘认账（grill 选项被存量架构锚死+视觉设计输入缺位）
-   并退出主导。
-   ⚠ **该任务书里「#82 落地前离线套 3 红是已知底噪」那句已过期**：#82 已落地（本轮），
-   离线套新基线 **4049 passed · 0 failed**，任何红都是你的。
+0. **🔴 0810 设计轮已收官：方案过审 + 六票已开（#83–#88），下一步是照票落地**。
+   正源 `.issues/design-0810/design-plan.md`（Danny 2026-08-10「其他的设计方案全部通过」），
+   原型 `.issues/design-0810/proto/{room,files}.html`，证据 `_shots-0810/`（现状 7 张 + 原型 4 张）。
+   **开工顺序：#83 → #84**（本轮本职：纯前端布局与皮肤，不碰数据模型），
+   **#85 / #86 可并行**（都便宜，且 #86 是 #88 的前置）；**#87 是数据模型真地基，值得单开一轮**。
+   - **#83** 对话侧栏上皮肤 + 开场块居中 · **#84** 资料库改两栏 file explorer（建议再拆 2a/2b/2c）
+   - **#85** 「这次补料改了什么」只读清单（+已查阅） · **#86** 「清空这份档案」
+   - **#87** 实体血缘地基（**一张票同时喂「删文件收回结论」与「逐条撤回」**） · **#88** 撤掉「新建一家公司」
+   - 票 7「逐条撤回」待 #87 落地后再开。
+   🔴 **两条产品拍板（Danny 0810）**：① **不要有「新建」的概念**——一个人恒一份档案，
+   加文件/删文件，从头来是**清空这一份**（context_id/owner_token 不变）+ 硬确认；
+   ② 「自动更新 + 已查阅/撤回」**完整做**，但按「与 0807 拍板③ 共存」落——
+   **不弹通知、不占今天页**，只在资料库有一处可查。
+   🔴 **#87 是 ① 的拦路石，别跳过**：删一份文件今天**只清材料面、不动人卡/项目卡**
+   （`file_delete.py` 明文裁定 + `test_delete_keeps_the_person_cards` 钉着），
+   结论会留在卡上并被 `facts.md` 反复写回、顾问继续引用。旧模型下靠「新建一家公司」洗掉重来，
+   ① 把那条退路砍了 → **在 #87 落地前，「删除文件」给用户的承诺是假的**。
+   ⚠ **该 handoff 里「#82 落地前离线套 3 红是已知底噪」那句已过期**：#82 已落地并复核，
+   `TZ=UTC` 离线全套 **4049 passed · 0 failed**，任何红都是你的。
+   ⚠ **W33「链接过期了」核实完毕：不是产品 bug**，两条假设都证伪（两条铸链路径都当场算
+   `default_expiry`，从上期只抄名册三字段、装不下 `expires_at`；demo-seed 里没有表单行）。
+   真因只可能是**撤回**或**演习夹具用显式 `period` 铸行**（周标签与真实铸造时刻脱钩）。
+   现场已不可复现（`rehearsal0808` 重建，`form_submissions` 0 行）。
+   真要修的是夹具卫生（`verify-forms-proactive.mjs:60` 硬写 `'2026-W01'`），属独立小票；
+   另有一个真空洞：**没有任何测试断言自动铸链的 `expires_at` 数值**，
+   在 `test_form_autofill_t9.py:569` 旁补一句 `expires_at - created_at == 7 days` 很便宜。
+
 1. **复演第 6 轮已收官**（侧栏动线 / 输入框 / 资料库抽查 / 自动铸链四样过）。
    档案 `.issues/redesign-0808/` 现在是**六份回执** + 四路侦察 + 两份开工裁定。
 2. ⚠ **给下一个人的口径**：recon-sidebar / recon-composer 是好正源，但它们**各有一处已证的错**
@@ -111,6 +130,26 @@
    成本票 #30 · 真 brain 分流取证 · 全量 feat-063。
 
 ## Notes（顺手发现，没顺手修）
+
+- 🔴 **删文件不收回结论**：`delete_document_from_context` 只清 `materials`/`signals`/`granularity`/`conflicts`，
+  **从不碰** `extraction.people` / `extraction.projects`。删掉一份文件后卡上的读数仍在，
+  且 `materialize_memory` 每次把它写回 `facts.md`。是 #77 的明文裁定（血缘不够），有测试钉着。开票 **#87**。
+- 🔴 **补传的旧值 10 个字段里 7 个无处可寻**：`AppendLedger.absorb` 直接 `setattr`，`put()` 是整快照替换，
+  `stamp()` 连旧 provenance 也覆盖；唯一留旧值的 `note_conflict` 被白名单卡死
+  （人只有 `team`，项目只有 `status`/`dueDate`）。撤回没法建在现状之上。
+- ✅ **两个便宜的现成件**（做「自动更新清单」时别重造）：`provenance[f].origin === 'doc'`
+  **恰好**标出「被后来的上传顶掉过」的格子（首次 `/ingest` 一个 stamp 都不写）；
+  「已查阅」交互层 `flowStore.ts` 三态标记库已建好并被今天页冲突卡在用，`restoreGap` 就是取消标记。
+- ⚠ **两条要订正的旧结论**：`gapDerive.ts` **不消费 conflicts**（纯客户端启发式，冲突卡与差距卡是同屏两张卡）；
+  冲突到前端时**已是字符串**（`_conflict_evidence` 拍平且刻意不带行号），要可点击引文得另加 additive payload key。
+  另：**不带项目的人身上的 `team` 冲突今天哪块屏都到不了**（`_conflicts_for` 只在 `subject_ref == project.ownerId` 时收）。
+- ⚠ **`verify-context-switch` ⑥ 的两条源码级判据是假绿雷**：`forgetContext` 被删掉之后它们**静默变绿**不是红。#88 改判时要主动退役。
+- ⚠ **`uploadFiles` 有四个调用点**，`OnboardGate`（新用户第一次上传）与 `HomeScreen` 首页骨架卡**不能碰**
+  （后者有 Danny 拍板「首访者的第一个动作不该先跳一屏」）。两条状态机也不能天真合并——
+  `notifyStore` 靠 `ingesting→ready` 跃迁合成「团队已就绪」，合并了每次补料都误报。
+- ⚠ **手机 390px 上文件行是 flex-wrap 的汤**：9 行 4 种高度 3 种内部顺序（`_shots-0810/files-mobile.png`）。#84 用固定 grid 骨架根治。
+- ⚠ **`.lite-files-scroll` 是 `absolute inset:0`，Playwright `fullPage` 拍不到它的全长**——
+  要拍资料库全屏得把视口调高（本轮用 1440×3200），别以为页面就那么短。
 
 - 🟠 **`test_decision_grading.py:1050` 是另一族墙钟赌注**（#82 扫出，未修）：
   `_uploaded_day(...) == date.today()` —— `date.today()` 是**本地时区**、`clone_context` 打的是 UTC 戳。
