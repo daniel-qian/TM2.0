@@ -455,6 +455,55 @@ def test_empty_context_keeps_the_account_binding(impl, tmp_path):
     assert fresh.account_owns(user, cid) is True
 
 
+def test_empty_context_claims_an_ephemeral_clone(impl, tmp_path):
+    """#88 · 清空＝这份档案从此归你：一次性克隆被亲手清空之后不再是一次性的。
+
+    为什么这条非有不可（它补的是 #88 **自己造出来**的一条死胡同）：撤掉「新建一家公司」
+    之后，领过示例团队的人没有别的路换成自己的资料——示例档案的上传口是封着的（补进去的
+    会随 TTL 回收一起没），而「清空这份档案」是他唯一被指引去做的动作。`ephemeral` 若在
+    清空后原样留着，他做完那个动作**什么也没解开**，而且 GC 迟早把他自己传的资料收走。
+
+    🔴 对照基准不能省（销毁类判据天生空真）：先断言清空**之前**两份都真是 ephemeral，
+       否则「清空后不是了」在一个本来就没打标的档案上恒真，这条测试会对着被删掉的产品
+       代码继续全绿。同理留一份 `kept` 不清空——它同时钉住「别把别的克隆也一起认领了」。
+    """
+    reg, master, _ = _ingest(impl, tmp_path / "mem", owner_token="token-master")
+    kept = _demo_clone(impl, master)        # 领了没动的那位访客
+    claimed = _demo_clone(impl, master)     # 领完清空、换成自己资料的那位
+    for c in (kept, claimed):               # 见 _backdate_clone：别赌墙上时钟
+        _backdate_clone(impl, c, hours=1)
+
+    assert impl.fresh().is_ephemeral(kept) is True
+    assert impl.fresh().is_ephemeral(claimed) is True, "对照基准就不成立 —— 下面全是空真"
+
+    assert impl.fresh().empty_context(claimed) is True
+
+    assert impl.fresh().is_ephemeral(claimed) is False, \
+        "清空之后它还是一次性克隆 —— 用户接管的档案会被 GC 收走"
+    assert impl.fresh().is_ephemeral(kept) is True, "清空一份把别人的克隆也顺手认领了"
+
+    # 🔴 判据落到**后果**上，不止那个 bool：ttl=0 该只收走没被清空的那一份。
+    # 只断 is_ephemeral 的话，`sweep_ephemeral` 换一条选行口径（不读这一列）就照样全绿。
+    assert impl.fresh().sweep_ephemeral(older_than_hours=0, limit=50) == 1
+    fresh = impl.fresh()
+    assert claimed in fresh, "用户亲手清空并接管的档案被 GC 收走了"
+    assert kept not in fresh, "没被认领的克隆反倒活下来了 —— sweep 选错了行"
+
+
+def test_empty_context_of_a_normal_archive_does_not_touch_the_ephemeral_flag(impl, tmp_path):
+    """反向的一半：真人自己传出来的档案本来就不是 ephemeral，清空是一次无操作，
+    绝不许因为「清空即认领」那一行反过来把它**标成** ephemeral（那就是把用户的正经档案
+    送进 GC 的名单）。"""
+    reg, cid, _ = _ingest(impl, tmp_path / "mem")
+    assert impl.fresh().is_ephemeral(cid) is False
+
+    assert impl.fresh().empty_context(cid) is True
+
+    assert impl.fresh().is_ephemeral(cid) is False
+    assert impl.fresh().sweep_ephemeral(older_than_hours=0, limit=50) == 0
+    assert cid in impl.fresh(), "清空一份普通档案之后它被 GC 收走了"
+
+
 def test_empty_context_of_an_unknown_id_is_false(impl):
     assert impl.fresh().empty_context("ctx_no_such_thing") is False
     assert "ctx_no_such_thing" not in impl.fresh(), "顺手把一个不存在的档案凭空造出来了"

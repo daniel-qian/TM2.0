@@ -295,10 +295,33 @@ function StepUpload() {
   const uploadFiles = useLite((s) => s.uploadFiles)
   const ingestStatus = useLite((s) => s.ingestStatus)
   const ingestError = useLite((s) => s.ingestError)
+  const appendStatus = useLite((s) => s.appendStatus)
+  const appendError = useLite((s) => s.appendError)
   const inputRef = useRef<HTMLInputElement | null>(null)
 
+  // #88 · 这一步照旧调 `store.uploadFiles`（**全新用户的档案就是这么铸出来的**，票面明令
+  // 不许碰），但 `uploadFiles` 现在会在「已经有档案」时把这一发**委托给 `appendFiles`**。
+  // 于是屏上该显示哪条状态机，取决于这一发究竟走了哪条路。
+  //
+  // 够得着的现场：向导里传成功一次（`contextId` 落地，而向导**刻意不关**——见文件头那段
+  // 「不响应式读 contextId」的碑，全新用户还要走②③④步）→ 用户翻回①再传一次。旧代码那
+  // 一发当场开出第二家公司；现在它是补料，`ingestStatus` 一动不动停在 'ready'。照旧只读
+  // `ingestStatus` 的话，屏上会**从头到尾写着「已就绪」**：秒表不走、失败也不报——用户在
+  // 一个正在跑的两分钟里看到的是"早就好了"。
+  //
+  // 🔴 判据不能写成「有没有 contextId」。引导那一发跑完的**同一帧** contextId 就到手了，
+  //    按它选的话 'ready' 会翻给一条还是 idle 的 append 机，「已就绪」在成功的瞬间消失、
+  //    一帧都不出现（`verify-onboard-gate` 等的正是 `.lite-onboard-upload-ready`）。
+  //    所以按「谁在动」选，和资料库屏 `shown` 那一处**同一条规则**（FilesScreen 里有碑）。
+  const appending =
+    appendStatus === 'ingesting' ? true
+      : ingestStatus === 'ingesting' ? false
+        : appendStatus !== 'idle'
+  const status = appending ? appendStatus : ingestStatus
+  const error = appending ? appendError : ingestError
+
   // feat-068 · ingesting 期间这一步整体上锁。
-  const busy = ingestStatus === 'ingesting'
+  const busy = status === 'ingesting'
   const elapsed = useIngestElapsedSeconds(busy)
 
   const onPick = (event: ChangeEvent<HTMLInputElement>) => {
@@ -356,7 +379,7 @@ function StepUpload() {
           🔴 秒表与动效整块 aria-hidden：外层是 aria-live="polite"，每秒变一次的数字若进无障碍
           树，读屏会被每秒播报刷屏两分钟；"在忙"这件事由按钮的 aria-busy 表达即可。 */}
       <div className="lite-onboard-upload-status" aria-live="polite">
-        {ingestStatus === 'ingesting' ? (
+        {status === 'ingesting' ? (
           <div className="lite-onboard-upload-waiting">
             <p className="lite-onboard-upload-reading">
               <span className="lite-onboard-upload-dot" aria-hidden="true" />
@@ -370,12 +393,12 @@ function StepUpload() {
               <span />
             </div>
           </div>
-        ) : ingestStatus === 'ready' ? (
+        ) : status === 'ready' ? (
           <p className="lite-onboard-upload-ready">{l.onboardUploadReady}</p>
-        ) : ingestStatus === 'error' ? (
+        ) : status === 'error' ? (
           <p className="lite-onboard-upload-error">
             {l.onboardUploadError}
-            {ingestError ? <span className="lite-onboard-upload-error-detail"> {ingestError}</span> : null}
+            {error ? <span className="lite-onboard-upload-error-detail"> {error}</span> : null}
           </p>
         ) : (
           <p className="lite-onboard-upload-idle">{l.onboardUploadIdle}</p>

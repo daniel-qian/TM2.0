@@ -1237,7 +1237,21 @@ class ContextRegistry(ProjectWriteMixin):
             文件的衍生物（确认文案必须把这一条说给用户听，别让他以为「清空」把笔记也清了）；
           · 常驻表单模板 + **员工已交的答卷 `form_submissions`** —— 那是**别人的话**，而且外面
             还挂着活的 H5 链接，清掉等于替员工撤回他已经交的东西；
-          · `asks` / `ask_recipients` · 账号归属 `account_contexts` · ephemeral 标记。
+          · `asks` / `ask_recipients` · 账号归属 `account_contexts`。
+
+        🔴 **`ephemeral` 标记是唯一的例外：清空会把它摘掉（#88，Danny 2026-08-10 拍板
+        「清空＝这份档案从此归你」）。** 这不是顺手优化，是补一条 #88 造出来的死胡同——
+
+          撤掉「新建一家公司」之后，领过示例团队的人**没有任何路**换成自己的资料：
+          示例档案是一次性克隆（到期被 `sweep_ephemeral` 回收），前端因此**封掉**它的上传口
+          （补进去的东西会随回收一起没，而经理会以为存下来了）；他今天的出路正是「新建一家
+          公司」，而那个出口这一票砍了。清空之后若 `ephemeral` 原样留着，上传口照旧封着——
+          用户做了唯一被指引的动作，却什么也没解开。
+
+          语义上也说得通：一次性克隆之所以一次性，是因为**里面装的是我们的示例数据**。
+          用户亲手把它清空 + 打了确认词，那份档案里再没有一个字节属于示例——它就是他的了。
+          先例是 `link_account_context`（绑到账号即 `ephemeral = false`，gc-demo-clones-0724）：
+          同一条判断「这份 context 已经归某个真人所有 → 不该被 GC 收走」，两个触发点。
 
         🔴 **留着答卷的代价（明知而为，不是疏漏）**：`POST /team/{id}/forms/{sub}/ingest` 会把一份
         已提交的答卷重新灌回资料库——所以「清空」**不会自己保持为空**，经理事后补灌一份答卷，
@@ -1264,6 +1278,10 @@ class ContextRegistry(ProjectWriteMixin):
         # 命门③（同 file_delete）：facts.md / notes.md 必须**当场**重物化成空，否则议事室的
         # recall 会继续从磁盘上那份旧文本里引出已经清掉的原文。
         materialize_memory(ctx.extraction, ctx.memory_dir)
+        # #88 · 清空即认领：这份档案里再没有一个字节属于示例，别让 GC 把它当一次性克隆收走
+        # （理由见 docstring 那段🔴；pg 腿是同一句话的 SQL 版）。对本来就不是克隆的档案，
+        # 这一行是无操作——`pop(..., None)`，不是「找不到就抛」。
+        self._ephemeral_at.pop(context_id, None)
         return True
 
     # --- input-side-0721 · 3A: clone (the one-click sample-team seam) --------------------------

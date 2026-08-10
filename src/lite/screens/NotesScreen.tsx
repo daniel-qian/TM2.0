@@ -19,7 +19,7 @@ function dayKey(iso: string): string {
 }
 
 // ui-sweep-0802 · 日期文案跟应用 locale，不跟 OS（与 lite2/screens/NotesScreen.tsx 同步修，
-// 口径对齐 KnownContextList.tsx 的 zh→zh-CN / en→en-US）。
+// 两处同一口径 zh→zh-CN / en→en-US）。
 function dateLocale(locale: Locale): string {
   return locale === 'zh' ? 'zh-CN' : 'en-US'
 }

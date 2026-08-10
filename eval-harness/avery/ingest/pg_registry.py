@@ -1249,9 +1249,10 @@ class PostgresContextRegistry(ProjectWriteMixin):
 
     def empty_context(self, context_id: str) -> bool:
         """#86 · `ContextRegistry.empty_context` 的 Postgres 双胞胎——清掉这家公司上传来的一切，
-        **`avery.contexts` 那一行原地不动**（`context_id` / `name` / `owner_token` / `ephemeral`
-        一个字节不改）。语义、保留清单、以及「留着答卷 = 清空不会自己保持为空」那颗雷，
-        全部见内存腿那份 docstring，这里只记 pg 侧独有的三条。
+        **`avery.contexts` 那一行几乎原地不动**（`context_id` / `name` / `owner_token`
+        一个字节不改；`ephemeral` 是 #88 加的唯一例外，见下面④）。语义、保留清单、以及
+        「留着答卷 = 清空不会自己保持为空」那颗雷，全部见内存腿那份 docstring，
+        这里只记 pg 侧独有的四条。
 
         🔴 **① 不许用 `put()` 凑数**，哪怕把 ctx 清空了再 put 看上去也能达到同一个结果。
         `put()` 是「快照替换 + 在库内回填」：它先把 `_prior_src_bytes` / `_prior_mat_vecs` 两张临时表
@@ -1268,6 +1269,13 @@ class PostgresContextRegistry(ProjectWriteMixin):
 
         🔴 **③ `granularity` 不在这里出现是对的**：`put()` 从来就不持久化它（见 put() 里那段注释），
         库里根本没有它的行。内存腿清它是因为它活在进程内的 `ExtractionResult` 上。
+
+        🔴 **④ `ephemeral` 清成 false（#88「清空＝这份档案从此归你」）**。为什么这么做见内存腿
+        的 docstring；pg 侧要多记一句：这一列**不能**跟 `source_files` 挤进同一句 UPDATE 的
+        SET 里草草带过——它改的是**档案的身份**（GC 收不收它），和「清单空了」不是一回事。
+        单独一句、带自己的注释，下一个改清单逻辑的人才不会顺手把它一起改掉。
+        与 `link_account_context` 里那句 `SET ephemeral = false` 是同一条判断的两个触发点；
+        两处都动过之后 `sweep_ephemeral` 的选行口径（`WHERE c.ephemeral`）一个字没变。
         """
         self._ensure_schema()
         with self._connect() as conn:
@@ -1296,11 +1304,16 @@ class PostgresContextRegistry(ProjectWriteMixin):
                     "INSERT INTO avery.memory_files (context_id, filename, content) "
                     "VALUES (%s, %s, %s)",
                     [(context_id, "facts.md", facts), (context_id, "notes.md", notes)])
-            # 清单也要空。⚠ 只动 source_files 与 updated_at —— name / owner_token / ephemeral
+            # 清单也要空。⚠ 只动 source_files 与 updated_at —— name / owner_token
             # 是**档案的身份**，本方法的全部意义就是它们活下来。
             conn.execute(
                 "UPDATE avery.contexts SET source_files = %s, updated_at = now() "
                 "WHERE context_id = %s", (Jsonb([]), context_id))
+            # #88 · 清空即认领（理由见 docstring ④）。刻意单独一句：它改的是档案的身份，
+            # 不是清单内容。对本来就 ephemeral=false 的档案这是一次无操作。
+            conn.execute(
+                "UPDATE avery.contexts SET ephemeral = false WHERE context_id = %s",
+                (context_id,))
         return True
 
     def delete(self, context_id: str) -> None:

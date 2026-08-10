@@ -71,11 +71,6 @@ export function FormsZoneIcon() {
   return <Notepad size={RAIL_SIZE} weight={WEIGHT} aria-hidden="true" focusable="false" />
 }
 
-/** 左栏「新建一家公司」/「这台电脑上传过的公司」。 */
-export function CompanyZoneIcon() {
-  return <Buildings size={RAIL_SIZE} weight={WEIGHT} aria-hidden="true" focusable="false" />
-}
-
 /** 销毁类：清空这份档案 / 删除一份文件。 */
 export function TrashIcon() {
   return <Trash size={RAIL_SIZE} weight={WEIGHT} aria-hidden="true" focusable="false" />

@@ -119,13 +119,27 @@ const rail = await page.evaluate(() => ({
   sections: Array.from(document.querySelectorAll('.lite-files .lite-files-section')).map((s) => s.id),
 }))
 const zIdx = (id) => rail.zones.indexOf(id)
-rec('③ 🔴 频率重排：常驻表单排在「新建一家公司」**前面**（旧序正好相反）',
-  zIdx('forms') > -1 && zIdx('new') > -1 && zIdx('forms') < zIdx('new'), JSON.stringify(rail.zones))
+// 🔴 **#88 改判**：旧口径断言「常驻表单排在**新建一家公司**前面」。「新建一家公司」整个
+//    概念撤了（Danny 0810），`zIdx('new')` 恒 -1 → 旧条必红，而且它护的那件事（把最罕用的
+//    东西排到后面）已经由「那个东西根本不存在」达成得更彻底。
+//    改判分两条，都比旧条有牙：
+//      ③a 序还在被守：日常的**文件**区排在**常驻表单**之前（这是重排后剩下的那对真顺序，
+//          对调一下就红——旧条对这一对是瞎的）；
+//      ③b 「新建/切换」两行**必须不在**（旧条只要求它排在后面，把它加回来照样能全绿）。
+rec('③a 🔴 频率重排：文件区排在常驻表单**前面**',
+  zIdx('files') > -1 && zIdx('forms') > -1 && zIdx('files') < zIdx('forms'),
+  JSON.stringify(rail.zones))
+rec('③b 🔴 #88 单档案模型：左栏没有「新建一家公司」/「切换档案」这两行',
+  zIdx('new') === -1 && zIdx('switch') === -1, JSON.stringify(rail.zones))
 rec('③ 默认落点就是文件区（进屏不用点一下才看得见自己传过什么）',
   rail.current.length === 1 && rail.current[0] === 'files' && rail.sections.includes('files-current'),
   JSON.stringify(rail))
 // 🔴 逐行真点。`empty` 那一行是销毁类动作不是分区（点它弹硬确认），排除在外。
-const ZONE_SECTION = { files: 'files-current', forms: 'files-forms', new: 'files-new', switch: 'files-switch' }
+// #88 · `new: 'files-new'` / `switch: 'files-switch'` 两条随那两区一起摘掉——留着就是**悬空的
+// 映射**：它们永远不会被下面那个循环走到（循环遍历的是屏上真有的 `rail.zones`），于是一旦
+// 有人把某一区重新加回来、id 却拼错，这里会静默 `ZONE_SECTION[z] === undefined`，
+// `getElementById(undefined)` 返 null，报出来的是「点不动」而不是「映射漏了」。
+const ZONE_SECTION = { files: 'files-current', forms: 'files-forms' }
 const dead = []
 for (const z of rail.zones.filter((z) => z !== 'empty')) {
   try { await page.locator(`[data-files-zone="${z}"]`).click({ timeout: 3000 }) } catch { dead.push(`${z}:点不动`); continue }

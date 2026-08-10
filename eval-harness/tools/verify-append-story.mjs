@@ -104,12 +104,14 @@ await page.evaluate((seam) => window[seam].getState().goScreen('files'), SEAM)
 await page.waitForTimeout(600)
 // 🔴 **#84 改判**：补资料不再是一个独立小节（`.lite-files-append`）——它就是**文件工作台
 //    工具条上那颗「上传文件」**（design-plan §2.4.2「现状两个方向相反的 dropzone 收成一个」）。
-//    有档案时那颗钮天然走 append 那条路。改判**没有放宽**：这一段要盯的两件事一件没少——
-//      · 「资料库上真的有一个补资料的入口」→ 现在盯工具条那个口子；
-//      · 「两个动作分得开」→ 两个模式现在分**住在两个分区**里，所以要**逐区点过去各看
-//        一次**。这比旧口径更狠：旧口径两个 `[data-upload-mode]` 恰好同屏，一次
-//        querySelectorAll 就够；现在必须证明「文件区那口是 append」**且**「新建区那口是
-//        new」，任一区把模式接错都逃不掉。
+//    有档案时那颗钮天然走 append 那条路。
+// 🔴 **#88 再改判**：「两个动作分得开」这条**没有对象了**——「新建一家公司」整个概念撤了
+//    （Danny 0810），`[data-files-zone="new"]` 那一区连同它的 `data-upload-mode="new"` 一起
+//    没了。旧那条判据（点进新建区、断言那口是 new）从此**必红**。
+//    改判**没有放宽**，是把同一件事翻了个面：旧口径问「两个方向分得开吗」，新口径问
+//    「**是不是只剩一个方向了**」——屏上不许再出现任何 `mode="new"` 的上传口，也不许再有
+//    通往「新建」的分区行。这比旧条更狠：旧条只要两个区各自模式对就放行，把「新建」偷偷
+//    加回来照样全绿；新条对着任何一个复活的新建入口都会红。
 const entry = await page.evaluate(() => {
   const bar = document.querySelector('.lite-files-uploader')
   return {
@@ -126,19 +128,28 @@ rec('② 资料库的文件工作台上真的有一个上传口（工具条主�
 rec('② 🔴 有档案时这个口子是 append 模式（接成 new = 每次补料都另开一家公司）',
   entry.mode === 'append' && entry.modesHere.every((m) => m === 'append'),
   JSON.stringify(entry.modesHere))
-// 另一半：「新建一家公司」那一区仍在，且是 new 模式。两个动作分得开才叫分得清。
-const otherZone = await (async () => {
-  try { await page.locator('[data-files-zone="new"]').click({ timeout: 3000 }) } catch { return null }
-  await page.waitForTimeout(400)
-  const got = await page.evaluate(() => Array.from(document.querySelectorAll('[data-upload-mode]'))
-    .map((n) => n.getAttribute('data-upload-mode')))
+// #88 · 另一半翻面：**只剩一个方向**。逐区点过去，证明整屏没有任何一个「新建」入口——
+// 既没有通往它的左栏行，也没有任何一个 `mode="new"` 的上传口。
+// 🔴 判据同时盯两样，缺一都能被绕过：只数左栏行的话，有人把 UploadPanel（默认 new）塞回
+//    某一区就逃了；只扫 `[data-upload-mode]` 的话，一个还没接线的空壳分区行也能活下来。
+const soloDirection = await (async () => {
+  const zones = await page.evaluate(() => Array.from(document.querySelectorAll('[data-files-zone]'))
+    .map((b) => b.getAttribute('data-files-zone')))
+  const modes = []
+  for (const z of zones.filter((z) => z !== 'empty')) {
+    try { await page.locator(`[data-files-zone="${z}"]`).click({ timeout: 3000 }) } catch { continue }
+    await page.waitForTimeout(350)
+    modes.push(...await page.evaluate(() => Array.from(document.querySelectorAll('[data-upload-mode]'))
+      .map((n) => n.getAttribute('data-upload-mode'))))
+  }
   await page.locator('[data-files-zone="files"]').click({ timeout: 3000 }).catch(() => {})
   await page.waitForTimeout(400)
-  return got
+  return { zones, modes }
 })()
-rec('② 🔴 两个方向分得开：「新建一家公司」那一区的口子仍是 new 模式',
-  Array.isArray(otherZone) && otherZone.length > 0 && otherZone.every((m) => m === 'new'),
-  JSON.stringify(otherZone))
+rec('② 🔴 #88 只剩一个方向：没有「新建一家公司」那一区，全屏也没有一个 mode="new" 的上传口',
+  !soloDirection.zones.includes('new') && !soloDirection.zones.includes('switch') &&
+    soloDirection.modes.length > 0 && soloDirection.modes.every((m) => m === 'append'),
+  JSON.stringify(soloDirection))
 
 // 走界面入口的另一半：这一发**不许**碰 ingest 那条状态机。判据不看 `ingestStatus` 的终值
 // （借用它的实现最后也停在 'ready'，看终值分不出来），看的是它的**副作用**：`notifyStore` 只认

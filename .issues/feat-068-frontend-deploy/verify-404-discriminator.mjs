@@ -49,7 +49,7 @@ await page.reload({ waitUntil: 'networkidle' })
 await page.waitForTimeout(2500)
 if (await page.locator('.lite-onboard').count()) { await page.keyboard.press('Escape'); await page.waitForTimeout(500) }
 
-const after = await page.evaluate(() => {
+const after = await page.evaluate((CID) => {
   const st = window.__lite2Store.getState()
   return {
     contextId: st.contextId,
@@ -57,16 +57,29 @@ const after = await page.evaluate(() => {
     restoreError: st.restoreError,
     ingestStatus: st.ingestStatus,
     restoring: st.restoring,
-    knownContexts: (st.knownContexts ?? []).length,
+    // #88 · 名册（`knownContexts`）已整条撤除，下面那条判据改盯**钥匙**。
+    // 🔴 读的是 localStorage 原文而不是 store 里某个字段：这一条要证明的是"我们没有拿一次
+    //    404 去销毁一份服务端只交出过一次的凭据"，那份凭据的家就是这个键。
+    tokenKeys: Object.keys(JSON.parse(localStorage.getItem('lite2:ownerTokens:v1') || '{}')).length,
+    hasTokenForCtx: !!JSON.parse(localStorage.getItem('lite2:ownerTokens:v1') || '{}')[CID],
   }
-})
+}, before.contextId)
 
-// 判据 = feat-050 写死的那套口径：锚点松开、干净回上传态、**名册不动**（fixD 的红线）
+// 判据 = feat-050 写死的那套口径：锚点松开、干净回上传态、**凭据不动**（fixD 的红线）
 rec('真 404 被认出来：锚点松开（localStorage 不再留死锚点）', after.anchor === null, `anchor=${after.anchor}`)
 rec('真 404 被认出来：干净回上传态，不把错误糊在屏幕上', after.contextId === null && after.restoreError === null,
   JSON.stringify({ contextId: after.contextId, restoreError: after.restoreError, ingestStatus: after.ingestStatus }))
-rec('名册不动（404 不能证明"服务端真没了"，不许删用户回得去的唯一入口）', after.knownContexts >= 1,
-  `knownContexts=${after.knownContexts}`)
+// 🔴 **#88 改判**。旧条断言的是「名册不动」（`knownContexts >= 1`）。名册随「新建一家公司」
+//    整条撤除之后，那条判据有两种坏法，两种都糟：留着写 `>= 1` 是**硬红**；顺手改成
+//    `(st.knownContexts ?? []).length` 比大小则**恒 0 === 0 的空真**——一道全绿的门冒充
+//    「回得去的入口还被守着」。
+//    它护的纪律一个字没变，只是护的**东西**换了：一次 404 什么都证明不了（feat-038 刻意让
+//    「不存在」和「你证明不了这是你的」返同一个 404），所以绝不许拿它去销毁任何**不可再生**
+//    的资产。名册没了，今天不可再生的那份资产是 **owner_token**——服务端只交出一次，
+//    删了就永久没人能认领这份档案（锚点反而是可再生的：登录恢复会把它送回来）。
+rec('凭据不动（404 不能证明"服务端真没了"，不许拿它销毁只交出过一次的 owner_token）',
+  after.tokenKeys >= 1 && after.hasTokenForCtx,
+  `tokenKeys=${after.tokenKeys} hasTokenForCtx=${after.hasTokenForCtx}`)
 
 const fail = R.filter((r) => !r.ok).length
 console.log(`\n═══ 404 判据复验：${R.length - fail} PASS · ${fail} FAIL ═══`)

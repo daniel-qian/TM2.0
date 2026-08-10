@@ -22,7 +22,7 @@ function dayKey(iso: string): string {
 }
 
 // ui-sweep-0802 · 日期文案跟应用 locale，不跟 OS：EN 界面配「7月31日」是走查实锤的违和态。
-// 口径对齐 KnownContextList.tsx（zh→zh-CN / en→en-US）。
+// 口径对齐 src/lite/screens/NotesScreen.tsx 的同名 helper（zh→zh-CN / en→en-US）。
 function dateLocale(locale: Locale): string {
   return locale === 'zh' ? 'zh-CN' : 'en-US'
 }

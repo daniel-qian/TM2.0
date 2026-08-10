@@ -3,11 +3,10 @@ import { useLocation } from 'react-router-dom'
 import { useDict } from '../../shared/i18n/useDict'
 import { useLite } from '../store'
 import { FileManifest, FileSortControl, formatBytes, localStamp, type FileSortKey } from '../FileManifest'
-import { KnownContextList } from '../KnownContextList'
-import { ACCEPT, UploadPanel, UploadStatusBlock, useUploadTarget } from '../UploadPanel'
+import { ACCEPT, UploadStatusBlock, useUploadTarget } from '../UploadPanel'
 import { FormBuilder } from '../FormBuilder'
 import {
-  CompanyZoneIcon, FilesZoneIcon, FormsZoneIcon, SearchIcon, TrashIcon, UploadIcon,
+  FilesZoneIcon, FormsZoneIcon, SearchIcon, TrashIcon, UploadIcon,
 } from '../icons'
 import type { LiveFormSubmission } from '../transport'
 
@@ -34,12 +33,13 @@ import type { LiveFormSubmission } from '../transport'
 // 就此消失。栏的视觉语言与票 1（#83 对话侧栏）**同一套**——同宽度节奏、同 34px 行高、
 // 同 hover/选中语法，于是「侧栏」不再是对话页一个孤零零的部件，而是这个应用的壳。
 //
-// ## 🔴 本票**没有**撤掉「新建一家公司」
-// 设计正源 §5.1 里 Danny 拍板「整个概念取消」，但那是 **#88** 的活（§8 排期：15+3 条判据
-// 改判 + 13 个 i18n 孤儿，且要先有 #86 的纠错出口——已就位）。本票只做布局：把它从
-// 「全页最重的一张白卡片」降成栏底次级组里的**一行**，病根③当场销账，而键、判据、入口
-// 一个都没删。#88 落地时删的就是 `.lite-files-rail-foot` 里 `id="new"` 那一行 + 它带出来的
-// `filesUploadTitle` / `againTitle` / `againBody` 三条键 + `activeZone === 'new'` 那一支。
+// ## #88 · 「新建一家公司」与「切换档案」两块**已整条撤除**
+// 设计正源 §5.1，Danny 0810 原话「不要有『新建』的想法，这完全不符合设计思路」。#84 把它
+// 从「全页最重的一张白卡片」降成栏底一行；本票把那一行连同它那一区一起拿掉。
+// 「切换」（`files-switch` + `KnownContextList`）同拍砍掉，理由是算术不是取舍：那个列表要
+// **≥2 份档案**才出现，而撤掉「新建」之后一台电脑最多长出 **1 份**——它谁都点不到。
+// 纠错出口换成 #86 的「清空这份档案」（栏底那枚红键 + 硬确认，`context_id` 不变）。
+// 于是左栏只剩两个真分区（文件 / 常驻表单）+ 一个销毁类动作。
 //
 // ## 🔴 分区是**真卸载**，不是 display:none
 // #76 在这个文件里立过碑：playwright 在隐藏元素上会给出四种并存的结局（hasText 照样命中
@@ -47,21 +47,6 @@ import type { LiveFormSubmission } from '../transport'
 // count() 完全免疫 → 继续**假绿**；段级 screenshot 直接抛错）。一道门里四种结局并存，
 // 读日志的人会把它归因成四个不同的 bug。所以非当前分区**整段不进 DOM**——门要看它，就
 // 得先真点那一行（同拍已给 files-ia / append-story / forms-proactive 各补了这一步）。
-
-// files-hub-0729/02 · 「这台电脑上传过的公司」。抽成小组件只为一件事：小节标题与内容
-// **同生共死**。名册不足两批时 KnownContextList 返回 null，标题必须跟着消失——一个
-// 「这台电脑上传过的公司」底下空无一物的小节，读起来像加载失败。
-function SwitchSection() {
-  const { t } = useDict()
-  const known = useLite((s) => s.knownContexts)
-  if (known.length < 2) return null
-  return (
-    <section id="files-switch" className="lite-files-section lite-files-switch-section" aria-label={t.upload.switchTitle}>
-      <h3 className="lite-files-section-title">{t.upload.switchTitle}</h3>
-      <KnownContextList />
-    </section>
-  )
-}
 
 // 词典占位符替换（与 lite2/AskCard.tsx、OnboardWizard.tsx 的 fill 同形——本仓有十多份各自
 // 独立的拷贝，没有共享导出；这里照惯例再放一份，不为一个三行函数新开一个 shared 模块）。
@@ -728,7 +713,9 @@ function EmptyArchivePanel({ onClose }: { onClose: (emptied: boolean) => void })
   )
 }
 
-type FilesZoneId = 'files' | 'forms' | 'new' | 'switch'
+// #88 · 只剩两个真分区。`empty`（清空这份档案）**不是分区**——它是销毁类动作，点了弹
+// 硬确认，不换工作台（`data-files-zone="empty"` 那一行在下面单独渲染，不进这个联合类型）。
+type FilesZoneId = 'files' | 'forms'
 
 export function FilesScreen() {
   const { t } = useDict()
@@ -739,7 +726,6 @@ export function FilesScreen() {
   const filesLoading = useLite((s) => s.filesLoading)
   const filesError = useLite((s) => s.filesError)
   const refreshFiles = useLite((s) => s.refreshFiles)
-  const knownCount = useLite((s) => s.knownContexts.length)
   const canAppend = useLite((s) => !!s.transport.appendFiles)
   const canFetchForms = useLite((s) => !!s.transport.fetchForms)
   const canEmpty = useLite((s) => !!s.transport.emptyContext)
@@ -756,10 +742,9 @@ export function FilesScreen() {
 
   // ── 分区 ──────────────────────────────────────────────────────────────────────────
   // 🔴 一行的存在性必须与它那一段的存在性**同源**：长出一行点进去空无一物的分区，
-  //    比没有这一行更像坏了（同 SwitchSection「标题与内容同生共死」那条老纪律）。
+  //    比没有这一行更像坏了（「标题与内容同生共死」那条老纪律）。
   const ephemeral = !!rawTeam?.ephemeral
   const formsZoneOn = !!contextId && canFetchForms
-  const switchZoneOn = knownCount >= 2
   const activeTemplates = (templates ?? []).filter((tpl) => tpl.active).length
 
   // 深链：铃铛的 'form' 通知带着 `?zone=forms` 进来（一次性参数，见 routes.ts 的
@@ -769,11 +754,9 @@ export function FilesScreen() {
     const want = new URLSearchParams(search).get('zone')
     return want === 'forms' ? 'forms' : 'files'
   })
-  const zoneOn: Record<FilesZoneId, boolean> = {
-    files: true, forms: formsZoneOn, new: true, switch: switchZoneOn,
-  }
-  // 分区消失时回落（例：切公司后 knownContexts 掉回 1 条）。**不**用 effect 改 state：
-  // 那会多渲染一帧空工作台，而这里一次派生就够了。
+  const zoneOn: Record<FilesZoneId, boolean> = { files: true, forms: formsZoneOn }
+  // 分区消失时回落（例：换账号清场后 `contextId` 掉回 null，常驻表单那一区跟着没）。
+  // **不**用 effect 改 state：那会多渲染一帧空工作台，而这里一次派生就够了。
   const activeZone: FilesZoneId = zoneOn[zone] ? zone : 'files'
 
   const [railOpen, setRailOpen] = useState(false)
@@ -820,11 +803,7 @@ export function FilesScreen() {
     chunks: files.reduce((n, f) => n + (f.n_chunks || 0), 0),
   }), [files])
 
-  const zoneTitle =
-    activeZone === 'files' ? l.filesCurrentTitle
-      : activeZone === 'forms' ? l.formsTitle
-        : activeZone === 'new' ? l.filesUploadTitle
-          : t.upload.switchTitle
+  const zoneTitle = activeZone === 'files' ? l.filesCurrentTitle : l.formsTitle
 
   return (
     <section className="scene scene-nexus is-active lite-files" aria-label={l.tabFiles}>
@@ -872,24 +851,18 @@ export function FilesScreen() {
           ) : null}
         </div>
 
-        {/* ── 次级组：罕用的两条 + 销毁类 ────────────────────────────────────────────
-            「新建一家公司」在这里是**一行**，改造前它是全页最重的一张白卡片（病根③）。
-            🔴 撤掉它是 #88 的活，不是本票的——本票只把权重调对。 */}
-        <div className="lite-files-rail-foot">
-          <p className="lite-files-rail-group-label">{l.filesRailMore}</p>
-          <RailRow
-            id="new" label={l.filesUploadTitle} icon={<CompanyZoneIcon />}
-            current={activeZone === 'new'} onClick={() => pick('new')}
-          />
-          {switchZoneOn ? (
-            <RailRow
-              id="switch" label={t.upload.switchTitle} icon={<CompanyZoneIcon />}
-              tail={knownCount} current={activeZone === 'switch'} onClick={() => pick('switch')}
-            />
-          ) : null}
-          {/* #86 的挂点。没有 contextId 就没有可清的东西；这条通道没有 emptyContext
-              （stub / 老后端）就一个键都不渲染（同 canAppend 的能力探测先例）。 */}
-          {contextId && canEmpty ? (
+        {/* ── 次级组：销毁类 ──────────────────────────────────────────────────────────
+            #88 之前这里还摆着「新建一家公司」和「切换档案」两行。两条都撤了（理由见文件头），
+            于是这一组只剩「清空这份档案」——**它本来就该是这一组唯一的东西**：整根栏上唯一
+            一个不换工作台、而是弹硬确认的动作。
+            🔴 组标题跟着内容走：只剩一行时仍留着标题是对的（它把「危险的那一格」与上面两个
+               日常分区在视觉上隔开），但组里一行都不渲染时标题必须一起消失——一个底下空无
+               一物的「更多」，读起来像加载失败（同「标题与内容同生共死」那条老纪律）。 */}
+        {contextId && canEmpty ? (
+          <div className="lite-files-rail-foot">
+            <p className="lite-files-rail-group-label">{l.filesRailMore}</p>
+            {/* #86 的挂点。没有 contextId 就没有可清的东西；这条通道没有 emptyContext
+                （stub / 老后端）就一个键都不渲染（同 canAppend 的能力探测先例）。 */}
             <RailRow
               id="empty" label={l.filesEmptyEntry} icon={<TrashIcon />} danger
               onClick={() => {
@@ -900,8 +873,8 @@ export function FilesScreen() {
                 setZone('files')
               }}
             />
-          ) : null}
-        </div>
+          </div>
+        ) : null}
       </aside>
 
       {/* ── 工作台 ──────────────────────────────────────────────────────────────────
@@ -1078,24 +1051,11 @@ export function FilesScreen() {
 
         {activeZone === 'forms' ? <StandingFormsSection /> : null}
 
-        {activeZone === 'new' ? (
-          // ── 新建一家公司（#88 会整条撤掉）──────────────────────────────────────
-          // 🔴 诚实说明必须在上传口**之前**：这个口子每次 POST /ingest 都新铸一个 context。
-          //    againTitle/againBody 这两条 copy 早就写好并审过字，却因为一次合并把 UI 整块
-          //    吃掉而当了很久的孤儿键（AGENTS.md「孤儿文案键是红旗」那条说的就是它）。
-          //    `showFiles={false}`：清单在「文件」那一区，两处都渲染 = 两个 `.upload-files`，
-          //    门按类名全局取样会数出双倍行数。
-          <section id="files-new" className="lite-files-section lite-files-upload" aria-label={l.filesUploadTitle}>
-            <div className="lite-files-again" role="note">
-              <p className="lite-files-again-title">{t.upload.againTitle}</p>
-              <p className="lite-files-again-body">{t.upload.againBody}</p>
-            </div>
-            <UploadPanel showFiles={false} />
-          </section>
-        ) : null}
-
-        {activeZone === 'switch' ? <SwitchSection /> : null}
-
+        {/* #88 · 这里曾经还有两段：`files-new`（「新建一家公司」，内含整块 UploadPanel）与
+            `files-switch`（「这台电脑上传过的公司」）。两段连同它们的左栏行整条撤除。
+            🔴 别把 UploadPanel 接回这一屏：资料库的上传口是**工具条上那颗主钮**（上面
+               `.lite-files-uploader`），再摆一块 `.upload-panel` 就又有了两个 `.upload-files`
+               ——门按类名全局取样会数出双倍行数（#84 立的碑）。 */}
       </div>
     </section>
   )

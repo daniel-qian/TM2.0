@@ -64,16 +64,8 @@ type UploadPanelProps = {
    * 会数出双倍行数。这不是样式偏好，是断言正确性。
    */
   showFiles?: boolean
-  /**
-   * T10 · 这个口子把文件送去哪儿。
-   *   'new'（默认）—— `POST /ingest`，**另开一家公司**。既有三处用法一字不变。
-   *   'append'    —— `POST /team/{id}/files`，并进当前这家公司，卡片安静更新到新读数。
-   *
-   * 🔴 两种模式共用这一个组件而不是各写一份，是因为**accept 列表、逐文件闸、等待态、
-   * 错误文案**四样必须逐字一致：`ACCEPT` 那行有一条明令「改这里要同步后端 SUPPORTED_EXTS」，
-   * 抄第二份出去就是第二把尺，而它多列一种格式就是把用户领进一条必然 422 的死路。
-   */
-  mode?: 'new' | 'append'
+  // #88 · `mode` 这个 prop 已经**撤掉**：方向不再由调用方传，由 `contextId` 推导
+  //（还没有档案 = 引导路径；已经有了 = 补进这一份）。理由见 useUploadTarget 上那段。
 }
 
 // #84 · 上传这件事的**唯一一份**接线（选文件 / 拖放 / 忙态闸 / 秒表 / 两条状态机的分工）。
@@ -86,7 +78,21 @@ type UploadPanelProps = {
 //     每一发都新铸 context_id + owner_token，后落地的覆盖 store＝前一个永久丢失）；
 //   · `anyBusy` 看**两条**状态机（append 跑着时 new 那口也必须锁）。
 // 抄第二份出去，这三条各自漂一次的代价都是真丢数据。
-export function useUploadTarget(mode: 'new' | 'append' = 'new') {
+//
+// #88 · **方向由 `contextId` 推导，不再由调用方传**。
+//   `contextId === null` → 引导路径（`uploadFiles`，铸出这个人的第一份也是唯一一份档案）；
+//   其余一律 append（补进这一份）。Danny 0810 拍板「不要有『新建』的想法」之后，
+//   「另开一家公司」这个方向从产品里整条消失，让调用方选方向就是给它一个已经不存在的选项。
+//
+// 🔴 `explicitMode` 只有**一个**合法用途，别拿它当回旧行为的后门：资料库屏要**同时**持有
+//    两条状态机来算 `shown`——引导那一发跑完的同一帧 `contextId` 就到手了，推导出来的方向
+//    当场翻成 append（那条状态机还是 idle），照它显示的话「团队已就绪」在成功的瞬间消失、
+//    `.upload-ready` 一帧都不出现。visual-data.spec 十二张数据态基线正是「塞
+//    input.upload-input → 等 .upload-ready」这条链驱动的，那样它们会以**「上传等不到」**
+//    （60s 超时）的形态红，而真正的原因是选错了状态机。
+export function useUploadTarget(explicitMode?: 'new' | 'append') {
+  const contextId = useLite((s) => s.contextId)
+  const mode: 'new' | 'append' = explicitMode ?? (contextId === null ? 'new' : 'append')
   const appending = mode === 'append'
   const uploadFiles = useLite((s) => s.uploadFiles)
   const appendFiles = useLite((s) => s.appendFiles)
@@ -102,10 +108,10 @@ export function useUploadTarget(mode: 'new' | 'append' = 'new') {
   // 🔴 两条路各有各的状态机：`notifyStore` 只认 ingest 的 `ingesting → ready` 并据此弹
   // 「你的团队已就绪」——补一份周报借它的状态就是发一条假通知（store.ts 的 appendFiles 上有碑）。
   //
-  // #76 · 'new' 这条读的是 `newCompanyStatus` 而**不是** `ingestStatus`：后者有五个写点，
-  // restoreSession / refreshTeam / switchContext / claimDemoTeam 都会把它拨到 'ready'，于是
-  // 「新建一家公司」这个面板在恢复会话之后恒显示「团队已就绪」+「取材自: 当前公司的文件」
-  // ——一个开新公司的口子，常驻展示着当前公司的就绪状态。新那格只由 uploadFiles 写。
+  // #76 · 'new' 这条读的是 `newCompanyStatus` 而**不是** `ingestStatus`：后者有四个写点，
+  // restoreSession / refreshTeam / claimDemoTeam 都会把它拨到 'ready'，于是这个上传口在恢复
+  // 会话之后恒显示「团队已就绪」+「取材自: 当前公司的文件」——一个还没开火的口子，常驻
+  // 展示着上一次的就绪状态。新那格只由 uploadFiles 写。
   const status = appending ? appendStatus : newCompanyStatus
   const error = appending ? appendError : ingestError
   const send = appending ? appendFiles : uploadFiles
@@ -258,11 +264,11 @@ export function UploadStatusBlock(
   )
 }
 
-export function UploadPanel({ showFiles = true, mode = 'new' }: UploadPanelProps = {}) {
+export function UploadPanel({ showFiles = true }: UploadPanelProps = {}) {
   const { t } = useDict()
-  const target = useUploadTarget(mode)
+  const target = useUploadTarget()
   const {
-    appending, status, busy, inputRef, dragOver, setDragOver, onPick, onDrop, openPicker,
+    appending, mode, status, busy, inputRef, dragOver, setDragOver, onPick, onDrop, openPicker,
   } = target
 
   return (

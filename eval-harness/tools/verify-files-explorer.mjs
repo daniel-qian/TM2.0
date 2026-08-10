@@ -205,10 +205,11 @@ let browser
     /rgb/.test(railRow?.sealBg ?? ''),
     `content=${railRow?.sealContent} w=${railRow?.sealWidth} bg=${railRow?.sealBg}`)
   rec('A③ 选中行 600 字重', railRow?.curWeight === '600', railRow?.curWeight)
-  rec('A③ 🔴 组标吃 --ink-soft **不吃** --ink-faint（11px 的 faint 在 paper 上只有 ~4.7:1，#80 的碑）',
-    !!railRow && railRow.groupLabelColor !== null &&
-    railRow.groupLabelColor !== railRow.inkFaint, JSON.stringify({
-      color: railRow?.groupLabelColor, faint: railRow?.inkFaint, soft: railRow?.inkSoft }))
+  // 🔴 组标那一条**搬到上传之后**（#88）。此前它在这儿能取到样，是因为栏底那一组里常驻着
+  //    「新建一家公司」——那一行撤掉之后，组里只剩「清空这份档案」，而它要 `contextId` 才
+  //    渲染（没有档案就没有可清的东西），于是空态下**整组连同组标都不在 DOM 里**。
+  //    照旧在这儿取样只会拿到 `color: null`。这不是"判据太严"，是取样时机不对：组标本来
+  //    就只在有档案时存在，判据得去它存在的那一帧量。搬到 A⑤ 上传之后（见下）。
 
   // ── A④ 单层标题（双标题收成一层）───────────────────────────────────────────────────
   const heads = await page.evaluate(() => ({
@@ -233,6 +234,28 @@ let browser
   const deskRows = await measureRows(page)
   rec('A⑤ 自证：屏上真有 9 行（下面全部表格判据的前提，不成立则整段空跑）',
     deskRows.length === 9, `${deskRows.length} 行`)
+
+  // ── A③' 组标配色（从 A③ 搬来；有档案之后栏底那一组才存在，理由见上面那段）──────────
+  const groupLabel = await page.evaluate(() => {
+    const label = document.querySelector('.lite-files-rail-group-label')
+    const rail = document.querySelector('.lite-files-rail')
+    return {
+      color: label ? getComputedStyle(label).color : null,
+      rows: document.querySelectorAll('.lite-files-rail-foot [data-files-zone]').length,
+      inkFaint: rail ? getComputedStyle(rail).getPropertyValue('--ink-faint').trim() : null,
+      inkSoft: rail ? getComputedStyle(rail).getPropertyValue('--ink-soft').trim() : null,
+    }
+  })
+  // 🔴 自证在前：没有它，下面那条「颜色 !== faint」在 `color === null` 时也为真——空真。
+  rec("A③' 自证：有档案之后栏底那一组真的在屏上（组标 + 至少一行）",
+    groupLabel.color !== null && groupLabel.rows >= 1, JSON.stringify(groupLabel))
+  rec("A③' 🔴 组标吃 --ink-soft **不吃** --ink-faint（11px 的 faint 在 paper 上只有 ~4.7:1，#80 的碑）",
+    groupLabel.color !== null && groupLabel.color !== groupLabel.inkFaint,
+    JSON.stringify(groupLabel))
+  // #88 · 组标与内容**同生共死**：组里一行都不渲染时标题必须一起消失（一个底下空无一物的
+  // 「更多」读起来像加载失败）。空态那一帧上面已经量过——那时 `color` 就是 null，正是本条要的。
+  rec("A③' 🔴 空态下整组不在 DOM（组标与内容同生共死）",
+    railRow?.groupLabelColor === null, `空态 groupLabelColor=${railRow?.groupLabelColor}`)
 
   const table = await page.evaluate(() => {
     const t = document.querySelector('.upload-files--table')

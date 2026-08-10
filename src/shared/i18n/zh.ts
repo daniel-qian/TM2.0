@@ -228,34 +228,25 @@ export const zh: Dict = {
     "fileStatusUnknown": "状态未知",
     "fileStatusEmptyHint": "这份文件能打开，但里面没取出文字——扫描件或纯图片导出通常是这样。它没有任何内容进入你的团队。",
     "fileStatusFailedHint": "这份文件完全没能打开，常见原因是字符编码不匹配（另存为 UTF-8 后重新上传）。它没有任何内容进入你的团队。",
-    // ⚠ HAND-WRITTEN, NOT YET M3（T10 · 2026-08-07）：这两句必须跟着改口。以前"合并"根本不存在，
-    // 说"不会并进"是全部真相；现在**存在**一条会合并的路（就在这一段上面的「补资料」），
-    // 再说同一句话就是把经理往错的按钮上引。
-    "againTitle": "从这里上传会新建一家公司",
-    "againBody": "从这里传，Avery 会当作另一家公司从头读一遍，不会并进你现在看的这一份。要给现在这家补资料，用上面的「给这家公司补资料」。两份都留着，随时可以来回切。",
-    // ⚠ HAND-WRITTEN, NOT YET M3（T10 · 补资料口）。
+    // ── #88 · 「新建一家公司」这个概念整条撤除 ───────────────────────────────────────
+    // 这里原来是 againTitle / againBody（「从这里上传会新建一家公司」）+ 底下十条 switch*
+    // （「这台电脑上传过的公司」那份名册）。Danny 2026-08-10 拍板：一个人从头到尾就一份
+    // 档案，传文件永远是补进这一份，真要从头来是**清空**它（下面 filesEmpty* 那一族 + 硬确认）。
+    // 🔴 againTitle 不能留着改用途：它的原文就是「从这里上传会新建一家公司」，而 Avery
+    //    已经不做这件事了——留着就是一句假话。
+    // ⚠ HAND-WRITTEN, NOT YET M3（T10 · 补资料口）——#88 之后这就是唯一的上传语义。
     "appendTitle": "给这家公司补资料",
     "appendCaption": "新文件会并进你现在看的这家公司。读到的新情况直接更新到卡片上；和旧资料对不上的地方，会出现在今天页等你确认。",
     "appendReadyLabel": "新资料已经并进来了",
     "appendAddedLead": "这次新增的",
     "appendConflicts": "有 {count} 处和旧资料对不上，去「今天」页看两边分别怎么写的。",
-    "switchTitle": "这台电脑上传过的公司",
-    "switchAction": "打开这一份",
-    "switchOpening": "打开中…",
-    "switchCurrent": "当前打开的",
-    "switchFilesLabel": "来自",
-    "switchForget": "从这个列表里移除",
-    "switchForgetNote": "只是把这台电脑上的入口去掉，服务端的数据不会被删。",
-    "switchErrorMissingCredential": "这台电脑上已经没有打开那一份的钥匙了。公司数据本身还在服务端——用当初绑定的账号登录就能拿回来。",
-    "switchErrorUnreadable": "打不开那一份——服务端没有把它交出来。可能是那一份真的没了，也可能是这台电脑已经证明不了它是你的，Avery 分不出是哪一种。两种情况下它都还留在这个列表里，可以再试一次。",
-    "switchErrorFailed": "刚才没连上服务器。什么都没丢，再试一次。",
     // partner-docs-0728 · 上传口旁边的两条链接（→ /paperwork）。M3 生成，2026-07-28。
     "paperworkFormsLink": "不知道该发什么？拿一份标准表单",
     "paperworkPrivacyLink": "你上传的内容，我们怎么处理",
     // ⚠ HAND-WRITTEN, NOT YET M3（files-hub-0729/01）：下载三键。按 PRD「en 源 → zh 导演手改，
     // 短键先例」办（同 feat-032 的 filesTitle/filesChunks 那条先例）。
     // 🔴 downloadError 刻意**不说「文件没了」**：这个端点把「没有这份」和「你证明不了这是你的」
-    // 编码成同一个 404（feat-038 租户隔离），前端一种都分不出来——同 switchErrorUnreadable 的纪律。
+    // 编码成同一个 404（feat-038 租户隔离），前端一种都分不出来——同 fileDeleteError 的纪律。
     "download": "下载",
     "downloading": "下载中…",
     "downloadError": "这份文件刚才没能下下来，再试一次。",
@@ -589,7 +580,6 @@ export const zh: Dict = {
     "filesCurrentEmptyRead": "这份档案里现在没有文件。刚传完的话稍等一下再刷新；也可能是你清空过，或者上一批没读出内容——不管哪种，用「上传文件」再传一批就能接着用。",
     // 刚刚亲手清空的那一下，值得一句确定的话（上面那句要照顾三种可能，所以只能含糊）。
     "filesCurrentEmptyCleared": "这份档案已经清空了。链接、登录、发出去的表单都照旧能用，随时可以重新开始传。",
-    "filesUploadTitle": "新建一家公司",
     // ⚠ HAND-WRITTEN, NOT YET M3（T10 · 补资料）。
     // #84 · filesAppendTitle / filesAppendLede 随本票删掉：补资料不再是一个独立小节，
     //   它就是文件工作台工具条上那颗「上传文件」（有档案时它天然是 append 那条路）。

@@ -145,7 +145,7 @@ function installFakeTransport(page) {
       ingest: async (files) => {
         const cid = 'ctx_fake_' + Math.random().toString(36).slice(2, 10)
         // 真 transport 会把 owner_token 存进 localStorage —— 假的这里也照做，
-        // 否则 switchContext 的"有没有钥匙"判断没有被测对象。
+        // 否则「这台电脑上有几份档案」（B1-3 数的就是它）没有被测对象。
         const store = JSON.parse(localStorage.getItem('lite2:ownerTokens:v1') || '{}')
         store[cid] = 'tok_' + cid
         localStorage.setItem('lite2:ownerTokens:v1', JSON.stringify(store))
@@ -158,6 +158,15 @@ function installFakeTransport(page) {
         await lag()
         if (window.__fakeGone && window.__fakeGone[cid]) throw new Error('team HTTP 404')
         return payloadFor(cid)
+      },
+      // #88 · 第二发上传走的是这条路（`uploadFiles` 在已有档案时委托给 `appendFiles`）。
+      // 🔴 必须实现：不实现的话 store 会落进 `append is not available` 那条诚实报错分支，
+      //    于是「contextId 没变」这条判据靠**上传压根没发生**而通过——空真。
+      appendFiles: async (cid, files) => {
+        const p = payloadFor(cid)
+        p.source_files = ['周报.docx', ...files.map((f) => f.name)]
+        p.appended = { documents: files.map((f) => f.name), conflicts_added: 0 }
+        return p
       },
       fetchFiles: async (cid) => ({ context_id: cid, files: [] }),
       // 笔记按 context 分开存 —— 「A 的笔记挂在 B 底下」只有分开存才验得出来。
@@ -195,8 +204,9 @@ const snapshot = (page) =>
       ),
       contextId: s.contextId,
       team: s.team ? s.team.people.length : null,
-      knownContexts: s.knownContexts,
-      switchError: s.switchError,
+      // #88 · `knownContexts` / `switchError` 两格已随名册整条撤除。换成钥匙串：
+      // 「一台电脑上有几份档案」现在只有它数得出来（每铸一份 ingest 存一把）。
+      tokenIds: Object.keys(JSON.parse(localStorage.getItem('lite2:ownerTokens:v1') || '{}')),
     }
   })
 
@@ -271,54 +281,58 @@ async function main() {
   await page.goto(ENTRY, { waitUntil: 'networkidle' })
   await installFakeTransport(page)
 
-  // ══ B1 · 第二次上传：两份都留着、都回得去 ═══════════════════════════════════════════════
-  console.log('\n═══ B1 · 二次上传不再抹掉第一家 ═══')
+  // ══ B1 · 第二次上传：补进同一份，不许长出第二家 ═════════════════════════════════════
+  //
+  // 🔴 **#88 整块改判**（Danny 2026-08-10「不要有『新建』的想法」）。
+  // 旧口径测的是「第二次上传会换成新 context，但第一份仍在名册里回得去」——那是在**承认**
+  // 多档案模型的前提下、给它补一条退路（旧 8 条：名册记账 / 切回去 / 没钥匙报
+  // missing-credential）。这一票把前提本身撤了：`uploadFiles` 降级为只在 `contextId === null`
+  // 时开火的引导路径，其余一律 `appendFiles` 补进当前这一份。名册、`switchContext`、
+  // `ContextSwitchError` 三样都没了，旧 8 条一条不剩地失去被测对象。
+  //
+  // 改判**没有放宽**，是把同一件事翻了个面：旧条问「第二份回得去吗」，新条问
+  // 「**是不是压根没有第二份**」。而且新条更狠——它盯的是**凭据表**
+  // （`lite2:ownerTokens:v1`，每铸一份 context 存一把钥匙），不是屏上任何一句话。
+  // 谁把 `uploadFiles` 接回「每次都铸新的」，屏幕上很可能一切如常（新档案照样渲染得好好的），
+  // 但钥匙串会从 1 把变成 2 把 —— 当场红。
+  console.log('\n═══ B1 · 二次上传补进同一份，不再长出第二家 ═══')
 
   const cidA = await upload(page, ['A公司周报.docx'])
   const afterA = await snapshot(page)
-  record('B1-1 第一次上传后：名册记下这一份', afterA.knownContexts.length === 1 &&
-    afterA.knownContexts[0].id === cidA,
-    `knownContexts=${JSON.stringify(afterA.knownContexts.map((c) => c.id))}`)
-  // ?. 是刻意的：修复前 knownContexts 是空的，这里必须**报 FAIL 而不是抛异常中断整轮**——
-  // 一个只在通过时才跑得完的门，等于没有门。
-  record('B1-2 名册留了当时的文件名（不是编的标签）',
-    JSON.stringify(afterA.knownContexts[0]?.files) === JSON.stringify(['A公司周报.docx']),
-    JSON.stringify(afterA.knownContexts[0]?.files))
+  record('B1-1 自证：第一次上传真的铸出了一份档案（否则下面全是空真）',
+    !!cidA && afterA.contextId === cidA && afterA.tokenIds.length === 1,
+    `cid=${cidA} tokenIds=${JSON.stringify(afterA.tokenIds)}`)
 
   const cidB = await upload(page, ['B公司花名册.csv'])
   const afterB = await snapshot(page)
-  record('B1-3 第二次上传后：contextId 换成了新的（后端行为，如实反映）',
-    afterB.contextId === cidB && cidB !== cidA, `${cidA} -> ${cidB}`)
-  record('B1-4 🔴 第一份仍在名册里（回得去的入口存在）',
-    afterB.knownContexts.length === 2 && afterB.knownContexts.some((c) => c.id === cidA),
-    `knownContexts=${JSON.stringify(afterB.knownContexts.map((c) => c.id))}`)
+  record('B1-2 🔴 第二次上传落回**同一个** contextId（换了 = 又新建了一家公司）',
+    afterB.contextId === cidA && cidB === cidA, `${cidA} -> ${afterB.contextId}`)
+  record('B1-3 🔴 钥匙串仍然只有一把（它数的就是「这台电脑上有几份档案」）',
+    afterB.tokenIds.length === 1 && afterB.tokenIds[0] === cidA,
+    `tokenIds=${JSON.stringify(afterB.tokenIds)}`)
+  record('B1-4 锚点也没被改写（还指着同一份）',
+    afterB.ls[KEY_CONTEXT] === cidA, `${KEY_CONTEXT}=${afterB.ls[KEY_CONTEXT]}`)
 
-  // 真的切回去
-  const switched = await page.evaluate(async (cid) => {
-    await window.__lite2Store.getState().switchContext(cid)
+  // 🔴 「没长出第二家」不许靠「第二发根本没发生」蒙混过关——那样上面三条全是空真。
+  //    所以还得证明补料**真的跑完了**：新文件进了清单，且状态机停在 ready。
+  const appended = await page.evaluate(() => {
     const s = window.__lite2Store.getState()
-    return { contextId: s.contextId, hasTeam: !!s.team, switchError: s.switchError,
-             anchor: localStorage.getItem('lite2:contextId:v1') }
-  }, cidA)
-  record('B1-5 🔴 切回第一份：真的切过去了，且没有报错',
-    switched.contextId === cidA && switched.hasTeam && switched.switchError === null,
-    JSON.stringify(switched))
-  record('B1-6 切回后锚点也跟着走（刷新还在这一份）', switched.anchor === cidA, switched.anchor)
-
-  // 钥匙没了 → 必须诚实报 missing-credential，不许静默、也不许当成 "gone" 把它从名册删掉
-  const noKey = await page.evaluate(async (cid) => {
-    const tokens = JSON.parse(localStorage.getItem('lite2:ownerTokens:v1') || '{}')
-    delete tokens[cid]
-    localStorage.setItem('lite2:ownerTokens:v1', JSON.stringify(tokens))
-    await window.__lite2Store.getState().switchContext(cid)
-    const s = window.__lite2Store.getState()
-    return { switchError: s.switchError, contextId: s.contextId,
-             stillListed: s.knownContexts.some((c) => c.id === cid) }
-  }, cidB)
-  record('B1-7 没钥匙 → 报 missing-credential（不是静默失败）',
-    noKey.switchError === 'missing-credential', JSON.stringify(noKey))
-  record('B1-8 🔴 没钥匙 ≠ 数据没了：这一份仍留在名册上',
-    noKey.stillListed === true, `stillListed=${noKey.stillListed}`)
+    return {
+      files: s.team?.sourceFiles ?? [],
+      appendStatus: s.appendStatus,
+      appendError: s.appendError,
+      newCompanyStatus: s.newCompanyStatus,
+    }
+  })
+  record('B1-5 🔴 补料这一发真的跑完了（被静默吞掉的话，上面三条都是空真）',
+    appended.appendStatus === 'ready' && appended.files.includes('B公司花名册.csv'),
+    JSON.stringify(appended))
+  // 🔴 委托给 appendFiles 之后**两条状态机仍然分得开**。合并了的话 notifyStore 会把每一次
+  //    补料都合成一条「你的团队已就绪」——补一份周报不是团队就绪。
+  record('B1-6 🔴 补料走的是自己那条状态机，没有借 ingest 那格（借了 = 每次补料都误报通知）',
+    appended.appendStatus === 'ready' && appended.newCompanyStatus === 'ready' &&
+      appended.appendError === null,
+    JSON.stringify({ append: appended.appendStatus, newCompany: appended.newCompanyStatus }))
 
   // ══ M2 · 换账号清场：三个漏网 store ═══════════════════════════════════════════════════
   console.log('\n═══ M2 · 换账号不再留下上一家公司的逐字原文 ═══')
@@ -378,8 +392,18 @@ async function main() {
     afterSwitch.ls[KEY_CONTEXT] === undefined, `${KEY_CONTEXT}=${afterSwitch.ls[KEY_CONTEXT]}`)
   record('m4-2 owner_token 也清了（既有行为，回归保护）',
     afterSwitch.ls[KEY_TOKENS] === undefined)
-  record('m4-3 名册（公司数据）跟着清',
-    afterSwitch.ls[KEY_KNOWN] === undefined && afterSwitch.knownContexts.length === 0)
+  // 🔴 **#88 改判**。旧条是「名册（公司数据）跟着清」。名册整条撤除之后它有两种坏法：
+  //    留着读 `knownContexts.length` 是**抛异常中断整轮**（字段没了，`undefined.length`）；
+  //    只留 `ls[KEY_KNOWN] === undefined` 则是**恒真的空真**（那把键再也没人写了）。
+  //    换成它护的那件事的一般形式：换账号之后，**没有任何 `lite2:` 键还留着上一家的
+  //    context_id**。名册当年只是这种键里的一个；写成通用形，下一个人再加一个存 cid 的
+  //    `lite2:` 键时这条判据自动罩住它，不用有人记得回来补。
+  record('m4-3 🔴 换账号后没有任何 lite2:* 键还留着上一家的 context_id',
+    !!cidA && !JSON.stringify(afterSwitch.ls).includes(cidA),
+    `cidA=${cidA} 残留键=${Object.keys(afterSwitch.ls).join(',') || '(全空)'}`)
+  record('m4-4 名册那把键也确实不存在（#88 撤除之后不许有人把它写回来）',
+    afterSwitch.ls[KEY_KNOWN] === undefined && seeded.ls[KEY_KNOWN] === undefined,
+    `${KEY_KNOWN}: seeded=${seeded.ls[KEY_KNOWN]} after=${afterSwitch.ls[KEY_KNOWN]}`)
 
   // ══ M3 · 登录用户的锚点必须落盘（adoptContext 收口）═══════════════════════════════════
   console.log('\n═══ M3 · 登录恢复走 adoptContext，锚点真的落盘 ═══')
@@ -418,14 +442,20 @@ async function main() {
     afterReload.contextId === 'ctx_from_account_9911' && afterReload.hasTeam,
     JSON.stringify(afterReload))
 
-  // ══ N1 · 切换竞态：屏上的 id / 人 / 钥匙必须是同一家公司 ═══════════════════════════════
+  // ══ N1 · 并发改 contextId 不许跨公司串数据 ═══════════════════════════════════════════
   //
-  // 复核新 finding 1（blocker）。原实现是 `adoptContext(新 id)` 先换、`await restoreSession()`
-  // 后取，而 restoreSession 在 await 之后拿闭包里的旧 id 无条件写 team/ownerToken。于是
-  // 双击（或点了 A 又改主意点 B）之后：屏上挂着 B 的 contextId 和锚点，人却是 A 的人，
-  // 手里攥的是 A 的 owner_token —— B 公司经理看到的整份花名册来自 A 公司的文件。
-  // 这条门就是拿"双击"当输入，断言三者必须同源。
-  console.log('\n═══ N1 · 快速两次切换不许跨公司串数据 ═══')
+  // 复核新 finding 1（blocker）原文：`await transport.fetchX(cid)` 期间 contextId 可能被改掉，
+  // 而 await 之后那句 `set({ team, ownerToken })` 不回头核对，于是屏上挂着 B 的 id 和锚点、
+  // 人却是 A 的人、手里攥的是 A 的 owner_token —— B 公司经理看到 A 公司的整份花名册。
+  //
+  // 🔴 **#88 改判：触发方式换了，纪律一个字没变。** 旧口径拿「双击名册里的两行」当输入
+  //    （`switchContext` × 2）。`switchContext` 随名册整条撤除，那 6 条判据全部失去被测对象。
+  //    但 `stillOn` 那道闸**一条都不能松**——改 contextId 的路少了一条，剩下的两条
+  //    （换账号清场、登录恢复 `adoptContext`）照样能在 `refreshTeam` 飞行途中把它换掉。
+  //    所以这里改用**仍然存在**的那条路当输入：让 fetchTeam 慢下来，飞行中 `adoptContext`
+  //    切走，然后断言那份过期载荷**一个字段都没写进去**。
+  //    这比旧条难过：旧条至少还有 `switchSeq` 世代号兜底，现在唯一的闸就是 `stillOn` 本身。
+  console.log('\n═══ N1 · 取数据途中被切走：过期载荷一个字段都不许写 ═══')
 
   const page3 = watch(await ctx.newPage())
   await page3.goto(ENTRY, { waitUntil: 'networkidle' })
@@ -433,21 +463,28 @@ async function main() {
   await page3.reload({ waitUntil: 'networkidle' })
   await installFakeTransport(page3)
 
+  // 一份真铸出来的档案（引导路径），外加一份"账号名下的另一份"——#88 之后这台电脑不会
+  // 自己长出第二份，所以第二个 id 只能来自账号恢复那条路，这里照它的形状造。
   const rA = await upload(page3, ['A公司周报.docx'])
-  const rB = await upload(page3, ['B公司花名册.csv'])
-  await upload(page3, ['C公司预算.xlsx']) // 落脚在第三家，于是切 A 和切 B 都是"真的换一家"
+  const rB = await page3.evaluate(() => {
+    const cid = 'ctx_from_account_n1'
+    const store = JSON.parse(localStorage.getItem('lite2:ownerTokens:v1') || '{}')
+    store[cid] = 'tok_' + cid
+    localStorage.setItem('lite2:ownerTokens:v1', JSON.stringify(store))
+    return cid
+  })
 
   const raced = await page3.evaluate(
     async ({ a, b }) => {
       window.__fakeDelayMs = 250
       const st = () => window.__lite2Store.getState()
-      // 一次 fetchTeam 要 250ms，两次点击间隔 40ms —— 就是双击的手速。
-      const p1 = st().switchContext(a)
-      await new Promise((r) => setTimeout(r, 40))
-      const p2 = st().switchContext(b)
-      await Promise.all([p1, p2])
-      // 🔴 必须再等一会儿：脏数据是**先发的那次**在 400ms 之后写进来的。
-      // 不等就收摊，这条测试会在坏代码上假过。
+      st().adoptContext(a, 'tok_' + a)
+      const flying = st().refreshTeam()            // 为 A 取数据，还在飞
+      await new Promise((r) => setTimeout(r, 40))  // 40ms 后账号恢复把人切到了 B
+      st().adoptContext(b, 'tok_' + b)
+      await flying
+      // 🔴 必须再等一会儿：脏数据是**先发的那次**在 250ms 之后写进来的。
+      //    不等就收摊，这条测试会在坏代码上假过。
       await new Promise((r) => setTimeout(r, 500))
       const s = st()
       window.__fakeDelayMs = 0
@@ -456,83 +493,56 @@ async function main() {
         teamPeople: s.team ? s.team.people.map((p) => p.name) : null,
         ownerToken: s.ownerToken,
         anchor: localStorage.getItem('lite2:contextId:v1'),
-        switchError: s.switchError,
-        switchPending: s.switchPending === undefined ? '(字段不存在)' : s.switchPending,
       }
     },
     { a: rA, b: rB },
   )
 
-  record('N1-1 落在最后点的那一份上（后点的赢，不是先发的赢）',
+  record('N1-1 落在后切的那一份上（先发的那次不许把 id 拽回去）',
     raced.contextId === rB, JSON.stringify(raced))
-  record('N1-2 🔴 屏上的人属于屏上那家公司（不是上一次点的那家）',
-    JSON.stringify(raced.teamPeople) === JSON.stringify(['员工-' + rB]),
+  record('N1-2 🔴 屏上的人绝不属于另一家（这就是跨公司串数据本身）',
+    JSON.stringify(raced.teamPeople) !== JSON.stringify(['员工-' + rA]),
     `contextId=${raced.contextId} teamPeople=${JSON.stringify(raced.teamPeople)}`)
   record('N1-3 🔴 手里的 owner_token 也是这一家的（错配 → 下一次读被后端 404）',
     raced.ownerToken === 'tok_' + rB, `ownerToken=${raced.ownerToken} expect=tok_${rB}`)
   record('N1-4 锚点跟着落在同一家（刷新不会跳回另一家）', raced.anchor === rB, raced.anchor)
-  record('N1-5 切成功了就不许同时挂着一句错误', raced.switchError === null,
-    `switchError=${raced.switchError}`)
-  record('N1-6 pending 态收干净了（UI 据此把名册按钮置灰，挡住误触）',
-    raced.switchPending === null, `switchPending=${raced.switchPending}`)
 
-  // ══ N2 · 404 只能说"打不开"，不能说"没了"，更不能据此删名册 ═════════════════════════
+  // ══ N2 · 「我打不开」不等于「这份不存在」 ═════════════════════════════════════════════
   //
-  // 复核新 finding 2（major）。feat-038 **刻意**让"这份不存在"和"你证明不了这是你的"
-  // 返回同一个 404（不给存在性 oracle），所以前端根本分不出是哪一种。原实现把 404 读成
-  // 「服务端已经没了」并据此 forgetKnownContext —— 产品替客户断言了一个它无法知道的事实，
-  // 而且这个删除不可逆（POST /ingest 每次新建 context，名册是那个 id 唯一的第二处记录）。
-  console.log('\n═══ N2 · 「我打不开」不等于「这份不存在」 ═══')
-
-  const gone = await page3.evaluate(async (a) => {
-    window.__fakeGone = { [a]: true }
-    await window.__lite2Store.getState().switchContext(a)
-    const s = window.__lite2Store.getState()
-    return {
-      switchError: s.switchError,
-      stillListed: s.knownContexts.some((c) => c.id === a),
-      lsListed: (localStorage.getItem('lite2:knownContexts:v1') || '').includes(a),
-      contextId: s.contextId,
-      teamPeople: s.team ? s.team.people.map((p) => p.name) : null,
-      switchPending: s.switchPending === undefined ? '(字段不存在)' : s.switchPending,
-    }
-  }, rA)
-
-  record('N2-1 🔴 404 读成「打不开」而不是「没了」', gone.switchError === 'unreadable',
-    `switchError=${gone.switchError}`)
-  record('N2-2 🔴 一次 404 不许把这一份从名册上抹掉（内存态）',
-    gone.stillListed === true, `stillListed=${gone.stillListed}`)
-  record('N2-3 🔴 localStorage 里的名册也没被抹（否则刷新后永久失去入口）',
-    gone.lsListed === true, `lsListed=${gone.lsListed}`)
-  record('N2-4 切换失败不留半切状态：仍停在原来那家公司上',
-    gone.contextId === rB && JSON.stringify(gone.teamPeople) === JSON.stringify(['员工-' + rB]),
-    `contextId=${gone.contextId} teamPeople=${JSON.stringify(gone.teamPeople)}`)
-  record('N2-5 失败后 pending 态也收干净（按钮不会永久灰着）',
-    gone.switchPending === null, `switchPending=${gone.switchPending}`)
-
-  const forgot = await page3.evaluate(async (a) => {
-    const st = window.__lite2Store.getState()
-    if (typeof st.forgetContext !== 'function') return { ok: false, why: 'store 没有 forgetContext' }
-    st.forgetContext(a)
-    const s = window.__lite2Store.getState()
-    return {
-      ok:
-        !s.knownContexts.some((c) => c.id === a) &&
-        !(localStorage.getItem('lite2:knownContexts:v1') || '').includes(a),
-      why: '',
-    }
-  }, rA)
-  record('N2-6 名册删除有且只有「用户显式点移除」这一条路（forgetContext 存在且真删）',
-    forgot.ok === true, forgot.why)
-
-  // ══ N3 · 第二次上传必须把上一家的 Avery's notes 清掉 ═══════════════════════════════════
+  // 🔴 **#88 整块退役，判据搬家而不是消失。** 旧 6 条（N2-1..N2-6）测的是 `switchContext`
+  //    吃到 404 时：读成 'unreadable' 而不是 'gone'、不许据此删名册（内存 + localStorage 两处）、
+  //    不留半切状态、pending 收干净、以及「名册删除只有用户显式点移除这一条路」。
+  //    `switchContext` / `forgetContext` / 名册三样在这一票里一起没了，六条全部失去被测对象。
   //
-  // 复核新 finding 3（major）。uploadFiles 原来用裸 setState 绕开 adoptContext 收口，
-  // 只重设 team/rawTeam，**唯独漏了 notes**：refreshNotes 不调、也不清空。于是 A 公司的
-  // 笔记原文原封不动挂在 B 公司的 contextId 底下，NotesScreen 直接渲染。
-  // 它就落在 B1「第二次上传」这个正主场景里，而 switchContext 走 adoptContext 那条路清得
-  // 干干净净 —— 同一件事两条路给出相反答案。
-  console.log('\n═══ N3 · 二次上传：A 公司的笔记不许挂到 B 公司底下 ═══')
+  //    它护的那条纪律**没有丢，也没有变松**——feat-038 刻意让「不存在」和「你证明不了这是
+  //    你的」返回同一个 404，所以绝不许拿一次 404 去销毁任何不可再生的东西。今天守它的是：
+  //      · `verify-404-discriminator`（同一 commit 改判）——真 404 之后 `lite2:ownerTokens:v1`
+  //        里那把钥匙必须还在。钥匙是现在唯一不可再生的资产（服务端只交出一次），
+  //        名册当年扮演的正是这个角色；
+  //      · `verify-archive-empty` ③/⑥ —— 清空/补料都不许换 `context_id`、不许动 token；
+  //      · store.ts `restoreSession` 的 404 分支那段碑（松的只有锚点，锚点可再生）。
+  //    🔴 不要在这里"照着旧代码复活一个类似的 switchContext 场景"——那会让门测一个产品里
+  //       不存在的动作，是假绿的另一种长法。
+
+  // ══ N3 · 换到另一份档案时，上一份的 Avery's notes 不许跟过去 ═══════════════════════════
+  //
+  // 复核新 finding 3（major）原文：`uploadFiles` 用裸 setState 绕开 `adoptContext` 收口，
+  // 只重设 team/rawTeam，**唯独漏了 notes** —— 于是上一份的笔记原文原封不动挂在新的
+  // contextId 底下，NotesScreen 直接渲染。
+  //
+  // 🔴 **#88 改判：输入换成「换账号」，被测的收口没换。**
+  //    旧口径拿「第二次上传」当输入，因为那时第二次上传就是换一家公司。现在它是补料
+  //    （`contextId` 根本不变），笔记本来就该留着——照旧那么测的话 N3-2「确实换到了第二家」
+  //    必红，N3-1 则退化成一条恒真的空判据。
+  //    今天还能把 contextId 换掉的真实用户路径只剩**换账号**（AuthPanel 的换人 effect →
+  //    `adoptContext`）。被测对象一个字没变：id 变了的时候 notes 清不清。
+  //    ⚠ 试过、不成立的一条：「登录恢复接管另一份」当输入。AuthPanel 的恢复线有一句
+  //      `if (useLite.getState().contextId) return`（手上已有数据就不接管，游客期刚传的
+  //      东西不许被登录动作吞掉），所以带着数据登录**根本不会换 id** —— 拿它当输入，
+  //      这一组会以「没换成」的形态红，而产品是对的。
+  //    ⚠ notes 只活在内存里（不进 localStorage），所以 M2 那组扫 `lite2:*` 键的判据
+  //      **一条都够不着它**。这一组不是 M2 的重复。
+  console.log('\n═══ N3 · 换账号：上一份的笔记不许跟过去 ═══')
 
   const page4 = watch(await ctx.newPage())
   await page4.goto(ENTRY, { waitUntil: 'networkidle' })
@@ -541,9 +551,10 @@ async function main() {
   await installFakeTransport(page4)
 
   const nA = await upload(page4, ['A公司周报.docx'])
+  const nB = 'ctx_from_account_n3'
   await page4.evaluate(
     ({ cid, verbatim }) => {
-      // 只有第一份有笔记；第二份在后端是空的。于是"B 底下出现内容"只可能是 A 漏过来的。
+      // 只有第一份有笔记；第二份在后端是空的。于是"第二份底下出现内容"只可能是第一份漏过来的。
       window.__fakeNotes = {
         [cid]: [
           { id: 'note_a1', created_at: '2026-07-18T02:00:00Z', text: verbatim, source_excerpt: verbatim.slice(0, 20) },
@@ -557,19 +568,25 @@ async function main() {
     const s = window.__lite2Store.getState()
     return { cid: s.contextId, notes: s.notes.map((n) => n.text) }
   })
-  record('N3-0 前置：A 公司底下确实有一条笔记原文（否则本组测试是空转）',
+  record('N3-0 前置：第一份底下确实有一条笔记原文（否则本组测试是空转）',
     notesA.notes.some((t) => t.includes(A_VERBATIM)), JSON.stringify(notesA))
 
-  const nB = await upload(page4, ['B公司花名册.csv'])
-  await page4.waitForTimeout(250) // uploadFiles 里的 refreshNotes 是 void 的，等它落定
+  // A → B 换账号，走**真实路径**（同 M2：AuthPanel 的换人 effect，不直接调 clearCompanyScope）。
+  // B 账号名下挂着另一份档案，于是清场之后恢复线会把它接管过来 —— id 真的换了。
+  await page4.evaluate((cid) => { window.__fakeAccountContexts = [cid] }, nB)
+  await page4.evaluate(() => window.__lite2Auth.setState({ status: 'authed', userId: 'user_N3a' }))
+  await page4.waitForTimeout(200)
+  await page4.evaluate(() => window.__lite2Auth.setState({ status: 'authed', userId: 'user_N3b' }))
+  await page4.waitForTimeout(700)
+
   const notesB = await page4.evaluate(() => {
     const s = window.__lite2Store.getState()
     return { cid: s.contextId, notes: s.notes.map((n) => n.text) }
   })
-  record('N3-1 🔴 第二次上传后，A 公司的笔记原文不在屏上',
+  record('N3-1 🔴 换账号之后，上一份的笔记原文不在屏上',
     !JSON.stringify(notesB.notes).includes(A_VERBATIM),
     `cid=${notesB.cid} notes=${JSON.stringify(notesB.notes)}`)
-  record('N3-2 且确实换到了第二家（不是靠"没换成"蒙混过关）',
+  record('N3-2 且确实换到了另一份（不是靠"没换成"蒙混过关）',
     notesB.cid === nB && nB !== nA, `${nA} -> ${notesB.cid}`)
 
   record('无 console 报错', consoleErrors.length === 0, consoleErrors.slice(0, 3).join(' | '))

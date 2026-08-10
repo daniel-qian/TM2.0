@@ -16,7 +16,7 @@ const rec = (n, ok, d) => { R.push({ n, ok }); console.log(`  [${ok ? 'PASS' : '
 
 const LITE2_KEYS = [
   'lite2:contextId:v1', 'lite2:ownerTokens:v1', 'lite2:onboard:v1', 'lite2:flow:v1',
-  'lite2:notify:v1', 'lite2:lang:v1', 'lite2:look:v1', 'lite2:knownContexts:v1',
+  'lite2:notify:v1', 'lite2:lang:v1', 'lite2:look:v1',
 ]
 const readKeys = (page) => page.evaluate((keys) => {
   const out = {}

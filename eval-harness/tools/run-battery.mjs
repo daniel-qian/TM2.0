@@ -8,9 +8,14 @@
 //
 // 🔴 清账结论：**实际是 25 道，不是 23 道**（A 19 / B 3 / C 3）。逐条依据见下面的「E3 裁定」。
 // 0729 更新：+1 道 answer-split（输出形态战役 03 分流短答）→ **26 道**（A 20 / B 3 / C 3）。
-// 0729 更新（files-hub-0729/02）：+1 道 context-switch（多库切换 + forget 源码闸）
-//   → **27 道**（A 21 / B 3 / C 3）。它是**上传型门**，与 file-manifest-truth /
-//   onboarding-returning 同罪：绝不能排到 C 区之后，否则就是往生产库里写测试数据。
+// 0729 更新（files-hub-0729/02）：+1 道 context-switch（多库切换 + forget 源码闸）。
+// 🔴 **#88（2026-08-10）把 context-switch 整条退役并删了文件**——它的前提是「一台电脑上有
+//   两份档案」，而 Danny 拍板撤掉「新建一家公司」之后一台电脑恒 1 份，那 15 条判据一条都
+//   不再有被测对象。**主动退役、不等它报警**：它 ⑥ 的两条是**源码级**判据
+//   （`forgetContext` 不许出现在 `catch` 里），`forgetContext` 被删之后那两条会**静默变绿**，
+//   一道全绿的门会一直冒充"多库切换还被守着"。判据的被测对象没了要主动摘，别等红。
+//   （它的两条真纪律没有丢：并发写不许串公司 → `stillOn` + `verify-data-boundary` M2/M3；
+//     不许拿一次失败去销毁凭据 → `restoreSession` 那段碑 + `verify-404-discriminator`。）
 // 票 #14 更新：+1 道 flow-gap-phases（B/C 组判定：triage/follow-ups + "A closer look" 差距卡，
 //   snippet 1537-2074 行那 7 个断言函数此前零机械化 runner）→ **28 道**（A 22 / B 3 / C 3）。
 //   同样归入 A 区上传型门那一挂——它走真 HTTP 打本地 mock 后端（不是 `?transport=stub`，那个
@@ -126,7 +131,6 @@ const ROSTER = [
   //   它们**真上传**，所以必须留在 A 区（C 区之后 dist 指向生产域名，跑它们 = 往生产库写数据）。
   { zone: 'A', name: 'file-manifest-truth',   cmd: ['eval-harness/tools/verify-file-manifest-truth.mjs'],          host: 'preview', backend: true,  dist: false, note: '🔴 上传型门（真传一份好文件 + 一份结构性损坏 PDF）；30 判据；**绝不能排在 C 区之后**' },
   { zone: 'A', name: 'onboarding-returning',  cmd: ['eval-harness/tools/verify-onboarding-returning.mjs'],         host: 'preview', backend: true,  dist: false, note: '🔴 上传型门（铺垫一次真上传造"返回访客"）；15 判据；**绝不能排在 C 区之后**' },
-  { zone: 'A', name: 'context-switch',        cmd: ['eval-harness/tools/verify-context-switch.mjs'],               host: 'preview', backend: true,  dist: false, note: '🔴 上传型门（真传两批造多库）；15 判据；files-hub-0729/02 多库切换 + forget 只许显式触发的源码闸；**绝不能排在 C 区之后**' },
   { zone: 'A', name: 'bottom-furniture',     cmd: ['eval-harness/tools/verify-bottom-furniture-clearance.mjs'],   host: 'preview', backend: true,  dist: false, note: '🔴 上传型门（票 #34/#36；空态两条都不复现——AskAveryLauncher 在 contextId=null 时整块不挂载）；**绝不能排在 C 区之后**。判据是 elementFromPoint 真命中，不是几何重叠；只把「劫持者是屏底锚定 fixed/sticky 家具」判红（顶栏遮挡滚动内容不算）。⚠ 审前先剔除被祖先 overflow 裁掉的控件——rect 不管裁剪，不剔会假红' },
   { zone: 'A', name: 'detail-provenance',     cmd: ['eval-harness/tools/verify-detail-provenance.mjs'],            host: 'preview', backend: true,  dist: false, note: '🔴 上传型门（票 #37；真传 demo-seed 全量造多文件工作区，每跑造 2 个 context——v02/v01 各一）；**绝不能排在 C 区之后**。判据是「详情卡可见文本里不许出现任何工作区级文件名」，不是「某个 class 不存在」——换组件重新实现同一个谎也逃不掉。带两条自证判据防空跑（文件清单非空 + 浮层真开着且渲染了本卡内容）' },
   { zone: 'A', name: 'flow-gap-phases',       cmd: ['eval-harness/tools/verify-flow-gap-phases.mjs'],              host: 'preview', backend: true,  dist: false, note: '🔴 上传型门（票 #14；手写种子造 gapDerive 要的"自报稳/真有卡点"矛盾）；triage/follow-ups(B组)+差距卡(C组——判据数别写死，#63/#65 各加过一条，以 runner 的 rec 调用为准)；`?transport=stub` 在这份 dist 上是死的（DEV 静态 false），走真 mock 后端；**绝不能排在 C 区之后**' },

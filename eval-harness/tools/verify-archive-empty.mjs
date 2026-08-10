@@ -119,7 +119,12 @@ const seeded = await st((seam) => {
   return {
     contextId: s.contextId, ownerToken: s.ownerToken,
     people: (s.team?.people ?? []).length, projects: (s.team?.projects ?? []).length,
-    files: (s.files ?? []).length, known: (s.knownContexts ?? []).length,
+    files: (s.files ?? []).length,
+    // #88 · 名册（knownContexts）已整条撤除。这里**刻意不写 `?? []`**：`?? []` 会把
+    // 「这一格没了」和「这一格是空的」抹成同一个 0，于是下面那条判据变成 0===0 的空真。
+    // 读原值 + 读 localStorage 原文，两样都要，「还在不在」才判得出来。
+    knownField: s.knownContexts === undefined ? 'absent' : JSON.stringify(s.knownContexts),
+    knownLs: window.localStorage.getItem('lite2:knownContexts:v1'),
     anchor: window.localStorage.getItem('lite2:contextId:v1'),
     canEmpty: !!s.transport.emptyContext,
   }
@@ -190,7 +195,8 @@ const after = await st((seam) => {
   return {
     contextId: s.contextId, ownerToken: s.ownerToken,
     anchor: window.localStorage.getItem('lite2:contextId:v1'),
-    known: (s.knownContexts ?? []).length,
+    knownField: s.knownContexts === undefined ? 'absent' : JSON.stringify(s.knownContexts),
+    knownLs: window.localStorage.getItem('lite2:knownContexts:v1'),
     emptyError: s.archiveEmptyError, emptying: s.archiveEmptying,
   }
 })
@@ -200,8 +206,13 @@ rec('③ 🔴 owner_token 逐字符不变（没了 = 用户手上那份锚点作
   after.ownerToken === seeded.ownerToken && !!after.ownerToken,
   after.ownerToken === seeded.ownerToken ? 'same' : 'CHANGED')
 rec('③ localStorage 锚点仍指着同一份档案', after.anchor === seeded.contextId, String(after.anchor))
-rec('③ 名册没多出一份（恒 1 份档案）', after.known === seeded.known,
-  `${seeded.known} → ${after.known}`)
+// 🔴 **#88 改判**。旧条是「名册没多出一份」（`after.known === seeded.known`）。名册整条撤除
+//    之后，照旧写 `(s.knownContexts ?? []).length` 就成了 **0 === 0 的空真**——一道全绿的门
+//    冒充「恒 1 份档案还被守着」。改成断言那套东西**真的不在了**：store 里没有这一格、
+//    localStorage 里也没有那把键。谁把多档案模型接回来，这两条同时红。
+rec('③ 🔴 #88 单档案模型：store 里没有 knownContexts 这一格，localStorage 里也没有那把键',
+  after.knownField === 'absent' && after.knownLs === null && seeded.knownField === 'absent',
+  JSON.stringify({ seeded: seeded.knownField, after: after.knownField, ls: after.knownLs }))
 rec('③ 忙态已归位、没有错误挂着', after.emptying === false && after.emptyError === null,
   JSON.stringify({ emptying: after.emptying, err: after.emptyError }))
 const okRead = teamReads.find((r) => r.url.includes(seeded.contextId) && r.status === 200)
@@ -254,13 +265,18 @@ await page.waitForTimeout(600)
 const reused = await st((seam) => {
   const s = window[seam].getState()
   return { contextId: s.contextId, keys: (s.files ?? []).map((f) => f.source_key ?? f.filename),
-           projects: (s.team?.projects ?? []).length, known: (s.knownContexts ?? []).length }
+           projects: (s.team?.projects ?? []).length,
+           knownField: s.knownContexts === undefined ? 'absent' : JSON.stringify(s.knownContexts),
+           knownLs: window.localStorage.getItem('lite2:knownContexts:v1') }
 })
 rec('⑥ 🔴 补料落回**同一个** context_id（「一个人从头到尾就一份档案」的可执行形态）',
   reused.contextId === seeded.contextId, `${seeded.contextId} → ${reused.contextId}`)
 rec('⑥ 清单里恰好只有刚补的那一份（清空是真的，旧的没回来）',
   reused.keys.length === 1 && reused.keys[0] === DOC_C, JSON.stringify(reused.keys))
-rec('⑥ 名册仍然只有一份档案', reused.known === seeded.known, `${seeded.known} → ${reused.known}`)
+// #88 · 同 ③ 的改判：补料这一发之后名册那套东西照样不许长回来（旧条同样会退化成空真）。
+rec('⑥ 🔴 补料之后名册那套东西也没长回来',
+  reused.knownField === 'absent' && reused.knownLs === null,
+  JSON.stringify({ field: reused.knownField, ls: reused.knownLs }))
 
 // ── ⑦ #84 · 真点那枚键（本门原来的明知缺口，票面与 ROSTER 都记着这笔账）───────────────────
 // 🔴 为什么必须补：上面 ②–⑥ 全程驱动的是 store 动作 `emptyArchive()`，**门根本没碰过那枚

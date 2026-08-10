@@ -391,6 +391,51 @@ def test_empty_endpoint_returns_the_emptied_payload(client):
     assert "0 people, 0 projects" in body["briefing"]["headline"], body["briefing"]
 
 
+def test_empty_endpoint_hands_back_an_archive_that_is_no_longer_a_demo_clone(client):
+    """#88 · 集成层那一半：registry 把 `ephemeral` 摘掉还不够，**回执 payload 里那个字段**
+    才是前端据以解封上传口的东西（`rawTeam.ephemeral` → `FilesScreen.uploadBlocked`）。
+
+    只测 registry 的话，「端点投的是清空**前**的快照」这条 bug 会全绿溜过去——那正是
+    下面 `test_empty_endpoint_reprojects_after_emptying_not_the_stale_snapshot` 逮到的
+    同一类暗区，而 `ephemeral` 这一格恰好是**从 registry 现读**（`_registry_says_ephemeral`）
+    而不是从 ctx 快照读的，两条路各错各的。
+
+    🔴 对照基准不能省：先证明清空**之前**回执上确实写着 `ephemeral: true`。没有它，
+       「清空后不是 true」在一个从来就没带过这个字段的回执上恒真。
+    """
+    # 🔴 走 `active_registry()`，**不要** `from avery.ingest.registry import REGISTRY`：
+    #    后者是内存腿那个单例，而配了 `AVERY_DB_URL` 时服务端用的是 pg 腿。拿错那一份的症状
+    #    是 `clone_context(...) is False`（母本压根不在内存里）——一条只在离线配置下跑得过的
+    #    测试，正是本票要堵的那种暗区（写它的时候实测栽过一次）。
+    from avery.ingest.registry import active_registry
+
+    master, _tok = _http_seed(client)
+    # 🔴 id 必须每跑一次都不同：配了 `AVERY_DB_URL` 时 `client` fixture 的 `REGISTRY.clear()`
+    #    只清内存腿，真库里那一行会跨轮活下来。写死的 id 第二轮就是
+    #    `UniqueViolation: Key (context_id)=(...) already exists`（实测栽过一次）。
+    clone = "ctx_e88_" + uuid.uuid4().hex[:12]
+    clone_tok = "tok-clone-" + clone
+    assert active_registry().clone_context(
+        master, new_context_id=clone, new_owner_token=clone_tok)
+    head = {"X-Avery-Token": clone_tok}
+
+    before = client.get(f"/team/{clone}", headers=head)
+    assert before.status_code == 200, before.text
+    assert before.json().get("ephemeral") is True, "对照基准不成立 —— 下面全是空真"
+
+    res = client.post(f"/team/{clone}/empty", headers=head)
+    assert res.status_code == 200, res.text
+    assert res.json().get("emptied") is True
+    assert res.json().get("ephemeral") is not True, \
+        "清空回执还自称一次性克隆 —— 前端据此继续封着上传口，用户做完唯一被指引的动作仍无路可走"
+
+    after = client.get(f"/team/{clone}", headers=head)
+    assert after.status_code == 200, after.text
+    assert after.json().get("ephemeral") is not True, "刷新一次又变回一次性了"
+    # 档案本身照旧活着（#86 的那条主张，别被本条的改动带塌）。
+    assert after.json()["context_id"] == clone
+
+
 def test_empty_endpoint_reprojects_after_emptying_not_the_stale_snapshot(client, monkeypatch):
     """🔴 这条补的是一块**离线永远看不见**的暗区。
 

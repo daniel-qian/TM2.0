@@ -69,19 +69,14 @@ export const en = {
     fileStatusFailedHint:
       "This file couldn't be opened at all — often a character-encoding mismatch (save it as UTF-8 and upload again). Nothing from it reached your team.",
 
-    // ── fixD/B1 — uploading a SECOND time starts a SEPARATE company, it does not merge ──────
-    // The backend mints a new context on every POST /ingest, and it cannot append (passing the
-    // old context_id REBUILDS and overwrites it). Previously the UI just kept inviting "add more
-    // files" and then silently swapped the screen to the new upload, with no way back — the
-    // manager's reading is "I lost my data". These strings say what actually happens, up front,
-    // and label the way back. Nothing here promises a merge, because there is no merge.
-    // T10 — these two had to change. Before the append endpoint existed, "no merge" was the whole
-    // truth; now a merging path DOES exist (the section right above this one), so repeating the old
-    // sentence would point the manager at the wrong button.
-    againTitle: 'This one starts a separate company',
-    againBody:
-      "Upload here and Avery reads it from scratch as another company — it is not merged into the one you're looking at. To add to the company you have open, use the box above. Both are kept, and you can switch between them here.",
-    // T10 — the append box.
+    // ── #88 — one archive per person; "start a separate company" is GONE ────────────────────
+    // This block used to hold `againTitle` / `againBody` ("uploading here starts a separate
+    // company") plus the ten `switch*` strings behind the "uploads on this browser" roster.
+    // Danny ruled on 2026-08-10 that the whole concept goes: uploading always adds to the one
+    // archive you have, and starting over means emptying it (`filesEmpty*` below, hard confirm).
+    // Leaving `againTitle` in place and repurposing it would have been a lie — it literally
+    // said "uploading here starts a separate company", which is no longer something Avery does.
+    // T10 — the append box: the only upload semantics left.
     appendTitle: 'Add materials to this company',
     appendCaption:
       "New files are merged into the company you're looking at. Anything they say more recently updates the cards directly; wherever they disagree with what you sent before, it shows up on Today for you to settle.",
@@ -89,31 +84,6 @@ export const en = {
     appendAddedLead: 'Added this time',
     appendConflicts:
       "{count} reading(s) disagree with your earlier materials — open Today to see what each one says.",
-    switchTitle: 'Uploads on this browser',
-    switchAction: 'Open this one',
-    switchOpening: 'Opening…',
-    switchCurrent: 'Currently open',
-    switchFilesLabel: 'Read from',
-    // Explicit, user-initiated removal — the ONLY way an entry leaves this list. A failed read
-    // must never remove one (see store.ts forgetKnownContext).
-    switchForget: 'Remove from this list',
-    switchForgetNote:
-      'This only removes the shortcut on this browser. Nothing is deleted on the server.',
-    // 🔴 The failure modes must stay distinguishable — they mean different things to a user.
-    // "no credential on this browser" is NOT "the data is gone", and must never be worded as if
-    // it were: the company is still on the server, this machine just can't prove it's yours.
-    switchErrorMissingCredential:
-      "This browser no longer holds the key to that upload, so it can't be opened here. The company itself is still on the server — signing in on the account it was attached to will bring it back.",
-    // 🔴 A 404 does NOT mean the upload is gone, and this string must never say that it does.
-    // Tenant isolation (feat-038) deliberately answers "no such context" and "you can't prove
-    // this is yours" with the same 404, precisely so the status code carries no existence
-    // information — which means Avery genuinely cannot tell the two apart. Saying "no longer on
-    // the server" would be the product asserting a fact about the customer's data that it does
-    // not have. Say what we actually observed: we couldn't open it.
-    switchErrorUnreadable:
-      "Avery couldn't open that upload — the server didn't hand it over. That can mean it's gone, or that this browser can no longer prove it's yours; Avery can't tell which from here. It stays on this list either way, so you can try again.",
-    switchErrorFailed: "Couldn't reach the server just now. Nothing was lost — try again.",
-
     // partner-docs-0728 — the two links beside the dropzone. They answer the two questions a
     // first-time uploader actually has, in the order they have them: "what am I supposed to send
     // you?" and "what are you going to do with it?". Both go to /paperwork.
@@ -665,7 +635,6 @@ export const en = {
     // (the one above has to cover three cases, so it can only hedge).
     filesCurrentEmptyCleared:
       'This archive is empty now. Your link, your sign-in and any forms already sent out keep working — you can start uploading again whenever you want.',
-    filesUploadTitle: 'Start a separate company',
     // T10 — `filesAppendTitle` / `filesAppendLede` are DELETED with #84: adding materials is no
     // longer its own section, it IS the "Upload files" button on the workbench toolbar (with an
     // archive open, that button is the append path by construction).

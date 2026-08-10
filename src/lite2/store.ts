@@ -97,105 +97,28 @@ export function rememberContextId(contextId: string | null): void {
   }
 }
 
-// ── fixD/B1 · 这台浏览器传过哪几份（"回得去"的名册）──────────────────────────────────────
+// ── #88 · 名册（`lite2:knownContexts:v1`）已整条撤除 ──────────────────────────────────────
 //
-// 病：上传完团队后 UI 继续摆着上传入口邀请"再加文件"，但 `POST /ingest` **每次都新建一个
-// context**（后端确认：`ingest_paths(context_id=...)` 也不是追加——它拿新文档重建一个
-// CompanyContext 再 `registry.put` 盖掉旧的，传旧 id 反而会把第一家公司的数据就地毁掉）。
-// 于是第二次上传 → contextId 换成新的 → 第一份从界面上消失，**且没有任何回得去的入口**。
-// 数据其实还在后端、token 还在 localStorage，但用户看不到、点不回去 —— 他以为自己弄丢了。
+// 这里曾经住着「这台浏览器传过哪几份」的名册：`KnownContext` / `loadKnownContexts` /
+// `rememberKnownContext` / `forgetKnownContext`，以及它带出来的 `switchContext` /
+// `forgetContext` / `ContextSwitchError`。它存在的全部理由是**一台电脑上会有好几份档案**——
+// `POST /ingest` 每次新铸一个 context，第二次上传就把第一份从界面上抹掉且回不去，名册是
+// 那条回得去的路。
 //
-// 这里存的是"回得去"所缺的最后一块：**每次成功上传留一条名册**（id + 当时传了哪些文件 +
-// 时间）。owner_token 归 transport 的 `lite2:ownerTokens:v1` 管，不在这儿复制一份
-// （与 CONTEXT_STORE_KEY 同一条纪律：凭据只有一个家）。
+// #88（Danny 0810 拍板「不要有『新建』的想法」）把那个前提本身撤了：`uploadFiles` 降级成
+// **只在 `contextId === null` 时开火的引导路径**，其余一律 `appendFiles` 补进当前这一份。
+// 于是一台电脑最多只会长出 **1 份**档案，而名册那套 UI 要 **≥2 份**才会出现——它不是
+// 「留着以防万一」的入口，是**谁都点不到的死代码**。纠错出口换成了 #86 的「清空这份档案」
+// （`emptyArchive`，`context_id`/`owner_token` 原地不变）。
 //
-// 🔴 为什么不去读 transport 那个 token map 的 key 来当名册：那是**凭据存储**，拿它当索引
-// 会让"有没有这份"和"有没有这份的钥匙"两件事永远绑死——恰恰是必须分开的两件事（钥匙没了
-// 但公司还在，UI 要能诚实说"这份回不去了"，而不是干脆当它不存在）。
+// 🔴 别照着 git 历史把它接回来：接回来就等于把「一个人一份档案」这条主张又拆了。
 //
-// 🔴 `lite2:` 前缀不是装饰：换账号清场（AuthPanel.clearCompanyScope）按这个前缀整段清扫，
-// 所以本名册天然跟着走 —— A 公司传过什么，B 公司的经理不会在下拉里看见。
-const KNOWN_CONTEXTS_KEY = 'lite2:knownContexts:v1'
-const MAX_KNOWN_CONTEXTS = 12
+// 留一句给下一个人：那段代码里有两条纪律**仍然成立**，只是搬去了别处——
+//   ① 404 只能读成「打不开」不能读成「没了」（feat-038 刻意不给存在性 oracle）——
+//      现在活在 `isNotFound` + `restoreSession` / `emptyArchive` / `fileDeleteError` 三处；
+//   ② 凭据只有一个家（owner_token 归 transport 的 `lite2:ownerTokens:v1`）——没变。
 
-export interface KnownContext {
-  id: string
-  // 当时上传的文件名，原样保留 —— 用户自己的字。UI 负责排版成人话，store 不编标签，
-  // 也不在这里塞中文/英文（本文件不该持有 copy）。
-  files: string[]
-  at: string // ISO
-}
-
-function isKnownContext(v: unknown): v is KnownContext {
-  if (!v || typeof v !== 'object') return false
-  const c = v as KnownContext
-  return typeof c.id === 'string' && !!c.id && Array.isArray(c.files) && typeof c.at === 'string'
-}
-
-export function loadKnownContexts(): KnownContext[] {
-  try {
-    if (typeof window === 'undefined' || !window.localStorage) return []
-    const raw = window.localStorage.getItem(KNOWN_CONTEXTS_KEY)
-    if (!raw) return []
-    const parsed = JSON.parse(raw) as unknown
-    return Array.isArray(parsed) ? parsed.filter(isKnownContext) : []
-  } catch {
-    return [] // 无痕/坏 JSON —— 名册为空，不崩（同 loadStoredContextId 的降级口径）
-  }
-}
-
-function saveKnownContexts(list: KnownContext[]): void {
-  try {
-    if (typeof window === 'undefined' || !window.localStorage) return
-    window.localStorage.setItem(KNOWN_CONTEXTS_KEY, JSON.stringify(list))
-  } catch {
-    /* quota/无痕 —— 本次会话内存里仍有名册，只是下次打不开 */
-  }
-}
-
-/** 记一条（新→旧；同 id 覆盖并提到最前，避免重复上传把名册刷屏）。 */
-export function rememberKnownContext(entry: KnownContext): KnownContext[] {
-  const next = [entry, ...loadKnownContexts().filter((c) => c.id !== entry.id)].slice(
-    0,
-    MAX_KNOWN_CONTEXTS,
-  )
-  saveKnownContexts(next)
-  return next
-}
-
-/**
- * 删一条名册记录。
- *
- * 🔴 **只许由用户显式操作触发**（store 的 `forgetContext` action ← UI 的「从这个列表里移除」）。
- * 绝不许由一次失败的读触发 —— 见下面 ContextSwitchError 上那段。名册是某个 context_id 在这台
- * 浏览器上的**唯一第二处记录**（第一处是 `lite2:contextId:v1` 锚点，它每次上传都会被覆盖）：
- * `POST /ingest` 每次新建 context，id 只在返回的那一刻出现过一次，删掉名册就是**永久**失去入口。
- * 用一次可能误判的失败去换永久失去入口，代价完全不对等。
- */
-export function forgetKnownContext(contextId: string): KnownContext[] {
-  const next = loadKnownContexts().filter((c) => c.id !== contextId)
-  saveKnownContexts(next)
-  return next
-}
-
-// 切回上一份可能失败，而且必须**分得清是哪一种失败**——它们对用户的意思完全不同：
-//   'missing-credential' = 这台浏览器根本没有那份的 owner_token（登出清过 / 换了浏览器）。
-//                          本地就能判定，不用打网络。公司数据多半还在服务端。
-//   'unreadable'         = 打过去了，服务端不给（HTTP 404）。
-//   'failed'             = 没连上（后端没起 / 网断 / 5xx）。
-//
-// 🔴 为什么 404 只能叫 'unreadable'，不能叫 'gone'（fixD 复核 · 新 finding 2）：
-// feat-038 的租户隔离**刻意**让「这份不存在」和「你证明不了这是你的」返回同一个 404 ——
-// 那正是它拒绝提供的存在性 oracle。于是 404 至少有三种成因，前端一种都分不出来：
-//   ① context 真的没了；
-//   ② token 对不上（ingest_api.authorize_context 的 token 分支）；
-//   ③ 持久化 registry 里 owner_token 为空的旧 context，对真正的主人也 fail-closed 成 404。
-// 把 404 读成「这份没了」，等于**产品替客户断言了一个它无法知道的事实**——正是本轮红线
-// 「我没读到 ≠ 客户说没有」在这里的形态。所以：文案落在「打不开」一侧，名册**不删**。
-// 🔴 也绝不允许第四种"静默失败"：切不过去就必须说，不能停在原地让人以为点没生效。
-export type ContextSwitchError = 'missing-credential' | 'unreadable' | 'failed'
-
-// T3 · 铸链失败的三种，因为对经理的意思完全不同（同 ContextSwitchError 的取舍）：
+// T3 · 铸链失败的三种，因为对经理的意思完全不同（同 `isNotFound` 那条「404 分不出成因」的取舍）：
 //   'rejected' —— 422：人数越界（一次 1..30）或服务端结构/红线门拒了这次铸链。改了能成。
 //   'retired'  —— 409/410：这张表已经撤下，不再发新链接。不是"出错了"，是"这条路关了"。
 //   'failed'   —— 其余一切（网断、404 凭据过期、5xx）。
@@ -236,16 +159,13 @@ const restoredContextId = stubSelected ? null : loadStoredContextId()
 // 同 id 再来 = 重复，挡掉；不同 id 来 = 新目标，放行并由 fetchGuard 让旧的那次作废。
 let restoreInFlightFor: string | null = null
 
-// 切换的世代号（fixD 复核 · 新 finding 1）。每次 switchContext 进门 +1 并把号码捞在手里；
-// await 回来发现号码变了 = 用户已经点了别的一份，**这次结果连同它的错误一起作废**。
-// 没有它的话，先发的那次（可能是慢的那次）会在后面覆盖用户真正想要的那一份。
-let switchSeq = 0
-
 // 🔴 "别把为 A 取回来的数据写进已经切到 B 的 state"（fixD 复核 · 新 finding 1 的正主）。
 //
 // 本文件里每一个 `await transport.fetchX(contextId)` 都持有一个**闭包里捕获的旧 contextId**。
-// await 期间 contextId 完全可能被改掉（switchContext / adoptContext / clearCompanyScope /
+// await 期间 contextId 完全可能被改掉（adoptContext / clearCompanyScope /
 // AuthPanel 的登录恢复），而 await 之后那句 `set({ team, ownerToken })` 原来一次都不回头核对。
+// #88 撤掉 `switchContext` 之后改 id 的路少了一条，但**这道闸一条都不能松**：换账号清场
+// 与登录恢复照旧会在 await 期间把 contextId 换掉。
 // 后果不是"渲染慢一拍"，是**跨公司串数据**：屏幕上挂着 B 公司的 contextId 和锚点，人却是 A
 // 公司的人，ownerToken 还是 A 的钥匙 —— B 公司的经理看到的整份花名册来自 A 公司的文件。
 // 这正是本轮红线最硬的一种形态。
@@ -267,8 +187,9 @@ function stillOn(get: () => LiteState, contextId: string | null): boolean {
 //   （仍抛 `team HTTP 404 (stub)`）还匹配得上——门跑 stub 全绿，生产两条路径全错：
 //     · 恢复路径：不再松开锚点，改走 else 把中文错误挂在屏幕上。localStorage 里那个死锚点
 //       原地不动，于是**每次刷新都再错一遍**，永远回不到干净的上传态。
-//     · switchContext：真 404 被判成 'failed'，文案说「刚才没连上服务器…再试一次」——
-//       服务器好得很，是凭据对不上，重试一万次也不会成。诚实的 'unreadable' 反倒成了死代码。
+//     · 「打不开」那一族（#88 前是 switchContext，现在是 emptyArchive / deleteFile /
+//       downloadFile）：真 404 被判成"没连上"，文案说「刚才没连上服务器…再试一次」——
+//       服务器好得很，是凭据对不上，重试一万次也不会成。
 //   状态码走 TransportError.status 这条结构化通道（transport.ts:421），message 只作为
 //   stub 的兜底——下一个人再改文案时，这里不会跟着塌。
 function isNotFound(err: unknown, message: string): boolean {
@@ -317,15 +238,15 @@ interface LiteState {
 
   // ── Your team（feat-016 ingestion 产出）──
   ingestStatus: IngestStatus
-  // #76 · 「新建一家公司」那个口子**自己**的状态机。只由 uploadFiles 写。
+  // #76 · **引导路径自己**的状态机。只由 uploadFiles 写（而 #88 之后 uploadFiles 只在
+  // 「还一份档案都没有」时才真开火，所以这一格描述的就是"铸出第一份档案"那一发）。
   //
-  // 🔴 病根：`ingestStatus` 有五个写点，其中 restoreSession / refreshTeam / switchContext /
-  // claimDemoTeam 四个都会把它拨到 'ready'。UploadPanel 两个实例读的是同一格，于是那个
-  // 用来「另开一家公司」的面板，在恢复会话之后**永远**显示「团队已就绪」+「取材自: 当前
-  // 公司的文件 chips」——一个开新公司的口子，常驻展示着当前公司的就绪状态，与①段清单
-  // 冗余且语义正好相反。
-  // 🔴 为什么不去改那五个写点：`ingestStatus` 是约二十道门 `waitForFunction` 的等待锚
-  //（file-manifest-truth / append-story / context-switch / at-references / topbar-clearance…），
+  // 🔴 病根：`ingestStatus` 有四个写点，其中 restoreSession / refreshTeam / claimDemoTeam
+  // 三个都会把它拨到 'ready'。上传面板读的若是那一格，回访者一进屏就**恒**显示
+  // 「团队已就绪」+「取材自: 当前公司的文件 chips」——一个还没开火的上传口，常驻展示着
+  // 上一次的就绪状态，与下面那份清单冗余且语义正好相反。
+  // 🔴 为什么不去改那几个写点：`ingestStatus` 是约二十道门 `waitForFunction` 的等待锚
+  //（file-manifest-truth / append-story / at-references / topbar-clearance…），
   // 少写一次不是一道门红，是整条电池挂在超时上。所以新开一格，老的一行不动。
   newCompanyStatus: IngestStatus
   ingestError: string | null
@@ -381,15 +302,8 @@ interface LiteState {
   demoClaiming: boolean
   demoClaimError: string | null
 
-  // fixD/B1：这台浏览器传过的每一份（新→旧，含当前这份）。上传入口据此告诉用户
-  // "再传一次会新建一份，当前这份不会合并进去"，并列出回得去的入口。
-  knownContexts: KnownContext[]
-  // 切回上一份失败的原因（成功即 null）。🔴 只用于诚实报错，绝不用来伪装成功。
-  switchError: ContextSwitchError | null
-  // 正在切往哪一份（没在切 = null）。存在的理由不是"转个圈好看"：UI 必须据此把名册里的
-  // 按钮**置灰**。裸 <button onClick={switchContext}> 无 pending 态 = 双击就是一次并发切换，
-  // 而并发切换正是新 finding 1 那条跨公司串数据的触发方式。store 挡住了竞态，UI 还得挡住误触。
-  switchPending: string | null
+  // #88 · `knownContexts` / `switchError` / `switchPending` 三格已随名册整条撤除（理由见
+  // 文件头那段碑）。一台电脑恒 1 份档案，没有"切回上一份"这件事了。
 
   // ── The room 的会话流（#71）──────────────────────────────────────────────────────────
   // 一场对话的全部轮次，**按提问顺序**，尾部是当前（可能还在流的）那一轮。
@@ -488,13 +402,7 @@ interface LiteState {
   // feat-050 的被覆盖口：谁拿到权威 contextId（现在是 localStorage，将来是 feat-053 的
   // 服务端按账号返回）就调它——落 state + 落锚点，一处收口。
   adoptContext: (contextId: string | null, ownerToken?: string | null) => void
-  // fixD/B1：切回名册里的某一份（第二次上传之后"回得去"的那条路）。
-  // 🔴 后端不支持追加（确认过 pipeline.ingest_docs：传旧 context_id 是**重建并覆盖**，
-  // 会就地毁掉第一家公司的数据），所以这里做的是"切换"，不是"合并"——UI 必须照实说。
-  switchContext: (contextId: string) => Promise<void>
-  // fixD 复核 · 新 finding 2：把某一份从名册上拿掉。**只有用户显式点了才允许调**——
-  // 一次读失败（404）绝不许触发它，见 forgetKnownContext 上那段。
-  forgetContext: (contextId: string) => void
+  // #88 · `switchContext` / `forgetContext` 已随名册整条撤除（理由见文件头那段碑）。
   // files-hub-0729/01 · 取回某一份原始文件的字节。**抛错不吞**——调用方（FileManifest 的
   // 每一行各自持一份 pending/error）负责把失败说给用户看。这里只做 contextId 收口：
   // 没有 contextId 就没有可下载的东西，压根不该有按钮（不建假按钮）。
@@ -508,10 +416,11 @@ interface LiteState {
    *
    * 这是 Danny 0810 拍板「不要有『新建』的概念」的落点：一个人从头到尾就一份档案，
    * 加文件、删文件；真要从头来是清空这一份。所以本动作**刻意不碰** `contextId`、
-   * 不碰 `ownerToken`、不碰 `knownContexts`——那三件一动就变回「另开一份」了。
+   * 也不碰 `ownerToken`——那两件一动就变回「另开一份」了。
+   * （#88 把「另开一份」的入口整条撤掉之后，本动作成了**唯一**的从头来一遍。）
    *
    * 🔴 **不许走 `resetLiteCompanyData()` 凑数**：那是「换账号，全部忘掉」的清点，
-   * 它会把 `knownContexts` 也清掉、也不会去后端真清任何东西。屏上看起来一样，
+   * 它不会去后端真清任何东西。屏上看起来一样，
    * 刷新一次数据全回来——那是"假装清空"，正是销毁类动作最不能有的形态。
    *
    * 成功回 true；能力探测不到 / 忙 / 失败一律 false，**不抛**——错误由
@@ -700,9 +609,6 @@ export const useLite = create<LiteState>((set, get) => ({
   restoreError: null,
   demoClaiming: false,
   demoClaimError: null,
-  knownContexts: loadKnownContexts(),
-  switchError: null,
-  switchPending: null,
 
   turns: [],
   run: emptyRunState(),
@@ -750,10 +656,32 @@ export const useLite = create<LiteState>((set, get) => ({
   setTransport: (transport) =>
     set({ transport, agentSource: createLiveAgentSource(transport) }),
 
+  // #88 · **引导路径**——这条路只在「这台电脑还一份档案都没有」时开火。
+  //
+  // 它曾经是「再传一次 = 另开一家公司」的正主：`POST /ingest` 每次新铸 context_id +
+  // owner_token，第二次上传就把第一份从界面上抹掉。Danny 0810 拍板「不要有『新建』的想法」
+  // 之后，那个语义整条撤了——已经有档案时一律**补进这一份**（`appendFiles`）。
+  //
+  // 🔴 闸为什么在 store 里而不在四个调用点上（`OnboardGate.StepUpload` / 首页骨架的上传卡 /
+  //    资料库工具条 / `UploadPanel`）：前两个是**全新用户铸出档案的那条路**，不能连根拔，
+  //    于是它们照旧调 `uploadFiles`。真正决定方向的是「此刻有没有档案」，那个事实只有
+  //    store 手上有。放在 UI 上就是四把尺，其中任何一把漂一次的代价都是**又新铸一个
+  //    context** —— 旧那份的 owner_token 服务端只返一次、已被覆盖 = 永久无人能认领。
+  //    实测够得着的一条：向导里传成功一次（contextId 落地，向导刻意不关，见 OnboardGate
+  //    那段「不响应式读 contextId」的碑）→ 用户翻回①上传步再传一次 → 旧代码当场开出第二家。
+  //
+  // 🔴 委托给 `appendFiles` 而不是在这里就地补料：那条路自己有重入闸、自己的状态机、
+  //    自己的身份复核（`stillOn`），抄一份出来就是第二把尺。也正因为委托，
+  //    `ingestStatus` 这一格**不会**被拨到 `ingesting→ready`——`notifyStore` 靠那一跳
+  //    合成「你的团队已就绪」，补料每次都报一条「团队已就绪」就是假通知。
   uploadFiles: async (files) => {
     if (files.length === 0) return
-    // #76 · 两格一起拨：老的那格是二十道门的等待锚（不许动），新的那格只服务「另建
-    // 一份画像」那个面板（它不该被 restoreSession/refreshTeam 的 'ready' 顺手点亮）。
+    if (get().contextId !== null) {
+      await get().appendFiles(files)
+      return
+    }
+    // #76 · 两格一起拨：老的那格是二十道门的等待锚（不许动），新的那格只服务引导路径自己
+    // （它不该被 restoreSession/refreshTeam 的 'ready' 顺手点亮）。
     set({ ingestStatus: 'ingesting', newCompanyStatus: 'ingesting', ingestError: null })
     try {
       const payload = await get().transport.ingest(files)
@@ -761,10 +689,10 @@ export const useLite = create<LiteState>((set, get) => ({
       //
       // 原来这里是裸 `set({ contextId: payload.context_id, team, rawTeam, ownerToken })`，
       // 绕开了同一个 commit 刚刚确立的收口。代价是**漏清 notes**：`refreshNotes` 不调、也不
-      // 清空，于是第二次上传之后，A 公司的「Avery's notes」原文原封不动挂在 B 公司的
-      // contextId 底下，NotesScreen 直接渲染给 B 公司的经理看。而 switchContext 走 adoptContext
-      // 那条路清得干干净净 —— **同一件事，两条路给出相反答案**，这正是 M3 修的那个坑
-      //（"绕开收口就会出方向反了的 bug"）在 uploadFiles 上剩下的另一半。
+      // 清空，于是上一份的「Avery's notes」原文原封不动挂在新的 contextId 底下，
+      // NotesScreen 直接渲染给新公司的经理看。#88 之后这条路一辈子只跑一次（`contextId`
+      // 为 null 才进得来），但收口一条都不许绕——`adoptContext` 同时还落 localStorage 锚点，
+      // 绕开它就是「刷新一次数据全丢」。
       //
       // adoptContext 在 id 变了时清 team/rawTeam/files/notes/ingestStatus，所以顺序必须是
       // 先 adopt 后 set —— 反过来会被它当场清掉本次刚拿到的团队。
@@ -777,24 +705,7 @@ export const useLite = create<LiteState>((set, get) => ({
         // 上传成功即"有会话了"——把上一轮失败的恢复提示清掉。
         restoring: false,
         restoreError: null,
-        // 换了公司，上一份切换失败的提示别继续挂着。
-        switchError: null,
       })
-      // feat-050 的落锚点动作已由 adoptContext 承担（含 stubSelected 判断），这里只补名册。
-      // stub 传输不记（它的 context 是进程内造的，记了下次真启动会拿去打真后端）。
-      if (!stubSelected) {
-        // fixD/B1：记进名册。**这一步是"回得去"的全部前提**——`POST /ingest` 每次都
-        // 新建 context，上一份的 id 在这一刻之后就再也没有第二个地方能问到了
-        // （owner_token 还在，但 token map 的 key 是凭据存储，不该当索引使——见
-        // KNOWN_CONTEXTS_KEY 上面那段）。漏了这行，第二次上传就还是"数据凭空消失"。
-        set({
-          knownContexts: rememberKnownContext({
-            id: payload.context_id,
-            files: files.map((f) => f.name),
-            at: new Date().toISOString(),
-          }),
-        })
-      }
       // feat-047（feat-032）：拉一次持久文件清单（含 n_chunks）。次要视图，失败不影响上传成功。
       // notes 同理——adoptContext 已经把上一份的清空了，这里把**这一份自己的**拉回来
       //（新 context 多半是空的；真为空时拉一次的结果也是空，不会凭空造出内容）。
@@ -812,7 +723,8 @@ export const useLite = create<LiteState>((set, get) => ({
   // T10 · 补资料 —— 与 uploadFiles 是**两条路**，差别都在下面这几行里，不是文案差别：
   //   ① 不调 adoptContext。那个收口在 contextId 变了时会清掉 team/files/notes/forms——正是
   //      「每次上传=新开一家公司」那堵墙的前端半边。补资料的 context_id 没变，一个字都不该清。
-  //   ② 不记名册（knownContexts）。没有新公司诞生，记一行只会让切换列表多一条指向同一份数据的行。
+  //   ② 不铸新 id。没有新公司诞生——#88 之后这已经是这个应用**唯一**的上传语义，
+  //      引导路径（`uploadFiles`）跑完那一次之后每一发都落到这里。
   //   ③ 不碰 ownerToken。服务端没有新铸，也没回传。
   //   ④ 走自己的状态机（见 LiteState 里那段 🔴：借 ingestStatus 会发一条假的「团队已就绪」通知）。
   appendFiles: async (files) => {
@@ -881,17 +793,7 @@ export const useLite = create<LiteState>((set, get) => ({
         rawTeam: payload,
         restoring: false,
         restoreError: null,
-        switchError: null,
       })
-      if (!stubSelected) {
-        set({
-          knownContexts: rememberKnownContext({
-            id: payload.context_id,
-            files: payload.source_files ?? [],
-            at: new Date().toISOString(),
-          }),
-        })
-      }
       void get().refreshFiles()
       void get().refreshNotes()
     } catch (err) {
@@ -953,12 +855,12 @@ export const useLite = create<LiteState>((set, get) => ({
       if (isNotFound(err, message)) {
         // 锚点指不动了 —— 松开它，干净回上传态（feat-050 口径不变）。
         //
-        // 🔴 但**名册不动**（fixD 复核 · 新 finding 2）。原来这里顺手 forgetKnownContext()，
-        // 理由写的是"服务端真没了"。可 404 根本不能证明这件事：feat-038 刻意让"不存在"和
-        // "你证明不了这是你的"同样返 404（不给存在性 oracle），token 错配、以及 DB 里
-        // owner_token 为空的旧 context，都会让**真正的主人**吃到 404。
-        // 于是那行代码等于：一次我方无法解释的失败 → 永久删掉用户回得去的唯一入口。
-        // 锚点是可再生的（切回去就有），名册不是（id 只在 ingest 返回那一刻出现过）。
+        // 🔴 松的**只有锚点**，`lite2:ownerTokens:v1` 里那把钥匙一个字节都不动。404 什么都
+        // 证明不了：feat-038 刻意让"不存在"和"你证明不了这是你的"同样返 404（不给存在性
+        // oracle），token 错配、以及 DB 里 owner_token 为空的旧 context，都会让**真正的
+        // 主人**吃到 404。拿一次我方无法解释的失败去销毁凭据，代价完全不对等——
+        // 锚点是可再生的（下次登录恢复会把它送回来），钥匙不是（服务端只返一次）。
+        // （#88 之前这段碑说的是"名册不动"，名册已随单档案模型撤除，纪律本身没变。）
         rememberContextId(null)
         set({
           contextId: null,
@@ -1053,82 +955,6 @@ export const useLite = create<LiteState>((set, get) => ({
     })
   },
 
-  // fixD/B1 · 切回名册里的某一份。
-  //
-  // 这是"第二次上传把第一家公司的数据从界面上抹掉，且回不去"里 **"回得去"** 的那一半；
-  // 另一半（上传入口在已有团队时把"会新建一份、不会合并"讲清楚）是 UI 的活。
-  //
-  // 🔴 三条失败路径都必须**说出来**，一条都不许静默（三者的语义差别见 ContextSwitchError）：
-  //   ① 本地没有 owner_token → 'missing-credential'（本地即可判定，不打网络）。
-  //      绝不硬着头皮打过去：那必然 404，而 404 什么都证明不了。
-  //   ② 404 → 'unreadable'（"打不开"，不是"没了"）。名册不动。
-  //   ③ 其它（后端没起/网断）→ 'failed'。锚点与名册都不动。
-  //
-  // 🔴 **先取数据，成功了才换 contextId**（fixD 复核 · 新 finding 1）。原来是
-  // `adoptContext(新 id)` → `await restoreSession()`，两个后果：
-  //   · restoreSession 在 await 之后拿闭包里的旧 contextId 无条件写 team/ownerToken，
-  //     两次快速切换（双击，或点了 A 又改主意点 B）就把 A 的整份花名册渲染到 B 的 id 底下，
-  //     手里攥的还是 A 的 owner_token —— 下一次对 B 的受保护读带着 A 的 token 打过去，
-  //     feat-038 回 404，于是又被读成"B 没了"。跨公司串数据 + 连锁误判，一次双击的距离。
-  //   · 且 restoreSession 开头的重入闸会让第二次切换直接空转（现已改为按 id 记）。
-  // 现在换成"取到了再换"：失败时用户仍停在原来那份公司上（不留半切状态），
-  // 竞态由 switchSeq 收口——只有最后一次点击允许落地，先到的结果一律作废。
-  switchContext: async (contextId) => {
-    const { contextId: current, transport, switchPending } = get()
-    if (!contextId || contextId === current) return
-    // files-hub-0729/02 · 同一目标已在路上 → 直接返回。
-    //
-    // 🔴 为什么这一道非在 store 里不可，UI 的 `disabled` 顶不住：React 的 `disabled` 要等
-    // 一次重渲染才落到 DOM 上，而**同一拍**里的第二次 click（用户手抖连点，两下之间没有任何
-    // 网络往返）发生在重渲染之前——那一刻按钮在 DOM 上仍然是可用的，handler 照样跑。
-    // 新门 verify-context-switch 的「同一拍连点两下只打一次 /team」相位就是这么逮到它的：
-    // 置灰是真的、结果也是对的（switchSeq 让后到的那次作废），但**两发请求真的出去了**。
-    // 一发多余的请求本身不致命，致命的是它证明了那道闸不在真正的临界区上。
-    //
-    // 只挡「同一个目标」：切到**别的**一份是合法的取代（switchSeq 负责让先发的那次作废），
-    // 挡掉它会让用户点错一份之后无法立刻改点另一份。
-    if (switchPending === contextId) return
-    const seq = ++switchSeq
-    set({ switchError: null, switchPending: contextId })
-    if (!storedOwnerToken(contextId)) {
-      if (seq !== switchSeq) return
-      set({ switchError: 'missing-credential', switchPending: null })
-      return
-    }
-    try {
-      const payload = await transport.fetchTeam(contextId)
-      if (seq !== switchSeq) return // 已被更新的一次切换取代 —— 结果作废，一个字段都不写
-      // adoptContext 一处收口：落 state + 落 localStorage 锚点 + 清掉上一份的派生数据
-      //（notes/files/team，id 变了才清 —— 见其实现）。它与紧跟的 set 在同一拍里跑完，
-      // 中间不 await，所以不存在"contextId 已是 B、team 还是 A"的可观测窗口。
-      get().adoptContext(contextId)
-      set({
-        team: liteTeamFromPayload(payload),
-        rawTeam: payload,
-        ingestStatus: 'ready',
-        restoring: false,
-        restoreError: null,
-        switchError: null,
-        switchPending: null,
-      })
-      void get().refreshFiles()
-      void get().refreshNotes()
-    } catch (err) {
-      if (seq !== switchSeq) return
-      const message = err instanceof Error ? err.message : String(err)
-      set({
-        switchPending: null,
-        switchError: isNotFound(err, message) ? 'unreadable' : 'failed',
-      })
-    }
-  },
-
-  // 用户显式说"这一份我不要看见了"。**只此一个调用方**——绝不许挂到任何失败处理路径上。
-  forgetContext: (contextId) => {
-    if (!contextId) return
-    set({ knownContexts: forgetKnownContext(contextId), switchError: null })
-  },
-
   // files-hub-0729/01 · 逐份下载。
   //
   // 🔴 刻意**不写任何 state**：下载是一次性动作，不是屏上的一份状态。每行自己的
@@ -1136,7 +962,7 @@ export const useLite = create<LiteState>((set, get) => ({
   // 而"这次取回了什么字节"根本不该进 store —— 文件内容是不可信的用户内容，
   // 让它在全局 state 里躺着只会多一处可被误渲染的地方。
   //
-  // 🔴 抛错不吞：切不过去要说、下不下来同样要说（同 switchContext 那条"绝不静默失败"）。
+  // 🔴 抛错不吞：下不下来要说出来，绝不静默失败（同 deleteFile / emptyArchive 那条纪律）。
   downloadFile: async (idx) => {
     const { contextId, transport } = get()
     if (!contextId) throw new Error('no context')
@@ -1146,7 +972,7 @@ export const useLite = create<LiteState>((set, get) => ({
   // 下面三个 refresh 全部带同一道 `stillOn` 闸（fixD 复核 · 新 finding 1 的同族）：
   // 它们各自 await 期间 contextId 都可能被切走（AuthPanel 的登录恢复就是 adoptContext(first)
   // 紧跟 refreshTeam + refreshNotes，与用户手点切换天然并发）。少一道闸，"A 的人/文件/笔记
-  // 落在 B 的 id 底下"就照样成立——只是入口从 switchContext 换成了这三个。
+  // 落在 B 的 id 底下"就照样成立——#88 撤掉 switchContext 之后入口就是这三个。
   refreshTeam: async () => {
     const { contextId, transport } = get()
     if (!contextId) return
@@ -1218,7 +1044,7 @@ export const useLite = create<LiteState>((set, get) => ({
         return false
       }
       // 🔴 措辞不许说「文件没了」：那个端点把「没有这份」和「你证明不了这是你的」编成同一个
-      // 404，前端一种都分不出来（同 downloadError / switchErrorUnreadable 的纪律）。
+      // 404，前端一种都分不出来（同 downloadError / restoreError 那条「404 什么都证明不了」）。
       set({ fileDeleting: null, fileDeleteError: sourceKey })
       return false
     }
@@ -1226,7 +1052,7 @@ export const useLite = create<LiteState>((set, get) => ({
 
   // #86 ·「清空这份档案」。骨架照 deleteFile（忙态 + 回权威清单 + 切公司必回收忙态），
   // 四处刻意不同：
-  //   ① **绝不动 contextId / ownerToken / knownContexts** —— 动了就是「另开一份」，
+  //   ① **绝不动 contextId / ownerToken** —— 动了就是「另开一份」，
   //      而这一票的全部内容就是把「新建」这个概念取消掉；
   //   ② 忙态整段不逐条（只有一个目标）；
   //   ③ 回执里那张空 payload **就地用掉**（team/rawTeam 直接落它），不等 refreshTeam ——
@@ -1272,7 +1098,7 @@ export const useLite = create<LiteState>((set, get) => ({
         return false
       }
       // 🔴 措辞不许说「档案没了」：那个端点把「没有这份」和「你证明不了这是你的」编成同一个
-      // 404，前端一种都分不出来（同 fileDeleteError / switchErrorUnreadable 的纪律）。
+      // 404，前端一种都分不出来（同 fileDeleteError / restoreError 那条「404 什么都证明不了」）。
       set({
         archiveEmptying: false,
         archiveEmptyError: err instanceof Error ? err.message : String(err),
@@ -1396,8 +1222,8 @@ export const useLite = create<LiteState>((set, get) => ({
   // T3 · 铸这一期的链接。
   //
   // 🔴 防双击的闸必须在 store 里，UI 的 `disabled` 顶不住：React 的 disabled 要等一次重渲染
-  // 才落到 DOM 上，同一拍里的第二次 click 发生在那之前（同 switchContext 那段的教训，那次是
-  // verify-context-switch 用「同一拍连点两下」逮到的）。而这个端点**不幂等**——第二发不是
+  // 才落到 DOM 上，同一拍里的第二次 click 发生在那之前（这条教训是 #88 撤掉的那道
+  // verify-context-switch 门用「同一拍连点两下」逮到的）。而这个端点**不幂等**——第二发不是
   // 一次多余的请求，是真的给每个人再发一轮新链接，员工手机上会收到两条。
   createFormLinks: async (templateId, recipients) => {
     const { contextId, transport } = get()
@@ -1539,7 +1365,7 @@ export const useLite = create<LiteState>((set, get) => ({
     const { agentSource, contextId, notes, turns } = get()
     // #72 · busy 闸在 store 的临界区上，不只在 UI 的 disabled 上：React 的 disabled 要等一次
     // 重渲染才落到 DOM，同一拍里的第二次 click（发送键/追问 chip 双击）发生在那之前——
-    // createFormLinks / switchContext 同款教训。上一轮还在流就静默丢弃这一发（UI 层本来
+    // createFormLinks / appendFiles 同款教训。上一轮还在流就静默丢弃这一发（UI 层本来
     // 就置灰了，走到这儿的只能是同一拍的重复触发）。
     const tail = turns[turns.length - 1]
     if (tail && tail.run.status === 'running') return
@@ -1938,9 +1764,6 @@ export function resetLiteCompanyData(): void {
     appendStatus: 'idle',
     appendError: null,
     appendReceipt: null,
-    knownContexts: [],
-    switchError: null,
-    switchPending: null,
   })
 }
 
