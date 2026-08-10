@@ -784,6 +784,18 @@ export interface LiveTransport {
   // 就**一个删除键都不渲染**（不建假按钮红线的落点）。
   deleteFile?: (contextId: string, sourceKey: string) => Promise<LiveTeamPayload>
 
+  // #86 ·「清空这份档案」—— 把上传来的一切收走，但**档案本身留着**：`context_id` 与
+  // `owner_token` 一个字节不变，所以清空之后手上这份锚点、这个 token、外面发出去的员工
+  // H5 链接全部继续有效。回执与 deleteFile 同形（整张 team payload，此刻是空世界）。
+  //
+  // 🔴 它**不是** delete：后端确实有一个删 context 行本身的方法（pg 侧的 `delete()`），
+  // 那是本方法的反面，永远不挂 HTTP。「不要有新建的概念」这句拍板的落点就是这一条：
+  // 一个人从头到尾就一份档案，加文件、删文件，真要从头来是清空这一份。
+  //
+  // 可选：老后端/stub 没有这个端点，调用方按 `!!transport.emptyContext` 探测能力——探测不到
+  // 就**一个清空键都不渲染**（不建假按钮红线的落点，同 deleteFile 的先例）。
+  emptyContext?: (contextId: string) => Promise<LiveTeamPayload>
+
   // 按 context_id 重新拉取 Your team（上传后填充/刷新）。
   fetchTeam: (contextId: string) => Promise<LiveTeamPayload>
 
@@ -1301,6 +1313,18 @@ export function createHttpTransport(base: string = apiBase()): LiveTransport {
         { method: 'DELETE', headers: { ...authHeader(contextId), ...accountHeader() } },
       )
       if (!res.ok) throw transportError('file delete', res)
+      return (await res.json()) as LiveTeamPayload
+    },
+
+    // #86 ·「清空这份档案」。同 deleteFile 的 owner_token 纪律；**不** rememberToken——
+    // 服务端没有铸新 token 也没回传，档案的凭据自始至终是同一个（那正是本票的意义）。
+    async emptyContext(contextId) {
+      const res = await send(
+        'archive empty',
+        `${base}/team/${encodeURIComponent(contextId)}/empty`,
+        { method: 'POST', headers: { ...authHeader(contextId), ...accountHeader() } },
+      )
+      if (!res.ok) throw transportError('archive empty', res)
       return (await res.json()) as LiveTeamPayload
     },
 

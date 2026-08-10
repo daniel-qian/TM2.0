@@ -3,234 +3,217 @@
 > 📢 本文件是**当前状态快照，整体重写不追加**。历史都在 git（`git log` + 各 `.issues/*/receipt*.md`），别在这儿堆编年史。
 > 启动路径见 `AGENTS.md` Startup Workflow：读本文件 + `feature_list.json`，跑 `./init.sh` 确认绿，再开工。
 
-**Last Updated:** 2026-08-10（**0810 设计轮：方案已过审、六票已开**。#82 拆弹已复核绿。
-本轮**零产品代码改动**；仍未 push、未上产）
+**Last Updated:** 2026-08-10（**#86「清空这份档案」已落地**：后端两腿 + 路由 + transport/store + 新门，
+**UI 挂点按票面留给 #84**。仍未 push、未上产）
 
 ## Current State
 
 - **git**：`main` = 差距战役八票 + gap2 三票 + 三轮演习批 + #68 + #70 + #69+#71 + #72 +
-  **0808 重构战役四波全部**（#73/#74/#75/#76/#77/#78/#79）+ wave 4（#80+#81）
-  + **#82（纯测试修复，`eval-harness/tests/` 两个文件，产品零字节）**。
-  回执六份：`receipt-75-room-claude.md` · `receipt-76-77-74-files.md` · `receipt-78-threads.md` ·
-  `receipt-79-copy-sweep.md` · `receipt-80-81-sidebar-composer.md` ·
-  **`receipt-82-clock-bomb.md`（本批）**。
+  **0808 重构战役四波全部**（#73/#74/#75/#76/#77/#78/#79）+ wave 4（#80+#81）+ #82
+  + **#86（0810 设计轮票 4 ·「清空这份档案」）**。
+  回执七份：`redesign-0808/` 六份 + **`design-0810/receipt-86-archive-empty.md`（本批）**。
   ⚠ 别在这儿写死 ahead 数字——它每提交一次就自己作废。要数就跑：
   `git rev-list --count origin/main..HEAD`。
-- **后端离线套基线：`TZ=UTC` → 4049 passed · 0 failed · 124 deselected · 4 xfailed**（约 122s）。
-  ✅ **票面那条「4045 中 3 红是已知底噪」的读法已作废**——现在**任何红都是你的**。
-- **像素基线现状**：**54 张不变**（#82 零前端改动，未跑前端门电池——改动零溢出 `tests/`）。
-  上一批（#80+#81）净漂移 4 张 = `{aurora,paper}-room-data-{desktop,mobile}`。
-  🔴 `visual.spec` 的 room 4 张（无材料态）一张没漂——侧栏挂在 `contextId !== null` 那一支里。
+- **后端离线套基线：`TZ=UTC` → 4076 passed · 0 failed · 133 deselected · 4 xfailed**（约 37s）。
+  = 上一基线 4049 + #86 的 27 条（21 条 `test_context_empty_t86.py` + 6 条 `test_registry_contract.py`
+  的 memory 参数）。✅ **任何红都是你的。**
+- **真库套（@needs_db）**：throwaway `avery_t86_test`（docker `teammaster-postgres-1` / pgvector pg17）
+  跑 `test_context_empty_t86 + test_registry_contract + test_registry_protocol` → **125 passed · 0 failed**。
+- **像素基线现状**：**54 张不变**。#86 零渲染改动（只动 `store.ts` / `transport.ts`，且新键今天无人读），
+  按构造不可能漂——**本轮未跑 B 区**，理由记在回执 §5。
 - **✅ 生产仍停在 08-07 白天那一版**（`main-20260807-190332` = main `99d83f7`）。
-  gap2 三票 + 三轮演习批 + #68 + #70 + #69/#71 + #72 + 重构战役四波 + wave 4 + #82 都没有上产。
+  gap2 三票 + 三轮演习批 + #68 + #70 + #69/#71 + #72 + 重构战役四波 + wave 4 + #82 + #86 都没有上产。
 - 🔴 **迁移账（上产时按这个来）**：
   - **T9 需要 `0015_form_submissions_auto_key.sql`**（increment-only、`_ensure_schema()` 自动重放）。
   - **#78 需要 `0016_advise_runs_thread.sql`**（`ADD COLUMN IF NOT EXISTS thread_id` +
     `(context_id, thread_id, seq)` 索引；**无回填 UPDATE**）。已在本地 throwaway 库真跑过。
-  - **#82 / #80 / #81 / #79 / #77 / #76 / #74 / #75 / #73 都不需要迁移**。
+  - **#86 不需要迁移**（只对既有表 DELETE/INSERT/UPDATE，一列都没加）。#82/#80/#81/#79/#77/#76/#74/#75/#73 同。
   - 判据一句话：**动 dataclass 里被整块 jsonb 装着的字段 → 免迁移；动表的顶层列 → 必须迁移。**
+  - ⚠ 但**「不需要迁移」不等于「不用跑 @needs_db」**：#86 动了 pg 腿，照跑（见上）。
 - 🔴 **新依赖**：`@phosphor-icons/react@2.1.10`（wave 4 引入，票面拍板项，别被下一个人当漂移回滚）。
-  bundle 实测 `Lite2App` chunk +9.98 kB raw / +2.88 kB gzip。
-  ⚠ worktree 的 node_modules 是主检出的 junction：装依赖要在 `D:\avery` 装，再把
-  `package.json` + `package-lock.json` 搬进 worktree、主检出 `git checkout` 还原。
+  ⚠ worktree 的 node_modules 是主检出的 junction：装依赖要在 `D:\avery` 装。
 - 🔴 **合的都是本地 main，没有 push**。前端 push main 即自动构建上产，push + 换后端容器
   必须在统一上产 session 的**同一个窗口**里做。
 
-## 本轮做完的（2026-08-10 · #82 form-tests-clock-bomb）
+## 本轮做完的（2026-08-10 · #86 archive-empty）
 
-回执 `.issues/redesign-0808/receipt-82-clock-bomb.md`（含 24 处字面量全表、时间旅行台账、
-6 条变异台账、两次自摆乌龙的复盘）。
+回执 `.issues/design-0810/receipt-86-archive-empty.md`（含语义裁定表、8 条变异台账、
+两个自己逮到并封上的门洞、以及给 #84 的确认文案草稿）。
 
-**产品零回归是机器证的**：`git diff --name-only | grep -v '^eval-harness/tests/' | wc -l` = **0**。
-自动铸链周一开火 / 手动铸链非幂等 / 409 语义**一个字节没动**——它们全是对的。
+**做了什么**：`empty_context()` 落进 `ContextRegistryProtocol` + 两条腿 · 新路由
+`POST /team/{context_id}/empty`（复用 `authorize_context`，回 `_team_payload`）·
+`upload_guard._route_for` 认得它 · transport `emptyContext` · store `emptyArchive()` +
+`archiveEmptying`/`archiveEmptyError`（**两抄本锁步**）· 新门 `verify-archive-empty`（zone A，25 判据）。
 
-- **病根**：`GET /team/{ctx}/forms/submissions` 是一支**读时会写**的端点（T9
-  `ensure_current_period_links`），而 `list_form_submissions` 是 **newest-first**。W32→W33 翻周后，
-  自动铸出的本期空行排到 `[0]`，三条测试的 `submissions[0]` / `all(auto is False)` 当场读错东西。
-- **三红改法**：选行一律**按 id**（id 从铸链回帧拿，不事后从名单取）；`all(...)` 改**子集判据**
-  （只看手动铸的那两行）并**先钉这两行确实在名单里**——过滤式判据最常见的死法是过滤出空集然后恒真。
-  `test_manual_mint_stays_non_idempotent` 的钉子语义（新行/新 token/老链接仍有效）一字未改。
-- **顺手结清一处假绿 + 两处同族拆弹**：`test_refile_endpoint_is_gated_and_honest` 也裸取 `[0]`
-  却**没红**（自动空行同样 409，结果恰好相同 → 错误取样完全隐形）；T9 另两处 `[0]` 至今没红
-  纯属布景巧合（铸的链接正好落在本期）。全部改为按 id 选行。
-- **新长 4 条正面判据**：翻周自动开火此前**零覆盖**（直调用例注入 `today` 永远翻不了周，
-  HTTP 用例照抄的是 `2026-W01` 这种远古周期，形状对但不是翻周）。现在钉了周一 / 同周周日 /
-  **跨年 W53→W01** 三个可控钟布景 + 一条零字面量的真钟用例。
+**语义**：清掉 `source_documents` / `source_files` / `materials` / `entities` 全五类 /
+`granularity` / facts+notes 重物化成空。**留下** `context_id` · `owner_token` · `name` ·
+对话历史 · Avery 的观察笔记 · 表单模板 · **员工已交答卷（含活的 H5 链接）** · 账号归属。
+
+- 🔴 **订正一条票面前提**：「不能复用 `put()`」这个结论成立，但票面给的理由（`_prior_src_bytes` /
+  `_prior_mat_vecs` 会回填旧字节旧向量）**今天咬不到**——空 ctx 插 0 行，那两条 `UPDATE...FROM`
+  匹配不到任何行，三张表照样是空的（M6 变异下它们全绿）。真正把 M6 判红的是另一条路：
+  `get()` 是**比对后写盘**，它把库里那份**旧 facts.md 写回磁盘**，`put()` 随后读到的就是这份旧文本、
+  再原样存回 `memory_files`——**行删干净了，议事室 recall 还引得到已清掉的原文**。
+  下一个人别照票面那句去找回填，它不在那儿。
+- 🔴 **明知的雷已钉成正面判据**：留着答卷 ⇒ `POST /team/{id}/forms/{sub}/ingest` 会把实体重新灌回来，
+  **「清空」不会自己保持为空**（`test_refiling_a_submission_after_empty_repopulates_the_archive`）。
+  确认文案不许说「清空之后永远是空的」。
+- **写门时自己逮到并封上两个洞**：① 「路由投清空前那份 ctx 快照」这条变异**离线 20/20 全绿、
+  挂 DB 才红**——修法不是再写一条 `@needs_db`（默认电池照样反选），而是 monkeypatch 让内存腿的
+  `get()` 返回深拷贝，把 pg 的快照语义搬到离线来；② 「按 dataclass 字段遍历清空」的判据**光靠真语料
+  不够**——那份语料只喂得饱 7 条列表里的 4 条（signals/playbooks/conflicts 天生为空），
+  「漏清 signals」的变异活得下来。现在清空前往每一条列表塞哨兵。
 
 ### 验证账
 
-- `TZ=UTC` 离线全套 **4049 passed · 0 failed**（4045 基线的 3 红修好 + 4 条新判据）。
-- **时间旅行台架**（scratchpad 的 `clockshift.py`，未入库）逐天拨钟跑 202 条表单测试：
-  +0/+1/+2/+3/+4/+5/+6d（W33 整周）· **+7d（下周一 W34）** · +8/+14/+21d · +147d（跨年 W01）·
-  +365d —— **全部 202 passed**。台架有牙的证据：+7d **第一跑是红的**，逮到的是我自己新写的
-  那条两次读钟。
-- 纯逻辑扫独立证死前提：`current_period(t-7d) < current_period(t)` 在 2024-01-01～2032-01-01
-  共 **2922 天违例 0**（含全部跨年点）。
-- **变异 6 条全死**（逐条独立跑、跑完还原，M1–M4 的变异体内嵌布景探针，先证「名单里确实有
-  1 行 auto」再让坏选行跑）。🔴 **M6 最有信息量**：把 `current_period` 焊死成常量，
-  改之前**整个 T9 套 30 条一条都不会红**，改之后**恰好那 4 条新判据红**。
+`TZ=UTC` 离线 **4076/0** · 真库 **125/0** · 新门 **25 PASS · 0 FAIL** ·
+`npm run typecheck` 绿 · `vite build --mode development` 绿 · `eslint` 零输出 ·
+`i18n-orphans` **0 孤儿**（本票没加任何 i18n 键）· **A 区门电池整轮见回执 §7**。
+**变异 8 条逐条独立跑、跑完还原**，每条主判据配一个专属变异（M4 只在离线层验过，门未在 M4 下跑——记账不假装）。
 
 ## 上几轮做完的（详情全在各自回执，这里只留会影响下一个人的）
 
+- **#82 表单测试拆墙钟炸弹**——`redesign-0808/receipt-82-clock-bomb.md`。产品零字节；
+  病根是 `GET /team/{ctx}/forms/submissions` **读时会写**（T9 自动铸链）+ newest-first，
+  W32→W33 翻周后 `submissions[0]` 读错东西。选行一律**按 id**。
 - **wave 4 · #80 会话侧栏 + #81 composer**——`receipt-80-81-sidebar-composer.md`。右上弹窗 → 左侧常显
-  侧栏（≤860 收抽屉）· composer 双行版式 + phosphor 图标（新文件 `src/lite2/icons.tsx`）·
-  新 action `newConversation`（后端零改动）。🔴 实测推翻两条读码推断的样式（停止钮 danger 描边
-  从没渲染出来过；「34px 圆钮」被冻结基座的 `min-width:64px` 撑成 64）。
-- **wave 3 · #79 copy-sweep**——`receipt-79-copy-sweep.md`。zh 137 键改值 + 2 新键 / en 28 改 + 2 新；
-  4 个真 bug；像素 50 张全漂全量重冻；立碑「名字引用跟着改、动词短语不改」。
-- **wave 2 · #78 真线程**——`receipt-78-threads.md`。迁移 0016 · thread_id 服务端铸经 SSE 两帧回传 ·
-  新端点 `GET /team/{id}/advise-threads`（limit 的单位是「场」不是「行」）· hydrateThread 三闸。
-- **wave 1 · #75 议事室 Claude 化 + #73 现场附件**——`receipt-75-room-claude.md`。docked composer 三态统一 ·
-  停止生成落成第五状态 `interrupted` · 多行输入 + IME 让位 · markdown 自渲染 · 胶囊即发。
-- **wave 1 · #74 + #77 + #76**——`receipt-76-77-74-files.md`。
-- **#72 建议追问 chips** · **#69+#71 会话流+灰提示** · **#70 @ 文件引用两修** · **#68 数据态像素基线** ·
-  **#66+#67** · **#65 / #64 / #63 / #61 / T9–T11**。
+  侧栏（≤860 收抽屉）· composer 双行版式 + phosphor 图标（`src/lite2/icons.tsx`）。
+- **wave 3 · #79 copy-sweep**——`receipt-79-copy-sweep.md`。zh 137 键改值 + 2 新 / en 28 改 + 2 新；
+  像素 50 张全漂全量重冻。
+- **wave 2 · #78 真线程**——`receipt-78-threads.md`。迁移 0016 · `GET /team/{id}/advise-threads`。
+- **wave 1 · #75 议事室 Claude 化 + #73 现场附件** · **#74 + #77 + #76**（`receipt-76-77-74-files.md`）。
+- **#72 / #69+#71 / #70 / #68 / #66+#67 / #65 / #64 / #63 / #61 / T9–T11**。
 
 ## What's Next（按优先级）
 
-0. **🔴 0810 设计轮已收官：方案过审 + 六票已开（#83–#88），下一步是照票落地**。
-   正源 `.issues/design-0810/design-plan.md`（Danny 2026-08-10「其他的设计方案全部通过」），
-   原型 `.issues/design-0810/proto/{room,files}.html`，证据 `_shots-0810/`（现状 7 张 + 原型 4 张）。
-   **开工顺序：#83 → #84**（本轮本职：纯前端布局与皮肤，不碰数据模型），
-   **#85 / #86 可并行**（都便宜，且 #86 是 #88 的前置）；**#87 是数据模型真地基，值得单开一轮**。
-   - **#83** 对话侧栏上皮肤 + 开场块居中 · **#84** 资料库改两栏 file explorer（建议再拆 2a/2b/2c）
-   - **#85** 「这次补料改了什么」只读清单（+已查阅） · **#86** 「清空这份档案」
-   - **#87** 实体血缘地基（**一张票同时喂「删文件收回结论」与「逐条撤回」**） · **#88** 撤掉「新建一家公司」
-   - 票 7「逐条撤回」待 #87 落地后再开。
-   🔴 **两条产品拍板（Danny 0810）**：① **不要有「新建」的概念**——一个人恒一份档案，
-   加文件/删文件，从头来是**清空这一份**（context_id/owner_token 不变）+ 硬确认；
-   ② 「自动更新 + 已查阅/撤回」**完整做**，但按「与 0807 拍板③ 共存」落——
-   **不弹通知、不占今天页**，只在资料库有一处可查。
-   🔴 **#87 是 ① 的拦路石，别跳过**：删一份文件今天**只清材料面、不动人卡/项目卡**
-   （`file_delete.py` 明文裁定 + `test_delete_keeps_the_person_cards` 钉着），
-   结论会留在卡上并被 `facts.md` 反复写回、顾问继续引用。旧模型下靠「新建一家公司」洗掉重来，
-   ① 把那条退路砍了 → **在 #87 落地前，「删除文件」给用户的承诺是假的**。
-   ⚠ **该 handoff 里「#82 落地前离线套 3 红是已知底噪」那句已过期**：#82 已落地并复核，
-   `TZ=UTC` 离线全套 **4049 passed · 0 failed**，任何红都是你的。
-   ⚠ **W33「链接过期了」核实完毕：不是产品 bug**，两条假设都证伪（两条铸链路径都当场算
-   `default_expiry`，从上期只抄名册三字段、装不下 `expires_at`；demo-seed 里没有表单行）。
-   真因只可能是**撤回**或**演习夹具用显式 `period` 铸行**（周标签与真实铸造时刻脱钩）。
-   现场已不可复现（`rehearsal0808` 重建，`form_submissions` 0 行）。
-   真要修的是夹具卫生（`verify-forms-proactive.mjs:60` 硬写 `'2026-W01'`），属独立小票；
-   另有一个真空洞：**没有任何测试断言自动铸链的 `expires_at` 数值**，
-   在 `test_form_autofill_t9.py:569` 旁补一句 `expires_at - created_at == 7 days` 很便宜。
-
-1. **复演第 6 轮已收官**（侧栏动线 / 输入框 / 资料库抽查 / 自动铸链四样过）。
-   档案 `.issues/redesign-0808/` 现在是**六份回执** + 四路侦察 + 两份开工裁定。
-2. ⚠ **给下一个人的口径**：recon-sidebar / recon-composer 是好正源，但它们**各有一处已证的错**
-   （见 wave 4「实测推翻」两条）——任何侦察里的「这个值是 X」都要自己在浏览器里量到为止。
-3. **统一上产**（gap2 三票 + 三轮演习批 + #68 + 重构战役四波 + wave 4）。🔴 push 与换后端容器同窗口；
-   **0015 + 0016 必须落地**；上产后先设 `AVERY_PUBLIC_BASE` 再验表单。
-4. **T8 两条记录**：① 议事室引用编号形状；② 今天页证据行机器形状（ADR-0033）。
-5. **给 `/health` 加版本字段**。
-6. carry-over：会话**改名 / 删除**（#80 v1 明确不做，成本表见 recon-sidebar §5.4）· 侧栏 20 场硬上限
-   （端点不透传 limit）· **全应用 icon 统一**（#81 只做了对话页；顶栏铃铛/齿轮/`↗▾×` 仍是手绘 SVG +
-   unicode 字形，动它＝54 张全重冻）· 判读卡 4 段死渲染 + 后端已发前端未消费 7 类字段 · r2 未开票发现 ·
-   gate-run 迁移 · files-hub #26–#29 · 换血抢救 #31/#32 · v01 退役 #33 · 真机零覆盖（iOS/微信，最高优）·
-   成本票 #30 · 真 brain 分流取证 · 全量 feat-063。
+0. **🔴 0810 设计轮六票：#86 已完成，剩五票**。正源 `.issues/design-0810/design-plan.md`
+   （Danny 2026-08-10「其他的设计方案全部通过」），原型 `proto/{room,files}.html`，证据 `_shots-0810/`。
+   - **#83** 对话侧栏上皮肤 + 开场块居中（纯前端）
+   - **#84** 资料库改两栏 file explorer（建议再拆 2a/2b/2c）　🔴 **它现在背着 #86 的两笔欠账，见下**
+   - **#85** 「这次补料改了什么」只读清单（+已查阅）
+   - ~~**#86**~~ ✅ 已落地（UI 挂点除外）
+   - **#87** 实体血缘地基（**一张票同时喂「删文件收回结论」与「逐条撤回」**，值得单开一轮）
+   - **#88** 撤掉「新建一家公司」——**前置 #86 已就位**：清空后 `contextId` 不变 / `knownContexts`
+     长度不变 / 补料落回同一个 id，这三条都是 `verify-archive-empty` ③⑥ 的现成判据，可直接当回归网。
+1. 🔴 **#84 必须一起收 #86 的两笔欠账**（详见 `receipt-86-archive-empty.md` §6）：
+   - **① 挂 UI**：左栏最底一条，销毁类；**静息态不用红**（常驻的红会把整根栏染成警告区），红只在 hover 出现；
+     点下去走硬确认（「输入店名才放行」）。后端/transport/store 全通了，
+     `__lite2Store.getState().emptyArchive()` 就是那枚键按下去要发生的全部事情。**确认文案草稿在回执 §6①**。
+     并且**回来给 `verify-archive-empty` 补一段「真点那枚键 + 硬确认走通」**——今天这道门驱动的是 store
+     动作，`verify-append-story` ② 那条教训（不碰按钮的门放走过「按钮接错线」变异）在这里原样适用。
+   - **② 🔴 空态文案现在是假话**：#86 新造出「有档案、零文件」这个**此前不可能存在**的状态，
+     而资料库那一屏在这个状态下印的是「多半是这些文件没读出内容，重新传一次最快」——
+     用户刚亲手清空，屏上把一次成功的销毁诊断成一次解析失败。今天没入口所以看不见，入口一上它就是第一句话。
+     需要一条「你清空了这份档案，随时可以重新开始传」的分支（zh + en 两条键）。
+2. **统一上产**（gap2 三票 + 三轮演习批 + #68 + 重构战役四波 + wave 4 + #82 + #86）。
+   🔴 push 与换后端容器同窗口；**0015 + 0016 必须落地**；上产后先设 `AVERY_PUBLIC_BASE` 再验表单。
+3. ⚠ **给下一个人的口径**：recon-sidebar / recon-composer 是好正源，但它们**各有一处已证的错**——
+   任何侦察里的「这个值是 X」都要自己在浏览器里量到为止。
+4. **W33「链接过期了」核实完毕：不是产品 bug**（两条假设都证伪）。真要修的是夹具卫生
+   （`verify-forms-proactive.mjs:60` 硬写 `'2026-W01'`），属独立小票；另有一个真空洞：
+   **没有任何测试断言自动铸链的 `expires_at` 数值**，在 `test_form_autofill_t9.py:569` 旁补一句
+   `expires_at - created_at == 7 days` 很便宜。
+5. **T8 两条记录**：① 议事室引用编号形状；② 今天页证据行机器形状（ADR-0033）。
+6. **给 `/health` 加版本字段**。
+7. carry-over：会话**改名 / 删除**（#80 v1 明确不做）· 侧栏 20 场硬上限 · **全应用 icon 统一**
+   （#81 只做了对话页；动它＝54 张全重冻）· 判读卡 4 段死渲染 + 后端已发前端未消费 7 类字段 ·
+   gate-run 迁移 · files-hub #26–#29 · 换血抢救 #31/#32 · v01 退役 #33 ·
+   真机零覆盖（iOS/微信，最高优）· 成本票 #30 · 真 brain 分流取证 · 全量 feat-063。
 
 ## Notes（顺手发现，没顺手修）
 
 - 🔴 **删文件不收回结论**：`delete_document_from_context` 只清 `materials`/`signals`/`granularity`/`conflicts`，
-  **从不碰** `extraction.people` / `extraction.projects`。删掉一份文件后卡上的读数仍在，
-  且 `materialize_memory` 每次把它写回 `facts.md`。是 #77 的明文裁定（血缘不够），有测试钉着。开票 **#87**。
+  **从不碰** `extraction.people` / `extraction.projects`。是 #77 的明文裁定（血缘不够），有测试钉着。开票 **#87**。
+  ⚠ #86 **绕开了**这道坎（全清一定是对的），所以它能先落——但它不能替代 #87：
+  逐份删仍然纠不干净，而清空是「整份重来」不是「改一处」。
+- 🔴 **`empty_context` 与 pg 独有的 `delete()` 是反面**：后者删 `avery.contexts` 那一行本身，
+  `context_id`/`owner_token` 一起没。`delete()` **永不挂 HTTP**（路由选 `POST /empty` 而不是
+  `DELETE /team/{id}` 就是这个理由，写在路由 docstring 里）。`test_registry_protocol.py` 那条
+  「内存腿不许长出 `delete()`」的 pin 原封未动。
 - 🔴 **补传的旧值 10 个字段里 7 个无处可寻**：`AppendLedger.absorb` 直接 `setattr`，`put()` 是整快照替换，
-  `stamp()` 连旧 provenance 也覆盖；唯一留旧值的 `note_conflict` 被白名单卡死
-  （人只有 `team`，项目只有 `status`/`dueDate`）。撤回没法建在现状之上。
+  `stamp()` 连旧 provenance 也覆盖。撤回没法建在现状之上。
 - ✅ **两个便宜的现成件**（做「自动更新清单」时别重造）：`provenance[f].origin === 'doc'`
-  **恰好**标出「被后来的上传顶掉过」的格子（首次 `/ingest` 一个 stamp 都不写）；
-  「已查阅」交互层 `flowStore.ts` 三态标记库已建好并被今天页冲突卡在用，`restoreGap` 就是取消标记。
-- ⚠ **两条要订正的旧结论**：`gapDerive.ts` **不消费 conflicts**（纯客户端启发式，冲突卡与差距卡是同屏两张卡）；
-  冲突到前端时**已是字符串**（`_conflict_evidence` 拍平且刻意不带行号），要可点击引文得另加 additive payload key。
-  另：**不带项目的人身上的 `team` 冲突今天哪块屏都到不了**（`_conflicts_for` 只在 `subject_ref == project.ownerId` 时收）。
+  **恰好**标出「被后来的上传顶掉过」的格子；「已查阅」交互层 `flowStore.ts` 三态标记库已建好。
+- ⚠ **两条要订正的旧结论**：`gapDerive.ts` **不消费 conflicts**；冲突到前端时**已是字符串**。
+  另：**不带项目的人身上的 `team` 冲突今天哪块屏都到不了**。
 - ⚠ **`verify-context-switch` ⑥ 的两条源码级判据是假绿雷**：`forgetContext` 被删掉之后它们**静默变绿**不是红。#88 改判时要主动退役。
-- ⚠ **`uploadFiles` 有四个调用点**，`OnboardGate`（新用户第一次上传）与 `HomeScreen` 首页骨架卡**不能碰**
-  （后者有 Danny 拍板「首访者的第一个动作不该先跳一屏」）。两条状态机也不能天真合并——
-  `notifyStore` 靠 `ingesting→ready` 跃迁合成「团队已就绪」，合并了每次补料都误报。
-- ⚠ **手机 390px 上文件行是 flex-wrap 的汤**：9 行 4 种高度 3 种内部顺序（`_shots-0810/files-mobile.png`）。#84 用固定 grid 骨架根治。
+- ⚠ **`uploadFiles` 有四个调用点**，`OnboardGate`（新用户第一次上传）与 `HomeScreen` 首页骨架卡**不能碰**。
+  两条状态机也不能天真合并——`notifyStore` 靠 `ingesting→ready` 跃迁合成「团队已就绪」，合并了每次补料都误报。
+- ⚠ **手机 390px 上文件行是 flex-wrap 的汤**：9 行 4 种高度 3 种内部顺序。#84 用固定 grid 骨架根治。
 - ⚠ **`.lite-files-scroll` 是 `absolute inset:0`，Playwright `fullPage` 拍不到它的全长**——
-  要拍资料库全屏得把视口调高（本轮用 1440×3200），别以为页面就那么短。
-
-- 🟠 **`test_decision_grading.py:1050` 是另一族墙钟赌注**（#82 扫出，未修）：
-  `_uploaded_day(...) == date.today()` —— `date.today()` 是**本地时区**、`clone_context` 打的是 UTC 戳。
-  不带 `TZ=UTC` 跑（比如 UTC+8 的凌晨）两边差一天 → 真红。引信是「午夜 + 时区」不是「ISO 周」，
-  所以它给「门命令为什么钉死 `TZ=UTC`」补了一条真实理由。
-- 🟠 **`GET /team/{ctx}/forms/submissions` 读时会写这件事，测试面没有集中说明**（#82 只在三个助手的
-  docstring 各留了一份碑）。下一个写 HTTP 表单测试的人仍可能第四次踩它。
-- 🔴 **`.lite-btn.lite-btn--ghost` / `.lite-btn.lite-btn--primary` 那两组 (0,3,0) 规则是一类隐形地雷**：
-  任何按 `.lite2-shell .某个具体按钮类`（0,2,0）写的**配色覆盖**都会被它们静默压死，而**一道门都不会红**。
-  写按钮配色前先想一眼特异性。
-- 🔴 **`.lite-room-history-panel` 那一族 CSS（lite2.css 8288-8312）已整段变死**（弹出面板被侧栏取代），
-  照 `.nexus-empty-composer-wrap` 先例留碑不删。⚠ 它的两条几何公式仍被手机抽屉与侧栏底沿**抄用**。
-- 🔴 **手机 ≤860 的抽屉态在所有既有门里零覆盖**：contrast / aria-zh / at-references / room-claude-rework
-  四道门的视口都硬钉 1280×900 或最小 900 > 860。抽屉里的配色、11px meta 对比度、开关 aria 全是盲区。
+  要拍资料库全屏得把视口调高（用 1440×3200）。
+- 🟠 **`test_decision_grading.py:1050` 是另一族墙钟赌注**（#82 扫出，未修）：`date.today()` 是本地时区、
+  `clone_context` 打的是 UTC 戳。不带 `TZ=UTC` 跑（UTC+8 的凌晨）真红。
+- 🟠 **`GET /team/{ctx}/forms/submissions` 读时会写这件事，测试面没有集中说明**。
+- 🔴 **`.lite-btn.lite-btn--ghost` / `--primary` 那两组 (0,3,0) 规则是一类隐形地雷**：
+  任何 (0,2,0) 的按钮**配色覆盖**都会被静默压死，而**一道门都不会红**。
+- 🔴 **`.lite-room-history-panel` 那一族 CSS（lite2.css 8288-8312）已整段变死**，照先例留碑不删。
+  ⚠ 它的两条几何公式仍被手机抽屉与侧栏底沿**抄用**。
+- 🔴 **手机 ≤860 的抽屉态在所有既有门里零覆盖**：四道门视口硬钉 1280×900 或最小 900 > 860。
 - 🔴 **「composer 圆角恒定」在像素层没有覆盖**（born-red 实证：16→4px 的变异 0 红）。
-  要给它长机械判据得量 `border-radius` 计算值。
-- **Phosphor 不传 `size` 不是 0×0**：`IconContext` 默认 `1em`，图标会**跟着按钮字号走**。
-- 🔴 **aria 硬门对短拉丁黑话是瞎的**：`suspiciousLatin` 要求「≥2 连续拉丁词 **或** 单词长度 ≥4」，
-  `HR`、`1:1`、`New` 永远不报。
-- **`gapCardClaimLabel`「文件里的说法」与「资料里的实际情况」在同一张差距卡上不对仗**；
-  **`projectsTitle`「你文件里的项目」**与同屏 lede 词族不齐。
-- **mock 语料下判读卡的信号行是英文**（`Grounded in the record: …`）——mock brain 产物不是字典漏网。
-- **mock 语料不产判读卡的 confidence / script / metrics / escalation 四段**。
+- **Phosphor 不传 `size` 不是 0×0**：`IconContext` 默认 `1em`，跟着按钮字号走。
+- 🔴 **aria 硬门对短拉丁黑话是瞎的**：`HR`、`1:1`、`New` 永远不报。
+- **`gapCardClaimLabel` 与「资料里的实际情况」在同一张差距卡上不对仗**；**`projectsTitle`** 与同屏 lede 词族不齐。
+- **mock 语料下判读卡的信号行是英文**；**mock 语料不产 confidence / script / metrics / escalation 四段**。
 - **短答路 followups 落库仍被丢**（`app.py` 的 `_persist_advise_run` 只取 `answer.text`）。
-- **`fetchAdviseRuns` / `refreshAdviseRuns` 前端已无消费者**；没删（后端平铺读面仍是公开契约）。
-- **`--lite2-bottom-band` 是幽灵 token**（全文件无赋值，恒等于兜底 120px；侧栏底沿也抄了它）；
-  **`--lite2-clear-top` 的 ≤860 覆盖写了两遍**，早段 72px 已被后段 24px 静默架空。
+- **`fetchAdviseRuns` / `refreshAdviseRuns` 前端已无消费者**——⚠ #86 起**不再成立**：
+  `emptyArchive` 之后门要靠它证明历史还在，且 `refreshNotes` / `refreshForms` 被 `emptyArchive` 调用。
+- **`--lite2-bottom-band` 是幽灵 token**；**`--lite2-clear-top` 的 ≤860 覆盖写了两遍**，早段已被后段静默架空。
 - **`.issues/gap-design-0805/t8-e2e.mjs:514` 是 `room.status !== 'error'` 反向判断**。
 - **`data-room-composer` 从未落地**（三处**注释**声称门已改判到它，DOM 上没有）。
-- **`nexus-brief-hud` 与四相面板仍在说同一件事**；#75 只修了眉标撒谎那半。
-- **switchContext 换公司时 `turns`/`run` 不清**——只有 `resetLiteCompanyData` 清（三抄本只有第三份全）。
+- **`nexus-brief-hud` 与四相面板仍在说同一件事**。
+- **switchContext 换公司时 `turns`/`run` 不清**——只有 `resetLiteCompanyData` 清。
+  ⚠ 公司域清单现在是**三抄本**（`adoptContext` / 404 分支 / `resetLiteCompanyData`），
+  #86 往前两份加了 `archiveEmptying`/`archiveEmptyError`；**404 分支那份历来就不全**，别照它抄。
 - **中文名互为前缀仍双中**（「王力」vs「王力宏」）：词边界对 CJK 刻意不阻断，宁多勿漏。
 - **`tests/test_at_references.py:90` 潜伏 typo**（`rep.errors` 应为 `parse_errors`）。
 - **`>` 开头的材料块结构性不可引用**；**facts.md 指针不是单射**。
 - 🔴 **`AVERY_PUBLIC_BASE` 必须指后端自己的口**（#63 实收）。
 - **粒度闸够不着跨批次**（T10）；**`_people_from_roster` 位置兜底会顶掉空格子**（#61）。
-- **`KeywordStore` 分词器是 `[a-z0-9]+`（纯 ASCII），对无空格中文 `query()` 恒空**。
+- **`KeywordStore` 分词器是 `[a-z0-9]+`（纯 ASCII），对无空格中文 `query()` 恒空**——
+  ⚠ 写「删/清之后检索不到」这类判据必须押 ASCII token，押中文串会全绿而它证明的是「之前也检索不到」。
 - bellIsReal / nudgeVerdict 等手册协议相位仍无机械 runner。
 
 ## Blockers / Risks
 
-- ✅ **~~离线 pytest 3 红＝已知墙钟炸弹~~ 已销账**（#82，2026-08-10）。新基线 **4049 passed · 0 failed**，
-  **任何红都是你的**。别再抄「4045 中 3 红为已知底噪」那句读法。
+- ✅ **~~离线 pytest 3 红＝已知墙钟炸弹~~ 已销账**（#82）。新基线 **4076 passed · 0 failed**，**任何红都是你的**。
 - 🔴 **写测试别赌墙上时钟——ISO 周翻转是它的新形态**（#82 首爆）。三条经验：
-  ① **列表端点可能读时会写**（T9 自动铸链），`[0]` 从来不是「我刚建的那个」——按 id 选行；
-  ② **错误的取样在结果恰好相同时完全隐形**（那条假绿 409 就是这么活了一整票）；
-  ③ **「哪一天跑都绿」读代码证不出来，得把钟真拨过去跑**（台架做法见 receipt-82 §4：
-  只移 `current_period` 的默认日期、不移到期戳，且 `from … import` 是按值绑定、必须扫
-  `sys.modules` 重绑，collection 之后要再扫一遍）。
+  ① **列表端点可能读时会写**，`[0]` 从来不是「我刚建的那个」——按 id 选行；
+  ② **错误的取样在结果恰好相同时完全隐形**；
+  ③ **「哪一天跑都绿」读代码证不出来，得把钟真拨过去跑**（台架做法见 receipt-82 §4）。
+- 🔴 **离线套对 pg 持久层是瞎的，而且它会以「全绿」的形态骗你**（#86 又实收一次）：
+  「路由投的是清空**前**那份 ctx 快照」这条变异**离线 20/20 全绿、挂上 `AVERY_DB_URL` 才红一条**——
+  病根是内存腿 `get()` 返回**活对象**、pg 腿返回**快照**，两者在「改完再投」这件事上语义相反。
+  **修法不是再写一条 `@needs_db`**（默认电池照样反选它），而是 monkeypatch 让内存腿 `get()`
+  返回深拷贝，把 pg 的语义搬到离线来。动 pg 腿仍必跑 `@needs_db`（throwaway 库起法见回执 §5）。
+- 🔴 **变异活下来 ≠ 门有洞，也 ≠ 代码没 bug —— 先看变异有没有真的碰到被判的性质**。
+  ⚠ **一条变异红一条判据 ≠ 它也能红旁边那条**：#86 实收，「按 dataclass 字段遍历清空」那条判据
+  在真语料上只对 7 条列表里的 4 条有牙（另外三条天生为空），漏清 signals 的变异活得下来。
+  **判据要对着被测性质的每一个实例都有牙，缺的就自己造出来**（往每条列表塞哨兵）。
+  ⚠ **变异脚本自己也会撒谎**（#82 交了两次学费）：CRLF 锚点 / stdout 子串探针。
 - 🟠 **别单独 push main**（实数跑 `git rev-list --count origin/main..HEAD`）：
   前端 push 即自动上产、后端容器要人手换，同窗口做。
 - 🔴 **像素基线目录是 gitignored**（`.gitignore:34`），**每棵树各一份**：worktree 里那份是空的，
-  在 worktree 跑 visual = **首写**，证明不了任何事。真比对做法：**在主检出 `D:\avery` 跑 playwright
-  （用它的真基线），`VERIFY_BASE` 指向 worktree 的 preview**。
-  ⚠ 表象会**方向相反**地骗你：「8 failed」看着像变异生效、「8 passed」看着像变异没生效，都不是真话。
-  病根是命令开头 `cd` 到 worktree、cwd 又在下一条命令里残留。判别法：跑之前 `pwd`，跑之后比 `mtime`。
-  ⚠ **改了 spec 必须先把改动合进本地 main**，主检出才看得见（#79 实收）。
-- 🔴 **`md5sum … | sed 's|.*/||'` 是贪婪的，会把哈希一起吃掉**——「重冻前后 md5 全表 diff」
-  会退化成只比文件名的**空判**。改用**完整行 diff**（哈希在前）。
-- 🔴 **一个 test 串着跑 N 次 `toHaveScreenshot`，第一处不匹配就中止整条**——一次红跑给出的漂移清单
-  是**残缺的**。
-- 🔴 **变异活下来 ≠ 门有洞，也 ≠ 代码没 bug —— 先看变异有没有真的碰到被判的性质**。
-  ⚠ **变异脚本自己也会撒谎**（#82 交了两次学费）：锚点用 `\n` 而文件是 CRLF → 报「没打上去」
-  却看着像「变异没生效」；布景探针拿 stdout 子串判定 → **pytest 会整段回显失败用例源码**，
-  那句字面量必然出现，探针恒报「布景坏了」。判据要落在 `E  AssertionError:` 那一行上。
-- 🔴 **改文件的脚本，还原路径必须还原原始 bytes**——#82 的变异跑器 `finally` 还原的是中途为了匹配
-  而 LF 归一化过的副本，四个文件内容一字未改、CRLF 却被整片压平，`git status` 全脏。
-- 🔴 **截图证据自己也会撒谎**：拍「多行输入态」的脚本把 `'\n'` 交给 `pressSequentially`，
-  等于连按三次 Enter，拍到的是「发了三问」。拍完要看一眼拍到的是不是那个态。
+  在 worktree 跑 visual = **首写**，证明不了任何事。真比对：**在主检出 `D:\avery` 跑 playwright**，
+  `VERIFY_BASE` 指向 worktree 的 preview。⚠ **改了 spec 必须先把改动合进本地 main**（#79 实收）。
+- 🔴 **`md5sum … | sed 's|.*/||'` 是贪婪的**，会把哈希一起吃掉 → 「重冻前后 md5 全表 diff」退化成空判。
+- 🔴 **一个 test 串着跑 N 次 `toHaveScreenshot`，第一处不匹配就中止整条**——漂移清单是**残缺的**。
+- 🔴 **改文件的脚本，还原路径必须还原原始 bytes**（#82：LF 归一化副本压平了全仓 CRLF）。
+- 🔴 **截图证据自己也会撒谎**：拍完要看一眼拍到的是不是那个态。
 - 🔴 **门崩掉比门变红难诊断得多**；**改判扫描的暗区**：`scripts/gates/live-frontend-gate.snippet.js`
   不在 `*verify-*.mjs` glob 里。
 - 🔴 **门全绿 ≠ 真部件被验到**：**恰好一致 / 恰好如预期的数字最该翻日志。**
+  ⚠ #86 实收一条新形态：「清空后 `.upload-file-row` 为 0」是现成的**空真**——导航没跳过去、
+  选择器写错、屏整块没挂，三种情况下它都为 0 且全绿。**销毁类判据必须配一条清空前的对照基准。**
 - 🔴 **多行插入时忘了把新文本也转成 CRLF，会造出混行尾文件**。收尾逐文件自查 `bare_lf == 0`。
-- 🔴 **改完后端必须按端口杀掉重起 uvicorn**（不热重载）。#82 零后端改动，未触发。
+- 🔴 **改完后端必须按端口杀掉重起 uvicorn**（不热重载，`pkill` 杀不掉且不报错）。
+  #86 触发过三次（新路由 + 每一轮后端变异）。
 - 🔴 **`./init.sh` 和 run-battery 的收尾重建都 `vite build` 不带 api base** → dist 落回生产域名。
   跑任何上传型门/截图之前先重打带 `VITE_AVERY_API_BASE` 的 dist**并在浏览器里验 apiBase**。
 - 🔴 **杀 npx 包装进程杀不死 vite 子进程**；stale 进程按端口杀。
 - 🔴 **本机 Docker PG 容器时钟来回跳 ~115s**：`created_at < now()` 判据间歇假红。
 - 🔴 **本机 curl / argv / stdout 都按 GBK 啃中文**：中文只走文件（`git commit -F` / `gh api --input`）。
-  ⚠ 同族：Python 脚本里 `print()` 中文会直接 `UnicodeEncodeError` 炸掉——结果写文件、stdout 只打 ASCII。
-- 🔴 **离线套对 pg 持久层是瞎的**：动 schema 必跑 `@needs_db`（本地 throwaway 库）。
+  ⚠ 同族：Python 脚本里 `print()` 中文会直接 `UnicodeEncodeError` 炸掉。
 - 🔴 **CSS 包含块/裁剪读码推断必须浏览器实测**（#66）；**特异性同理**。
 - 🔴 `e535ec9` commit message 是错的（真相在 `03a9824` erratum）；rebase 与否归 Danny。
 - 🔴 repo 级 stash 两条别人的存货；处置归 Danny。

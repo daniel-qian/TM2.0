@@ -21,6 +21,7 @@ import os
 import tempfile
 import uuid
 from dataclasses import dataclass, field, replace
+from dataclasses import fields as dataclass_fields
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Protocol
@@ -832,6 +833,26 @@ class CompanyContext:
                 for i, sd in enumerate(self.source_documents)]
 
 
+def _empty_extraction_in_place(extraction: ExtractionResult) -> None:
+    """#86 —— 把一份 ExtractionResult 的每一条列表**原地**清空（`clear()`，不换对象）。
+
+    两条都是刻意的：
+
+    ① **原地**——`ctx.extraction` 这个对象可能被别人攥着（`briefing()` 的调用方、正在跑的
+       advise）。整个换掉，他们手上还是清空前的旧世界。
+
+    ② **按 dataclass 字段遍历，不逐个点名**——`ExtractionResult` 的每一条字段按定义都是
+       「从上传的文件里推出来的东西」（人/项目/信号/材料/方法卡/粒度裁决/冲突），所以
+       「全清」对**今天有的和明天新加的**都成立。逐个点名的写法会在下一个人往
+       `ExtractionResult` 上加第八条列表时静默漏清一条，而不会有任何一道门红
+       （pg 腿那边的漏清会被 @needs_db 的往返判据逮到，内存腿这边没有人看着）。
+    """
+    for f in dataclass_fields(extraction):
+        value = getattr(extraction, f.name)
+        if isinstance(value, list):
+            value.clear()
+
+
 class ContextRegistry(ProjectWriteMixin):
     """In-memory id -> CompanyContext map. Process-local — the OFFLINE default (no external service,
     what the AFK suite runs). feat-030 delivered the promised DB-backed twin behind the same get/put
@@ -1195,6 +1216,56 @@ class ContextRegistry(ProjectWriteMixin):
             return None
         return ctx.source_documents[idx].content
 
+    # --- 设计0810/#86: 清空这份档案（档案本身留着）-------------------------------------------
+
+    def empty_context(self, context_id: str) -> bool:
+        """#86 —— 把这家公司**上传来的一切**清掉，但**档案本身留着**：`context_id` 与
+        `owner_token` 一个字节不动，浏览器里那份锚点、外面发出去的 H5 链接、绑定的账号全部继续有效。
+
+        Danny 0810 拍板「不要有『新建』的概念」——一个人从头到尾就一份档案，加文件、删文件，
+        真要从头来是**清空这一份**。它是今天**唯一能做干净**的纠错出口：逐份删文件受制于
+        实体血缘不足（`file_delete.py` 的票内裁定：卡片只有实体级单值 source，删一份文档收不回
+        它推导出来的人卡/项目卡），而**清空不需要血缘**——每一个实体都来自某份文件，全清一定是对的。
+
+        清掉：`source_documents`（原件字节 + 清单）· `source_files` · `materials`（含向量）·
+        `entities` 全部五类（人/项目/信号/方法卡/冲突）· `granularity` · 重物化成空的 facts/notes。
+
+        **留下**（清的是「文件和文件推出来的东西」，不是这家公司）：
+          · `owner_token` / `context_id` / `name` —— 档案的身份；
+          · 对话历史 `advise_runs`（经理问过什么、Avery 答过什么，与文件无关）；
+          · Avery 自己写的观察 `company_notes` —— **归属存疑但倾向保留**：那是 Avery 的话不是
+            文件的衍生物（确认文案必须把这一条说给用户听，别让他以为「清空」把笔记也清了）；
+          · 常驻表单模板 + **员工已交的答卷 `form_submissions`** —— 那是**别人的话**，而且外面
+            还挂着活的 H5 链接，清掉等于替员工撤回他已经交的东西；
+          · `asks` / `ask_recipients` · 账号归属 `account_contexts` · ephemeral 标记。
+
+        🔴 **留着答卷的代价（明知而为，不是疏漏）**：`POST /team/{id}/forms/{sub}/ingest` 会把一份
+        已提交的答卷重新灌回资料库——所以「清空」**不会自己保持为空**，经理事后补灌一份答卷，
+        实体就回来了。这是本票明文接受的语义（答卷不属于「上传来的文件」那一类），
+        判据钉在 `tests/test_context_empty_t86.py::test_refiling_a_submission_after_empty_repopulates`。
+
+        返回 False = 这个 id 不存在（与 `clone_context` 同一姿态；端点在此之前已经过了
+        `authorize_context`，所以 False 在服务路径上等价于「刚被别人删掉了」）。
+
+        🔴 **原地 mutate 那个活对象，绝不新造 `CompanyContext`**（与 `file_delete.py` 命门①
+        逐字同一条）：内存腿的 `get()` 返回的就是库里那个引用，调用方（`_team_payload`、
+        正在跑的 advise）手上很可能攥着同一个对象；换一个新对象出来，他们看到的还是清空前的旧世界。
+        """
+        ctx = self._by_id.get(context_id)
+        if ctx is None:
+            return False
+
+        _empty_extraction_in_place(ctx.extraction)
+        ctx.source_documents.clear()
+        ctx.source_files.clear()
+        # 检索面跟上。内存腿的 store 永远是 KeywordStore（pg 腿见它自己那份），重铸成空即可——
+        # 两个内存 store 都没有 remove()，与 file_delete._rebuild_store 同一条理由。
+        ctx.store = KeywordStore()
+        # 命门③（同 file_delete）：facts.md / notes.md 必须**当场**重物化成空，否则议事室的
+        # recall 会继续从磁盘上那份旧文本里引出已经清掉的原文。
+        materialize_memory(ctx.extraction, ctx.memory_dir)
+        return True
+
     # --- input-side-0721 · 3A: clone (the one-click sample-team seam) --------------------------
 
     def clone_context(self, src_context_id: str, *, new_context_id: str,
@@ -1324,6 +1395,9 @@ class ContextRegistryProtocol(Protocol):
     def source_document_bytes(self, context_id: str, idx: int) -> bytes | None: ...
     def clone_context(self, src_context_id: str, *, new_context_id: str,
                       new_owner_token: str, ephemeral: bool = True) -> bool: ...
+    # #86 · 清空这一份档案（id / owner_token 不变）。⚠ 与 pg 独有的 `delete()` 是**反面**：
+    # 那个删的是 contexts 行本身，连 id 带 token 一起没；这个只清「文件和文件推出来的东西」。
+    def empty_context(self, context_id: str) -> bool: ...
     def sweep_ephemeral(self, *, older_than_hours: int, limit: int = 50) -> int: ...
     def is_ephemeral(self, context_id: str) -> bool: ...
 
