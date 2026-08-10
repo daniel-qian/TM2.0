@@ -132,7 +132,12 @@ B 区 `data-boundary` 37/37 + `null-owner` 15/0 · C 区 **3/3**（跑完重打 
 
 ## Blockers / Risks
 
-- 无硬 blocker。
+- 🔴 **离线 pytest 当前 3 红＝已知墙钟炸弹，不是你改坏的**（2026-08-10 周一 UTC 进 W33 引爆；
+  T9 读时自动铸链**正确开火**，炸的是测试语料硬编码 W32+裸取 `submissions[0]`）。修复票 **#82**
+  已开卡片已发；#82 落地前，任何票的「后端离线全套」账面按 **4045 中 3 红为已知底噪** 读，
+  其余红才是你的。诊断全文见 #82 票面。
+- 🟠 **别单独 push main**（实数跑 `git rev-list --count origin/main..HEAD`）：
+  前端 push 即自动上产、后端容器要人手换，同窗口做。
 - 🟠 **别单独 push main**（实数跑 `git rev-list --count origin/main..HEAD`）：
   前端 push 即自动上产、后端容器要人手换，同窗口做。
 - 🔴 **像素基线目录是 gitignored**（`.gitignore:34`），**每棵树各一份**：worktree 里那份是空的，
