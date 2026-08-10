@@ -84,6 +84,12 @@ rec('⓪ 上传成功（本门的地基：没有 contextId 就整段不渲染，
 
 await page.evaluate((seam) => window[seam].getState().goScreen('files'), SEAM)
 await page.waitForTimeout(1200)
+// #84 · 资料库改成两栏 explorer 之后，常驻表单（含拼装器）住在**它自己那一区**里——非当前
+// 分区整段不进 DOM（理由见 FilesScreen 文件头那段碑）。默认落点是「文件」，所以这里得真点
+// 一下左栏那一行。⚠ 不加这一步，下面 43 条判据会集体以「拼装器不见了」的形态红，而拼装器
+// 好端端地在另一区——这正是下一条自证判据存在的理由（它先红，把「空屏上断言」拦在前面）。
+await page.locator('[data-files-zone="forms"]').click({ timeout: 20000 }).catch(() => {})
+await page.waitForTimeout(800)
 
 // 自证判据：整段真的渲染出来了。少了它，下面每一条「找不到 X」都会被当成「X 正确地不存在」。
 const sectionCount = await page.locator('.lite-files-forms').count()

@@ -262,6 +262,81 @@ rec('⑥ 清单里恰好只有刚补的那一份（清空是真的，旧的没�
   reused.keys.length === 1 && reused.keys[0] === DOC_C, JSON.stringify(reused.keys))
 rec('⑥ 名册仍然只有一份档案', reused.known === seeded.known, `${seeded.known} → ${reused.known}`)
 
+// ── ⑦ #84 · 真点那枚键（本门原来的明知缺口，票面与 ROSTER 都记着这笔账）───────────────────
+// 🔴 为什么必须补：上面 ②–⑥ 全程驱动的是 store 动作 `emptyArchive()`，**门根本没碰过那枚
+//    按钮**。`verify-append-story` ② 有过一模一样的缺口，代价是「把补资料那个口子接错线、
+//    其实调的还是 uploadFiles」那条变异**活了下来**（0 红）。#84 把 UI 挂点建出来了，
+//    这一段就是把那条缺口封上：从左栏那一行点起，走完硬确认。
+// 此刻档案里恰好有 ⑥ 补进去的一份文件——那正是「清空前的对照基准」（销毁类判据天生空真，
+// 「清空后为 0」必须配一个清空前不为 0 的基准）。
+await page.evaluate((seam) => window[seam].getState().goScreen('files'), SEAM)
+await page.waitForTimeout(600)
+const emptyCallsBeforeUi = calls.filter((c) => /\/empty$/.test(c.url)).length
+// 🔴 基准取「点键之前的**实数**」，不写死 1。② 那一段开头有一句 `calls.length = 0`——
+//    台账被清过，⓪ 铺语料那一发 `/ingest` 早就不在里面了，所以这里的实数是 0 而不是 1。
+//    第一版按「全程恰好 1 发」写，红的形态是「按钮接错线」，真实原因却是「数错了从哪儿
+//    开始数」。判据落在**这一次点击的增量**上，与上面几段跑过什么无关，也才真有牙：
+//    这枚键要是接成 uploadFiles，增量就是 +1。
+const ingestBeforeUi = calls.filter((c) => /\/ingest$/.test(c.url)).length
+const rowsBeforeUi = await page.evaluate(() =>
+  document.querySelectorAll('.lite-files .upload-file-row').length)
+rec('⑦ 自证：点键之前屏上真有一行（对照基准；没有它，下面「清空后 0 行」是空真）',
+  rowsBeforeUi === 1, `${rowsBeforeUi} 行`)
+
+const entryCount = await page.locator('[data-files-zone="empty"]').count()
+rec('⑦ 左栏底部真有「清空这份档案…」那一行（#86 票面留给 #84 的挂点）', entryCount === 1,
+  `${entryCount} 枚`)
+await page.locator('[data-files-zone="empty"]').click({ timeout: 5000 }).catch(() => {})
+await page.waitForTimeout(400)
+const panelUp = await page.locator('.lite-files-empty-archive').count()
+rec('⑦ 点它只弹硬确认，**不删任何东西**（销毁类第一下绝不动手）',
+  panelUp === 1 &&
+  calls.filter((c) => /\/empty$/.test(c.url)).length === emptyCallsBeforeUi &&
+  (await page.evaluate(() => document.querySelectorAll('.lite-files .upload-file-row').length)) === 1,
+  `面板=${panelUp}`)
+
+const go = page.locator('.lite-files-empty-archive-go')
+rec('⑦ 一个字都没输时「确认清空」是置灰的', await go.isDisabled().catch(() => false))
+// 打错字也不放行。🔴 这条不是凑数：把 `armed` 写成 `typed.length > 0` 是最顺手的实现，
+// 那样「随便敲一个字符」就等于确认——而它在「什么都不输时置灰」那条判据下**全绿**。
+await page.locator('.lite-files-empty-archive-input').fill('清')
+await page.waitForTimeout(200)
+rec('⑦ 🔴 打错字也不放行（写成「非空即可」在上一条判据下照样全绿）',
+  await go.isDisabled().catch(() => false))
+// 置灰只是礼貌，真闸在 handler 里——绕开 disabled 直接派发一次 click，也不许发请求。
+await page.evaluate(() => document.querySelector('.lite-files-empty-archive-go')
+  ?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+await page.waitForTimeout(300)
+rec('⑦ 🔴 绕开 disabled 硬派一次 click 也发不出请求（UI 置灰挡不住键盘/脚本，真闸必须在 handler 里）',
+  calls.filter((c) => /\/empty$/.test(c.url)).length === emptyCallsBeforeUi,
+  `${calls.filter((c) => /\/empty$/.test(c.url)).length} 发`)
+
+await page.locator('.lite-files-empty-archive-input').fill('清空')
+await page.waitForTimeout(200)
+rec('⑦ 输对了才解锁', !(await go.isDisabled().catch(() => true)))
+await go.click({ timeout: 5000 }).catch(() => {})
+await page.waitForFunction(
+  (seam) => (window[seam].getState().files ?? []).length === 0, SEAM, { timeout: 20000 },
+).catch(() => {})
+await page.waitForTimeout(400)
+const uiEmptied = await st((seam) => {
+  const s = window[seam].getState()
+  return { contextId: s.contextId, files: (s.files ?? []).length, token: !!s.ownerToken }
+})
+const uiRows = await page.evaluate(() =>
+  document.querySelectorAll('.lite-files .upload-file-row').length)
+rec('⑦ 🔴 那枚键**真的接在 emptyArchive 上**：又发了一发 `POST /team/{cid}/empty`',
+  calls.filter((c) => /\/empty$/.test(c.url)).length === emptyCallsBeforeUi + 1,
+  `${emptyCallsBeforeUi} → ${calls.filter((c) => /\/empty$/.test(c.url)).length}`)
+rec('⑦ 🔴 接的不是 uploadFiles / 不是本地假清空：**点键前后** /ingest 一发都没多',
+  calls.filter((c) => /\/ingest$/.test(c.url)).length === ingestBeforeUi,
+  `${ingestBeforeUi} → ${calls.filter((c) => /\/ingest$/.test(c.url)).length} 发 ingest`)
+rec('⑦ 屏上 1 行 → 0 行，且 context_id 逐字符不变（走 UI 这条路同样不换档案）',
+  rowsBeforeUi === 1 && uiRows === 0 && uiEmptied.contextId === seeded.contextId,
+  `${rowsBeforeUi} → ${uiRows} · ${uiEmptied.contextId}`)
+rec('⑦ 清空成功后确认面板自己收起（留着一张已经执行完的 alertdialog 是第二个真相）',
+  (await page.locator('.lite-files-empty-archive').count()) === 0)
+
 rec('无 pageerror', pageErrors.length === 0, pageErrors.slice(0, 2).join(' | ') || '0 条')
 await ctx.close()
 

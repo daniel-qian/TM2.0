@@ -25,7 +25,11 @@ function classNames(parts: Array<string | false | null | undefined>) {
 // 少列一种格式只是少一种；多列一种格式是撒谎。旧格式怎么办由界面明说（acceptedLegacyNote），
 // 不靠用户自己猜。
 // 🔴 改这一行时同步 eval-harness/avery/ingest/guards.py::SUPPORTED_EXTS，两边必须一致。
-const ACCEPT = '.pdf,.docx,.xlsx,.csv,.tsv,.md,.markdown,.txt'
+//
+// #84 · `export`：资料库屏的工具条上传口是**第二个消费者**（`↑ 上传文件` 主钮 + 整块工作台
+// 接拖放）。抄第二份 ACCEPT 出去就是第二把尺，而它多列一种格式就是把用户领进一条必然 422
+// 的死路——上面那段碑说的就是这件事，所以那一屏 import 这一份，不自己写。
+export const ACCEPT = '.pdf,.docx,.xlsx,.csv,.tsv,.md,.markdown,.txt'
 
 // 07-19 fixB 收口的版式修正：accepted 三行合并——原因见当时的注释（真机实测：新元素落在
 // 浏览器默认 16px 全墨字 + 16px 下边距）。
@@ -72,8 +76,17 @@ type UploadPanelProps = {
   mode?: 'new' | 'append'
 }
 
-export function UploadPanel({ showFiles = true, mode = 'new' }: UploadPanelProps = {}) {
-  const { t } = useDict()
+// #84 · 上传这件事的**唯一一份**接线（选文件 / 拖放 / 忙态闸 / 秒表 / 两条状态机的分工）。
+//
+// 为什么抽成 hook：资料库屏 #84 之后不再摆一整块 `.upload-panel`——上传口长在文件工作台的
+// 工具条上（`↑ 上传文件` 主钮），拖放接的是整块工作台，进度长在表格顶端那一行。三处落点
+// 在页面上离得很远，一个组件塞不下；而**接线必须只有一份**：
+//   · `ACCEPT` 上面那条碑（多列一种格式＝把人领进必然 422 的死路）；
+//   · `openPicker` 的 busy 闸（键盘用户在那两分钟里回车两下就能打出第二发 /ingest，
+//     每一发都新铸 context_id + owner_token，后落地的覆盖 store＝前一个永久丢失）；
+//   · `anyBusy` 看**两条**状态机（append 跑着时 new 那口也必须锁）。
+// 抄第二份出去，这三条各自漂一次的代价都是真丢数据。
+export function useUploadTarget(mode: 'new' | 'append' = 'new') {
   const appending = mode === 'append'
   const uploadFiles = useLite((s) => s.uploadFiles)
   const appendFiles = useLite((s) => s.appendFiles)
@@ -114,7 +127,7 @@ export function UploadPanel({ showFiles = true, mode = 'new' }: UploadPanelProps
     event.target.value = ''
   }
 
-  const onDrop = (event: DragEvent<HTMLDivElement>) => {
+  const onDrop = (event: DragEvent<HTMLElement>) => {
     event.preventDefault()
     setDragOver(false)
     if (anyBusy) return
@@ -135,6 +148,122 @@ export function UploadPanel({ showFiles = true, mode = 'new' }: UploadPanelProps
     if (anyBusy) return
     inputRef.current?.click()
   }
+
+  return {
+    appending, mode, status, error, busy, anyBusy, elapsed,
+    receipt, sourceFiles, inputRef, dragOver, setDragOver,
+    onPick, onDrop, openPicker,
+  }
+}
+
+export type UploadTarget = ReturnType<typeof useUploadTarget>
+
+// #84 · 等待/就绪/失败三态的**唯一一份** DOM。两个消费者：这个文件里的 `.upload-panel`，
+// 以及资料库屏工作台（表格顶端那一行）。
+// 🔴 类名一个字节不许改：`.upload-ready` 是 visual-data.spec 十二张数据态基线的**播种等待
+//    锚**（`input.upload-input` 塞种子 → 等 `.upload-ready`），`.upload-error-label` 是
+//    verify-contrast-smalltext 错误态世界唯一的采样面（那一族此前长期够不着，2026-08-03
+//    才补上，实测两皮都破过 AA）。改了名，红的样子会是「上传失败」而不是「你的屏改了」。
+export function UploadStatusBlock(
+  { target, showIdleEmpty = false, showSourceChips = true }:
+  { target: UploadTarget; showIdleEmpty?: boolean; showSourceChips?: boolean },
+) {
+  const { t } = useDict()
+  const { appending, status, error, elapsed, receipt, sourceFiles, openPicker } = target
+  return (
+    <div className="upload-status" aria-live="polite">
+      {/* feat-068 · 诚实的等待态。三层：① 一句话把 1–2 分钟的预期讲在前头（ingestingHint），
+          ② 活的秒表证明没冻，③ 一条不定量动效（CSS，尊重 prefers-reduced-motion）。
+          🔴 秒表和动效整块 aria-hidden：外层 .upload-status 是 aria-live="polite"，每秒变一次
+          的数字若进无障碍树，读屏会被每秒播报一次刷屏两分钟。标签 + hint 播报一次即可，
+          "没冻"这件事对读屏用户本来就由 aria-busy 表达。 */}
+      {status === 'ingesting' ? (
+        <div className="upload-ingesting-block">
+          <p className="upload-ingesting">
+            <span className="upload-ingesting-dot" aria-hidden="true" />
+            {t.upload.ingestingLabel}
+          </p>
+          <p className="upload-ingesting-hint">{t.upload.ingestingHint}</p>
+          <p className="upload-ingesting-elapsed" aria-hidden="true">
+            {fill(t.upload.ingestingElapsed, { seconds: elapsed })}
+          </p>
+          <div className="upload-ingesting-bar" aria-hidden="true">
+            <span />
+          </div>
+        </div>
+      ) : null}
+      {status === 'ready' ? (
+        <div className="upload-ready">
+          <p className="upload-ready-label">
+            {appending ? t.upload.appendReadyLabel : t.upload.readyLabel}
+          </p>
+          {/* 补资料模式：只报**这一趟**加进来的那几份，不重列整个资料库（整份清单就在下面）。
+              服务端最终采用的 source_key 可能与用户选的文件名不同（同名补传第二次会拿到
+              `周报(1).md`）——照实显示服务端那个名字，别显示用户选的那个：资料库里那一行、
+              下载下来那份、卡片引用的出处，三处都是它。 */}
+          {appending ? (
+            receipt && receipt.documents.length > 0 ? (
+              <p className="upload-grown-from">
+                {t.upload.appendAddedLead}:{' '}
+                {receipt.documents.map((name) => (
+                  <span key={name} className="upload-source-chip">
+                    {name}
+                  </span>
+                ))}
+              </p>
+            ) : null
+          ) : showSourceChips && sourceFiles.length > 0 ? (
+            // #84 · 资料库工作台传 `showSourceChips={false}`：那一屏的表格**逐行**就是这份
+            // 名单，再在表头上印一遍九个 chip = 同一件事说两遍（正是本票要修的病根之一）。
+            // append 那一支不受影响——「这次新增的」说的是**这一趟**加了哪几份，表格分不出。
+            <p className="upload-grown-from">
+              {t.upload.grownFrom}:{' '}
+              {sourceFiles.map((name) => (
+                <span key={name} className="upload-source-chip">
+                  {name}
+                </span>
+              ))}
+            </p>
+          ) : null}
+          {/* 「新旧对不上」这件事本身不在这儿展开——今天页那条双栏通道才是它的落点。
+              这里只说有几处、去哪儿看；缺席（0 处）什么都不写（absent≠none：不编一句「全都对得上」，
+              我们只知道**记下来的**冲突有几条，不知道有没有没被记下的）。 */}
+          {appending && receipt && receipt.conflicts_added > 0 ? (
+            <p className="upload-append-conflicts">
+              {fill(t.upload.appendConflicts, { count: receipt.conflicts_added })}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+      {status === 'error' ? (
+        <div className="upload-error">
+          <p className="upload-error-label">{t.upload.errorLabel}</p>
+          {error ? <p className="upload-error-detail">{error}</p> : null}
+          {/* 🔴 走 openPicker 不裸 click()：裸调绕开了那道 busy 闸，于是「append 报错 +
+              new 正在跑」时这颗重试键能打出第二发 /ingest（openPicker 存在的全部理由）。 */}
+          <button type="button" className="lite-btn lite-btn--ghost upload-retry" onClick={openPicker}>
+            {t.upload.retry}
+          </button>
+        </div>
+      ) : null}
+      {/* 补资料模式的空闲态不写这一行：`empty`（「还没有文件」）说的是**整个工作区**是空的，
+          而补资料只在已经有一家公司时才出现——那句话在这里恒为假。上头的 caption 已经把
+          「选一批新文件会发生什么」讲完了。
+          #84 · 资料库工作台也不写（`showIdleEmpty` 默认关）：那一屏的空态是表格自己那一句
+          （「你清空了这份档案」/「还没传过东西」两条分得开的话），这里再印一句是第二个真相。 */}
+      {showIdleEmpty && status === 'idle' && !appending ? (
+        <p className="upload-empty">{t.upload.empty}</p>
+      ) : null}
+    </div>
+  )
+}
+
+export function UploadPanel({ showFiles = true, mode = 'new' }: UploadPanelProps = {}) {
+  const { t } = useDict()
+  const target = useUploadTarget(mode)
+  const {
+    appending, status, busy, inputRef, dragOver, setDragOver, onPick, onDrop, openPicker,
+  } = target
 
   return (
     <section className="upload-panel" aria-label={appending ? t.upload.appendTitle : t.upload.title}
@@ -201,85 +330,7 @@ export function UploadPanel({ showFiles = true, mode = 'new' }: UploadPanelProps
         </p>
       </div>
 
-      <div className="upload-status" aria-live="polite">
-        {/* feat-068 · 诚实的等待态。三层：① 一句话把 1–2 分钟的预期讲在前头（ingestingHint），
-            ② 活的秒表证明没冻，③ 一条不定量动效（CSS，尊重 prefers-reduced-motion）。
-            🔴 秒表和动效整块 aria-hidden：外层 .upload-status 是 aria-live="polite"，每秒变一次
-            的数字若进无障碍树，读屏会被每秒播报一次刷屏两分钟。标签 + hint 播报一次即可，
-            "没冻"这件事对读屏用户本来就由 aria-busy 表达。 */}
-        {status === 'ingesting' ? (
-          <div className="upload-ingesting-block">
-            <p className="upload-ingesting">
-              <span className="upload-ingesting-dot" aria-hidden="true" />
-              {t.upload.ingestingLabel}
-            </p>
-            <p className="upload-ingesting-hint">{t.upload.ingestingHint}</p>
-            <p className="upload-ingesting-elapsed" aria-hidden="true">
-              {fill(t.upload.ingestingElapsed, { seconds: elapsed })}
-            </p>
-            <div className="upload-ingesting-bar" aria-hidden="true">
-              <span />
-            </div>
-          </div>
-        ) : null}
-        {status === 'ready' ? (
-          <div className="upload-ready">
-            <p className="upload-ready-label">
-              {appending ? t.upload.appendReadyLabel : t.upload.readyLabel}
-            </p>
-            {/* 补资料模式：只报**这一趟**加进来的那几份，不重列整个资料库（整份清单在上面 ① 段）。
-                服务端最终采用的 source_key 可能与用户选的文件名不同（同名补传第二次会拿到
-                `周报(1).md`）——照实显示服务端那个名字，别显示用户选的那个：资料库里那一行、
-                下载下来那份、卡片引用的出处，三处都是它。 */}
-            {appending ? (
-              receipt && receipt.documents.length > 0 ? (
-                <p className="upload-grown-from">
-                  {t.upload.appendAddedLead}:{' '}
-                  {receipt.documents.map((name) => (
-                    <span key={name} className="upload-source-chip">
-                      {name}
-                    </span>
-                  ))}
-                </p>
-              ) : null
-            ) : sourceFiles.length > 0 ? (
-              <p className="upload-grown-from">
-                {t.upload.grownFrom}:{' '}
-                {sourceFiles.map((name) => (
-                  <span key={name} className="upload-source-chip">
-                    {name}
-                  </span>
-                ))}
-              </p>
-            ) : null}
-            {/* 「新旧对不上」这件事本身不在这儿展开——今天页那条双栏通道才是它的落点。
-                这里只说有几处、去哪儿看；缺席（0 处）什么都不写（absent≠none：不编一句「全都对得上」，
-                我们只知道**记下来的**冲突有几条，不知道有没有没被记下的）。 */}
-            {appending && receipt && receipt.conflicts_added > 0 ? (
-              <p className="upload-append-conflicts">
-                {fill(t.upload.appendConflicts, { count: receipt.conflicts_added })}
-              </p>
-            ) : null}
-          </div>
-        ) : null}
-        {status === 'error' ? (
-          <div className="upload-error">
-            <p className="upload-error-label">{t.upload.errorLabel}</p>
-            {error ? <p className="upload-error-detail">{error}</p> : null}
-            {/* 🔴 走 openPicker 不裸 click()：裸调绕开了那道 busy 闸，于是「append 报错 +
-                new 正在跑」时这颗重试键能打出第二发 /ingest（openPicker 存在的全部理由）。 */}
-            <button type="button" className="lite-btn lite-btn--ghost upload-retry" onClick={openPicker}>
-              {t.upload.retry}
-            </button>
-          </div>
-        ) : null}
-        {/* 补资料模式的空闲态不写这一行：`empty`（「还没有文件」）说的是**整个工作区**是空的，
-            而补资料只在已经有一家公司时才出现——那句话在这里恒为假。上头的 caption 已经把
-            「选一批新文件会发生什么」讲完了。 */}
-        {status === 'idle' && !appending ? (
-          <p className="upload-empty">{t.upload.empty}</p>
-        ) : null}
-      </div>
+      <UploadStatusBlock target={target} showIdleEmpty />
 
       {/* feat-047 移植（feat-032）·「你的文件」持久清单——回看上传过哪些材料、Avery 的记忆
           基于什么。files-hub-0729/01：渲染搬进共享件 FileManifest（资料库屏的「当前资料」

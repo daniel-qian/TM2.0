@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useLite } from './store'
 import {
   NOTIF_TARGET,
+  NOTIF_TARGET_PARAMS,
   selectUnreadCount,
   useNotify,
   type NotifKind,
@@ -122,7 +123,7 @@ export function LiteBell() {
                     data-notif-id={n.id}
                     onClick={() => {
                       markRead(n.id)
-                      goScreen(NOTIF_TARGET[n.kind])
+                      goScreen(NOTIF_TARGET[n.kind], NOTIF_TARGET_PARAMS[n.kind])
                       closePop()
                     }}
                   >

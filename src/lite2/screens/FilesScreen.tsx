@@ -1,33 +1,56 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useLocation } from 'react-router-dom'
 import { useDict } from '../../shared/i18n/useDict'
 import { useLite } from '../store'
-import { FileManifest, localStamp } from '../FileManifest'
+import { FileManifest, FileSortControl, formatBytes, localStamp, type FileSortKey } from '../FileManifest'
 import { KnownContextList } from '../KnownContextList'
-import { UploadPanel } from '../UploadPanel'
+import { ACCEPT, UploadPanel, UploadStatusBlock, useUploadTarget } from '../UploadPanel'
 import { FormBuilder } from '../FormBuilder'
+import {
+  CompanyZoneIcon, FilesZoneIcon, FormsZoneIcon, SearchIcon, TrashIcon, UploadIcon,
+} from '../icons'
 import type { LiveFormSubmission } from '../transport'
 
 // files-hub-0729/01（ADR-0032）· 资料库屏。
+// #84（design-0810 · 设计轮票 2）· **两栏 file explorer**。
 //
-// ## 这一屏解决什么
-// 改造前「文件」这件事散在三屏四点：团队屏满态右栏一个上传面板、团队屏空态又一个、首页
-// 骨架卡一个、引导闸里还有一套自己的实现。而"我传过什么、现在用的是哪一批、能不能拿回来"
-// 这三个问题**一个都没有落点**——清单只在上传面板底下顺带渲染，下载端点后端有、前端从未接，
-// 多库切换 store 里全套现成、UI 从来没长出来。资料库屏是这些问题的那个落点。
+// ## Danny 0810 的原话
+// 「组件分布和 layout 好乱，作为用户我看不懂」「应该是 file explorer 形态的文件管理系统，
+//  **上传窗口和它放在一起**」。规格正源 `.issues/design-0810/design-plan.md` §2.4，
+//  静态原型 `.issues/design-0810/proto/files.html`。
 //
-// ## 四段
-//   ① 当前资料 —— 这一批文件的清单 + 逐份下载（FileManifest withDownload）。
-//   ② 上传新一批 —— UploadPanel 整件 + 「新建一家公司」的诚实说明。
-//   ③ 这台电脑上传过的公司 —— 多库切换（files-hub-0729/02）。
-//   ④ 常驻表单 —— 模板 + 生成本期链接（选人、复制）+ 谁交了（gap-design-0805 T3）。
+// ## 改造前的四条病根（都是 0810 真机截图上量到的，不是读码推断的）
+//  ① **两条互不相干的左边界**：内容列 `min(100%,820px)` 吊在视口正中 → 1440px 下两侧各
+//     ~310px 死白，而顶栏胶囊是**左对齐**的。
+//  ② **四件事垂直摞成一根长条**（文件 / 常驻表单 / 补资料 / 新建一家公司），桌面满数据态
+//     ~2700px，全部默认摊开。
+//  ③ **视觉权重与使用频率倒挂**：最罕用的「新建一家公司」占着全页最重的一张白卡片
+//     （内含整套上传家具）。
+//  ④ **文件行是 flex-wrap 的汤**：390px 上 9 行出现 4 种高度、3 种内部顺序（病根④的修法
+//     在 FileManifest 的 `table` 形态里，不在本文件）。
 //
-// ## 🔴 v1 刻意不做的
-// 删除 / 重传 / 替换：后端写端点整批缺席（见 issue T3）。按"不建假按钮"红线，**UI 上一个
-// 都不出现**——一个点了必然失败的删除键比没有删除键伤得多。愿景里那个「agent 自己的文件
-// 空间」也不在这儿：那是 Vision 页的诚实预告，v1 只管用户上传的文件，两者不许混。
-// files-hub-0729/02 · 第三段的外壳。抽成小组件只为一件事：小节标题与内容**同生共死**。
-// 名册不足两批时 KnownContextList 返回 null，标题必须跟着消失——一个「这台电脑上传过的公司」
-// 底下空无一物的小节，读起来像加载失败。
+// ## 改法：把「垂直摞」换成「左右分」
+// 左栏 208px＝**分区**，右栏是这一区的**工作台**。纵向长条换成横向切换，~2700px 的滚动
+// 就此消失。栏的视觉语言与票 1（#83 对话侧栏）**同一套**——同宽度节奏、同 34px 行高、
+// 同 hover/选中语法，于是「侧栏」不再是对话页一个孤零零的部件，而是这个应用的壳。
+//
+// ## 🔴 本票**没有**撤掉「新建一家公司」
+// 设计正源 §5.1 里 Danny 拍板「整个概念取消」，但那是 **#88** 的活（§8 排期：15+3 条判据
+// 改判 + 13 个 i18n 孤儿，且要先有 #86 的纠错出口——已就位）。本票只做布局：把它从
+// 「全页最重的一张白卡片」降成栏底次级组里的**一行**，病根③当场销账，而键、判据、入口
+// 一个都没删。#88 落地时删的就是 `.lite-files-rail-foot` 里 `id="new"` 那一行 + 它带出来的
+// `filesUploadTitle` / `againTitle` / `againBody` 三条键 + `activeZone === 'new'` 那一支。
+//
+// ## 🔴 分区是**真卸载**，不是 display:none
+// #76 在这个文件里立过碑：playwright 在隐藏元素上会给出四种并存的结局（hasText 照样命中
+// → 随后的 click 等 30s 把门**崩**掉；innerText 返空串 → 判据以「文案不对」**假红**；
+// count() 完全免疫 → 继续**假绿**；段级 screenshot 直接抛错）。一道门里四种结局并存，
+// 读日志的人会把它归因成四个不同的 bug。所以非当前分区**整段不进 DOM**——门要看它，就
+// 得先真点那一行（同拍已给 files-ia / append-story / forms-proactive 各补了这一步）。
+
+// files-hub-0729/02 · 「这台电脑上传过的公司」。抽成小组件只为一件事：小节标题与内容
+// **同生共死**。名册不足两批时 KnownContextList 返回 null，标题必须跟着消失——一个
+// 「这台电脑上传过的公司」底下空无一物的小节，读起来像加载失败。
 function SwitchSection() {
   const { t } = useDict()
   const known = useLite((s) => s.knownContexts)
@@ -36,34 +59,6 @@ function SwitchSection() {
     <section id="files-switch" className="lite-files-section lite-files-switch-section" aria-label={t.upload.switchTitle}>
       <h3 className="lite-files-section-title">{t.upload.switchTitle}</h3>
       <KnownContextList />
-    </section>
-  )
-}
-
-// T10 · 「给这家公司补资料」——第 ②a 段的外壳。抽成小组件的理由同 SwitchSection：
-// 小节标题与内容**同生共死**，三条否决里任何一条成立时整段（含标题）一起消失。
-function AppendSection() {
-  const { t } = useDict()
-  const l = t.lite2
-  const contextId = useLite((s) => s.contextId)
-  const rawTeam = useLite((s) => s.rawTeam)
-  const canAppend = useLite((s) => !!s.transport.appendFiles)
-
-  if (!contextId || !canAppend) return null
-  // 一次性副本：不做假按钮，但也不装作这个功能不存在——说清楚为什么这儿没有口子。
-  if (rawTeam?.ephemeral) {
-    return (
-      <section id="files-append" className="lite-files-section lite-files-append" aria-label={l.filesAppendTitle}>
-        <h3 className="lite-files-section-title">{l.filesAppendTitle}</h3>
-        <p className="lite-files-empty">{l.filesAppendDemoNote}</p>
-      </section>
-    )
-  }
-  return (
-    <section id="files-append" className="lite-files-section lite-files-append" aria-label={l.filesAppendTitle}>
-      <h3 className="lite-files-section-title">{l.filesAppendTitle}</h3>
-      <p className="lite-files-empty">{l.filesAppendLede}</p>
-      <UploadPanel showFiles={false} mode="append" />
     </section>
   )
 }
@@ -104,8 +99,7 @@ async function writeClipboard(text: string): Promise<boolean> {
   }
 }
 
-// gap-design-0805 T3 · form-frontend-a1c · 第④段的外壳（抽成小组件的理由同 SwitchSection：
-// 小节标题与内容同生共死）。
+// gap-design-0805 T3 · form-frontend-a1c · 常驻表单分区。
 //
 // ## 这一段解决什么
 // 「Avery 内置常驻表单收集信息」这句对客承诺，后端两票（T1 建表+员工 H5、T2 提交进资料）
@@ -123,9 +117,12 @@ async function writeClipboard(text: string): Promise<boolean> {
 //     （_submission_payload，form_api.py:225-238），做出来的按钮没有诚实的标题也没有诚实的
 //     禁用态。宁可没有。
 //
-// ## 为什么整段可能一个像素都不渲染
-// 见下面四条否决。stub 通道（?transport=stub）没有这三个端点，判空即整段消失——这也是
-// 像素基线里 files 屏不变的原因：那条 spec 全程 stub 且从不上传，压根没有 contextId。
+// ## #84 · 段内按频率重排（规格 §2.4.8「纯顺序调整，零新部件」）
+// 新序 = 「谁交了」（**天天看**）→ 铸链（一周一次）→ 拼装器（很少动）。
+// 改造前拼装器夹在模板列表与铸链之间：一个一年动两次的编辑器，天天挡在「这周发给谁」前面。
+// 🔴 拼装器**不做折叠**。规格原文就是「纯顺序调整」，而且 `verify-form-builder` 有 43 条
+//    判据真点它——把它塞进一个默认收起的 disclosure，等于给那 43 条判据每条都加一步
+//    「先展开」，换来的只是少两行墨。收进的是**位置**，不是可见性。
 function StandingFormsSection() {
   const { t } = useDict()
   const l = t.lite2
@@ -157,11 +154,13 @@ function StandingFormsSection() {
   // 逐人一格而不是整批一个：一批人本来就可能各扛各的项目，整批绑一个等于替经理断言。
   const [bindings, setBindings] = useState<Record<string, string>>({})
 
-  // 🔴 hooks 必须全部跑在早退之前（下面四条 return null 在它们后面）。
-  // 拉取挂在「经理打开了资料库屏」这个动作上，**不**并进 uploadFiles/restoreSession 那几处
+  // 🔴 hooks 必须全部跑在早退之前（下面几条 return null 在它们后面）。
+  // 拉取挂在「经理打开了常驻表单分区」这个动作上，**不**并进 uploadFiles/restoreSession 那几处
   // 扇出（同 refreshAdviseRuns 挂 RoomScreen 的先例）：`GET /forms` 在服务端首次调用会写
   // （ensure_builtin_templates 铸内置周报），并进扇出等于把一次写变成常态后台流量。
   // 换公司时把本地挑选态一并清掉——上一家公司选中的那几个人不该留在这一家的按钮上。
+  // ⚠ #84 之后这一段只在分区被点开时才挂载，于是这条 effect 从「进屏就拉」变成
+  //   「进这一区才拉」——写副作用因此更少发生，方向是对的（不是漏拉：区一打开就拉）。
   useEffect(() => {
     setPicked([])
     setCopiedId(null)
@@ -205,11 +204,8 @@ function StandingFormsSection() {
   //  ② templates === null：没拉过 / 这条通道没有这个方法（stub）/ 拉失败。**不是**「这家公司
   //     没有表单」——404 是后端对缺凭据的无枚举答复，不承载存在信息（absent≠none）。
   //
-  // ⚠ gap2 T11 拆掉了原来的第 ③④ 条（「一张在用的模板都没有」「既没花名册又没提交记录」）。
-  // 那两条当年是对的：那时候这一段只能做「发内置周报」，没模板/没人选就真的一件事都做不了。
-  // 现在这一段还能**建表**——而第 ④ 条恰好在最需要它的时候把入口拿掉：一家刚上传完、花名册
-  // 还没解析出来的公司会命中它，于是「新建表单」在第一天不存在。两条改成各自包住自己那一块
-  // （下面 `roster.length > 0` / `statusRows.length > 0` / `selected` 三处判空）。
+  // ⚠ #84：这两条同时也是**左栏那一行出不出**的判据（`formsZoneAvailable`），两处必须同源
+  //   ——否则会长出一行点进去空无一物的分区，那比没有这一行更像坏了。
   if (!contextId) return null
   // #76 · 静默蒸发的可见降级。此前这里是一条裸 `if (templates === null) return null`：
   // 🔴 **拉失败**（token 过期 / 服务端抖了一下）与**这条通道压根没有表单功能**（stub / 老
@@ -335,13 +331,10 @@ function StandingFormsSection() {
         </p>
       ) : null}
 
-      {/* ── #76 · 「谁交了」提到 ④ 段最前 ────────────────────────────────────────────
-          频率倒挂是这一屏最大的病：铸链是**一周一次**的动作，却占着 ④ 的黄金位；而经理
-          周中天天要看的「谁交了」压在整块最底，要滚过建表入口、chips 墙、逐人绑项目下拉
-          才到。这里把它提到前面——下面的铸链/拼装器一个字没动，只是排在它后面。
-          🔴 计算量（statusRows / latestPeriod）本来就在早退之上、与位置无关，直接搬。 */}
-      {/* 谁交了。没有一条铸过的链接时整块不出——那时候「谁交了」的答案是「你还没发给谁」，
-          而上面那个生成按钮已经把这句话说完了。 */}
+      {/* ── ① 谁交了（#76 提到最前，#84 保持第一）───────────────────────────────────
+          频率倒挂是这一区最大的病：铸链是**一周一次**的动作，而经理周中天天要看的
+          「谁交了」曾经压在整块最底。没有一条铸过的链接时整块不出——那时候「谁交了」的
+          答案是「你还没发给谁」，而下面那个生成按钮已经把这句话说完了。 */}
       {statusRows.length > 0 ? (
         <div className="lite-files-forms-status-block">
           <p className="lite-files-forms-label">
@@ -417,10 +410,11 @@ function StandingFormsSection() {
         </div>
       ) : null}
 
-      {/* 模板列表。只有一张时不给切换按钮——一个唯一选项的单选组是纯噪音；题面预览照给，
+      {/* ── ② 铸链：挑一张表 → 点名发给谁 → 拿链接（一周一次）───────────────────────
+          模板列表：只有一张时不给切换按钮——一个唯一选项的单选组是纯噪音；题面预览照给，
           经理发出去之前有权看清员工会被问到什么。
           ⚠ gap2 T11：一张在用的模板都没有时，这个 <ul> 渲染成空——底下的拼装器仍在，
-          经理可以从这里建第一张（这正是拆掉那条早退的原因）。 */}
+          经理可以从那里建第一张（这正是拆掉那条早退的原因）。 */}
       <ul className="lite-files-forms-templates">
         {active.map((tpl) => {
           const isSelected = tpl.id === selected?.id
@@ -455,12 +449,6 @@ function StandingFormsSection() {
           )
         })}
       </ul>
-
-      {/* gap2 T11 · 模板拼装器（建一张 / 复制一张改 / 让 Avery 读旧表格起草）。
-          摆在模板列表和「选人生成链接」之间：先有表，才谈发给谁。
-          🔴 它**不受**下面那两块的判空约束——花名册还没解析出来的第一天，恰恰是最该能建表的
-          时候（原来那条 `roster.length === 0 && rows.length === 0` 早退会把它一起藏掉）。 */}
-      <FormBuilder templates={templates ?? []} />
 
       {/* 选人 + 生成。没有花名册、或者一张在用的表都还没有，就整块不出——那时候一个
           「生成链接」按钮点了必然什么都不会发生，那就是假按钮。 */}
@@ -560,7 +548,7 @@ function StandingFormsSection() {
         </div>
       ) : null}
 
-      {/* 刚铸出来的这一批链接。刻意与下面的「谁交了」分开：这几条是经理此刻要粘出去的，
+      {/* 刚铸出来的这一批链接。刻意与上面的「谁交了」分开：这几条是经理此刻要粘出去的，
           混进全量清单里最容易粘错周。 */}
       {minted && minted.links.length > 0 ? (
         <div className="lite-files-forms-links-block">
@@ -618,20 +606,129 @@ function StandingFormsSection() {
         </div>
       ) : null}
 
+      {/* ── ③ 改表（很少动，所以排在最后）───────────────────────────────────────────
+          gap2 T11 · 模板拼装器（建一张 / 复制一张改 / 让 Avery 读旧表格起草）。
+          🔴 它**不受**上面那两块的判空约束——花名册还没解析出来的第一天，恰恰是最该能建表的
+             时候（原来那条 `roster.length === 0 && rows.length === 0` 早退会把它一起藏掉）。 */}
+      <div className="lite-files-forms-edit-block">
+        <p className="lite-files-forms-label">{l.formsEditTitle}</p>
+        <FormBuilder templates={templates ?? []} />
+      </div>
     </section>
   )
 }
 
-// #76 · 页内导航。整屏此前是一长条 4000px+ 的单列堆叠，零锚点零目录——经理要找「谁交了」
-// 只能滚。锚点是**纯加法**：段落 DOM 一个字节不动，只是各自补了 id。
+// ── #84 · 左栏的一行 ──────────────────────────────────────────────────────────────────
+// 规格 §2.2（与 #83 对话侧栏**同一套**）：34px 单行 · `padding:0 10px` · radius 8 ·
+// hover `rgba(ink,.05)` · 选中 `rgba(accent,.13)` + 2px accent 左封条 + 600 字重。
+// 🔴 是 <button> 不是可点的 <div>：verify-button-family 审的是 `.lite2-shell` 下每一枚可见
+//    <button>「要么挂 .lite-btn、要么进白名单」——挂族是不动白名单的那条路（白名单膨胀＝门失效）。
+function RailRow(
+  { id, label, icon, tail, current, danger, onClick }: {
+    id: string
+    label: string
+    icon: ReactNode
+    tail?: ReactNode
+    current?: boolean
+    danger?: boolean
+    onClick: () => void
+  },
+) {
+  return (
+    <button
+      type="button"
+      className={classNames([
+        'lite-btn', 'lite-btn--ghost', 'lite-files-rail-row',
+        danger && 'lite-files-rail-row--danger',
+      ])}
+      data-files-zone={id}
+      // aria-current 而不是 aria-pressed：这一排是**导航**（当前在哪一区），不是一组开关。
+      aria-current={current ? 'true' : undefined}
+      data-current={current ? '1' : '0'}
+      onClick={onClick}
+    >
+      {icon}
+      <span className="lite-files-rail-label">{label}</span>
+      {tail !== undefined && tail !== null ? (
+        <span className="lite-files-rail-tail">{tail}</span>
+      ) : null}
+    </button>
+  )
+}
+
+// ── #84 · 「清空这份档案」（#86 的 UI 挂点）────────────────────────────────────────────
+// #86 把后端 + transport + store 全通了，票面把 UI 挂点留给本票；run-battery 的 ROSTER 注释
+// 也明写「#84 落地时必须回来补『真点那枚键』那一段」——同拍已补（verify-archive-empty ⑦）。
 //
-// 🔴 刻意不做折叠（display:none）：playwright 在隐藏元素上会给出**四种并存的结局**——
-// `hasText` 照样命中（elementText 只递归 TEXT_NODE、从不查计算样式）于是随后的 .click()
-// 等到 30s 超时把门**崩**掉；`.innerText()` 返空串于是判据以「文案不对」**假红**；
-// `.count()` / `querySelectorAll().length` 完全免疫于是继续**假绿**；段级 `.screenshot()`
-// 直接抛错。一道门里四种结局并存，读日志的人会把它归因成四个不同的 bug。要折叠得同 commit
-// 给每道门补一步「先展开」，那是 #79 重冻那一趟一起做的事。
-type FilesNavItem = { id: string; label: string }
+// 🔴 销毁类**必须硬确认**，二段点击不够：这一下删掉的是用户传过的全部文件（原件也删）。
+//    这里要求**手打一个词**才放行。
+//    ⚠ #86 回执的草稿写的是「输入店名才放行」——但这个应用里**根本没有店名这个字段**
+//      （KnownContext 只存 id/files/at，team 载荷里也没有公司名）。要求用户输入一个屏上
+//      不存在的字符串 = 一道谁也过不去的门。所以改成打一个词典里的确认词，硬度不变
+//      （手打过不去误触），前提是真的存在。这条偏差记在回执里。
+// 🔴 静息态**不用红**：常驻的红会把整根栏染成警告区。红只在 hover 出现（CSS 那边），
+//    确认面板里才用红实底。
+function EmptyArchivePanel({ onClose }: { onClose: (emptied: boolean) => void }) {
+  const { t } = useDict()
+  const l = t.lite2
+  const emptyArchive = useLite((s) => s.emptyArchive)
+  const emptying = useLite((s) => s.archiveEmptying)
+  const emptyError = useLite((s) => s.archiveEmptyError)
+  const [typed, setTyped] = useState('')
+  const armed = typed.trim() === l.filesEmptyConfirmWord
+
+  return (
+    <div className="lite-files-empty-archive" role="alertdialog" aria-label={l.filesEmptyTitle}>
+      <p className="lite-files-empty-archive-title">{l.filesEmptyTitle}</p>
+      {/* 三句话分三段：**会删掉什么** / **会留下什么** / **这份档案本身不会消失**。
+          合成一段的话，「员工已经交上来的答卷留着」这句最容易被跳读——而它恰恰是用户
+          清空之后最可能来投诉的一件事（答卷会随重新归档再次出现在资料库里）。 */}
+      <p className="lite-files-empty-archive-body">{l.filesEmptyBodyGone}</p>
+      <p className="lite-files-empty-archive-body">{l.filesEmptyBodyKept}</p>
+      <p className="lite-files-empty-archive-body">{l.filesEmptyBodyStays}</p>
+      <label className="lite-files-empty-archive-field">
+        <span>{fill(l.filesEmptyConfirmLabel, { word: l.filesEmptyConfirmWord })}</span>
+        <input
+          type="text"
+          className="lite-files-empty-archive-input"
+          value={typed}
+          autoComplete="off"
+          onChange={(e) => setTyped(e.target.value)}
+        />
+      </label>
+      <div className="lite-files-empty-archive-actions">
+        <button
+          type="button"
+          className="lite-btn lite-btn--ghost lite-files-empty-archive-cancel"
+          onClick={() => onClose(false)}
+        >
+          {l.filesEmptyCancel}
+        </button>
+        <button
+          type="button"
+          className="lite-btn lite-files-empty-archive-go"
+          // 置灰只是礼貌；真闸是下面那句 `if (!armed) return`——UI 的 disabled 挡不住
+          //（键盘/脚本都绕得过），而这一下是不可逆的。
+          disabled={!armed || emptying}
+          aria-busy={emptying}
+          onClick={() => {
+            if (!armed || emptying) return
+            void emptyArchive().then((ok) => {
+              if (ok) onClose(true)
+            })
+          }}
+        >
+          {emptying ? l.filesEmptyBusy : l.filesEmptyAction}
+        </button>
+      </div>
+      {emptyError ? (
+        <p className="lite-files-empty-archive-error" role="status">{l.filesEmptyError}</p>
+      ) : null}
+    </div>
+  )
+}
+
+type FilesZoneId = 'files' | 'forms' | 'new' | 'switch'
 
 export function FilesScreen() {
   const { t } = useDict()
@@ -644,147 +741,360 @@ export function FilesScreen() {
   const refreshFiles = useLite((s) => s.refreshFiles)
   const knownCount = useLite((s) => s.knownContexts.length)
   const canAppend = useLite((s) => !!s.transport.appendFiles)
+  const canFetchForms = useLite((s) => !!s.transport.fetchForms)
+  const canEmpty = useLite((s) => !!s.transport.emptyContext)
+  const templates = useLite((s) => s.formTemplates)
   const rawTeam = useLite((s) => s.rawTeam)
 
   // 🔴「还没传过」和「传了但读不出来」是两件事，文案必须分得开。这里只判前者：
-  // 有 contextId 但清单为空 = 后端确实没给出文件，那是 ② 段上传口要回答的问题，
-  // 不是这一段该替它编一句"可能还在处理"。
+  // 有 contextId 但清单为空 = 后端确实没给出文件。
   const hasFiles = files.length > 0
   // 🔴 「还在读」与「读完了是空的」必须分得开：本屏此前不读 restoring/filesLoading，于是
   // 回访者第一帧、切库那一瞬都会**闪**一句「Avery 没列出任何文件」——那是对着一个还没
   // 发生的结论下判断。
   const filesPending = (restoring || filesLoading) && !hasFiles
 
-  // 导航项跟着段落的真实存在性走：一条指向不存在的锚点比没有导航更糟。
-  const nav: FilesNavItem[] = [
-    { id: 'files-current', label: l.filesCurrentTitle },
-    ...(contextId ? [{ id: 'files-forms', label: l.formsTitle }] : []),
-    ...(contextId && canAppend && !rawTeam?.ephemeral
-      ? [{ id: 'files-append', label: l.filesAppendTitle }] : []),
-    { id: 'files-new', label: l.filesUploadTitle },
-    ...(knownCount >= 2 ? [{ id: 'files-switch', label: t.upload.switchTitle }] : []),
-  ]
+  // ── 分区 ──────────────────────────────────────────────────────────────────────────
+  // 🔴 一行的存在性必须与它那一段的存在性**同源**：长出一行点进去空无一物的分区，
+  //    比没有这一行更像坏了（同 SwitchSection「标题与内容同生共死」那条老纪律）。
+  const ephemeral = !!rawTeam?.ephemeral
+  const formsZoneOn = !!contextId && canFetchForms
+  const switchZoneOn = knownCount >= 2
+  const activeTemplates = (templates ?? []).filter((tpl) => tpl.active).length
+
+  // 深链：铃铛的 'form' 通知带着 `?zone=forms` 进来（一次性参数，见 routes.ts 的
+  // EPHEMERAL_PARAMS）。读一次就够——之后是用户自己在切区，不该被 URL 拽回去。
+  const { search } = useLocation()
+  const [zone, setZone] = useState<FilesZoneId>(() => {
+    const want = new URLSearchParams(search).get('zone')
+    return want === 'forms' ? 'forms' : 'files'
+  })
+  const zoneOn: Record<FilesZoneId, boolean> = {
+    files: true, forms: formsZoneOn, new: true, switch: switchZoneOn,
+  }
+  // 分区消失时回落（例：切公司后 knownContexts 掉回 1 条）。**不**用 effect 改 state：
+  // 那会多渲染一帧空工作台，而这里一次派生就够了。
+  const activeZone: FilesZoneId = zoneOn[zone] ? zone : 'files'
+
+  const [railOpen, setRailOpen] = useState(false)
+  const [confirmEmpty, setConfirmEmpty] = useState(false)
+  // 「刚刚亲手清空」与「传了但读不出来」是两件事——#86 回执欠账②：入口一上，
+  // 那句「多半是这些文件没读出内容，重新传一次最快」就成了对一次成功销毁的误诊。
+  const [justEmptied, setJustEmptied] = useState(false)
+
+  const pick = (next: FilesZoneId) => {
+    setZone(next)
+    setRailOpen(false)
+    setConfirmEmpty(false)
+  }
+
+  // 上传口：**一个**，长在文件工作台的工具条上（规格 §2.4.2）。改造前这一屏有两个长得几乎
+  // 一样、方向却相反的 dropzone（补进这一家 / 另开一家）。
+  // 🔴 方向由「有没有档案」决定，不由用户猜：有档案就是补进这一家；一份都还没有时它才是
+  //    开档那一发。示例克隆（ephemeral）两条都不行——补进去的东西会随 TTL 回收一起消失，
+  //    而经理会以为存下来了，所以那里**禁入口 + 说明白**，不做假按钮。
+  const canAppendNow = !!contextId && canAppend
+  const upAppend = useUploadTarget('append')
+  const upNew = useUploadTarget('new')
+  // 接线用这一个：有档案就补进这一家，一份都没有时它才是开档那一发。
+  const up = canAppendNow ? upAppend : upNew
+  const uploadMode: 'new' | 'append' = canAppendNow ? 'append' : 'new'
+  const uploadBlocked = ephemeral && canAppendNow
+  // 🔴 **显示**用另一个：开档那一发跑完的同一帧 `contextId` 就到手了，`up` 当场翻成
+  //    append（那条状态机还是 idle）——照 `up` 显示的话，「团队已就绪」在成功的瞬间
+  //    消失，`.upload-ready` 一帧都不出现。visual-data.spec 十二张数据态基线正是
+  //    「塞 input.upload-input → 等 .upload-ready」这条链驱动的，那样它会以
+  //    **「上传等不到」**（60s 超时）的形态红，而真正的原因是这一行选错了状态机。
+  //    这条是真机拍图时逮到的，不是读码推断的。
+  const shown =
+    upAppend.status === 'ingesting' ? upAppend
+      : upNew.status === 'ingesting' ? upNew
+        : upAppend.status !== 'idle' ? upAppend
+          : upNew
+
+  const [sort, setSort] = useState<FileSortKey>('idx')
+  const [filter, setFilter] = useState('')
+
+  const totals = useMemo(() => ({
+    bytes: files.reduce((n, f) => n + (f.size_bytes || 0), 0),
+    chunks: files.reduce((n, f) => n + (f.n_chunks || 0), 0),
+  }), [files])
+
+  const zoneTitle =
+    activeZone === 'files' ? l.filesCurrentTitle
+      : activeZone === 'forms' ? l.formsTitle
+        : activeZone === 'new' ? l.filesUploadTitle
+          : t.upload.switchTitle
 
   return (
     <section className="scene scene-nexus is-active lite-files" aria-label={l.tabFiles}>
-      <div className="lite-files-scroll">
+      {/* 抽屉开关。桌面（≥861）被 CSS `display:none` 收起——栏本来就在那儿，没有可开的东西。
+          抓手 `data-files-toggle` 是手机态门唯一的入口，改名前先 grep。 */}
+      <button
+        type="button"
+        className="lite-btn lite-btn--ghost lite-files-rail-toggle"
+        aria-expanded={railOpen}
+        data-files-toggle
+        onClick={() => setRailOpen((o) => !o)}
+      >
+        {l.filesEyebrow}
+      </button>
+      {/* 遮罩只在抽屉真开着时才进 DOM（桌面 railOpen 恒 false → 桌面这个节点根本不存在），
+          CSS 那边另有一道桌面兜底的 display:none，两头都做。 */}
+      {railOpen ? (
+        <button
+          type="button"
+          className="lite-btn lite-files-rail-scrim"
+          data-files-scrim=""
+          aria-label={l.filesRailScrimAria}
+          onClick={() => setRailOpen(false)}
+        />
+      ) : null}
+
+      <aside
+        className={classNames(['lite-files-rail', railOpen ? 'is-open' : ''])}
+        aria-label={l.filesEyebrow}
+        data-files-rail=""
+      >
+        <p className="lite-files-rail-eyebrow">{l.filesEyebrow}</p>
+        <div className="lite-files-rail-list">
+          <RailRow
+            id="files" label={l.filesCurrentTitle} icon={<FilesZoneIcon />}
+            tail={files.length > 0 ? files.length : undefined}
+            current={activeZone === 'files'} onClick={() => pick('files')}
+          />
+          {formsZoneOn ? (
+            <RailRow
+              id="forms" label={l.formsTitle} icon={<FormsZoneIcon />}
+              tail={templates !== null ? activeTemplates : undefined}
+              current={activeZone === 'forms'} onClick={() => pick('forms')}
+            />
+          ) : null}
+        </div>
+
+        {/* ── 次级组：罕用的两条 + 销毁类 ────────────────────────────────────────────
+            「新建一家公司」在这里是**一行**，改造前它是全页最重的一张白卡片（病根③）。
+            🔴 撤掉它是 #88 的活，不是本票的——本票只把权重调对。 */}
+        <div className="lite-files-rail-foot">
+          <p className="lite-files-rail-group-label">{l.filesRailMore}</p>
+          <RailRow
+            id="new" label={l.filesUploadTitle} icon={<CompanyZoneIcon />}
+            current={activeZone === 'new'} onClick={() => pick('new')}
+          />
+          {switchZoneOn ? (
+            <RailRow
+              id="switch" label={t.upload.switchTitle} icon={<CompanyZoneIcon />}
+              tail={knownCount} current={activeZone === 'switch'} onClick={() => pick('switch')}
+            />
+          ) : null}
+          {/* #86 的挂点。没有 contextId 就没有可清的东西；这条通道没有 emptyContext
+              （stub / 老后端）就一个键都不渲染（同 canAppend 的能力探测先例）。 */}
+          {contextId && canEmpty ? (
+            <RailRow
+              id="empty" label={l.filesEmptyEntry} icon={<TrashIcon />} danger
+              onClick={() => {
+                setConfirmEmpty(true)
+                setRailOpen(false)
+                // 清空的是**文件**，所以顺手把工作台切到那一区：在「常驻表单」区弹一张
+                // 「清空这份档案？」，读起来像要清掉表单（而表单恰恰是留下的那一半）。
+                setZone('files')
+              }}
+            />
+          ) : null}
+        </div>
+      </aside>
+
+      {/* ── 工作台 ──────────────────────────────────────────────────────────────────
+          整块接拖放（规格 §2.4.2「上传窗口和它放在一起」）。改造前只有那个小方框接拖拽，
+          而它离表格有一屏远。 */}
+      <div
+        className={classNames(['lite-files-pane', up.dragOver && 'is-dragover'])}
+        data-files-pane={activeZone}
+        onDragOver={(e) => {
+          if (activeZone !== 'files' || uploadBlocked) return
+          e.preventDefault()
+          up.setDragOver(true)
+        }}
+        onDragLeave={() => up.setDragOver(false)}
+        onDrop={(e) => {
+          if (activeZone !== 'files' || uploadBlocked) {
+            up.setDragOver(false)
+            return
+          }
+          up.onDrop(e)
+        }}
+      >
+        {/* 页头：**一行**说清「这是什么 + 有多少」。改造前是 eyebrow + h2 + 副标 + 小节
+            标题 +「你的文件」，四层标题说同一件事（规格 §2.4.7「双标题收成一层」）。 */}
         <header className="lite-files-head">
-          <p className="eyebrow lite-files-eyebrow">{l.filesEyebrow}</p>
-          <h2>{l.filesHeading}</h2>
-          <p className="lite-files-sub">{l.filesSub}</p>
-        </header>
-
-        {/* #76 · 页内导航（锚点，非折叠——理由见 FilesNavItem 上面那段）。 */}
-        {nav.length > 1 ? (
-          <nav className="lite-files-nav" aria-label={l.tabFiles}>
-            {nav.map((item) => (
-              <a key={item.id} className="lite-files-nav-link" href={`#${item.id}`}>
-                {item.label}
-              </a>
-            ))}
-          </nav>
-        ) : null}
-
-        {/* ── ① 当前资料 ─────────────────────────────────────────────────────────
-            清单本体是共享件（与上传口底下那份同一个组件），这里多开下载列。
-            🔴 下载走 fetch+blob+objectURL：端点吃 owner_token header，裸 <a href> 带不上
-            （见 FileManifest.downloadOne 与 transport.downloadFile 的注释）。 */}
-        <section id="files-current" className="lite-files-section lite-files-current" aria-label={l.filesCurrentTitle}>
-          <h3 className="lite-files-section-title">
-            {l.filesCurrentTitle}
-            {/* #76 · 手动刷新。真闸在 store 的临界区（同一拍双击 UI 的 disabled 顶不住）。 */}
-            {contextId ? (
-              <button
-                type="button"
-                className="lite-btn lite-btn--ghost lite-files-refresh"
-                disabled={filesLoading}
-                aria-busy={filesLoading}
-                onClick={() => void refreshFiles()}
-              >
-                {filesLoading ? t.upload.filesRefreshing : t.upload.filesRefresh}
-              </button>
-            ) : null}
-          </h3>
-          {/* 🔴 拉失败要说出来，但清单**停在上一次的好结果上**：清空会把「我这次没读到」
-              演成「你的文件没了」（absent≠none），而 live-frontend-gate 的 tokenDiscipline
-              相位断言的正是 files.length 不变。变的只是屏上多了这一句。 */}
-          {filesError ? (
-            <p className="lite-files-empty lite-files-error" role="status">
-              {t.upload.filesLoadError}{' '}
-              <button
-                type="button"
-                className="lite-btn lite-btn--ghost lite-files-retry"
-                onClick={() => void refreshFiles()}
-              >
-                {t.upload.filesRetry}
-              </button>
+          <h2 className="lite-files-title">{zoneTitle}</h2>
+          {activeZone === 'files' && hasFiles ? (
+            <p className="lite-files-count">
+              {fill(l.filesCountLine, {
+                n: files.length,
+                size: formatBytes(totals.bytes),
+                chunks: totals.chunks,
+              })}
             </p>
           ) : null}
-          {hasFiles ? (
-            <FileManifest withDownload />
-          ) : filesPending ? (
-            <p className="lite-files-empty lite-files-loading" role="status">
-              {t.upload.filesLoading}
-            </p>
-          ) : (
-            <p className="lite-files-empty">
-              {contextId ? l.filesCurrentEmptyRead : l.filesCurrentEmptyNone}
-            </p>
-          )}
-        </section>
+        </header>
 
-        {/* ── ②a 给这家公司补资料（T10）─────────────────────────────────────────
-            这一段是「每次上传=新开一家公司」那堵墙被拆掉之后新长出来的口子：文件并进**当前**
-            这家公司，卡片安静更新到新读数，新旧对不上的地方走今天页那条双栏通道。
+        {/* 硬确认摆在**页头正下方**，不摆在内容末尾。两个理由，后一条是真机拍图逃到的：
+            ① 它是一张 alertdialog，得在眼皮底下，不能要求用户先滚到底才看得见；
+            ② 屏底那颗 `✦ 问 Avery` 胶囊是 fixed 的——摆在末尾时，「确认清空」刚好被它盖住
+               （elementFromPoint 落在胶囊上）。销毁类按钮被家具抢走点击是
+               verify-bottom-furniture-clearance 盯的正是这一类。 */}
+        {confirmEmpty && contextId && canEmpty ? (
+          <EmptyArchivePanel
+            onClose={(emptied) => {
+              setConfirmEmpty(false)
+              // 🔴 判据取的是「这一次真的清空成功了」（store 回的那个 bool），**不是**
+              //    「关面板时清单恰好是空的」——后者在一个本来就空的档案上点开又取消时也
+              //    为真，于是屏上会印一句「你清空了这份档案」而用户什么都没做。
+              if (emptied) setJustEmptied(true)
+            }}
+          />
+        ) : null}
 
-            三条否决，每条都是「这里现在没有一个诚实的按钮可放」：
-             ① 没有 contextId —— 还没有公司，"补"无从谈起（下面 ②b 才是开公司的口子）。
-             ② 这份工作区是一次性的示例克隆（后端 `ephemeral`）—— 补进去的资料会随 TTL 回收
-                一起消失，经理却会以为存下来了。**先禁入口**是本票的明确边界（克隆连表单表
-                都没复制），所以这里不做假按钮，只留一句说明。
-                🔴 判据取自后端每帧都发的 `ephemeral`，不是只在领取首帧出现的 `demo`——
-                后者刷新一次页面就没了，入口会自己冒出来（那读起来像 bug，不像功能）。
-             ③ 这条通道没有 appendFiles（stub / 老后端）—— 同 demoClaim 的先例，能力探测判空。 */}
-        {/* ── #76 · 段落按**使用频率**重排 ─────────────────────────────────────────
-            旧序是 ①当前资料 → ②a补资料 → ②b另建公司 → ③切换 → ④常驻表单，按的是"先回看
-            再发起"的叙事。真实使用频率正好相反：④ 里的「谁交了」是**周中天天**要看的一格，
-            却被压在整屏最底（要滚过建表入口和 chips 墙）；而「另建一家公司」是一辈子点几次
-            的动作，占着第三段的黄金位。
-            新序 = ①当前资料 → ④常驻表单（「谁交了」已提到它的最前）→ ②a补资料 → ②b另建
-            公司 → ③切换。段内 DOM 一个字节没动，只是排列顺序变了——这也是重构代价最低的
-            那一刀（像素之外只碰几何类的门）。 */}
-        {/* ── ④ 常驻表单 ─────────────────────────────────────────────────────────
-            gap-design-0805 T3 · 常驻表单主线 3/3。同 ③ 的「没有内容整段不渲染」纪律，
-            四条否决写在 StandingFormsSection 里。摆在最后一段是因为它是**发起**动作
-            （生成链接发出去），而前三段是回看动作——先看到已有的，再决定要不要再收一轮。 */}
-        <StandingFormsSection />
+        {activeZone === 'files' ? (
+          <section
+            id="files-current"
+            className="lite-files-section lite-files-current"
+            aria-label={l.filesCurrentTitle}
+          >
+            {/* ── 工具条：上传 / 筛 / 排序 / 刷新，全在表格正上方 ───────────────────── */}
+            <div className="lite-files-toolbar lite-files-uploader" data-upload-mode={uploadMode}>
+              <input
+                ref={up.inputRef}
+                type="file"
+                multiple
+                accept={ACCEPT}
+                className="upload-input"
+                onChange={up.onPick}
+                aria-hidden="true"
+                tabIndex={-1}
+              />
+              <button
+                type="button"
+                className="lite-btn lite-btn--primary lite-files-upload-action"
+                disabled={up.anyBusy || uploadBlocked}
+                aria-busy={up.busy}
+                onClick={up.openPicker}
+              >
+                <UploadIcon />
+                <span>{l.filesUploadAction}</span>
+              </button>
+              {/* 「找」只按**文件名**筛。措辞刻意不写成「在这些文件里找」——那句话许诺的是
+                  全文检索，而后端没有这个端点，我们只对得起文件名这一层。 */}
+              <label className="lite-files-filter">
+                <SearchIcon />
+                <input
+                  type="text"
+                  className="lite-files-filter-input"
+                  value={filter}
+                  placeholder={l.filesFilterPlaceholder}
+                  aria-label={l.filesFilterPlaceholder}
+                  onChange={(e) => setFilter(e.target.value)}
+                />
+              </label>
+              <span className="lite-files-toolbar-spacer" />
+              {files.length > 1 ? <FileSortControl sort={sort} onChange={setSort} /> : null}
+              {contextId ? (
+                <button
+                  type="button"
+                  className="lite-btn lite-btn--ghost lite-files-refresh"
+                  disabled={filesLoading}
+                  aria-busy={filesLoading}
+                  onClick={() => void refreshFiles()}
+                >
+                  {filesLoading ? t.upload.filesRefreshing : t.upload.filesRefresh}
+                </button>
+              ) : null}
+            </div>
 
-        <AppendSection />
+            {/* 示例克隆：不做假按钮，但也不装作这个功能不存在——说清楚为什么这儿传不进去。 */}
+            {uploadBlocked ? (
+              <p className="lite-files-empty lite-files-append-demo">{l.filesAppendDemoNote}</p>
+            ) : null}
 
-        {/* ── ②b 新建一家公司 ───────────────────────────────────────────────────
-            🔴 诚实说明必须在上传口**之前**：这个口子每次 POST /ingest 都新铸一个 context。
-            改造前界面一路邀请"再加点文件"，然后把屏幕悄悄换成新的那一份，且没有任何回得去的
-            入口——经理的读法是"我把数据弄丢了"。againTitle/againBody 这两条 copy 早就写好并
-            审过字，却因为一次合并把 UI 整块吃掉而当了很久的孤儿键（AGENTS.md「孤儿文案键是
-            红旗」那条说的就是它）。这里把它们接回去。
-            T10 之后这两句必须改口：以前"合并"根本不存在，说"不会并进"是全部真相；现在**存在**
-            另一条会合并的路（就在上面 ②a），再说同一句话就是把经理往错的按钮上引。
-            `showFiles={false}`：上面 ① 段已经有一份清单了，两处都渲染 = 两个
-            `.upload-files`，门按类名全局取样会数出双倍行数。 */}
-        <section id="files-new" className="lite-files-section lite-files-upload" aria-label={l.filesUploadTitle}>
-          <h3 className="lite-files-section-title">{l.filesUploadTitle}</h3>
-          <div className="lite-files-again" role="note">
-            <p className="lite-files-again-title">{t.upload.againTitle}</p>
-            <p className="lite-files-again-body">{t.upload.againBody}</p>
-          </div>
-          <UploadPanel showFiles={false} />
-        </section>
+            {/* 🔴 拉失败要说出来，但清单**停在上一次的好结果上**：清空会把「我这次没读到」
+                演成「你的文件没了」（absent≠none），而 live-frontend-gate 的 tokenDiscipline
+                相位断言的正是 files.length 不变。变的只是屏上多了这一句。 */}
+            {filesError ? (
+              <p className="lite-files-empty lite-files-error" role="status">
+                {t.upload.filesLoadError}{' '}
+                <button
+                  type="button"
+                  className="lite-btn lite-btn--ghost lite-files-retry"
+                  onClick={() => void refreshFiles()}
+                >
+                  {t.upload.filesRetry}
+                </button>
+              </p>
+            ) : null}
 
-        {/* ── ③ 这台电脑上传过的公司 ─────────────────────────────────────────────
-            files-hub-0729/02 · 多库切换。KnownContextList 在只有 0/1 批时自己返回 null
-            ——所以这里连标题一起藏，否则会留下一个「这台电脑上传过的公司」下面什么都没有的空
-            小节（比不显示更让人以为出了问题）。 */}
-        <SwitchSection />
+            {hasFiles || shown.status !== 'idle' ? (
+              <FileManifest
+                withDownload
+                table
+                sort={sort}
+                onSortChange={setSort}
+                filter={filter}
+                topRow={
+                  shown.status === 'idle' ? null : (
+                    <li className="upload-files-topline">
+                      <UploadStatusBlock target={shown} showSourceChips={false} />
+                    </li>
+                  )
+                }
+              />
+            ) : filesPending ? (
+              <p className="lite-files-empty lite-files-loading" role="status">
+                {t.upload.filesLoading}
+              </p>
+            ) : (
+              <>
+                <p className="lite-files-empty">
+                  {!contextId ? l.filesCurrentEmptyNone
+                    : justEmptied ? l.filesCurrentEmptyCleared
+                      : l.filesCurrentEmptyRead}
+                </p>
+                {/* 空态下上传的三态也得有落点（首发 ingest 的两分钟、以及失败态——
+                    verify-contrast-smalltext 的错误态世界就采这一族）。 */}
+                <UploadStatusBlock target={shown} showSourceChips={false} />
+              </>
+            )}
+
+            {/* 整块工作台都是投放区，所以这一句是**说明**不是控件：它不接点击、不长成
+                第二个 dropzone（"两个方向相反的 dropzone 收成一个"那条规格）。 */}
+            {!uploadBlocked ? (
+              <p className="lite-files-dropnote">
+                {l.filesDropHint}
+                <span className="lite-files-dropnote-exts">{t.upload.acceptedExts}</span>
+              </p>
+            ) : null}
+          </section>
+        ) : null}
+
+        {activeZone === 'forms' ? <StandingFormsSection /> : null}
+
+        {activeZone === 'new' ? (
+          // ── 新建一家公司（#88 会整条撤掉）──────────────────────────────────────
+          // 🔴 诚实说明必须在上传口**之前**：这个口子每次 POST /ingest 都新铸一个 context。
+          //    againTitle/againBody 这两条 copy 早就写好并审过字，却因为一次合并把 UI 整块
+          //    吃掉而当了很久的孤儿键（AGENTS.md「孤儿文案键是红旗」那条说的就是它）。
+          //    `showFiles={false}`：清单在「文件」那一区，两处都渲染 = 两个 `.upload-files`，
+          //    门按类名全局取样会数出双倍行数。
+          <section id="files-new" className="lite-files-section lite-files-upload" aria-label={l.filesUploadTitle}>
+            <div className="lite-files-again" role="note">
+              <p className="lite-files-again-title">{t.upload.againTitle}</p>
+              <p className="lite-files-again-body">{t.upload.againBody}</p>
+            </div>
+            <UploadPanel showFiles={false} />
+          </section>
+        ) : null}
+
+        {activeZone === 'switch' ? <SwitchSection /> : null}
 
       </div>
     </section>

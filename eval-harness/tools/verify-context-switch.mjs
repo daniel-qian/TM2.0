@@ -93,6 +93,12 @@ rec('两批读出的人不重叠（判据本身是有效的）',
 // ── ② 名册两条 + 当前那条被标出来 ────────────────────────────────────────────────────────
 await page.evaluate((seam) => window[seam].getState().goScreen('files'), S)
 await page.waitForTimeout(600)
+// #84 · 资料库改成两栏 explorer 之后，「这台电脑上传过的公司」住在**它自己那一区**里
+// （非当前分区整段不进 DOM，理由见 FilesScreen 文件头那段碑）。默认落点是「文件」，
+// 所以这里得真点一下左栏那一行。⚠ 不加这一步的红形态是「切换列表空了」——看起来像
+// 多库切换功能没了，而其实只是没走到那一屏。
+await page.locator('[data-files-zone="switch"]').click({ timeout: 10000 }).catch(() => {})
+await page.waitForTimeout(400)
 
 const rows = await page.locator('.lite-files-switch-row').count()
 rec('资料库屏「这台电脑上传过的公司」列出两条（UI 真的渲染了，不只是 store 里有）', rows === 2, `实得 ${rows}`)

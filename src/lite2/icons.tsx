@@ -21,7 +21,12 @@
 //    tab 改名 50 张全漂）。全应用 icon 统一是 carry-over。
 //    ⚠ 悬浮胶囊**收起态 pill** 上的手绘 SparkIcon 同理不动：像素数据态 14 张里胶囊都是
 //    收起 pill，动它 14 张全漂。展开态（走 composer）才用本文件的 icon。
-import { ArrowUp, NotePencil, Paperclip, Stop } from '@phosphor-icons/react'
+//    ⚠ #84 追加了一族「资料库」icon（左栏分区 + 表格行动作）。范围仍然守着上面那条线：
+//      顶栏/铃铛/齿轮一个没碰，所以 54 张基线里只有 files 那 4 张会漂（票面预期内）。
+import {
+  ArrowUp, Buildings, CaretDown, DotsThreeOutline, DownloadSimple, FileText, FolderSimple,
+  MagnifyingGlass, NotePencil, Notepad, Paperclip, Stop, Trash, UploadSimple,
+} from '@phosphor-icons/react'
 
 // 一族一个笔触。改这个常量＝改整套 icon 的观感，改之前先看上面那段。
 const WEIGHT = 'bold' as const
@@ -30,6 +35,8 @@ const WEIGHT = 'bold' as const
 const CONTROL_SIZE = 17
 /** 与文字并排的 icon 尺寸（侧栏「新对话」钮）。 */
 const INLINE_SIZE = 16
+/** #84 · 资料库左栏行内与表格行内的 icon 尺寸（34px 行 / 13px 正文旁）。 */
+const RAIL_SIZE = 15
 
 /** 发送这一问。取代文字钮「提问」与悬浮胶囊的 unicode `→`。 */
 export function SendIcon() {
@@ -49,4 +56,57 @@ export function AttachIcon() {
 /** 开一场新对话（侧栏置顶）。Claude 侧栏同位用的也是「纸+笔」而不是加号。 */
 export function NewChatIcon() {
   return <NotePencil size={INLINE_SIZE} weight={WEIGHT} aria-hidden="true" focusable="false" />
+}
+
+// ── #84 · 资料库（左栏分区 + 工具条 + 表格行动作）────────────────────────────────────
+// 全部走同一个 WEIGHT 与 RAIL_SIZE：这一族一次上齐，就不会出现「后加的那两枚笔触不一样」。
+
+/** 左栏「文件」分区。 */
+export function FilesZoneIcon() {
+  return <FolderSimple size={RAIL_SIZE} weight={WEIGHT} aria-hidden="true" focusable="false" />
+}
+
+/** 左栏「常驻表单」分区。 */
+export function FormsZoneIcon() {
+  return <Notepad size={RAIL_SIZE} weight={WEIGHT} aria-hidden="true" focusable="false" />
+}
+
+/** 左栏「新建一家公司」/「这台电脑上传过的公司」。 */
+export function CompanyZoneIcon() {
+  return <Buildings size={RAIL_SIZE} weight={WEIGHT} aria-hidden="true" focusable="false" />
+}
+
+/** 销毁类：清空这份档案 / 删除一份文件。 */
+export function TrashIcon() {
+  return <Trash size={RAIL_SIZE} weight={WEIGHT} aria-hidden="true" focusable="false" />
+}
+
+/** 工具条主钮「上传文件」。 */
+export function UploadIcon() {
+  return <UploadSimple size={RAIL_SIZE} weight={WEIGHT} aria-hidden="true" focusable="false" />
+}
+
+/** 工具条「在这些文件里找…」。 */
+export function SearchIcon() {
+  return <MagnifyingGlass size={RAIL_SIZE} weight={WEIGHT} aria-hidden="true" focusable="false" />
+}
+
+/** 表格行首的文档字形。 */
+export function DocIcon() {
+  return <FileText size={RAIL_SIZE} weight={WEIGHT} aria-hidden="true" focusable="false" />
+}
+
+/** 表格行动作：下载这一份。 */
+export function DownloadIcon() {
+  return <DownloadSimple size={RAIL_SIZE} weight={WEIGHT} aria-hidden="true" focusable="false" />
+}
+
+/** ≤860 的行尾溢出菜单开关（桌面 hover 直接现两枚钮，这枚 CSS 收起）。 */
+export function OverflowIcon() {
+  return <DotsThreeOutline size={RAIL_SIZE} weight={WEIGHT} aria-hidden="true" focusable="false" />
+}
+
+/** 自绘下拉（排序）的三角。取代原生 `<select>` 那枚跟着系统走的箭头。 */
+export function CaretDownIcon() {
+  return <CaretDown size={11} weight={WEIGHT} aria-hidden="true" focusable="false" />
 }

@@ -584,13 +584,44 @@
         return (results.inject = { pass: false, error: String(e) });
       }
       const err = $('.upload-error');
-      const chips = $$('.upload-source-chip').map((c) => c.textContent.trim());
+      const chips = this._landedFiles();
       results.inject = {
         pass: !err && chips.length === files.length,
         error: err ? (($('.upload-error-detail') || {}).textContent || 'ingest error') : null,
         sourceChips: chips,
       };
       return results.inject;
+    },
+
+    // #84 (design-0810, ticket 2) — "which files actually landed", read from whichever surface
+    // is in front of us.
+    //
+    // 🔴 RE-JUDGED, and this is the second time this file has been the blind spot: it is not
+    //    matched by `git ls-files "*verify-*.mjs"` and run-battery does not run it, so nothing
+    //    here goes red on its own — it goes red one layer up, inside
+    //    `verify-flow-gap-phases` ("injectSeeds·首次注入 — error=null"), which reads as
+    //    "the upload failed" when the upload was perfectly fine.
+    //
+    // What changed: the Files hub no longer prints the 「取材自」 chip row. Those chips listed
+    // exactly the same nine filenames the table below lists row by row — one thing said twice,
+    // which is one of the four root causes this ticket exists to remove. The chips are still
+    // what `UploadPanel` renders everywhere else (home skeleton, onboarding), so both shapes
+    // have to work.
+    //
+    // The meaning of the check is unchanged — "N files landed, and here are their names".
+    // Reading the manifest rows is if anything *stronger* evidence than the chips were:
+    // the chips came from `team.sourceFiles` (a derived projection), the rows come from the
+    // file manifest itself.
+    _landedFiles() {
+      const chips = $$('.upload-source-chip').map((c) => c.textContent.trim());
+      if (chips.length > 0) return chips;
+      // Scoped to `.upload-file-row` on purpose: the table's column header also carries a
+      // `.upload-file-name` cell (it holds the word "Name"), and counting it would report
+      // one file too many on every single run.
+      return $$('.upload-file-row').map((r) => {
+        const t = $('.upload-file-name-text', r) || $('.upload-file-name', r);
+        return t ? (t.textContent || '').trim() : '';
+      }).filter(Boolean);
     },
 
     assertTeamRendered() {
@@ -758,7 +789,7 @@
     recordInjectFromDom(expectedCount) {
       const err = $('.upload-error');
       const ready = $('.upload-ready');
-      const chips = $$('.upload-source-chip').map((c) => c.textContent.trim());
+      const chips = this._landedFiles();   // #84 · 同 injectSeeds，两处必须同源
       results.inject = {
         pass: !err && !!ready && chips.length === (expectedCount || chips.length) && chips.length > 0,
         error: err ? (($('.upload-error-detail') || {}).textContent || 'ingest error') : null,
@@ -3003,19 +3034,47 @@
       try {
         await poll(() => ($('.upload-files') ? true : null), 8000, 'upload files list to mount');
       } catch (e) { /* fall through — assertions below report absence */ }
+      // #84 (design-0810, ticket 2) — RE-JUDGED. The Files hub is a two-pane explorer now and
+      // the manifest is a real grid table, so the single merged `.upload-file-meta` cell this
+      // phase used to sample no longer exists on THIS screen: size / references / uploaded-at
+      // are three separate cells (`.upload-file-size` / `.upload-file-chunks` /
+      // `.upload-file-time`). The compact list shape — meta cell and all — is still what
+      // `UploadPanel` renders elsewhere (home skeleton, onboarding), byte for byte.
+      //
+      // 🔴 This file is the re-judgement blind spot: `git ls-files "*verify-*.mjs"` does not
+      //    match it and run-battery does not run it, so a class rename lands here silently.
+      //    If you rename a `.upload-file-*` class, grep THIS file too.
+      //
+      // The phase still asserts the same thing it was written for — one row per uploaded file,
+      // each row carrying a filename and a machine-readable reference count — it just reads the
+      // cells where those two live now, and tolerates either shape so the phase keeps working
+      // on whichever surface you point it at.
       const filesBlock = $('.upload-files');
       const rows = $$('.upload-file-row');
       const rowsOk = rows.length > 0 && rows.every((r) => {
         const name = $('.upload-file-name', r);
-        const meta = $('.upload-file-meta', r);
-        return !!name && (name.textContent || '').trim().length > 0 &&
-          !!meta && /\d/.test(meta.textContent || '') && /chunk|reference/i.test(meta.textContent || '');
+        const meta = $('.upload-file-meta', r);              // compact list shape
+        const chunks = $('.upload-file-chunks', r);          // table shape (#84)
+        const nameOk = !!name && (name.textContent || '').trim().length > 0;
+        const metaOk = !!meta && /\d/.test(meta.textContent || '') &&
+          /chunk|reference/i.test(meta.textContent || '');
+        // In the table the unit rides in its own span (`.upload-file-chunks-unit`, hidden on
+        // desktop because the column header already says it) — so require the DIGIT here and
+        // let the column header carry the noun. Asserting the noun per row would be asserting
+        // a duplicate the design deliberately removed.
+        const chunksOk = !!chunks && /\d/.test(chunks.textContent || '');
+        return nameOk && (metaOk || chunksOk);
       });
+      // #84 · the upload progress line rides at the top of the table but is NOT a file row
+      // (`.upload-files-topline`). If it ever gets `.upload-file-row`, every row count in the
+      // battery reads one too many and nothing on screen looks wrong.
+      const toplineLeak = $$('.upload-files-topline.upload-file-row').length;
       const out = {
         filesBlockPresent: !!filesBlock,
         rowCount: rows.length,
         rowsOk,
-        pass: !!filesBlock && rows.length > 0 && rowsOk,
+        toplineLeak,
+        pass: !!filesBlock && rows.length > 0 && rowsOk && toplineLeak === 0,
       };
       results.filesSurfaceV2 = out;
       return out;

@@ -71,6 +71,14 @@ const surface = await page.evaluate(() => ({
 }))
 rec('① 🔴 Files 屏上 `.upload-files` 全局恰好一份（任一 UploadPanel 恢复 showFiles 默认必红）',
   surface.manifests === 1, JSON.stringify(surface))
+// #84 · 上传进度那一行**不许**混进文件行里：它是 `.upload-files-topline`，不是
+// `.upload-file-row`。混了的话本文件下一条与 assertFilesSurfaceV2 都会永远多数一行，
+// 而屏上看不出任何异常（假红/假绿各一半）。
+rec('① 🔴 表格顶端那条状态行不是文件行（`.upload-files-topline` ≠ `.upload-file-row`）',
+  surface.rows === seed.files.length &&
+  (await page.evaluate(() =>
+    document.querySelectorAll('.upload-files-topline.upload-file-row').length)) === 0,
+  JSON.stringify(surface))
 rec('① 清单行数 === 传进去的文件数（不是双倍，也不是零）',
   surface.rows === seed.files.length, JSON.stringify(surface))
 
@@ -94,28 +102,44 @@ rec('② 🔴 印的是**本地换算**的时刻，逐字等于 new Date(iso) �
   stamps.length > 0 && stamps.every((s) => !!s.want && s.shown.replace(/^·\s*/, '') === s.want),
   JSON.stringify(stamps))
 
-// ── ③ 分区重排 + 锚点 ────────────────────────────────────────────────────────────────
-const ia = await page.evaluate(() => {
-  const order = Array.from(document.querySelectorAll('.lite-files .lite-files-section'))
-    .map((s) => s.id || s.className)
-  const links = Array.from(document.querySelectorAll('.lite-files-nav-link'))
-    .map((a) => a.getAttribute('href') || '')
-  return {
-    order,
-    links,
-    dangling: links.filter((h) => !h.startsWith('#') || !document.getElementById(h.slice(1))),
-  }
-})
-const idxOf = (id) => ia.order.indexOf(id)
-rec('③ 🔴 频率重排：常驻表单排在「另建一家公司」**前面**（旧序正好相反）',
-  idxOf('files-forms') > -1 && idxOf('files-new') > -1 && idxOf('files-forms') < idxOf('files-new'),
-  JSON.stringify(ia.order))
-rec('③ 当前资料仍是第一段（重排不该把回看动作也挪走）', idxOf('files-current') === 0,
-  JSON.stringify(ia.order))
-rec('③ 页内导航在场且**每一条锚点都指向真实存在的段落**（悬空锚点比没有导航更糟）',
-  ia.links.length > 1 && ia.dangling.length === 0, JSON.stringify(ia))
+// ── ③ 分区重排 + 「锚点不许悬空」（#84 改判）──────────────────────────────────────────
+// 🔴 **改判理由**：#84 把纵向长条换成了左栏分区（design-plan §2.4.1），非当前分区**整段
+//    不进 DOM**。于是旧口径的三条判据全部失去意义：`.lite-files-section` 同一时刻只有
+//    一段、`.lite-files-nav-link` 那排胶囊整个不存在了。
+//    改判**不是放宽**——三条判据要盯的那三件事一件没少，只是换了载体：
+//      · 「频率重排」从 DOM 段序搬到**左栏行序**（`[data-files-zone]` 的先后）；
+//      · 「当前资料是第一段」变成「默认落点就是文件区」（进屏不用点就看得见文件）；
+//      · 「锚点不许悬空」从 href→id 变成**逐行真点过去**：点完那一区必须真的长出它自己
+//        那一段。这条比旧的更狠——旧口径只查 id 存在，长出来的是不是空工作台它管不着。
+const rail = await page.evaluate(() => ({
+  zones: Array.from(document.querySelectorAll('[data-files-zone]'))
+    .map((b) => b.getAttribute('data-files-zone')),
+  current: Array.from(document.querySelectorAll('[data-files-zone][data-current="1"]'))
+    .map((b) => b.getAttribute('data-files-zone')),
+  sections: Array.from(document.querySelectorAll('.lite-files .lite-files-section')).map((s) => s.id),
+}))
+const zIdx = (id) => rail.zones.indexOf(id)
+rec('③ 🔴 频率重排：常驻表单排在「新建一家公司」**前面**（旧序正好相反）',
+  zIdx('forms') > -1 && zIdx('new') > -1 && zIdx('forms') < zIdx('new'), JSON.stringify(rail.zones))
+rec('③ 默认落点就是文件区（进屏不用点一下才看得见自己传过什么）',
+  rail.current.length === 1 && rail.current[0] === 'files' && rail.sections.includes('files-current'),
+  JSON.stringify(rail))
+// 🔴 逐行真点。`empty` 那一行是销毁类动作不是分区（点它弹硬确认），排除在外。
+const ZONE_SECTION = { files: 'files-current', forms: 'files-forms', new: 'files-new', switch: 'files-switch' }
+const dead = []
+for (const z of rail.zones.filter((z) => z !== 'empty')) {
+  try { await page.locator(`[data-files-zone="${z}"]`).click({ timeout: 3000 }) } catch { dead.push(`${z}:点不动`); continue }
+  await page.waitForTimeout(350)
+  const got = await page.evaluate((id) => !!document.getElementById(id), ZONE_SECTION[z])
+  if (!got) dead.push(`${z}→#${ZONE_SECTION[z]} 不在`)
+}
+rec('③ 🔴 左栏每一行都真的通向它自己那一段（点完空无一物 = 悬空锚点的新形态）',
+  dead.length === 0, dead.length ? dead.join(' / ') : `${rail.zones.length} 行全通`)
 
-// ── ④ 「谁交了」在 ④ 段内部被提到了铸链区之前 ────────────────────────────────────────
+// ── ④ 「谁交了」在常驻表单区内部被提到了铸链区之前 ────────────────────────────────────
+// #84：这一段现在住在**它自己那一区**里，要先切过去才够得着（旧口径下它与文件清单同屏）。
+await page.locator('[data-files-zone="forms"]').click({ timeout: 3000 }).catch(() => {})
+await page.waitForTimeout(500)
 const inForms = await page.evaluate(() => {
   const sec = document.getElementById('files-forms')
   if (!sec) return null
@@ -123,12 +147,25 @@ const inForms = await page.evaluate(() => {
   return {
     status: kids.findIndex((c) => c.includes('lite-files-forms-status-block')),
     templates: kids.findIndex((c) => c.includes('lite-files-forms-templates')),
+    // #84 · 拼装器从「模板列表与铸链之间」挪到**整区最后**（很少动的东西不该天天挡路）。
+    edit: kids.findIndex((c) => c.includes('lite-files-forms-edit-block')),
+    mint: kids.findIndex((c) => c.includes('lite-files-forms-mint-block')),
     kids,
   }
 })
 rec('④ 「谁交了」区排在模板列表之前（没有提交行时两者都不在，这条自动跳过）',
   !inForms || inForms.status === -1 || inForms.templates === -1 ||
   inForms.status < inForms.templates, JSON.stringify(inForms))
+// 🔴 判据是「拼装器是这一区的**最后一块**」，不是「排在铸链之后」。后者写成
+//    `mint === -1 || edit > mint` 时带着一个兜底分支：铸链区判空不渲染（没有花名册的第一天
+//    就是这样）它就恒真。规格 §2.4.8 说的是「很少动的收到最后」——那就直接钉最后一位。
+rec('④ 🔴 #84 段内重排：拼装器（改表）是这一区的**最后一块**（一年动两次的编辑器不该天天挡在「这周发给谁」前面）',
+  !!inForms && inForms.edit > -1 && inForms.edit === inForms.kids.length - 1,
+  JSON.stringify({ mint: inForms?.mint, edit: inForms?.edit, n: inForms?.kids.length }))
+
+// 回到文件区——下面 ⑤ 的删除判据在那一区里。
+await page.locator('[data-files-zone="files"]').click({ timeout: 3000 }).catch(() => {})
+await page.waitForTimeout(400)
 
 // ── ⑤ #77 删除：二段确认是硬要求（销毁类）────────────────────────────────────────────
 const delBtns = page.locator('.lite-files .upload-file-delete')

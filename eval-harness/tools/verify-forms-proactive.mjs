@@ -126,12 +126,22 @@ async function main() {
   // ── ② 重开资料库屏 → 服务端自动补铸本期 ──────────────────────────────────────────────
   await dismissWizard(page)
   await page.evaluate(() => window.__lite2Store.getState().goScreen('files'))
+  // #84 · 资料库改成两栏 explorer 之后，常驻表单住在**它自己那一区**里（非当前分区整段
+  // 不进 DOM，理由见 FilesScreen 文件头那段碑）。默认落点是「文件」，所以这里得真点一下
+  // 左栏那一行。⚠ 不加这一步的红形态是「表单区整段不在」——看起来像功能没了。
+  await page.locator('[data-files-zone="forms"]').click({ timeout: 20000 })
   await page.waitForSelector('.lite-files-forms', { timeout: 20000 })
   await dismissWizard(page)
   // 🔴 自证：表单区真的在屏上（四条否决里任何一条命中，整段消失，下面全部判据都够不着）。
-  const sectionText = await page.locator('.lite-files-forms').innerText()
-  ok('②a 自证 · 表单区真的渲染了', sectionText.includes('常驻表单'),
-     `${sectionText.slice(0, 40).replace(/\n/g, ' ')}…`)
+  // #84 改判：段内那条 `<h3>` 标题在两栏 explorer 里是 `display:none`——分区名已经印在
+  // 工作台页头上了（规格 §2.4.7「双标题收成一层」），段里再来一遍就是双标题。
+  // 自证要盯的那件事一点没变（「表单区真的在屏上，下面全部判据不是空跑」），只是那句
+  // 「常驻表单」现在住在页头里。两条一起断：页头说的是这一区 + 段落本体在场。
+  const headText = await page.locator('.lite-files-pane .lite-files-title').innerText()
+  const sectionCount = await page.locator('.lite-files-forms').count()
+  ok('②a 自证 · 表单区真的渲染了（页头说的是这一区 + 段落本体在场）',
+     headText.includes('常驻表单') && sectionCount === 1,
+     `页头="${headText.trim()}" 段=${sectionCount}`)
 
   await page.waitForSelector('.lite-files-forms-autofilled', { timeout: 20000 })
   const banner = await page.locator('.lite-files-forms-autofilled').innerText()
@@ -192,6 +202,14 @@ async function main() {
     // 而 `undefined === 'files'` 为假 —— 一条以「跳错屏」形态假红的门。
     const path = await page.evaluate(() => window.location.pathname)
     ok('③d 点这条通知跳到「文件与表单」屏', path.includes('/files'), `path=${path}`)
+    // #84 · 落屏还不够，得落到**那一区**：一条讲表单的通知把人扔在文件表格上，等于让他
+    // 自己再找一次入口。判据落在**屏上真的渲染了表单区**，不是「URL 里有 zone=forms」
+    // ——后者对着「参数带上了、组件没读」那种接错线照样全绿（显示值≠判据值的老规矩）。
+    const landedForms = await page.locator('.lite-files-forms').count()
+    const landedRow = await page.locator('[data-files-zone="forms"][data-current="1"]').count()
+    ok('③e 🔴 而且落在**常驻表单**那一区（不是默认的文件区）',
+       landedForms === 1 && landedRow === 1,
+       `forms段=${landedForms} 左栏选中=${landedRow}`)
   }
 
   // ── ④ 员工真填一份 → 那一行变「已交」 ────────────────────────────────────────────────

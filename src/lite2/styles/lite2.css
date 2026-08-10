@@ -9749,3 +9749,927 @@
     transform: none;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════════════
+   #84 · 资料库 → 两栏 file explorer（2026-08-10 · design-0810 · 设计轮票 2）
+   ═══════════════════════════════════════════════════════════════════════════════════
+   APPEND-ONLY：本块在文件尾，同权重后写者胜。规格正源
+   `.issues/design-0810/design-plan.md` §2.4 + §2.5（Danny 0810 已审过·全部通过），
+   静态原型 `.issues/design-0810/proto/files.html`。
+
+   ── 改的是哪四条病根（0810 真机截图上量到的）─────────────────────────────────────
+   ① **两条互不相干的左边界**：`.lite-files-head/-nav/-section` 三个选择器共用的
+      `width:min(100%,820px); margin:0 auto`（本文件 7551-7557）把内容列吊在视口正中，
+      1440px 下两侧各 ~310px 死白，而顶栏胶囊是**左对齐**的。
+      → 左栏贴左、工作台占满右边；表格另有 1120px 的**阅读**上限（不是页面上限）。
+   ② **四件事垂直摞成一根 ~2700px 的长条** → 左栏分区，横向切换。
+   ③ **权重与频率倒挂**：最罕用的「新建一家公司」占着全页最重的一张白卡片
+      → 降成栏底次级组里的一行（撤掉它是 #88 的活，本票只调权重）。
+   ④ **文件行是 flex-wrap 的汤**：390px 上 9 行 4 种高度 3 种内部顺序
+      → grid 真列 + 手机五列×两行**逐格写死落位**。
+
+   ── 🔴 三条一个字节都不能动的 ───────────────────────────────────────────────────
+   ⒜ `.upload-input` / `.upload-ready` / `.upload-error(-label)` 这一族类名。
+      visual-data.spec 十二张数据态基线用**资料库屏**做播种驱动（塞 `input.upload-input`
+      → 等 `.upload-ready`）；verify-contrast-smalltext 的错误态世界只在这一族上采样。
+      动它们，红的样子会是「上传失败」而不是「你的屏改了」。
+   ⒝ `.upload-file-row` 恒等于「一份文件一行」。列头是 `.upload-files-colhead`、
+      上传进度是 `.upload-files-topline`，两者都**不是** `.upload-file-row`——否则
+      verify-files-ia ①②与 assertFilesSurfaceV2 会把它们当成文件行取样。
+   ⒞ 行动作只用 `opacity` 藏，**绝不加 `pointer-events:none`**：playwright 的可见性判定
+      不看 opacity（照样点得到），但命中测试看 pointer-events——加了那一句，
+      verify-files-ia ⑤ 的三次点击会**超时崩门**而不是变红。 */
+
+.lite2-shell .lite-files {
+  /* 栏宽写死，不随内容自适应（同 --lite2-room-aside-w 那条碑：宽度跟着内容走 =
+     判据以「跑十次红三次」的间歇形态红，那种红最难诊断）。规格 §2.2：资料库 208。 */
+  --lite2-files-rail-w: 208px;
+  /* 表格的**阅读**上限。撑满 1440 会让文件名与最右的数字列拉开近 900px 空档，眼睛得
+     横着走一整屏——"整页只用中间 820px"的解法不是"什么都撑满"，是"工作台占满、
+     表格有上限"。1120 是 6 列在 13px 字号下不产生长空档的实测上界（原型量的）。 */
+  --lite2-files-read-max: 1120px;
+}
+
+/* 老的居中列规则（7551-7557）在新壳里必须失效：那三个选择器是 (0,2,0)，这里用
+   `.lite-files-pane` 多一级 (0,3,0) 压过去，不去改上面那一段——它还挂着 #76 那条
+   「往滚动壳里加子元素要进名单」的碑，留着比删掉有用。 */
+.lite2-shell .lite-files-pane .lite-files-section {
+  width: auto;
+  margin: 0;
+  padding-inline: 0;
+}
+
+/* ── 左栏：视觉语言与 #83 对话侧栏**同一套**（规格 §2.2 一处定义两处消费）─────────
+   下陷（不是凸起）+ 贴边通到底 + 右界一根硬线。抄的是 9469-9489 那一份的取值，
+   刻意逐条重写而不是共用一个类：两根栏的**几何**不同（264/208、absolute/fixed 语境
+   不同），共用类会让其中一根被另一根的 padding 拽歪，而这里没有门看着。 */
+.lite2-shell .lite-files-rail {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: var(--lite2-files-rail-w);
+  display: flex;
+  flex-direction: column;
+  /* 内容顶距吃 --lite2-clear-top（96 / 窄屏 72 / 极窄 24），底距让开常驻合规页脚的
+     **实测**高度（--lite2-footer-h 由 Lite2Footer 的 ResizeObserver 发布）。
+     再猜一个常数就是把 #34 那个 bug 换个数字重犯。 */
+  padding: var(--lite2-clear-top, 96px) 8px calc(var(--lite2-footer-h, 56px) + 12px);
+  /* 🔴 下陷：底色比暖纸画布**暗**一档。这一条单独就修掉「白卡片」观感的一大半。
+     ⚠ 半透明在桌面是对的（栏并排在画布上，不盖正文）；手机抽屉盖的是正文，那里必须
+       不透明——见下面 ≤860 段的碑。 */
+  background: rgba(var(--lite2-ink-rgb), 0.035);
+  border-right: 1px solid var(--rule);
+  /* z 44：与对话侧栏同一档（压过空态卡 40，让位悬浮胶囊 45 / 顶栏 50）。 */
+  z-index: 44;
+}
+
+.lite2-shell .lite-files-rail-eyebrow {
+  flex: none;
+  margin: 0 10px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  /* 🔴 吃 `--ink-soft` **不吃** `--ink-faint`：11px 的 faint 在 paper 上只有 ~4.7:1，
+     verify-contrast-smalltext 的 AA 地板余量仅 0.2，aurora 侧更薄（#80 已立此碑）。 */
+  color: var(--ink-soft);
+}
+
+.lite2-shell .lite-files-rail-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.lite2-shell .lite-files-rail-foot {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--rule);
+}
+
+.lite2-shell .lite-files-rail-group-label {
+  margin: 0 10px 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+
+/* 行：34px 单行、`padding:0 10px`、radius 8（规格 §2.2 与对话侧栏逐位相同）。
+   🔴 选择器刻意多挂一个 `.lite-btn`：`.lite2-shell .lite-btn.lite-btn--ghost`(0,3,0) 会把
+      任何按 `.lite2-shell .某个具体按钮类`(0,2,0) 写的配色**静默压死**，而一道门都不会红
+      （#81 回执 §2.1 是被它咬的第一例）。 */
+.lite2-shell .lite-btn.lite-files-rail-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  width: 100%;
+  min-height: 34px;
+  padding: 0 10px;
+  border-color: transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 13px;
+  text-align: left;
+}
+
+.lite2-shell .lite-btn.lite-files-rail-row:hover:not(:disabled),
+.lite2-shell .lite-btn.lite-files-rail-row:focus-visible:not(:disabled) {
+  border-color: transparent;
+  background: rgba(var(--lite2-ink-rgb), 0.05);
+  color: var(--ink);
+}
+
+/* 焦点环画在行**内侧**：列表是 `overflow-y:auto` 的，画在外侧的环会被裁掉半圈
+   （#83 在对话侧栏上踩过同一处）。 */
+.lite2-shell .lite-btn.lite-files-rail-row:focus-visible {
+  outline: 2px solid rgba(var(--lite2-sky-rgb), 0.9);
+  outline-offset: -2px;
+}
+
+/* 选中：accent 软底 + **2px accent 左封条** + 600 字重。
+   左封条是「这一条是当前」最省墨的说法；accent 语法抄既有 `.lite-ref-chip`，不新开色阶。 */
+.lite2-shell .lite-btn.lite-files-rail-row[data-current='1'] {
+  background: rgba(var(--lite2-accent-rgb), 0.13);
+  font-weight: 600;
+}
+
+/* 🔴 `content` 必须一起判死才算"上了屏"：`getComputedStyle(el,'::before')` 对一个根本
+   没生成的伪元素照样把规则里写的 width/background 原样吐回来（#83 的 M-F 变异活下来
+   就是这么活的）。同拍的门判的是 content ≠ 'none'。 */
+.lite2-shell .lite-btn.lite-files-rail-row[data-current='1']::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  border-radius: 2px;
+  background: rgb(var(--lite2-accent-deep-rgb));
+}
+
+.lite2-shell .lite-files-rail-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lite2-shell .lite-files-rail-tail {
+  flex: none;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-soft);
+}
+
+/* 销毁类：**静息态不用红**——常驻的红会把一整根栏染成警告区（规格 §2.4 栏底那条注）。
+   红只在 hover 出现，点下去还有一道硬确认（手打一个词才放行）。 */
+.lite2-shell .lite-btn.lite-files-rail-row--danger {
+  color: var(--ink-soft);
+}
+
+.lite2-shell .lite-btn.lite-files-rail-row--danger:hover:not(:disabled),
+.lite2-shell .lite-btn.lite-files-rail-row--danger:focus-visible:not(:disabled) {
+  background: rgba(var(--lite2-danger-rgb), 0.1);
+  color: var(--terracotta-text, var(--alert, #b3261e));
+}
+
+/* ── 工作台 ────────────────────────────────────────────────────────────────────── */
+.lite2-shell .lite-files-pane {
+  position: absolute;
+  left: var(--lite2-files-rail-w);
+  right: 0;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  /* 底距让开**屏底常驻家具**，不只是页脚：`✦ 问 Avery` 那颗胶囊是 fixed 的，只让开
+     footer 的话它会直接压在拖放说明那一行上（真机 1440×900 拍图逮到的）。
+     公式抄 `.lite-room-scroll`(8184) 那一份——一处定义，别再猜第二个常数（#34 的碑）。 */
+  padding: var(--lite2-clear-top, 96px) 28px
+    max(var(--lite2-bottom-band, 120px), calc(var(--lite2-footer-h, 56px) + 76px));
+  overflow-y: auto;
+}
+
+/* 整块工作台都是投放区（规格 §2.4.2「上传窗口和它放在一起」）。改造前只有那个小方框
+   接拖拽，而它离表格有一屏远。 */
+.lite2-shell .lite-files-pane.is-dragover {
+  background: rgba(var(--lite2-sky-rgb), 0.06);
+  box-shadow: inset 0 0 0 2px rgba(var(--lite2-sky-rgb), 0.35);
+}
+
+/* 页头：**一行**说清「这是什么 + 有多少」（规格 §2.4.7）。 */
+.lite2-shell .lite-files-pane .lite-files-head {
+  flex: none;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  width: 100%;
+  max-width: var(--lite2-files-read-max);
+  margin: 0;
+  padding: 0 0 14px;
+}
+
+.lite2-shell .lite-files-title {
+  margin: 0;
+  font-family: var(--lite2-heading-font);
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.lite2-shell .lite-files-count {
+  margin: 0;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-soft);
+}
+
+.lite2-shell .lite-files-pane .lite-files-section {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.lite2-shell .lite-files-pane .lite-files-section:last-of-type {
+  padding-bottom: 0;
+}
+
+/* 表格与它上下的家具共用同一条阅读上限——工作台本身占满，表格不撑满。 */
+.lite2-shell .lite-files-toolbar,
+.lite2-shell .lite-files-pane .upload-files,
+.lite2-shell .lite-files-dropnote,
+.lite2-shell .lite-files-pane .lite-files-empty,
+.lite2-shell .lite-files-empty-archive {
+  width: 100%;
+  max-width: var(--lite2-files-read-max);
+}
+
+/* ── 工具条：上传 / 筛 / 排序 / 刷新，全在表格正上方 ───────────────────────────── */
+.lite2-shell .lite-files-toolbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 12px;
+}
+
+.lite2-shell .lite-files-toolbar-spacer {
+  margin-left: auto;
+}
+
+.lite2-shell .lite-btn.lite-files-upload-action {
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.lite2-shell .lite-files-filter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  width: 220px;
+  padding: 0 10px;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  background: var(--lite2-surface);
+  color: var(--ink-soft);
+}
+
+.lite2-shell .lite-files-filter-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+}
+
+.lite2-shell .lite-files-toolbar .lite-btn.lite-files-refresh {
+  min-height: 32px;
+}
+
+/* ── 自绘排序控件（规格 §2.4.6：原生 `<select>` 是这块屏上最刺眼的一处）───────────── */
+.lite2-shell .upload-files-sort {
+  position: relative;
+  display: inline-flex;
+}
+
+.lite2-shell .lite-btn.upload-files-sort-toggle {
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 12px;
+  border-color: var(--hairline);
+  border-radius: 8px;
+  background: var(--lite2-surface);
+  font-size: 13px;
+}
+
+/* 标签与当前值之间靠 gap 分开，**不写标点字面量**——硬编码的全角冒号会原样漏进英文壳，
+   而 i18n 门看不见它（`{l.formsFieldsLead}：{preview}` 那次事故的同族）。 */
+.lite2-shell .upload-files-sort-label {
+  color: var(--ink-soft);
+}
+
+.lite2-shell .upload-files-sort-current {
+  font-weight: 600;
+}
+
+.lite2-shell .upload-files-sort-toggle svg {
+  opacity: 0.55;
+}
+
+.lite2-shell .upload-files-sort-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 46;
+  min-width: 160px;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  /* 🔴 浮层不是玻璃：**不透明**底色。半透明会让底下的表格从字缝里透出来（#78 给历史
+     面板立过这条碑，#83 的手机抽屉又踩了一次），也会让 contrast 门量出屏上不存在的比值。 */
+  background: rgb(var(--lite2-surface-rgb));
+  box-shadow: var(--shadow);
+}
+
+.lite2-shell .lite-btn.upload-files-sort-option {
+  justify-content: flex-start;
+  min-height: 30px;
+  padding: 0 10px;
+  border-color: transparent;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 13px;
+  text-align: left;
+}
+
+.lite2-shell .lite-btn.upload-files-sort-option[aria-selected='true'] {
+  background: rgba(var(--lite2-accent-rgb), 0.13);
+  font-weight: 600;
+}
+
+/* ── 表格 ─────────────────────────────────────────────────────────────────────────
+   真列，不是 flex 汤。列宽用 grid 钉死 → 每一行的每一格都在同一条竖线上，名字长短
+   再也改变不了行的结构。这是手机上那锅汤的**根治法**，不是"调 gap"。 */
+.lite2-shell .lite-files-pane .upload-files--table {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.lite2-shell .upload-files-colhead,
+.lite2-shell .upload-files--table .upload-file-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 76px 96px 132px 92px 72px;
+  align-items: center;
+  gap: 12px;
+  padding: 0 10px;
+}
+
+/* 列头 sticky 在滚动容器**内部**：与数据行共享同一条内容宽，滚动条出不出现都对得齐
+   （做成 `<ul>` 的兄弟时实测差 2px——列头与数据整张表错位，而屏上几乎看不出来）。 */
+.lite2-shell .upload-files-colhead {
+  flex: none;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  height: 30px;
+  list-style: none;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink-soft);
+  border-bottom: 1px solid var(--rule);
+  /* 行滚到它底下时不许透出来。吃画布色而不是 surface：工作台底就是画布。 */
+  background: var(--lite2-paper, rgb(var(--lite2-paper-rgb)));
+}
+
+.lite2-shell .upload-files--table .upload-files-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lite2-shell .upload-files--table .upload-file-row {
+  /* 🔴 `flex: none` 不是装饰。基座 `.upload-files-list`(183) 是 `display:flex;
+     flex-direction:column`，而这里的列表有**确定高度**（flex:1 + overflow-y:auto）——
+     行数一多，flex 默认的 `shrink:1` 会把每一行压到内容高度以下：屏上是**第二行文字
+     溢出到下一行的背景上**，9 行叠成一锅。
+     ⚠ 这条是真机 390×844 拍图逮到的，探针在 **3 份文件**时完全正常（没溢出就不收缩）
+       ——「判据够不着」的活样本：语料喂不饱，病根根本不发生。 */
+  flex: none;
+  min-height: 38px;
+  border-radius: 6px;
+  /* 🔴 `border: 0` 先归零再补下边线。基座 `.upload-file-row`(192) 是**四边**
+     `1px solid var(--rule)` 的一张小卡片——只写 border-bottom 的话左右两条还在，行的
+     内容盒比列头**窄 2px**，整张表的列头与数据错开一列的十分之一。屏上几乎看不出来，
+     写这道门时量出来的（572 vs 570）。同时归零那张 `rgba(paper,.6)` 的卡片底：表格的行
+     是行，不是一摞小卡片（那正是「组件分布好乱」的观感来源之一）。 */
+  border: 0;
+  border-bottom: 1px solid rgba(var(--lite2-ink-rgb), 0.07);
+  background: transparent;
+  font-size: 13px;
+}
+
+.lite2-shell .upload-files--table .upload-file-row:hover {
+  background: rgba(var(--lite2-ink-rgb), 0.045);
+}
+
+.lite2-shell .upload-files--table .upload-file-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--ink);
+}
+
+.lite2-shell .upload-files--table .upload-file-name svg {
+  flex: none;
+  opacity: 0.5;
+}
+
+.lite2-shell .upload-file-name-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 数字列一律 tabular-nums + 右对齐：列与列之间的数字才对得齐，扫一眼就能比大小。 */
+.lite2-shell .upload-files--table .upload-file-size,
+.lite2-shell .upload-files--table .upload-file-chunks {
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  color: var(--ink-soft);
+  text-align: right;
+}
+
+.lite2-shell .upload-files--table .upload-file-time {
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+/* 单位只在手机上贴出来（那儿没有列头）。桌面有列头，贴了就是「2.2 KB 片段 18 片段」。 */
+.lite2-shell .upload-file-chunks-unit {
+  display: none;
+}
+
+.lite2-shell .upload-files--table .upload-file-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.lite2-shell .upload-file-status-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* 行动作：静息态隐形、hover/focus 才现，但**格子恒占位**——现出来的时候不推挤别的列。
+   🔴 只用 opacity，绝不加 pointer-events:none（见本块头 ⒞）。 */
+.lite2-shell .upload-files--table .upload-file-acts {
+  display: flex;
+  gap: 4px;
+  justify-content: flex-end;
+  opacity: 0;
+  transition: opacity 120ms;
+}
+
+.lite2-shell .upload-files--table .upload-file-row:hover .upload-file-acts,
+.lite2-shell .upload-files--table .upload-file-row:focus-within .upload-file-acts {
+  opacity: 1;
+}
+
+.lite2-shell .upload-files--table .lite-btn.upload-file-download,
+.lite2-shell .upload-files--table .lite-btn.upload-file-delete,
+.lite2-shell .upload-files--table .lite-btn.upload-file-overflow {
+  width: 26px;
+  min-width: 26px;
+  height: 26px;
+  min-height: 26px;
+  padding: 0;
+  border-color: transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-soft);
+}
+
+.lite2-shell .upload-files--table .lite-btn.upload-file-download:hover:not(:disabled),
+.lite2-shell .upload-files--table .lite-btn.upload-file-overflow:hover:not(:disabled) {
+  background: rgba(var(--lite2-ink-rgb), 0.08);
+  color: var(--ink);
+}
+
+.lite2-shell .upload-files--table .lite-btn.upload-file-delete:hover:not(:disabled) {
+  background: rgba(var(--lite2-danger-rgb), 0.12);
+  color: var(--terracotta-text, var(--alert, #b3261e));
+}
+
+/* 桌面上没有溢出菜单（hover 直接现两枚钮）。 */
+.lite2-shell .upload-files--table .lite-btn.upload-file-overflow {
+  display: none;
+}
+
+/* 额外内容（读不进去的说明 / 删除确认条 / 两种错误行 / 手机溢出菜单）统一收进这一格，
+   **显式落位**在整行下面。理由见 FileManifest 里那段碑：nth-child 落位会被条件渲染
+   整体错开，而一条判据都不会红。 */
+.lite2-shell .upload-files--table .upload-file-aside {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 0 0 8px;
+}
+
+.lite2-shell .upload-files--table .upload-file-delete-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(var(--lite2-danger-rgb), 0.07);
+}
+
+.lite2-shell .upload-files--table .upload-file-delete-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.lite2-shell .upload-files--table .upload-file-delete-body {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+}
+
+.lite2-shell .upload-files--table .upload-file-acts-menu {
+  display: flex;
+  gap: 6px;
+}
+
+.lite2-shell .upload-files-nomatch {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+/* ── 上传进度：表格顶端那一行（规格 §2.4.5）───────────────────────────────────────
+   上传的东西最终会变成这张表的一行，进度就不该另开一块面板。
+   🔴 它**不是** `.upload-file-row`：那个类名是「一份文件一行」的取样锚（files-ia ①②、
+      assertFilesSurfaceV2 都按它数行），把一条状态行混进去 = 行数永远多一。
+   仍无百分比：`/ingest` 不吐进度信号，假进度条会卡 90%——秒表是唯一我们真的知道的量。 */
+.lite2-shell .upload-files-topline {
+  /* 同上：列表是 flex 列且高度确定，不写 `flex:none` 这一行会被压扁（进度条整条消失）。 */
+  flex: none;
+  list-style: none;
+  margin: 0 0 2px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: rgba(var(--lite2-sky-rgb), 0.07);
+}
+
+.lite2-shell .upload-files-topline .upload-status {
+  margin: 0;
+}
+
+.lite2-shell .upload-files-topline .upload-ingesting-block {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 4px 10px;
+}
+
+.lite2-shell .upload-files-topline .upload-ingesting {
+  margin: 0;
+  font-size: 13px;
+}
+
+.lite2-shell .upload-files-topline .upload-ingesting-elapsed {
+  margin: 0;
+  justify-self: start;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-soft);
+}
+
+.lite2-shell .upload-files-topline .upload-ingesting-hint {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.lite2-shell .upload-files-topline .upload-ingesting-bar {
+  grid-column: 1 / -1;
+  margin: 2px 0 0;
+}
+
+/* ── 拖放说明：是**说明**不是控件 ────────────────────────────────────────────────
+   整块工作台都接投放，所以这里不再画第二个 dropzone（规格 §2.4.2「两个方向相反的
+   dropzone 收成一个」）。它不接点击、没有 tabindex、也没有 role=button。 */
+.lite2-shell .lite-files-dropnote {
+  flex: none;
+  /* 空态下表格不在场、没有 `flex:1` 的东西撑开中间——不写这一行，说明会紧贴着那句空态
+     文字浮在页面上半截，读起来像"还没加载完"。推到工作台底沿才是"这一整块都能放". */
+  margin-top: auto;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 8px;
+  margin: 10px 0 14px;
+  padding: 10px 12px;
+  border: 1px dashed var(--hairline);
+  border-radius: 10px;
+  font-size: 12px;
+  /* AA：12px 属小字，`--ink-faint` 在 paper 上只有 ~4.7:1、aurora 更薄——吃 ink-soft
+     （#80 那条碑的同一族，contrast-smalltext 会真采到这一行）。 */
+  color: var(--ink-soft);
+  text-align: center;
+}
+
+.lite2-shell .lite-files-dropnote-exts {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── 「清空这份档案」的硬确认 ──────────────────────────────────────────────────── */
+.lite2-shell .lite-files-empty-archive {
+  flex: none;
+  margin: 0 0 16px;
+  padding: 14px 16px;
+  border: 1px solid rgba(var(--lite2-danger-rgb), 0.35);
+  border-radius: 12px;
+  background: rgba(var(--lite2-danger-rgb), 0.06);
+}
+
+.lite2-shell .lite-files-empty-archive-title {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--terracotta-text, var(--alert, #b3261e));
+}
+
+.lite2-shell .lite-files-empty-archive-body {
+  margin: 0 0 6px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--ink-soft);
+  max-width: 72ch;
+}
+
+.lite2-shell .lite-files-empty-archive-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.lite2-shell .lite-files-empty-archive-input {
+  height: 32px;
+  width: 160px;
+  padding: 0 10px;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  background: var(--lite2-surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+}
+
+.lite2-shell .lite-files-empty-archive-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.lite2-shell .lite-btn.lite-files-empty-archive-go {
+  border-color: transparent;
+  background: var(--terracotta-text, var(--alert, #b3261e));
+  color: #fff;
+  font-weight: 600;
+}
+
+.lite2-shell .lite-btn.lite-files-empty-archive-go:disabled {
+  opacity: 0.45;
+}
+
+.lite2-shell .lite-files-empty-archive-error {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--terracotta-text, var(--alert, #b3261e));
+}
+
+/* ── 「改表」小标（常驻表单区最后一块）──────────────────────────────────────────── */
+.lite2-shell .lite-files-forms-edit-block {
+  margin-top: 22px;
+  padding-top: 14px;
+  border-top: 1px solid var(--rule);
+}
+
+/* 常驻表单/新建公司/切换三区在工作台里是**滚动内容**，不是钉死的表格。 */
+.lite2-shell .lite-files-pane .lite-files-forms,
+.lite2-shell .lite-files-pane .lite-files-upload,
+.lite2-shell .lite-files-pane .lite-files-switch-section {
+  flex: 0 0 auto;
+  display: block;
+  width: 100%;
+  max-width: 860px;
+}
+
+/* 页头已经印了分区名，段里再来一遍就是双标题（规格 §2.4.7）。 */
+.lite2-shell .lite-files-pane .lite-files-section > .lite-files-section-title {
+  display: none;
+}
+
+/* 桌面兜底：抽屉开关与遮罩即使被渲染出来也不许上屏（组件层已条件渲染，这里是第二道）。
+   🔴 这两条必须写在下面那个 @media **之前**：媒体查询不加特异性，写在后面会连手机态
+      一起压死——抽屉当场打不开、遮罩消失，而一条门都不会红（#83 立过这块碑）。 */
+.lite2-shell .lite-btn.lite-files-rail-toggle,
+.lite2-shell .lite-btn.lite-files-rail-scrim {
+  display: none;
+}
+
+/* ── ≤860 · 栏退化为抽屉 + 行退化为五列×两行的固定骨架 ───────────────────────────
+   🔴 现状最实的一条病就在这儿：9 行文件在 390px 上出现 4 种高度、3 种内部顺序，因为整行
+      是 flex-wrap，折行位置由**文件名长度**决定（`_shots-0810/files-mobile.png`）。
+      根治法不是"调 gap"，是**把每一格的落位写死**——与内容长度无关。
+   ⚠ 手机态在既有那批门里同样是**零覆盖**（视口全硬钉 ≥900），本票同拍补了一道
+     `verify-files-explorer.mjs`（390×844）——别把这块当验过的。 */
+@media (max-width: 860px) {
+  .lite2-shell .lite-btn.lite-files-rail-toggle {
+    display: inline-flex;
+    position: absolute;
+    left: 16px;
+    top: calc(var(--lite2-clear-top, 24px) + 6px);
+    z-index: 48;
+    min-height: 30px;
+    padding: 0 10px;
+    border-radius: 8px;
+    font-size: 12px;
+  }
+
+  .lite2-shell .lite-btn.lite-files-rail-scrim {
+    display: block;
+    position: absolute;
+    inset: 0;
+    width: auto;
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: rgba(var(--lite2-ink-rgb), 0.28);
+    z-index: 46;
+  }
+
+  .lite2-shell .lite-files-rail {
+    /* 🔴 抽屉底色必须**不透明**，与桌面那份 `rgba(ink,.035)` 正相反。两个理由，缺一不可：
+       ① 抽屉是**浮层**，盖住的是正文。半透明 = 透明玻璃，正文从字缝里透出来、整屏叠字。
+       ② verify-contrast-smalltext 的 bgOf 把 alpha>0.5 当实底、≤0.5 当**完全透明**跳过
+          ——半透明的抽屉会让它量出一个屏上根本不存在的比值（可能假绿放过真违规）。 */
+    display: none;
+    width: min(300px, 84vw);
+    /* 底距吃**屏底家具带**而不只是页脚：栏底那一组是贴底的（「新建一家公司」「清空这份
+       档案…」），只让开 footer 的话 `✦ 问 Avery` 那颗 fixed 胶囊会压在销毁类那一行上
+       ——被家具抢走点击的销毁按钮正是 verify-bottom-furniture-clearance 盯的那一类。
+       对话侧栏那份（9686）没这个问题：它底下是列表不是贴底按钮组。 */
+    padding: calc(var(--lite2-clear-top, 24px) + 44px) 8px
+      max(var(--lite2-bottom-band, 120px), calc(var(--lite2-footer-h, 56px) + 76px));
+    background: rgb(var(--lite2-surface-rgb));
+    box-shadow: var(--shadow);
+    z-index: 47;
+  }
+
+  .lite2-shell .lite-files-rail.is-open {
+    display: flex;
+    animation: lite2-room-drawer-in 180ms ease;
+  }
+
+  .lite2-shell .lite-files-pane {
+    left: 0;
+    padding: calc(var(--lite2-clear-top, 24px) + 44px) 14px
+      max(var(--lite2-bottom-band, 120px), calc(var(--lite2-footer-h, 56px) + 76px));
+  }
+
+  .lite2-shell .lite-files-pane .lite-files-head {
+    flex-wrap: wrap;
+    gap: 4px 10px;
+  }
+
+  .lite2-shell .lite-files-title {
+    font-size: 22px;
+  }
+
+  .lite2-shell .lite-files-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .lite2-shell .lite-files-filter {
+    order: 3;
+    width: 100%;
+  }
+
+  .lite2-shell .lite-files-toolbar-spacer {
+    display: none;
+  }
+
+  /* 手机上不摆表头，改由第二行自解释（片段数自带单位，见 .upload-file-chunks-unit）。 */
+  .lite2-shell .upload-files-colhead {
+    display: none;
+  }
+
+  .lite2-shell .upload-file-chunks-unit {
+    display: inline;
+    margin-left: 3px;
+    color: var(--ink-soft);
+  }
+
+  /* 五列 × 两行的固定骨架。**每一格的落位都写死**，与内容长度无关——这正是
+     「同一行不再有第二种长相」的机械保证。
+     🔴 按**类名**落位，不按 nth-child：hint / 确认条 / 两种错误行都是条件渲染的兄弟，
+        nth-child 会随它们的出现整体错位（原型里能用 nth-child，是因为那儿没有条件渲染）。 */
+  .lite2-shell .upload-files--table .upload-file-row {
+    grid-template-columns: auto auto auto 1fr 28px;
+    grid-template-rows: auto auto;
+    min-height: 0;
+    column-gap: 8px;
+    row-gap: 3px;
+    padding: 9px 8px;
+  }
+
+  .lite2-shell .upload-files--table .upload-file-name   { grid-column: 1 / 5; grid-row: 1; }
+  .lite2-shell .upload-files--table .upload-file-status { grid-column: 1;     grid-row: 2; }
+  .lite2-shell .upload-files--table .upload-file-size   { grid-column: 2;     grid-row: 2; }
+  .lite2-shell .upload-files--table .upload-file-chunks { grid-column: 3;     grid-row: 2; }
+  .lite2-shell .upload-files--table .upload-file-time   { grid-column: 4;     grid-row: 2; }
+  .lite2-shell .upload-files--table .upload-file-acts   { grid-column: 5;     grid-row: 1 / 3; }
+  .lite2-shell .upload-files--table .upload-file-aside  { grid-column: 1 / 6; grid-row: 3; }
+
+  .lite2-shell .upload-files--table .upload-file-size,
+  .lite2-shell .upload-files--table .upload-file-chunks,
+  .lite2-shell .upload-files--table .upload-file-time {
+    text-align: left;
+    font-size: 11px;
+  }
+
+  .lite2-shell .upload-files--table .upload-file-status {
+    font-size: 11px;
+  }
+
+  /* 手机上没有 hover，所以动作恒显——但只显一枚 `⋯`，两枚真钮收进行尾溢出菜单
+     （展开后落在 .upload-file-aside 那一格，不挤进五列骨架）。 */
+  .lite2-shell .upload-files--table .upload-file-acts {
+    opacity: 1;
+  }
+
+  .lite2-shell .upload-files--table .upload-file-acts > .lite-btn.upload-file-download,
+  .lite2-shell .upload-files--table .upload-file-acts > .lite-btn.upload-file-delete {
+    display: none;
+  }
+
+  .lite2-shell .upload-files--table .lite-btn.upload-file-overflow {
+    display: inline-flex;
+  }
+
+  .lite2-shell .lite-files-pane .lite-files-forms,
+  .lite2-shell .lite-files-pane .lite-files-upload,
+  .lite2-shell .lite-files-pane .lite-files-switch-section {
+    max-width: none;
+  }
+}

@@ -102,23 +102,43 @@ rec('自证①b：这条通道有 appendFiles（stub/老后端上整道门无意
 //    因为门根本没碰过那个按钮。本票交付的东西就是这个入口，判据必须落在它身上。
 await page.evaluate((seam) => window[seam].getState().goScreen('files'), SEAM)
 await page.waitForTimeout(600)
+// 🔴 **#84 改判**：补资料不再是一个独立小节（`.lite-files-append`）——它就是**文件工作台
+//    工具条上那颗「上传文件」**（design-plan §2.4.2「现状两个方向相反的 dropzone 收成一个」）。
+//    有档案时那颗钮天然走 append 那条路。改判**没有放宽**：这一段要盯的两件事一件没少——
+//      · 「资料库上真的有一个补资料的入口」→ 现在盯工具条那个口子；
+//      · 「两个动作分得开」→ 两个模式现在分**住在两个分区**里，所以要**逐区点过去各看
+//        一次**。这比旧口径更狠：旧口径两个 `[data-upload-mode]` 恰好同屏，一次
+//        querySelectorAll 就够；现在必须证明「文件区那口是 append」**且**「新建区那口是
+//        new」，任一区把模式接错都逃不掉。
 const entry = await page.evaluate(() => {
-  const section = document.querySelector('.lite-files-append')
+  const bar = document.querySelector('.lite-files-uploader')
   return {
-    present: !!section,
-    mode: section?.querySelector('[data-upload-mode]')?.getAttribute('data-upload-mode') ?? null,
-    hasInput: !!section?.querySelector('input.upload-input'),
-    title: section?.querySelector('.lite-files-section-title')?.textContent?.trim() ?? '',
-    // 「新建一家公司」那个口子必须同时在场，且是另一个模式——两个动作分得开才叫分得清。
-    otherModes: Array.from(document.querySelectorAll('[data-upload-mode]'))
+    present: !!bar,
+    mode: bar?.getAttribute('data-upload-mode') ?? null,
+    hasInput: !!bar?.querySelector('input.upload-input'),
+    action: bar?.querySelector('.lite-files-upload-action')?.textContent?.trim() ?? '',
+    modesHere: Array.from(document.querySelectorAll('[data-upload-mode]'))
       .map((n) => n.getAttribute('data-upload-mode')),
   }
 })
-rec('② 资料库上真的有「给这家公司补资料」这个入口', entry.present === true && entry.hasInput === true,
-  JSON.stringify(entry))
-rec('② 两个动作分得开：补资料口是 append 模式，另建画像口是 new 模式',
-  entry.mode === 'append' && entry.otherModes.includes('new') && entry.otherModes.includes('append'),
-  JSON.stringify(entry.otherModes))
+rec('② 资料库的文件工作台上真的有一个上传口（工具条主钮 + 真 input）',
+  entry.present === true && entry.hasInput === true, JSON.stringify(entry))
+rec('② 🔴 有档案时这个口子是 append 模式（接成 new = 每次补料都另开一家公司）',
+  entry.mode === 'append' && entry.modesHere.every((m) => m === 'append'),
+  JSON.stringify(entry.modesHere))
+// 另一半：「新建一家公司」那一区仍在，且是 new 模式。两个动作分得开才叫分得清。
+const otherZone = await (async () => {
+  try { await page.locator('[data-files-zone="new"]').click({ timeout: 3000 }) } catch { return null }
+  await page.waitForTimeout(400)
+  const got = await page.evaluate(() => Array.from(document.querySelectorAll('[data-upload-mode]'))
+    .map((n) => n.getAttribute('data-upload-mode')))
+  await page.locator('[data-files-zone="files"]').click({ timeout: 3000 }).catch(() => {})
+  await page.waitForTimeout(400)
+  return got
+})()
+rec('② 🔴 两个方向分得开：「新建一家公司」那一区的口子仍是 new 模式',
+  Array.isArray(otherZone) && otherZone.length > 0 && otherZone.every((m) => m === 'new'),
+  JSON.stringify(otherZone))
 
 // 走界面入口的另一半：这一发**不许**碰 ingest 那条状态机。判据不看 `ingestStatus` 的终值
 // （借用它的实现最后也停在 'ready'，看终值分不出来），看的是它的**副作用**：`notifyStore` 只认
@@ -126,7 +146,7 @@ rec('② 两个动作分得开：补资料口是 append 模式，另建画像口
 // 多出来的那一条就是假通知。
 const notifBefore = await page.evaluate(
   () => JSON.parse(window.localStorage.getItem('lite2:notify:v1') || '{"items":[]}').items?.length ?? 0)
-await page.setInputFiles('.lite-files-append input.upload-input', [{
+await page.setInputFiles('.lite-files-uploader input.upload-input', [{
   name: NEW_DOC, mimeType: 'text/markdown', buffer: Buffer.from(PROJECT_V2, 'utf8'),
 }])
 await settle('appendStatus', '② 补资料这个口子真的把补传跑起来了（appendStatus 落定）')

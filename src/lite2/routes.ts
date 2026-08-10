@@ -161,7 +161,11 @@ export function baseScreenFrom(pathname: string, state: unknown): LiteScreen {
 // placeholder 而不是正文）。与 `q` 分成两个键而不是加个 `qmode`：中继两端各只认自己那个
 // 键，就没有"忘了带模式位 → 模板文字被当成用户原话发出去"这个失手位。
 // 其余一切参数（v/mode/look/lang/showInactive/transport/未来新增的）一律跟着走。
-const EPHEMERAL_PARAMS = ['q', 'qh', 'refs'] as const
+// `zone` = `/files?zone=forms`（#84：铃铛的 'form' 通知落在资料库的**常驻表单**那一区，
+// 而不是默认的「文件」区）——同一条「这次进屋要看什么」的接力语义。
+// 🔴 它必须一次性：否则经理点完通知、切去别的屏再回资料库，会被这个残留参数一次次拽回
+//    表单区，而他此刻想看的是文件。
+const EPHEMERAL_PARAMS = ['q', 'qh', 'refs', 'zone'] as const
 
 /**
  * 取当前 URL 的 search，去掉一次性参数，叠加 extra，返回可直接拼在路径后的 `?...`（或空串）。

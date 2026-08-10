@@ -54,6 +54,15 @@ export const NOTIF_TARGET: Record<NotifKind, LiteScreen> = {
   form: 'files',
 }
 
+// #84 · 落屏之后还要落到**哪一区**。资料库改成两栏 explorer 之后，`/files` 的默认落点是
+// 「文件」；一条讲表单的通知把人扔在文件表格上，等于让他自己再找一次入口。
+// 🔴 与 NOTIF_TARGET 放在一起而不是散进 LiteBell：目标是「屏 + 区」这**一件**事，
+//    拆两处写，下一个人加通知种类时只会看见其中一处。
+// `zone` 是 routes.ts 的一次性参数（EPHEMERAL_PARAMS）——落一次就走，不粘在 URL 上。
+export const NOTIF_TARGET_PARAMS: Partial<Record<NotifKind, Record<string, string>>> = {
+  form: { zone: 'forms' },
+}
+
 interface PersistedNotify {
   items: NotifItem[]
   seenGapIds: string[]

@@ -128,6 +128,14 @@ export const en = {
     download: 'Download',
     downloading: 'Downloading…',
     downloadError: "Couldn't download that file just now. Try again.",
+    // ── #84 · in the table shape these three are icon-only, so the label lives in aria-label ──
+    // 🔴 Carry the filename: nine rows, nine identical download glyphs — a screen-reader user
+    // hearing "Download" nine times cannot tell which row focus is on. verify-aria-zh scans
+    // exactly this family (it never appears in innerText).
+    downloadAria: 'Download “{name}”',
+    downloadingAria: 'Downloading “{name}”',
+    deleteAria: 'Delete “{name}”',
+    rowActionsAria: 'More actions for “{name}”',
 
     // ── #76 · the manifest grows a shape: columns, sorting, a refresh, honest load states ──
     // uploaded_at / doc_kind have been in the payload since feat-032 and were never rendered,
@@ -148,6 +156,20 @@ export const en = {
     filesSortTime: 'Newest first',
     filesSortName: 'Name',
     filesSortSize: 'Largest first',
+
+    // ── #84 · column headers for the real table ───────────────────────────────────────────
+    // Half of the #76 note above is overturned here: back then the manifest was a flex soup with
+    // nowhere to hang a header; it is a real grid now, so a header row is just a header row.
+    // The "type" column still does NOT happen — the extension is already in the filename.
+    filesColName: 'Name',
+    filesColSize: 'Size',
+    filesColChunks: 'References',
+    filesColTime: 'Uploaded',
+    filesColStatus: 'Status',
+    // No column headers on mobile (the five-column × two-row skeleton has no room), so the
+    // reference count has to carry its own unit or 18 is a number with no noun.
+    filesChunksShort: 'refs',
+    filesNoMatch: 'No filename contains “{q}”.',
 
     // ── #77 · delete a file. v1 shipped no button because the endpoint did not exist. ──
     // 🔴 Destructive: the confirm step is not decoration, and the body must tell the manager
@@ -624,25 +646,66 @@ export const en = {
     filesEyebrow: 'Files',
     // Page name: the zh side is 「资料库」, deliberately the same word family as the home
     // screen's 「资料概览」 — one product, one word for the thing.
-    filesHeading: 'What you have given Avery',
-    filesSub:
-      'Everything you have uploaded is here. You can also see which batch Avery is reading right now.',
-    filesCurrentTitle: 'What Avery is reading now',
-    // 🔴 Two different empty states, because they mean different things to a user. Neither one
-    // is allowed to say "your files are gone" — see the switchErrorUnreadable note above for the
-    // same discipline: a 404 from this backend carries no existence information.
-    filesCurrentEmptyNone: 'Nothing uploaded yet. Send Avery a few files below and your team appears.',
+    // #84 — `filesHeading` / `filesSub` are DELETED from both dictionaries with this ticket
+    // ("collapse the double heading"): the screen used to stack eyebrow + h2 + sub + section
+    // title + "Your files", five layers saying one thing. The head is one line now.
+    // ⚠ `filesCurrentTitle` is repurposed into the LEFT-RAIL row label (and the workbench head
+    //   title). It is no longer a section name inside a long scroll column.
+    filesCurrentTitle: 'Documents',
+    filesCurrentEmptyNone:
+      'Nothing uploaded yet. Use “Upload files” above to send Avery a few and your team appears.',
+    // 🔴 #86 debt ②: this used to end with "the files came back unreadable and uploading them
+    // again is the fix." Since #86, "an archive with zero files" is a state the user can create
+    // ON PURPOSE (emptying it) — so that diagnosis became a lie: a successful destruction
+    // reported as a parse failure. It now names all three possibilities without picking one
+    // (same absent≠none discipline), because the way out is the same either way.
     filesCurrentEmptyRead:
-      "Avery hasn't listed any files for this upload. If you just uploaded, give it a moment and refresh; if it stays empty, the files came back unreadable and uploading them again is the fix.",
+      'There are no files in this archive right now. If you just uploaded, give it a moment and refresh; you may also have emptied it, or the last batch came back unreadable — either way, “Upload files” gets you going again.',
+    // Right after the user emptied it themselves, they deserve a sentence that is certain
+    // (the one above has to cover three cases, so it can only hedge).
+    filesCurrentEmptyCleared:
+      'This archive is empty now. Your link, your sign-in and any forms already sent out keep working — you can start uploading again whenever you want.',
     filesUploadTitle: 'Start a separate company',
-    // T10 — the append section's shell. `filesAppendDemoNote` explains why there is no box here
-    // rather than pretending the feature doesn't exist: a demo copy is disposable by design, so
-    // anything added to it goes away with it — that is the sentence worth saying.
-    filesAppendTitle: 'Add materials to this company',
-    filesAppendLede:
-      'Got a new weekly, a new set of minutes, an updated roster? Send them here and they are merged into the company you have open — the cards update to what the newer materials say.',
+    // T10 — `filesAppendTitle` / `filesAppendLede` are DELETED with #84: adding materials is no
+    // longer its own section, it IS the "Upload files" button on the workbench toolbar (with an
+    // archive open, that button is the append path by construction).
+    // 🔴 `filesAppendDemoNote` stays: it explains why nothing can be added HERE, rather than
+    // pretending the feature doesn't exist. A demo copy is disposable by design.
     filesAppendDemoNote:
-      'The sample team is a disposable copy that gets cleaned up, so anything you add to it will not stick. To use Avery for real, start a company of your own below.',
+      'The sample team is a disposable copy that gets cleaned up, so anything you add to it will not stick. To use Avery for real, start a company of your own from the left rail.',
+
+    // ── #84 · the two-pane file explorer shell ────────────────────────────────────────────
+    filesRailMore: 'Other',
+    filesRailScrimAria: 'Close the files rail',
+    filesUploadAction: 'Upload files',
+    // 🔴 Deliberately NOT "Search these files" (what the prototype said): that promises
+    // full-text search and the backend has no such endpoint. We can only stand behind filenames.
+    filesFilterPlaceholder: 'Filter by filename…',
+    filesCountLine: '{n} files · {size} total · {chunks} quotable references',
+    filesDropHint: 'Drop files anywhere on this workbench to add them · supports',
+
+    // ── #84 · "Empty this archive" (the UI mount point #86 left behind) ───────────────────
+    // 🔴 Three separate paragraphs, not one: "employee answers stay" is the easiest line to skim
+    // past, and it is exactly what a user comes back to complain about (re-filing an answer
+    // makes what Avery read from it show up in the archive again).
+    // 🔴 Wording checked line by line against the backend's `empty_context` docstring.
+    filesEmptyEntry: 'Empty this archive…',
+    filesEmptyTitle: 'Empty this archive?',
+    filesEmptyBodyGone:
+      'Deleted: every file you uploaded (the originals too), plus the people, projects, signals and contradictions Avery read out of them — all of it. Deleted files cannot be recovered.',
+    filesEmptyBodyKept:
+      'Kept: your conversation with Avery, the notes Avery wrote for itself, your standing forms, and the answers employees already submitted (those are their words, and the fill-in links you sent are still live).',
+    filesEmptyBodyStays:
+      'The archive itself does not disappear — your link, your sign-in and any forms already sent out keep working, and you can start uploading again right away. If you later re-file one of those answers, what Avery reads from it will show up in the archive again.',
+    filesEmptyConfirmLabel: 'Type “{word}” to confirm',
+    // 🔴 A typed word is the gate. It has to be a word that ACTUALLY EXISTS on screen: the #86
+    // receipt drafted "type the shop name", but this app has no shop-name field anywhere
+    // (KnownContext holds id/files/at only) — that would be a door nobody can open.
+    filesEmptyConfirmWord: 'EMPTY',
+    filesEmptyAction: 'Empty it',
+    filesEmptyCancel: 'Keep it',
+    filesEmptyBusy: 'Emptying…',
+    filesEmptyError: "Couldn't empty it just now — nothing was deleted. Try again.",
 
     // ── gap-design-0805 T3 · form-frontend-a1c · the standing-forms section (④) ──────────────
     // 🔴 What a standing form IS, in copy: the employee's own account of their own stretch of
@@ -654,8 +717,14 @@ export const en = {
     // 🔴 The three mint failures each get their OWN sentence — see FormsMintError in store.ts
     // for why reusing `transport.*` would tell a manager about file formats after a headcount 422.
     formsTitle: 'Standing forms',
+    // ⚠ #84 changed the direction it points: the list is not "above" any more, it is the
+    // "Documents" zone in the left rail.
     formsLede:
-      'Make one link per person and forward it yourself. They fill it in on their phone, and what they write becomes one more item in the files above — their own words, marked as theirs.',
+      'Make one link per person and forward it yourself. They fill it in on their phone, and what they write becomes one more item under Documents — their own words, marked as theirs.',
+    // #84 · the builder moved to the bottom of this zone (rarely touched); a small label
+    // separates it from the minting block above. "Change the form" — not "edit template":
+    // what the manager has in mind is fixing a form, not administering a template object.
+    formsEditTitle: 'Change the form',
     // 🔴 The separator lives INSIDE the string, not in JSX. The first cut wrote
     // `{l.formsFieldsLead}：{preview}` with a hard-coded fullwidth colon, which shipped a CJK
     // glyph into the English shell — and no i18n gate can see it, because it is a literal in the
