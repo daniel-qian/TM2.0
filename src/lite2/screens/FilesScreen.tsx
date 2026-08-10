@@ -7,8 +7,13 @@ import { KnownContextList } from '../KnownContextList'
 import { ACCEPT, UploadPanel, UploadStatusBlock, useUploadTarget } from '../UploadPanel'
 import { FormBuilder } from '../FormBuilder'
 import {
-  CompanyZoneIcon, FilesZoneIcon, FormsZoneIcon, SearchIcon, TrashIcon, UploadIcon,
+  ChangesZoneIcon, CompanyZoneIcon, FilesZoneIcon, FormsZoneIcon, SearchIcon, TrashIcon, UploadIcon,
 } from '../icons'
+import {
+  changeFieldLabel, changeValueText, clampWidth, countChanges, deriveChanges,
+  type ChangeGroup, type ChangeRow,
+} from '../changeLog'
+import { useFlow } from '../flowStore'
 import type { LiveFormSubmission } from '../transport'
 
 // files-hub-0729/01（ADR-0032）· 资料库屏。
@@ -618,6 +623,176 @@ function StandingFormsSection() {
   )
 }
 
+// ── #85 ·「这次补料改了什么」只读流水 ─────────────────────────────────────────────────
+// 拍板③（安静更新、不打扰）与拍板 B（事后查得到）的共存形状：**不弹通知、不占今天页**，
+// 只在资料库里有这一处。所以这一区不产生任何跨屏提醒，左栏那颗计数是它唯一的外溢。
+//
+// 🔴 「已查阅」零新状态机：直接用 `flowStore` 那本三态标记库（今天页的冲突卡已经在用它，
+//    `conflict_` 前缀）。这里用 `change_` 前缀分桶，`restoreGap` 就是取消标记。
+// 🔴 一条改动的 id 里带着**出处文件**（changeLog.ts 那条注释）：同一格被另一份资料再改一次
+//    是**一条新的改动**，该重新回到未查阅——不带文件的话，看过一次就永远不再提醒。
+const CHANGE_MARK = 'change_'
+
+function ChangeRowItem(
+  { row, read, onToggle, onJump }: {
+    row: ChangeRow
+    read: boolean
+    onToggle: () => void
+    onJump: (docKey: string) => void
+  },
+) {
+  const { t } = useDict()
+  const l = t.lite2
+  const value = changeValueText(row.field, row.value, l)
+  const prev = row.prevValue === undefined ? '' : changeValueText(row.field, row.prevValue, l)
+  return (
+    <li className="lite-changes-row" data-change-kind={row.kind} data-change-read={read ? '1' : '0'}>
+      <div className="lite-changes-what">
+        {row.kind === 'added' ? (
+          <span className="lite-changes-subject">
+            {fill(row.subjectKind === 'person' ? l.changesAddedPerson : l.changesAddedProject,
+              { subject: row.subjectName })}
+          </span>
+        ) : (
+          <span className="lite-changes-subject">
+            {fill(l.changesFieldOf, {
+              subject: row.subjectName,
+              field: changeFieldLabel(row.field, l),
+            })}
+          </span>
+        )}
+        {row.kind === 'updated' ? (
+          // 「从 X 改成 Y」。旧值不划删除线——那读起来像「这条是错的」，而它当时是对的，
+          // 只是有了更新的说法。箭头是唯一的方向语义。
+          <span className="lite-changes-delta">
+            <span className="lite-changes-prev">{clampWidth(prev)}</span>
+            <span className="lite-changes-arrow" aria-hidden="true">→</span>
+            <span className="lite-changes-next">{clampWidth(value)}</span>
+          </span>
+        ) : row.kind === 'filled' ? (
+          <span className="lite-changes-delta">
+            <span className="lite-changes-filled">{l.changesFilled}</span>
+            <span className="lite-changes-next">{clampWidth(value)}</span>
+          </span>
+        ) : null}
+      </div>
+      <div className="lite-changes-tail">
+        {/* 可点引文：跳到「文件」那一区并按这份文件筛出来。**点不到具体那一行**——没有原文
+            阅读器，所以 aria 说的就是它真能做到的事（同「按文件名筛」那条措辞纪律）。 */}
+        <button
+          type="button"
+          className="lite-btn lite-btn--ghost lite-changes-cite"
+          aria-label={fill(l.changesJumpAria, { doc: row.docKey })}
+          data-change-doc={row.docKey}
+          onClick={() => onJump(row.docKey)}
+        >
+          {row.line
+            ? fill(l.changesFromDocLine, { doc: row.docKey, line: row.line })
+            : fill(l.changesFromDoc, { doc: row.docKey })}
+        </button>
+        <button
+          type="button"
+          className="lite-btn lite-btn--ghost lite-changes-mark"
+          aria-pressed={read}
+          data-change-mark={row.id}
+          onClick={onToggle}
+        >
+          {read ? l.changesUnmark : l.changesMarkRead}
+        </button>
+      </div>
+    </li>
+  )
+}
+
+function ChangesSection({ onJump }: { onJump: (docKey: string) => void }) {
+  const { t } = useDict()
+  const l = t.lite2
+  const rawTeam = useLite((s) => s.rawTeam)
+  const files = useLite((s) => s.files)
+  const marks = useFlow((s) => s.gapMarks)
+  const resolveGap = useFlow((s) => s.resolveGap)
+  const restoreGap = useFlow((s) => s.restoreGap)
+
+  // 🔴 派生只吃 payload，**不吃**语言：成句在渲染时才发生（teamData.ts 那条老碑——
+  //    把已本地化的文案烧进派生数据，切语言之后它不跟着变）。
+  const groups = useMemo(() => deriveChanges(rawTeam), [rawTeam])
+
+  // 组的先后按**文件的上传时间**倒序（新的在上）。清单还没回来时退回派生顺序——一条流水的
+  // 存在与否不该等第二个请求（`GET /team/{id}/files`）回来。
+  const ordered = useMemo(() => {
+    const at = new Map(files.map((f) => [f.source_key ?? f.filename, f.uploaded_at]))
+    const stamped = groups.map((g, i) => ({ group: g, at: at.get(g.docKey) ?? '', i }))
+    stamped.sort((a, b) => (a.at === b.at ? a.i - b.i : a.at < b.at ? 1 : -1))
+    return stamped.map(({ group, at: uploadedAt }) => ({ group, uploadedAt }))
+  }, [groups, files])
+
+  const total = countChanges(groups)
+  const isRead = (row: ChangeRow) => marks[`${CHANGE_MARK}${row.id}`] === 'resolved'
+  const readCount = groups.reduce(
+    (n, g) => n + g.rows.filter(isRead).length, 0)
+
+  const [showRead, setShowRead] = useState(false)
+
+  if (total === 0) {
+    return (
+      <section id="files-changes" className="lite-files-section lite-changes" aria-label={l.changesTitle}>
+        <p className="lite-files-empty">{l.changesEmpty}</p>
+        <p className="lite-changes-hint">{l.changesEmptyHint}</p>
+      </section>
+    )
+  }
+
+  const visible = (group: ChangeGroup) => group.rows.filter((r) => showRead || !isRead(r))
+
+  return (
+    <section id="files-changes" className="lite-files-section lite-changes" aria-label={l.changesTitle}>
+      <p className="lite-changes-lede">{l.changesLede}</p>
+      {readCount > 0 ? (
+        <div className="lite-changes-foldbar">
+          <button
+            type="button"
+            className="lite-btn lite-btn--ghost lite-changes-fold"
+            aria-pressed={showRead}
+            data-changes-fold=""
+            onClick={() => setShowRead((v) => !v)}
+          >
+            {fill(l.changesReadFold, { n: readCount })}
+          </button>
+        </div>
+      ) : null}
+      {ordered.map(({ group, uploadedAt }) => {
+        const rows = visible(group)
+        // 一组里全部标了「已查阅」且折叠区关着 → 整组收起。标题与内容同生共死（本文件
+        // SwitchSection 那条老纪律）：留一个空标题读起来像加载失败。
+        if (rows.length === 0) return null
+        return (
+          <div className="lite-changes-group" key={group.docKey} data-change-group={group.docKey}>
+            <p className="lite-changes-group-head">
+              <span className="lite-changes-doc">{group.docKey}</span>
+              {uploadedAt ? (
+                <span className="lite-changes-at">{localStamp(uploadedAt)}</span>
+              ) : null}
+            </p>
+            <ul className="lite-changes-list">
+              {rows.map((row) => (
+                <ChangeRowItem
+                  key={row.id}
+                  row={row}
+                  read={isRead(row)}
+                  onToggle={() => (isRead(row)
+                    ? restoreGap(`${CHANGE_MARK}${row.id}`)
+                    : resolveGap(`${CHANGE_MARK}${row.id}`))}
+                  onJump={onJump}
+                />
+              ))}
+            </ul>
+          </div>
+        )
+      })}
+    </section>
+  )
+}
+
 // ── #84 · 左栏的一行 ──────────────────────────────────────────────────────────────────
 // 规格 §2.2（与 #83 对话侧栏**同一套**）：34px 单行 · `padding:0 10px` · radius 8 ·
 // hover `rgba(ink,.05)` · 选中 `rgba(accent,.13)` + 2px accent 左封条 + 600 字重。
@@ -728,7 +903,7 @@ function EmptyArchivePanel({ onClose }: { onClose: (emptied: boolean) => void })
   )
 }
 
-type FilesZoneId = 'files' | 'forms' | 'new' | 'switch'
+type FilesZoneId = 'files' | 'changes' | 'forms' | 'new' | 'switch'
 
 export function FilesScreen() {
   const { t } = useDict()
@@ -762,6 +937,17 @@ export function FilesScreen() {
   const switchZoneOn = knownCount >= 2
   const activeTemplates = (templates ?? []).filter((tpl) => tpl.active).length
 
+  // #85 · 补料流水。左栏那一行**只在真有改动时存在**（同「一行的存在性与它那一段的存在性
+  // 同源」那条纪律）：首次上传之后一条都不会有（那时每张卡都是新读出来的，不是被改过的），
+  // 长一行点进去空无一物的分区比没有这一行更像坏了。
+  // 计数是**未查阅**那几条，不是总数——已经看过的不该继续在栏上敲你。
+  const changeGroups = useMemo(() => deriveChanges(rawTeam), [rawTeam])
+  const changeMarks = useFlow((s) => s.gapMarks)
+  const unreadChanges = useMemo(() => changeGroups.reduce(
+    (n, g) => n + g.rows.filter((r) => changeMarks[`${CHANGE_MARK}${r.id}`] !== 'resolved').length,
+    0), [changeGroups, changeMarks])
+  const changesZoneOn = countChanges(changeGroups) > 0
+
   // 深链：铃铛的 'form' 通知带着 `?zone=forms` 进来（一次性参数，见 routes.ts 的
   // EPHEMERAL_PARAMS）。读一次就够——之后是用户自己在切区，不该被 URL 拽回去。
   const { search } = useLocation()
@@ -770,7 +956,7 @@ export function FilesScreen() {
     return want === 'forms' ? 'forms' : 'files'
   })
   const zoneOn: Record<FilesZoneId, boolean> = {
-    files: true, forms: formsZoneOn, new: true, switch: switchZoneOn,
+    files: true, changes: changesZoneOn, forms: formsZoneOn, new: true, switch: switchZoneOn,
   }
   // 分区消失时回落（例：切公司后 knownContexts 掉回 1 条）。**不**用 effect 改 state：
   // 那会多渲染一帧空工作台，而这里一次派生就够了。
@@ -822,9 +1008,10 @@ export function FilesScreen() {
 
   const zoneTitle =
     activeZone === 'files' ? l.filesCurrentTitle
-      : activeZone === 'forms' ? l.formsTitle
-        : activeZone === 'new' ? l.filesUploadTitle
-          : t.upload.switchTitle
+      : activeZone === 'changes' ? l.changesTitle
+        : activeZone === 'forms' ? l.formsTitle
+          : activeZone === 'new' ? l.filesUploadTitle
+            : t.upload.switchTitle
 
   return (
     <section className="scene scene-nexus is-active lite-files" aria-label={l.tabFiles}>
@@ -863,6 +1050,15 @@ export function FilesScreen() {
             tail={files.length > 0 ? files.length : undefined}
             current={activeZone === 'files'} onClick={() => pick('files')}
           />
+          {/* #85 · 补料流水。排在「文件」正下方：它讲的就是那些文件带来的后果，中间隔着
+              别的东西会把这层因果读断。计数是**未查阅**的条数（全看过就不再显示数字）。 */}
+          {changesZoneOn ? (
+            <RailRow
+              id="changes" label={l.changesTitle} icon={<ChangesZoneIcon />}
+              tail={unreadChanges > 0 ? unreadChanges : undefined}
+              current={activeZone === 'changes'} onClick={() => pick('changes')}
+            />
+          ) : null}
           {formsZoneOn ? (
             <RailRow
               id="forms" label={l.formsTitle} icon={<FormsZoneIcon />}
@@ -934,6 +1130,14 @@ export function FilesScreen() {
                 n: files.length,
                 size: formatBytes(totals.bytes),
                 chunks: totals.chunks,
+              })}
+            </p>
+          ) : null}
+          {activeZone === 'changes' && changesZoneOn ? (
+            <p className="lite-files-count">
+              {fill(l.changesCountLine, {
+                n: countChanges(changeGroups),
+                files: changeGroups.length,
               })}
             </p>
           ) : null}
@@ -1074,6 +1278,18 @@ export function FilesScreen() {
               </p>
             ) : null}
           </section>
+        ) : null}
+
+        {activeZone === 'changes' ? (
+          <ChangesSection
+            onJump={(docKey) => {
+              // 可点引文落到**真存在**的地方：切到「文件」那一区并按文件名筛出来。
+              // 深链到具体行做不到（没有原文阅读器），所以不假装能做到。
+              setFilter(docKey)
+              setZone('files')
+              setRailOpen(false)
+            }}
+          />
         ) : null}
 
         {activeZone === 'forms' ? <StandingFormsSection /> : null}

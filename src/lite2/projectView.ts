@@ -230,7 +230,21 @@ export function projectRiskLabel(level: RiskLevelKey, l: Dict['lite2']): string 
  * 只吃 `t.lite2` 这一段字典，是普通属性读取；本模块不 import 任何组件/store。
  */
 export function projectStatusLabel(view: ProjectView, l: Dict['lite2']): string {
-  switch (view.statusKey) {
+  return statusTokenLabel(view.statusKey, l, view.statusRaw)
+}
+
+/**
+ * 归一化状态词 → 屏幕文案。#85 的补料流水要给**旧值**（`lineage.prev.value`，一个裸 token
+ * 如 `'on-track'`）配文案，而它手上没有 `ProjectView`。
+ *
+ * 🔴 抽出来是为了**只留一把尺**：流水里那句「从 进行中 改成 受阻」与项目卡上那枚状态标必须
+ * 逐字同词。各写一份的下场是同一个 token 在两块屏上叫两个名字。
+ * `raw` 只在词表外（`other`）时用来照原样回显文档用词，与 `statusRaw` 同一条口径。
+ */
+export function statusTokenLabel(
+  key: ProjectStatusKey, l: Dict['lite2'], raw?: string | null,
+): string {
+  switch (key) {
     case 'blocked':
       return l.projectsStatusBlocked
     case 'at-risk':
@@ -242,8 +256,13 @@ export function projectStatusLabel(view: ProjectView, l: Dict['lite2']): string 
     case 'unknown':
       return l.projectsStatusUnknown
     default:
-      return view.statusRaw ?? l.projectsStatusUnknown
+      return raw ?? l.projectsStatusUnknown
   }
+}
+
+/** 裸状态串（payload 或 `lineage.prev.value` 里那个）→ 屏幕文案。空串按「未知」。 */
+export function statusTextLabel(raw: string | undefined | null, l: Dict['lite2']): string {
+  return statusTokenLabel(statusKeyOf(raw ?? undefined), l, (raw ?? '').trim() || null)
 }
 
 export function groupKeyOf(view: ProjectView): ProjectGroupKey {
