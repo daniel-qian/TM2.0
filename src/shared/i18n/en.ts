@@ -640,8 +640,13 @@ export const en = {
     // archive open, that button is the append path by construction).
     // 🔴 `filesAppendDemoNote` stays: it explains why nothing can be added HERE, rather than
     // pretending the feature doesn't exist. A demo copy is disposable by design.
+    // 🔴 #88 follow-up fix: this used to say "start a company of your own from the left rail" —
+    // but that entry is exactly what #88 removed. #88 fixed the mechanism half (`empty_context`
+    // clears `ephemeral`, so emptying == claiming) and missed the copy half, leaving production
+    // copy that points at a button which no longer exists (caught on post-deploy re-verification,
+    // 2026-08-10). Now it points at the real way out: the last row of the left rail.
     filesAppendDemoNote:
-      'The sample team is a disposable copy that gets cleaned up, so anything you add to it will not stick. To use Avery for real, start a company of your own from the left rail.',
+      'The sample team is a disposable copy that gets cleaned up, so anything you add to it will not stick. To make this archive your own, use "Empty this archive" at the bottom of the left rail — once it is empty the archive is yours and you can start uploading your own files.',
 
     // ── #84 · the two-pane file explorer shell ────────────────────────────────────────────
     filesRailMore: 'Other',
