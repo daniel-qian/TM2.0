@@ -352,6 +352,10 @@ interface LiteState {
   // 让连删两份的第二下看起来像没反应）。
   fileDeleting: string | null
   fileDeleteError: string | null
+  // #86 ·「清空这份档案」的忙/错两件。**整段**不逐条（与 fileDeleting 相反，理由也相反：
+  // 清空只有一个目标，逐条置灰无意义；而它是销毁类，忙态期间整块必须锁死）。
+  archiveEmptying: boolean
+  archiveEmptyError: string | null
   // feat-047 移植（feat-033）「Avery's notes」：写侧、跨会话累积的 agent 自写观察（只读，
   // 新→旧，重启后仍在）。
   notes: LiveNoteEntry[]
@@ -499,6 +503,21 @@ interface LiteState {
   // 静默指向另一份文件）。成功回 true；能力探测不到 / 忙 / 失败一律 false，**不抛**——
   // 逐行的错误由 fileDeleteError 说出来。
   deleteFile: (sourceKey: string) => Promise<boolean>
+  /**
+   * #86 ·「清空这份档案」—— 把上传来的一切收走，`contextId` / `ownerToken` **不变**。
+   *
+   * 这是 Danny 0810 拍板「不要有『新建』的概念」的落点：一个人从头到尾就一份档案，
+   * 加文件、删文件；真要从头来是清空这一份。所以本动作**刻意不碰** `contextId`、
+   * 不碰 `ownerToken`、不碰 `knownContexts`——那三件一动就变回「另开一份」了。
+   *
+   * 🔴 **不许走 `resetLiteCompanyData()` 凑数**：那是「换账号，全部忘掉」的清点，
+   * 它会把 `knownContexts` 也清掉、也不会去后端真清任何东西。屏上看起来一样，
+   * 刷新一次数据全回来——那是"假装清空"，正是销毁类动作最不能有的形态。
+   *
+   * 成功回 true；能力探测不到 / 忙 / 失败一律 false，**不抛**——错误由
+   * `archiveEmptyError` 说出来。调用方负责在此之前做硬确认（输入店名才放行）。
+   */
+  emptyArchive: () => Promise<boolean>
   refreshTeam: () => Promise<void>
   refreshFiles: () => Promise<void>
   refreshNotes: () => Promise<void>
@@ -669,6 +688,8 @@ export const useLite = create<LiteState>((set, get) => ({
   filesError: null,
   fileDeleting: null,
   fileDeleteError: null,
+  archiveEmptying: false,
+  archiveEmptyError: null,
   notes: [],
   noteJustAdded: false,
   adviseRuns: null,
@@ -952,6 +973,11 @@ export const useLite = create<LiteState>((set, get) => ({
           filesError: null,
           fileDeleting: null,
           fileDeleteError: null,
+          // #86 · 清空那两件同属公司域（理由与上面 fileDeleting/filesError 逐字相同：
+          // archiveEmptyError 是「A 那次清空为什么没成」，挂到 B 头上是替 B 断言一件没发生
+          // 的事；archiveEmptying 漏了则「清空途中切公司」会把那颗键永久置灰）。
+          archiveEmptying: false,
+          archiveEmptyError: null,
           newCompanyStatus: 'idle',
           notes: [],
           adviseRuns: null,
@@ -1001,6 +1027,8 @@ export const useLite = create<LiteState>((set, get) => ({
             // #76/#77 · 文件族忙/错四件（同下面表单那份的理由，逐字适用）。
             filesLoading: false, filesError: null,
             fileDeleting: null, fileDeleteError: null,
+            // #86 · 清空那两件（同上，逐字适用）。
+            archiveEmptying: false, archiveEmptyError: null,
             newCompanyStatus: 'idle' as IngestStatus,
             // T3：表单**七件**同属公司域——留着就是把 A 公司的链接摆在 B 公司的资料库里，
             // 经理一复制就把 A 的人的表单发出去了。
@@ -1192,6 +1220,63 @@ export const useLite = create<LiteState>((set, get) => ({
       // 🔴 措辞不许说「文件没了」：那个端点把「没有这份」和「你证明不了这是你的」编成同一个
       // 404，前端一种都分不出来（同 downloadError / switchErrorUnreadable 的纪律）。
       set({ fileDeleting: null, fileDeleteError: sourceKey })
+      return false
+    }
+  },
+
+  // #86 ·「清空这份档案」。骨架照 deleteFile（忙态 + 回权威清单 + 切公司必回收忙态），
+  // 四处刻意不同：
+  //   ① **绝不动 contextId / ownerToken / knownContexts** —— 动了就是「另开一份」，
+  //      而这一票的全部内容就是把「新建」这个概念取消掉；
+  //   ② 忙态整段不逐条（只有一个目标）；
+  //   ③ 回执里那张空 payload **就地用掉**（team/rawTeam 直接落它），不等 refreshTeam ——
+  //      清空是销毁类，屏上不该有「清单已空、卡片还挂着上一秒的人」这个中间帧；
+  //   ④ 顺手把 notes / forms **重拉一遍**：后端刻意保留了它们，本地必须回权威值，
+  //      否则用户会以为「清空把笔记也清了」（那正是确认文案里承诺没清的东西）。
+  emptyArchive: async () => {
+    const { contextId, transport } = get()
+    if (!contextId || !transport.emptyContext) return false
+    // 同一拍双击闸。这个端点**是幂等的**（第二发同样回一张空 payload），所以这道闸不为
+    // 正确性，只为不让销毁类动作被手抖连点发两次。
+    if (get().archiveEmptying) return false
+    set({ archiveEmptying: true, archiveEmptyError: null })
+    try {
+      const payload = await transport.emptyContext(contextId)
+      if (!stillOn(get, contextId)) {
+        set({ archiveEmptying: false })
+        return false
+      }
+      set({
+        archiveEmptying: false,
+        archiveEmptyError: null,
+        // 权威空世界就地落地（见 ③）。context_id 恒等于入参——真不等就说明后端换了档案，
+        // 那是本票明令不该发生的事，让它以「屏和 store 对不上」的形态露出来，别在这儿掩盖。
+        team: liteTeamFromPayload(payload),
+        rawTeam: payload,
+        files: [],
+        // 清空之后再没有「这次补料失败了」这种话可说——那句话的对象已经不存在了。
+        appendStatus: 'idle',
+        appendError: null,
+        appendReceipt: null,
+        fileDeleteError: null,
+      })
+      // 权威清单（服务端说了算，别信本地推断出来的空）。
+      await get().refreshFiles()
+      // 后端留着的那两族，本地回权威值（见 ④）。失败不影响清空本身，故 void。
+      void get().refreshNotes()
+      void get().refreshForms()
+      return true
+    } catch (err) {
+      if (!stillOn(get, contextId)) {
+        set({ archiveEmptying: false })
+        return false
+      }
+      // 🔴 措辞不许说「档案没了」：那个端点把「没有这份」和「你证明不了这是你的」编成同一个
+      // 404，前端一种都分不出来（同 fileDeleteError / switchErrorUnreadable 的纪律）。
+      set({
+        archiveEmptying: false,
+        archiveEmptyError: err instanceof Error ? err.message : String(err),
+      })
       return false
     }
   },
@@ -1815,6 +1900,9 @@ export function resetLiteCompanyData(): void {
     filesError: null,
     fileDeleting: null,
     fileDeleteError: null,
+    // #86 · 清空那两件（与 adoptContext 那份是同一份契约的两个抄本，改一处必须改两处）。
+    archiveEmptying: false,
+    archiveEmptyError: null,
     newCompanyStatus: 'idle',
     notes: [],
     noteJustAdded: false,

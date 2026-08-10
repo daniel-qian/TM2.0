@@ -365,6 +365,124 @@ def test_source_documents_with_duplicate_filenames_survive_the_round_trip(impl, 
 
 
 # ==============================================================================================
+# 设计0810 · #86 — `empty_context()`：清空这份档案，但档案本身留着。ONE suite, TWO legs.
+#
+# 为什么它必须落在**这个**文件而不是只留在 test_context_empty_t86.py：清空的两条腿是两套完全
+# 不同的机制（内存腿原地 mutate 一个活对象；pg 腿是库内显式 DELETE + 重写 memory_files），
+# 「两边结果一样」在别处没有任何一条判据看着。而本文件的 `impl` 参数化正是为这件事存在的 ——
+# memory 离线跑、postgres 挂 @needs_db，同一套断言跑两遍。
+#
+# ⚠ 与 pg 独有的 `delete()` 是**反面**：那个删 contexts 行本身（id/token 一起没）。
+# `test_registry_protocol.py` 明令禁止内存腿长出 `delete()`，所以本方法换了名字。
+# ==============================================================================================
+
+def test_empty_context_clears_the_uploads_and_keeps_the_identity(impl, tmp_path):
+    reg, cid, _ = _ingest(impl, tmp_path / "mem", source_documents=_sample_source_docs(),
+                          owner_token="tok_empty_86")
+    before = reg.get(cid)
+    assert before.source_files and before.extraction.materials, "自证：种子自己就是空的"
+    assert before.file_cards(), "自证：file space 是空的，下面的判据够不着"
+
+    assert impl.fresh().empty_context(cid) is True
+
+    got = impl.fresh().get(cid)
+    assert got is not None, "清空把整份档案删了 —— 那是 delete()，不是 empty_context()"
+    # 清掉的：文件与文件推出来的一切。
+    assert got.source_files == [] and got.source_documents == []
+    assert got.file_cards() == []
+    assert got.extraction.materials == []
+    assert got.extraction.people == [] and got.extraction.projects == []
+    assert got.extraction.signals == [] and got.extraction.playbooks == []
+    assert got.extraction.conflicts == []
+    assert impl.fresh().source_document_bytes(cid, 0) is None, "原件字节还下载得到"
+    # 留下的：档案的身份。这半边才是本票的意义所在。
+    assert cid in impl.fresh()
+    assert got.context_id == cid and got.name == "prism"
+    assert got.owner_token == "tok_empty_86", "owner_token 没了 = 用户手上那份锚点作废"
+
+
+def test_empty_context_materializes_the_same_empty_memory_on_both_legs(impl, tmp_path):
+    """facts.md / notes.md 必须重物化成空，且**两条腿逐字节同一份**。
+
+    内存腿走 `materialize_memory(空抽取)`（会写下两行标题），pg 腿把同一份文本写进
+    `memory_files`。任何一边偷懒写成空串，这条在跑到另一条腿时就红。
+    """
+    from avery.ingest.extract import ExtractionResult
+    from avery.ingest.registry import materialize_memory
+
+    reg, cid, _ = _ingest(impl, tmp_path / "mem")
+    mem_before = reg.get(cid).memory_dir
+    assert "## People" in (mem_before / "facts.md").read_text(encoding="utf-8"), "自证：facts 是空的"
+
+    assert impl.fresh().empty_context(cid) is True
+
+    mem_dir = impl.fresh().get(cid).memory_dir
+    want = tmp_path / "want"
+    materialize_memory(ExtractionResult(), want)
+    for name in ("facts.md", "notes.md"):
+        assert (mem_dir / name).read_text(encoding="utf-8") == \
+            (want / name).read_text(encoding="utf-8"), f"{name} 与空档案的重物化产物不一致"
+
+
+def test_empty_context_keeps_notes_and_advise_runs(impl, tmp_path):
+    """对话历史与 Avery 自己写的观察不是文件的衍生物 —— 清文件不带走它们。"""
+    reg, cid, _ = _ingest(impl, tmp_path / "mem")
+    reg.append_note(cid, "The onboarding backlog keeps landing on one squad — a load problem.")
+    reg.append_advise_run(cid, "How should we staff next week?", answer="Cover the evening peak.",
+                          thread_id="th_86")
+    assert len(reg.list_notes(cid)) == 1 and len(reg.list_advise_runs(cid)) == 1
+
+    assert impl.fresh().empty_context(cid) is True
+
+    fresh = impl.fresh()
+    notes = fresh.list_notes(cid)
+    assert len(notes) == 1 and "onboarding backlog" in notes[0].text
+    runs = fresh.list_advise_runs(cid)
+    assert len(runs) == 1 and runs[0].question == "How should we staff next week?"
+    assert runs[0].thread_id == "th_86"
+    assert len(fresh.list_advise_threads(cid)) == 1
+
+
+def test_empty_context_keeps_the_account_binding(impl, tmp_path):
+    reg, cid, _ = _ingest(impl, tmp_path / "mem")
+    user = "user_" + uuid.uuid4().hex[:10]
+    assert reg.link_account_context(user, cid) is True
+
+    assert impl.fresh().empty_context(cid) is True
+
+    fresh = impl.fresh()
+    assert fresh.contexts_for_account(user) == [cid]
+    assert fresh.account_owns(user, cid) is True
+
+
+def test_empty_context_of_an_unknown_id_is_false(impl):
+    assert impl.fresh().empty_context("ctx_no_such_thing") is False
+    assert "ctx_no_such_thing" not in impl.fresh(), "顺手把一个不存在的档案凭空造出来了"
+
+
+def test_empty_context_leaves_an_archive_that_takes_new_files(impl, tmp_path):
+    """清空 → 再往同一份档案里加文件。这就是「不要有新建」那句拍板的可执行形态。"""
+    from avery.ingest.file_append import append_paths_to_context
+
+    reg, cid, _ = _ingest(impl, tmp_path / "mem", source_documents=_sample_source_docs())
+    assert impl.fresh().empty_context(cid) is True
+
+    later = tmp_path / "later.md"
+    later.write_text("# Later\n\n- Project: Night kitchen  Owner: Chen  Status: in progress\n",
+                     encoding="utf-8")
+    from avery.ingest.registry import SourceDocument
+    sd = SourceDocument(filename="later.md", source_key="later.md", mime="text/markdown",
+                        size_bytes=later.stat().st_size, content=later.read_bytes())
+    assert append_paths_to_context(impl.fresh(), cid, [str(later)], [sd]).ok
+
+    got = impl.fresh().get(cid)
+    assert got.context_id == cid, "补料换了 id —— 单档案模型破了"
+    assert [c["source_key"] for c in got.file_cards()] == ["later.md"]
+    assert got.extraction.materials, "补进来的文件没切出块"
+    assert impl.fresh().source_document_bytes(cid, 0) == later.read_bytes()
+
+
+# ==============================================================================================
 # feat-033 — the "Avery's notes" write-side contract (shared: memory + postgres). Agent-written
 # observations accumulate, list new->old, and — the whole point — a person-scoring observation is
 # REFUSED at append() before anything lands. The SAME red-line gate (`redline.validate`, EN+ZH) the

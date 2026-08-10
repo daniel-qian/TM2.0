@@ -1247,8 +1247,67 @@ class PostgresContextRegistry(ProjectWriteMixin):
                 "SELECT 1 FROM avery.contexts WHERE context_id = %s",
                 (context_id,)).fetchone() is not None
 
+    def empty_context(self, context_id: str) -> bool:
+        """#86 · `ContextRegistry.empty_context` 的 Postgres 双胞胎——清掉这家公司上传来的一切，
+        **`avery.contexts` 那一行原地不动**（`context_id` / `name` / `owner_token` / `ephemeral`
+        一个字节不改）。语义、保留清单、以及「留着答卷 = 清空不会自己保持为空」那颗雷，
+        全部见内存腿那份 docstring，这里只记 pg 侧独有的三条。
+
+        🔴 **① 不许用 `put()` 凑数**，哪怕把 ctx 清空了再 put 看上去也能达到同一个结果。
+        `put()` 是「快照替换 + 在库内回填」：它先把 `_prior_src_bytes` / `_prior_mat_vecs` 两张临时表
+        装满旧字节与旧向量，再 DELETE+INSERT，最后 `UPDATE ... FROM` 把新行里为 NULL 的格子补回去。
+        今天的空 ctx 恰好插 0 行、回填因此匹配不到任何行——**它是靠"没有行可回填"这个巧合才空的**，
+        不是靠语义。那两张临时表的存在理由正是「让数据活下来」，把销毁类动作架在它上面，
+        下一次有人给回填加一条「行没了也补一条回来」的兜底，清空就会静默地不再清空，而没有一道门会红。
+        显式 DELETE 是**说得出口的**空。
+
+        🔴 **② `memory_files` 写的是空抽取的重物化结果，不是删行**。`get()` 对缺行读作 `""`，
+        而内存腿走的是 `materialize_memory(空)`——那会写下两行标题（`# Company facts …`）。
+        两条腿必须逐字节同结果，否则 `test_registry_contract` 的 impl 参数化跑到 pg 那一遍就会
+        以「facts.md 内容不一致」的形态红——而那是真分歧，不是测试太严。
+
+        🔴 **③ `granularity` 不在这里出现是对的**：`put()` 从来就不持久化它（见 put() 里那段注释），
+        库里根本没有它的行。内存腿清它是因为它活在进程内的 `ExtractionResult` 上。
+        """
+        self._ensure_schema()
+        with self._connect() as conn:
+            exists = conn.execute(
+                "SELECT 1 FROM avery.contexts WHERE context_id = %s", (context_id,)).fetchone()
+        if exists is None:
+            return False
+
+        # 空档案的 facts.md / notes.md —— 与内存腿逐字节同一个产物（理由见 ②）。落盘也顺手做了：
+        # 本进程后续的 recall 直接读这个目录，不必等下一次 get() 去比对刷新。
+        mem_dir = self._root() / context_id
+        materialize_memory(ExtractionResult(), mem_dir)
+        facts = (mem_dir / "facts.md").read_text(encoding="utf-8")
+        notes = (mem_dir / "notes.md").read_text(encoding="utf-8")
+
+        from psycopg.types.json import Jsonb
+        with self._connect() as conn, conn.transaction():
+            # 文件与文件推出来的一切。四张表逐条点名——`avery.entities` 一句就带走全部五类
+            # （person/project/signal/playbook/conflict），它们同表不同 kind。
+            conn.execute("DELETE FROM avery.entities WHERE context_id = %s", (context_id,))
+            conn.execute("DELETE FROM avery.materials WHERE context_id = %s", (context_id,))
+            conn.execute("DELETE FROM avery.source_documents WHERE context_id = %s", (context_id,))
+            conn.execute("DELETE FROM avery.memory_files WHERE context_id = %s", (context_id,))
+            with conn.cursor() as cur:
+                cur.executemany(
+                    "INSERT INTO avery.memory_files (context_id, filename, content) "
+                    "VALUES (%s, %s, %s)",
+                    [(context_id, "facts.md", facts), (context_id, "notes.md", notes)])
+            # 清单也要空。⚠ 只动 source_files 与 updated_at —— name / owner_token / ephemeral
+            # 是**档案的身份**，本方法的全部意义就是它们活下来。
+            conn.execute(
+                "UPDATE avery.contexts SET source_files = %s, updated_at = now() "
+                "WHERE context_id = %s", (Jsonb([]), context_id))
+        return True
+
     def delete(self, context_id: str) -> None:
-        """Remove one context (entities/materials/memory cascade). Test + ops hygiene."""
+        """Remove one context (entities/materials/memory cascade). Test + ops hygiene.
+
+        ⚠ 别把它当「清空」用（#86）：它删的是 `avery.contexts` **那一行本身**，`context_id` 与
+        `owner_token` 跟着一起没——正好是 `empty_context()` 的反面。"""
         self._ensure_schema()
         with self._connect() as conn:
             conn.execute("DELETE FROM avery.contexts WHERE context_id = %s", (context_id,))

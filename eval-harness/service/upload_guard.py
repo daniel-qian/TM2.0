@@ -76,6 +76,11 @@ def _route_for(path: str) -> str | None:
     # 但下面的 `guarded` 只对 POST/DELETE 起闸，读侧照旧直通、行为逐字不变。
     if path.startswith("/team/") and "/files/" in path:
         return "ingest"
+    # #86 ·「清空这份档案」：`POST /team/{id}/empty`。同一张写脸、同一个 owner_token 门，
+    # 共用 'ingest' 那个表盘。它没有请求体，所以体积预检对它是空转——真正要的是**限流**：
+    # 这是全站唯一一个一次调用就抹掉整个资料库的端点，边缘上零防护尤其不能接受。
+    if path.startswith("/team/") and path.endswith("/empty"):
+        return "ingest"
     if path == "/ask" or path.startswith("/ask/"):
         return "ask"
     if path.startswith("/r/"):

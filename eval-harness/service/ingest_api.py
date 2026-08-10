@@ -958,3 +958,44 @@ def team_file_delete(context_id: str, source_key: str,
         "remaining": report.remaining_documents,
     }
     return payload
+
+
+@router.post("/team/{context_id}/empty")
+def team_empty(context_id: str,
+               x_avery_token: str | None = Header(None),
+               authorization: str | None = Header(None),
+               x_avery_account: str | None = Header(None)) -> dict:
+    """#86 ·「清空这份档案」—— 把上传来的一切收走，**档案本身留着**。
+
+    Danny 0810 拍板：不要有「新建」的概念，一个人从头到尾就一份档案；真要从头来是清空这一份，
+    `context_id` / `owner_token` 都不变（浏览器里那份锚点、外面发出去的员工 H5 链接、
+    绑定的账号，清空之后全部继续有效）。
+
+    为什么是 **POST /empty** 而不是 `DELETE /team/{id}`：`DELETE` 的语义是「这份资源没了」，
+    而这里资源恰恰**必须还在**。pg 腿上真有一个那样的方法（`PostgresContextRegistry.delete()`，
+    删 `contexts` 行本身），它是本端点的**反面**，永远不该挂到 HTTP 上。
+
+    清掉什么、留下什么，正源在 `ContextRegistry.empty_context` 的 docstring（确认文案照它写）。
+    🔴 其中一条必须让用户看见：Avery 自己写的观察（notes）与员工已交的答卷**留着**。
+
+    门与本族其余写端点逐字相同：owner_token（header）或已验证账号，否则同体 404 无枚举。
+    回执 = 与 `GET /team/{id}` 同一张 payload（清空后的空世界），前端拿它整屏刷新。
+    🔴 同 append / delete：**不发** owner_token（凭据只在创建那一刻交出去一次）。"""
+    reg = active_registry()
+    ctx = authorize_context(reg, context_id, extract_owner_token(x_avery_token, authorization),
+                            account.resolve_account(x_avery_account))
+    emptied = getattr(reg, "empty_context", None)
+    if emptied is None or not emptied(ctx.context_id):
+        # authorize 之后 context 理论上恒在；走到这里 = 刚被别的请求删掉了（或一个不认这个
+        # 方法的老 registry 替身）。同体 404，不给存在性 oracle。
+        raise HTTPException(status_code=404, detail=f"unknown company_context_id: {context_id}")
+
+    # 🔴 必须重新 get()，不能复用上面那个 ctx：内存腿的 ctx 是被原地清空的**同一个对象**（拿它
+    # 投影是对的），但 pg 腿的 empty_context 走的是库内 SQL，手上这个 ctx 还是清空**前**的快照——
+    # 直接投它，回执会把刚刚清掉的那一屏原样发回去，前端看到的是「点了没反应」。
+    fresh = reg.get(ctx.context_id)
+    if fresh is None:
+        raise HTTPException(status_code=404, detail=f"unknown company_context_id: {context_id}")
+    payload = _team_payload(fresh, reg=reg)
+    payload["emptied"] = True
+    return payload
