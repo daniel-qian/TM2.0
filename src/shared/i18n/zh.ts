@@ -623,6 +623,50 @@ export const zh: Dict = {
     "filesEmptyCancel": "先留着",
     "filesEmptyBusy": "正在清空…",
     "filesEmptyError": "刚才没能清空，什么都没删。再试一次。",
+
+    // ── #85 ·「这次补料改了什么」只读流水 ───────────────────────────────────────────────
+    // ⚠ HAND-WRITTEN（本 session 直接定稿，不走 M3 —— 口径 2026-08-03 已改）。
+    // 🔴 这一区的全部分寸都在拍板③（2026-08-07「补传后安静更新、不打扰」）与拍板 B
+    //    （「事后要查得到」）之间：**不弹通知、不占今天页**，只在这里可查。所以第一句话就把
+    //    「Avery 已经自己改好了」说在前面——把它写成一堆待办，就是把拍板③ 又推翻一次。
+    // 🔴 词族锁：这一族统一说「资料」（同页名「资料库」），不说「文档/档案/知识库」。
+    // 🔴 不许出现「冲突/矛盾/异常」那一族词：那是今天页决策卡的活，这里只是流水账。
+    "changesTitle": "资料更新",
+    "changesLede": "你补上新资料之后，Avery 会直接把卡片改成新的说法，不来打扰你。改了哪些、依据是哪一份，都记在这儿。",
+    "changesCountLine": "{n} 处改动 · 来自 {files} 份资料",
+    // 🔴「没有」与「还没发生过」是两件事，但对用户来说出路一样：这句只说事实 + 出路，
+    //    不替他断言是哪一种（同 filesCurrentEmptyRead 那条纪律）。
+    "changesEmpty": "还没有这样的记录。等你再传一批资料进来，Avery 顺着新资料改动过的地方就会列在这里。",
+    "changesEmptyHint": "第一次上传不算「改动」——那时候所有卡片都是新读出来的。",
+    // 每一行：主体 + 哪一格 + 从什么变成什么。三段分开渲染，不拼成一句长话。
+    "changesFieldOf": "{subject} · {field}",
+    "changesFilled": "补上了",
+    "changesAddedPerson": "新增同事「{subject}」",
+    "changesAddedProject": "新增项目「{subject}」",
+    "changesFromDoc": "依据《{doc}》",
+    "changesFromDocLine": "依据《{doc}》第 {line} 行",
+    // 引文可点：跳到「文件」那一区并按这个文件名筛出来。**做不到的不许许诺**——我们没有
+    // 原文阅读器，点不到具体那一行，所以 aria 里说的就是「在文件里找到它」。
+    "changesJumpAria": "在文件里找到《{doc}》",
+    "changesMarkRead": "已查阅",
+    "changesUnmark": "取消标记",
+    "changesReadFold": "已查阅（{n}）",
+    // 列表项的分隔符（顿号）。中英不同，所以它是一条键、不是写死在代码里的字符。
+    "changeListJoin": "、",
+    "changeFieldRole": "职位",
+    "changeFieldTeam": "部门",
+    "changeFieldTenure": "司龄",
+    "changeFieldOwns": "负责",
+    "changeFieldCollaboration": "协作",
+    "changeFieldOwner": "负责人",
+    "changeFieldStatus": "状态",
+    "changeFieldDueDate": "截止",
+    "changeFieldSummary": "简介",
+    "changeFieldProgress": "进度",
+    "changeFieldRisk": "风险",
+    "changeFieldMilestones": "里程碑",
+    "changeFieldBlockers": "卡点",
+
     // ⚠ HAND-WRITTEN（gap-design-0805 T3 · form-frontend-a1c）：资料库第④段「常驻表单」。
     // 词族锁定：这一族统一说「表单」，不混用「问卷/表格/打卡/考勤」。
     // 🔴 表单是**员工本人对自己这段工作的说法**，不是对人的评分——后端 gate_form_red_line

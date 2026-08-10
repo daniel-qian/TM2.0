@@ -2220,18 +2220,24 @@ def _reading_absent(value) -> bool:
 # ## 形状
 #   lineage = {
 #     "docs":   ["旺季排班协调纪要.md", "项目台账.md"],       # 提到过这张卡的文档（doc_key 粒度）
+#     "added_in": "b-…",                                     # 这张卡是哪一批补传**新建**的（#85）
 #     "fields": {"ownerName": {"source": "旺季排班协调纪要.md:12",
 #                              "batch_id": "b-…",            # 这一格是哪一批补传写的（首次上传没有）
 #                              "seeded": True,               # 见下「推出来的 vs 记下来的」
 #                              "prev": {"value": "老周", "source": "项目台账.md:7", "prev": {...}}}}
 #   }
 #
-# ## 两个键回答**两个不同的问题**，别混着用
+# ## 三个键回答**三个不同的问题**，别混着用
 #   · `docs`   —— 「**哪些文档提到过这张卡**」。凡是有一条读数落到这张卡上（哪怕它一格都没改写、
 #     哪怕它输给了 keep-first、哪怕手编赢了），那份文档就在这里。它答的是「删光之后这张卡还有没有
 #     文档依据」，**不是**「删掉它卡上要改什么」。
 #   · `fields` —— 「**这一格现在这个值是哪一份文档的哪一行给的**」。它才是「删掉之后该变成什么」
 #     的判据。
+#   · `added_in`（#85 追加）—— 「**这张卡是哪一批补传新建的**」。缺席 = 首次上传铸的 / 手编建的
+#     （absent≠none）。为什么非得有它：新建的卡走的是 `merge_*_reading` 的 append 分支，一格都
+#     没被顶掉，于是 `fields` 全是 `seeded`、`provenance` 一个键都没有——「这批资料新增了两位
+#     同事」在卡上**结构性地留不下任何痕迹**。⚠ 它刻意**不**用 `provenance` 记：`origin:'doc'`
+#     在屏幕上的意思是「被后来的上传顶掉过」（见下面 §🔴 第 3 条），给新卡盖这个戳就是撒谎。
 #
 # ## 推出来的 vs 记下来的（`seeded`）
 # 一张卡刚被抽取器铸出来时，它每一格都来自 `source` 那一份文档——所以 `__post_init__` 就地播种
@@ -2407,6 +2413,31 @@ def absorb_sources(cur, incoming) -> None:
     for key in list((_lineage_of(incoming).get("docs") or [])):
         note_source_doc(cur, key)
     note_source_doc(cur, str(getattr(incoming, "source", "") or ""))
+
+
+def note_added_in(entity, batch_id: str) -> None:
+    """#85 —— 这张卡是**这一批补传新建**的。空批次号不记（首次上传/表单回流那条路没有批次）。
+
+    🔴 只在 `merge_*_reading` 的 append 分支调，且只调一次：这张卡此刻刚被造出来，`added_in`
+    是它的**出生批次**，不是「最近一次被这批资料碰过」。后者已经由 `fields[f].batch_id` 回答，
+    两个键混起来的下场是「一张三个月前的老卡，因为今天有份文件提了它一句，就出现在『这次补料
+    新增了谁』里」。
+
+    ⚠ 幂等但不覆盖：已经有出生批次的卡再进来一次不改写它。出生只发生一次。
+    🔴 **但这一句今天是够不着的**（#85 变异 M-B 实测存活，查下去才发现是死枝，不是门洞）：
+    两处调用点传的都是 `incoming` —— 一条刚从新文件抽出来的读数，`_init_lineage` 只播
+    `docs`/`fields`，从不播 `added_in`，所以「已经有出生批次」在现行链路上永远为假。
+    留着它是为了**别的 bug 发生时少错一点**（真有人把它挪进 `absorb`，出生批次至少不会
+    跟着最后一次被提到的批次跑）。写在这里是因为：一条测不到的分支必须自己说自己测不到，
+    否则下一个人会把变异台账上那格绿读成「这条守卫验过了」。
+    """
+    bid = (batch_id or "").strip()
+    if not bid:
+        return
+    lin = _lineage_of(entity)
+    if lin.get("added_in"):
+        return
+    lin["added_in"] = bid
 
 
 def _init_lineage(entity, kind: str) -> None:
@@ -2697,6 +2728,8 @@ def merge_project_reading(projects: list[ProjectEntity], incoming: ProjectEntity
     if cur is None:
         # 新项目：追加在**末尾**（同 `merge_person_reading` 的理由——活下来那条的 id 是前端
         # 编辑/归档的靶子，插在前面等于让经理刚改过的那张卡失联），然后解一次 id 碰撞。
+        # #85：记下出生批次——新卡一格都没被顶掉，不记的话「这批资料新增了什么」在卡上无迹可寻。
+        note_added_in(incoming, ledger.batch_id)
         projects.append(incoming)
         _disambiguate_project_ids(projects)
         return incoming
@@ -2777,6 +2810,10 @@ def merge_person_reading(people: list[PersonEntity], incoming: PersonEntity,
     if cur is None:
         # 名册里没有这个人（新同事第一次交表）——追加在**末尾**。绝不插在前面：活下来那条的 id 是
         # 前端编辑/归档的靶子，把它换掉等于让经理刚改过的那张卡失联。
+        # #85：只有补传路记出生批次（表单回流没有账本 → 没有批次号 → `note_added_in` 自己不记）。
+        # 这不是漏做：「这次补料改了什么」讲的是**文件**那条路，员工交表另有「谁交了」那一屏。
+        if ledger is not None:
+            note_added_in(incoming, ledger.batch_id)
         people.append(incoming)
         _disambiguate_person_ids(people)
         return incoming
