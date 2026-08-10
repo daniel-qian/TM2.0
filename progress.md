@@ -3,37 +3,48 @@
 > 📢 本文件是**当前状态快照，整体重写不追加**。历史都在 git（`git log` + 各 `.issues/*/receipt*.md`），别在这儿堆编年史。
 > 启动路径见 `AGENTS.md` Startup Workflow：读本文件 + `feature_list.json`，跑 `./init.sh` 确认绿，再开工。
 
-**Last Updated:** 2026-08-10（**同一天五票落地**：#86「清空这份档案」+ #83「对话侧栏皮肤」+
-#87「实体血缘地基」（纯后端，动了迁移 0009）+ #84「资料库两栏 file explorer」+
-**#85「这次补料改了什么」只读流水 + 已查阅（前后端各一半，零迁移）**。仍未 push、未上产）
+**Last Updated:** 2026-08-10（**同一天六票落地 = 0810 设计轮全清**：#86「清空这份档案」+
+#83「对话侧栏皮肤」+ #87「实体血缘地基」（纯后端，动了迁移 0009）+ #84「资料库两栏
+file explorer」+ #85「这次补料改了什么」只读流水 + **#88「撤掉新建一家公司」单档案模型收口
+（前后端各一半，零迁移）**。仍未 push、未上产）
 
 ## Current State
 
 - **git**：`main` = 差距战役八票 + gap2 三票 + 三轮演习批 + #68 + #70 + #69+#71 + #72 +
   **0808 重构战役四波全部**（#73/#74/#75/#76/#77/#78/#79）+ wave 4（#80+#81）+ #82
-  + **#86 + #83 + #87 + #84 + #85（0810 设计轮票 4 / 票 1 / 票 5 / 票 2 / 票 3）**。
-  回执十一份：`redesign-0808/` 六份 + `design-0810/` 五份（86 / 83 / 87 / 84 / **85**，全是本日）。
+  + **#86 + #83 + #87 + #84 + #85 + #88（0810 设计轮票 4 / 1 / 5 / 2 / 3 / 6 —— 六票全清）**。
+  回执十二份：`redesign-0808/` 六份 + `design-0810/` 六份（86 / 83 / 87 / 84 / 85 / **88**，全是本日）。
   ⚠ 别在这儿写死 ahead 数字——它每提交一次就自己作废。要数就跑：
   `git rev-list --count origin/main..HEAD`。
-- **后端离线套基线：`TZ=UTC` → 4132 passed · 0 failed · 137 deselected · 4 xfailed**（约 137s）。
-  = 上一基线 4114 + #85 的 18 条（`test_change_log_t85.py`，另 1 条 `@needs_db` 进 deselected）。
+- **后端离线套基线：`TZ=UTC` → 4135 passed · 0 failed · 139 deselected · 4 xfailed**（约 118s）。
+  = 上一基线 4132 + #88 的 3 条（`test_registry_contract` 两条 ephemeral 契约 + `test_context_empty_t86`
+  一条端点；另 2 条 pg 参数化进 deselected）。
   ✅ **任何红都是你的。**
-- **真库套（@needs_db）**：throwaway `avery_t85_test`（docker `teammaster-postgres-1` / pgvector pg17）
-  跑 `test_change_log_t85 + test_entity_lineage_t87 + test_registry_contract + test_registry_protocol`
-  → **62 passed · 0 failed**。（#87 那一轮跑的是更宽的一组，73/0，两个数不是同一个集合，别对减。）
+- **真库套（@needs_db）**：throwaway `avery_t88_test`（docker `teammaster-postgres-1` / pgvector pg17）
+  跑 `test_registry_contract + test_context_empty_t86 + test_registry_protocol + test_file_append_t10
+  + test_file_delete_t77` → **205 passed · 0 failed**。（历轮跑的集合各不相同：#85 是 62、#87 是 73
+  ——**这几个数不是同一个集合，别对减**。）
+  🔴 **本轮实收一条间歇红**：`test_sweep_collects_only_old_unlinked_ephemeral_clones[postgres]`
+  整轮红过一次、单跑绿、随后两轮同命令全绿。当场探容器时钟：连采 6 次，前 5 次 `+0.4s`，
+  **第 6 次 `-114.2s`** —— 就是那条「Docker PG 时钟来回跳 ~115 秒」，招牌症状正是「单跑绿、整轮红」，
+  触发面是 `created_at < now()`。**不是本票造成的，也别当它不存在。**
   ⚠ 本机 docker PG 的口令是 **`dev`** 不是 `postgres`（`docker inspect teammaster-postgres-1` 可查）。
   跑完记得 `DROP DATABASE`（本 session 的一次性库已删）。
-- **像素基线现状**：**54 张，本日重冻过 8 张**——4 张按 #83 + 4 张按 #84，另 46 张哈希逐字未变。
-  **#85 净漂移 0 张**：那一区**只在补传之后才存在**，而两套 spec（空态 9 屏 ×2 皮 ×2 视口 +
-  数据态 3 屏）走的都是首次上传，左栏那一行根本不渲染。⚠ **零漂移是预期，不是证据**——
-  证据是在主检出跑完之后对 54 张取 md5 **逐行 diff 为空**（一张都没被重写，全绿不是靠悄悄重冻换来的）。
+- **像素基线现状**：**54 张，本日重冻过 10 张**——4 张按 #83 + 4 张按 #84 + **2 张按 #88**
+  （`{aurora,paper}-files-desktop`：空态左栏少了「更多 / 新建一家公司」那一组），另 44 张哈希逐字未变。
+  **#85 净漂移 0 张**（那一区只在补传之后才存在，两套 spec 都走首次上传）。
+  ⚠ **零漂移是预期，不是证据**——证据是在主检出跑完之后对 54 张取 md5 **逐行 diff**
+  （#88 那一轮：恰好 2 行不同，总数 54 → 54，无附带漂移）。
+  🔴 **像素盖不到「有档案」的资料库屏**：`visual-data.spec` 的 `SCREENS` 是
+  `home/team/projects/room`，**不含 files**；`visual.spec` 的 files 四张拍的是空态。
+  所以 #88「有档案时栏底少了一行」这一改**没有像素覆盖**，行为覆盖在 `verify-files-explorer` A③'。
   🔴 **别在 worktree 里跑像素**：那是 gitignore 的**每树一份**产物。#85 实收一次新形态：
   worktree 里**第一次红、第二次绿**，且 54 张 mtime 全变成那一刻——等于对着一份自己刚写出来的
   东西比对。像素一律 `cd /d/avery` 跑，`VERIFY_BASE` 指 worktree 的 preview，**跑前跑后各取一次
   md5 做全表 diff**（⚠ 别用 `md5sum … | sed 's|.*/||'`，它贪婪吃掉哈希、把对照退化成空判）。
 - **✅ 生产仍停在 08-07 白天那一版**（`main-20260807-190332` = main `99d83f7`）。
   gap2 三票 + 三轮演习批 + #68 + #70 + #69/#71 + #72 + 重构战役四波 + wave 4 + #82 +
-  #86 + #83 + #87 + #84 都没有上产。
+  **0810 设计轮六票（#86/#83/#87/#84/#85/#88）** 都没有上产。
 - 🔴 **迁移账（上产时按这个来）**：
   - **T9 需要 `0015_form_submissions_auto_key.sql`**（increment-only、`_ensure_schema()` 自动重放）。
   - **#78 需要 `0016_advise_runs_thread.sql`**（`ADD COLUMN IF NOT EXISTS thread_id` +
@@ -43,6 +54,9 @@
     `_ensure_schema` 每次引导自动重放，换容器即生效。**升级路径已在一次性库上真跑过**
     （回执 §6 七步表）：新代码 + 旧 0009 = **每一条人卡写入被真库 `CheckViolation` 拒掉**；
     换回新 0009 重放引导 → 就地 DROP+ADD、存量行活过全表重验、护城河没被捅漏。
+  - **#88 不需要迁移**：它改的 `avery.contexts.ephemeral` 是**既有顶层列**（gc-demo-clones-0724
+    就在了），`empty_context` 只是多写它一次。⚠ 但**动了 pg 腿就得跑 `@needs_db`**——
+    M9 变异实测：pg 腿不摘那个标，**离线套 70 passed 全绿**，只有真库那一层逮得到。
   - **#85 / #84 / #86 / #82 / #80 / #81 / #79 / #77 / #76 / #74 / #75 / #73 不需要迁移**
     （#84 纯前端；**#85 的 `added_in` 是 `lineage` jsonb **里面**的嵌套键，而 `lineage` 这个
     顶层键 #87 已经加进 0009 的 allowlist 了——这句话不是读码推断，`@needs_db` 那条在一次性
@@ -54,6 +68,49 @@
   ⚠ worktree 的 node_modules 是主检出的 junction：装依赖要在 `D:\avery` 装。
 - 🔴 **合的都是本地 main，没有 push**。前端 push main 即自动构建上产，push + 换后端容器
   必须在统一上产 session 的**同一个窗口**里做。
+
+## 本轮做完的 · 之六（2026-08-10 · #88 撤掉「新建一家公司」——单档案模型收口）
+
+回执 `.issues/design-0810/receipt-88-single-archive.md`（含 **Danny 现拍的两条**、完整门账
+对表、10 条变异台账含**一条存活及其原因**、三次「差点被读成结论」的红）。**0810 设计轮到此全清。**
+
+`uploadFiles` 降级为**引导路径**：`contextId === null` 才真开火，其余委托 `appendFiles`。
+🔴 **闸在 store 不在四个调用点上**——`OnboardGate.StepUpload` 与首页骨架卡是全新用户铸出
+档案的那条路（票面明令不能碰），而「此刻有没有档案」这个事实只有 store 手上有；放 UI 上
+就是四把尺，任何一把漂一次的代价都是又新铸一个 context（旧那份的 owner_token 服务端只返
+一次、已被覆盖 = 永久无人能认领）。够得着的现场：向导里传成功一次之后翻回①再传一次。
+
+两块 UI 整条撤除：`files-new`（「新建一家公司」）+ `files-switch`（「切换」）+
+`KnownContextList.tsx` + store 的 `knownContexts/switchContext/forgetContext/switchError/
+switchPending` + localStorage `lite2:knownContexts:v1` + 13 条 i18n 键（手工 Edit，孤儿 0 → 0）。
+
+### Danny 本轮现拍的两条
+
+1. **名册整条砍到底**。票面把它列为「待拍的余数」（倾向保留为只读历史入口）。第一次问
+   Danny 说「没太听懂，现在没有存量用户，重新衡量以后提问」。重新衡量后它**不是产品取舍
+   是算术题**：切换列表要 ≥2 份才出现，而撤掉「新建」后一台电脑最多长出 1 份 → 死代码。
+   🔴 **方法论留给下一个人**：摆选项之前先算一遍**每个选项的前提还成不成立**——
+   「存量用户回不去」听着像真代价，可它的前提恰恰被同一票消灭了。
+2. **清空 ＝ 这份档案从此归你**（票面完全没有，是本票**自己造出来**的死胡同）：领过示例
+   团队的人上传口是封着的，出路本来是「新建一家公司」，砍掉之后清空若不摘 `ephemeral`，
+   他做完唯一被指引的动作**什么也没解开**。`empty_context` 两条腿清 `ephemeral`，
+   与 `link_account_context` 是同一条判断的两个触发点。
+
+### 三条值得下一个人知道的
+
+1. 🔴 **票面门账只列了 3 道，实际动了 8 道**。两道漏网的找法不同：`verify-404-discriminator`
+   靠逐门 grep 被删符号扫到（**硬红**）；`verify-data-boundary` 也是 grep 扫到，但 41 处引用、
+   约 20 条判据的规模只有真读进去才看得出来。**动第一行代码之前，先对
+   `git ls-files "*verify-*.mjs"` 全量 grep 被删的每一个符号，把门账算完。**
+2. 🔴 **票面点名的「假绿陷阱」有第二个现场**。除了 `verify-context-switch` ⑥，
+   `verify-archive-empty` ③⑥ 写的是 `(s.knownContexts ?? []).length`——名册撤除后前后都是
+   `0 === 0`，**一道全绿的门冒充「恒 1 份档案还被守着」**。改判一律读**原值**
+   （`=== undefined ? 'absent'`）+ localStorage 原文；`?? []` 不许出现在判据里，
+   它把「这一格没了」和「这一格是空的」抹成同一个数。
+3. 🔴 **`i18n-orphans` 有一块暗区：注释里点过名的键永远不是孤儿**（`bareAccessRe` 扫的是
+   文件原文，注释一并算数）。实收：票面预判 13 个孤儿，第一次跑只报 12——少的那个是
+   `upload.againTitle`，因为 `FileManifest.tsx` 的注释把它当反面教材点了名。
+   **「0 孤儿」比它看起来的要弱。** 已把那处注释改成不写具体键名。
 
 ## 本轮做完的 · 之五（2026-08-10 · #85「这次补料改了什么」只读流水 + 已查阅）
 
@@ -231,23 +288,22 @@ facts+notes 重物化成空；**留下** `context_id` · `owner_token` · `name`
 
 ## What's Next（按优先级）
 
-0. **🔴 0810 设计轮六票：#83 + #86 + #87 + #84 + #85 已完成，只剩 #88 一票**。正源 `.issues/design-0810/design-plan.md`
+0. **✅ 0810 设计轮六票全部完成**（#83 + #86 + #87 + #84 + #85 + #88）。正源 `.issues/design-0810/design-plan.md`
    （Danny 2026-08-10「其他的设计方案全部通过」），原型 `proto/{room,files}.html`，证据 `_shots-0810/`。
    - ~~**#83**~~ ✅ 已落地。**它把导航栏的视觉语言定死了**：底色 `rgba(ink,.035)` · 贴边通到底 ·
      行 34px/`padding 0 10px`/radius 8 · hover `rgba(ink,.05)` · 选中 `rgba(accent,.13)` +
      2px accent 左封条 + 600 · 组标 11px/700/`--ink-soft`。**#84 的左栏（208px）照抄这一套。**
-   - ~~**#84**~~ ✅ 已落地（含 #86 那两笔欠账）。**它把「新建一家公司」降成了左栏底部次级组里的一行**，
-     键 / 判据 / 入口一个没删——**#88 要删的就是那一行**，见下面第 1 条。
+   - ~~**#84**~~ ✅ 已落地（含 #86 那两笔欠账）。它把「新建一家公司」降成左栏底部一行，#88 已把它删掉。
    - ~~**#85**~~ ✅ 已落地（走 #87 血缘，不走 conflicts；**只读**，撤回仍是票 7）。
-     ⚠ 它在左栏加了**第三行**「资料更新」（在「文件」与「常驻表单」之间），#88 动左栏时会碰到。
+     它在左栏加的「资料更新」那一行与 #88 在合并时撞过一次，已解（保留 `changes`，去掉 `new`/`switch`）。
    - ~~**#86**~~ ✅ 已落地（UI 挂点已由 #84 补上）
    - ~~**#87**~~ ✅ 已落地（**只做地基**；两条下游见第 3 条）
-   - **#88** 撤掉「新建一家公司」——前置 #86 已就位。
-1. **#88 撤掉「新建一家公司」——#84 已把地基铺好**（回执 `receipt-84-files-explorer.md` §2① / §8）：
-   要删的是 `FilesScreen.tsx` 里 `.lite-files-rail-foot` 下 `id="new"` 那一行 + `activeZone === 'new'`
-   那一支 + `filesUploadTitle` / `againTitle` / `againBody` 三条键。同拍要改的判据已知道是哪几条：
-   `verify-files-ia` ③（左栏行序里 forms 在 new 前面）与 `verify-append-story` ②（「两个方向分得开」
-   靠的就是 new 那一区）——两条都会红，**那个红是对的**。
+   - ~~**#88**~~ ✅ 已落地。**Danny 同拍又拍了两条**（名册整条砍到底 / 清空即认领），见「之六」。
+1. 🔴 **单档案模型现在是产品的硬前提，别再往回长**。可执行的形态是：
+   `uploadFiles` 只在 `contextId === null` 时开火 · 一台电脑的钥匙串（`lite2:ownerTokens:v1`）
+   恒 1 把 · 左栏没有「新建」「切换」两行 · 纠错出口只有「清空这份档案」（`context_id` 不变）。
+   守它的是 `verify-data-boundary` B1（判据落**凭据表**不落屏上文案）+ `verify-files-ia` ③b +
+   `verify-append-story` ② + `verify-archive-empty` ③⑥。**四道门里任何一道红，先怀疑多档案复辟。**
 2. ✅ **#85 已经把 #87 的现成件吃掉了**：`lineage` 现在**投给前端**了（两张卡各一个 additive
    `lineage` 键，整本原样透传），那条「卡上没有 lineage 键」的判据已按纪律同 commit 改判。
    **票 7（逐条撤回）不用再修投影这条路**——它要写回去的 `prev` 链已经在浏览器里了，
@@ -259,7 +315,7 @@ facts+notes 重物化成空；**留下** `context_id` · `owner_token` · `name`
      **建议开票**，成本写在回执 §9.2。
    - 🔴 **两张票卡在同一个产品拍板上**：删掉冲突的一方之后**由谁胜出**（`file_delete.py` 明说这等于
      「替抽取器编一个它从没做过的判断」）。**一次拍板同时解锁两张票**，值得单独问 Danny。
-4. **统一上产**（gap2 三票 + 三轮演习批 + #68 + 重构战役四波 + wave 4 + #82 + #86 + #83 + #87）。
+4. **统一上产**（gap2 三票 + 三轮演习批 + #68 + 重构战役四波 + wave 4 + #82 + **0810 设计轮六票**）。
    🔴 push 与换后端容器同窗口；**0015 + 0016 必须落地，0009 必须是就地改过的那一版**；
    上产后先设 `AVERY_PUBLIC_BASE` 再验表单。
 5. ⚠ **给下一个人的口径**：recon-sidebar / recon-composer 是好正源，但它们**各有一处已证的错**——
@@ -278,6 +334,18 @@ facts+notes 重物化成空；**留下** `context_id` · `owner_token` · `name`
 
 ## Notes（顺手发现，没顺手修）
 
+- 🔴 **#88 顺手发现：`i18n-orphans` 有一块暗区**。它那条 `bareAccessRe` 正则
+  扫的是**文件原文，注释一并算数**——在注释里点名一个键就等于**永久**把它从孤儿名单上摘掉。
+  实收：#88 票面预判 13 个孤儿，第一次跑只报 12，少的那个被 `FileManifest.tsx` 的注释养活着。
+  **「0 孤儿」比它看起来的要弱。** 想修的话是给扫描器加一步剥注释，是独立小票。
+- ⚠ **#88 顺手发现：`useUploadTarget` 的默认推导没有独立可达行为**。资料库屏显式传 mode，
+  而唯一消费默认分支的 `HomeScreen` 骨架卡只在 `!team` 时渲染（那时 contextId 几乎恒 null）。
+  M4 变异因此存活——**不是门漏，是那条推导本身是 store 闸的 belt-and-braces**。
+  没给它编门（编出来只会测一个造出来的场景）。哪天首页骨架卡的渲染条件放宽，回来补一条。
+- ⚠ **#88 顺手发现：手拍脚本会静悄悄拍不到东西**。`_px88/shot.mjs` 第一轮四张手机 `data-*`
+  **全没拍到左栏**（收抽屉点遮罩，那一下被关闭动画吃掉，随后 `openRail()` 又把它合回去），
+  而截图看起来一切正常——差一点就当「人眼过了」。现在脚本自己会在拍不到栏时抛错。
+  **手拍脚本也要有自证，跟门一样。**
 - ⚠ **#85 流水里「简介」那一行读起来像噪音**（截图上是「负责人：老周 → 负责人：小马」）：
   病在**抽取器**给 `summary` 取值的方式（取第一条键行），不在流水——它如实反映了那一格真的变了。
   同一件事还有个门层面的后果：**`clampWidth` 的死针探测**。语料第一版把长句写成文末散文，
