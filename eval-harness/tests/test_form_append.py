@@ -300,7 +300,15 @@ def _auth(tok: str) -> dict:
     return {"X-Avery-Token": tok}
 
 
-def _one_link(client) -> tuple[str, str, str]:
+def _one_link(client) -> tuple[str, str, str, str]:
+    """铸一条链接，把 token 与**这一条的 id** 一起带回。
+
+    🔴 id 从铸链回帧里拿，不许事后 `GET .../forms/submissions` 再取 `[0]`（#82）。那支端点是
+    读时顺手把本期备好的（T9 `ensure_current_period_links`），而这里铸的 `2026-W32` 从
+    2026-08-10 起**永远是上一期**：每次读都会照着它的名单自动铸出一条本期空行，列表又是
+    newest-first，于是 `[0]` 拿到的是那条空行而不是周雅刚交的那份。2026 年 W32→W33 翻周
+    当天，这个假设一次炸了本文件两条 + T9 一条。
+    """
     files = [("files", (HANDBOOK.name, HANDBOOK.read_bytes(), "application/octet-stream"))]
     ing = client.post("/ingest", files=files).json()
     cid, tok = ing["context_id"], ing["owner_token"]
@@ -309,7 +317,21 @@ def _one_link(client) -> tuple[str, str, str]:
                     json={"recipients": [{"id": "P-0007", "name": "周雅"}], "period": "2026-W32"},
                     headers=_auth(tok))
     assert r.status_code == 200, r.text
-    return cid, tok, r.json()["links"][0]["token"]
+    link = r.json()["links"][0]
+    return cid, tok, link["token"], link["id"]
+
+
+def _submission_row(client, cid: str, tok: str, sid: str) -> dict:
+    """名单里 id 为 `sid` 的那一行。**按 id 选，不按位置选**（理由见 `_one_link`）。
+
+    找不到就当场红——判据宁可炸也不能退化成「过滤出空集，后面的断言无事发生」。
+    """
+    rows = client.get(f"/team/{cid}/forms/submissions",
+                      headers=_auth(tok)).json()["submissions"]
+    hit = [r for r in rows if r["id"] == sid]
+    assert len(hit) == 1, \
+        f"提交 {sid} 不在名单里，名单是 {[(r['id'], r['period'], r['auto']) for r in rows]}"
+    return hit[0]
 
 
 _FORM_POST = {
@@ -323,7 +345,7 @@ _FORM_POST = {
 
 
 def test_submitting_the_form_files_it_into_the_company_records(client):
-    cid, tok, share = _one_link(client)
+    cid, tok, share, sid = _one_link(client)
     r = client.post(f"/f/{share}/submit", data=_FORM_POST)
     assert r.status_code == 200
     assert "已经进了你们公司的资料" in r.text, "入库成功时员工该看到的是定稿文案，不是 pending 版"
@@ -337,8 +359,8 @@ def test_submitting_the_form_files_it_into_the_company_records(client):
     assert dl.status_code == 200 and "宴会厅翻台" in dl.content.decode("utf-8")
 
     # 已在提交时入库 → 补灌端点是幂等 no-op
-    sid = client.get(f"/team/{cid}/forms/submissions",
-                     headers=_auth(tok)).json()["submissions"][0]["id"]
+    assert _submission_row(client, cid, tok, sid)["status"] == "submitted", \
+        "拿错了行——补灌的必须是周雅刚交的那一份，不是自动铸出的本期空行"
     r2 = client.post(f"/team/{cid}/forms/{sid}/ingest", headers=_auth(tok))
     assert r2.status_code == 200 and r2.json()["appended"] is False
     assert len(client.get(f"/team/{cid}/files", headers=_auth(tok)).json()["files"]) == 2
@@ -347,7 +369,7 @@ def test_submitting_the_form_files_it_into_the_company_records(client):
 def test_a_failed_filing_degrades_honestly_and_the_refile_endpoint_repairs_it(client):
     """append 挂掉：员工看 pending 文案（不说「已经进了资料」这句假话）、答案照样锁住；
     经理凭 POST /team/{ctx}/forms/{id}/ingest 补灌成功。"""
-    cid, tok, share = _one_link(client)
+    cid, tok, share, sid = _one_link(client)
 
     with pytest.MonkeyPatch.context() as mp:
         def _boom(*a, **k):
@@ -360,8 +382,8 @@ def test_a_failed_filing_degrades_honestly_and_the_refile_endpoint_repairs_it(cl
     assert "已经进了你们公司的资料" not in r.text, "入库失败还说「已经进了资料」是撒谎"
     assert len(client.get(f"/team/{cid}/files", headers=_auth(tok)).json()["files"]) == 1
 
-    sid = client.get(f"/team/{cid}/forms/submissions",
-                     headers=_auth(tok)).json()["submissions"][0]["id"]
+    assert _submission_row(client, cid, tok, sid)["status"] == "submitted", \
+        "答案没锁住——append 挂了不该把员工填的东西一起丢了"
     r2 = client.post(f"/team/{cid}/forms/{sid}/ingest", headers=_auth(tok))
     assert r2.status_code == 200, r2.text
     assert r2.json()["appended"] is True
@@ -373,9 +395,12 @@ def test_a_failed_filing_degrades_honestly_and_the_refile_endpoint_repairs_it(cl
 
 
 def test_refile_endpoint_is_gated_and_honest(client):
-    cid, tok, share = _one_link(client)
-    sid = client.get(f"/team/{cid}/forms/submissions",
-                     headers=_auth(tok)).json()["submissions"][0]["id"]
+    cid, tok, share, sid = _one_link(client)
+    # ⚠ 这条以前也裸取 `[0]`，只是**恰好**没红：翻周后 `[0]` 是自动铸出的本期空行，它同样
+    # 未提交、同样 409，于是判据看着全绿、量的却是另一行（#82 顺手结清的假绿）。
+    gated = _submission_row(client, cid, tok, sid)
+    assert gated["status"] == "open" and gated["auto"] is False, \
+        "要验的是周雅那条**还没填**的手动链接，不是自动铸出的本期空行"
     # 未提交 → 409（不是 404：链接真实存在，只是还没答）
     r = client.post(f"/team/{cid}/forms/{sid}/ingest", headers=_auth(tok))
     assert r.status_code == 409

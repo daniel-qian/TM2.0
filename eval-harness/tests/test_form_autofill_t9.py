@@ -214,7 +214,16 @@ def test_manual_mint_stays_non_idempotent(client):
     assert a["token"] != b["token"], "两轮拿到了同一条链接"
     # 老链接照常有效（「重复调用等于再发一轮，老链接照常有效直到过期或被填」）。
     assert client.get(f"/f/{a['token']}").status_code == 200
-    assert all(row["auto"] is False for row in _submissions(client, cid, tok))
+    # 🔴 判据只落在**手动铸的那两行**上，不是「名单里所有行」（#82）。读名单那一下会顺手把
+    # 本期备好，`THIS_PERIOD` 一旦成了上期，名单里就多出一条 auto=True 的本期空行——那是
+    # T9 在干正事，不是手动路径被改坏了。`all(...)` 把这两件事混成了一条判据，W33 翻周当天炸。
+    # 先钉「这两行确实在名单里」：过滤式判据最常见的死法是过滤出空集然后恒真。
+    rows = {row["id"]: row for row in _submissions(client, cid, tok)}
+    manual = [a["id"], b["id"]]
+    assert set(manual) <= set(rows), \
+        f"手动铸的两行不在名单里，判据在空跑：manual={manual} 名单={sorted(rows)}"
+    assert [rows[i]["auto"] for i in manual] == [False, False], \
+        "手动铸出来的行被标成了 auto——自动路径的 `auto_key` 漏到手动路径上了"
 
 
 # ── ② 照抄上期：绑定与去重 ────────────────────────────────────────────────────────────────────
@@ -456,6 +465,19 @@ def _submissions(client, cid, tok) -> list[dict]:
     return r.json()["submissions"]
 
 
+def _submission_row(client, cid, tok, sid: str) -> dict:
+    """名单里 id 为 `sid` 的那一行。
+
+    🔴 **按 id 选，不按位置选**（#82）。这支端点读时会顺手把本期备好，名单又是 newest-first——
+    只要被测的那条链接不在本期，`[0]` 就是自动铸出的本期空行。本文件两处 `[0]` 至今没红是因为
+    它们铸的链接**正好落在本期**（于是没有"上一期"可照抄、自动路径不开火），那是布景的巧合，
+    不是判据的保证。找不到就当场红，不让过滤式判据退化成空集恒真。
+    """
+    rows = {r["id"]: r for r in _submissions(client, cid, tok)}
+    assert sid in rows, f"提交 {sid} 不在名单里，名单是 {[(k, v['period']) for k, v in rows.items()]}"
+    return rows[sid]
+
+
 def test_reading_the_forms_area_fills_this_period_in(client):
     """流量触发：经理**读**表单区那一下就把本期备好了（照 `ensure_builtin_templates` 的先例）。"""
     cid, tok = _company(client)
@@ -485,6 +507,111 @@ def _second_read(client, cid, tok) -> dict:
     r = client.get(f"/team/{cid}/forms/submissions", headers=_auth(tok))
     assert r.status_code == 200, r.text
     return r.json()
+
+
+# ── 🔴 周翻转：自动铸链在新的一周开火（#82 正面判据）─────────────────────────────────────────
+# 2026-08-10 周一 UTC 进 W33，是 T9 上线后第一个 ISO 周翻转。产品**正确开火**了——照着 W32 的
+# 名单把 W33 备好——但那一刻全仓没有任何一条判据在看着这件事：直调用例都注入 `today=TODAY`
+# （周期是死的，永远翻不了周），HTTP 用例照抄的是 `2026-W01` 这种「铁定早于本期」的远古周期，
+# 形状对但不是**翻周**。于是产品干对了活，我们是从三条测试红里才发现它干了活的。
+# 下面两条把这条路钉死：一条把钟拨到指定的那一天（含跨年），一条不打任何补丁跑真钟。
+
+
+def _pin_autofill_clock(monkeypatch, day: date) -> None:
+    """把自动补铸这一路的「今天」钉在 `day`。
+
+    只补 `form_autofill` 模块里那个名字：被测的是 `ensure_current_period_links` 经 HTTP 走的
+    那条路，它算周期就是调本模块的 `current_period`。ISO 周的**算法本身不替换**——lambda 里
+    调的还是产品那支真函数，换掉的只有喂给它的日期。手动铸链走 `form_api` 自己那份 import，
+    这里**没**被钉住，所以下面铸上期名单时一律显式传 `period`，不吃默认值。
+    """
+    from avery.ingest import form_autofill
+    monkeypatch.setattr(form_autofill, "current_period",
+                        lambda today=None: current_period(today or day))
+
+
+@pytest.mark.parametrize("pinned, this_week, last_week", [
+    ("2026-08-10", "2026-W33", "2026-W32"),   # #82 那一幕的原样复现：周一早上翻进新的一周
+    ("2026-08-16", "2026-W33", "2026-W32"),   # 同一周的周日——周内哪天读，「本期」都得是同一期
+    ("2027-01-04", "2027-W01", "2026-W53"),   # 跨年翻周（2026 是 53 周年，字典序仍然递增）
+])
+def test_a_new_iso_week_auto_fills_from_last_weeks_roster_over_http(
+        client, monkeypatch, pinned, this_week, last_week):
+    """经理在新的一周第一次打开表单区 → 本期已按**上一个 ISO 周**的名单备好。
+
+    钉三天而不是一天：周一（翻周那一下）、同周周日（「本期」在一周内不许漂）、跨年那一次
+    （`latest_form_period_before` 全靠 `YYYY-Www` 的字典序，W53→W01 是它唯一会崩的形状）。
+    """
+    day = date.fromisoformat(pinned)
+    # 先验尺子再量东西：ISO 周算错了，下面每一条断言都会以「看着对」的样子测错东西。
+    assert current_period(day) == this_week
+    assert current_period(day - timedelta(days=7)) == last_week
+    assert last_week < this_week, "上期没排在本期前面——字典序=时间序这条前提破了"
+    _pin_autofill_clock(monkeypatch, day)
+
+    cid, tok = _company(client)
+    client.get(f"/team/{cid}/forms", headers=_auth(tok))
+    r = client.post(f"/team/{cid}/forms/tpl_weekly/links", headers=_auth(tok),
+                    json={"recipients": [{"id": "P-0007", "name": "周雅"},
+                                         {"id": "P-0008", "name": "陈立"}],
+                          "period": last_week})
+    assert r.status_code == 200, r.text
+    last_tokens = {lk["token"] for lk in r.json()["links"]}
+
+    body = _second_read(client, cid, tok)
+    assert body.get("auto_filled") == [
+        {"template_id": "tpl_weekly", "period": this_week,
+         "copied_from": last_week, "minted": 2}], \
+        f"翻进 {this_week} 之后读表单区，本期没有按 {last_week} 的名单备好"
+
+    fresh = [s for s in body["submissions"] if s["period"] == this_week]
+    assert sorted(s["person_name"] for s in fresh) == ["周雅", "陈立"]
+    assert all(s["auto"] is True and s["status"] == "open" for s in fresh)
+    # 备好的是**空白**链接：照抄的是名单，不是上期的答案。
+    assert all("answers" not in s for s in fresh)
+    # 每人一条不可猜的新链接——把上期的 token 抄过来，会让上周填过的人以为自己还没填。
+    assert not ({s["token"] for s in fresh} & last_tokens)
+    # 上期那两行原样还在（照抄不是搬走）。
+    assert len([s for s in body["submissions"] if s["period"] == last_week]) == 2
+
+    # 同一周里再读一次不再铸（additive key，空即缺席——否则铃铛每刷一次响一声）。
+    assert "auto_filled" not in _second_read(client, cid, tok)
+
+
+def test_the_real_wall_clock_copies_last_iso_week_into_this_one(client):
+    """同一条路，**不打任何补丁**跑真钟——一个周期字面量都不含，哪一天跑都该绿。
+
+    上一条钉的是「钟拨到那天时的行为」，这一条钉的是「产品此刻读真钟算出来的那一期」确实
+    就是自动补铸落地的那一期。两条缺一不可：只有钉钟那条，`current_period` 被改成返回常量
+    也照样全绿（判据自己喂自己）；只有真钟这条，就永远测不到跨年和周一那一下。
+
+    ⚠ 「本期」只问产品要一次（`current_period()`），不自己拿 `datetime.now()` 另算一遍：两次
+    读钟之间隔着一整个 HTTP 请求，跨周那一瞬间（周日 23:59:59.999 → 周一）两个答案会不一样，
+    那就又是一颗墙钟炸弹，只不过引信从「一周」缩到了「一毫秒」。**上期**则必须独立算出来
+    （真钟减 7 天），否则整条判据就变成产品自己跟自己对答案。
+    """
+    last_week = current_period(datetime.now(timezone.utc).date() - timedelta(days=7))
+
+    cid, tok = _company(client)
+    client.get(f"/team/{cid}/forms", headers=_auth(tok))
+    client.post(f"/team/{cid}/forms/tpl_weekly/links", headers=_auth(tok),
+                json={"recipients": [{"id": "P-0007", "name": "周雅"}], "period": last_week})
+
+    body = _second_read(client, cid, tok)
+    filled = body.get("auto_filled")
+    assert filled and len(filled) == 1, \
+        f"真钟走到 {current_period()} 了，读表单区却没有按 {last_week} 的名单把本期备好"
+    got = filled[0]
+    assert got["template_id"] == "tpl_weekly" and got["minted"] == 1
+    assert got["copied_from"] == last_week, "照抄的不是上一个 ISO 周"
+    assert got["period"] == current_period(), "备好的不是产品此刻认的那一期"
+    assert got["period"] > last_week, (
+        f"本期 {got['period']} 没有排在上期 {last_week} 之后——`current_period` 要么不随周走，"
+        f"要么 ISO 周的字典序被打破了（`latest_form_period_before` 全靠它）")
+
+    fresh = [s for s in body["submissions"] if s["period"] == got["period"]]
+    assert len(fresh) == 1 and fresh[0]["auto"] is True and fresh[0]["status"] == "open"
+    assert fresh[0]["person_name"] == "周雅"
 
 
 def test_voiding_an_open_link_expires_it_and_stops_the_autofill_loop(client):
@@ -519,8 +646,8 @@ def test_voiding_a_submitted_link_is_refused(client):
                       "f_load": "60", "f_mood": "如常"})
     r = client.post(f"/team/{cid}/forms/submissions/{link['id']}/void", headers=_auth(tok))
     assert r.status_code == 409, r.text
-    rows = _submissions(client, cid, tok)
-    assert rows[0]["status"] == "submitted" and rows[0]["submitted_at"]
+    row = _submission_row(client, cid, tok, link["id"])
+    assert row["status"] == "submitted" and row["submitted_at"]
 
 
 def test_void_is_tenant_scoped_and_has_no_enumeration_oracle(client):
@@ -543,7 +670,8 @@ def test_void_is_tenant_scoped_and_has_no_enumeration_oracle(client):
         "A 公司的真 id 与一个瞎编的 id，在 B 公司手里换来了两种不同的 404 —— 枚举 oracle")
     # 没有 token 也是同一个 404（门与本文件其余经理端点同一张）。
     assert client.post(f"/team/{cid_a}/forms/submissions/{link['id']}/void").status_code == 404
-    assert _submissions(client, cid_a, tok_a)[0]["status"] == "open", "越权调用改动了别人的行"
+    assert _submission_row(client, cid_a, tok_a, link["id"])["status"] == "open", \
+        "越权调用改动了别人的行"
 
 
 # ── 端到端：新管线真的接到了 /team 的载荷上 ─────────────────────────────────────────────────
