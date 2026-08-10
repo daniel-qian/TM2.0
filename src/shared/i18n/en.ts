@@ -1849,8 +1849,10 @@ export const en = {
     // roomHistoryTitle 的值归 #79 改，两件事不该锁在一起。
     roomHistoryCount: '{n} threads',
     roomHistoryTurns: '{n} exchanges',
-    // 只有一轮的那种「场」——也包括 #78 之前落库的存量行（它们没有场归属，各自单轮）。
-    roomHistoryEmptyThread: 'One question',
+    // ⚠ #83 deleted `roomHistoryEmptyThread` ('One question'). It was the meta line for
+    //  single-exchange threads, and on 0810 real data 8 of 9 rows carried the exact same
+    //  string — a full line of ink, zero information. The count now only shows when >1,
+    //  so the key has no consumer left; both dictionaries drop it in the same commit.
     // aria：打开这一场。⚠ 必须是纯中文（zh 侧），verify-aria-zh 禁拉丁词——所以这两句
     // 里都不许出现 Avery。
     roomHistoryOpenAria: 'Open this conversation and keep asking',
@@ -1862,6 +1864,9 @@ export const en = {
     // (adviseThreads === []). While it is still null (not fetched / stub transport) the list
     // area stays blank: "never asked anything" and "don't know yet" are different claims.
     roomHistoryEmpty: 'No past conversations yet',
+    // #83 · accessible name for the ≤860 drawer scrim. It is a full-bleed button whose only
+    // job is to close the drawer, so the name says exactly that.
+    roomHistoryScrimAria: 'Close conversation history',
     roomHistoryToday: 'Today',
     roomHistoryYesterday: 'Yesterday',
     roomHistoryEarlier: 'Earlier',

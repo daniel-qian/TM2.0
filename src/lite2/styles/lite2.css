@@ -9435,3 +9435,317 @@
     margin-left: 0;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════════════
+   #83 · 对话侧栏上皮肤 + 开场块居中（2026-08-10 · design-0810 · 设计轮票 1）
+   ═══════════════════════════════════════════════════════════════════════════════════
+   APPEND-ONLY：本块在文件尾，同权重后写者胜。规格正源是
+   `.issues/design-0810/design-plan.md` §2.2 + §2.3（Danny 0810 已审过·全部通过），
+   静态原型是 `.issues/design-0810/proto/room.html`（令牌逐位抄自 look-paper.css）。
+
+   ── 改的是哪四条病根（都是 0810 真机截图上量到的，不是读码推断的）────────────────
+   ① 栏读成一张**浮在页面上的白卡片**：底色 `rgb(255,253,248)` 比暖纸画布更亮，且上沿从
+      96px 起、下沿停在 780px —— 上下各一道悬空截断边。参照物（Claude / 访达 / Notion）的
+      边栏一律比正文区**暗**一档且**贴边通到底**。→ 底色改 `rgba(ink, .035)`（**下陷**不是
+      凸起）+ `top:0; bottom:0`。
+   ② **一场占两行 ≈ 85px**（标题行 + 左右分栏的 meta 行），1440×900 只装得下 9 场。
+      → 收成单行 34px，同一块地方装 12+。
+   ③ meta 行几乎全是噪声：9 场里 8 场的 meta 文字**逐字相同**。→ 轮数只在 >1 时占墨
+      （文案层在 RoomScreen；`roomHistoryEmptyThread` 已随本票从两份字典删掉）。
+   ④ 每行三个对齐点（标题左 / meta 左 / 时刻右）→ 列表没有稳定竖轴。
+      → 时刻从静息态撤掉，只在 hover 时**替补**出现。
+
+   ── 🔴 两条一个字节都不能动的 ────────────────────────────────────────────────────
+   ⒜ **composer 几何**。verify-room-claude-rework ② 的「发问零跳变」逐像素比对 composer 的
+      x/y/宽在第一问前后是否一致，两个采样点都在首场答完之前。本块**不写任何一条**碰
+      `.nexus-followup-composer` 或 `--lite2-room-aside-w`(264px) 的规则——开场块居中是靠
+      给 **board** 加 `justify-content:center`，composer 在滚动区外、原地钉死。
+      （方案期原型第一版把 composer 一起收进来居中，拍出来才发现正撞这条，已改。）
+   ⒝ **三个 data 抓手**（`data-history-thread` / `-turns` / `-toggle`）照旧挂在 DOM 上——
+      verify-room-threads 的 5 条属性判据 + 3 处 driver 点击锚全靠它们。本票撤掉的只是
+      **可见文本**，属性一个没动。 */
+
+/* ── 栏本体：下陷 + 贴边通到底 ─────────────────────────────────────────────────── */
+.lite2-shell .lite-room-aside {
+  /* 🔴 `top:0; bottom:0` 是「贴边通到底」的全部实现，也是消灭两道悬空截断边的唯一办法。
+     顶栏胶囊（fixed z50）浮在栏之上——Linear/Notion 同款；栏的**内容**仍从
+     `--lite2-clear-top` 起（下面的 padding-top），所以 verify-topbar-clearance 的
+     「首标题必须低于顶栏带」那条不变量一寸没让。 */
+  top: 0;
+  bottom: 0;
+  /* 🔴 底色从 `rgb(surface)`（比画布**更亮**）翻成 `rgba(ink, .035)`（比画布**更暗**一档）。
+     这一条单独就修掉「白卡片」观感的一大半。
+     ⚠ 半透明在这里是**对的**，与手机抽屉正相反：桌面这根栏是「并排的一列」，底下压着的是
+       画布不是正文；verify-contrast-smalltext 的 bgOf 会把它跳过、退到不透明祖先（更亮的
+       画布）上量——那是**保守**方向（真实底色更暗＝真实对比度更高），不会假绿放过真违规。
+       手机抽屉盖的是正文，那里必须不透明，见下面 ≤860 段的碑。 */
+  background: rgba(var(--lite2-ink-rgb), 0.035);
+  /* 内容顶距仍吃 --lite2-clear-top（96 / 窄屏 24），不许硬写数字——它是全屋九个消费者
+     共用的那条让位账。底距让开常驻合规页脚的**实测**高度（--lite2-footer-h 由 Lite2Footer
+     的 ResizeObserver 发布；再猜一个常数就是把 #34 那个 bug 换个数字重犯）。
+     左右 8px：行的 hover 底色几乎铺满栏宽，是 Claude 侧栏的密度感来源。 */
+  padding: var(--lite2-clear-top, 96px) 8px calc(var(--lite2-footer-h, 56px) + 12px);
+  gap: 0;
+}
+
+/* 「新对话」与列表之间一根细线。用伪元素而不是新 DOM 节点：这棵树上挂着 verify-room-threads
+   的 5 条属性判据与 3 处 driver 抓手，能不动 DOM 就不动。 */
+.lite2-shell .lite-room-aside-top {
+  margin-bottom: 8px;
+}
+
+.lite2-shell .lite-room-aside-top::after {
+  content: '';
+  display: block;
+  height: 1px;
+  margin: 10px 10px 0;
+  background: var(--rule);
+}
+
+/* 「新对话」并入行的节奏（同 34px / 同 padding / 同圆角），用 accent 文字色拎出来但
+   **不做实底**——实底会把视觉重心永久钉在栏顶，而经理真要点的是下面那些会话。
+   🔴 选择器刻意多挂一个 `.lite-btn`：`.lite2-shell .lite-btn.lite-btn--ghost`(0,3,0) 会把任何
+      按 `.lite2-shell .某个具体按钮类`(0,2,0) 写的配色**静默压死**，而一道门都不会红
+      （#81 回执 §2.1 就是被它咬的第一例）。 */
+.lite2-shell .lite-btn.lite-room-new {
+  justify-content: flex-start;
+  gap: 8px;
+  width: 100%;
+  min-height: 34px;
+  padding: 0 10px;
+  border-color: transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: rgb(var(--lite2-accent-deep-rgb));
+  font-size: 13px;
+}
+
+.lite2-shell .lite-btn.lite-room-new:hover:not(:disabled),
+.lite2-shell .lite-btn.lite-room-new:focus-visible:not(:disabled) {
+  border-color: transparent;
+  background: rgba(var(--lite2-accent-rgb), 0.1);
+  color: rgb(var(--lite2-accent-deep-rgb));
+}
+
+.lite2-shell .lite-room-aside-list {
+  gap: 10px;
+  /* #80 那份 `margin:0 -6px; padding:2px 6px` 是为「焦点环别被 overflow 裁掉」写的。
+     本票把焦点环改成 `outline-offset:-2px` 的**内描边**（画在行自己身上，结构上裁不掉），
+     负外边距那套就不需要了——去掉它，行才真能铺满栏宽。 */
+  margin: 0;
+  padding: 0 0 2px;
+}
+
+.lite2-shell .lite-room-aside-group {
+  gap: 2px;
+}
+
+/* 日期组标。🔴 吃 `--ink-soft` **不吃** `--ink-faint`：11px 的 faint 在 paper 上只有
+   ~4.7:1，verify-contrast-smalltext 的 AA 地板余量仅 0.2，aurora 侧更薄。#80 已立此碑，
+   本票把字重从 600 提到 700（规格 §2.2），颜色一个字节不动。 */
+.lite2-shell .lite-room-aside-group-label {
+  font-weight: 700;
+}
+
+/* ── 会话行：单行 34px ────────────────────────────────────────────────────────────
+   基座 `.lite2-shell .lite-room-history-head`(8325) 是**两行式**（flex-direction:column +
+   一圈描边），那是「右上角弹出面板」时代为 420px 宽的面板定的。这里整条改写成行的节奏。 */
+.lite2-shell .lite-room-aside .lite-room-history-head {
+  position: relative;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 10px;
+  border-color: transparent;
+  border-radius: 8px;
+}
+
+.lite2-shell .lite-room-aside .lite-room-history-head:hover:not(:disabled),
+.lite2-shell .lite-room-aside .lite-room-history-head:focus-visible {
+  border-color: transparent;
+  background: rgba(var(--lite2-ink-rgb), 0.05);
+}
+
+/* 焦点环画在行**内侧**：列表是 `overflow-y:auto` 的，画在外侧的环会被裁掉半圈
+   （那正是 #80 用负外边距绕开的问题，这里换成结构上裁不掉的解法）。 */
+.lite2-shell .lite-room-aside .lite-room-history-head:focus-visible {
+  outline: 2px solid rgba(var(--lite2-sky-rgb), 0.9);
+  outline-offset: -2px;
+}
+
+/* 选中：accent 软底 + **2px accent 左封条** + 600 字重。
+   左封条是「这一条是当前」最省墨的说法；accent 语法抄既有 `.lite-ref-chip`，**不新开色阶**。 */
+.lite2-shell .lite-room-aside .lite-room-history-list li.is-current .lite-room-history-head {
+  border-color: transparent;
+  background: rgba(var(--lite2-accent-rgb), 0.13);
+  font-weight: 600;
+}
+
+.lite2-shell .lite-room-aside .lite-room-history-list li.is-current .lite-room-history-head::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  border-radius: 2px;
+  background: rgb(var(--lite2-accent-deep-rgb));
+}
+
+.lite2-shell .lite-room-aside .lite-room-history-q {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.lite2-shell .lite-room-aside .lite-room-history-meta {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+
+/* 轮数：只有 >1 的场才渲染这个节点（RoomScreen 的条件渲染），所以它出现＝这一行真有信息。 */
+.lite2-shell .lite-room-aside .lite-room-history-turns {
+  flex: none;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(var(--lite2-ink-rgb), 0.07);
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+  line-height: 18px;
+}
+
+/* 时刻：静息态**不占墨**，hover/focus 时替补出现（日期组标已经说了是哪一天）。
+   ⚠ 用 display 切换而不是 opacity：opacity:0 的元素**照样占位**，那样标题会被永久截短
+     ~80px，等于换个方式付同一笔墨钱。轮数 pill 同时让位，两者占同一个位置——这就是
+     「替补」的字面意思。 */
+.lite2-shell .lite-room-aside .lite-room-history-date {
+  display: none;
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.lite2-shell .lite-room-aside .lite-room-history-head:hover:not(:disabled) .lite-room-history-date,
+.lite2-shell .lite-room-aside .lite-room-history-head:focus-visible .lite-room-history-date {
+  display: inline;
+}
+
+.lite2-shell .lite-room-aside .lite-room-history-head:hover:not(:disabled) .lite-room-history-turns,
+.lite2-shell .lite-room-aside .lite-room-history-head:focus-visible .lite-room-history-turns {
+  display: none;
+}
+
+/* ── 开场块在「顶栏以下、composer 以上」那块矩形里垂直居中 ─────────────────────────
+   🔴 居中的是 **board**，不是把 composer 一起收进来（见文件头 ⒜）。board 的内容盒天生
+      就是那块矩形：上边界 = padding-top = --lite2-clear-top（顶栏以下），下边界 =
+      padding-bottom = --lite2-room-dock-clear（composer 以上）。所以
+      `min-height:100% + justify-content:center` 落在它身上，量出来的矩形一分不差。
+   ⚠ 只在 `[data-room-turns="0"]` 上生效。8863 那条「刻意不做垂直居中」的碑说的是
+     **有对话之后**别让开场块从屏中跳到顶部——本票没有推翻它：开场块随第一问整块退场
+     （room-claude-rework ② 的第三条判据就钉着这个），退场的东西谈不上跳。真正被门量的
+     composer 三个数在这条规则前后逐像素不变。
+   ⚠ `min-height:100%` 解析得了：`.lite-room-scroll` 是 `position:absolute` + 四边定值，
+     高度是确定的；box-sizing 全局 border-box（实测），所以 100% 含 padding，内容盒正好是
+     上面那块矩形。 */
+.lite2-shell .lite-room-board[data-room-turns='0'] {
+  min-height: 100%;
+  justify-content: center;
+}
+
+/* 桌面兜底：遮罩即使被渲染出来也不许上屏（组件层已经条件渲染，这里是第二道）。
+   🔴 这一条必须写在下面那个 @media **之前**：媒体查询不加特异性，两条都是 (0,3,0)，
+      写在后面就会连手机态一起压死——抽屉的遮罩当场消失，而一条门都不会红。 */
+.lite2-shell .lite-btn.lite-room-aside-scrim {
+  display: none;
+}
+
+/* ── ≤860 · 栏退化为**抽屉** ──────────────────────────────────────────────────────
+   ⚠ 手机抽屉态在**所有既有门里零覆盖**：contrast-smalltext / aria-zh / at-references /
+     room-claude-rework 四道门的视口都硬钉 1280×900 或最小 900 > 860。本票同拍补了一道
+     `eval-harness/tools/verify-room-drawer-mobile.mjs`（390×844）——别把这块当验过的。
+   ⚠ 包含块**实测**过（`.issues/design-0810/_px83/probe.mjs`，不是读码推断）：`.scene.is-active`
+     的 `transform: matrix(1,0,0,1,0,0)` 虽是单位阵却**不是 none**，照样给 fixed 后代劫持
+     包含块——390×844 上插一个 `position:fixed;top:0` 的探针，落点是 y=64（scene 顶）而不是
+     视口 0。所以这里一律用 **absolute**：在这块屏上它与 fixed 等价，但不依赖那个怪癖。
+     实测同时确认议事室手机态**文档不滚**（scrollHeight === clientHeight === 844，内容滚在
+     `.lite-room-scroll` 里），所以 absolute 的抽屉不会被滚走。 */
+@media (max-width: 860px) {
+  .lite2-shell .lite-room-aside {
+    /* 从「右上角 360px 弹出面板」改成「左侧贴边抽屉」。`display:none ↔ flex` 的开关沿用
+       #80 那一对（9398/9417），这里只换几何与配色。 */
+    left: 0;
+    right: auto;
+    top: 0;
+    bottom: 0;
+    width: min(320px, 86vw);
+    max-height: none;
+    padding: calc(var(--lite2-clear-top, 24px) + 44px) 8px
+      calc(var(--lite2-footer-h, 56px) + 12px);
+    border: 0;
+    border-right: 1px solid var(--rule);
+    border-radius: 0;
+    /* 🔴 抽屉底色必须**不透明**，与桌面那份 `rgba(ink,.035)` 正相反。两个理由，缺一不可：
+       ① 抽屉是**浮层**，盖住的是正文。半透明底色 = 透明玻璃，正文从字缝里透出来、整屏叠字
+          （原型阶段真长出来过；#78 早就给历史面板立过「浮层不是玻璃」的碑，照样又踩一次）。
+       ② verify-contrast-smalltext 的 bgOf 把 alpha>0.5 当实底、≤0.5 当**完全透明**跳过——
+          半透明的抽屉会让它量出一个屏上根本不存在的比值（可能假绿放过真违规）。 */
+    background: rgb(var(--lite2-surface-rgb));
+    box-shadow: var(--shadow);
+    z-index: 47;
+  }
+
+  .lite2-shell .lite-room-aside.is-open {
+    animation: lite2-room-drawer-in 180ms ease;
+  }
+
+  /* 遮罩：铺满正文，点它即收起。只在抽屉开着时才进 DOM（RoomScreen 条件渲染），这里那句
+     `display:none` 是桌面兜底——两头都做。
+     ⚠ 它是一枚 <button>（挂 .lite-btn 过按钮族审计），所以要把按钮壳整体归零。 */
+  .lite2-shell .lite-btn.lite-room-aside-scrim {
+    display: block;
+    position: absolute;
+    inset: 0;
+    width: auto;
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: rgba(var(--lite2-ink-rgb), 0.28);
+    z-index: 46;
+  }
+
+  /* 抽屉开关：挪到左上角当抽屉把手（右上角那个位置是 #78 的弹出面板留下的）。
+     🔴 `data-history-toggle` 这个抓手一个字节不动——verify-room-threads 三处 driver 点它。
+     z 48：压过抽屉(47)与遮罩(46)，抽屉开着时它仍点得到（aria-expanded 跟着翻）。 */
+  .lite2-shell .lite-room-history-toggle {
+    left: 16px;
+    right: auto;
+    z-index: 48;
+  }
+
+  /* #80 在 9427 给开场块加的 `padding-top:44px` 是为了躲开右上角那枚开关钮。开关钮现在
+     挪到了左上角、且开场块改成在矩形里垂直居中——把让位从**开场块**挪到**空态 board 的
+     顶距**上：让位要改的是那块矩形的上边界，加在被居中的内容上只会把居中算歪。
+     ⚠ 只加在 `[data-room-turns="0"]` 上：#80 那条碑（对话起来之后内容是滚的，再搞一段
+       恒定顶距只是白白吃掉竖向空间）继续成立。 */
+  .lite2-shell .lite-room-welcome {
+    padding-top: 0;
+  }
+
+  .lite2-shell .lite-room-board[data-room-turns='0'] {
+    padding-top: calc(var(--lite2-clear-top, 24px) + 44px);
+  }
+}
+
+@keyframes lite2-room-drawer-in {
+  from {
+    transform: translateX(-101%);
+  }
+  to {
+    transform: none;
+  }
+}

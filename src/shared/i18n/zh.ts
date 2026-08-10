@@ -1390,7 +1390,9 @@ export const zh: Dict = {
     "roomHistoryTitle": "历史对话",
     "roomHistoryCount": "{n} 场",
     "roomHistoryTurns": "{n} 轮问答",
-    "roomHistoryEmptyThread": "单独问过一次",
+    // ⚠ #83 删掉了 `roomHistoryEmptyThread`（「单独问过一次」）。它是单轮场那一支的 meta 文字，
+    //  0810 真数据实测 9 场里 8 场逐字相同——满行的墨、零信息。轮数改成只在 >1 时才占墨，
+    //  这个键从此没有任何消费者，两份字典同拍删掉（留着就是 i18n-orphans 的一个孤儿）。
     "roomHistoryOpenAria": "打开这场对话，接着往下问",
     "roomHistoryCurrent": "就是眼下这场",
     "roomHistoryBusy": "这一轮还在答，答完才能切",
@@ -1400,6 +1402,9 @@ export const zh: Dict = {
     // 侧栏空态：拉到了确实没有历史（adviseThreads === []）才说这句。null（还没拉/stub 通道）
     // 时列表区留白——「还没问过」和「还不知道有没有问过」是两件事，不许合并成一句。
     "roomHistoryEmpty": "还没有历史对话",
+    // #83 · ≤860 抽屉遮罩的可及名。它是一枚铺满正文的按钮，唯一的动作就是把抽屉收回去，
+    // 所以名字直接说这件事（纯中文，过 verify-aria-zh 的拉丁门）。
+    "roomHistoryScrimAria": "收起历史对话",
     // 按日期分组的三个组标。分组键取**场内最后一轮**的 created_at（与列表排序键同源，
     // 不打架）；比较的是浏览器本地时区的日历日。
     "roomHistoryToday": "今天",

@@ -590,13 +590,22 @@ function LiteRoomAside() {
               要改名得新端点 + registry 双腿 + Protocol 锁步，是独立票）。 */}
           <span className="lite-room-history-q">{first.question}</span>
           <span className="lite-room-history-meta">
-            <span className="lite-room-history-turns">
-              {thread.runs.length > 1
-                ? fill(l.roomHistoryTurns, { n: thread.runs.length })
-                : l.roomHistoryEmptyThread}
-            </span>
+            {/* #83 · 轮数**只在 >1 时才占墨**。改造前单轮那一支渲染的是
+                `roomHistoryEmptyThread`「单独问过一次」——0810 真数据实测 9 场里 8 场逐字
+                相同，满行的墨、零信息（design-plan §1.1 病根③）。那个键已随本票从 zh/en
+                两份字典里删掉，不留孤儿。
+                🔴 撤掉的只是**可见文本**：`data-history-turns` 照旧挂在上面这枚 button 上，
+                   verify-room-threads 的 5 条属性判据与 3 处 driver 抓手零改判。 */}
+            {thread.runs.length > 1 ? (
+              <span className="lite-room-history-turns">
+                {fill(l.roomHistoryTurns, { n: thread.runs.length })}
+              </span>
+            ) : null}
             {/* 时间戳取**最后一轮**：列表是按最近活动排的，标一个开场时间会和
-                排序打架（老场被追问后浮到最前、却显示着最老的时间）。 */}
+                排序打架（老场被追问后浮到最前、却显示着最老的时间）。
+                #83 · 它从静息态**撤到 hover**（CSS 里 display 切换，见 lite2.css #83 段）：
+                日期组标已经说了是哪一天，逐行再报一次年月日时分是重复劳动，而且它是
+                「每行三个对齐点」里最右边那一个（病根④）。 */}
             <span className="lite-room-history-date">{stampOf(lastRunOf(thread).created_at)}</span>
           </span>
         </button>
@@ -623,6 +632,22 @@ function LiteRoomAside() {
           ? `${l.roomHistoryTitle} · ${fill(l.roomHistoryCount, { n: count })}`
           : l.roomHistoryTitle}
       </button>
+      {/* #83 · ≤860 抽屉的遮罩。**只在抽屉真开着时才进 DOM**（桌面 open 恒 false → 桌面
+          这个节点根本不存在），于是它对既有那批 1280×900 的门是结构性不可见的，一条判据
+          都够不着它；CSS 那边另有一道 `display:none` 的桌面兜底，两头都做。
+          🔴 用 <button> 而不是可点的 <div>：verify-button-family 审的是 `.lite2-shell` 下每一枚
+             可见 <button>「要么挂 .lite-btn、要么进白名单」——挂族是不动白名单的那条路
+            （白名单膨胀＝门失效）。按钮壳的边框/内距/圆角在 CSS 里整体归零。
+          没有遮罩的抽屉，用户不知道点哪儿能关（原型阶段人眼过逮到的）。 */}
+      {open ? (
+        <button
+          type="button"
+          className="lite-btn lite-room-aside-scrim"
+          data-history-scrim=""
+          aria-label={l.roomHistoryScrimAria}
+          onClick={() => setOpen(false)}
+        />
+      ) : null}
       <aside
         className={classNames(['lite-room-aside', open ? 'is-open' : ''])}
         aria-label={l.roomHistoryTitle}
