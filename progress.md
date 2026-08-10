@@ -3,16 +3,18 @@
 > 📢 本文件是**当前状态快照，整体重写不追加**。历史都在 git（`git log` + 各 `.issues/*/receipt*.md`），别在这儿堆编年史。
 > 启动路径见 `AGENTS.md` Startup Workflow：读本文件 + `feature_list.json`，跑 `./init.sh` 确认绿，再开工。
 
-**Last Updated:** 2026-08-10（**同一天三票落地**：#86「清空这份档案」+ #83「对话侧栏皮肤」+
-**#87「实体血缘地基」（纯后端，动了迁移 0009）**。仍未 push、未上产）
+**Last Updated:** 2026-08-10（**同一天四票落地**：#86「清空这份档案」+ #83「对话侧栏皮肤」+
+#87「实体血缘地基」（纯后端，动了迁移 0009）+ **#84「资料库两栏 file explorer」（纯前端，
+像素 files 4 张已重冻）**。仍未 push、未上产）
 
 ## Current State
 
 - **git**：`main` = 差距战役八票 + gap2 三票 + 三轮演习批 + #68 + #70 + #69+#71 + #72 +
   **0808 重构战役四波全部**（#73/#74/#75/#76/#77/#78/#79）+ wave 4（#80+#81）+ #82
-  + **#86 + #83 + #87（0810 设计轮票 4 / 票 1 / 票 5）**。
-  回执九份：`redesign-0808/` 六份 + `design-0810/receipt-86-archive-empty.md` +
-  `design-0810/receipt-83-room-rail.md` + **`design-0810/receipt-87-entity-lineage.md`**（三份都是本日）。
+  + **#86 + #83 + #87 + #84（0810 设计轮票 4 / 票 1 / 票 5 / 票 2）**。
+  回执十份：`redesign-0808/` 六份 + `design-0810/receipt-86-archive-empty.md` +
+  `design-0810/receipt-83-room-rail.md` + `design-0810/receipt-87-entity-lineage.md` +
+  **`design-0810/receipt-84-files-explorer.md`**（后四份都是本日）。
   ⚠ 别在这儿写死 ahead 数字——它每提交一次就自己作废。要数就跑：
   `git rev-list --count origin/main..HEAD`。
 - **后端离线套基线：`TZ=UTC` → 4114 passed · 0 failed · 136 deselected · 4 xfailed**（约 128s）。
@@ -23,11 +25,16 @@
   + test_file_delete_t77 + test_context_empty_t86 + test_form_reflow_a2` → **73 passed · 0 failed**。
   ⚠ 本机 docker PG 的口令是 **`dev`** 不是 `postgres`（`docker inspect teammaster-postgres-1` 可查）。
   跑完记得 `DROP DATABASE`（本 session 三个一次性库都已删）。
-- **像素基线现状**：**54 张，其中 4 张按 #83 重冻过**（`{aurora,paper}-room-data-{desktop,mobile}`），
-  另 50 张哈希逐字未变。**#86 / #87 零渲染改动**（#87 前端零字节），按构造不漂。
+- **像素基线现状**：**54 张，其中 8 张本日重冻过**——4 张按 #83（`{aurora,paper}-room-data-{desktop,mobile}`）
+  + **4 张按 #84（`{aurora,paper}-files-{desktop,mobile}`）**，另 46 张哈希逐字未变
+  （两次都在主检出 `D:\avery` 重冻，前后 md5 **整行** diff，总数 54 → 54）。
+  **#86 / #87 零渲染改动**（#87 前端零字节），按构造不漂。
+  🔴 **别在 worktree 里跑像素**：那里是**空的**一份（gitignore 的单机产物），playwright 会报
+  8 failed，而翻开日志每一条都是 `A snapshot doesn't exist … writing actual`——**一次比对都
+  没发生**。#84 实收一次，形态与「真漂移」在汇总行上一模一样。像素一律 `cd /d/avery` 跑。
 - **✅ 生产仍停在 08-07 白天那一版**（`main-20260807-190332` = main `99d83f7`）。
-  gap2 三票 + 三轮演习批 + #68 + #70 + #69/#71 + #72 + 重构战役四波 + wave 4 + #82 + #86 + #83 + #87
-  都没有上产。
+  gap2 三票 + 三轮演习批 + #68 + #70 + #69/#71 + #72 + 重构战役四波 + wave 4 + #82 +
+  #86 + #83 + #87 + #84 都没有上产。
 - 🔴 **迁移账（上产时按这个来）**：
   - **T9 需要 `0015_form_submissions_auto_key.sql`**（increment-only、`_ensure_schema()` 自动重放）。
   - **#78 需要 `0016_advise_runs_thread.sql`**（`ADD COLUMN IF NOT EXISTS thread_id` +
@@ -37,7 +44,8 @@
     `_ensure_schema` 每次引导自动重放，换容器即生效。**升级路径已在一次性库上真跑过**
     （回执 §6 七步表）：新代码 + 旧 0009 = **每一条人卡写入被真库 `CheckViolation` 拒掉**；
     换回新 0009 重放引导 → 就地 DROP+ADD、存量行活过全表重验、护城河没被捅漏。
-  - **#86 / #82 / #80 / #81 / #79 / #77 / #76 / #74 / #75 / #73 不需要迁移**。
+  - **#84 / #86 / #82 / #80 / #81 / #79 / #77 / #76 / #74 / #75 / #73 不需要迁移**
+    （#84 是纯前端，后端零字节）。
   - 判据一句话：**动 dataclass 里被整块 jsonb 装着的字段 → 免迁移；动表的顶层列，或给
     `PersonEntity` 加一个顶层字段 → 必须改迁移**（后者 #87 实收：0009 的 CHECK 钉死顶层键清单）。
   - ⚠ **「不需要迁移」不等于「不用跑 @needs_db」**：动了 pg 腿就照跑。
@@ -45,6 +53,43 @@
   ⚠ worktree 的 node_modules 是主检出的 junction：装依赖要在 `D:\avery` 装。
 - 🔴 **合的都是本地 main，没有 push**。前端 push main 即自动构建上产，push + 换后端容器
   必须在统一上产 session 的**同一个窗口**里做。
+
+## 本轮做完的 · 之四（2026-08-10 · #84 资料库两栏 file explorer）
+
+回执 `.issues/design-0810/receipt-84-files-explorer.md`（含三条主动裁定、真机拍图逮到的
+4 个 bug、门改判逐条对表、**21 条变异台账**）。**纯前端**：后端零字节、零迁移。
+
+规格照抄 `design-plan.md` §2.4 + §2.5，左栏视觉语言与 #83 **同一套**（§2.2 一处定义两处消费）。
+对着 §1.2 四条病根逐条销账：内容列不再吊在视口正中（左栏贴左 + 工作台占满，**表格另有
+1120px 阅读上限**）· ~2700px 长条换成左栏分区（非当前分区**整段不进 DOM**）· 「新建一家公司」
+从全页最重的白卡片降成栏底一行 · 文件行从 flex-wrap 的汤换成 `grid` 钉死的真列
+（手机**逐格写死** `grid-column/grid-row`，390px 上 9 行从 4 种高度 3 种内部顺序收成**各一种**）。
+另：上传口进工具条（主钮 + 整块工作台接拖放，两个反向 dropzone 收成一个）· 进度长在表格顶端
+那一行 · 数字列 `tabular-nums` 右对齐 · `排序` 换自绘控件 · 双标题收成一层 · 表单区内部重排。
+
+**#86 的两笔欠账一并结清**：左栏底部「清空这份档案…」+ 硬确认已接上；「有档案、零文件」的
+空态文案改口（原来把一次成功的销毁诊断成解析失败）。
+⚠ 硬确认输的**不是「店名」**——这个应用里根本没有店名字段（`KnownContext` 只有 id/files/at），
+改成手打词典里的确认词（zh `清空` / en `EMPTY`）。
+
+**新门 `eval-harness/tools/verify-files-explorer.mjs`（37 判据，已进 A 区 ROSTER）**：补手机态
+零覆盖 + 满数据态列几何。另改判 7 道：`files-ia` 17→19 · `forms-proactive` 19→20 ·
+`archive-empty` 25→36（补「真点那枚键」段）· `append-story` / `form-builder` /
+`context-switch` / snippet 的 `assertFilesSurfaceV2` + `injectSeeds`。
+**变异 21 条全红**（第一轮 3 条活下来，三条病因各不相同——见 Blockers）。
+
+### 值得下一个人知道的三条
+
+1. 🔴 **票面预判「必红」的那道门实测零改判**：`verify-file-manifest-truth` 从头到尾没取样过
+   `.upload-file-meta`（它只读 `-row/-name/-status/-status-hint`）。**票面预判是假设，不是事实**
+   ——真按「反正要改判」动手，就会把一道本来有牙的门改松。
+2. 🔴 **两道会红的门不在票面门账上**：`context-switch`（切换列表搬进了 switch 区）与
+   `form-builder`（拼装器搬进了 forms 区）。前者靠逐门 grep 扫到，**后者是整轮电池才逮到的**
+   ——手挑清单永远漏在「想不到的那一道」上。
+3. 🔴 **`.upload-source-chip` 被 snippet 当上传成功的判据**。我把工作台上那排与表格逐行重复的
+   chips 收掉，`verify-flow-gap-phases` 当场红成 `injectSeeds·首次注入 — error=null`
+   ——**读起来像上传失败，其实上传好得很**。snippet 现在抽了 `_landedFiles()`：chips 在就用
+   chips，不在就读清单行本身（后者其实是更强的证据）。
 
 ## 本轮做完的 · 之三（2026-08-10 · #87 实体血缘地基）
 
@@ -129,24 +174,22 @@ facts+notes 重物化成空；**留下** `context_id` · `owner_token` · `name`
 
 ## What's Next（按优先级）
 
-0. **🔴 0810 设计轮六票：#83 + #86 + #87 已完成，剩三票**。正源 `.issues/design-0810/design-plan.md`
+0. **🔴 0810 设计轮六票：#83 + #86 + #87 + #84 已完成，剩两票（#85 / #88）**。正源 `.issues/design-0810/design-plan.md`
    （Danny 2026-08-10「其他的设计方案全部通过」），原型 `proto/{room,files}.html`，证据 `_shots-0810/`。
    - ~~**#83**~~ ✅ 已落地。**它把导航栏的视觉语言定死了**：底色 `rgba(ink,.035)` · 贴边通到底 ·
      行 34px/`padding 0 10px`/radius 8 · hover `rgba(ink,.05)` · 选中 `rgba(accent,.13)` +
      2px accent 左封条 + 600 · 组标 11px/700/`--ink-soft`。**#84 的左栏（208px）照抄这一套。**
-   - **#84** 资料库改两栏 file explorer（建议再拆 2a/2b/2c）　🔴 **它背着 #86 的两笔欠账，见下**
+   - ~~**#84**~~ ✅ 已落地（含 #86 那两笔欠账）。**它把「新建一家公司」降成了左栏底部次级组里的一行**，
+     键 / 判据 / 入口一个没删——**#88 要删的就是那一行**，见下面第 1 条。
    - **#85**「这次补料改了什么」只读清单　✅ **#87 让它更便宜了，见第 2 条**
-   - ~~**#86**~~ ✅ 已落地（UI 挂点除外）
+   - ~~**#86**~~ ✅ 已落地（UI 挂点已由 #84 补上）
    - ~~**#87**~~ ✅ 已落地（**只做地基**；两条下游见第 3 条）
    - **#88** 撤掉「新建一家公司」——前置 #86 已就位。
-1. 🔴 **#84 必须一起收 #86 的两笔欠账**（详见 `receipt-86-archive-empty.md` §6）：
-   - **① 挂 UI**：左栏最底一条，销毁类；**静息态不用红**（常驻的红会把整根栏染成警告区），红只在
-     hover 出现；点下去走硬确认（「输入店名才放行」）。后端/transport/store 全通了，
-     `__lite2Store.getState().emptyArchive()` 就是那枚键按下去要发生的全部事情。**确认文案草稿在回执 §6①**。
-     并且**回来给 `verify-archive-empty` 补一段「真点那枚键 + 硬确认走通」**。
-   - **② 🔴 空态文案现在是假话**：#86 造出「有档案、零文件」这个此前不可能存在的状态，而资料库那一屏
-     在这个状态下印的是「多半是这些文件没读出内容，重新传一次最快」——用户刚亲手清空，屏上把一次成功
-     的销毁诊断成一次解析失败。需要一条「你清空了这份档案，随时可以重新开始传」的分支（zh + en）。
+1. **#88 撤掉「新建一家公司」——#84 已把地基铺好**（回执 `receipt-84-files-explorer.md` §2① / §8）：
+   要删的是 `FilesScreen.tsx` 里 `.lite-files-rail-foot` 下 `id="new"` 那一行 + `activeZone === 'new'`
+   那一支 + `filesUploadTitle` / `againTitle` / `againBody` 三条键。同拍要改的判据已知道是哪几条：
+   `verify-files-ia` ③（左栏行序里 forms 在 new 前面）与 `verify-append-story` ②（「两个方向分得开」
+   靠的就是 new 那一区）——两条都会红，**那个红是对的**。
 2. **#85 可以直接吃 #87 的现成件**（回执 §9.3）：`batch_id` 就是「这一批」的确定性名字，不用再靠
    `uploaded_at` 猜分组；「从 X 改成 Y」的 X 现在**每一格都有**（`prev.value`），不再只有 `conflicts`
    里那 3/10 个字段。⚠ 但 `lineage` **今天不投给前端**（有一条判据正面钉着「卡上没有 lineage 键」），
@@ -240,6 +283,19 @@ facts+notes 重物化成空；**留下** `context_id` · `owner_token` · `name`
 
 - ✅ **~~离线 pytest 3 红＝已知墙钟炸弹~~ 已销账**（#82）。新基线 **4114 passed · 0 failed**，
   **任何红都是你的**。
+- 🔴 **量错了东西的三种形态**（#84 实收，三条第一轮全绿活下来的变异，病因各不相同）：
+  - **ⓐ 尺子够不着 → 假绿**：「栏是下陷还是凸起」写成「往祖先链上合成到第一张不透明的面」，
+    而**实测**（`_px84/lumprobe.mjs`）那条链从 `aside` 一路到 `BODY` **全是 `rgba(0,0,0,0)`**
+    ——暖纸画布不是任何一个祖先的 `background-color`。合成兜底成纯白 255，于是「翻回白卡片」
+    （253）在 255 面前照样算"更暗"。→ 对照物改取**画布令牌** `--lite2-paper-rgb`。
+    ⚠ 同一条判据的**第一版**是拿 `document.body` 当对照物，那时它以**假红**的形态错（body 也透明，
+    亮度恒 0，对着真下陷的栏永远红）。**先假红后假绿，都是量错了东西。**
+  - **ⓑ 变异是空的 → 看起来像门洞，其实不是**：把 `color: var(--ink-faint)` 插在规则**开头**，
+    而同一条规则后面本来就写着 `color: var(--ink-soft)`——同权重后写者胜，这条变异什么都没改。
+    **变异活下来，先验变异本身有没有生效。**
+  - **ⓒ 判据落在下游后果上 → 假绿**：「九行恰好一种高度 + 一种落位指纹」。行一旦可收缩，会被
+    **整齐地**压到 `min-height`——九行仍然只有一种高度、指纹也不变，而第二行的字整条压到下一行的
+    背景上。→ 补一条「每个格子真的装在行框里」（量格子相对行框的溢出量）。
 - 🔴 **判据的期望值不许由被测函数算出来**（#87 实收，与「fixture 自考自答」同族）：
   「逐格播种」判据写成 `== set(_lineage_fields(kind))`，而变异改的就是 `_lineage_fields`——
   **尺子长在被量的东西上，它一缩水期望值跟着缩水**，变异全绿活下来。期望值要取自**上游源表**
