@@ -3,7 +3,11 @@
 > 📢 本文件是**当前状态快照，整体重写不追加**。历史都在 git（`git log` + 各 `.issues/*/receipt*.md`），别在这儿堆编年史。
 > 启动路径见 `AGENTS.md` Startup Workflow：读本文件 + `feature_list.json`，跑 `./init.sh` 确认绿，再开工。
 
-**Last Updated:** 2026-08-12（#89 上产后同日 **#92、#94、#90 先后落地进本地 main（未 push）**：
+**Last Updated:** 2026-08-12（#89 上产后同日 **#92、#94、#90、#93 先后落地进本地 main（未 push）**：
+**#93 = 全档案重跑粒度闸**（S2 第二刀）——补传后拿整个档案的字节重建 docs 重判，
+**只折叠不删除**（新字段 `folded_into`，Danny 拍板不复用 `archived`）+ 血缘完整性前置 fail closed
++ **裁决落库**（`granularity` 此前真库往返静默丢失）；实测逐份补传 **7 张 → 4 张**、与一次全选
+逐字相等（回执 `receipt-93.md`）。
 #92 = 粒度闸 R5-duty-column + 「全选==逐传」不变式门（回执 `receipt-92.md`）；
 #94 = 账号方案 A 真彩排九判据 33 条全绿 + authGuestNote/homeGuestNote 修真话
 （回执 `receipt-94.md`，常驻测试户已建、凭据只在 scratchpad）；
@@ -19,12 +23,16 @@ worker + 孤儿回收 + 'reading' 态）+ pg put() 增量化（positional diff�
 - **git**：`main` = 差距战役八票 + gap2 三票 + 三轮演习批 + #68 + #70 + #69+#71 + #72 +
   **0808 重构战役四波全部**（#73/#74/#75/#76/#77/#78/#79）+ wave 4（#80+#81）+ #82
   + **#86 + #83 + #87 + #84 + #85 + #88（0810 设计轮票 4 / 1 / 5 / 2 / 3 / 6 —— 六票全清）**
-  + **#89 + #92 + #94（0812：抽取失败可见+热备 · 粒度闸 R5 职责列+不变式门 · 账号A真彩排+文案修真）**。
-  回执：`redesign-0808/` 六份 + `design-0810/` 六份 + `ingest-root-cause-0812/receipt-{92,94}.md`。
+  + **#89 + #92 + #94 + #90 + #93（0812：抽取失败可见+热备 · 粒度闸 R5 职责列+不变式门 ·
+  账号A真彩排+文案修真 · 上传管线后端重做 · 全档案重跑粒度闸）**。
+  回执：`redesign-0808/` 六份 + `design-0810/` 六份 + `ingest-root-cause-0812/receipt-{90,92,93,94}.md`。
   ⚠ 别在这儿写死 ahead 数字——它每提交一次就自己作废。要数就跑：
   `git rev-list --count origin/main..HEAD`。
-- **后端离线套基线：`TZ=UTC` → 4175 passed · 0 failed · 147 deselected · 4 xfailed**（约 2min，
-  合并后实测）。= 4146 + **#92 的 14 条**（`test_granularity_duty_column_92.py`：R5 十条单元
+- **后端离线套基线：`TZ=UTC` → 4204 passed · 0 failed · 151 deselected · 4 xfailed**（约 2min，
+  #93 合并后实测）。= 4175 + **#93 的 29 条**（`test_granularity_rejudge_93.py`：全档案重跑三道锁 /
+  带对照基准的「7 张 → 4 张」不变式 / 链形状哨兵 / 手编护盾 / 裁决落库 / 删除撤销折叠 /
+  0010 的 want-ADD 孪生门；其中 4 条 `@needs_db` 走 deselected）。
+  上一档 4175 = 4146 + **#92 的 14 条**（`test_granularity_duty_column_92.py`：R5 十条单元
   判据 + sniff 前提钉 + 「全选==逐传」端到端不变式门 ×3）+ **#90 的 15 条**
   （`test_ingest_async_90.py`：sha256 幂等含 LLM 零调用对照基准 / 异步 deposit 骨架回执 /
   worker 落地 / 红线 job failed 收行 / 孤儿回收 / 四段计时）。
@@ -32,10 +40,19 @@ worker + 孤儿回收 + 'reading' 态）+ pg put() 增量化（positional diff�
   ⚠ #90 起 `tests/conftest.py` autouse 关掉 worker 线程（确定性），HTTP 上传类测试一律
   「POST → `ingest_worker.run_pending_jobs()` → GET 断言」；真线程路径由
   `test_ingest_nonblocking.py` 单独盖。✅ **任何红都是你的。**
-- **真库套（@needs_db）**：throwaway `avery_t88_test`（docker `teammaster-postgres-1` / pgvector pg17）
-  跑 `test_registry_contract + test_context_empty_t86 + test_registry_protocol + test_file_append_t10
-  + test_file_delete_t77` → **205 passed · 0 failed**。（历轮跑的集合各不相同：#85 是 62、#87 是 73
-  ——**这几个数不是同一个集合，别对减**。）
+- **真库套（@needs_db）**：#93 起改跑**全仓口径**（`-m needs_db`，不再挑文件）：一次性库
+  `avery_t93_final` → **142 选中 · 137 passed · 5 failed**，五条逐条销账、**没有一条归 #93**：
+  🔴 **四条自 #90 起就红**（`test_e2e_first_user` / `test_persistence_restart` ×2 /
+  `test_pgvector_store` 的 HTTP 那条，症状统一 `0/0 materials`）——在**干净 HEAD** 上换新一次性库
+  复现过，**是 #90 异步 deposit 的欠账**：`/ingest` 现在秒回，这四条仍按同步路断言。
+  #90 回执写的「既有**五文件** 78/78」不含这四条=当时没扫到的暗区。**已开后续票建议，本票没顺手修。**
+  🟠 第五条 `test_e2e_stress::...health_not_blocked` 是**负载下的延迟 flake**（判据
+  `max<8.0s`，整轮量到 8.8s；机器空下来单跑 2/2 绿，16s vs 整轮 47s），且它结构上够不着 #93 的代码
+  （压测打 `/ingest` → `_execute_ingest` 走 `ingest_paths`，而 `rejudge_after_append` **只有
+  `append_docs_to_context` 一个调用点**）。⚠ 它只采到 **2 个** health 样本，「最大延迟」在这种
+  采样密度下本来就不该当硬门。
+  （历轮跑的是**挑出来的子集**：#88 是 205、#87 是 73、#85 是 62 ——**跟本轮的 142 不是同一个集合，
+  别对减**。#93 换成全仓口径正是因为上面那片暗区。）
   🔴 **本轮实收一条间歇红**：`test_sweep_collects_only_old_unlinked_ephemeral_clones[postgres]`
   整轮红过一次、单跑绿、随后两轮同命令全绿。当场探容器时钟：连采 6 次，前 5 次 `+0.4s`，
   **第 6 次 `-114.2s`** —— 就是那条「Docker PG 时钟来回跳 ~115 秒」，招牌症状正是「单跑绿、整轮红」，
@@ -66,6 +83,44 @@ worker + 孤儿回收 + 'reading' 态）+ pg put() 增量化（positional diff�
   ⚠ worktree 的 node_modules 是主检出的 junction：装依赖要在 `D:\avery` 装。
 - 🔴 **合的都是本地 main，没有 push**。前端 push main 即自动构建上产，push + 换后端容器
   必须在统一上产 session 的**同一个窗口**里做。
+
+## 本轮做完的 · 之五（2026-08-12 · #93 全档案重跑粒度闸 —— S2 第二刀，结构性根治）
+
+回执：`.issues/ingest-root-cause-0812/receipt-93.md`（三道锁的判据设计、裁决落库、删除路语义
+复核、21 条变异台账、真库五条红的逐条销账）。**纯后端**：前端零字节。迁移 **就地改 0010**
+（`entities_kind_check` 收 `'ruling'`，want + ADD 两处同改）。
+
+- **补传结束前拿整个档案的字节重建全量 docs、重跑粒度闸**，判出来的降级**只折叠不删除**。
+  作者那句「整表静默删除，宁可漏」（`file_append.py:133-136`）**保留成实现约束**，不再是方向
+  否决——它的两个前提被 #87 推翻了（字节全在库 + `lineage["docs"]` 记着每张卡的来源文档）。
+  这是同一块碑的第二次订正（第一次是 `file_delete.py:36-52`）。
+- **实测不变式：逐份补传 7 张 → 4 张，与一次全选逐字相等。** 对照基准是把 `rejudge_archive`
+  monkeypatch 成空桩（= #93 之前的行为）在同一份语料上量出来的那个 7。
+- **三道锁**：① 降级必须 `parent_kind == "project"`（新字段，规则自己声明 parent 在哪个命名
+  空间）**且** parent 在当下可见的卡里查得到——**两把锁刻意分成两扇门**（0808 碑：belt-and-braces
+  会互相免疫变异），测试侧为此造了**无标题哨兵卡**让 R4 的空 parent 真能命中池子；
+  ② 血缘完整性前置断言，字节拉不回/parse 失败 → **整趟放弃**、回执记账；
+  ③ 软折叠 `folded_into`（Danny 拍板不复用 `archived`），`registry._active_projects()` 同门过滤、可逆。
+- **裁决落库**：`granularity` 从此进 pg（`kind='ruling'` 行）。此前它在真库往返里**静默丢失**
+  （pg_registry 自己拿它当反面教材）。折叠一旦开始，「为什么这张卡不见了」重启后必须答得出——
+  `Ruling.subject_id` 指到卡，**只在重判路记**（抽取路跑在 `_disambiguate_project_ids` 之前，
+  那里的 id 还不是最终 id）。
+- **`file_delete` 语义复核（票面第 3 项）**：按 `doc_key_of(evidence)` 清裁决的既有写法不变，
+  但补上后果——**解释被删掉，折叠就撤销**（4 张 → 7 张，真库上也验过）。新不变量：
+  一张 `folded_into` 非空的卡，`granularity` 里必须有一条 `subject_id` 指向它的裁决。
+- **票面之外的一条收紧**：**经理手编过的卡（provenance origin='manual'）系统不收走**。
+  折叠比顶掉一格重得多，而「手编格恒不被文档顶掉」是这个仓库既有的纪律。逐卡生效，反向门钉着。
+- 🔴 **顺手补了 #87 那口坑的孪生门**：`test_entities_kind_check_covers_written_kinds` 只扫
+  `ADD`、**看不见 `want`**——0009 在 #87 时被补过孪生门，**0010 一直没有**。已补
+  （`test_migration_0010_want_and_add_agree_with_the_kinds_put_writes`，变异 M17 实证）。
+- **变异 21/21 全歼**。⚠ 第一轮两条存活，**查下去都不是门洞、但都换来一条真判据**：
+  一条**打歪了**（打的是回执字段，而裁决的 `subject_id` 是另一行代码——重新瞄准当场红）；
+  一条打的性质在原语料里**一个实例都没有**（三条降级的 parent 全指同一张活卡）——
+  补了「链」形状哨兵语料（乙是甲的里程碑、甲又是丙的里程碑）之后当场红。
+- **已知缺口（明写）**：被折叠的卡今天**对经理不可见**（折叠抽屉 UI 不在本票内，票面明写）；
+  折叠卡仍进 `facts.md`（与 `archived` 今天的处境完全相同，动它会同时改归档语义）；
+  重跑成本随档案线性涨（计时已埋，⚠ `stage=rejudge` 那行的 `files=` 数的是**整个档案**，
+  其余四段数的是本批——正是要并排看的两个数）。
 
 ## 本轮做完的 · 之四（2026-08-12 · #90 上传管线后端重做）
 
@@ -523,6 +578,21 @@ facts+notes 重物化成空；**留下** `context_id` · `owner_token` · `name`
 
 ## Notes（顺手发现，没顺手修）
 
+- 🔴 **#93 顺手发现：四条 `@needs_db` 自 #90 起就红，而且在一片没人扫的暗区里**
+  （`test_e2e_first_user_full_chain` / `test_company_survives_a_service_restart` /
+  `test_file_space_survives_a_service_restart` /
+  `test_ingest_over_http_persists_pgvector_and_survives_restart`）。症状统一是「POST /ingest
+  回来之后库里 0 行」——几乎肯定是**异步 deposit 改造**的落账：这四条仍按同步语义断言
+  「请求返回时库里就该有数据」，而 #90 之后要等 job done（照 `test_ingest_async_90.py` 的
+  `_drain()` 姿态）。已在**干净 HEAD** 上换新一次性库复现证明与 #93 无关（证据见
+  `receipt-93.md` §6）。**修法归 #90 线的收尾票**，顺带把 #90 回执里「既有五文件 78/78」
+  那句口径订正成全仓口径——否则下次还会漏扫同一片暗区。
+- ⚠ **#93 顺手发现：`test_e2e_stress` 的 `max(health_latencies) < 8.0` 是一条会被机器负载翻红的门**，
+  而且它整轮只采到 **2 个**样本（轮询线程自己被饿着了）。「最大延迟」在这种采样密度下不该当硬门；
+  要么改成分位数 + 最少样本数，要么标 flaky。**不是回归**（空机 2/2 绿）。
+- 🟠 **#93 的两条已知缺口**（都写在 `receipt-93.md` §7）：被折叠的卡今天**对经理不可见**
+  （折叠抽屉 UI 票面明写不进本票，产品拍板已带回编排会话）；折叠卡**仍然进 `facts.md`**
+  ——与 `archived` 今天的处境**完全相同**，改它会同时改归档语义，是另一张票。
 - 🔴 **#88 顺手发现：`i18n-orphans` 有一块暗区**。它那条 `bareAccessRe` 正则
   扫的是**文件原文，注释一并算数**——在注释里点名一个键就等于**永久**把它从孤儿名单上摘掉。
   实收：#88 票面预判 13 个孤儿，第一次跑只报 12，少的那个被 `FileManifest.tsx` 的注释养活着。
@@ -599,7 +669,10 @@ facts+notes 重物化成空；**留下** `context_id` · `owner_token` · `name`
 - **`tests/test_at_references.py:90` 潜伏 typo**（`rep.errors` 应为 `parse_errors`）。
 - **`>` 开头的材料块结构性不可引用**；**facts.md 指针不是单射**。
 - 🔴 **`AVERY_PUBLIC_BASE` 必须指后端自己的口**（#63 实收）。
-- **粒度闸跨批次失明只剩 R1/R3/R4**（#92 后职责列一族已文档局部化，够得着单批；全档案重跑=#93）；
+- ✅ **~~粒度闸跨批次失明~~ 已销账**（#93 的全档案重跑闸）。⚠ 但**抽取那一趟**照旧只看得见本批
+  （R1/R3/R4 在 `extract_docs` 里仍然瞎）—— 补的是**归并之后**那一道重判，两者别混：
+  `apply_gate` 里判出来的降级是**丢弃**，`rejudge` 里判出来的是**折叠**（`folded_into`），
+  所以两条路跑完 `extraction.projects` 那张原始列表**本来就不等长**，不变式落在 `project_cards()`；
   **`_people_from_roster` 位置兜底会顶掉空格子**（#61）。
 - **`KeywordStore` 分词器是 `[a-z0-9]+`（纯 ASCII），对无空格中文 `query()` 恒空**——
   ⚠ 写「删/清之后检索不到」这类判据必须押 ASCII token。
@@ -607,7 +680,7 @@ facts+notes 重物化成空；**留下** `context_id` · `owner_token` · `name`
 
 ## Blockers / Risks
 
-- ✅ **~~离线 pytest 3 红＝已知墙钟炸弹~~ 已销账**（#82）。新基线 **4114 passed · 0 failed**，
+- ✅ **~~离线 pytest 3 红＝已知墙钟炸弹~~ 已销账**（#82）。当前基线 **4204 passed · 0 failed**（#93 后），
   **任何红都是你的**。
 - 🔴 **量错了东西的三种形态**（#84 实收，三条第一轮全绿活下来的变异，病因各不相同）：
   - **ⓐ 尺子够不着 → 假绿**：「栏是下陷还是凸起」写成「往祖先链上合成到第一张不透明的面」，

@@ -55,6 +55,7 @@ from .extract import (
     ExtractionResult, FieldConflict, MaterialChunk, MethodCard, PersonEntity, ProjectEntity,
     SignalEntity,
 )
+from .granularity import Ruling                                             # issue #93
 from .redline_extract import validate_extraction
 from .registry import (
     AdviseRun, AdviseThread, CompanyContext, CompanyNote, ProjectWriteMixin, SourceDocument, data_root,
@@ -89,13 +90,15 @@ _PROJECT_FIELDS = {f.name for f in dataclasses.fields(ProjectEntity)}
 _SIGNAL_FIELDS = {f.name for f in dataclasses.fields(SignalEntity)}
 _PLAYBOOK_FIELDS = {f.name for f in dataclasses.fields(MethodCard)}  # rich-align-0722/08
 _CONFLICT_FIELDS = {f.name for f in dataclasses.fields(FieldConflict)}   # T6/B2a
+_RULING_FIELDS = {f.name for f in dataclasses.fields(Ruling)}           # issue #93
 
 # The entity `kind` column values put() writes — the SINGLE source of truth the DB `entities_kind_check`
 # CHECK (migration 0001 + 0010) must match. Add a kind here WITHOUT extending that CHECK and real
 # Postgres rejects the write in prod, invisible to the offline suite (`not needs_db` never hits the
 # CHECK) — exactly how 08's "playbook" kind shipped and only failed on the prod demo cast. The offline
 # guard test_entities_kind_check_covers_written_kinds asserts the two never drift again.
-_ENTITY_KINDS = ("person", "project", "signal", "playbook", "conflict")   # T6/B2a added "conflict"
+_ENTITY_KINDS = ("person", "project", "signal", "playbook", "conflict",
+                 "ruling")   # T6/B2a added "conflict"; issue #93 added "ruling"
 
 
 def _entity(cls, fields: set[str], payload: dict):
@@ -356,10 +359,15 @@ class PostgresContextRegistry(ProjectWriteMixin):
         projects = [asdict(p) for p in ctx.extraction.projects]
         signals = [asdict(s) for s in ctx.extraction.signals]
         playbooks = [asdict(p) for p in getattr(ctx.extraction, "playbooks", [])]  # rich-align-0722/08
-        # T6/B2a — 归并丢弃的读数必须**随 context 落库**。反面教材就在同一个类里：
-        # `ExtractionResult.granularity` 也是顶层列表，但 get() 从不重建它（见下面的 ExtractionResult(...)），
-        # 于是它在真库往返里静默丢失——离线套用的是 in-memory registry，永远考不到这件事。
+        # T6/B2a — 归并丢弃的读数必须**随 context 落库**。
         conflicts = [asdict(c) for c in getattr(ctx.extraction, "conflicts", [])]
+        # issue #93 — 粒度闸的裁决记录随 context 落库。上面这段注释原本拿 `granularity` 当**反面
+        # 教材**（「也是顶层列表，但 get() 从不重建它，于是真库往返里静默丢失，而离线套用的是
+        # in-memory registry，永远考不到这件事」）。那笔账现在结清了，理由不是整洁，是**必须**：
+        # #93 起补传路会**折叠**卡（`rejudge.py`），而这个模块唯一的合法性根据是「每一次降级都
+        # 说得出为什么」。裁决不落库 = 容器一重启，「这张卡为什么不见了」就永远答不出来了 ——
+        # 一张看不见的卡加一个答不出的问题，比当初那 7 张假项目卡还坏。
+        rulings = [asdict(r) for r in getattr(ctx.extraction, "granularity", [])]
 
         # The materialized memory FULL TEXT is what a restart re-materializes from. If the caller
         # somehow hands a context whose files are not on disk yet, materialize first — the DB row
@@ -451,7 +459,8 @@ class PostgresContextRegistry(ProjectWriteMixin):
                 # _ENTITY_KINDS (the set entities_kind_check allows) so the constant stays the one
                 # place a new entity kind must be registered.
                 by_kind = {"person": people, "project": projects,
-                           "signal": signals, "playbook": playbooks, "conflict": conflicts}
+                           "signal": signals, "playbook": playbooks, "conflict": conflicts,
+                           "ruling": rulings}
                 stored_by_kind: dict[str, list[str]] = {}
                 for kind, payload in conn.execute(
                         "SELECT kind, payload FROM avery.entities WHERE context_id = %s "
@@ -623,6 +632,8 @@ class PostgresContextRegistry(ProjectWriteMixin):
             # T6/B2a: 冲突随 context 往返（否则 pg-backed 生产 get() 回来冲突全没了，而离线全绿）。
             conflicts=[_entity(FieldConflict, _CONFLICT_FIELDS, pl) for k, pl in ents
                        if k == "conflict"],
+            # issue #93: 粒度闸裁决随 context 往返 —— 「这张卡为什么不见了」重启后的唯一答案。
+            granularity=[_entity(Ruling, _RULING_FIELDS, pl) for k, pl in ents if k == "ruling"],
             materials=[MaterialChunk(id=cid, text=text, source=src, doc_kind=dk)
                        for cid, text, src, dk in mats])
 
@@ -796,6 +807,31 @@ class PostgresContextRegistry(ProjectWriteMixin):
             row = conn.execute(
                 "SELECT content FROM avery.source_documents WHERE context_id = %s AND idx = %s",
                 (context_id, idx)).fetchone()
+        if row is None or row[0] is None:
+            return None
+        return bytes(row[0])
+
+    def source_document_bytes_by_key(self, context_id: str, source_key: str) -> bytes | None:
+        """issue #93 — one document's bytea, addressed by `source_key`. See the in-memory twin for
+        why the re-judgment path must not address by position.
+
+        🔴 The key expression is `COALESCE(NULLIF(source_key, ''), filename)` — byte-for-byte the
+        SAME ruler as `put()`'s temp-table lifeboat and as Python's `sd.source_key or sd.filename`.
+        A private rsplit/`source_key = %s` here would miss every document uploaded without a
+        source_key (INSERT never writes NULL, it writes ''), and a missed document is not a 404 in
+        this caller: it is a re-judgment that quietly gives up (or, if the caller were sloppier,
+        one judged against an archive it cannot see).
+        """
+        key = (source_key or "").strip()
+        if not key:
+            return None
+        self._ensure_schema()
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT content FROM avery.source_documents "
+                "WHERE context_id = %s AND COALESCE(NULLIF(source_key, ''), filename) = %s "
+                "ORDER BY idx LIMIT 1",
+                (context_id, key)).fetchone()
         if row is None or row[0] is None:
             return None
         return bytes(row[0])
@@ -1554,8 +1590,11 @@ class PostgresContextRegistry(ProjectWriteMixin):
         两条腿必须逐字节同结果，否则 `test_registry_contract` 的 impl 参数化跑到 pg 那一遍就会
         以「facts.md 内容不一致」的形态红——而那是真分歧，不是测试太严。
 
-        🔴 **③ `granularity` 不在这里出现是对的**：`put()` 从来就不持久化它（见 put() 里那段注释），
-        库里根本没有它的行。内存腿清它是因为它活在进程内的 `ExtractionResult` 上。
+        🔴 **③ `granularity` 不需要单独一句 DELETE**（口径 2026-08-12 · #93 起变了，结论没变）：
+        它现在**真的落库**了（`kind='ruling'` 的 entities 行），而下面那句
+        `DELETE FROM avery.entities` 是按 context 整片删的，不点名 kind——所以裁决记录跟着一起走。
+        ⚠ 这正是那句 DELETE **不许**加 `AND kind IN (…)` 的理由：一加，下一个新 kind 就会在
+        「清空之后还剩几行」这件事上静默地活下来。
 
         🔴 **④ `ephemeral` 清成 false（#88「清空＝这份档案从此归你」）**。为什么这么做见内存腿
         的 docstring；pg 侧要多记一句：这一列**不能**跟 `source_files` 挤进同一句 UPDATE 的
@@ -1580,8 +1619,8 @@ class PostgresContextRegistry(ProjectWriteMixin):
 
         from psycopg.types.json import Jsonb
         with self._connect() as conn, conn.transaction():
-            # 文件与文件推出来的一切。四张表逐条点名——`avery.entities` 一句就带走全部五类
-            # （person/project/signal/playbook/conflict），它们同表不同 kind。
+            # 文件与文件推出来的一切。四张表逐条点名——`avery.entities` 一句就带走全部六类
+            # （person/project/signal/playbook/conflict/ruling），它们同表不同 kind。
             conn.execute("DELETE FROM avery.entities WHERE context_id = %s", (context_id,))
             conn.execute("DELETE FROM avery.materials WHERE context_id = %s", (context_id,))
             conn.execute("DELETE FROM avery.source_documents WHERE context_id = %s", (context_id,))

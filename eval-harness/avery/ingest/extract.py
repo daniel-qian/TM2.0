@@ -348,6 +348,24 @@ class ProjectEntity:
     # issue #87 · 实体血缘。人卡那一格的项目孪生——同一个形状、同一套不变式，说明只住在
     # `_init_lineage` 上面（ONE DEFINITION：两处各写一份注释就是下一次口径漂移的种子）。
     lineage: dict = field(default_factory=dict)
+    # issue #93 · 软折叠 —— 「这张卡的读数已经并进 `<folded_into>` 那张卡了」。空串 = 没被折叠。
+    #
+    # 🔴 **为什么不复用 `archived`**（Danny 0812 拍板）：`archived` 是**经理手编领域**，
+    # `_absorb_project` 的规则表上「`id`/`title`/`archived`/`provenance` 一个都不碰」是明写的，
+    # 补传路的整节口径也把它和 `provenance` 一起划进「文档改不动的格子」。系统往里写 = 两个作者
+    # 写同一格：经理恢复一张被系统折叠的卡，下一次补传再折一次；系统折叠一张经理归档过的卡，
+    # 恢复之后它从折叠抽屉里跳出来。两种写法都会让「谁把它收走的」变成一个答不出的问题。
+    #
+    # 语义与 `archived` 平行但不相交：两者都**只**在投影层生效（`_active_projects()` 是唯一过滤点），
+    # 都**可逆**（清空这一格卡就回来），都**绝不物理删除**。差别是这一格还带着「并去哪里」的答案，
+    # 而那个答案配套的「为什么」住在 `ExtractionResult.granularity` 的裁决记录里
+    # （`Ruling.subject_id == self.id`，#93 起真落库）。
+    #
+    # 🔴 文档改不动它：不在 `_APPEND_REFRESHABLE`/`_APPEND_UNIONED` 里，所以 `merge_project_reading`
+    # 与 `_absorb_project` 都碰不到它；也不在 `_lineage_fields("project")` 里（它不是一条读数，
+    # 是一次系统裁决，血缘无从谈起）。写它的只有 `rejudge.py` 一处，清它的只有 `file_delete.py`
+    # 里那条「解释没了就把卡放回来」。
+    folded_into: str = ""
 
     def __post_init__(self) -> None:
         # pg_registry stores asdict(self); the DB read (_entity -> ProjectEntity(**payload)) hands the
@@ -2087,7 +2105,10 @@ def _absorb_project(cur: ProjectEntity, pr: ProjectEntity) -> None:
         （test_project_progress_uses_is_None_so_ZERO_is_a_real_reading）；
       · `risk` 整个对象 keep-first、`milestones` 整张列表 keep-first（rich-align-0722/01、02）；
       · blockers/dependsOn 保序并集，与 `_absorb_person` 的 owns/collaboration 同一个 6 上限；
-      · `id` / `title` / `archived` / `provenance` **一个都不碰**。
+      · `id` / `title` / `archived` / `provenance` / `folded_into` **一个都不碰**
+        （#93 把 `folded_into` 加进这张不碰清单：它是一次系统裁决，不是一条读数——而这个函数
+        **正是**折叠时把被折叠那张卡的读数搬进母卡的通道，如果它顺手复制 `folded_into`，
+        母卡会在吸收的同一刻把自己也折叠掉）。
 
     #87：与 `_absorb_person` 同一次改写——`or` 换成显式 if（结果逐字未变），只为让「这一格是不是
     pr 填的」问得出来，好把血缘搬过去。`ownerId` 刻意不记血缘：它是 `_link_owners` 解出来的派生

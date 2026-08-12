@@ -513,14 +513,20 @@ class CompanyContext:
         return [self._one_project_card(pr) for pr in self._active_projects()]
 
     def _active_projects(self) -> list:
-        """rich-align-0722/05a 软删（archived）的**唯一**过滤点。`project_cards()` 与
-        `_decision_subjects()` 都从这里取。
+        """rich-align-0722/05a 软删（archived）+ issue #93 软折叠（folded_into）的**唯一**过滤点。
+        `project_cards()` 与 `_decision_subjects()` 都从这里取。
 
         🔴 为什么收成一处：这条业务不变量抄第二份就一定会漂——而漂掉的后果是用户已经扔进
         折叠抽屉的项目，从今天页和「N 个值得多看一眼」里爬回来。收成一处之后，
         `test_project_crud_05a` 对 `project_cards()` 的既有门就**传递性**地守住了定级那条路。
+
+        #93：`folded_into` 走同一个门，理由逐字相同——被折叠的卡读数已经并进母卡，让它在定级面
+        再出现一次，就是拿同一摊事跟经理说两遍。⚠ 两个标记**语义不同、绝不互相翻译**：
+        `archived` 是经理收的（他能在折叠抽屉里看到并恢复），`folded_into` 是系统收的
+        （抽屉 UI 不在 #93 票内，所以今天它对经理是不可见的——这一条写进回执当已知缺口）。
         """
-        return [pr for pr in self.extraction.projects if not getattr(pr, "archived", False)]
+        return [pr for pr in self.extraction.projects
+                if not getattr(pr, "archived", False) and not getattr(pr, "folded_into", "")]
 
     def archived_project_cards(self) -> list[dict]:
         """rich-align-0722/05a: soft-deleted projects for the 'archived' collapse drawer (restorable).
@@ -1273,6 +1279,28 @@ class ContextRegistry(ProjectWriteMixin):
             return None
         return ctx.source_documents[idx].content
 
+    def source_document_bytes_by_key(self, context_id: str, source_key: str) -> bytes | None:
+        """issue #93 — the same bytes, addressed by `source_key` instead of by position.
+
+        🔴 寻址用 key 不用 idx，与 `file_delete` 头上那条碑逐字同一个理由：`put()` 用 `enumerate`
+        重排 idx，删掉中间一份之后所有后续 idx 左移。全档案重跑闸要在**补传进行中**（清单已经
+        被这一趟改过、还没 put）把每一份存量文档的字节拉回来重建 —— 按位置寻址在这里不是
+        「可能取错」，是**结构上**取错：调用方手里那份清单的下标与库里的 idx 此刻本来就不同。
+        取错的下场尤其安静：拿 B 的字节当 A 重建，闸照跑、判据照绿，只是判错了。
+
+        None 有三种成因，调用方**必须一视同仁地当作「重建不出来」**（#93 的血缘完整性前置断言
+        就是靠这个返回值 fail closed）：这家公司没有这份 key；这一行的 content 是 NULL
+        （0017 backfill 之前铸的存量行）；unknown context。
+        """
+        ctx = self.get(context_id)
+        key = (source_key or "").strip()
+        if ctx is None or not key:
+            return None
+        for sd in ctx.source_documents:
+            if (sd.source_key or sd.filename) == key:
+                return sd.content
+        return None
+
     # --- #90 · async deposit: bytes land NOW, understanding is a background job -----------------
     # The deposit pair writes the uploaded bytes + a `queued` IngestJob in one atomic step (one SQL
     # transaction on the pg twin; one lock section here), so POST /ingest and POST /team/{id}/files
@@ -1587,6 +1615,8 @@ class ContextRegistryProtocol(Protocol):
     def clear(self) -> None: ...
     def resolve_memory_dir(self, context_id: str) -> Path | None: ...
     def source_document_bytes(self, context_id: str, idx: int) -> bytes | None: ...
+    # issue #93 · 全档案重跑闸的字节入口（按 key，不按 idx —— 理由见内存腿那份实现）。
+    def source_document_bytes_by_key(self, context_id: str, source_key: str) -> bytes | None: ...
     def clone_context(self, src_context_id: str, *, new_context_id: str,
                       new_owner_token: str, ephemeral: bool = True) -> bool: ...
     # #86 · 清空这一份档案（id / owner_token 不变）。⚠ 与 pg 独有的 `delete()` 是**反面**：
