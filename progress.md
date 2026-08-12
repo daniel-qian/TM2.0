@@ -3,21 +3,23 @@
 > 📢 本文件是**当前状态快照，整体重写不追加**。历史都在 git（`git log` + 各 `.issues/*/receipt*.md`），别在这儿堆编年史。
 > 启动路径见 `AGENTS.md` Startup Workflow：读本文件 + `feature_list.json`，跑 `./init.sh` 确认绿，再开工。
 
-**Last Updated:** 2026-08-12（**#89 上产**：抽取失败不再对用户静默 + 供应商热备 + `/health`
-补 commit/providers。前端 `6b70173`、后端 `avery-agent:main-20260812-070519`，**同一 commit、
-同窗口换完并复验**。🟢 本地 main 与 origin/main 已同步）
+**Last Updated:** 2026-08-12（#89 上产后同日 **#92 落地进本地 main（未 push）**：粒度闸
+R5-duty-column + 「全选==逐传」不变式门，回执 `.issues/ingest-root-cause-0812/receipt-92.md`。
+#89 的生产态不变：前端 `6b70173`、后端 `avery-agent:main-20260812-070519`。
+⚠ 本地 main 自 #92 起**领先** origin/main——别单独 push）
 
 ## Current State
 
 - **git**：`main` = 差距战役八票 + gap2 三票 + 三轮演习批 + #68 + #70 + #69+#71 + #72 +
   **0808 重构战役四波全部**（#73/#74/#75/#76/#77/#78/#79）+ wave 4（#80+#81）+ #82
-  + **#86 + #83 + #87 + #84 + #85 + #88（0810 设计轮票 4 / 1 / 5 / 2 / 3 / 6 —— 六票全清）**。
-  回执十二份：`redesign-0808/` 六份 + `design-0810/` 六份（86 / 83 / 87 / 84 / 85 / **88**，全是本日）。
+  + **#86 + #83 + #87 + #84 + #85 + #88（0810 设计轮票 4 / 1 / 5 / 2 / 3 / 6 —— 六票全清）**
+  + **#89 + #92（0812：抽取失败可见+热备 · 粒度闸 R5 职责列+不变式门）**。
+  回执：`redesign-0808/` 六份 + `design-0810/` 六份 + `ingest-root-cause-0812/receipt-92.md`。
   ⚠ 别在这儿写死 ahead 数字——它每提交一次就自己作废。要数就跑：
   `git rev-list --count origin/main..HEAD`。
-- **后端离线套基线：`TZ=UTC` → 4146 passed · 0 failed · 139 deselected · 4 xfailed**（约 51s）。
-  = 上一基线 4135 + #89 的 11 条（`test_provider_failover_89.py`：供应商链解析 / failover 顺序 /
-  BudgetExceeded 不换家 / 遥测 absent≠false / 本地假供应商 429 与晴天两景的 `/ingest` 集成）。
+- **后端离线套基线：`TZ=UTC` → 4160 passed · 0 failed · 139 deselected · 4 xfailed**（约 2min）。
+  = 上一基线 4146（含 #89 的 11 条）+ **#92 的 14 条**（`test_granularity_duty_column_92.py`：
+  R5 十条单元判据 + sniff 前提钉 + 「全选==逐传」端到端不变式门 ×3）。
   ✅ **任何红都是你的。**
 - **真库套（@needs_db）**：throwaway `avery_t88_test`（docker `teammaster-postgres-1` / pgvector pg17）
   跑 `test_registry_contract + test_context_empty_t86 + test_registry_protocol + test_file_append_t10
@@ -54,7 +56,36 @@
 - 🔴 **合的都是本地 main，没有 push**。前端 push main 即自动构建上产，push + 换后端容器
   必须在统一上产 session 的**同一个窗口**里做。
 
-## 本轮做完的（2026-08-12 · #89 抽取失败可见 + 供应商热备）
+## 本轮做完的 · 之二（2026-08-12 · #92 粒度闸 R5 职责列 + 「全选==逐传」不变式门）
+
+回执 `.issues/ingest-root-cause-0812/receipt-92.md`（判据逐条论证、变异 11 条台账、已知边界
+五条）。**纯 eval-harness**：前端零字节、迁移零条。#93 的 #92 依赖已清。
+
+- 病灶（生产钉死）：花名册「当前负责事项」列被抽成 12 张假项目卡，**逐传时全部存活**——
+  R1/R3/R4 全靠跨文档证据池，单文件补传批同时瞎掉；提示词判据 "it gives that project its
+  own owner" 在花名册形状上本身失效（每格确实有 owner=本行的人）。18-vs-11 的主要来源。
+- **R5 主判据=结构信号**：同一文档内 ≥60% 且 ≥2 张**带行号**的项目候选，source 行号与某个
+  人的行号重合 → 逐张降级、parent=那一行的人（verdict=milestone，三值闭集不动）。
+  文档局部判定 → 全选与逐传**天然一致**。`doc_kind=='roster'` 只降门槛（1 张/50%）不当
+  主判据——她的文件嗅成 project，主判据在 project 下自己站住；line:1=clamp 默认不算行
+  （**单锁**，两侧共用 `_line_anchored`，刻意不做双保险防变异免疫）；逃生口照 R3 guard(a)
+  形状但字段集=progress/dueDate/milestones（**owner/status 刻意不算**：前者是病灶的伪装、
+  后者是模型嗅的）。
+- **不变式门**（新 `test_granularity_duty_column_92.py`，14 条）：她三件套形状的语料走真
+  `LLMExtractor`(scripted brain) + 真 `ingest_paths`/`append_paths_to_context`，
+  全选==逐传==6 个真项目、人 13 两侧一致、12 格职责全进裁决审计；含逆序与 heuristic 变体
+  （钉 R5 在启发式路结构性惰性：项目 source 是 span 起点，撞不上人行）。
+  **拆掉 R5 实测全选 17 vs 逐传 18**（M2 探针）——生产 18-vs-11 同一机制。
+  `apply_gate`/`build_milestone_index` 全套测试**史上第一次**被喂多于一份文档。
+- 🔴 **`apply_gate` 现在读 `res.people`（全仓第一个读者）**——#93 全档案重跑闸重建判定
+  现场时必须**连人一起喂**，只喂 projects+docs 会让 R5 在重跑路上**静默**失明。
+- 变异 **11/11 全歼**（恒真/恒假各一发 + 每条主判据专属一发：line1 锁/逃生口双向/比例线/
+  条数线/roster 加分/parent/跨文档域/规则序；锚点命中数逐条==1、跑完还原原始字节）。
+  M6/M7/M8/M10/M13 各**恰好 1 红**且落在自己的专属测试上。40 条 granularity 护栏零改动全绿。
+- 已知边界（回执 §6 全文）：owner-only 项目台账会被折叠（与职责列结构不可判，票面拍的刀口）；
+  模型全不给行号时 R5 静默（诚实的失手：无行证据不降级）；跨文档失明（R1/R3/R4）未动=#93。
+
+## 本轮做完的 · 之一（2026-08-12 · #89 抽取失败可见 + 供应商热备）
 
 回执：`.issues/design-0810/receipt-deploy-0812.md`（含考古结论：DeepSeek-as-checker 去哪了）。
 
@@ -354,7 +385,8 @@ facts+notes 重物化成空；**留下** `context_id` · `owner_token` · `name`
    + 粒度闸单批失明 + 近似标题不归并 + 同字节重传不识别。分段方案 S0(sha256幂等+超时熔断)→
    S1(异步deposit+任务表)→S2(R5职责列判据→全档案重跑闸)→S3(存储增量化)，账号A彩排并行。
    0812 晚已全部拍板并开票：**#90**(后端:sha256幂等+异步任务+增量落库+计时) → **#91**(前端:熔断+轮询+读取中,依赖#90) ·
-   **#92**(粒度闸R5职责列+不变式门,可并行) → **#93**(全档案重跑闸+folded_into新字段[拍板]+裁决落库,依赖#92和#90) ·
+   ~~#92~~ ✅ **已落地**（本地 main，回执 `receipt-92.md`）→ **#93**(全档案重跑闸+folded_into新字段[拍板]+裁决落库,
+   依赖#92✅和#90——**重建现场必须连 people 一起喂**，见 receipt-92 §6.4) ·
    **#94**(账号A真彩排,九判据,agent建avery-e2e测试户[已授权],可并行)。
    Caddy access log 已装好并验证（/var/log/caddy/avery-access.log，JSON，50MB×5 滚动）。
    ⚠ 大前提拍板（已入 memory）：**Avery 没有实际生产使用，只是部署通了**——开票按自然边界捆，不做分段上线仪式。
@@ -500,7 +532,8 @@ facts+notes 重物化成空；**留下** `context_id` · `owner_token` · `name`
 - **`tests/test_at_references.py:90` 潜伏 typo**（`rep.errors` 应为 `parse_errors`）。
 - **`>` 开头的材料块结构性不可引用**；**facts.md 指针不是单射**。
 - 🔴 **`AVERY_PUBLIC_BASE` 必须指后端自己的口**（#63 实收）。
-- **粒度闸够不着跨批次**（T10）；**`_people_from_roster` 位置兜底会顶掉空格子**（#61）。
+- **粒度闸跨批次失明只剩 R1/R3/R4**（#92 后职责列一族已文档局部化，够得着单批；全档案重跑=#93）；
+  **`_people_from_roster` 位置兜底会顶掉空格子**（#61）。
 - **`KeywordStore` 分词器是 `[a-z0-9]+`（纯 ASCII），对无空格中文 `query()` 恒空**——
   ⚠ 写「删/清之后检索不到」这类判据必须押 ASCII token。
 - bellIsReal / nudgeVerdict 等手册协议相位仍无机械 runner。
