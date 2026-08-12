@@ -994,7 +994,7 @@ export const en = {
     authWorking: 'Working…',
     // 游客态的诚实说明：不登录能干什么、登录多给什么。
     authGuestNote:
-      'You can use Avery without an account. Signing in just keeps your company data under your name, so it opens on another device.',
+      'You can use Avery without an account. What you upload while signed in is kept under your name and opens on another device; anything uploaded before signing in becomes yours only after you click "Attach to my account" here.',
     authVerifyNote: 'Account created. Click the confirmation link in your email, then sign in.',
     authSignedInAs: 'Signed in',
     authClaimTitle: 'This company data is not attached to your account yet',
@@ -1794,7 +1794,7 @@ export const en = {
     // 登录提示前置（合伙人反馈 A6）：AuthPanel 弹层里的 authGuestNote 藏得太深，这句在
     // 空态首屏常驻（仅 status==='guest' 时渲染——登录按钮真的在顶栏上才说这句话）。
     homeGuestNote:
-      'No account needed — everything works as a guest. Signing in only keeps your uploads with you across devices.',
+      'No account needed — everything works as a guest. Sign in before uploading and your data is kept under your name, so another device can open it.',
 
     // ── 0721 · B4 闭环：首页今日待办块 + 决策卡「加入跟进」。 ──
     homeTodayTitle: 'To do today',

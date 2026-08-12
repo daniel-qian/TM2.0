@@ -3,10 +3,11 @@
 
 🔴 命门①（本文件存在的第一前提，arch-0802）：**绝不新造 `CompanyContext`。**
 通道只有一条：`ctx = reg.get(context_id)` → 在**那个对象**上原地 append → `reg.put(ctx)`。
-pg 侧的 put() 是 DELETE+INSERT 快照替换，靠 `_prior_src_bytes` / `_prior_mat_vecs` 两张
-ON COMMIT DROP 临时表**只回填 NULL 单元**（pg_registry.py:324-421 一带）——回填补的是
-「行还在、格子是 NULL」，补不回「整行不存在」。新造的 CompanyContext 里 source_documents
-是空列表：拿它去 put，老文档的原件字节、全部旧 chunk、全部实体会在一次写里永久蒸发。
+pg 侧的 put() 语义是快照替换（#90 起实现为 positional diff——语义不变，交出去的列表就是
+全部），靠 `_prior_src_bytes` / `_prior_mat_vecs` 两张 ON COMMIT DROP 临时表**只回填 NULL
+单元**——回填补的是「行还在、格子是 NULL」，补不回「整行不存在」。新造的 CompanyContext 里
+source_documents 是空列表：拿它去 put，diff 从第 0 行起清掉一切——老文档的原件字节、
+全部旧 chunk、全部实体在一次写里永久蒸发。
 
 🔴 命门②：切 chunk 必须非零。`_finalize_source_documents`（pipeline.py:80-88）的既有规则是
 「parse 了但零 chunk → status='empty'」，前端 FileManifest.tsx:41-58 把 empty 渲染成

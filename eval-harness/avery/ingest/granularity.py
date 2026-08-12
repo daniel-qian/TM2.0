@@ -37,6 +37,16 @@ demoted it, the parent it belongs to, and the rule that fired — see `Ruling`. 
 still read (`stated_project_count`) but it is used ONLY as a reconciliation signal to report
 against, never to truncate. An unexplainable gate is worse than the fragmentation it fixes.
 
+THE SECOND INCIDENT THE DEFINITION HAD TO ABSORB (issue #92): a roster's DUTY COLUMN. The
+partner's 「人员架构」 CSV lists 13 people, each with a 「当前负责事项」 cell, and the LLM returned
+12 of those cells as projects — each with a perfectly good owner (the person on its row), which is
+why the prompt's own "it gives that project its own owner" test could never catch it. By the
+definition above these are not projects: the document tracks the PERSON, and the cell is what that
+person carries. Rule R5 reads the structural tell (project candidates whose source line IS a
+person's source line, row after row) and demotes them to the person — document-locally, so the
+one-file-at-a-time append path and a single all-file batch rule the same way. See
+`_duty_column_index` for the full mechanism and its escape hatch.
+
 WHAT IS DELIBERATELY NOT DONE: milestones are DROPPED from the project axis, not re-emitted as a
 milestone entity. The kickoff puts milestones out of scope for this wave ("不做：里程碑"), and
 inventing a new entity type nothing renders would be dead weight. Their text survives in the RAG
@@ -243,6 +253,10 @@ class Ruling:
     # "project" keeps the card; "milestone" and "document" both drop it. They are kept DISTINCT
     # rather than folded into one "rejected" because the explanation a manager gets differs: one
     # says "this belongs to that project", the other says "this is your file, not a project".
+    # R5-duty-column also drops under "milestone" (machine-wise the same "belongs to a parent"
+    # verdict), but its `parent` is a PERSON — the roster row the duty was written on. The closed
+    # three-value set is a cross-file contract (test_every_ruling_is_explainable pins it); the
+    # human-facing distinction lives in `rule` + `reason`, not in a fourth verdict.
     verdict: str                                        # "project" | "milestone" | "document"
     rule: str                                           # stable rule id, e.g. "R1-milestone-section"
     reason: str
@@ -373,6 +387,143 @@ def _tracked_fields(p) -> list[str]:
     return got
 
 
+# ── R5: the duty column (issue #92) ──────────────────────────────────────────────────────────────
+# THE PRODUCTION SHAPE THIS CATCHES. The partner's 「人员架构」 CSV carries a 「当前负责事项」 column:
+# one row per person, each cell naming the pile of work that person is carrying. The LLM read 13
+# rows and returned 12 "projects" — and the PROMPT criterion could not have stopped it, because
+# "it gives that project its own owner" is TRUE of every cell (the owner is the person on that
+# row). A constraint that only lives in the prompt is not a gate (the model disobeys); the gate
+# has to read a STRUCTURAL signal off the extraction itself.
+#
+# THE SIGNAL. On the LLM path every entity carries `source="<doc>:<line>"` from the model's own
+# line attribution (llm_extract._line_ref). A duty cell and the person it belongs to sit on THE
+# SAME ROW, so the fake project's line == that person's line, for row after row. Real projects do
+# not look like this: a weekly defines the project on its 「项目：」 header line and the owner on
+# the 负责人 line below it. So: within ONE document, when most line-bearing project candidates sit
+# exactly on person lines, the document is duty-column-shaped, and each such candidate is demoted
+# with the person on its row as the citable parent.
+#
+# WHY THIS RULE IS DOCUMENT-LOCAL ON PURPOSE — it is the only defence that does not lean on the
+# cross-document evidence pool. R1/R3/R4 all read other documents (milestone lists / sibling
+# titles / identities), so a file re-uploaded ALONE (the append path) blinds all three at once —
+# that asymmetry is exactly the production 18-vs-11. R5 judges a document against itself, so
+# one-file-at-a-time and all-at-once agree BY CONSTRUCTION.
+#
+# THE HEURISTIC PATH IS STRUCTURALLY INERT HERE, and that is load-bearing, not luck: its `source`
+# means something else. Heuristic people come from roster rows / resume headers / 自述 lines, and
+# heuristic projects carry the SPAN START (the project header line, extract.py::_project_from_span)
+# — a line cannot be both a project header and a person row, and doc_kind=='roster' produces no
+# projects at all on that path. The one collision the heuristic CAN produce is the whole-document
+# span's `<doc>:1` against a line-1 person — which the `line 1` exclusion below already refuses
+# for the LLM clamp reason. So one definition serves both paths: live on the LLM path, provably
+# unreachable on the heuristic one (test_granularity_duty_column_92 pins this with a real
+# heuristic corpus rather than trusting this paragraph).
+
+# Base trigger: at least this many row-aligned candidates, making up at least this share of the
+# document's line-bearing candidates. Two knobs, two failure modes they guard: the MIN_HITS floor
+# keeps one accidental line collision in a real weekly from ever firing (a model that cites the
+# owner line for both the person and the project is one bad row, not a pattern); the RATIO keeps
+# a big mixed document honest (12 duty rows above a genuine 15-project section is 44% — leave it
+# alone; the same 12 above 4 real projects is 75% — fire). 宁可漏 on the fence, like the rest of
+# this module.
+_R5_MIN_HITS = 2
+_R5_MIN_RATIO = 0.6
+# doc_kind=='roster' is a BONUS SIGNAL ONLY, never the main criterion — the production file was
+# called 「人员架构」, which the roster sniff does not match (measured doc_kind=='project'), so a
+# rule gated on the sniff would have missed the incident entirely. When the sniff DOES say roster,
+# the document has told us its rows are people, so a single row-aligned candidate is already
+# suspicious: the thresholds relax, nothing else changes.
+_R5_ROSTER_MIN_HITS = 1
+_R5_ROSTER_MIN_RATIO = 0.5
+
+
+def _line_anchored(source: str) -> tuple[str, int] | None:
+    """'<doc>:<line>' -> (doc, line) when the source carries a REAL line, else None.
+
+    ONE eligibility ruler for BOTH sides of the R5 comparison (the person line set and the project
+    candidates) — deliberately one lock, not a belt-and-braces pair, so a mutation here cannot hide
+    behind a twin check (progress.md 0808: two locks on one door make each immune to mutation).
+
+    LINE 1 IS NOT A LINE for this purpose: when the model omits `line`, llm_extract._line_ref
+    clamps it to 1, so `<doc>:1` means "the model did not say" — treating two such defaults as
+    "the same row" would manufacture overlap out of missing data. The split mirrors
+    `extract.doc_key_of` (rsplit at the LAST colon; a doc name may itself contain colons) — that
+    function is not importable here without a cycle (extract.py imports this module), and a
+    non-numeric tail after the last colon means the string carries no line at all.
+    """
+    s = source or ""
+    if ":" not in s:
+        return None
+    head, _, tail = s.rpartition(":")
+    if not tail.isdigit() or int(tail) <= 1:
+        return None
+    return head, int(tail)
+
+
+def _independent_tracking(p) -> list[str]:
+    """R5's escape hatch — R3 guard (a)'s shape with the duty-appropriate field set.
+
+    A roster MAY double as a project ledger, and the way a document says so is by tracking the row
+    BEYOND the person: a progress number, a deadline, a milestone list. Those three and NOT the
+    other two `_tracked_fields` reads, because on a duty row both are noise: ownerName is the
+    person on that row (its presence is the bug's whole disguise — the prompt criterion died on
+    it), and status is the one field the model sniffs out of a cell like 「婚宴对接（进行中）」, the
+    same reason R4 refuses sniffed status as evidence.
+    """
+    got = []
+    if getattr(p, "progress", None) is not None:
+        got.append("进度")
+    if getattr(p, "dueDate", ""):
+        got.append("截止日期")
+    if getattr(p, "milestones", None):
+        got.append("里程碑")
+    return got
+
+
+def _duty_column_index(projects, people, docs: list[ParsedDoc]) -> dict[int, tuple[str, str]]:
+    """id(candidate) -> (person name, person source) for every candidate R5 may demote.
+
+    Aggregation and demotion are two different scopes ON PURPOSE. The trigger is per-document
+    (is this document duty-column-shaped?) so that one coincidental collision never fires; the
+    demotion is per-candidate and only for candidates that actually sit on a person's row, so
+    every demotion can cite ITS person and ITS line — a candidate swept up "because the document
+    as a whole looked like a roster" would be exactly the unexplainable gate the module docstring
+    forbids. Escape-hatch candidates stay IN the trigger arithmetic (row alignment is shape
+    evidence regardless of fields) but are exempted at demotion time in `classify`, so a ledger
+    row with a real deadline does not weaken its neighbours' signal and still survives itself.
+    """
+    person_at: dict[tuple[str, int], tuple[str, str]] = {}
+    for person in people or []:
+        ref = _line_anchored(getattr(person, "source", ""))
+        name = (getattr(person, "name", "") or "").strip()
+        if ref is None or not name:
+            continue
+        person_at.setdefault(ref, (name, getattr(person, "source", "")))
+    if not person_at:
+        return {}
+
+    per_doc: dict[str, list[tuple[object, int]]] = {}
+    for p in projects:
+        ref = _line_anchored(getattr(p, "source", ""))
+        if ref is None:
+            continue
+        per_doc.setdefault(ref[0], []).append((p, ref[1]))
+
+    kinds = {doc.name: doc.doc_kind for doc in docs}
+    out: dict[int, tuple[str, str]] = {}
+    for doc_name, cands in per_doc.items():
+        hits = [(p, person_at[(doc_name, n)]) for p, n in cands if (doc_name, n) in person_at]
+        if kinds.get(doc_name) == "roster":
+            min_hits, min_ratio = _R5_ROSTER_MIN_HITS, _R5_ROSTER_MIN_RATIO
+        else:
+            min_hits, min_ratio = _R5_MIN_HITS, _R5_MIN_RATIO
+        if len(hits) < min_hits or len(hits) / len(cands) < min_ratio:
+            continue
+        for p, hit in hits:
+            out[id(p)] = hit
+    return out
+
+
 def document_identities(docs: list[ParsedDoc]) -> dict[str, str]:
     """title-key -> document name, for every way a document names ITSELF: its filename (with and
     without extension), its first `#` heading, and any 'sheet: X' tab title the parser emits.
@@ -427,7 +578,8 @@ def docs_stating_status(docs: list[ParsedDoc]) -> set[str]:
 def classify(project, milestone_index: dict[str, tuple[str, str]],
              project_titles: dict[str, str],
              doc_identities: dict[str, str] | None = None,
-             stated_status_docs: set[str] | None = None) -> Ruling:
+             stated_status_docs: set[str] | None = None,
+             duty_parents: dict[int, tuple[str, str]] | None = None) -> Ruling:
     """Rule the candidate a project or a milestone, WITH a citable reason.
 
     Rules fire in evidence strength order — a structural fact from the document beats a shape
@@ -444,6 +596,15 @@ def classify(project, milestone_index: dict[str, tuple[str, str]],
                             its own owner/progress/deadline: some companies really do run one.
       R4 document           the title is the DOCUMENT's own name/heading and nothing about it is
                             tracked — not an owner, a progress, a deadline, or a LABELLED status.
+      R5 duty-column        the candidate sits on a PERSON's row, in a document where most
+                            line-bearing candidates do (`_duty_column_index` — the roster
+                            「当前负责事项」 shape). It is that person's pile of work, not a tracked
+                            project; parent = the person. A row the document tracks BEYOND the
+                            person (progress / deadline / milestones, `_independent_tracking`)
+                            escapes — a roster may double as a project ledger. LAST demotion rule
+                            on purpose: an owner is the one field a duty cell always has, so
+                            R2/R3's untracked-only guards never see these, and a candidate R1 can
+                            tie to a milestone list keeps that stronger, doc-nested parent.
       R0 tracked            otherwise, if the doc gave it owner/status/progress/deadline, it is a
                             project and we say which fields prove it.
     """
@@ -517,6 +678,18 @@ def classify(project, milestone_index: dict[str, tuple[str, str]],
                       reason=f"「{title}」是文档自身的标题（{doc_name}），"
                              f"文档没有给它负责人、进度或截止日期——这是一份文件，不是一个项目")
 
+    # R5 — A DUTY CELL IS NOT A PROJECT (issue #92). See `_duty_column_index` for the structural
+    # signal and the incident it pins. The demotion is refused when the document tracks this row
+    # beyond its person: 「有截止日期的那一行是台账，不是职责栏」.
+    duty = (duty_parents or {}).get(id(project))
+    if duty and not _independent_tracking(project):
+        person_name, _person_src = duty
+        return Ruling(title=title, verdict="milestone", rule="R5-duty-column", parent=person_name,
+                      evidence=getattr(project, "source", ""),
+                      reason=f"「{title}」写在「{person_name}」名下那一行的职责栏里——这是这个人"
+                             f"当前背着的一摊事；文档没有单独给它进度、截止日期或里程碑，"
+                             f"不是公司单独跟进的项目")
+
     got = _tracked_fields(project)
     if got:
         return Ruling(title=title, verdict="project", rule="R0-tracked",
@@ -550,6 +723,10 @@ def apply_gate(res, docs: list[ParsedDoc]) -> list[Ruling]:
 
     Ordering note: this runs BEFORE cross-document dedup, so a milestone is judged against the
     document that nested it rather than against a merged record whose provenance is already gone.
+
+    R5 (issue #92) is the first rule that reads `res.people` — the person rows are the evidence a
+    duty column is judged against, and they too are still pre-dedup here, so every person still
+    carries the source line of the row that named them.
     """
     projects = list(getattr(res, "projects", []) or [])
     if not projects:
@@ -566,7 +743,8 @@ def apply_gate(res, docs: list[ParsedDoc]) -> list[Ruling]:
 
     identities = document_identities(docs)
     stated_status = docs_stating_status(docs)
-    rulings = [classify(p, milestone_index, project_titles, identities, stated_status)
+    duty_parents = _duty_column_index(projects, list(getattr(res, "people", []) or []), docs)
+    rulings = [classify(p, milestone_index, project_titles, identities, stated_status, duty_parents)
                for p in projects]
     keep = [p for p, r in zip(projects, rulings) if r.verdict == "project"]
     res.projects = keep

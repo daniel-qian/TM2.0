@@ -8,6 +8,10 @@
 -- the worker comes back; a processing row whose worker died is detected at startup (nobody in this
 -- process claimed it) and marked `failed: server restarted` — the exact recovery the pure-in-memory
 -- `_BUILD_LOCK` precedent never had (restart wiped it, stuck states leaked forever).
+-- 🔴 OPS CONSTRAINT that recovery model implies: swap containers STOP-OLD-THEN-START-NEW. During
+-- an overlap window the new container's startup recovery would mark the old container's live
+-- `processing` job failed while it is still running. The current swap runbook already does this;
+-- this line exists so a future runbook change trips over it.
 --
 --   id               job handle ("job_<16hex>", minted by the depositing endpoint)
 --   context_id       the workspace this job lands into. NO foreign key ON PURPOSE: a failed/done job

@@ -7,8 +7,9 @@ v1 那条「后端写端点整批缺席，按不建假按钮红线 UI 上一个�
 
 🔴 命门①（与 `file_append.py` 逐字同一条，arch-0802）：**绝不新造 `CompanyContext`。**
 通道只有一条：`ctx = reg.get(context_id)` → 在**那个对象**上原地 mutate → `reg.put(ctx)`。
-pg 侧的 put() 是 DELETE+INSERT 快照替换，靠临时表只回填「行还在、格子是 NULL」的单元，
-补不回「整行不存在」——拿一个新造的 ctx 去 put，其余文档的原件字节会在一次写里永久蒸发。
+pg 侧的 put() 语义是快照替换（#90 起实现为 positional diff，语义不变——你交出去的列表就是
+全部），靠临时表只回填「行还在、格子是 NULL」的单元，补不回「整行不存在」——拿一个新造的
+ctx 去 put，其余文档的原件字节会在一次写里永久蒸发。
 
 🔴 命门②：**先查后改。** 所有能 raise 的事（context 不在、key 不在）做完，才碰 `ctx` 任何
 一个字段。内存 registry 的 `get()` 返回的是**活引用**：删到一半再抛，坏状态已经落在库里了，
@@ -149,7 +150,8 @@ def _rebuild_store(ctx) -> None:
 
     🔴 分流必须按 `isinstance(ctx.store, PgVectorStore)`，不许用 `hasattr` 之类的鸭子探测：
     pg 环境下 `ctx.store` 是 `PgVectorStore`，它的 `add()` 是 no-op、**数据库自己才是 store**
-    （行由 `pg_registry.put()` 的 DELETE+INSERT 快照一次写掉，删除在那一步已经生效）。这一支
+    （行由 `pg_registry.put()` 的快照写掉——#90 的 diff 会从被删行起重写，删除在那一步已经
+    生效）。这一支
     什么都不做才是对的；无脑重铸成 `KeywordStore` 的后果是把这家公司从向量检索**静默降级**
     到关键词——`query()` 照样返结果、所有现存门全绿，没有任何一处会红。
 

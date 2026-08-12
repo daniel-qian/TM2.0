@@ -2215,7 +2215,7 @@ def _reading_absent(value) -> bool:
 # #77 当时的裁定是「诚实的降级」，理由是**血缘不够**：实体只有一个**单值** `source`、归并是
 # keep-first，删完只知道「少了一份来源」，不知道「少了之后该变成什么」。本节补的就是那句话，
 # 也是「逐条撤回」（票 7）唯一缺的那块地基——旧值在 `AppendLedger.absorb` 里被 `setattr` 抹掉，
-# `reg.put()` 是整快照 DELETE+INSERT，无历史无 journal。
+# `reg.put()` 是快照语义（#90 起按 positional diff 实现，但仍无历史无 journal）。
 #
 # ## 形状
 #   lineage = {

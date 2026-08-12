@@ -396,9 +396,9 @@ class PostgresContextRegistry(ProjectWriteMixin):
             # files-hub-0729/01 → arch-0802 · 保住已存的原始字节，改为**纯 SQL 回填**
             # （老注释里"再往上抬就该改成临时表 + UPDATE...FROM"的那一步，现在就是）。
             #
-            # 病灶不变：`get()` 的清单投影刻意不拉 bytea（见 :418-424 `content=None`），而全部
-            # 手编 CRUD 都是 `get() → 改 → put()`（registry.py:190-238），快照 DELETE+INSERT 会把
-            # content 抹成 NULL——
+            # 病灶不变：`get()` 的清单投影刻意不拉 bytea（`content=None`），而全部手编 CRUD 都是
+            # `get() → 改 → put()`（registry.py:190-238），被重写的行（#90 的 diff 下=分歧点之后
+            # 的行；#90 之前=每一行）会把 content 落成 NULL——
             #   ① `GET /team/{id}/files/{idx}` 永远 404 而清单照列（「不建假按钮」红线走后门）；
             #   ② 用户上传的**原件被永久销毁**（与 UI 无关，更重）。
             #

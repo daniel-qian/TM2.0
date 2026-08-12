@@ -888,8 +888,8 @@ class _CountingEmbedder:
 def test_append_preserves_the_past_and_embeds_only_the_increment(tmp_path):
     """真库端到端：旧文档字节保全 + **只嵌增量** + 重开一个 registry 实例还能读回来。
 
-    离线套看不到这一层：内存 registry 的 `put` 是一次 dict 赋值，而 pg 的 put 是
-    DELETE+INSERT 快照替换。这条门就是命门①在真库上的判据。
+    离线套看不到这一层：内存 registry 的 `put` 是一次 dict 赋值，而 pg 的 put 是真 SQL 写
+    （#90 起 positional diff，快照语义不变）。这条门就是命门①在真库上的判据。
     """
     url = _skip_without_db()
     from avery.ingest.pg_registry import PostgresContextRegistry
