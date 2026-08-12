@@ -1,0 +1,10 @@
+# session-state-files-are-credentials 碑：任何会落盘的会话/状态/凭据文件一律通配挡住。
+# 本目录只允许 .mjs 脚本与 .md 文档进仓；跑出来的一切状态都算凭据。
+*.json
+*.log
+*.txt
+*.png
+*.csv
+*state*
+*creds*
+*session*

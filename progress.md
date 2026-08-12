@@ -3,8 +3,10 @@
 > 📢 本文件是**当前状态快照，整体重写不追加**。历史都在 git（`git log` + 各 `.issues/*/receipt*.md`），别在这儿堆编年史。
 > 启动路径见 `AGENTS.md` Startup Workflow：读本文件 + `feature_list.json`，跑 `./init.sh` 确认绿，再开工。
 
-**Last Updated:** 2026-08-12（#89 上产后同日 **#92 落地进本地 main（未 push）**：粒度闸
-R5-duty-column + 「全选==逐传」不变式门，回执 `.issues/ingest-root-cause-0812/receipt-92.md`。
+**Last Updated:** 2026-08-12（#89 上产后同日 **#92 与 #94 先后落地进本地 main（未 push）**：
+#92 = 粒度闸 R5-duty-column + 「全选==逐传」不变式门（回执 `receipt-92.md`）；
+#94 = 账号方案 A 真彩排九判据 33 条全绿 + authGuestNote/homeGuestNote 修真话
+（回执 `.issues/ingest-root-cause-0812/receipt-94.md`，常驻测试户已建、凭据只在 scratchpad）。
 #89 的生产态不变：前端 `6b70173`、后端 `avery-agent:main-20260812-070519`。
 ⚠ 本地 main 自 #92 起**领先** origin/main——别单独 push）
 
@@ -13,8 +15,8 @@ R5-duty-column + 「全选==逐传」不变式门，回执 `.issues/ingest-root-
 - **git**：`main` = 差距战役八票 + gap2 三票 + 三轮演习批 + #68 + #70 + #69+#71 + #72 +
   **0808 重构战役四波全部**（#73/#74/#75/#76/#77/#78/#79）+ wave 4（#80+#81）+ #82
   + **#86 + #83 + #87 + #84 + #85 + #88（0810 设计轮票 4 / 1 / 5 / 2 / 3 / 6 —— 六票全清）**
-  + **#89 + #92（0812：抽取失败可见+热备 · 粒度闸 R5 职责列+不变式门）**。
-  回执：`redesign-0808/` 六份 + `design-0810/` 六份 + `ingest-root-cause-0812/receipt-92.md`。
+  + **#89 + #92 + #94（0812：抽取失败可见+热备 · 粒度闸 R5 职责列+不变式门 · 账号A真彩排+文案修真）**。
+  回执：`redesign-0808/` 六份 + `design-0810/` 六份 + `ingest-root-cause-0812/receipt-{92,94}.md`。
   ⚠ 别在这儿写死 ahead 数字——它每提交一次就自己作废。要数就跑：
   `git rev-list --count origin/main..HEAD`。
 - **后端离线套基线：`TZ=UTC` → 4160 passed · 0 failed · 139 deselected · 4 xfailed**（约 2min）。
@@ -55,6 +57,29 @@ R5-duty-column + 「全选==逐传」不变式门，回执 `.issues/ingest-root-
   ⚠ worktree 的 node_modules 是主检出的 junction：装依赖要在 `D:\avery` 装。
 - 🔴 **合的都是本地 main，没有 push**。前端 push main 即自动构建上产，push + 换后端容器
   必须在统一上产 session 的**同一个窗口**里做。
+
+## 本轮做完的 · 之三（2026-08-12 · #94 账号方案 A 真彩排）
+
+回执 `.issues/ingest-root-cause-0812/receipt-94.md`（九判据逐条证据、产品事实四条、清理回执、下轮复用姿势）。
+**前端只动 4 条文案，零逻辑改动；后端零字节。**
+
+`auth.users` 从 **0 行**起步，方案 A 完整动线在生产上第一次被走通：登录态上传自动归属
+（`account_linked:true`）· 换设备恢复（人/项目逐字对上，**核心判据**）· 游客上传→手动认领 ·
+登出后 owner_token 腿仍 200 · demo 全程免登录 · 双账号不串场 · 真 JWT 60s 缓存
+（**t+1.9s 后端 200 而 GoTrue 直探已 403** = 窗内 200 确凿来自缓存 → t+66.2s 重核验 401）·
+refresh_token 真续期后新 token 请求 200。常驻测试户 `avery-e2e+20260812@dannyqian.com`
+（凭据只在 scratchpad，回执只写指针）；临时户 B 已删；三个彩排 context 已解绑 + 标 ephemeral
+（48h 后任一次 /demo/claim 顺手回收）。文案 authGuestNote + homeGuestNote 中英四处改真话
+（死针探测零命中先行）。验证：`./init.sh` 绿 · i18n-orphans 0 · verify-auth-capability 25/25 ·
+verify-auth-form 57/57。
+
+**带回编排的四条产品事实**（详回执 §5）：① 注册入口对预置户是死胡同且**比票面更糟**——Supabase
+枚举保护对已注册邮箱回 200+假 user id，authStore 那句「这个邮箱已经注册过了」**结构性够不到**，
+分发话术必须明说「直接登录、别点注册」；② 无改密/重置入口（src 零调用点）；③ claim 不收权
+（实证：认领+登出后旧 owner_token 仍是万能钥匙）；④ **登出会让 OnboardGate 闸门复活**盖住还开着
+的登录弹层（A 登出→B 登录的共享机动线被打断一次；也是彩排主跑第一次挂死的病根）。
+另订正 exploration.md §2：「刷新丢认领入口」对现行代码**不成立**（锚点+token 都持久化，入口刷新
+前后都在）；真正的丢失条件 = localStorage 没了（那时游客数据对这台设备就是孤儿）。
 
 ## 本轮做完的 · 之二（2026-08-12 · #92 粒度闸 R5 职责列 + 「全选==逐传」不变式门）
 
@@ -387,7 +412,8 @@ facts+notes 重物化成空；**留下** `context_id` · `owner_token` · `name`
    0812 晚已全部拍板并开票：**#90**(后端:sha256幂等+异步任务+增量落库+计时) → **#91**(前端:熔断+轮询+读取中,依赖#90) ·
    ~~#92~~ ✅ **已落地**（本地 main，回执 `receipt-92.md`）→ **#93**(全档案重跑闸+folded_into新字段[拍板]+裁决落库,
    依赖#92✅和#90——**重建现场必须连 people 一起喂**，见 receipt-92 §6.4) ·
-   **#94**(账号A真彩排,九判据,agent建avery-e2e测试户[已授权],可并行)。
+   ~~#94~~ ✅ **已落地**（本地 main，九判据 33 条全绿，回执 `receipt-94.md`；
+   常驻测试户 avery-e2e+20260812@ 已建、凭据在 scratchpad 交接）。
    Caddy access log 已装好并验证（/var/log/caddy/avery-access.log，JSON，50MB×5 滚动）。
    ⚠ 大前提拍板（已入 memory）：**Avery 没有实际生产使用，只是部署通了**——开票按自然边界捆，不做分段上线仪式。
 
