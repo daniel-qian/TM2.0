@@ -69,6 +69,25 @@ export const en = {
     fileStatusFailedHint:
       "This file couldn't be opened at all — often a character-encoding mismatch (save it as UTF-8 and upload again). Nothing from it reached your team.",
 
+    // ── #89 — the extraction-degraded banner (the fix for what bit us on 2026-08-11) ────────
+    // That day every extraction call hit the provider's 429, fell back to the regex heuristic,
+    // and a 13-person roster produced 0 people. What the user saw: 200 + "Read" + "nothing
+    // needs you today" — every one of those sentences saying all is well. The backend has been
+    // honestly sending `extraction_mode: "degraded"` since feat-039; the frontend never read it.
+    // 🔴 Three rules for this copy, all earned that day:
+    //   1. Take the blame off the user first — her first thought was "did I use the wrong format".
+    //   2. Never say "nothing was read": `degraded` means AT LEAST ONE doc fell back, so the
+    //      others may well have extracted fine. Overstating is just a lie in the other direction.
+    //   3. The retry line MUST say delete-then-reupload: append runs through
+    //      `_unique_parse_names(taken=…)`, so a same-named file comes back as `xxx(1)` — a
+    //      re-upload ADDS a copy, it does not replace. Without that sentence, three retries
+    //      leave three identical files in the library and triple the chunk count.
+    extractionDegradedTitle: "Some files couldn't be read",
+    extractionDegradedBody:
+      "Your files are safely stored in the library below — the service that reads them was unreachable at the time. So the people and projects from those files may be missing or incomplete. Nothing you did wrong.",
+    extractionDegradedRetry:
+      'To try again: delete those files first, then upload them again. Re-uploading without deleting adds a second copy rather than replacing.',
+
     // ── #88 — one archive per person; "start a separate company" is GONE ────────────────────
     // This block used to hold `againTitle` / `againBody` ("uploading here starts a separate
     // company") plus the ten `switch*` strings behind the "uploads on this browser" roster.

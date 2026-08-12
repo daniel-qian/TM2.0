@@ -17,11 +17,17 @@
 
 FROM python:3.11-slim AS base
 
+# #89 · the git commit this image was built from, surfaced verbatim on /health as "commit".
+# Passed by the server build: docker build --build-arg AVERY_COMMIT=$(git rev-parse HEAD) …
+# Default "unknown" keeps local/gate builds honest (they never claim a commit they didn't pin).
+ARG AVERY_COMMIT=unknown
+
 # Faster, quieter, no .pyc clutter; unbuffered logs for container log capture.
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PORT=8137 \
+    AVERY_COMMIT=${AVERY_COMMIT} \
     AVERY_BRAIN=mock
 
 WORKDIR /app

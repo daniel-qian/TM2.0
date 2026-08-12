@@ -63,8 +63,36 @@ def _with_timeout(brain: Brain) -> Brain:
     return brain
 
 
+def failover_enabled() -> bool:
+    """#89 — the ops kill-switch for provider failover (default ON). `AVERY_BRAIN_FAILOVER=off`
+    pins every path back to single-provider behavior (worth having when a secondary starts
+    answering garbage and「不答」比「答坏」诚实)."""
+    return (os.environ.get("AVERY_BRAIN_FAILOVER") or "on").strip().lower() not in (
+        "off", "0", "false", "no")
+
+
 def resolve_brain_kind() -> str:
     return (os.environ.get("AVERY_BRAIN") or "mock").strip().lower()
+
+
+# #89 · 互为热备的那一对（境内现实：M3 + DeepSeek）。claude / openai-compat 没有指定的第二家，
+# 仍包 FallbackBrain（链长 1）——为的是遥测：/health 的 providers 真相来自这层记录点。
+_PAIR = {"minimax": "deepseek", "deepseek": "minimax"}
+_PAIR_KEY_ENV = {"minimax": "MINIMAX_API_KEY", "deepseek": "DEEPSEEK_API_KEY"}
+
+
+def advise_chain(kind: str | None = None) -> list[str]:
+    """The ordered provider chain /advise (and /ask · form drafting) will actually walk.
+    ['mock'] 在 mock 下；真脑 = 主脑 + （若 armed 且对家有 key）对家。/health 用它自证。"""
+    kind = (kind or resolve_brain_kind()).strip().lower()
+    if kind == "mock":
+        return ["mock"]
+    chain = [kind]
+    other = _PAIR.get(kind)
+    if (failover_enabled() and other
+            and (os.environ.get(_PAIR_KEY_ENV[other]) or "").strip()):
+        chain.append(other)
+    return chain
 
 
 def brain_is_live() -> bool:
@@ -72,14 +100,8 @@ def brain_is_live() -> bool:
     return resolve_brain_kind() != "mock"
 
 
-def make_brain(case, kind: str | None = None) -> Brain:
-    """Build the brain named by `kind` (or AVERY_BRAIN). Raises RuntimeError with a clear message
-    when a real brain is requested but its key/SDK is missing (caller maps to a clean HTTP error)."""
-    kind = (kind or resolve_brain_kind()).strip().lower()
-
-    if kind == "mock":
-        return make_mock_brain(case, "avery")   # pure/local — no client, no timeout to bound
-
+def _make_single(kind: str) -> Brain:
+    """One real brain for `kind`, timeout-bounded. Raises RuntimeError on unknown kind/missing key."""
     if kind == "minimax":
         return _with_timeout(OpenAICompatBrain(
             name="avery-minimax", api_key_env="MINIMAX_API_KEY",
@@ -106,3 +128,28 @@ def make_brain(case, kind: str | None = None) -> Brain:
 
     raise RuntimeError(f"unknown AVERY_BRAIN={kind!r} "
                        f"(expected mock | minimax | deepseek | claude | openai-compat)")
+
+
+def make_brain(case, kind: str | None = None) -> Brain:
+    """Build the brain named by `kind` (or AVERY_BRAIN). Raises RuntimeError with a clear message
+    when a real brain is requested but its key/SDK is missing (caller maps to a clean HTTP error).
+
+    #89: every REAL brain comes back wrapped in `failover.FallbackBrain` — minimax/deepseek get
+    each other as hot standby (when the other key exists and AVERY_BRAIN_FAILOVER isn't off);
+    everything else is a chain of one, which still buys the /health provider telemetry. The mock
+    brain is never wrapped (pure/local, and the offline suite's determinism depends on it).
+    此 seam 同时覆盖 /advise、/ask 起草、表单起草——三个调用方都从这里拿脑子。
+    """
+    kind = (kind or resolve_brain_kind()).strip().lower()
+
+    if kind == "mock":
+        return make_mock_brain(case, "avery")   # pure/local — no client, no timeout to bound
+
+    from . import failover
+    chain: list[tuple[str, Brain]] = [(kind, _make_single(kind))]
+    for other in advise_chain(kind)[1:]:
+        try:
+            chain.append((other, _make_single(other)))
+        except RuntimeError:
+            logger.warning("failover secondary %s is configured but unbuildable — chain of 1", other)
+    return failover.FallbackBrain(chain)

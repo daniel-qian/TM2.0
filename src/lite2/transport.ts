@@ -134,6 +134,14 @@ export interface LiveAppendReceipt {
   conflicts_added: number
 }
 
+/**
+ * #89 · 一趟抽取的诚实标签（后端 `service/extractor_factory.extraction_mode`）。
+ *   'llm'       —— 真模型读完了每一份文档。
+ *   'degraded'  —— 配了模型但至少一份掉回正则兜底。**这是要上屏告诉用户的那一种。**
+ *   'heuristic' —— 这台后端压根没配模型（离线部署的正常态，不是故障）。
+ */
+export type LiveExtractionMode = 'llm' | 'degraded' | 'heuristic'
+
 export interface LiveTeamPayload {
   context_id: string
   source_files?: string[]
@@ -167,6 +175,15 @@ export interface LiveTeamPayload {
   // T10 · `POST /team/{id}/files` 的首帧附带："这一趟到底加了什么"。仅补传回执有，
   // /ingest 与 /team/{id} 都不发。
   appended?: LiveAppendReceipt
+  // #89 · 这一趟抽取到底是谁干的。**只有两个写口有**（`POST /ingest` 与 `POST /team/{id}/files`）——
+  // `GET /team/{id}` 是读，不重跑抽取，所以刷新帧永远没有这个键（前端因此必须自己存，见 store 的
+  // `extractionMode` 那段碑）。
+  // 🔴 这个键从 feat-039 起就一直在后端发着，而 2026-08-11 之前前端**一次都没读过**：
+  //    合伙人上传当天 MiniMax 配额用尽、每次抽取 429、降级正则抽出 0 人 0 项目，她看到的却是
+  //    200 +「已读取」+「今天没有要你定夺的事」。后端诚实了，前端把话丢了。
+  //    'degraded' = 配了真模型但至少一份文档掉回了正则（429 / 红线 / 超预算 / 模型没抽出东西）；
+  //    'heuristic' = 这台后端本来就没配模型（诚实的离线部署，**不是**故障，不许报警）。
+  extraction_mode?: LiveExtractionMode
   // rich-align-0722 · issue 03：人身自述投影开关（后端 AVERY_ALLOW_PERSON_SCORING）。
   // present-and-true ONLY when 开关开（仿 account_linked 缺席即 false 语义）。true 时后端才会在人卡上
   // 投影 self_report；缺席/false 时人卡零自述数字。前端运行时剥离据此决定放不放行 self_report 白名单。

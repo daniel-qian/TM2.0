@@ -22,8 +22,8 @@ from avery.brain import MINIMAX_BASE_URL, MINIMAX_MODEL, OpenAICompatBrain
 from avery.ingest.extract import Extractor, HeuristicExtractor
 from avery.ingest.llm_extract import LLMExtractor
 
-from . import llm_budget
-from .brain_factory import DEEPSEEK_BASE_URL, DEEPSEEK_MODEL
+from . import failover, llm_budget
+from .brain_factory import DEEPSEEK_BASE_URL, DEEPSEEK_MODEL, failover_enabled
 
 log = logging.getLogger("service.extractor_factory")
 
@@ -46,9 +46,35 @@ def _extraction_brain_kind() -> str | None:
     return None
 
 
+def extraction_chain() -> list[str]:
+    """#89 — the ordered provider chain extraction will ACTUALLY walk: primary first, then every
+    OTHER keyed provider (failover). [] when extraction is heuristic (forced or keyless).
+    /health reports this so「热备到底armed没有」在生产上可核，不靠读代码。"""
+    if resolve_extractor_kind() == "heuristic":
+        return []
+    primary = _extraction_brain_kind()
+    if primary is None or not (os.environ.get(_KEY_ENV[primary]) or "").strip():
+        return []
+    chain = [primary]
+    if failover_enabled():
+        chain += [k for k in _EXTRACTION_BRAINS
+                  if k != primary and (os.environ.get(_KEY_ENV[k]) or "").strip()]
+    return chain
+
+
 # One extraction window must answer within this budget or the window retries/falls back —
 # a hung provider call must never hang an /ingest request indefinitely.
 _EXTRACT_TIMEOUT_S = float(os.environ.get("AVERY_EXTRACT_TIMEOUT_S", "240"))
+
+
+def _extract_backoff_s() -> float:
+    """#89 — the per-window retry backoff LLMExtractor sleeps between attempts. Env-tunable so the
+    offline integration tests (local fake 429 provider) don't spend 6s asleep per window; the 2.0s
+    production default is unchanged."""
+    try:
+        return float(os.environ.get("AVERY_EXTRACT_BACKOFF_S", "2.0"))
+    except (TypeError, ValueError):
+        return 2.0
 
 
 def _make_extraction_brain(kind: str):
@@ -89,13 +115,19 @@ def make_extractor() -> Extractor:
         h._avery_degraded = "llm_budget_exhausted"   # type: ignore[attr-defined]
         return h
 
-    try:
-        brain = _make_extraction_brain(brain_kind)
-    except Exception:
+    # #89 · 供应商链：主脑失败换下一家（0811 的 39 小时 429 期间 DeepSeek key 就在 env 里躺着）。
+    # 每家各包各的 BudgetedBrain——预算数的是**真发生的供应商调用**（一次 failover = 2 次计费），
+    # 与 0805 走查定下的口径一致；BudgetExceeded 由 FallbackBrain 原样上抛（不 failover，见其碑）。
+    chain: list[tuple[str, object]] = []
+    for k in extraction_chain():
+        try:
+            chain.append((k, llm_budget.BudgetedBrain(_make_extraction_brain(k))))
+        except Exception:
+            continue                          # 这一家配置坏了就跳过；一家都不剩再落 heuristic
+    if not chain:
         return HeuristicExtractor()
-    # Wrap the brain so every model call charges the budget and trips the gate mid-batch (the
-    # LLMExtractor catches the BudgetExceeded per-doc and falls back to the heuristic -> degraded).
-    return LLMExtractor(llm_budget.BudgetedBrain(brain), fallback=HeuristicExtractor())
+    return LLMExtractor(failover.FallbackBrain(chain), fallback=HeuristicExtractor(),
+                        retry_backoff_s=_extract_backoff_s())
 
 
 def extraction_mode(extractor: Extractor) -> str:

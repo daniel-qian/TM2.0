@@ -42,7 +42,7 @@ from avery.locale import DEFAULT_LOCALE, normalize_locale  # ADR-0033: locale �
 from avery.ingest.registry import new_thread_id  # #78: 服务端铸场 id（理由见 _with_thread_id）
 
 from . import account  # feat-053: verify a Supabase access token -> user id (header-only)
-from . import brain_factory, embedding_factory, extractor_factory, live_input, llm_budget, mem_sentinel
+from . import brain_factory, embedding_factory, extractor_factory, failover, live_input, llm_budget, mem_sentinel
 from .ask_api import maybe_ask_draft_frame  # feat-034: the ask-draft frame (service-layer, not engine)
 from .ask_api import router as ask_router   # feat-034: /ask manager endpoints + /r/{token} employee H5
 from .auth_api import router as auth_router  # feat-053: /account/status|contexts|claim
@@ -432,13 +432,34 @@ def health() -> dict:
     # and a spent budget is moot there (no LLM extractor is in play).
     extractor = extractor_factory.active_extractor()             # "heuristic" or "llm:<brain>"
     llm_configured = extractor.startswith("llm:")
-    extraction_degraded = llm_configured and llm_budget.exhausted()
+    # #89 · /health 不再撒谎：0811 的 39 小时 429 期间这里恒 degraded:false——它只看我们自己的
+    # 进程内预算计数器，从不知道供应商在拒绝我们。现在补上**被动**供应商遥测（failover.py 的
+    # 记录点，绝不在这条 30s 心跳热路径上主动打真调用）：
+    #   · providers        — 每家「最近一次真调用」的成败/摘要/时刻；没被调用过 = ok:null（诚实的
+    #                        不知道，绝不翻译成好或坏）。
+    #   · extraction_chain — 抽取实际会走的供应商顺序（热备 armed 与否在生产可核，不靠读代码）。
+    #   · 已知全链坏（每家都被调用过且最近一次都失败）→ extraction_mode='degraded' + degraded=true。
+    #     单家坏而对家好/未知 ≠ degraded（热备就是干这个的）。下一次成功调用自动翻回来。
+    chain = extractor_factory.extraction_chain()
+    provider_outage = llm_configured and failover.all_known_bad(chain)
+    extraction_degraded = llm_configured and (llm_budget.exhausted() or provider_outage)
     extraction_mode = "degraded" if extraction_degraded else ("llm" if llm_configured else "heuristic")
+    snap = failover.snapshot()
+    advise_prov = brain_factory.advise_chain() if brain_factory.brain_is_live() else []
+    providers = {p: snap.get(p, {"ok": None, "detail": "", "at": None})
+                 for p in dict.fromkeys(chain + advise_prov)}
+    for k, v in snap.items():
+        providers.setdefault(k, v)
     return {"status": "ok", "service": "avery-agent", "brain": kind,
             "live": brain_factory.brain_is_live(),
+            # #89 · 镜像构建时烙进来的 git commit（server 侧 docker build --build-arg AVERY_COMMIT）。
+            # 07-21 挂到今天的债：「生产跑的就是这个镜像」此前只能靠换容器日志自证、外部核不了。
+            "commit": (os.environ.get("AVERY_COMMIT") or "").strip() or "unknown",
             "embeddings": embedding_factory.active_embeddings(),  # "keyword" or "dashscope:<model>/<dim>"
             "extractor": extractor,                               # configured intent
             "extraction_mode": extraction_mode,                  # effective now: llm / heuristic / degraded
+            "extraction_chain": chain,                            # #89: ordered failover chain ([] offline)
+            "providers": providers,                               # #89: last-known per-provider truth
             "memory": mem,                                        # {rss_mb, warn_mb, high, available}
             "llm_calls_remaining": llm_budget.remaining(),        # None = unlimited (gate disabled)
             # 0805 走查修闸: embeddings burn on their OWN counter (AVERY_EMBED_CALL_BUDGET —

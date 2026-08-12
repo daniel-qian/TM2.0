@@ -10902,3 +10902,40 @@
     padding-left: 0;
   }
 }
+
+/* ── #89 · 抽取降级横幅 ─────────────────────────────────────────────────────────────
+   语气刻意用 warn（蜜色）而不是 danger（陶土色）：没有任何东西被销毁——文件都好好存着，
+   只是没读懂。红实底留给「清空这份档案」那种真销毁动作（.lite-files-empty-archive），
+   把两件事画成同一个红，用户第二次就不看了。
+   🔴 小字用 --honey-text 而不是 --honey：13px 以下是文本用途，装饰色在 paper 上过不了
+      AA 4.5:1（look-paper.css 顶部那段 *-text 令牌的碑写着这条），verify-contrast-smalltext
+      会红。 */
+.lite2-shell .lite-files-degraded {
+  flex: none;
+  margin: 0 0 16px;
+  padding: 14px 16px;
+  border: 1px solid rgba(var(--lite2-warn-rgb), 0.38);
+  border-radius: 12px;
+  background: rgba(var(--lite2-warn-rgb), 0.07);
+}
+
+.lite2-shell .lite-files-degraded-title {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--honey-text);
+}
+
+.lite2-shell .lite-files-degraded-body,
+.lite2-shell .lite-files-degraded-retry {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--ink-soft);
+  max-width: 72ch;
+}
+
+.lite2-shell .lite-files-degraded-retry {
+  margin-top: 6px;
+  color: var(--honey-text);
+}

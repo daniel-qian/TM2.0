@@ -8,6 +8,7 @@ import type {
   FormLinksResult,
   FormTemplateInput,
   LiveAppendReceipt,
+  LiveExtractionMode,
   LiveFileEntry,
   LiveAdviseRunEntry,
   LiveAdviseThread,
@@ -94,6 +95,45 @@ export function rememberContextId(contextId: string | null): void {
     else window.localStorage.removeItem(CONTEXT_STORE_KEY)
   } catch {
     /* quota/无痕——本次会话内存里仍持有 contextId，只是下次打不开而已 */
+  }
+}
+
+// ── #89 · 「这一趟抽取是谁干的」要活过刷新 ───────────────────────────────────────────────
+//
+// 为什么非存不可：`extraction_mode` **只有两个写口发**（`POST /ingest` / `POST /team/{id}/files`）。
+// `GET /team/{id}` 是读口、不重跑抽取，所以刷新一次这个事实就没了。而 0811 那位合伙人恰恰是
+// 「传完 → 看了会儿 → 刷新/换页」——只活在内存里的警告，正好在她最需要的时候消失。
+//
+// 🔴 连着 contextId 一起存，读的时候必须核对：`emptyArchive` 清空档案**不换 context_id**，
+//    上一轮的 'degraded' 会原样挂在一份崭新的空档案上，屏上就是一句关于不存在之事的警告。
+//    存成 {contextId, mode} 让不匹配自我失效，比在三个清理点各补一刀可靠。
+const EXTRACTION_MODE_KEY = 'lite2:extractionMode:v1'
+
+export function loadStoredExtractionMode(contextId: string | null): LiveExtractionMode | null {
+  try {
+    if (!contextId || typeof window === 'undefined' || !window.localStorage) return null
+    const raw = window.localStorage.getItem(EXTRACTION_MODE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as { contextId?: string; mode?: string }
+    if (parsed?.contextId !== contextId) return null
+    return parsed.mode === 'degraded' || parsed.mode === 'llm' || parsed.mode === 'heuristic'
+      ? parsed.mode
+      : null
+  } catch {
+    return null
+  }
+}
+
+export function rememberExtractionMode(
+  contextId: string | null,
+  mode: LiveExtractionMode | null | undefined,
+): void {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return
+    if (!contextId || !mode) window.localStorage.removeItem(EXTRACTION_MODE_KEY)
+    else window.localStorage.setItem(EXTRACTION_MODE_KEY, JSON.stringify({ contextId, mode }))
+  } catch {
+    /* 同上：无痕模式下这次会话内存里还在，只是刷新后不再提醒 */
   }
 }
 
@@ -301,6 +341,13 @@ interface LiteState {
   // 后端不介意但用户会拿到两个工作区糊一脸）；error = 领取失败的人话（诚实报错，不伪装成功）。
   demoClaiming: boolean
   demoClaimError: string | null
+
+  // #89 · 这份档案**最近一次抽取**是谁干的（后端两个写口发的 `extraction_mode`）。
+  // null = 还不知道（这台机器上没传过东西，或者数据是 demo 克隆/恢复会话来的——那两条路
+  // 根本没跑抽取，绝不许拿上一份的标签冒充）。
+  // 🔴 'heuristic' 不是故障：那是「这台后端没配模型」的诚实态，屏上一个字都不该报警。
+  //    只有 'degraded' 才上屏（配了模型但掉回了正则 → 卡片多半是空的，而用户不知道为什么）。
+  extractionMode: LiveExtractionMode | null
 
   // #88 · `knownContexts` / `switchError` / `switchPending` 三格已随名册整条撤除（理由见
   // 文件头那段碑）。一台电脑恒 1 份档案，没有"切回上一份"这件事了。
@@ -609,6 +656,9 @@ export const useLite = create<LiteState>((set, get) => ({
   restoreError: null,
   demoClaiming: false,
   demoClaimError: null,
+  // #89 · 首帧就从 localStorage 取回（与 `restoredContextId` 同一拍、同一个理由）：警告必须
+  // 熬过刷新。锚点不匹配时 loadStoredExtractionMode 自己返 null，不用在这儿再判一次。
+  extractionMode: loadStoredExtractionMode(restoredContextId),
 
   turns: [],
   run: emptyRunState(),
@@ -697,11 +747,15 @@ export const useLite = create<LiteState>((set, get) => ({
       // adoptContext 在 id 变了时清 team/rawTeam/files/notes/ingestStatus，所以顺序必须是
       // 先 adopt 后 set —— 反过来会被它当场清掉本次刚拿到的团队。
       get().adoptContext(payload.context_id, payload.owner_token ?? null)
+      // #89 · 抽取标签必须写在 adoptContext **之后**：那个收口在 id 变了时会把它清成 null
+      //（新档案不许继承上一份的标签），写在前面会被它当场抹掉。
+      rememberExtractionMode(payload.context_id, payload.extraction_mode ?? null)
       set({
         ingestStatus: 'ready',
         newCompanyStatus: 'ready',
         team: liteTeamFromPayload(payload),
         rawTeam: payload,
+        extractionMode: payload.extraction_mode ?? null,
         // 上传成功即"有会话了"——把上一轮失败的恢复提示清掉。
         restoring: false,
         restoreError: null,
@@ -750,10 +804,14 @@ export const useLite = create<LiteState>((set, get) => ({
         set({ appendStatus: 'idle' })
         return
       }
+      // #89 · 补传同样重跑抽取，所以这一趟的标签**覆盖**上一趟的：刚补的那份读懂了，就不该
+      // 因为上一趟降级过而继续挂着警告；反过来刚补的那份降级了也必须立刻说。
+      rememberExtractionMode(contextId, payload.extraction_mode ?? null)
       set({
         appendStatus: 'ready',
         appendError: null,
         appendReceipt: payload.appended ?? null,
+        extractionMode: payload.extraction_mode ?? null,
         // 卡片当场是新读数——这正是本票「不许砍半」的那一半：资料库多一行的同时，卡也得动。
         team: liteTeamFromPayload(payload),
         rawTeam: payload,
@@ -950,7 +1008,10 @@ export const useLite = create<LiteState>((set, get) => ({
             ingestStatus: 'idle' as IngestStatus,
             // T10：补资料那一组同属公司域（「A 公司那次补传为什么没成」挂到 B 头上，
             // 就是替 B 断言一件没发生的事——与上面 formsError 逐字同一条理由）。
-            appendStatus: 'idle' as IngestStatus, appendError: null, appendReceipt: null }
+            appendStatus: 'idle' as IngestStatus, appendError: null, appendReceipt: null,
+            // #89 · 抽取标签同属公司域：换了档案就不知道新这份是谁抽的（demo 克隆 / 恢复会话
+            // 这两条路根本没跑抽取），留着上一份的标签就是替新档案断言一件没发生的事。
+            extractionMode: null }
         : {}),
     })
   },
@@ -1085,7 +1146,12 @@ export const useLite = create<LiteState>((set, get) => ({
         appendError: null,
         appendReceipt: null,
         fileDeleteError: null,
+        // #89 · 同一条理由：文件全没了，「那次抽取降级了」也就没有了对象。
+        // 🔴 `emptyArchive` **不换 context_id**，所以 adoptContext 那条清理路径这里不会跑——
+        //    必须在这儿自己清，否则崭新的空档案上会挂着一句关于不存在之事的警告。
+        extractionMode: null,
       })
+      rememberExtractionMode(contextId, null)
       // 权威清单（服务端说了算，别信本地推断出来的空）。
       await get().refreshFiles()
       // 后端留着的那两族，本地回权威值（见 ④）。失败不影响清空本身，故 void。

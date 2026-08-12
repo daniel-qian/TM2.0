@@ -907,6 +907,8 @@ export function FilesScreen() {
   const canEmpty = useLite((s) => !!s.transport.emptyContext)
   const templates = useLite((s) => s.formTemplates)
   const rawTeam = useLite((s) => s.rawTeam)
+  // #89 · 「这一趟抽取是谁干的」。只有 'degraded' 上屏（理由见下面渲染点那段碑）。
+  const extractionMode = useLite((s) => s.extractionMode)
 
   // 🔴「还没传过」和「传了但读不出来」是两件事，文案必须分得开。这里只判前者：
   // 有 contextId 但清单为空 = 后端确实没给出文件。
@@ -1193,6 +1195,26 @@ export function FilesScreen() {
                 </button>
               ) : null}
             </div>
+
+            {/* #89 · 抽取降级横幅。
+                🔴 挂在这儿而**不是** UploadStatusBlock 里：那块只在 status==='ready'/'ingesting'
+                   期间有 DOM，刷一次页面就没了——而 0811 那位合伙人恰恰是「传完→看了会儿→翻页」，
+                   只活在上传态里的警告正好在她最需要的时候消失。这里的判据只看 `extractionMode`
+                   （store 从 localStorage 取回，见那段碑），与本次上传跑没跑完无关。
+                🔴 判据是 `=== 'degraded'` 而不是 `!== 'llm'`：'heuristic' 是「这台后端没配模型」
+                   的诚实态（离线部署/门电池），对着它报警就是天天喊狼来了。null 同理（demo 克隆、
+                   恢复会话——那两条路根本没跑抽取，我们不知道，就不许说）。 */}
+            {extractionMode === 'degraded' ? (
+              <div
+                className="lite-files-empty lite-files-degraded"
+                data-extraction-mode="degraded"
+                role="status"
+              >
+                <p className="lite-files-degraded-title">{t.upload.extractionDegradedTitle}</p>
+                <p className="lite-files-degraded-body">{t.upload.extractionDegradedBody}</p>
+                <p className="lite-files-degraded-retry">{t.upload.extractionDegradedRetry}</p>
+              </div>
+            ) : null}
 
             {/* 示例克隆：不做假按钮，但也不装作这个功能不存在——说清楚为什么这儿传不进去。 */}
             {uploadBlocked ? (
