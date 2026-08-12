@@ -1,5 +1,8 @@
 -- rich-align-0722/08 — admit the "playbook" entity kind into entities_kind_check.
 -- 差距战役 T6/B2a (2026-08-06) — 同一条 CHECK 再收一个 kind: "conflict"（归并丢弃的读数）。
+-- issue #93 (2026-08-12) — 同一条 CHECK 再收一个 kind: "ruling"（粒度闸的裁决记录）。补传路
+--   从此会**折叠**项目卡（rejudge.py），而「每一次降级都说得出为什么」是这个模块唯一的合法性
+--   根据——裁决不落库，容器一重启「这张卡为什么不见了」就永远答不出来。
 --
 -- ⚠ 为什么是**就地改这一条**而不是新加一个 0013：`test_entities_kind_check_covers_written_kinds`
 -- 扫的是 db/migrations/*.sql 里**每一条** `ADD CONSTRAINT entities_kind_check`，要求它们**全部**
@@ -28,7 +31,7 @@ DECLARE
     have text;
     -- Keep this array identical to the ADD below (test_entities_kind_check_covers_written_kinds pins
     -- both to pg_registry._ENTITY_KINDS). Compared after the same normalization 0009 uses.
-    want text := 'CHECK (kind = ANY (ARRAY[''person'',''project'',''signal'',''playbook'',''conflict'']::text[]))';
+    want text := 'CHECK (kind = ANY (ARRAY[''person'',''project'',''signal'',''playbook'',''conflict'',''ruling'']::text[]))';
 BEGIN
     SELECT pg_get_constraintdef(oid) INTO have
     FROM pg_constraint
@@ -45,7 +48,8 @@ BEGIN
     THEN
         ALTER TABLE avery.entities DROP CONSTRAINT IF EXISTS entities_kind_check;
         ALTER TABLE avery.entities ADD CONSTRAINT entities_kind_check CHECK (
-            kind = ANY (ARRAY['person', 'project', 'signal', 'playbook', 'conflict']::text[])
+            kind = ANY (ARRAY['person', 'project', 'signal', 'playbook', 'conflict',
+                              'ruling']::text[])
         );
     END IF;
 END

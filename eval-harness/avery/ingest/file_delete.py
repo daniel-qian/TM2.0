@@ -25,6 +25,10 @@ recall 面照旧引得到那份已经删掉的资料的原文。
 材料块（`materials`）、它孵出的信号（`signals`，doc 派生的原始读数）、粒度闸对它那些候选
 的裁决记录（`granularity`）、以及**任何一条把它当作一方的冲突**（`conflicts`）。
 
+**放回来**（issue #93 追加，不是删）：任何一张软折叠卡（`folded_into` 非空），如果解释它那条
+裁决刚好随这份文档一起被清掉了，就**撤销折叠**——见 `_unfold_unexplained`。这是删除路唯一一处
+碰项目卡的地方，方向是**加**（卡回到经理眼前），不是减。
+
 **不删**：人卡 / 项目卡 / 方法卡。不是偷懒，是**血缘不够**：`PersonEntity`/`ProjectEntity`
 只有实体级单值 `source`，且归并是 keep-first（`file_append.merge_*` 不重写 source），多份
 文档喂出来的卡 `source` 恒指第一份；字段级 `provenance` 只在补传/手编/表单回流时才 stamp，
@@ -78,6 +82,9 @@ class DeleteReport:
     signals_removed: int = 0
     conflicts_removed: int = 0
     rulings_removed: int = 0
+    # issue #93 · 被这次删除**放回来**的软折叠卡：解释它们为什么被折叠的那条裁决随这份文档
+    # 一起走了，所以折叠也跟着撤销（理由见 `_unfold_unexplained` / 模块 docstring）。
+    unfolded: int = 0
     remaining_documents: list[str] = field(default_factory=list)
 
 
@@ -122,6 +129,12 @@ def delete_document_from_context(reg, context_id: str, source_key: str) -> Delet
                                  if doc_key_of(s.source) != key]
     ctx.extraction.granularity[:] = [r for r in ctx.extraction.granularity
                                      if doc_key_of(r.evidence) != key]
+    # issue #93 · 上面这一句的**下半句**。裁决按 `evidence`（那条降级凭以成立的文档行）清理，
+    # 而 #93 起裁决不再只是审计记录：补传路的软折叠靠它回答「为什么这张卡不见了」。删掉那份
+    # 文档等于删掉唯一的解释——留下一张看不见、又说不出理由的卡，正是这个模块最不该造出来的
+    # 东西（`granularity.py` 模块头：「一个解释不了的闸比它修的碎片化更坏」）。
+    # 所以：解释没了，折叠就撤销，卡放回经理眼前。
+    unfolded = _unfold_unexplained(ctx)
     # 冲突：只要有**任何一方**来自这份文档，整条收走（理由见模块 docstring）。
     # ⚠ `doc_key` 是 ConflictValue 上的现成字段（`doc_key_of(source)` 的产物），这里按它判；
     #    缺席时退回自己算一次，别让一条没打 doc_key 的老记录逃过。
@@ -142,7 +155,52 @@ def delete_document_from_context(reg, context_id: str, source_key: str) -> Delet
         signals_removed=before_signals - len(ctx.extraction.signals),
         conflicts_removed=before_conflicts - len(ctx.extraction.conflicts),
         rulings_removed=before_rulings - len(ctx.extraction.granularity),
+        unfolded=unfolded,
         remaining_documents=[(sd.source_key or sd.filename) for sd in ctx.source_documents])
+
+
+def _unfold_unexplained(ctx) -> int:
+    """issue #93 —— 把「折叠还在、解释没了」的卡放回来。返回放回来了几张。
+
+    不变式（本函数是它唯一的守卫）：**一张 `folded_into` 非空的卡，`extraction.granularity` 里
+    必须有一条 `subject_id` 指向它的裁决**。折叠是系统替经理收走一张卡，收走的唯一许可就是
+    「说得出为什么」；解释一旦随文档删掉，许可就没了。
+
+    🔴 撤销折叠是**加法**，不是又一次销毁：清空这一格，卡带着它全部读数回到项目轴上
+    （软折叠从头到尾没有删过任何东西，这正是 #93 选软折叠的理由）。母卡在折叠时吸收过去的
+    那些格子**不回收**——那是 `_absorb_project` 的 keep-first 语义，母卡只填过自己空着的格子，
+    收回去等于替抽取器编一个它从没做过的判断（与本模块 docstring 里「冲突为什么整条删而不是
+    只摘掉一方」逐字同一条纪律）。代价记明：撤销之后母卡上留着几格来自这张卡的读数，
+    每一格的出处都在 `lineage` 里指着它自己的来源文档，不是一句假话。
+
+    ⚠ 判据落在 `subject_id` 上，不落在标题上：同名卡（`_disambiguate_project_ids` 存在的理由）
+    会让按标题找解释的写法在两张卡之间张冠李戴，而张冠李戴的形态恰好是「全绿」。
+
+    ## 一条查清楚了、但没有被这一票消灭的残留（票面第 3 项的诚实答案）
+    上面那句 `doc_key_of(r.evidence)` 清理，扫的是**裁决自称的那一行**，而不同规则的
+    `evidence` 语义并不一致（`granularity.classify`）：
+      · **R1-milestone-section**（补传路唯一真正在开火的折叠规则）—— `evidence` 是
+        **里程碑那一行**，也就是**凭以折叠的那份文档**。删它 → 裁决走 → 折叠撤销。**语义闭合。**
+      · **R3-phase-of** —— `evidence` 是**候选自己的** `source`，而 `source` 是实体级 keep-first
+        出处：归并之后它可能指向**另一份**文档，不是提供 parent 证据的那一份。于是删掉真正
+        提供证据的那份文档时，裁决**活着**、折叠**也活着**，而它引的那一行虽然仍然存在，
+        已经不再证明这次折叠。
+    没有在本票消灭它，是因为消灭它要给 `Ruling` 再开一个「凭据文档」字段，而那会改到**抽取路**
+    的审计语义（两条路共用 `classify`），代价大于收益：R3 要同时满足「标题带阶段标记」+
+    「文档一个跟踪字段都没给」+「parent 是一张可见的卡」，在补传路上是窄口。
+    残留的**方向**也是可接受的那一侧：卡多折着一会儿，而不是卡被删掉——软折叠可逆，
+    读数一格没丢，裁决引的行仍然是一份真文档里的真一行。写在这里，下一个人不用重新查一遍。
+    """
+    explained = {(r.subject_id or "") for r in ctx.extraction.granularity
+                 if (r.subject_id or "") and r.verdict != "project"}
+    n = 0
+    for pr in ctx.extraction.projects:
+        if getattr(pr, "folded_into", "") and pr.id not in explained:
+            pr.folded_into = ""
+            n += 1
+            log.info("unfolded project %s (%s) — the ruling that explained its fold cited a "
+                     "document that has just been deleted", pr.id, pr.title)
+    return n
 
 
 def _rebuild_store(ctx) -> None:

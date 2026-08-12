@@ -50,6 +50,7 @@ from .parse import ParsedDoc, ParseError, parse_file
 from .pipeline import _finalize_source_documents
 from .redline_extract import ExtractionRedlineResult, ExtractionViolation, validate_extraction
 from .registry import SourceDocument, materialize_memory
+from .rejudge import RejudgeReport, rejudge_after_append
 
 log = logging.getLogger("avery.ingest.file_append")
 
@@ -72,6 +73,9 @@ class AppendReport:
     people_touched: int = 0
     projects_touched: int = 0
     conflicts_added: int = 0
+    # #93 · 全档案重跑粒度闸这一趟干了什么（跑没跑、折了几张、没折的为什么）。
+    # None = 这条路上根本没走到那一步（红线不过 / 一份新文件都没有）。
+    rejudge: RejudgeReport | None = None
 
     @property
     def violations(self) -> list[ExtractionViolation]:
@@ -168,10 +172,13 @@ def append_docs_to_context(reg, context_id: str, docs: list[ParsedDoc],
     # ── 只对新文件跑抽取（命门②）────────────────────────────────────────────────────────
     # `extract_docs` 内部照旧跑 apply_gate → _dedupe_entities → _link_owners，但作用域是
     # **这一批**：新文件之间的跨文档归并与冲突在这里就地解决，然后才轮到与存量的归并。
-    # ⚠ 已知边界：粒度闸（granularity.apply_gate）只看得见这一批文档，所以「新文档里的一条
-    #    里程碑其实属于一个**存量**项目」这种跨批次误判它挡不住——把整份 ctx.extraction 连同
-    #    单份新文档喂给它会让它拿一个缺了源文档的 docs 集合去重判每一张老卡，那是整表静默删除，
-    #    比漏判坏得多。宁可漏，写在这里。
+    # ⚠ 这一趟的粒度闸（granularity.apply_gate）只看得见**这一批**文档，所以「新文档里的一条
+    #    里程碑其实属于一个**存量**项目」这种跨批次误判它挡不住。
+    #    🔴 **2026-08-12 · issue #93 已经把这条边界补上了**，但补在下面（归并之后那道
+    #    `rejudge_after_append`），不在这里：这里必须继续只看这一批，因为跨批次的判定要在
+    #    **归并完成、卡与存量合并成同一张表之后**才做得对。原注释「宁可漏，写在这里」写下时
+    #    站的两个前提（字节重建不出全量 docs、卡的血缘查不到）已被 #87 推翻，
+    #    完整的订正与三道锁写在 `rejudge.py` 的模块头。
     _t0 = time.perf_counter()
     fresh = extract_docs(fresh_docs, extractor=extractor)
     # #90 · 分段计时（票面 D）：全管线此前 perf_counter 零命中，「越传越慢主凶是谁」只能靠猜。
@@ -234,6 +241,14 @@ def append_docs_to_context(reg, context_id: str, docs: list[ParsedDoc],
     log.info("ingest-timing stage=merge context_id=%s files=%d elapsed_ms=%.0f",
              context_id, len(fresh_docs), (time.perf_counter() - _t0) * 1000)
 
+    # ── #93 · 全档案重跑粒度闸 —— 上面那条 ⚠ 的正面答案 ────────────────────────────────────
+    # 上一段注释（命门②下面那条）说「宁可漏」，因为把整份 ctx.extraction 连同单份新文档喂给闸
+    # 等于整表静默删除。那句话保留为**实现约束**，不再是方向否决：`rejudge` 把整个档案的字节
+    # 重建回 docs（#87 的血缘让「重建不出来就整个放弃」判得出来），并且**只折叠、不删除**。
+    # 位置有讲究：必须在归并**之后**（要判的是并完之后那张表）、整体红线与 put() **之前**
+    # （折叠会把读数并进母卡，红线得看到折叠之后的样子）。
+    rejudge = rejudge_after_append(reg, ctx, {d.name: d for d in fresh_docs})
+
     # 与 pipeline / form_append 同一道门、同一个开关口径（材料本身刻意不扫 —— ADR-0023 只存不听；
     # 这里防的是「context 里既有的违规被本次写意外放行」）。
     whole = validate_extraction(ctx.extraction)
@@ -262,7 +277,8 @@ def append_docs_to_context(reg, context_id: str, docs: list[ParsedDoc],
         ok=True, context=ctx, redline=rl, parsed=fresh_docs, parse_errors=errors,
         added_documents=finalized, skipped_duplicates=skipped,
         people_touched=len(fresh.people), projects_touched=len(fresh.projects),
-        conflicts_added=len(ctx.extraction.conflicts) - conflicts_before)
+        conflicts_added=len(ctx.extraction.conflicts) - conflicts_before,
+        rejudge=rejudge)
 
 
 def _extend_playbooks(extraction: ExtractionResult, fresh: ExtractionResult) -> None:

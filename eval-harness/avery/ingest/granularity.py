@@ -262,6 +262,22 @@ class Ruling:
     reason: str
     parent: str = ""
     evidence: str = ""                                  # "<doc>:<1-based line>"
+    # issue #93 · WHICH NAMESPACE `parent` IS A NAME IN. R1/R3 name a PROJECT the same corpus
+    # tracks; R5 names a PERSON (the roster row the duty was written on). Both are just strings on
+    # this record, and the re-judgment path (`rejudge.py`) has to look the parent UP before it may
+    # fold a card into it — so it needs to know which list to look in. Reading a person's name off
+    # the project list is not a hypothetical: a company with a project literally named after a
+    # colleague would fold a duty cell into a stranger, and the fold would carry a perfectly
+    # citable-looking reason. "" = this rule names no parent at all (R0/R2/R4) — the one value that
+    # makes `rejudge` refuse to fire, which is exactly the ticket's 「无 parent 规则禁开火」.
+    parent_kind: str = ""                               # "" | "project" | "person"
+    # issue #93 · WHICH CARD this ruling is about, when the answer is knowable. Deliberately EMPTY
+    # on the extraction path: `apply_gate` runs before `_disambiguate_project_ids`, so the id a
+    # candidate carries there is not yet the id the card will live under — recording it would be a
+    # join key that silently points at the wrong card. The re-judgment path judges cards that are
+    # ALREADY in the archive under their final ids, so there it is exact, and it is what answers
+    # 「为什么这张卡不见了」 against a specific card after a restart.
+    subject_id: str = ""
 
     def as_line(self) -> str:
         tail = f"（归入「{self.parent}」）" if self.parent else ""
@@ -614,7 +630,7 @@ def classify(project, milestone_index: dict[str, tuple[str, str]],
     parent, where = milestone_index.get(k, ("", ""))
     if parent and _key(parent) != k:
         return Ruling(title=title, verdict="milestone", rule="R1-milestone-section", parent=parent,
-                      evidence=where,
+                      parent_kind="project", evidence=where,
                       reason=f"文档把「{title}」列在项目「{parent}」的「里程碑」清单里，"
                              f"它是该项目的一个检查点，不是独立项目")
 
@@ -647,7 +663,8 @@ def classify(project, milestone_index: dict[str, tuple[str, str]],
                 continue
             if bare == other_k or (len(other_k) >= 4 and other_k in bare):
                 return Ruling(title=title, verdict="milestone", rule="R3-phase-of",
-                              parent=other_title, evidence=getattr(project, "source", ""),
+                              parent=other_title, parent_kind="project",
+                              evidence=getattr(project, "source", ""),
                               reason=f"「{title}」是同一份文档已在跟进的项目「{other_title}」的一个阶段")
 
     # R4 — A DOCUMENT IS NOT A PROJECT. The extractor's no-title fallback reaches for the document's
@@ -685,7 +702,7 @@ def classify(project, milestone_index: dict[str, tuple[str, str]],
     if duty and not _independent_tracking(project):
         person_name, _person_src = duty
         return Ruling(title=title, verdict="milestone", rule="R5-duty-column", parent=person_name,
-                      evidence=getattr(project, "source", ""),
+                      parent_kind="person", evidence=getattr(project, "source", ""),
                       reason=f"「{title}」写在「{person_name}」名下那一行的职责栏里——这是这个人"
                              f"当前背着的一摊事；文档没有单独给它进度、截止日期或里程碑，"
                              f"不是公司单独跟进的项目")
@@ -717,18 +734,22 @@ def build_milestone_index(docs: list[ParsedDoc]) -> dict[str, tuple[str, str]]:
     return index
 
 
-def apply_gate(res, docs: list[ParsedDoc]) -> list[Ruling]:
-    """Demote every milestone masquerading as a project on `res`, in place. Returns one Ruling per
-    candidate — kept AND demoted — so the decision is fully auditable.
+def judge_projects(projects: list, people: list, docs: list[ParsedDoc]) -> list[Ruling]:
+    """Rule EVERY candidate in `projects` against the evidence pool `docs`, changing nothing.
 
-    Ordering note: this runs BEFORE cross-document dedup, so a milestone is judged against the
-    document that nested it rather than against a merged record whose provenance is already gone.
+    ONE RULER, two callers (issue #93). `apply_gate` is the extraction path: it judges a freshly
+    extracted batch and drops the demoted candidates. `rejudge.rejudge_archive` is the append path:
+    it judges the WHOLE archive's cards against the WHOLE archive's documents and FOLDS instead of
+    dropping. Those two paths must not each own a copy of "how a candidate is judged" — the whole
+    point of the re-judgment is that 「一次全选」 and 「逐份补传」 reach the same verdicts, and two
+    copies of the judging loop is precisely how that stops being true without a gate going red
+    (`_person_key`/`_link_owners` is this repo's carved-in-stone precedent for that failure).
 
-    R5 (issue #92) is the first rule that reads `res.people` — the person rows are the evidence a
-    duty column is judged against, and they too are still pre-dedup here, so every person still
-    carries the source line of the row that named them.
+    Judging is a PURE read of `projects`/`people`/`docs`: nothing here mutates a card, so the
+    append path can look at every verdict, decide which ones it is allowed to act on, and act on
+    only those. The identity of the returned list matters — `rulings[i]` is the verdict on
+    `projects[i]`.
     """
-    projects = list(getattr(res, "projects", []) or [])
     if not projects:
         return []
     milestone_index = build_milestone_index(docs)
@@ -743,9 +764,33 @@ def apply_gate(res, docs: list[ParsedDoc]) -> list[Ruling]:
 
     identities = document_identities(docs)
     stated_status = docs_stating_status(docs)
-    duty_parents = _duty_column_index(projects, list(getattr(res, "people", []) or []), docs)
-    rulings = [classify(p, milestone_index, project_titles, identities, stated_status, duty_parents)
-               for p in projects]
+    duty_parents = _duty_column_index(projects, list(people or []), docs)
+    return [classify(p, milestone_index, project_titles, identities, stated_status, duty_parents)
+            for p in projects]
+
+
+def apply_gate(res, docs: list[ParsedDoc]) -> list[Ruling]:
+    """Demote every milestone masquerading as a project on `res`, in place. Returns one Ruling per
+    candidate — kept AND demoted — so the decision is fully auditable.
+
+    Ordering note: this runs BEFORE cross-document dedup, so a milestone is judged against the
+    document that nested it rather than against a merged record whose provenance is already gone.
+
+    R5 (issue #92) is the first rule that reads `res.people` — the person rows are the evidence a
+    duty column is judged against, and they too are still pre-dedup here, so every person still
+    carries the source line of the row that named them.
+
+    #93: the judging itself moved into `judge_projects` (see there for why). What stays here is the
+    EXTRACTION path's disposal rule — a demoted candidate is dropped outright. That is safe on this
+    path and only on this path: these candidates were extracted seconds ago, nobody has ever seen
+    them, and nothing downstream has a reference to them. The append path may NOT do this (a
+    dropped card is a card the manager was already looking at, and dropping it in a rewrite is the
+    「整表静默删除」 the module refused for two tickets) — it folds instead, see `rejudge.py`.
+    """
+    projects = list(getattr(res, "projects", []) or [])
+    rulings = judge_projects(projects, list(getattr(res, "people", []) or []), docs)
+    if not rulings:
+        return []
     keep = [p for p, r in zip(projects, rulings) if r.verdict == "project"]
     res.projects = keep
     return rulings
