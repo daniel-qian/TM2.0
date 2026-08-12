@@ -10,6 +10,7 @@ import type {
   LiveAppendReceipt,
   LiveExtractionMode,
   LiveFileEntry,
+  LiveFilesPayload,
   LiveAdviseRunEntry,
   LiveAdviseThread,
   LiveFormSubmission,
@@ -24,6 +25,9 @@ import type {
 } from './transport'
 import { isStubTransportSelected, resolveTransport } from './stubTransport'
 import { createHttpTransport, storedOwnerToken, TransportError } from './transport'
+// #91 · 非 hook 的 i18n 取词路径（与 transport.ts 同一条纪律：只 import index.ts，零 React）。
+// store 需要自己造两句话：任务在服务端读挂时的诚实报错、轮询联系不上时的超时文案。
+import { activeLocale, getDict } from '../shared/i18n'
 import {
   coerceAdvice,
   coerceAskDraft,
@@ -100,9 +104,13 @@ export function rememberContextId(contextId: string | null): void {
 
 // ── #89 · 「这一趟抽取是谁干的」要活过刷新 ───────────────────────────────────────────────
 //
-// 为什么非存不可：`extraction_mode` **只有两个写口发**（`POST /ingest` / `POST /team/{id}/files`）。
-// `GET /team/{id}` 是读口、不重跑抽取，所以刷新一次这个事实就没了。而 0811 那位合伙人恰恰是
-// 「传完 → 看了会儿 → 刷新/换页」——只活在内存里的警告，正好在她最需要的时候消失。
+// 为什么非存不可：这个值只在**任务落定那一刻**被消费一次——#90 之前它骑在两个 POST 写口的
+// 响应上，#91 起改从 GET /files 的 `last_job.extraction_mode` 里由内部轮询取（POST 秒回时
+// 抽取还没跑）。`GET /team/{id}` 是读口、不重跑抽取；`last_job` 虽然常驻，但**刻意不让**
+// refreshFiles 直接消费它——job 行是无 FK 的审计痕迹，`emptyArchive` 清空档案不删 job，
+// 直接消费=清空后横幅从服务端诈尸（verify-extraction-degraded ⑥ 钉着这条）。所以刷新后的
+// 记忆仍走本地：0811 那位合伙人恰恰是「传完 → 看了会儿 → 刷新/换页」——只活在内存里的警告，
+// 正好在她最需要的时候消失。
 //
 // 🔴 连着 contextId 一起存，读的时候必须核对：`emptyArchive` 清空档案**不换 context_id**，
 //    上一轮的 'degraded' 会原样挂在一份崭新的空档案上，屏上就是一句关于不存在之事的警告。
@@ -214,6 +222,121 @@ let restoreInFlightFor: string | null = null
 // 返回 false = 这次结果已过期，**一个字段都别写**（取代它的那次调用会自己落地结果与错误）。
 function stillOn(get: () => LiteState, contextId: string | null): boolean {
   return get().contextId === contextId
+}
+
+// ── #91 · 异步 deposit 的内部轮询（对外契约一个字不改）────────────────────────────────────
+//
+// #90 把上传拆成「秒级 deposit + 服务端 worker 读取」之后，POST 响应不再是终态：/ingest 回的
+// 是空骨架，补传回的是旧世界 + 'reading' 行。**直接拿它当终态渲染就是把空骨架当成空团队**
+// ——所以 uploadFiles/appendFiles 在 deposit 之后关起门来轮询 GET /team/{id}/files 的任务摘要
+// （`last_job`），全部文件到达终态才翻 'ready'。
+//
+// 🔴 对外契约不变是这次迁移成本的胜负手（侦查线 A2）：`ingestStatus/appendStatus` 的
+//    'ingesting'→'ready' 二值翻牌对外一个字不改——约 30 道活跃门 + 18 张数据态像素基线全锚在
+//    这个契约上。轮询是这两个 action 的**内部实现**，别把它泄漏成新的状态或新的事件：
+//    · notifyStore 只认 ingesting→ready 那一跳 → 只在轮询落定那一刻翻，deposit 回执绝不翻
+//      （提前翻=「你的团队已就绪」的假通知）；
+//    · OnboardGate/UploadPanel 的防双击闸吃的是「忙态覆盖整个耗时窗口」→ 'ingesting' 从
+//      deposit 前一直挂到轮询落定；
+//    · ingestClock 的秒表锚点跟着忙态活 → 自动从「HTTP 生命周期」变成「轮询生命周期」，
+//      模块级锚点本来就是为中途离开设计的，零改动。
+//
+// 🔴 每一轮 poll 都要过 stillOn 身份复核（不是只在最后一次）——A 的轮询结果写进 B 的 state
+//    是红线事故（下面 stillOn 那段碑的同族）。
+//
+// 落定判据（两条腿，谁先答谁算）：
+//   · `last_job.id === 本次 deposit 的 job.id` 且 status 到 done/failed —— 任务自己的答案；
+//   · 摘要不可见/被更新的任务顶掉时退回看行：本批没有任何 'reading' 行了（失败时服务端会把
+//     行收走，成功时翻终态，两种终局都让这条腿闭合）。
+// 🔴 只消费**自己那个 job** 的 extraction_mode——别的任务的标签归别的轮询循环。
+const INGEST_POLL_MS = 3000
+const INGEST_POLL_MAX_MS = 10 * 60 * 1000 // 服务端 worker 死在半路（孤儿回收只在重启时跑）的兜底
+const INGEST_POLL_MAX_MISSES = 4 // 连续 4 轮拉不到清单（每轮自带 15s 超时）→ 诚实放手
+
+function sleepMs(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+// fetchTeam 没有（也不该有）传输层超时——这里给「落定后取权威世界」这一次调用设墙钟，
+// 否则整条状态机会吊死在一个永不返回的 GET 上。竞速输掉的那个 fetch 悬空无害：下一次
+// refreshTeam 会取代它，且它自身不写任何 state。
+function withDeadline<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`deadline ${ms}ms`)), ms)
+    p.then(
+      (v) => { clearTimeout(timer); resolve(v) },
+      (e) => { clearTimeout(timer); reject(e) },
+    )
+  })
+}
+
+function jobFailedMessage(reason: string | null | undefined): string {
+  const lead = getDict(activeLocale()).upload.jobFailedLead
+  return reason ? `${lead} — ${reason}` : lead
+}
+
+type IngestSettle =
+  | { outcome: 'ready'; mode: LiveExtractionMode | null }
+  | { outcome: 'failed'; reason: string | null }
+  | { outcome: 'stale' } // contextId 在轮询期间被换掉——结果作废，一个字段都不写
+  | { outcome: 'lost' } // 联系不上/超过墙钟——文件多半已收下，诚实说「刷新看看」
+
+// 落定后取权威世界（20s 墙钟 ×2 次）。null = 两次都没拿到——调用方走诚实报错，
+// 🔴 绝不把 `deadline 20000ms` 这种开发者串漏进用户报错（那正是 ZH-03 拆掉的东西）。
+async function fetchWorldSettled(
+  get: () => LiteState,
+  contextId: string,
+): Promise<LiveTeamPayload | null> {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      return await withDeadline(get().transport.fetchTeam(contextId), 20_000)
+    } catch {
+      /* 一次没拿到不定罪——重试一发，第二发也空手才交给调用方定夺 */
+    }
+  }
+  return null
+}
+
+function coerceMode(v: unknown): LiveExtractionMode | null {
+  return v === 'llm' || v === 'degraded' || v === 'heuristic' ? v : null
+}
+
+// 轮询本体。每轮顺手把 `files` 写进 state——'reading' 行就是这么活着上屏的（FilesScreen
+// 的表格实时长出「正在读取…」的行，这正是 #91 票面第 3 件事）。
+async function pollIngestSettled(
+  get: () => LiteState,
+  set: (partial: Partial<LiteState>) => void,
+  contextId: string,
+  jobId: string,
+): Promise<IngestSettle> {
+  const deadline = Date.now() + INGEST_POLL_MAX_MS
+  let misses = 0
+  for (;;) {
+    if (!stillOn(get, contextId)) return { outcome: 'stale' }
+    let payload: LiveFilesPayload
+    try {
+      payload = await get().transport.fetchFiles(contextId)
+      misses = 0
+    } catch {
+      misses += 1
+      if (misses >= INGEST_POLL_MAX_MISSES) return { outcome: 'lost' }
+      await sleepMs(INGEST_POLL_MS)
+      continue
+    }
+    if (!stillOn(get, contextId)) return { outcome: 'stale' }
+    set({ files: payload.files })
+    const job = payload.last_job
+    if (job && job.id === jobId) {
+      if (job.status === 'failed') return { outcome: 'failed', reason: job.reason ?? null }
+      if (job.status === 'done') return { outcome: 'ready', mode: coerceMode(job.extraction_mode) }
+    } else if (!payload.files.some((f) => f.status === 'reading')) {
+      // 摘要缺席（读摘要那一路在服务端挂了）或被更晚的任务顶掉——行都到终态就是落定。
+      // 🔴 mode 给 null 不给 last_job 的值：那是**别人那趟**的标签，冒领=对着错误的一批报警。
+      return { outcome: 'ready', mode: null }
+    }
+    if (Date.now() > deadline) return { outcome: 'lost' }
+    await sleepMs(INGEST_POLL_MS)
+  }
 }
 
 // 404 = context 真没了/token 对不上（feat-038 租户隔离：绝不给 403 这种可枚举的 oracle），
@@ -730,6 +853,11 @@ export const useLite = create<LiteState>((set, get) => ({
       await get().appendFiles(files)
       return
     }
+    // #91 · 重入闸落进 store 临界区（appendFiles 早有同款；此前只有 UI 层的 disabled/openPicker
+    // 封口——OnboardGate 那段碑明写「本波只在 UI 层封口（store.ts 归他人所有）」，现在 store
+    // 归本票所有，把欠的这一道补上）。deposit 窗口内的第二发 /ingest 仍然是双 context 事故：
+    // 每发新铸 context+token，后落地的覆盖 store，先前那个 token 服务端只返一次=永久丢失。
+    if (get().newCompanyStatus === 'ingesting') return
     // #76 · 两格一起拨：老的那格是二十道门的等待锚（不许动），新的那格只服务引导路径自己
     // （它不该被 restoreSession/refreshTeam 的 'ready' 顺手点亮）。
     set({ ingestStatus: 'ingesting', newCompanyStatus: 'ingesting', ingestError: null })
@@ -744,9 +872,65 @@ export const useLite = create<LiteState>((set, get) => ({
       // 为 null 才进得来），但收口一条都不许绕——`adoptContext` 同时还落 localStorage 锚点，
       // 绕开它就是「刷新一次数据全丢」。
       //
+      // #90/#91 · adopt 挪到了**deposit 秒回的当下**（不再等抽取）：owner_token 与锚点当场
+      // 持久化——0812 的暗伤①′（首传断连=token 死在 socket 里、档案永久孤儿化）就是这一步
+      // 治好的。此刻起哪怕轮询全断、页面关掉，档案都找得回来。
+      //
       // adoptContext 在 id 变了时清 team/rawTeam/files/notes/ingestStatus，所以顺序必须是
-      // 先 adopt 后 set —— 反过来会被它当场清掉本次刚拿到的团队。
+      // 先 adopt 后写数据 —— 反过来会被它当场清掉本次刚拿到的东西。
       get().adoptContext(payload.context_id, payload.owner_token ?? null)
+      if (payload.job) {
+        // ── 异步世界（#90 后端）：deposit 回执是空骨架，**不许当终态渲染**。────────────
+        // 状态机停在 'ingesting'（忙态覆盖到轮询落定，防双击闸/秒表/门的等待锚全靠它），
+        // 轮询期间 'reading' 行经 pollIngestSettled 写进 files 实时上屏。
+        const settled = await pollIngestSettled(get, set, payload.context_id, payload.job.id)
+        if (settled.outcome === 'stale') {
+          // contextId 已被换掉：adoptContext 的公司域清理早已把两条状态机拨回 idle，
+          // 这里一个字段都不写（写了就是把 A 的结局挂到 B 头上）。
+          return
+        }
+        if (settled.outcome === 'failed' || settled.outcome === 'lost') {
+          set({
+            ingestStatus: 'error',
+            newCompanyStatus: 'error',
+            ingestError:
+              settled.outcome === 'failed'
+                ? jobFailedMessage(settled.reason)
+                : getDict(activeLocale()).transport.depositTimeout,
+          })
+          return
+        }
+        // 落定 → 取权威世界。🔴 team 与 'ready' 必须同一次 set 落地：门电池等 'ready' 再读
+        // team，先翻牌后填数会让「提前翻牌」以最难复现的形态漏出去。
+        // #89 · 抽取标签写在 adoptContext 之后（收口在 id 变了时会清它），值来自**本次任务**
+        // 的 last_job.extraction_mode——POST 回执从 #90 起不再携带它。
+        const world = await fetchWorldSettled(get, payload.context_id)
+        if (!stillOn(get, payload.context_id)) return
+        if (world === null) {
+          // 读完了、结果却拉不回来。诚实说「刷新看看」——refreshTeam/restoreSession 都能接上。
+          set({
+            ingestStatus: 'error',
+            newCompanyStatus: 'error',
+            ingestError: getDict(activeLocale()).transport.depositTimeout,
+          })
+          return
+        }
+        rememberExtractionMode(payload.context_id, settled.mode)
+        set({
+          ingestStatus: 'ready',
+          newCompanyStatus: 'ready',
+          team: liteTeamFromPayload(world),
+          rawTeam: world,
+          extractionMode: settled.mode,
+          // 上传成功即"有会话了"——把上一轮失败的恢复提示清掉。
+          restoring: false,
+          restoreError: null,
+        })
+        // files 已由最后一轮 poll 写成终态；notes 是这一份自己的，拉回来（多半为空）。
+        void get().refreshNotes()
+        return
+      }
+      // ── 同步世界（stub / 老后端）：回执就是终态，路径与 #90 之前逐字节相同。──────────
       // #89 · 抽取标签必须写在 adoptContext **之后**：那个收口在 id 变了时会把它清成 null
       //（新档案不许继承上一份的标签），写在前面会被它当场抹掉。
       rememberExtractionMode(payload.context_id, payload.extraction_mode ?? null)
@@ -804,14 +988,70 @@ export const useLite = create<LiteState>((set, get) => ({
         set({ appendStatus: 'idle' })
         return
       }
-      // #89 · 补传同样重跑抽取，所以这一趟的标签**覆盖**上一趟的：刚补的那份读懂了，就不该
-      // 因为上一趟降级过而继续挂着警告；反过来刚补的那份降级了也必须立刻说。
-      rememberExtractionMode(contextId, payload.extraction_mode ?? null)
+      if (payload.job) {
+        // ── 异步世界（#90 后端）：deposit 秒回的是旧世界 + 'reading' 行，**不许当终态渲染**
+        // （旧世界当场落 team 会把「补传中」演成「什么都没变」，任务失败后再回滚更是谎上加谎）。
+        // 状态机停在 'ingesting' 直到轮询落定——notifyStore 不订阅 appendStatus，这条路本来
+        // 就没有通知；防双击闸（appendStatus==='ingesting' 的重入闸 + UI anyBusy）靠忙态
+        // 覆盖整个窗口。每轮 poll 自带 stillOn（pollIngestSettled 内部）。
+        const settled = await pollIngestSettled(get, set, contextId, payload.job.id)
+        if (settled.outcome === 'stale') {
+          set({ appendStatus: 'idle' })
+          return
+        }
+        if (settled.outcome === 'failed' || settled.outcome === 'lost') {
+          // 🔴 失败时回执一并不留：deposit 回执说「这次新增了 X」，而那批行已被服务端收走
+          //    ——留着它就是对着一次失败展示一份成功清单。
+          set({
+            appendStatus: 'error',
+            appendError:
+              settled.outcome === 'failed'
+                ? jobFailedMessage(settled.reason)
+                : getDict(activeLocale()).transport.depositTimeout,
+          })
+          return
+        }
+        const world = await fetchWorldSettled(get, contextId)
+        if (!stillOn(get, contextId)) {
+          set({ appendStatus: 'idle' })
+          return
+        }
+        if (world === null) {
+          set({
+            appendStatus: 'error',
+            appendError: getDict(activeLocale()).transport.depositTimeout,
+          })
+          return
+        }
+        // #89 · 这一趟的标签**覆盖**上一趟的（值来自本次任务的 last_job.extraction_mode——
+        // POST 回执从 #90 起不再携带）。刚补的读懂了就不该继续挂警告，反过来也必须立刻说。
+        rememberExtractionMode(contextId, settled.mode)
+        set({
+          appendStatus: 'ready',
+          appendError: null,
+          // 回执用 deposit 那份：documents（这次收下的 key）+ skipped_identical（库里已有的）。
+          // 到这里任务已 done，「已收下待读取」升格成「已读完」，给用户看语义不变。
+          appendReceipt: payload.appended ?? null,
+          extractionMode: settled.mode,
+          // 卡片与 'ready' 同一次 set 落地（同 uploadFiles 那条「不许提前翻牌」的碑）。
+          team: liteTeamFromPayload(world),
+          rawTeam: world,
+        })
+        return
+      }
+      // ── 同步世界（stub / 老后端 / #90 的「整批全是库里已有字节」不入队路）：回执即终态。──
+      // #89 · 抽取标签**只在键在场时**动（absent≠none）：全 identical 那一路没跑抽取，
+      // 回执里没有这个键——把它读成「清掉警告」就是让一次无害的重传抹掉一条还成立的警告。
+      if (payload.extraction_mode !== undefined) {
+        rememberExtractionMode(contextId, payload.extraction_mode ?? null)
+      }
       set({
         appendStatus: 'ready',
         appendError: null,
         appendReceipt: payload.appended ?? null,
-        extractionMode: payload.extraction_mode ?? null,
+        ...(payload.extraction_mode !== undefined
+          ? { extractionMode: payload.extraction_mode ?? null }
+          : {}),
         // 卡片当场是新读数——这正是本票「不许砍半」的那一半：资料库多一行的同时，卡也得动。
         team: liteTeamFromPayload(payload),
         rawTeam: payload,

@@ -126,12 +126,53 @@ function withLocale(req: AdviseRequest): AdviseRequest & { locale: Locale } {
  * `documents` 是**服务端最终采用的 source_key**，不一定等于用户选的文件名——同名文件补传第二次
  * 会拿到 `周报(1).md`（`<source_key>:<行号>` 是出处契约的一半，两份文档不许共用一个 key）。
  * `skipped` 是被判为重复而没落第二份的；`conflicts_added` 是这一趟新开的冲突条数。
+ *
+ * #91（对着 #90 的异步 deposit）三处语义更新：
+ *   · `documents` 现在是「已收下、正在读取」的 key——deposit 秒回时抽取还没跑，
+ *     「已归并落地」要等任务终态（store 轮询翻牌后才把回执亮给用户，语义对用户不变）。
+ *   · `skipped_identical` 新增：库里已有一模一样字节的文件（sha256 命中），这一趟连临时文件
+ *     都没写就跳过了。与 `skipped`（同请求里的重名竞态）语义不同，措辞必须分开——
+ *     「你这批里有重名」vs「你传的这份我们已经有了」。老后端/stub 不发，缺席即 []。
+ *   · `conflicts_added` 转 optional：异步 deposit 的回执在抽取之前发出，结构上装不下
+ *     「这一趟新开了几条冲突」。缺席≠0（absent≠none）——UI 对缺席一个字都不说，
+ *     冲突本身照旧从今天页 + 铃铛（team 更新驱动的 gap 通知）到达用户。
  */
+export interface LiveSkippedIdentical {
+  filename: string
+  matches_source_key: string
+}
+
 export interface LiveAppendReceipt {
   documents: string[]
   skipped: string[]
   parse_errors: string[]
-  conflicts_added: number
+  conflicts_added?: number
+  skipped_identical?: LiveSkippedIdentical[]
+}
+
+// ── #90 · 异步 deposit 的任务契约（#91 前端接线）────────────────────────────────────────
+// `job` 是两个写口（POST /ingest、POST /team/{id}/files）秒回时的任务句柄：键**缺席**表示
+// 这一趟没有入队（全部命中 sha256 幂等跳过，或者对面是老后端/stub 的同步世界）——
+// 调用方按「有没有 job」决定要不要轮询，缺席就按旧同步语义就地翻牌。
+export interface LiveIngestJobHandle {
+  id: string
+  kind: string
+  status: string
+}
+
+// `last_job` 是 GET /team/{id}/files 的 additive 任务摘要：这份档案最近一次读取任务的终局。
+// 键缺席 = 这份档案从没跑过任务（或老后端）。status 词表由服务端定
+// （queued/processing/done/failed），`| string` 兜底同 LiveFileStatus 的纪律。
+// 🔴 reason 是**开发者英文**（红线原因/异常摘要），只作诊断附注，绝不当作给用户的整句。
+export interface LiveIngestJobSummary {
+  id: string
+  kind: string
+  status: 'queued' | 'processing' | 'done' | 'failed' | string
+  reason?: string | null
+  extraction_mode?: LiveExtractionMode | string | null
+  file_keys?: string[]
+  created_at?: string
+  updated_at?: string
 }
 
 /**
@@ -175,9 +216,17 @@ export interface LiveTeamPayload {
   // T10 · `POST /team/{id}/files` 的首帧附带："这一趟到底加了什么"。仅补传回执有，
   // /ingest 与 /team/{id} 都不发。
   appended?: LiveAppendReceipt
-  // #89 · 这一趟抽取到底是谁干的。**只有两个写口有**（`POST /ingest` 与 `POST /team/{id}/files`）——
-  // `GET /team/{id}` 是读，不重跑抽取，所以刷新帧永远没有这个键（前端因此必须自己存，见 store 的
-  // `extractionMode` 那段碑）。
+  // #90/#91 · 异步 deposit 的任务句柄。两个写口在真入队时发；缺席 = 没有任务要等
+  // （全 identical 跳过 / 老后端同步世界），调用方就地按旧语义翻牌。
+  job?: LiveIngestJobHandle
+  // #90/#91 · 仅 `POST /ingest`：同一批里第二份同字节文件被跳过的记录（补传的同款记录在
+  // `appended.skipped_identical` 里）。缺席即空。
+  skipped_identical?: LiveSkippedIdentical[]
+  // #89 · 这一趟抽取到底是谁干的。
+  // 🔴 #90 起两个写口（`POST /ingest` / `POST /team/{id}/files`）**不再发这个键**——deposit
+  //    秒回时抽取还没跑，编一个值就是 #89 要杀的那种谎。它现在活在 GET /team/{id}/files 的
+  //    `last_job.extraction_mode` 里（任务终态时有值），store 的内部轮询在任务落定那一刻消费它。
+  //    这里保留 optional 位是给**老后端/同步路**（demo 克隆等）兜底：键在就照旧尊重。
   // 🔴 这个键从 feat-039 起就一直在后端发着，而 2026-08-11 之前前端**一次都没读过**：
   //    合伙人上传当天 MiniMax 配额用尽、每次抽取 429、降级正则抽出 0 人 0 项目，她看到的却是
   //    200 +「已读取」+「今天没有要你定夺的事」。后端诚实了，前端把话丢了。
@@ -555,12 +604,14 @@ export interface AskDraft {
 // 永远不显示它。后果不是少一个徽章——是**读进去了和没读进去长得一模一样**：一份扫描版 PDF
 // 一个字都没抽出来，和一份读全了的花名册在「你的文件」里像素级相同，headline 还照样说
 // 「团队已就绪」。
-// 🔴 三个词的口径由后端 registry.SourceDocument.status 定，前端不得自行判定、不得改写：
+// 🔴 词表口径由后端 registry.SourceDocument.status 定，前端不得自行判定、不得改写：
 //   'ingested' 真读进去了并产出了引用 · 'empty' 解析成功但没抽到内容（扫描件/空表）
 //   'failed'   根本没解析成（编码不认、格式不认、库缺）
+//   'reading'  #90 · 字节已收下、worker 还没读完的中间态（deposit 秒回后、任务终态前）。
+//              任务 done 翻成前三者之一；任务 failed 时这一行被服务端收走（不留终态行）。
 // optional + 兜底 string：老后端不发这个键，stub transport 也不发——缺席时界面显示「未知」，
 // 绝不默认当成 ingested（"我没读到" 和 "客户说没有" 是两件事，这里是同一条纪律的下游）。
-export type LiveFileStatus = 'ingested' | 'empty' | 'failed'
+export type LiveFileStatus = 'ingested' | 'empty' | 'failed' | 'reading'
 
 export interface LiveFileEntry {
   idx: number
@@ -583,6 +634,9 @@ export interface LiveFileEntry {
 export interface LiveFilesPayload {
   context_id: string
   files: LiveFileEntry[]
+  // #90/#91 · 这份档案最近一次读取任务的摘要（additive；缺席 = 从没跑过任务 / 老后端）。
+  // 是异步 deposit 的**轮询面**：store 的内部轮询按它翻牌，#89 降级横幅的值也从这儿来。
+  last_job?: LiveIngestJobSummary
 }
 
 // ── Avery's notes（feat-047 移植自 src/lite/transport.ts feat-033：GET /team/{id}/notes 契约）──
@@ -1232,6 +1286,15 @@ export function forgetAllOwnerTokens(): void {
   }
 }
 
+// ── #91 · 超时阈值 ───────────────────────────────────────────────────────────────────────
+// deposit（POST /ingest、补传）：#90 后服务端处理是秒级，但**字节还要过网**——国内到法兰克福
+// 的上行推 10MiB 可能要一分钟上下。60s 是「服务端秒级 + 最坏上行」的和，不是拍脑袋：
+// 再短会把慢线上一次**会成功**的大文件上传拦腰掐死（超时文案里那句「可能已经传上了」
+// 会从边缘情况变成常态）。
+// 读端点（GET /files 轮询）：无 body 上行，15s 已经是三倍余量——挂住的一轮放掉，下一轮再来。
+const DEPOSIT_TIMEOUT_MS = 60_000
+const FILES_TIMEOUT_MS = 15_000
+
 // ── 真 HTTP/SSE 传输（浏览器 fetch + 流式解析）──────────────────────────────────────────
 // 用 fetch + ReadableStream 手解 SSE（而非 EventSource）：POST body + Abort 都需要，EventSource 只支持 GET。
 export function createHttpTransport(base: string = apiBase()): LiveTransport {
@@ -1267,12 +1330,48 @@ export function createHttpTransport(base: string = apiBase()): LiveTransport {
   // 🔴 只包一层错误文案，url/init 原样透传——请求形状、header、URL 一个字节都没动。
   // AbortError 原样抛回（streamAdvise 靠 controller.signal.aborted 判定，但不让包装吃掉调用方
   // 可能依赖的错误类型）；不用 instanceof——老浏览器的 DOMException 不是 Error 子类。
-  const send = async (name: string, url: string, init?: RequestInit): Promise<Response> => {
+  //
+  // #91 · 超时熔断（照 authStore.probeOnce 的 AbortController+setTimeout 范式）。0812 合伙人
+  // 实测的病灶：这里曾是裸 fetch——第三个文件的请求根本没到后端，UI 永远停在「正在读取文件…」，
+  // 界面无任何自救出口。opts.timeoutMs 给单次请求设墙钟上限：
+  //   · 🔴 **只熔断，不自动重试**——/ingest 每发新铸 context+token，自动重试=复刻「回车两下」
+  //     数据丢失事故（OnboardGate 那段碑）。断了就诚实报错，重试权在用户手里。
+  //   · 🔴 只对**没带外来 signal** 的请求生效：streamAdvise 自带 controller（SSE 是长命流，
+  //     给它设超时就是把每场超过一分钟的判读拦腰掐断）。
+  //   · 超时文案要诚实（timeoutCopy='deposit' 那句）：deposit 是「请求可能已经送达、回执死在
+  //     半路」——字节多半已经传上了，抢先说"失败了"会引导用户重传出第二份。
+  const send = async (
+    name: string,
+    url: string,
+    init?: RequestInit,
+    opts?: { timeoutMs?: number; timeoutCopy?: 'deposit' },
+  ): Promise<Response> => {
+    const timeoutMs = opts?.timeoutMs
+    let controller: AbortController | null = null
+    let timer: ReturnType<typeof setTimeout> | null = null
+    let timedOut = false
+    const wired: RequestInit | undefined =
+      timeoutMs && !init?.signal
+        ? ((controller = new AbortController()),
+          (timer = setTimeout(() => {
+            timedOut = true
+            controller?.abort()
+          }, timeoutMs)),
+          { ...init, signal: controller.signal })
+        : init
     try {
-      return await fetch(url, init)
+      return await fetch(url, wired)
     } catch (err) {
-      if ((err as { name?: string } | null)?.name === 'AbortError') throw err
+      if ((err as { name?: string } | null)?.name === 'AbortError') {
+        if (!timedOut) throw err // 外来 abort（调用方自己的 controller）原样透传
+        const t = getDict(activeLocale()).transport
+        const message = opts?.timeoutCopy === 'deposit' ? t.depositTimeout : t.offline
+        console.debug(`[avery] ${name}: timed out after ${timeoutMs}ms — ${message}`)
+        throw new TransportError(message, name)
+      }
       throw transportError(name)
+    } finally {
+      if (timer !== null) clearTimeout(timer)
     }
   }
 
@@ -1329,13 +1428,13 @@ export function createHttpTransport(base: string = apiBase()): LiveTransport {
       for (const f of files) form.append('files', f, f.name)
       // feat-053：上传**不要求**登录（游客路径是硬要求，登录墙会作废整条演示链）。
       // 已登录时带上账号 header，服务端顺手把新 context 绑到账号，省掉一次认领。
-      // feat-068 的 send() 包装必须保留：ingest 真要 100–120 秒（后端在法兰克福、LLM 在国内），
-      // 那层带跨境重试与统一错误文案。裸 fetch 会把部署线刚修好的等待态又打回去。
+      // #91 · 超时熔断：#90 后这一发是秒级 deposit（LLM 不再骑在这个请求上），60s 兜的是
+      // 字节上行的最坏情况。超时=只熔断不重试，文案说「可能已经传上了」（见 send 的碑）。
       const res = await send('ingest', `${base}/ingest`, {
         method: 'POST',
         body: form,
         headers: accountHeader(),
-      })
+      }, { timeoutMs: DEPOSIT_TIMEOUT_MS, timeoutCopy: 'deposit' })
       if (!res.ok) throw transportError('ingest', res)
       const payload = (await res.json()) as LiveTeamPayload
       // feat-047: store this company's owner_token so every later read/advise can present it.
@@ -1356,7 +1455,7 @@ export function createHttpTransport(base: string = apiBase()): LiveTransport {
         method: 'POST',
         body: form,
         headers: { ...authHeader(contextId), ...accountHeader() },
-      })
+      }, { timeoutMs: DEPOSIT_TIMEOUT_MS, timeoutCopy: 'deposit' })
       if (!res.ok) throw transportError('ingest', res)
       return (await res.json()) as LiveTeamPayload
     },
@@ -1560,10 +1659,12 @@ export function createHttpTransport(base: string = apiBase()): LiveTransport {
 
     // feat-047 移植：按 context_id 拉取「你的文件」清单——header-only owner_token（缺/伪 token
     // → 后端 404，前端不静默回落）。
+    // #91 · 15s 超时：这条现在也是异步 deposit 的**轮询面**——挂住的一轮必须放掉（轮询循环
+    // 自己数连败），refreshFiles 那条路则从「永远卡住 filesLoading」变成诚实的 filesError。
     async fetchFiles(contextId) {
       const res = await send('files', `${base}/team/${encodeURIComponent(contextId)}/files`, {
         headers: authHeader(contextId),
-      })
+      }, { timeoutMs: FILES_TIMEOUT_MS })
       if (!res.ok) throw transportError('files', res)
       return (await res.json()) as LiveFilesPayload
     },

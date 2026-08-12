@@ -51,9 +51,14 @@ export function formatBytes(bytes: number): string {
 // 绝不默认渲染成「已读取」。这就是本轮的总纪律在这一格里的样子——
 // 「我没读到」和「客户说没有」是两件事，永远不许混。
 type FileStatusView = {
-  labelKey: 'fileStatusIngested' | 'fileStatusEmpty' | 'fileStatusFailed' | 'fileStatusUnknown'
+  labelKey:
+    | 'fileStatusIngested'
+    | 'fileStatusEmpty'
+    | 'fileStatusFailed'
+    | 'fileStatusUnknown'
+    | 'fileStatusReading'
   hintKey: 'fileStatusEmptyHint' | 'fileStatusFailedHint' | null
-  tone: 'ok' | 'warn' | 'bad' | 'unknown'
+  tone: 'ok' | 'warn' | 'bad' | 'unknown' | 'busy'
 }
 
 function fileStatusView(status: string | undefined): FileStatusView {
@@ -64,6 +69,11 @@ function fileStatusView(status: string | undefined): FileStatusView {
       return { labelKey: 'fileStatusEmpty', hintKey: 'fileStatusEmptyHint', tone: 'warn' }
     case 'failed':
       return { labelKey: 'fileStatusFailed', hintKey: 'fileStatusFailedHint', tone: 'bad' }
+    // #90/#91 · 中间态：字节已收下、worker 还在逐页读。store 的内部轮询每一轮都把清单写回
+    // state，所以这一行是**活**的——任务落定它就翻成上面三个终态之一（失败时整行被服务端收走）。
+    // 无 hint：上传进度块（表格顶那一行）已经在讲同一件事，行内再来一句就是第二个真相。
+    case 'reading':
+      return { labelKey: 'fileStatusReading', hintKey: null, tone: 'busy' }
     default:
       return { labelKey: 'fileStatusUnknown', hintKey: null, tone: 'unknown' }
   }
@@ -78,6 +88,10 @@ const STATUS_TONE_COLOR: Record<FileStatusView['tone'], string> = {
   warn: 'var(--honey-text, var(--honey, #b8860b))',
   bad: 'var(--alert, #b3261e)',
   unknown: 'var(--ink-faint, #8a8578)',
+  // #91 · 'reading' 中间态与等待块的 honey 同族（正在进行，不是警告也不是完成）；
+  // 文字用 AA 校准过的 --honey-text 档，转点动画吃 currentColor（见 lite2.css 的
+  // `[data-status='reading']` 那条——tone 只管颜色，动没动由 data-status 说了算）。
+  busy: 'var(--honey-text, var(--honey, #b8860b))',
 }
 
 // 服务端时刻 → 经理这台机器的本地时刻，`YYYY-MM-DD HH:mm`。**这是仓库里唯一一份**——

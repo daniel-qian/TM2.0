@@ -232,8 +232,17 @@ rec('⑤ 新建的卡各有一行（新项目 + 新同事）——它们一格�
   && added.some((t) => t.subject.includes('林小满')), JSON.stringify(added))
 
 // ── ⑥ 「已查阅」：三段——标之前在、标之后收起、取消标记回来 ─────────────────────────
-const firstId = await page.evaluate(() =>
-  document.querySelector('.lite-changes-row .lite-changes-mark')?.getAttribute('data-change-mark') ?? '')
+// 🔴 挑来标的行**刻意避开「负责人」**（#91 实收）：⑦ 会把这一行标着过刷新，而 ⑪ 的对照
+//    基准要在可见行里找到「负责人」行再标它——⑦ 折叠掉的若正是它，⑪ 当场扑空。这个前提
+//    此前是**碰巧**成立的：pre-#90 每个文件在 parse 时各自打 uploaded_at，同批三份时间戳
+//    递增，组序（按上传时间倒序）把「前厅部花名册」排在最上；#90 起整批共享一个
+//    received_at，平手回退派生序，「负责人」行成了第一行。行序两种都对（一次上传=一个
+//    时刻更诚实），门的前提不该赌排序的巧合——显式选一行不是「负责人」的。
+const firstId = await page.evaluate(() => {
+  const row = [...document.querySelectorAll('.lite-changes-row')].find(
+    (r) => !(r.querySelector('.lite-changes-subject')?.textContent ?? '').includes('负责人'))
+  return row?.querySelector('.lite-changes-mark')?.getAttribute('data-change-mark') ?? ''
+})
 const before = await page.evaluate(() => document.querySelectorAll('.lite-changes-row').length)
 await page.click(`[data-change-mark="${firstId}"]`)
 await page.waitForTimeout(300)

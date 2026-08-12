@@ -231,12 +231,28 @@ export function UploadStatusBlock(
               ))}
             </p>
           ) : null}
+          {/* #90/#91 · sha256 幂等跳过的那几份——「超时后手动重传」这个最常见场景的正面答复。
+              🔴 这是**成功**的话（东西早就在库里了），措辞与渲染都不许长得像报错；照实列
+              服务端认出的对应 source_key 的展示名（filename 是用户这次选的那个名字）。
+              缺席/空 = 这一趟没有命中，一个字都不写（absent≠none）。 */}
+          {appending && receipt && (receipt.skipped_identical?.length ?? 0) > 0 ? (
+            <p className="upload-skipped-identical">
+              {t.upload.skippedIdenticalLead}:{' '}
+              {(receipt.skipped_identical ?? []).map((s) => (
+                <span key={s.filename} className="upload-source-chip">
+                  {s.filename}
+                </span>
+              ))}
+            </p>
+          ) : null}
           {/* 「新旧对不上」这件事本身不在这儿展开——今天页那条双栏通道才是它的落点。
               这里只说有几处、去哪儿看；缺席（0 处）什么都不写（absent≠none：不编一句「全都对得上」，
-              我们只知道**记下来的**冲突有几条，不知道有没有没被记下的）。 */}
-          {appending && receipt && receipt.conflicts_added > 0 ? (
+              我们只知道**记下来的**冲突有几条，不知道有没有没被记下的）。
+              #90 后异步回执结构上装不下这个数（deposit 在抽取之前发出，键缺席）——这一行在
+              异步后端上自然不再出现；冲突本身照旧从今天页 + 铃铛的 gap 通知到达用户。 */}
+          {appending && receipt && (receipt.conflicts_added ?? 0) > 0 ? (
             <p className="upload-append-conflicts">
-              {fill(t.upload.appendConflicts, { count: receipt.conflicts_added })}
+              {fill(t.upload.appendConflicts, { count: receipt.conflicts_added ?? 0 })}
             </p>
           ) : null}
         </div>

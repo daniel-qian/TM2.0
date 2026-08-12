@@ -4433,7 +4433,8 @@
 /* prefers-reduced-motion：动效全停，但秒表（JS 侧）仍在跳——"没冻"的证据不依赖动画。 */
 @media (prefers-reduced-motion: reduce) {
   .lite2-shell .upload-ingesting-dot,
-  .lite2-shell .lite-onboard-upload-dot {
+  .lite2-shell .lite-onboard-upload-dot,
+  .lite2-shell .upload-file-row[data-status='reading'] .upload-file-status-dot {
     animation: none;
     opacity: 0.8;
   }
@@ -10254,6 +10255,13 @@
   height: 6px;
   border-radius: 50%;
   background: currentColor;
+}
+
+/* #91 · 'reading' 中间态的转点：复用 feat068 的等待脉冲（同一件事同一种呼吸），颜色仍吃
+   currentColor（tone 管色、data-status 管动，两轴不打架）。reduced-motion 的豁免在上面
+   那个 4435 块里与 ingesting-dot 同列。 */
+.lite2-shell .upload-file-row[data-status='reading'] .upload-file-status-dot {
+  animation: feat068-v02-ingest-pulse 1.8s ease-in-out infinite;
 }
 
 /* 行动作：静息态隐形、hover/focus 才现，但**格子恒占位**——现出来的时候不推挤别的列。

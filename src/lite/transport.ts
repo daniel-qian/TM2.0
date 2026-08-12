@@ -84,6 +84,10 @@ export interface LiveTeamPayload {
   // 🔴 只走 header，绝不进 URL（URL 会进 Referer/access log/CDN log/浏览器历史）。
   // /team/{id} 刷新帧不回传此字段（那次调用本就已用 token 证过身）。
   owner_token?: string
+  // #90/#91 · 异步 deposit 的任务句柄（v01 冻结壳的**最小维护补丁**，不是新功能）：#90 把
+  // /ingest 改成秒级 deposit 之后，这个响应不再是终态——不认这个键的话，v01 会把空骨架当成
+  // 空团队渲染。缺席 = 同步世界（stub/老后端），行为与冻结时逐字节相同。
+  job?: { id: string; kind: string; status: string }
 }
 
 // 人卡：定性 ONLY。🔴 红线：moodPct/capacityPct 等血条字段 live 永不出现——
@@ -206,6 +210,9 @@ export interface LiveFileEntry {
 export interface LiveFilesPayload {
   context_id: string
   files: LiveFileEntry[]
+  // #90/#91 · 最近一次读取任务的摘要（additive；缺席=从没跑过任务/老后端）。v01 只用它判
+  // 「上传任务落定没」，不消费 extraction_mode（#89 横幅是 v02 的部件）。
+  last_job?: { id: string; kind: string; status: string; reason?: string | null }
 }
 
 // ── Avery's notes（feat-033：GET /team/{id}/notes 契约）──────────────────────────────────────

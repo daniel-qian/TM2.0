@@ -28,8 +28,11 @@ export const en = {
     title: 'Bring your team in',
     // 0721 对齐棒（合伙人反馈 B5）：重心从「文件长出团队」改到「文件变成管理判断」——
     // demo 的第一印象不该是文件解析器。列举的产出全部真实存在（决策卡/项目状态/需关注的人）。
+    // #91 — the multi-select nudge is a real quality lever, not politeness: reading files
+    // together gives the extractor cross-document evidence (the granularity gate literally sees
+    // more), so batching is both faster AND more accurate. Say why, not just "you can".
     caption:
-      "Give it what you'd hand a new manager on day one — a roster, a project weekly, a few resumes. Avery reads them and comes back with working judgments: who's carrying what, where projects stand, what needs your eye today.",
+      "Give it what you'd hand a new manager on day one — a roster, a project weekly, a few resumes. You can select them all in one go: files read together come out faster and more accurate than one by one. Avery then comes back with working judgments: who's carrying what, where projects stand, what needs your eye today.",
     drop: 'Drop files here, or choose',
     choose: 'Choose files',
     accepted: 'PDF, Word, Excel, CSV, Markdown, or text',
@@ -39,8 +42,12 @@ export const en = {
     // ingestingHint 负责「事先把预期讲明白 + 说清值在哪」；ingestingElapsed 是活的秒表，
     // 证明界面没冻。数字必须是量过的：真 seed 文件在生产上实测 171.6s（feat-068 收工前跑的），
     // 也不做假百分比进度条（服务端没有任何进度信号，卡在 90% 比诚实的文字更糟）。
+    // #91 — "Leave this tab open" is RETIRED. #90 made the deposit second-level: the bytes are
+    // safe the moment this line appears, and reading continues server-side whether or not the
+    // tab lives. Walking away is now a capability — say so in the affirmative, don't just drop
+    // the old warning (a removed sentence teaches nobody what changed).
     ingestingHint:
-      'Usually two to three minutes. It reads every page of every file — that is the slow part, and the part that makes the team below worth reading. Leave this tab open.',
+      'Your files are safely in. Reading every page usually takes two or three minutes — feel free to close this page or move on; the results will be in the library when you come back.',
     ingestingElapsed: '{seconds}s elapsed',
     readyLabel: 'Your team is ready',
     errorLabel: "Couldn't read those files",
@@ -64,6 +71,9 @@ export const en = {
     fileStatusEmpty: 'Nothing readable',
     fileStatusFailed: "Couldn't read",
     fileStatusUnknown: 'Status unknown',
+    // #91 — the #90 'reading' interim state: bytes are in, the worker hasn't finished. The row
+    // flips to one of the three finals above when the job settles (or is withdrawn on failure).
+    fileStatusReading: 'Reading…',
     fileStatusEmptyHint:
       'This file opened but no text came out of it — a scan or an image-only export usually does this. Nothing from it reached your team.',
     fileStatusFailedHint:
@@ -87,6 +97,16 @@ export const en = {
       "Your files are safely stored in the library below — the service that reads them was unreachable at the time. So the people and projects from those files may be missing or incomplete. Nothing you did wrong.",
     extractionDegradedRetry:
       'To try again: delete those files first, then upload them again. Re-uploading without deleting adds a second copy rather than replacing.',
+    // ── #91 — async-deposit surfaces ─────────────────────────────────────────────────────
+    // jobFailedLead: the whole batch failed server-side AFTER the second-level deposit (redline
+    // refusal / every file unparseable / worker crash) — the #90 equivalent of the old sync 422.
+    // "didn't make it into the library" is the honest scope: nothing was stored, nothing merged.
+    // The developer-English reason rides after it as a diagnostic, same pattern as form errors.
+    jobFailedLead: "These files didn't make it into the library",
+    // skippedIdenticalLead: sha256 idempotency (#90) recognised bytes the library already has —
+    // the retry-after-timeout story this whole campaign exists for. It is a SUCCESS message:
+    // "already safe" — never phrase it as a rejection.
+    skippedIdenticalLead: 'Already in the library, not saved twice',
 
     // ── #88 — one archive per person; "start a separate company" is GONE ────────────────────
     // This block used to hold `againTitle` / `againBody` ("uploading here starts a separate
@@ -98,7 +118,7 @@ export const en = {
     // T10 — the append box: the only upload semantics left.
     appendTitle: 'Add materials to this company',
     appendCaption:
-      "New files are merged into the company you're looking at. Anything they say more recently updates the cards directly; wherever they disagree with what you sent before, it shows up on Today for you to settle.",
+      "New files are merged into the company you're looking at. Got several? Select them all at once — files read together come out faster and more accurate. Anything they say more recently updates the cards directly; wherever they disagree with what you sent before, it shows up on Today for you to settle.",
     appendReadyLabel: 'The new materials are in',
     appendAddedLead: 'Added this time',
     appendConflicts:
@@ -244,6 +264,11 @@ export const en = {
       "This build is misconfigured — it went out without a backend address. Retrying won't help; it needs to be rebuilt and redeployed.",
     // fetch 自己 reject：连接被拒 / 混合内容拦截 / CORS / 离线，压根没有 status 可读。
     offline: "Couldn't reach the server. Check your connection and try again.",
+    // #91 · deposit 超时熔断的那句话。🔴 必须诚实：超时 ≠ 失败——字节多半已经送达、回执死在
+    // 半路（0812 的病灶正是「服务端做完了、socket 已死」）。抢先说"失败了"会引导用户重传出
+    // 第二份。所以这句话的动词是「刷新看看」，不是「重试」。
+    depositTimeout:
+      "No reply for too long — but your files may well have made it. Refresh once and check the library before deciding whether to upload again.",
     // 429：/ingest 10/min(burst 3)、/advise 30/min(burst 10)，真会跳。
     // Retry-After 只认纯数字秒数——读不出就走 rateLimitedWait，绝不编一个具体秒数。
     rateLimited: 'Too many requests just now — wait {seconds}s and try again.',
@@ -1561,8 +1586,10 @@ export const en = {
 
     onboardUploadTitle: 'Start with a few files',
     // 0721（B5）：同 upload.caption 的重心修正——产出是管理判断，不只是「长出团队」。
+    // #91 — carries the same multi-select nudge as upload.caption (batched files read faster
+    // AND more accurately; the extractor gets cross-document evidence).
     onboardUploadBody:
-      "Hand Avery what you'd hand a new manager on day one — a roster, a project plan, a weekly note. It reads them into a working picture: people, projects, and what needs your eye. Fine to skip; you can upload later from Team.",
+      "Hand Avery what you'd hand a new manager on day one — a roster, a project plan, a weekly note. Pick them all in one go: files read together come out faster and more accurate. It reads them into a working picture: people, projects, and what needs your eye. Fine to skip; you can upload later from Team.",
     onboardUploadChoose: 'Choose files',
     onboardUploadReading: 'Reading your files…',
     // feat-068 — 同 upload.ingestingHint 的理由（真等 100–120s）。向导版多一句"可以先进行

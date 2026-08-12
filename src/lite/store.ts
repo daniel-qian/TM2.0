@@ -143,6 +143,57 @@ export const useLite = create<LiteState>((set, get) => ({
     set({ ingestStatus: 'ingesting', ingestError: null })
     try {
       const payload = await get().transport.ingest(files)
+      // ── #90/#91 · 异步世界的**最小维护补丁**（v01 是冻结壳，这不是新功能）────────────
+      // #90 后 /ingest 是秒级 deposit：响应带 job 句柄 + 空骨架，抽取在服务端 worker 上跑。
+      // 直接把这份回执当终态渲染 = 把空骨架当成空团队（0 人 0 项目 0 卡）。所以带 job 时
+      // 关起门来轮询 GET /files 的任务摘要，落定后取权威 /team 再翻 'ready'——对外契约
+      // （ingestStatus 二值翻牌）一个字不变。缺 job = 同步世界（stub/老后端），走下面的
+      // 原路，行为与冻结时逐字节相同。完整版（身份复核/降级横幅/reading 行）在 v02；
+      // v01 只求「上传照常能出团队」。
+      if (payload.job) {
+        const cid = payload.context_id
+        const jobId = payload.job.id
+        // contextId 先落地：owner_token 已由 transport 存好，断连/刷新后档案找得回来。
+        set({ contextId: cid, ownerToken: payload.owner_token ?? null })
+        const deadline = Date.now() + 10 * 60 * 1000
+        let misses = 0
+        for (;;) {
+          let filesPayload
+          try {
+            filesPayload = await get().transport.fetchFiles(cid)
+            misses = 0
+          } catch {
+            misses += 1
+            if (misses >= 4) throw new Error('ingest is taking too long — refresh to check')
+            await new Promise((r) => setTimeout(r, 3000))
+            continue
+          }
+          if (get().contextId !== cid) return // 换了目标——这次结果作废，一个字段都不写
+          set({ files: filesPayload.files })
+          const job = filesPayload.last_job
+          if (job && job.id === jobId && job.status === 'failed') {
+            throw new Error(job.reason || 'the files did not make it into the library')
+          }
+          const settled = (job && job.id === jobId && job.status === 'done')
+            || ((!job || job.id !== jobId)
+              && !filesPayload.files.some((f) => f.status === 'reading'))
+          if (settled) break
+          if (Date.now() > deadline) {
+            throw new Error('ingest is taking too long — refresh to check')
+          }
+          await new Promise((r) => setTimeout(r, 3000))
+        }
+        const world = await get().transport.fetchTeam(cid)
+        if (get().contextId !== cid) return
+        set({
+          ingestStatus: 'ready',
+          team: liteTeamFromPayload(world),
+          rawTeam: world,
+          contextId: cid,
+          ownerToken: payload.owner_token ?? null,
+        })
+        return
+      }
       set({
         ingestStatus: 'ready',
         team: liteTeamFromPayload(payload),
