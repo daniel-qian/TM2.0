@@ -3,9 +3,9 @@
 > 📢 本文件是**当前状态快照，整体重写不追加**。历史都在 git（`git log` + 各 `.issues/*/receipt*.md`），别在这儿堆编年史。
 > 启动路径见 `AGENTS.md` Startup Workflow：读本文件 + `feature_list.json`，跑 `./init.sh` 确认绿，再开工。
 
-**Last Updated:** 2026-08-10（**0810 设计轮六票全清 + 统一上产**。前端 `35ade3d`、
-后端 `avery-agent:main-20260810-212220`，**前后端同窗口换完并复验**。
-🟢 **本地 main 与 origin/main 已同步，不再有积压**）
+**Last Updated:** 2026-08-12（**#89 上产**：抽取失败不再对用户静默 + 供应商热备 + `/health`
+补 commit/providers。前端 `6b70173`、后端 `avery-agent:main-20260812-070519`，**同一 commit、
+同窗口换完并复验**。🟢 本地 main 与 origin/main 已同步）
 
 ## Current State
 
@@ -15,9 +15,9 @@
   回执十二份：`redesign-0808/` 六份 + `design-0810/` 六份（86 / 83 / 87 / 84 / 85 / **88**，全是本日）。
   ⚠ 别在这儿写死 ahead 数字——它每提交一次就自己作废。要数就跑：
   `git rev-list --count origin/main..HEAD`。
-- **后端离线套基线：`TZ=UTC` → 4135 passed · 0 failed · 139 deselected · 4 xfailed**（约 118s）。
-  = 上一基线 4132 + #88 的 3 条（`test_registry_contract` 两条 ephemeral 契约 + `test_context_empty_t86`
-  一条端点；另 2 条 pg 参数化进 deselected）。
+- **后端离线套基线：`TZ=UTC` → 4146 passed · 0 failed · 139 deselected · 4 xfailed**（约 51s）。
+  = 上一基线 4135 + #89 的 11 条（`test_provider_failover_89.py`：供应商链解析 / failover 顺序 /
+  BudgetExceeded 不换家 / 遥测 absent≠false / 本地假供应商 429 与晴天两景的 `/ingest` 集成）。
   ✅ **任何红都是你的。**
 - **真库套（@needs_db）**：throwaway `avery_t88_test`（docker `teammaster-postgres-1` / pgvector pg17）
   跑 `test_registry_contract + test_context_empty_t86 + test_registry_protocol + test_file_append_t10
@@ -53,6 +53,72 @@
   ⚠ worktree 的 node_modules 是主检出的 junction：装依赖要在 `D:\avery` 装。
 - 🔴 **合的都是本地 main，没有 push**。前端 push main 即自动构建上产，push + 换后端容器
   必须在统一上产 session 的**同一个窗口**里做。
+
+## 本轮做完的（2026-08-12 · #89 抽取失败可见 + 供应商热备）
+
+回执：`.issues/design-0810/receipt-deploy-0812.md`（含考古结论：DeepSeek-as-checker 去哪了）。
+
+**起因是一次真实翻车，不是巡检发现的。** 0811 合伙人试用：MiniMax Token Plan 用尽 →
+每次抽取撞 429 → 降级正则 → 13 人花名册抽出 **0 人 0 项目**。而她屏上看到的是
+200 +「已读取」+「今天没有要你定夺的事」+「现在没有自相矛盾的地方」——
+**每一句都在说一切正常**，于是她的结论是「我是不是传错格式了」。
+
+配额是钱的事（Danny 已充值）。但里面有两条确实是工程债：
+
+### 一、诚实的一半送到门口，另一半把它扔了
+后端**从 feat-039 起就一直发着** `extraction_mode: "degraded"`。
+那个字符串在 `src/` 里的出现次数：**0**。
+
+🔴 **立碑**：「后端诚实了」≠「用户知道了」。契约里 additive 的诚实标签，
+**如果前端没有消费点，它和不存在是一回事**——而且没有任何一道门会红，
+因为两侧各自都是自洽的。往契约里加诚实字段时，**同一个 commit 里必须有它的读点**。
+
+修法与三个设计点：
+- 判据 `=== 'degraded'` 而**不是** `!== 'llm'`：`'heuristic'` 是「这台后端没配模型」的
+  诚实态，对着它报警就是天天喊狼来了（变异实证：写成 `!== 'llm'` 红 ①④）。
+- **熬得过刷新**：这个键**只有两个写口发**（`POST /ingest` / `POST /team/{id}/files`），
+  `GET /team/{id}` 是读口不重跑抽取 —— 不自己存进 localStorage，警告就在刷新那一瞬间消失，
+  而她的真实动线正是「传完 → 看了会儿 → 翻页」。
+- `emptyArchive` **不换 `context_id`**，所以「换 id 就清干净」那条收口在这儿根本不跑，
+  必须单独清一刀（否则崭新的空档案上挂着一句关于不存在之事的警告）。
+- 文案两条硬纪律：**先摘掉用户的责任**；重试**必须说「先删再传」**——补传走
+  `_unique_parse_names(taken=…)`，同名文件会被改名成 `(1)`，**直接重传是多一份不是覆盖**，
+  不说这句用户重试三次就是三份同样的文件、片段数翻三倍。
+
+### 二、单供应商单点，且 /health 对此撒谎
+`DEEPSEEK_API_KEY` 那 39 小时**就躺在生产 env 里**，但代码是「取第一家有 key 的」，
+第二家从没被问过一次。同窗口 `/health` 恒 `degraded:false`——
+它**只看我们自己进程内的预算计数器，从不知道供应商在拒绝我们**。
+
+- `service/failover.py`：`FallbackBrain` 供应商链 + 被动遥测。抽取 / advise / ask 起草 /
+  表单起草四个调用方共用同一个 seam。
+- `BudgetExceeded` **不 failover 也不记为供应商失败**——那是我们自己的花钱闸，
+  换一家只会再充一次电费然后撞同一堵墙。
+- `/health` 补 `commit`（7-21 挂到今天的债，镜像构建时用 `--build-arg` 烙）+
+  `providers`（**没被调用过 = `ok:null`**，诚实的「不知道」，绝不翻译成好或坏）+
+  `extraction_chain`。**已知全链坏才 `degraded:true`**；单家坏对家好 ≠ degraded。
+- `AVERY_BRAIN_FAILOVER=off` 是运维刀闸。
+
+### 验证
+离线 **4146/0**（+11）· 门电池 **44/44**（A 38 · B 3 · C 3）· 像素 28+8 **零漂移** ·
+新门 `verify-extraction-degraded.mjs` **17 判据**。
+
+🔴 **变异第二发逮到门自己的洞**：初版每步都跟一发 `gotoFiles()`（整页导航），
+于是 ② 走的其实是 localStorage 那条路、和 ③ 测的是同一件事——
+**「传完待在原地不动」这条最常见的动线一条判据都没盖到**。已拆成 ② 只吃内存态 / ③ 只吃持久化。
+**门 17/17 全绿的时候它是有洞的，是变异把洞照出来的。**
+
+### 生产真验（不是读码）
+用**她的原始字节**在生产上真跑：`ctx_c1dfe797b6c2` → **13 人 · 5 项目 · 20 片段 · 1 轮对话**
+（0811 同样这两个文件是 0 人 0 项目）。DeepSeek 单独强制走一遍：同样 13 人 5 项目。
+横幅在生产包里 7/7 接通（含刷新后仍在）。`advise_runs` 从**全表 0 行**变成 2 行。
+
+### ⚠ 换容器踩的两个坑（下次照抄这两条）
+1. **容器内部监听 8137**，脚本跑在容器**里面**还用外部映射端口 8138 → `Connection refused`。
+   一律照抄 `docker port avery`。
+2. 🔴 **只抄 env 不抄挂载 = 示例团队会消失**。demo seed 是**只读 bind mount**
+   （`/home/admin/avery-demo-seed → /app/demo-seed:ro`），**不在 `docker inspect` 的 Env 里**。
+   第一次预检 `/demo/status` 回 `false` 才发现。**换容器前必查 `{{range .Mounts}}`。**
 
 ## 本轮做完的 · 之六（2026-08-10 · #88 撤掉「新建一家公司」——单档案模型收口）
 
@@ -272,6 +338,23 @@ facts+notes 重物化成空；**留下** `context_id` · `owner_token` · `name`
 - **#72 / #69+#71 / #70 / #68 / #66+#67 / #65 / #64 / #63 / #61 / T9–T11**。
 
 ## What's Next（按优先级）
+
+0. **🔴「已读取」这个词承诺得比它知道的多**（#89 上产后人眼过图逮到，**没修**）。
+   生产截图上横幅说「有文件没能读懂」，底下每行状态却是绿色「已读取」，贴在一起像自相矛盾。
+   机制自洽——两根不同的轴：状态列判**解析**（这份文件切出了文字片段，每文件 `chunk_counts>0`），
+   横幅判**抽取**（文字有没有被理解成人和项目，整批 `extraction_mode`）。但用户读「已读取」
+   就是「读懂了」。**不是顺手改得动的**：`verify-file-manifest-truth.mjs:164` 逐字断言
+   `statusText === '已读取'`，`verify-contrast-smalltext` 拿它当 `--sage` 采样面
+   （3.9–4.11:1，本来就贴地板），三态各有自己的诚实 hint 要一起看。
+
+0b. **红线第二层从未上过生产**（0812 考古结论，回执 §7）。当年是**两层设计**：
+   确定性正则门（在跑，`contract.py`/`ask_api.py` 每条建议都过）+ 跨家族 LLM 语义仲裁
+   （票 011c，DeepSeek 当第二判官，`redline.py` 文件头至今写着这句话）。第二层真跑过、
+   真抓到过一次确定性门的假阳（`EVAL-RESULTS.md` §3c），但**只活在评测台**——
+   `service/`/`avery/` 零 import judge，最后一次真跑 2026-07-01。
+   ⚠ 与 #89 的 failover **是两件事**：failover 是替换（可用性），那个是复核（正确性）。
+   要不要捡回运行时：代价是每条建议多一次模型调用。**建议单开一票。**
+
 
 0. **✅ 0810 设计轮六票全部完成，并已统一上产**（#83 + #86 + #87 + #84 + #85 + #88）。正源
    `.issues/design-0810/design-plan.md`（Danny 2026-08-10「其他的设计方案全部通过」），
