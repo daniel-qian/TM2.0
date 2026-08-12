@@ -3,7 +3,13 @@
 > 📢 本文件是**当前状态快照，整体重写不追加**。历史都在 git（`git log` + 各 `.issues/*/receipt*.md`），别在这儿堆编年史。
 > 启动路径见 `AGENTS.md` Startup Workflow：读本文件 + `feature_list.json`，跑 `./init.sh` 确认绿，再开工。
 
-**Last Updated:** 2026-08-12（#89 上产后同日 **#92、#94、#90、#93 先后落地进本地 main（未 push）**：
+**Last Updated:** 2026-08-13 凌晨（0812 战役五票 **#92、#94、#90、#93、#91 全部落地进本地 main（未 push）**：
+**#91 = 上传前端接线**（战役收口票）——transport 超时熔断（deposit 60s AbortController，
+只熔断不重试、超时文案说「可能已经传上了」）+ `uploadFiles/appendFiles` 关门轮询 `GET /files`
+任务摘要、全部文件终态才翻牌（**ingestStatus/appendStatus 对外契约一个字没改**，约 30 道门 +
+18 张数据态像素合并树实测零改判零漂移）+ 文件行 'reading' 态上屏 + #89 横幅改从
+`last_job.extraction_mode` 消费 + 「请保持页面打开」退役/多选引导上屏 + v01 逃生门最小维护补丁
+（回执 `receipt-91.md`）。**统一上产从此可以 #90+#91 同批走，前端数据态门/像素不再有「预期红」。**
 **#93 = 全档案重跑粒度闸**（S2 第二刀）——补传后拿整个档案的字节重建 docs 重判，
 **只折叠不删除**（新字段 `folded_into`，Danny 拍板不复用 `archived`）+ 血缘完整性前置 fail closed
 + **裁决落库**（`granularity` 此前真库往返静默丢失）；实测逐份补传 **7 张 → 4 张**、与一次全选
@@ -13,8 +19,7 @@
 （回执 `receipt-94.md`，常驻测试户已建、凭据只在 scratchpad）；
 **#90 = 上传管线后端重做**——sha256 内容幂等 + 异步 deposit（ingest_jobs 任务表 + 进程内
 worker + 孤儿回收 + 'reading' 态）+ pg put() 增量化（positional diff，xmin 实证）+ 四段计时
-（回执 `receipt-90.md`）。🔴 **#91 落地前前端数据态门/visual-data 像素对着 main 的后端是
-预期红**——`uploadFiles` 还在拿 POST 响应当终态渲染，**统一上产必须 #90+#91 同批**。
+（回执 `receipt-90.md`）。
 #89 的生产态不变：前端 `6b70173`、后端 `avery-agent:main-20260812-070519`。
 ⚠ 本地 main 自 #92 起**领先** origin/main——别单独 push）
 
@@ -23,9 +28,9 @@ worker + 孤儿回收 + 'reading' 态）+ pg put() 增量化（positional diff�
 - **git**：`main` = 差距战役八票 + gap2 三票 + 三轮演习批 + #68 + #70 + #69+#71 + #72 +
   **0808 重构战役四波全部**（#73/#74/#75/#76/#77/#78/#79）+ wave 4（#80+#81）+ #82
   + **#86 + #83 + #87 + #84 + #85 + #88（0810 设计轮票 4 / 1 / 5 / 2 / 3 / 6 —— 六票全清）**
-  + **#89 + #92 + #94 + #90 + #93（0812：抽取失败可见+热备 · 粒度闸 R5 职责列+不变式门 ·
-  账号A真彩排+文案修真 · 上传管线后端重做 · 全档案重跑粒度闸）**。
-  回执：`redesign-0808/` 六份 + `design-0810/` 六份 + `ingest-root-cause-0812/receipt-{90,92,93,94}.md`。
+  + **#89 + #92 + #94 + #90 + #93 + #91（0812 战役：抽取失败可见+热备 · 粒度闸 R5 职责列+不变式门 ·
+  账号A真彩排+文案修真 · 上传管线后端重做 · 全档案重跑粒度闸 · 上传前端接线——五票全清）**。
+  回执：`redesign-0808/` 六份 + `design-0810/` 六份 + `ingest-root-cause-0812/receipt-{90,91,92,93,94}.md`。
   ⚠ 别在这儿写死 ahead 数字——它每提交一次就自己作废。要数就跑：
   `git rev-list --count origin/main..HEAD`。
 - **后端离线套基线：`TZ=UTC` → 4204 passed · 0 failed · 151 deselected · 4 xfailed**（约 2min，
@@ -59,8 +64,11 @@ worker + 孤儿回收 + 'reading' 态）+ pg put() 增量化（positional diff�
   触发面是 `created_at < now()`。**不是本票造成的，也别当它不存在。**
   ⚠ 本机 docker PG 的口令是 **`dev`** 不是 `postgres`（`docker inspect teammaster-postgres-1` 可查）。
   跑完记得 `DROP DATABASE`（本 session 的一次性库已删）。
-- **像素基线现状**：**54 张，本日重冻过 10 张**——4 张按 #83 + 4 张按 #84 + **2 张按 #88**
-  （`{aurora,paper}-files-desktop`：空态左栏少了「更多 / 新建一家公司」那一组），另 44 张哈希逐字未变。
+- **像素基线现状**：**54 张。#91（0813 凌晨）重冻 4 张**——`{aurora,paper}-home-{desktop,mobile}`
+  （首页上传骨架卡的 caption 多了多选引导一句，下方内容顺移；diff 图人审=漂移全部圈定在那张卡），
+  **其余 50 张（含全部 18 张数据态）md5 逐字未变**；合并树复跑 54/54 零漂移。
+  0810 那轮重冻过 10 张——4 张按 #83 + 4 张按 #84 + **2 张按 #88**
+  （`{aurora,paper}-files-desktop`：空态左栏少了「更多 / 新建一家公司」那一组）。
   **#85 净漂移 0 张**（那一区只在补传之后才存在，两套 spec 都走首次上传）。
   ⚠ **零漂移是预期，不是证据**——证据是在主检出跑完之后对 54 张取 md5 **逐行 diff**
   （#88 那一轮：恰好 2 行不同，总数 54 → 54，无附带漂移）。
@@ -83,6 +91,46 @@ worker + 孤儿回收 + 'reading' 态）+ pg put() 增量化（positional diff�
   ⚠ worktree 的 node_modules 是主检出的 junction：装依赖要在 `D:\avery` 装。
 - 🔴 **合的都是本地 main，没有 push**。前端 push main 即自动构建上产，push + 换后端容器
   必须在统一上产 session 的**同一个窗口**里做。
+
+## 本轮做完的 · 之六（2026-08-13 凌晨 · #91 上传前端接线——0812 战役收口）
+
+回执 `.issues/ingest-root-cause-0812/receipt-91.md`（逐件、门夹具三处改造的病历、变异台账、
+已知边界五条）。**纯前端 + 门**：后端零字节、迁移零条。人眼图 `_shots-91/`。
+
+- **①熔断**：`send()` AbortController 超时（deposit 60s——服务端秒级但字节要过网、10MiB 慢线
+  上行是真实分母；fetchFiles 15s）；🔴 只熔断不重试；超时文案动词是「刷新看看」不是「重试」
+  （deposit 超时多半=字节已到、回执死在半路）。SSE 自带 signal 的请求一律不碰。
+- **②内部轮询**：deposit 秒回带 `job` → 关门轮询 `GET /files`，`last_job.id===本次 job` 到
+  done/failed（或本批无 'reading' 行）才把 team+status 在**同一次 set** 里翻牌——对外契约零改动。
+  每轮 stillOn；只消费自己 job 的 extraction_mode；无 `job` 键=同步世界走原路（stub/老后端/
+  全 identical 不入队路，字节不变）。adopt 挪到 deposit 当下=断连不再孤儿化档案（暗伤①′ 前端半边闭合）。
+  uploadFiles 补 store 级重入闸。notifyStore/OnboardGate/ingestClock 零改动（忙态覆盖整个窗口，
+  秒表锚点自动跟着轮询生命周期走）。
+- **③'reading' 行**：「正在读取…」+ honey 转点（复用 feat068 脉冲，reduced-motion 豁免）；
+  轮询每轮写 files，行是活的。🔴 `.upload-ready`/`.upload-error-label` 类名一字节未动。
+- **④横幅改接**：值从 last_job 消费，持久化/清理机制原样——🔴 **刻意不让 refreshFiles 直接消费
+  last_job**：job 行是无 FK 审计痕迹、清空不删，直接消费=清空后横幅从服务端诈尸（门⑥现在钉着）。
+- **⑤文案**（手写中文）：「请保持页面打开」退役、正面说「关掉页面都没关系」；多选引导×3 入口
+  （「一起读更快、结果也更准」——说清为什么）；`skipped_identical` 回执行（「已经有了，没有重复保存」
+  ——超时重传场景的正面答复，措辞是成功不是拒绝）；conflicts_added 转 optional 自然退场
+  （冲突照旧走今天页+铃铛）。
+- **v01 最小维护补丁**（票面外、电池逼出来的）：逃生门 uploadFiles 认 job 就轮询到落定，否则
+  空骨架被当空团队渲染——三门 v01 半边 18 条判据全红。修壳不改判门。
+- **门夹具两处 #90 引信**（都有 A/B 实证）：⑴ 门语料每发必须唯一字节——sha256 幂等把同字节
+  补传整个跳过（无 job、无 extraction_mode），五发同串 WEEKLY 时判据全在空转；⑵ change-log 的
+  firstId 避开「负责人」行——pre-#90 逐文件打 uploaded_at、组序碰巧把它排后面，#90 整批共享
+  received_at 后平手回退派生序，门赌的巧合塌了（起 pre-#90 后端直连对比钉死：载荷键序逐字相同，
+  唯一变量就是批内时间戳并列）。
+- **verify-extraction-degraded 重设计**（17→18 判据）：改包点挪到 GET /files·last_job；⓪′ 钉
+  「POST 写口确实不再发 extraction_mode」这个前提。⚠ 实收：`route.fetch()` 的 APIResponse
+  **没有 clone()**——观察响应体用 text() 自己 parse。
+- **验证**（合并树二跑——#93 在收尾窗口并入，纯后端零文件重叠）：init.sh 绿 · 电池 A 38/38 ·
+  B 3/3 · C 3/3 · 像素 54 张恰好 4 张 home 换血（多选文案卡，diff 人审后重冻）+ 合并树复跑
+  54/54 md5 零漂移 · 变异 M1/M2/M3 全击毙（M3 恰好一条红精确落位）· reading/ready/skipped
+  新态截图人眼过。
+- 🔴 **已知边界**：刷新后回来的 'reading' 行**不自动续轮询**（轮询关在两个 action 内部是票面
+  口径；工具条「刷新」现成，回来时多半已读完）——要不要「见 reading 自动轮询」是下张票的
+  产品判断，别顺手。
 
 ## 本轮做完的 · 之五（2026-08-12 · #93 全档案重跑粒度闸 —— S2 第二刀，结构性根治）
 
@@ -498,18 +546,18 @@ facts+notes 重物化成空；**留下** `context_id` · `owner_token` · `name`
    `statusText === '已读取'`，`verify-contrast-smalltext` 拿它当 `--sage` 采样面
    （3.9–4.11:1，本来就贴地板），三态各有自己的诚实 hint 要一起看。
 
-0a. **上传根治战役进行中**（正源 `.issues/ingest-root-cause-0812/exploration.md` + 五张票，
-   0812 晚拍板开出）。
-   ~~#90~~ ✅ **已落地**（后端:sha256幂等+异步任务+增量落库+计时；本地 main，回执 `receipt-90.md`）。
-   ~~#92~~ ✅ **已落地**（本地 main，回执 `receipt-92.md`）。
-   ~~#94~~ ✅ **已落地**（本地 main，九判据 33 条全绿，回执 `receipt-94.md`；
-   常驻测试户 avery-e2e+20260812@ 已建、凭据在 scratchpad 交接）。
-   ⏭ **#91（前端：熔断+轮询+'reading' 态）是下一张**，契约清单在 receipt-90.md §给#91——
-   🔴 **#91 落地前，前端门电池数据态门 + visual-data 像素对着 main 后端是预期红**
-   （`uploadFiles` 拿 POST 响应当终态渲染，store.ts:753-758），这是排好的依赖顺序不是回归；
-   **统一上产必须 #90+#91 同批**。
-   ⏭ **#93**(全档案重跑闸+folded_into新字段[拍板]+裁决落库)依赖#92✅和#90✅——两票已清，
-   可开工；**重建现场必须连 people 一起喂**（apply_gate 现在读 res.people，见 receipt-92 §6.4）。
+0a. **✅ 上传根治战役五票全清**（正源 `.issues/ingest-root-cause-0812/exploration.md`，
+   0812 晚拍板开出，0813 凌晨收口）。
+   ~~#90~~ ✅（后端:sha256幂等+异步任务+增量落库+计时，回执 `receipt-90.md`）·
+   ~~#92~~ ✅（回执 `receipt-92.md`）· ~~#94~~ ✅（回执 `receipt-94.md`；常驻测试户
+   avery-e2e+20260812@ 已建、凭据在 scratchpad）· ~~#93~~ ✅（全档案重跑闸+folded_into+裁决落库，
+   回执 `receipt-93.md`）· ~~#91~~ ✅（前端:熔断+内部轮询+'reading' 态+横幅改接任务摘要+文案退役，
+   回执 `receipt-91.md`）。
+   🟢 **「#91 落地前数据态门/像素预期红」那条警告已作废**——门电池 A 38/38 · B 3/3 · C 3/3 +
+   像素 54 张在合并树上全绿，**下一步是 #90+#91+#92+#93 统一上产**（迁移 0017/0018 要落地；
+   🔴 换容器先 stop 旧再 start 新——#90 的启动孤儿回收会误杀并存旧容器正跑的 job）。
+   ⚠ #90 遗留 4 条 needs_db 红（`0/0 materials` 一族：e2e 仍按同步路断言，异步 deposit 欠账）
+   ——#93 回执已记，**建议单开小票**改判那四条（「POST → run_pending_jobs → GET」的既定姿势）。
    Caddy access log 已装好并验证（/var/log/caddy/avery-access.log，JSON，50MB×5 滚动）。
    ⚠ 大前提拍板（已入 memory）：**Avery 没有实际生产使用，只是部署通了**——开票按自然边界捆，不做分段上线仪式。
 
