@@ -697,12 +697,20 @@ def client(monkeypatch):
     REGISTRY.clear()
 
 
+def _drain() -> None:
+    """#90: /ingest 与补传都是异步 deposit——POST 秒回 queued job,理解在 worker。离线电池
+    关掉了 worker 线程(tests/conftest.py),这里同步驱动到队列空,测试拿到的才是终态世界。"""
+    from service import ingest_worker
+    ingest_worker.run_pending_jobs()
+
+
 def _ingest(client) -> tuple[str, dict]:
     res = client.post("/ingest", files=[
         ("files", ("员工花名册.md", ROSTER_V1.encode("utf-8"), "text/markdown")),
         ("files", ("项目周报.md", PROJECT_V1.encode("utf-8"), "text/markdown"))])
     assert res.status_code == 200, res.text
     body = res.json()
+    _drain()
     return body["context_id"], {"X-Avery-Token": body["owner_token"]}
 
 
@@ -718,8 +726,8 @@ def test_the_append_endpoint_is_gated_exactly_like_the_read_path(client):
 
 
 def test_the_append_endpoint_returns_the_refreshed_team_payload(client):
-    """回执 = 与 `/team/{id}` 同一张 payload —— 前端拿它整屏刷新，卡片当场是新读数。
-    🔴 **不发** owner_token：那是创建时才交出去一次的凭据，本端点没有新铸也不该重发一遍。"""
+    """#90 改判：POST 秒回 deposit 回执（job queued + 'reading' 行），新读数在 worker 落地后
+    经 `GET /team/{id}` 可见。🔴 **不发** owner_token 的纪律不变。"""
     cid, hdr = _ingest(client)
     res = client.post(f"/team/{cid}/files", headers=hdr, files=[
         ("files", ("本周周报.md", PROJECT_V2.encode("utf-8"), "text/markdown"))])
@@ -727,20 +735,28 @@ def test_the_append_endpoint_returns_the_refreshed_team_payload(client):
     body = res.json()
     assert body["context_id"] == cid, "补传绝不新建 context"
     assert "owner_token" not in body
-    assert body["projects"][0]["status"] == "blocked"
-    assert body["appended"]["documents"] == ["本周周报.md"]
+    assert body["appended"]["documents"] == ["本周周报.md"], "已收下待读取的 key"
+    assert body["job"]["status"] == "queued"
+    assert "extraction_mode" not in body, "#90：抽取还没跑，这个键必须缺席"
+    _drain()
+    team = client.get(f"/team/{cid}", headers=hdr).json()
+    assert team["projects"][0]["status"] == "blocked"
     # 状态与截止日两条都和上一批对不上 —— 安静更新到新值，同时各记一条冲突走今天页那条通道。
-    assert body["appended"]["conflicts_added"] == 2
+    from avery.ingest.registry import REGISTRY
+    assert len(REGISTRY.get(cid).extraction.conflicts) == 2
     assert len(client.get(f"/team/{cid}/files", headers=hdr).json()["files"]) == 3
 
 
 def test_the_append_endpoint_disambiguates_against_the_existing_library(client):
-    """同名文件补传第二次：新文档拿到自己的 key，块数各归各的文档。"""
+    """同名文件补传第二次：新文档拿到自己的 key，块数各归各的文档。
+    ⚠ #90 语料细节：补传的必须是**不同字节**的同名文件——同字节会被内容幂等跳过（那是另一
+    条门的判据），本条测的是「同名不同内容」的 key 消歧。"""
     cid, hdr = _ingest(client)
     res = client.post(f"/team/{cid}/files", headers=hdr, files=[
         ("files", ("项目周报.md", PROJECT_V2.encode("utf-8"), "text/markdown"))])
     assert res.status_code == 200, res.text
     assert res.json()["appended"]["documents"] == ["项目周报(1).md"]
+    _drain()
     cards = client.get(f"/team/{cid}/files", headers=hdr).json()["files"]
     assert [c["filename"] for c in cards].count("项目周报.md") == 2, "display 名允许重复"
     assert all(c["n_chunks"] > 0 for c in cards), "有文档的块被算到了别人头上"
@@ -748,7 +764,8 @@ def test_the_append_endpoint_disambiguates_against_the_existing_library(client):
 
 def test_the_red_line_still_refuses_a_scoring_document_on_the_append_path(client):
     """红线硬门在补传这条路上原样生效 —— 一份给人打分的资料，不许靠「换个入口」进来。
-    422 与 /ingest 同体；且**一个字段都没写**（先造后挂）。"""
+    #90 改判：拒绝不再是同步 422，而是 job `failed`（reason 点名红线）+ 本批 'reading' 行
+    被收走——「一个字段都没写」的判据不变（failed = 这批文件没进资料库，与旧 422 同构）。"""
     # 文件名保持「花名册」——`sniff_kind` 按它认出这是一张人员表，roster 那条解析路才会跑。
     # 换个名字（「员工评估表.md」）就抽不出人，于是**红线也不会响**：这条门测的就不是红线了。
     scored = "\n".join(["# 员工花名册（含评估）", "",
@@ -756,13 +773,17 @@ def test_the_red_line_still_refuses_a_scoring_document_on_the_append_path(client
                         f"{ZHOU} | {OLD_TEAM} | 市场经理 | 综合评分 92 分"])
     cid, hdr = _ingest(client)
     before = client.get(f"/team/{cid}/files", headers=hdr).json()["files"]
+    people_before = client.get(f"/team/{cid}", headers=hdr).json()["people"]
     res = client.post(f"/team/{cid}/files", headers=hdr, files=[
         ("files", ("员工花名册.md", scored.encode("utf-8"), "text/markdown"))])
-    assert res.status_code == 422, res.text
-    body = res.json()["detail"]
-    assert body["error"] == "extraction refused" and body["violations"]
-    assert client.get(f"/team/{cid}/files", headers=hdr).json()["files"] == before, (
-        "红线拒绝之后资料库还是被改了")
+    assert res.status_code == 200, res.text   # deposit 收下了字节——判决在 worker
+    _drain()
+    manifest = client.get(f"/team/{cid}/files", headers=hdr).json()
+    assert manifest["last_job"]["status"] == "failed"
+    assert "red line" in manifest["last_job"]["reason"]
+    assert manifest["files"] == before, "红线拒绝之后资料库还是被改了"
+    assert client.get(f"/team/{cid}", headers=hdr).json()["people"] == people_before, (
+        "红线拒绝之后卡片还是被改了")
 
 
 def test_the_append_endpoint_refuses_a_disguised_type_the_same_way_ingest_does(client):

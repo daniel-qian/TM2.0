@@ -1,102 +1,102 @@
-"""feat-028 (demo-harden cluster-1, fix #2) — /ingest must not block the event loop.
+# -*- coding: utf-8 -*-
+"""feat-028 → #90 — /ingest must not block the event loop, now stated for the ASYNC deposit.
 
-`service/ingest_api.py::ingest` runs on the single-worker uvicorn event loop. If it calls the
-SYNCHRONOUS `ingest_paths(...)` directly (minutes-long extraction), it freezes the whole loop — so
-`/health` and every other request stall behind it, and the Docker HEALTHCHECK can then mark the
-container unhealthy and restart it mid-extraction (wiping the in-memory registry).
+The feat-028 version of this gate monkeypatched `service.ingest_api.ingest_paths` slow and proved
+`/health` stayed responsive while the handler's threadpool ran extraction. #90 removed extraction
+from the request path entirely — `ingest_api` no longer even imports `ingest_paths` — so that
+patch point is gone. The SAME hazard ("a minutes-long extraction freezes the single-worker loop,
+the Docker HEALTHCHECK restarts the container mid-extraction") is now guarded by two sharper,
+directly-measurable claims:
 
-This gate drives the real ASGI app over an in-process httpx ASGITransport. It fires a slow `/ingest`
-(the extraction call monkeypatched to block ~1.5s) and, concurrently, a `/health`. If the handler
-offloads the blocking work (run_in_threadpool / to_thread), `/health` returns in well under the
-block window. If the handler blocks the loop, `/health` can only complete AFTER the block — its
-end-to-end latency then approaches the full block and the assertion fails.
+  1. POST /ingest returns WITHOUT waiting for extraction — a deposit under a 1.5s-slow extractor
+     still answers in well under the block window (the whole point of #90's seam move).
+  2. While the REAL worker thread is grinding that slow extraction, /health answers immediately —
+     the worker is a daemon thread whose blocking sleep/IO releases the GIL, never the event loop.
 
-No pytest-asyncio in this env, so the scenario runs under an explicit `asyncio.run`.
+This file is ALSO the real-thread integration gate: it flips AVERY_INGEST_WORKER back on (the
+offline battery's tests/conftest.py autouse fixture turns it off for determinism) and proves the
+lifespan-started thread claims + finishes a queued job end to end — deposit rows flip 'reading' →
+terminal with NO run_pending_jobs() call anywhere in the test.
 """
 from __future__ import annotations
 
-import asyncio
 import time
-from types import SimpleNamespace
 
 import pytest
 
-pytest.importorskip("httpx")
-import httpx  # noqa: E402
-from httpx import ASGITransport  # noqa: E402
+pytest.importorskip("fastapi.testclient")
+from fastapi.testclient import TestClient  # noqa: E402
 
-BLOCK_S = 1.5          # how long the (monkeypatched) extraction blocks
-HEALTH_BUDGET_S = 0.7  # /health must return well inside the block window if the loop is free
-
-
-def _stub_report():
-    """A minimal IngestReport-shaped object so the handler's success path (report.ok / .context /
-    _team_payload) works without a real extraction."""
-    ctx = SimpleNamespace(
-        context_id="ctx_stub", source_files=[],
-        team_cards=lambda: [], project_cards=lambda: [],
-        # gap2 T9 (#58): both now take the period's form status as a keyword — _team_payload feeds
-        # ONE aggregate to BOTH (feeding only one is how the today page and the briefing count start
-        # contradicting each other; see registry.briefing()'s long note). **kw here, not an explicit
-        # `forms=None`: this fake exists to satisfy a SURFACE, and pinning today's exact kwarg list
-        # would make this event-loop gate go red every time that surface grows a keyword.
-        briefing=lambda **kw: {}, signal_cards=lambda: [],
-        # feat-056: _team_payload now also projects the decision grades. This gate is about the
-        # event loop, not payload shape — the fake just has to satisfy the same surface.
-        decision_cards=lambda **kw: [],
-        # rich-align-0722/05a: _team_payload also projects the archived (soft-deleted) project drawer.
-        archived_project_cards=lambda: [],
-        # rich-align-0722/06: …and the archived (soft-deleted) people drawer.
-        archived_people_cards=lambda: [],
-        # rich-align-0722/08: …and the SOP method-card (playbooks) projection.
-        playbook_cards=lambda: [],
-    )
-    return SimpleNamespace(ok=True, context=ctx, violations=[], parse_errors=[])
+BLOCK_S = 1.5          # how long the (monkeypatched) extraction grinds inside the worker
+FAST_BUDGET_S = 0.7    # POST /ingest and /health must both answer well inside the block window
+LAND_DEADLINE_S = 15.0  # the slow job must still LAND (thread liveness, not just non-blocking)
 
 
-def test_slow_ingest_does_not_block_health(monkeypatch):
+def test_slow_extraction_blocks_neither_the_deposit_nor_health(monkeypatch):
     monkeypatch.setenv("AVERY_BRAIN", "mock")
     # Force the offline heuristic so this gate is deterministic regardless of whether the dev .env
-    # carries real extraction keys — the ONLY block is the monkeypatched slow ingest below.
+    # carries real extraction keys — the ONLY slowness is the monkeypatched extraction below.
     monkeypatch.setenv("AVERY_EXTRACTOR", "heuristic")
-    import service.ingest_api as ingest_api
-    from service.app import app
+    monkeypatch.setenv("AVERY_EMBEDDINGS", "keyword")
+    for k in ("AVERY_DB_URL", "PGVECTOR_URL"):
+        monkeypatch.delenv(k, raising=False)
+    # Override tests/conftest.py's autouse 'off': THIS gate wants the real worker thread — the
+    # lifespan starts it, and the job must land with no synchronous drive anywhere in this test.
+    monkeypatch.setenv("AVERY_INGEST_WORKER", "on")
+
+    import service.app as app_mod
+    import service.ingest_worker as iw
+    from avery.ingest.registry import REGISTRY
+
+    real_ingest_paths = iw.ingest_paths
 
     def slow_ingest(*args, **kwargs):
-        time.sleep(BLOCK_S)          # stand in for a minutes-long synchronous extraction
-        return _stub_report()
+        time.sleep(BLOCK_S)          # stand in for a minutes-long extraction, INSIDE the worker
+        return real_ingest_paths(*args, **kwargs)
 
-    # Patch the symbol the handler actually calls.
-    monkeypatch.setattr(ingest_api, "ingest_paths", slow_ingest)
+    # Patch the symbol the WORKER actually calls (ingest_api no longer has one to patch).
+    monkeypatch.setattr(iw, "ingest_paths", slow_ingest)
 
-    async def scenario():
-        transport = ASGITransport(app=app)
-        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+    REGISTRY.clear()
+    try:
+        with TestClient(app_mod.app) as client:   # lifespan: orphan recovery + worker thread start
             t0 = time.perf_counter()
+            r = client.post("/ingest", files={
+                "files": ("company.txt", b"a content line long enough to chunk on its own\n",
+                          "text/plain")})
+            deposit_elapsed = time.perf_counter() - t0
+            assert r.status_code == 200, r.text[:300]
+            assert deposit_elapsed < FAST_BUDGET_S, (
+                f"POST /ingest took {deposit_elapsed:.2f}s under a {BLOCK_S}s-slow extractor — "
+                f"the deposit is waiting for extraction, which is exactly what #90 removed")
+            body = r.json()
+            assert body["job"]["status"] == "queued"
 
-            ingest_task = asyncio.create_task(client.post(
-                "/ingest",
-                files={"files": ("company.txt", b"hello world", "text/plain")},
-            ))
+            # The worker thread is now grinding the slow extraction. /health must not notice.
+            t0 = time.perf_counter()
+            h = client.get("/health")
+            health_elapsed = time.perf_counter() - t0
+            assert h.status_code == 200
+            assert health_elapsed < FAST_BUDGET_S, (
+                f"/health took {health_elapsed:.2f}s while the worker ground a slow extraction — "
+                f"the worker is blocking the event loop (expected < {FAST_BUDGET_S}s)")
 
-            async def timed_health():
-                # Small head start so the ingest handler is scheduled and reaches its blocking
-                # extraction call FIRST; measure latency from the shared t0 so a blocked loop shows
-                # up as the block window being charged to /health.
-                await asyncio.sleep(0.15)
-                r = await client.get("/health")
-                return time.perf_counter() - t0, r.status_code
-
-            health_task = asyncio.create_task(timed_health())
-            ingest_resp, (health_latency, health_status) = await asyncio.gather(
-                ingest_task, health_task)
-            return ingest_resp.status_code, health_latency, health_status
-
-    ingest_status, health_latency, health_status = asyncio.run(scenario())
-
-    assert health_status == 200
-    assert ingest_status == 200, "the ingest success path should still return the team payload"
-    assert health_latency < HEALTH_BUDGET_S, (
-        f"/health took {health_latency:.2f}s while a slow /ingest was in flight — the ingest "
-        f"handler is blocking the event loop (expected < {HEALTH_BUDGET_S}s; the block was "
-        f"{BLOCK_S}s). Offload the synchronous ingest_paths() call.")
+            # Real-thread liveness: the job LANDS with no run_pending_jobs() call in this test.
+            hdr = {"X-Avery-Token": body["owner_token"]}
+            deadline = time.monotonic() + LAND_DEADLINE_S
+            last: dict = {}
+            while time.monotonic() < deadline:
+                last = client.get(f"/team/{body['context_id']}/files",
+                                  headers=hdr).json().get("last_job", {})
+                if last.get("status") in ("done", "failed"):
+                    break
+                time.sleep(0.05)
+            assert last.get("status") == "done", (
+                f"the worker thread never landed the queued job (last_job={last!r}) — "
+                f"the lifespan thread is dead or never claimed it")
+            statuses = [f["status"] for f in client.get(
+                f"/team/{body['context_id']}/files", headers=hdr).json()["files"]]
+            assert statuses and all(s != "reading" for s in statuses), (
+                f"file rows stuck mid-flight after the job landed: {statuses}")
+    finally:
+        REGISTRY.clear()

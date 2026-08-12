@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import os
 import tempfile
+import threading
 import uuid
 from dataclasses import dataclass, field, replace
 from dataclasses import fields as dataclass_fields
@@ -63,9 +64,16 @@ class SourceDocument:
     status: str = "ingested"               # feat-032 P2: 'ingested' | 'failed' (unparseable) |
                                            # 'empty' (parsed, produced no material). The manifest
                                            # surfaces it so a failed file is not disguised as valid.
+                                           # #90 adds 'reading': bytes are deposited, the async
+                                           # worker has not finished extraction yet (a MID state —
+                                           # the worker flips it to one of the three terminals).
     uploaded_at: str = ""                  # ISO8601 UTC; set at ingest, or read back from the DB
     content: bytes | None = None           # raw upload bytes (in-memory) / None (pg metadata read)
     storage_ref: str = ""                  # feat-035 seam: object-store pointer; inline bytea in v1
+    content_sha256: str = ""               # #90 content idempotency: hex sha256 of the RAW bytes,
+                                           # computed the moment read_capped read them. '' = unknown
+                                           # (a pre-#90 row with NULL content); the idempotency map
+                                           # skips empty hashes. Migration 0017 backfills stored rows.
 
 
 def _now_iso() -> str:
@@ -131,6 +139,33 @@ class AdviseThread:
     调用方要一个稳定 key 时用 `thread_id or runs[0].id`（前端 LiteRoomHistory 就是这么 key 的）。"""
     thread_id: str
     runs: list[AdviseRun]
+
+
+@dataclass
+class IngestJob:
+    """#90 — one async-deposit unit of work: "these deposited bytes still need understanding".
+
+    Minted by the depositing endpoint (POST /ingest · POST /team/{id}/files) in the SAME
+    transaction that lands the bytes, claimed by the in-process worker (queued -> processing),
+    finished as done/failed. `file_keys` names the source_keys this job is responsible for — the
+    startup orphan recovery uses it to drop the 'reading' file rows of a job whose worker died.
+
+    `extraction_mode` is the honest #89 label (llm / heuristic / degraded), recorded at completion:
+    the POST response returns BEFORE extraction starts, so the polling surface (the /files task
+    summary) reads the final label from here instead."""
+    id: str
+    context_id: str
+    kind: str                  # 'ingest' (fresh context) | 'append' (补传)
+    status: str = "queued"     # queued -> processing -> done | failed
+    reason: str = ""           # human-readable failure reason ('' while healthy)
+    extraction_mode: str = ""  # recorded at completion; '' until then
+    file_keys: list[str] = field(default_factory=list)
+    created_at: str = ""       # ISO8601 UTC
+    updated_at: str = ""
+
+
+def new_job_id() -> str:
+    return "job_" + uuid.uuid4().hex[:16]
 
 
 # rich-align-0722/05a · 真 CRUD 项目（手编赢 + 逐字段出处，ADR-0028）.
@@ -893,6 +928,10 @@ class ContextRegistry(ProjectWriteMixin):
         self._account_contexts: dict[str, list[str]] = {}  # feat-053: user_id -> [context_id]
         self._context_owner: dict[str, str] = {}           # feat-053: context_id -> user_id (1:1)
         self._ephemeral_at: dict[str, datetime] = {}       # gc-demo-clones-0724: clone_id -> created (UTC)
+        self._ingest_jobs: dict[str, IngestJob] = {}       # #90: job_id -> IngestJob (insert order = age)
+        # #90: jobs are touched from TWO threads (the event-loop thread deposits, the worker thread
+        # claims/finishes) — every compound read-modify-write on the job dict goes through this lock.
+        self._jobs_lock = threading.Lock()
 
     def put(self, ctx: CompanyContext) -> str:
         self._by_id[ctx.context_id] = ctx
@@ -1234,6 +1273,123 @@ class ContextRegistry(ProjectWriteMixin):
             return None
         return ctx.source_documents[idx].content
 
+    # --- #90 · async deposit: bytes land NOW, understanding is a background job -----------------
+    # The deposit pair writes the uploaded bytes + a `queued` IngestJob in one atomic step (one SQL
+    # transaction on the pg twin; one lock section here), so POST /ingest and POST /team/{id}/files
+    # can return in seconds. The worker drives claim -> execute -> finish. `recover_orphan_ingest_jobs`
+    # runs at process startup: a `processing` row then can only be a job whose worker died mid-flight
+    # (this process hasn't claimed anything yet) — mark it failed and drop its 'reading' file rows,
+    # the honest restart story the in-memory `_BUILD_LOCK` precedent never had.
+
+    def _register_job(self, job: IngestJob) -> None:
+        """Stamp + store one job (caller holds `_jobs_lock`). Stored by reference on purpose —
+        claim/finish mutate the stored row; readers get deep copies."""
+        import copy
+        stored = copy.deepcopy(job)
+        stored.created_at = stored.created_at or _now_iso()
+        stored.updated_at = stored.updated_at or stored.created_at
+        self._ingest_jobs[stored.id] = stored
+
+    def deposit_new_context(self, *, context_id: str, name: str, owner_token: str,
+                            source_documents: list[SourceDocument], job: IngestJob) -> None:
+        """#90 · /ingest 的收字节半程：铸一个**骨架** context（空抽取、空检索面、空物化）+ 挂上
+        status='reading' 的文件行 + 落一条 queued job —— 一步原子。owner_token 从这一刻起就是
+        持久的（秒级回执把它交给上传者；断连也不再孤儿化——worker 完成后同一个 token 照常开门）。
+
+        骨架的 facts.md/notes.md 是**空抽取的物化结果**（与 #86 empty_context 同一个产物）——
+        不是缺文件：worker 完成前这份 context 就已经可以被 GET，投影层读到的必须是一个
+        自洽的空世界。worker 完成时 `ingest_docs(context_id=...)` 整体快照替换。"""
+        extraction = ExtractionResult()
+        mem_dir = materialize_memory(extraction, data_root() / context_id)
+        ctx = CompanyContext(
+            context_id=context_id, extraction=extraction, store=KeywordStore(),
+            memory_dir=mem_dir, name=name, source_files=[],
+            source_documents=list(source_documents), owner_token=owner_token)
+        with self._jobs_lock:
+            self._by_id[context_id] = ctx
+            self._register_job(job)
+
+    def deposit_append(self, context_id: str, source_documents: list[SourceDocument],
+                       job: IngestJob) -> None:
+        """#90 · 补传的收字节半程：把 status='reading' 的文件行挂进**既有** context + 落一条
+        queued job，一步原子。KeyError = context 不存在（端点转同体 404）。
+
+        ⚠ 挂的是**原地 extend**（内存腿 get() 返回活引用——正在投影这份 ctx 的调用方立刻看得见
+        reading 行，这正是「文件行秒级可见」的兑现点）。worker 完成时用 `reserved_keys` 把这些
+        行换成 finalized 终态行（file_append.append_docs_to_context 的 #90 参数）。"""
+        ctx = self._by_id.get(context_id)
+        if ctx is None:
+            raise KeyError(context_id)
+        with self._jobs_lock:
+            ctx.source_documents.extend(source_documents)
+            self._register_job(job)
+
+    def claim_next_ingest_job(self) -> IngestJob | None:
+        """Atomically claim the OLDEST queued job (queued -> processing), or None. Deep-copied out —
+        the caller's later mutation never edits the stored row (finish_ingest_job is the write path)."""
+        import copy
+        with self._jobs_lock:
+            for job in self._ingest_jobs.values():   # insert order = age (oldest first)
+                if job.status == "queued":
+                    job.status = "processing"
+                    job.updated_at = _now_iso()
+                    return copy.deepcopy(job)
+        return None
+
+    def finish_ingest_job(self, job_id: str, *, status: str, reason: str = "",
+                          extraction_mode: str = "") -> None:
+        """Land a claimed job's terminal state (done / failed). KeyError for an unknown id — the
+        worker only ever finishes a job it claimed, so an unknown id is a bug, not a race."""
+        if status not in ("done", "failed"):
+            raise ValueError(f"finish_ingest_job wants 'done' or 'failed', got {status!r}")
+        with self._jobs_lock:
+            job = self._ingest_jobs.get(job_id)
+            if job is None:
+                raise KeyError(job_id)
+            job.status = status
+            job.reason = reason or ""
+            job.extraction_mode = extraction_mode or ""
+            job.updated_at = _now_iso()
+
+    def latest_ingest_job(self, context_id: str) -> IngestJob | None:
+        """This context's NEWEST job (or None) — the /files task-summary read. Deep-copied out."""
+        import copy
+        with self._jobs_lock:
+            for job in reversed(self._ingest_jobs.values()):
+                if job.context_id == context_id:
+                    return copy.deepcopy(job)
+        return None
+
+    def recover_orphan_ingest_jobs(self) -> int:
+        """#90 · startup orphan recovery: every `processing` job at process start is a job whose
+        worker died mid-flight (nothing in THIS process has claimed anything yet) — mark it
+        `failed: server restarted` and drop its still-'reading' file rows, so the manager sees an
+        honest failure + a clean manifest instead of a spinner that never lands. `queued` jobs are
+        deliberately NOT touched: their bytes are already deposited, the worker simply runs them.
+
+        Returns the number of jobs recovered. (On this in-memory twin a real restart wipes
+        everything, so production recovery is the pg twin's job — this one exists so the RECOVERY
+        BEHAVIOR itself is offline-testable against the same contract.)"""
+        recovered = 0
+        with self._jobs_lock:
+            for job in self._ingest_jobs.values():
+                if job.status != "processing":
+                    continue
+                job.status = "failed"
+                job.reason = "server restarted"
+                job.updated_at = _now_iso()
+                ctx = self._by_id.get(job.context_id)
+                if ctx is not None and job.file_keys:
+                    keys = set(job.file_keys)
+                    # Only the rows still mid-flight — a terminal row (this batch somehow landed
+                    # before the crash) is real data and stays. In-place splice: callers hold the
+                    # live list (file_delete 命门① 同款纪律).
+                    ctx.source_documents[:] = [
+                        sd for sd in ctx.source_documents
+                        if sd.status != "reading" or (sd.source_key or sd.filename) not in keys]
+                recovered += 1
+        return recovered
+
     # --- 设计0810/#86: 清空这份档案（档案本身留着）-------------------------------------------
 
     def empty_context(self, context_id: str) -> bool:
@@ -1405,6 +1561,8 @@ class ContextRegistry(ProjectWriteMixin):
         self._account_contexts.clear()
         self._context_owner.clear()
         self._ephemeral_at.clear()
+        with self._jobs_lock:
+            self._ingest_jobs.clear()   # #90: 同 _advise_runs 那条注释的教训——漏清就是残留温床
 
 
 # --- arch-0802: the registry seam, WRITTEN DOWN -----------------------------------------------
@@ -1436,6 +1594,17 @@ class ContextRegistryProtocol(Protocol):
     def empty_context(self, context_id: str) -> bool: ...
     def sweep_ephemeral(self, *, older_than_hours: int, limit: int = 50) -> int: ...
     def is_ephemeral(self, context_id: str) -> bool: ...
+
+    # #90 · async deposit: bytes + a queued job land atomically; the worker drives the lifecycle.
+    def deposit_new_context(self, *, context_id: str, name: str, owner_token: str,
+                            source_documents: list[SourceDocument], job: IngestJob) -> None: ...
+    def deposit_append(self, context_id: str, source_documents: list[SourceDocument],
+                       job: IngestJob) -> None: ...
+    def claim_next_ingest_job(self) -> IngestJob | None: ...
+    def finish_ingest_job(self, job_id: str, *, status: str, reason: str = "",
+                          extraction_mode: str = "") -> None: ...
+    def latest_ingest_job(self, context_id: str) -> IngestJob | None: ...
+    def recover_orphan_ingest_jobs(self) -> int: ...
 
     # Avery's notes (write side)
     def append_note(self, context_id: str, text: str, source_excerpt: str = "") -> CompanyNote: ...

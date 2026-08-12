@@ -245,6 +245,17 @@ def _upload(client):
     return client.post("/ingest", files=files)
 
 
+def _drive_and_summary(client, body: dict) -> tuple[dict, dict]:
+    """#90: the POST no longer carries a final extraction_mode (it returns before extraction) —
+    drive the worker, then read the honest label off the /files task summary + the landed team."""
+    from service import ingest_worker
+    ingest_worker.run_pending_jobs()
+    hdr = {"X-Avery-Token": body["owner_token"]}
+    last = client.get(f"/team/{body['context_id']}/files", headers=hdr).json()["last_job"]
+    team = client.get(f"/team/{body['context_id']}", headers=hdr).json()
+    return last, team
+
+
 def test_ingest_degrades_honestly_when_the_only_provider_is_dead(monkeypatch, _fast_retries):
     from fastapi.testclient import TestClient
     fake = _FakeProvider("quota")
@@ -254,7 +265,8 @@ def test_ingest_degrades_honestly_when_the_only_provider_is_dead(monkeypatch, _f
         with TestClient(app) as c:
             r = _upload(c)
             assert r.status_code == 200
-            assert r.json()["extraction_mode"] == "degraded", \
+            last, _team = _drive_and_summary(c, r.json())
+            assert last["extraction_mode"] == "degraded", \
                 "唯一供应商全 429 时必须自报 degraded——0811 这个值后端发了、没人看"
             h = c.get("/health").json()
             assert h["extraction_chain"] == ["minimax"]
@@ -276,9 +288,9 @@ def test_ingest_fails_over_to_the_second_provider(monkeypatch, _fast_retries):
         with TestClient(app) as c:
             r = _upload(c)
             assert r.status_code == 200
-            body = r.json()
-            assert body["extraction_mode"] == "llm", "备脑答得出 → 这不是 degraded，是热备在干活"
-            assert [p["name"] for p in body["people"]] == ["王岚"], "人卡必须来自备脑的抽取"
+            last, team = _drive_and_summary(c, r.json())
+            assert last["extraction_mode"] == "llm", "备脑答得出 → 这不是 degraded，是热备在干活"
+            assert [p["name"] for p in team["people"]] == ["王岚"], "人卡必须来自备脑的抽取"
             h = c.get("/health").json()
             assert h["extraction_chain"] == ["minimax", "deepseek"]
             assert h["providers"]["minimax"]["ok"] is False

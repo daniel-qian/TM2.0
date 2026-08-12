@@ -27,6 +27,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Iterator
 
@@ -42,7 +43,7 @@ from avery.locale import DEFAULT_LOCALE, normalize_locale  # ADR-0033: locale �
 from avery.ingest.registry import new_thread_id  # #78: 服务端铸场 id（理由见 _with_thread_id）
 
 from . import account  # feat-053: verify a Supabase access token -> user id (header-only)
-from . import brain_factory, embedding_factory, extractor_factory, failover, live_input, llm_budget, mem_sentinel
+from . import brain_factory, embedding_factory, extractor_factory, failover, ingest_worker, live_input, llm_budget, mem_sentinel
 from .ask_api import maybe_ask_draft_frame  # feat-034: the ask-draft frame (service-layer, not engine)
 from .ask_api import router as ask_router   # feat-034: /ask manager endpoints + /r/{token} employee H5
 from .auth_api import router as auth_router  # feat-053: /account/status|contexts|claim
@@ -63,6 +64,29 @@ MEMORY_DIR = HERE / "memory"
 # Pick up MINIMAX_*/DEEPSEEK_*/ANTHROPIC_* from eval-harness/.env if present (real shell wins).
 load_dotenv(HERE / ".env")
 
+# #90 · the async-deposit lifecycle: startup recovers orphaned jobs (a `processing` row at startup
+# = a worker that died mid-flight — mark it failed, drop its 'reading' file rows), then starts the
+# in-process worker thread; shutdown stops it politely. Both halves live behind the
+# AVERY_INGEST_WORKER kill switch ("off" = this process does not touch jobs at all — the offline
+# battery runs that way and drives jobs deterministically via ingest_worker.run_pending_jobs()).
+# Recovery failures must never keep the service down: worst case is an orphan row that recovers on
+# the NEXT boot, while a service that refuses to start serves nobody.
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    if ingest_worker.worker_enabled():
+        try:
+            from avery.ingest.registry import active_registry
+            n = active_registry().recover_orphan_ingest_jobs()
+            if n:
+                logger.warning("startup: recovered %d orphaned ingest job(s) "
+                               "(marked 'failed: server restarted')", n)
+        except Exception:
+            logger.exception("startup orphan recovery failed — service starts anyway")
+        ingest_worker.ensure_worker_started()
+    yield
+    ingest_worker.stop_worker()
+
+
 # feat-038: close the interactive docs surface (readiness §2-A). /docs, /redoc, and /openapi.json
 # turn an IDOR into a clickable console and expose the API shape; a lead-gen deploy has no need for
 # them. docs_url=None + redoc_url=None + openapi_url=None make all three 404.
@@ -73,6 +97,7 @@ app = FastAPI(
     docs_url=None,
     redoc_url=None,
     openapi_url=None,
+    lifespan=_lifespan,
 )
 
 # feat-039: the upload hard-gate EDGE — per-IP rate limit + total-body size cap on POST /ingest

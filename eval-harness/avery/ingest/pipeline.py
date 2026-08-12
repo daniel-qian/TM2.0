@@ -22,6 +22,7 @@ extractor (heuristic or LLM) that scored a person cannot poison the advisor's me
 from __future__ import annotations
 
 import logging
+import time
 
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -117,7 +118,13 @@ def ingest_docs(docs: list[ParsedDoc], *, extractor: Extractor | None = None,
     """
     registry = registry if registry is not None else active_registry()
 
+    # #90 · 分段计时（票面 D）：parse / extract / merge / persist 四段口径；首铸没有独立归并段
+    # （跨文档归并在 extract_docs 内部），所以这条路打 extract 与 persist 两段，parse 在
+    # ingest_paths。context_id 在铸 id 之前的段用调用方给的（补传/重放），没有就空着。
+    _t0 = time.perf_counter()
     extraction = extract_docs(docs, extractor=extractor)
+    log.info("ingest-timing stage=extract context_id=%s files=%d elapsed_ms=%.0f",
+             context_id or "", len(docs), (time.perf_counter() - _t0) * 1000)
 
     # THE HARD GATE — a person-scoring extraction never becomes a context.
     #
@@ -152,6 +159,7 @@ def ingest_docs(docs: list[ParsedDoc], *, extractor: Extractor | None = None,
     # fallback (pre-030 behavior) remains for the ephemeral offline default.
     cid = context_id or new_context_id()
     base = Path(work_dir) if work_dir else data_root()
+    _t0 = time.perf_counter()
     mem_dir = materialize_memory(extraction, base / cid)
 
     ctx = CompanyContext(
@@ -160,6 +168,8 @@ def ingest_docs(docs: list[ParsedDoc], *, extractor: Extractor | None = None,
         source_documents=_finalize_source_documents(source_documents, docs, extraction),
         owner_token=owner_token)
     registry.put(ctx)
+    log.info("ingest-timing stage=persist context_id=%s files=%d elapsed_ms=%.0f",
+             cid, len(docs), (time.perf_counter() - _t0) * 1000)
 
     return IngestReport(ok=True, context=ctx, redline=rl, parsed=docs, extraction=extraction,
                         context_id=cid)
@@ -174,11 +184,14 @@ def ingest_paths(paths: list[str | Path], *, extractor: Extractor | None = None,
     """Ingest files from disk: parse each (skipping unparseable ones), then `ingest_docs`."""
     docs: list[ParsedDoc] = []
     errors: list[str] = []
+    _t0 = time.perf_counter()
     for p in paths:
         try:
             docs.append(parse_file(p))
         except ParseError as e:
             errors.append(str(e))
+    log.info("ingest-timing stage=parse context_id=%s files=%d elapsed_ms=%.0f",
+             context_id or "", len(paths), (time.perf_counter() - _t0) * 1000)
     # feat-032 P2: files were uploaded but NONE parsed -> refuse to publish an (empty) context. The
     # pre-fix code fell through and registered a context with 0 people/projects/materials AND kept
     # the unparseable bytes, so /ingest answered 200 for a batch it could not read at all. Now the ok

@@ -3,9 +3,12 @@
 > 📢 本文件是**当前状态快照，整体重写不追加**。历史都在 git（`git log` + 各 `.issues/*/receipt*.md`），别在这儿堆编年史。
 > 启动路径见 `AGENTS.md` Startup Workflow：读本文件 + `feature_list.json`，跑 `./init.sh` 确认绿，再开工。
 
-**Last Updated:** 2026-08-12（**#89 上产**：抽取失败不再对用户静默 + 供应商热备 + `/health`
-补 commit/providers。前端 `6b70173`、后端 `avery-agent:main-20260812-070519`，**同一 commit、
-同窗口换完并复验**。🟢 本地 main 与 origin/main 已同步）
+**Last Updated:** 2026-08-12（**#90 完成并合入本地 main**：上传管线后端重做——sha256 内容幂等 +
+异步 deposit（ingest_jobs 任务表 + 进程内 worker + 孤儿回收 + 'reading' 态）+ pg put() 增量化
+（positional diff，xmin 实证）+ 四段计时。**未上产、未 push**。🔴 **#91 落地前前端数据态门/
+visual-data 像素对着 main 的后端是预期红**——`uploadFiles` 还在拿 POST 响应当终态渲染，
+统一上产必须 #90+#91 同批。当天早些时候：#89 上产，前端 `6b70173`、
+后端 `avery-agent:main-20260812-070519`，生产仍停在那个 commit）
 
 ## Current State
 
@@ -15,10 +18,13 @@
   回执十二份：`redesign-0808/` 六份 + `design-0810/` 六份（86 / 83 / 87 / 84 / 85 / **88**，全是本日）。
   ⚠ 别在这儿写死 ahead 数字——它每提交一次就自己作废。要数就跑：
   `git rev-list --count origin/main..HEAD`。
-- **后端离线套基线：`TZ=UTC` → 4146 passed · 0 failed · 139 deselected · 4 xfailed**（约 51s）。
-  = 上一基线 4135 + #89 的 11 条（`test_provider_failover_89.py`：供应商链解析 / failover 顺序 /
-  BudgetExceeded 不换家 / 遥测 absent≠false / 本地假供应商 429 与晴天两景的 `/ingest` 集成）。
-  ✅ **任何红都是你的。**
+- **后端离线套基线：`TZ=UTC` → 4161 passed · 0 failed · 147 deselected · 4 xfailed**（约 2min）。
+  = 上一基线 4146 + #90 的 15 条（`test_ingest_async_90.py`：sha256 幂等含 LLM 零调用对照基准 /
+  异步 deposit 骨架回执 / worker 落地 / 红线 job failed 收行 / 孤儿回收 / 四段计时）。
+  deselected +8 = `test_ingest_jobs_db_90.py`（needs_db）。
+  ⚠ #90 起 `tests/conftest.py` autouse 关掉 worker 线程（确定性），HTTP 上传类测试一律
+  「POST → `ingest_worker.run_pending_jobs()` → GET 断言」；真线程路径由
+  `test_ingest_nonblocking.py` 单独盖。✅ **任何红都是你的。**
 - **真库套（@needs_db）**：throwaway `avery_t88_test`（docker `teammaster-postgres-1` / pgvector pg17）
   跑 `test_registry_contract + test_context_empty_t86 + test_registry_protocol + test_file_append_t10
   + test_file_delete_t77` → **205 passed · 0 failed**。（历轮跑的集合各不相同：#85 是 62、#87 是 73
@@ -54,7 +60,38 @@
 - 🔴 **合的都是本地 main，没有 push**。前端 push main 即自动构建上产，push + 换后端容器
   必须在统一上产 session 的**同一个窗口**里做。
 
-## 本轮做完的（2026-08-12 · #89 抽取失败可见 + 供应商热备）
+## 本轮做完的（2026-08-12 晚 · #90 上传管线后端重做）
+
+回执：`.issues/ingest-root-cause-0812/receipt-90.md`（四件事逐条、14 条变异台账、
+xmin 判据设计、给 #91 的契约清单、运维约束）。**纯后端**：前端零字节。迁移 **0017**（content_sha256
++ pgcrypto WITH SCHEMA public + 库内 backfill）+ **0018**（ingest_jobs，刻意无 FK=审计痕迹）。
+
+- **A · 内容幂等**：哈希在 read_capped 当场算；补传命中库内同字节 → **连临时文件都不写**整个跳过，
+  回执新开 `skipped_identical`（含 matches_source_key）；整批全命中=200+不入队（成功不是失败）。
+  pg 四处：INSERT 列 / get() 元数据 SELECT / `_prior_src_bytes` 平行回填 / **clone 列清单**（漏=副本丢 hash）。
+- **B · 异步 deposit**：POST /ingest 与补传秒回（字节+queued job 一个事务；owner_token 当场持久
+  ——断连不再孤儿化档案）。响应**不带 extraction_mode**、带 `job` 句柄；文件行 `'reading'` 中间态；
+  `GET /files` additive `last_job` 摘要（#89 横幅异步下靠它翻牌）。worker=daemon 线程 +
+  `run_pending_jobs()` 同步驱动双入口（原子 claim 互抢安全）；`AVERY_INGEST_WORKER=off` 刀闸。
+  **失败语义**：failed=这批文件没进资料库（红线/全 parse 失败/崩溃 → job failed + reason +
+  reading 行收走，与旧 422 同构）。**启动孤儿回收**：processing→failed: server restarted + 收行，
+  queued 一根指头不碰（重启后自然跑掉）。🔴 运维约束：**换容器先 stop 旧再 start 新**
+  （并存窗口里新容器的回收会误杀旧容器正跑的 job）。
+- **C · pg put() 增量化**：「re-put=replace」语义不变，实现改 positional diff（逐表指纹、
+  第一分歧点后重写）。补传只写新行；**xmin 判据**（老行事务 id 逐行不变 + 同一次 append 必须
+  挪动 facts.md 的 xmin=尺子自证）+ 零变化 re-put 四表全不动。回填临时表保留（守被重写的行）。
+- **D · 计时**：`ingest-timing stage=parse|extract|merge|persist` 四段 logfmt，插桩在引擎层
+  （同步直调与 worker 共享探针）。
+- **28 条既有测试改判**（红线 422→job failed、POST 响应断言→GET 断言等），逐条记在回执;
+  `test_ingest_nonblocking.py` 重写成三合一门（deposit 不等抽取 + worker 忙时 /health 活 +
+  lifespan 线程真落地）。
+- 🔴 **实收两条「单跑绿整批红」**：① Docker PG 时钟跳（claim 的 oldest-first 赌了两个 now()
+  的顺序——改显式拨 created_at）;② **claim/recover 是全局扫描**而共享测试库里其他测试走
+  HTTP /ingest 留下 job 行（无 FK 审计设计=删 context 不删 job）——测试开头清场 live 行。
+- 🔴 变异第一轮 12/14「锚点 0 命中」= 仓库 CRLF vs 脚本 LF——跑器的命中数==1 防线把
+  「没打上」和「存活」分开了;按文件真实行尾转换后 14/14 全红。
+
+## 上一轮（2026-08-12 早 · #89 抽取失败可见 + 供应商热备）
 
 回执：`.issues/design-0810/receipt-deploy-0812.md`（含考古结论：DeepSeek-as-checker 去哪了）。
 
@@ -347,15 +384,14 @@ facts+notes 重物化成空；**留下** `context_id` · `owner_token` · `name`
    `statusText === '已读取'`，`verify-contrast-smalltext` 拿它当 `--sage` 采样面
    （3.9–4.11:1，本来就贴地板），三态各有自己的诚实 hint 要一起看。
 
-0a. **上传根治方向已探明、待开票**（0812 探索轮，正源 `.issues/ingest-root-cause-0812/exploration.md`）。
-   一句话诊断：字节保管/LLM 理解/归并对账被绑进同一个同步 HTTP 请求，三个症状全部派生于此
-   ——①无超时无取消永远转圈（首传断连=owner_token 丢失=**档案孤儿化**）；②越传越慢的主凶
-   是 `pg put()` 全量快照重写不是 LLM；③逐传 18 张卡 vs 全选 11 张 = 抽取过抽（花名册职责列）
-   + 粒度闸单批失明 + 近似标题不归并 + 同字节重传不识别。分段方案 S0(sha256幂等+超时熔断)→
-   S1(异步deposit+任务表)→S2(R5职责列判据→全档案重跑闸)→S3(存储增量化)，账号A彩排并行。
-   0812 晚已全部拍板并开票：**#90**(后端:sha256幂等+异步任务+增量落库+计时) → **#91**(前端:熔断+轮询+读取中,依赖#90) ·
-   **#92**(粒度闸R5职责列+不变式门,可并行) → **#93**(全档案重跑闸+folded_into新字段[拍板]+裁决落库,依赖#92和#90) ·
-   **#94**(账号A真彩排,九判据,agent建avery-e2e测试户[已授权],可并行)。
+0a. **上传根治战役进行中**（正源 `.issues/ingest-root-cause-0812/exploration.md` + 五张票）。
+   ✅ **#90 已完成并合入本地 main**（本条上面「本轮做完的」+ `receipt-90.md`）。
+   ⏭ **#91（前端：熔断+轮询+'reading' 态）是下一张**，契约清单在 receipt-90.md §给#91——
+   🔴 **#91 落地前，前端门电池数据态门 + visual-data 像素对着 main 后端是预期红**
+   （`uploadFiles` 拿 POST 响应当终态渲染，store.ts:753-758），这是排好的依赖顺序不是回归；
+   **统一上产必须 #90+#91 同批**。
+   其余：**#92**(粒度闸R5职责列+不变式门,可并行) → **#93**(全档案重跑闸+folded_into+裁决落库,
+   依赖#92和#90) · **#94**(账号A真彩排,九判据,agent建avery-e2e测试户[已授权],可并行)。
    Caddy access log 已装好并验证（/var/log/caddy/avery-access.log，JSON，50MB×5 滚动）。
    ⚠ 大前提拍板（已入 memory）：**Avery 没有实际生产使用，只是部署通了**——开票按自然边界捆，不做分段上线仪式。
 

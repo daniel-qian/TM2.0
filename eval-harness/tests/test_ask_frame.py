@@ -49,6 +49,8 @@ def _ingest(client):
     files = [("files", (p.name, p.read_bytes(), "application/octet-stream"))
              for p in (HANDBOOK, ROSTER)]
     body = client.post("/ingest", files=files).json()
+    from service import ingest_worker
+    ingest_worker.run_pending_jobs()   # #90: deposit is async — extraction lands via the worker
     return body["context_id"], body["owner_token"]
 
 

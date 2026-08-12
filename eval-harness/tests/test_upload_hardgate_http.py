@@ -64,7 +64,14 @@ def test_normal_upload_still_200_with_extraction_mode(client):
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["context_id"]
-    assert body["extraction_mode"] == "heuristic", (
+    # #90: the POST returns BEFORE extraction, so it must NOT carry an extraction_mode at all —
+    # the honest label lands on the /files task summary once the worker finishes.
+    assert "extraction_mode" not in body, "a pre-extraction response claiming a mode is a lie"
+    from service import ingest_worker
+    ingest_worker.run_pending_jobs()
+    last = client.get(f"/team/{body['context_id']}/files",
+                      headers={"X-Avery-Token": body["owner_token"]}).json()["last_job"]
+    assert last["extraction_mode"] == "heuristic", (
         "an offline (keyless) deploy must honestly report 'heuristic', never claim llm")
 
 

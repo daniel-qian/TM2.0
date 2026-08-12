@@ -143,7 +143,14 @@ def test_offline_seed_ingest_shape_and_redline(offline_client):
     must keep the payload contract shape, must hold the red line, must not emit mojibake."""
     r = _post_seeds(offline_client, [SEED_XLSX, SEED_PDF])
     assert r.status_code == 200, f"/ingest failed on the official seeds: {r.text[:400]}"
-    payload = r.json()
+    deposit = r.json()
+    # #90: the POST answers with the skeleton (deposit receipt); drive the worker, then assert the
+    # LANDED world off the refreshed team payload — same contract keys, real values.
+    from service import ingest_worker
+    ingest_worker.run_pending_jobs()
+    payload = offline_client.get(f"/team/{deposit['context_id']}",
+                                 headers={"X-Avery-Token": deposit["owner_token"]}).json()
+    payload["owner_token"] = deposit["owner_token"]   # keep the replay assertion below unchanged
 
     for key in ("context_id", "source_files", "people", "projects", "briefing", "signals"):
         assert key in payload, f"payload contract drifted: missing {key}"

@@ -1,18 +1,19 @@
 """feat-018 — the ingestion HTTP surface (upload → Your team), mounted onto the feat-015 service.
 
-feat-016 built the ingestion ENGINE (`avery/ingest/`) and the id↔context SEAM (`avery/ingest/seam.py`),
-but the HTTP endpoints were deliberately deferred to the deploy line (feat-018): the frontend
-transport (`src/live/transport.ts`) already calls `POST /ingest`, `GET /team/:id` against the
-service origin. This module is that thin HTTP wrapper — COMPOSE, not modify: it calls the existing
-`ingest.ingest_paths(...)` and `CompanyContext.*_cards()` and changes NOTHING in `avery/` or in the
-feat-015 engine.
+feat-016 built the ingestion ENGINE (`avery/ingest/`) and the id↔context SEAM (`avery/ingest/seam.py`);
+this module is the thin HTTP layer over it. #90 moved the seam: the upload endpoints now do the
+BYTE half only (gate + hash + one-transaction deposit of bytes + a queued IngestJob, returning in
+seconds), while parse → red-line-safe extract → RAG → merge runs on the in-process worker
+(service/ingest_worker.py) — which still calls the UNCHANGED engine functions. COMPOSE, not modify.
 
 Endpoints (contract = `LiveTeamPayload` in transport.ts):
 
-  POST /ingest        multipart `files=@...` (one or many) → parse → red-line-safe extract → RAG →
-                      register a CompanyContext → return the first Your-team payload + context_id.
-                      If the red-line gate HARD-FAILS the extraction, returns HTTP 422 and NO context
-                      is registered (a person-scoring upload never becomes retrievable).
+  POST /ingest        multipart `files=@...` (one or many) → deposit: mint context_id+owner_token,
+                      persist bytes as status='reading' rows + a queued job, return the skeleton
+                      payload in seconds (NO extraction_mode — extraction has not run yet). A
+                      red-line refusal lands asynchronously as the job's `failed` + reason, and the
+                      batch's rows are collected back out (a person-scoring upload still never
+                      becomes retrievable — the gate just answers via the job summary now).
   GET  /team/{id}     re-fetch the Your-team payload for a registered context_id (refresh/poll).
 
 Red line: `team_cards()` emits QUALITATIVE-ONLY person cards (no moodPct/capacityPct/score keys) —
@@ -25,10 +26,10 @@ registry (offline default, the pre-030 ADR-0021 §6 ephemeral behavior). Same ge
 """
 from __future__ import annotations
 
+import hashlib
 import logging
 import mimetypes
 import secrets
-import tempfile
 from dataclasses import asdict
 from pathlib import Path
 from urllib.parse import quote
@@ -37,14 +38,16 @@ from fastapi import APIRouter, Header, HTTPException, UploadFile
 from fastapi import File
 from fastapi import Response
 from pydantic import BaseModel, Field
-from starlette.concurrency import run_in_threadpool
 
-from avery.ingest import guards, ingest_paths
-from avery.ingest.file_append import append_paths_to_context, existing_source_keys
+from avery.ingest import guards
+from avery.ingest.file_append import existing_content_hashes, existing_source_keys
 from avery.ingest.file_delete import delete_document_from_context
-from avery.ingest.registry import CompanyContext, ContextRegistry, SourceDocument, active_registry
+from avery.ingest.registry import (
+    CompanyContext, ContextRegistry, IngestJob, SourceDocument, _now_iso, active_registry,
+    new_context_id, new_job_id,
+)
 
-from . import account, embedding_factory, extractor_factory, upload_guard
+from . import account, ingest_worker, upload_guard
 
 logger = logging.getLogger(__name__)
 
@@ -290,12 +293,33 @@ def _team_payload(ctx: CompanyContext, *, reg: ContextRegistry | None = None) ->
 @router.post("/ingest")
 async def ingest(files: list[UploadFile] = File(...),
                  x_avery_account: str | None = Header(None)) -> dict:
-    """Upload company files → CompanyContext + first Your-team payload.
+    """Upload company files → a DEPOSIT: context_id + owner_token + 'reading' file rows, in seconds.
 
-    The uploaded bytes are written to a temp dir, parsed + extracted + RAG-loaded by the existing
-    pipeline, then the temp inputs are discarded (sampler = ephemeral). Real LLM keys are NEVER
-    needed for the offline heuristic extractor; a pluggable LLM extractor/embedder drops in via env
-    (see service/.env.example) without changing this endpoint.
+    #90 · the seam moved from the HTTP request boundary to the archive state machine. This endpoint
+    now does the BYTE half only: read + gate the bytes (every synchronous 4xx below is unchanged —
+    count 413 / per-file 413 / total 413 / type 415 / zip-bomb 413), hash them, deposit bytes + a
+    `queued` IngestJob in ONE registry transaction, and return. The UNDERSTANDING half (parse →
+    LLM extract → red line → RAG → cards) runs on the in-process worker (service/ingest_worker.py);
+    the frontend polls `GET /team/{id}/files` (task summary + per-file status) until the job lands.
+
+    What this kills (exploration.md 症状① / ①′): the minutes-long request a browser abandons, and —
+    worse — the orphaned archive: the owner_token used to be computed WHILE the socket was dying and
+    was returned exactly once; a dropped connection meant a context nobody could ever open again.
+    Now the token is durable in the same transaction as the bytes and back in the caller's hand in
+    seconds, so a retry AFTER a timeout re-reads instead of re-minting.
+
+    Consequences a caller must know (the #91 frontend contract):
+      * the response carries NO `extraction_mode` — extraction has not run yet; the final label
+        rides the /files task summary (`last_job.extraction_mode`).
+      * a red-line refusal / an all-unparseable batch is NO LONGER a 422 here — it lands as the
+        job's `failed` + reason, and the deposited rows are collected back out (failed = 这批文件
+        没进资料库, the async twin of the old 422-that-persisted-nothing).
+      * `people`/`projects`/`briefing` in this response are the EMPTY skeleton world.
+
+    #90 · content idempotency (同批内): a second file in THIS batch carrying identical bytes is
+    skipped outright — no temp file, no parse, no LLM — and reported under `skipped_identical`
+    (its `matches_source_key` names the first copy). The cross-upload case lives on the append
+    endpoint, where a library to compare against exists.
 
     feat-053: /ingest stays OPEN (no account required) — that is the guest path, and gating it would
     put the whole product behind a login wall. When the uploader IS signed in, the fresh context is
@@ -305,131 +329,100 @@ async def ingest(files: list[UploadFile] = File(...),
         raise HTTPException(status_code=400, detail="no files uploaded")
 
     # feat-039 upload hard-gate (readiness §2-D): refuse an over-COUNT batch before touching any
-    # bytes. Per-file SIZE and TYPE/zip-bomb checks run per file below (before the file is written to
-    # disk); the total-body cap already ran at the ASGI edge (upload_guard.IngestGuardMiddleware).
+    # bytes. Per-file SIZE and TYPE/zip-bomb checks run per file below; the total-body cap already
+    # ran at the ASGI edge (upload_guard.IngestGuardMiddleware). All of these stay SYNCHRONOUS —
+    # byte-level refusals must reach the uploader as HTTP status codes, not as a failed job.
     upload_guard.enforce_count(len(files))
 
-    # feat-038: mint the owner_token BEFORE ingest so it is persisted with the context in the SAME
-    # write (no second put()), and returned to the uploader below. Header-transported thereafter.
+    # feat-038: mint the owner_token BEFORE the deposit so it is persisted with the context in the
+    # SAME transaction, and returned to the uploader below. Header-transported thereafter.
     owner_token = mint_owner_token()
 
     per_file_cap = guards.max_file_bytes()
     total_cap = guards.max_total_bytes()
     running_total = 0
-    tmp = Path(tempfile.mkdtemp(prefix="avery-upload-"))
-    saved: list[Path] = []
     src_docs: list[SourceDocument] = []
+    skipped_identical: list[dict] = []
+    seen_hashes: dict[str, str] = {}   # fresh context: no library yet — guards THIS batch only
+    used_names: set[str] = set()
+    received_at = _now_iso()
+    for f in files:
+        # Guard against path traversal in the client-provided filename (basename only).
+        display = Path(f.filename or "upload").name or "upload"
+        # Read in bounded chunks (RAM stays <= per-file cap), refuse an oversize file (413) and a
+        # DISGUISED type / zip bomb (415 / 413) BEFORE anything persists.
+        raw = await upload_guard.read_capped(f, display, per_file_cap)
+        running_total += len(raw)
+        if running_total > total_cap:
+            raise HTTPException(status_code=413, detail={
+                "error": "upload too large",
+                "detail": f"batch exceeds the {total_cap}-byte per-request limit"})
+        # #90: hash the moment the bytes are in hand — the identical-content check runs BEFORE the
+        # type gate on purpose: bytes we already hold are skipped, never re-litigated.
+        digest = hashlib.sha256(raw).hexdigest()
+        if digest in seen_hashes:
+            skipped_identical.append({"filename": display,
+                                      "matches_source_key": seen_hashes[digest]})
+            continue
+        upload_guard.enforce_type_and_archive(display, raw)
+        # Distinct per-document keys within the batch (two 'report.txt's stay two documents).
+        parse_name = _unique_parse_names([display], taken=used_names)[0]
+        used_names.add(parse_name)
+        seen_hashes[digest] = parse_name
+        # feat-032: the raw upload (bytes + metadata) IS what persists — straight into the deposit,
+        # no temp dir at all now. Content is UNTRUSTED — stored and listed, never followed as
+        # instructions. `filename` keeps the ORIGINAL display name; `source_key` (== parse_name) is
+        # the disambiguated per-document key the manifest counts n_chunks on. status='reading' is
+        # the #90 mid state the worker flips to a terminal (frontend LiveFileStatus renders unknown
+        # statuses honestly — additive-safe).
+        mime = f.content_type or mimetypes.guess_type(display)[0] or "application/octet-stream"
+        src_docs.append(SourceDocument(
+            filename=display, source_key=parse_name, mime=mime, size_bytes=len(raw),
+            status="reading", uploaded_at=received_at, content=raw, content_sha256=digest))
+
+    # The first file never matches an empty map, so src_docs is non-empty by construction here.
+    cid = new_context_id()
+    job = IngestJob(id=new_job_id(), context_id=cid, kind="ingest",
+                    file_keys=[sd.source_key for sd in src_docs])
+    reg = active_registry()
     try:
-        # Guard against path traversal in the client-provided filename (basename only), then give
-        # the batch DISTINCT on-disk names so two same-named uploads don't clobber one temp path.
-        display_names = [Path(f.filename or "upload").name or "upload" for f in files]
-        parse_names = _unique_parse_names(display_names)
-        for f, display, parse_name in zip(files, display_names, parse_names):
-            # Read in bounded chunks (RAM stays <= per-file cap), refuse an oversize file (413) and a
-            # DISGUISED type / zip bomb (415 / 413) BEFORE it is parsed or written to disk.
-            raw = await upload_guard.read_capped(f, display, per_file_cap)
-            running_total += len(raw)
-            if running_total > total_cap:
-                raise HTTPException(status_code=413, detail={
-                    "error": "upload too large",
-                    "detail": f"batch exceeds the {total_cap}-byte per-request limit"})
-            upload_guard.enforce_type_and_archive(display, raw)
-            dest = tmp / parse_name
-            dest.write_bytes(raw)
-            saved.append(dest)
-            # feat-032: keep the raw upload (bytes + metadata) for the per-company file space —
-            # we already have the bytes, so build the SourceDocument here rather than re-reading.
-            # The temp file is STILL deleted below (disk hygiene); the bytes are what persist, in
-            # the DB (Postgres registry) or in memory (offline). Content is UNTRUSTED — stored and
-            # listed, never followed as instructions. `filename` keeps the ORIGINAL display name;
-            # `source_key` is the disambiguated per-document key (== parse_name) the manifest counts
-            # n_chunks on, so two 'report.txt' rows attribute chunks to their OWN document.
-            mime = f.content_type or mimetypes.guess_type(display)[0] or "application/octet-stream"
-            src_docs.append(SourceDocument(filename=display, source_key=parse_name, mime=mime,
-                                           size_bytes=len(raw), content=raw))
+        reg.deposit_new_context(context_id=cid, name="company", owner_token=owner_token,
+                                source_documents=src_docs, job=job)
+    except ValueError as e:
+        # feat-030 P3: the deposit-door guard (e.g. a NUL control char in a filename) rejects with
+        # a clean ValueError — surface it as 422, never a raw 500.
+        raise HTTPException(status_code=422,
+                            detail={"error": "upload rejected", "reason": str(e)})
+    ingest_worker.wake()
 
-        # feat-023: pluggable extraction (LLM when keyed, heuristic otherwise/forced) — the
-        # red-line gate inside ingest_paths is unchanged and still refuses a scoring extraction.
-        # feat-028: the whole synchronous ingest is minutes-long — BOTH building the LLM extractor
-        # brain (make_extractor constructs an OpenAI client, ~seconds) AND the parse+extraction fan-
-        # out (ingest_paths). Running either inline would block the single-worker event loop —
-        # freezing /health and letting the Docker HEALTHCHECK restart the container mid-extraction.
-        # Offload the entire synchronous unit to a worker thread; behavior is otherwise identical.
-        # feat-031: open the real vector path only when an embedder is configured (DashScope when
-        # keyed) AND a PERSISTENT registry will actually store the vectors and hand them to a
-        # pgvector store at recall time. Under the in-memory registry that VectorStore is never read
-        # by advise (it recalls via avery.memory.recall over facts.md, not CompanyContext.store), so
-        # embedding the corpus there is pure DashScope spend with no reader — stay honest keyword
-        # (feat-031 cost gate; feat-035 will add the per-tenant spend ceiling).
-        def _extract_and_ingest() -> object:
-            registry = active_registry()
-            embedder = embedding_factory.make_embedder()
-            prefer_vector = embedder is not None and getattr(registry, "persistent", False)
-            # feat-039: build the extractor HERE so we can read its honest-degradation telemetry after
-            # ingest (llm / heuristic / degraded) and surface it on the response (readiness §2-G2/W).
-            extractor = extractor_factory.make_extractor()
-            rep = ingest_paths([str(p) for p in saved], registry=registry, name="company",
-                               extractor=extractor,
-                               embedder=embedder if prefer_vector else None,
-                               prefer_vector=prefer_vector,
-                               source_documents=src_docs,
-                               owner_token=owner_token)
-            return rep, extractor_factory.extraction_mode(extractor)
-
+    # feat-038: hand the freshly-minted owner_token back to the UPLOADER (once, at creation) so
+    # the client can store it and present it as a header on every later read. It is NOT included
+    # in the /team/{id} refetch payload (that call already had to prove ownership to reach it).
+    skeleton = reg.get(cid)
+    if skeleton is None:   # deposited a moment ago — only a concurrent ops delete could do this
+        raise HTTPException(status_code=500, detail="deposit landed but the context is unreadable")
+    payload = _team_payload(skeleton, reg=reg)
+    payload["owner_token"] = owner_token
+    # #90: the job handle for reconciliation ('did MY upload land?' across refreshes/polls).
+    payload["job"] = {"id": job.id, "kind": job.kind, "status": "queued"}
+    if skipped_identical:   # absent≠none — the key only exists when something was skipped
+        payload["skipped_identical"] = skipped_identical
+    # feat-053: a SIGNED-IN uploader owns what they just uploaded — bind it now so this company
+    # follows their account (new device / cleared browser) with no claim step. Anonymous uploads
+    # skip this entirely and stay owner_token-only, exactly as before. Best-effort: a linking
+    # failure must never fail a deposit that already succeeded — the context is still reachable
+    # by its owner_token, and /account/claim can bind it afterwards.
+    uploader = account.resolve_account(x_avery_account)
+    if uploader:
         try:
-            report, extraction_mode = await run_in_threadpool(_extract_and_ingest)
-        except ValueError as e:
-            # feat-030 P3: a persistence guard (e.g. a NUL/control char that slipped past parse)
-            # rejects the write with a clean ValueError — surface it as 422, never a raw 500.
-            raise HTTPException(
-                status_code=422,
-                detail={"error": "upload rejected", "reason": str(e)},
-            )
-
-        if not report.ok or report.context is None:
-            # Red-line gate (or an all-unparseable batch) refused to publish a context.
-            raise HTTPException(
-                status_code=422,
-                detail={
-                    "error": "extraction refused",
-                    "reason": ("red line: a person-scoring/ranking field was extracted"
-                               if report.violations else "no parseable content in the upload"),
-                    "violations": [{"kind": v.kind, "person": v.person, "detail": v.detail,
-                                    "rule_id": v.rule_id} for v in report.violations],
-                    "parse_errors": report.parse_errors,
-                },
-            )
-        # feat-038: hand the freshly-minted owner_token back to the UPLOADER (once, at creation) so
-        # the client can store it and present it as a header on every later read. It is NOT included
-        # in the /team/{id} refetch payload (that call already had to prove ownership to reach it).
-        payload = _team_payload(report.context)
-        payload["owner_token"] = owner_token
-        # feat-053: a SIGNED-IN uploader owns what they just uploaded — bind it now so this company
-        # follows their account (new device / cleared browser) with no claim step. Anonymous uploads
-        # skip this entirely and stay owner_token-only, exactly as before. Best-effort: a linking
-        # failure must never fail an ingest that already succeeded — the context is still reachable
-        # by its owner_token, and /account/claim can bind it afterwards.
-        uploader = account.resolve_account(x_avery_account)
-        if uploader:
-            try:
-                link = getattr(active_registry(), "link_account_context", None)
-                if link is not None:
-                    payload["account_linked"] = bool(link(uploader, report.context.context_id))
-            except Exception:
-                payload["account_linked"] = False
-        # feat-039: honest extraction label so the client is TOLD when it fell back (never a silent
-        # low-quality result presented as a real team). 'degraded' => a model was configured but at
-        # least one document dropped to the heuristic (429 / red-line / budget) — no fake person card.
-        payload["extraction_mode"] = extraction_mode
-        return payload
-    finally:
-        # Ephemeral: never persist the raw upload.
-        for p in saved:
-            p.unlink(missing_ok=True)
-        try:
-            tmp.rmdir()
-        except OSError:
-            pass
+            link = getattr(reg, "link_account_context", None)
+            if link is not None:
+                payload["account_linked"] = bool(link(uploader, cid))
+        except Exception:
+            payload["account_linked"] = False
+    # ⚠ deliberately NO `extraction_mode` key: extraction has not run yet, and a made-up value here
+    # would be exactly the kind of lie #89 exists to kill. The final label rides the /files summary.
+    return payload
 
 
 @router.get("/team/{context_id}")
@@ -800,77 +793,85 @@ async def team_files_append(context_id: str,
     ctx = authorize_context(reg, context_id, extract_owner_token(x_avery_token, authorization),
                             account.resolve_account(x_avery_account))
 
+    # #90 · 与 /ingest 同一刀：本端点只做字节半程（闸 + 哈希 + deposit + queued job，秒级返回），
+    # 理解半程在 worker。字节闸逐条同步不变；红线/全 parse 失败从 422 变成 job failed（语义同构：
+    # failed = 这批文件没进资料库）。POST 响应不再携带 extraction_mode（抽取还没跑）。
+    #
+    # 内容幂等（本端点是它的主战场——「超时后手动重传」打的就是这里）：
+    # `existing_content_hashes(ctx)` 是这家公司库里已有字节的判据表，命中 = **连临时文件都不写**
+    # 直接跳过（省 parse 省 LLM 省重复材料），回执记进 `appended.skipped_identical`。
+    # 同批内第二份同字节文件同样命中（写进表的当批哈希）。全部命中 ⇒ 200 + 空 documents，
+    # **不入队**——「你传的这些我们都有了」是成功不是失败。
     per_file_cap = guards.max_file_bytes()
     total_cap = guards.max_total_bytes()
     running_total = 0
-    tmp = Path(tempfile.mkdtemp(prefix="avery-append-"))
-    saved: list[Path] = []
     src_docs: list[SourceDocument] = []
-    try:
-        display_names = [Path(f.filename or "upload").name or "upload" for f in files]
-        parse_names = _unique_parse_names(display_names, taken=existing_source_keys(ctx))
-        for f, display, parse_name in zip(files, display_names, parse_names):
-            raw = await upload_guard.read_capped(f, display, per_file_cap)
-            running_total += len(raw)
-            if running_total > total_cap:
-                raise HTTPException(status_code=413, detail={
-                    "error": "upload too large",
-                    "detail": f"batch exceeds the {total_cap}-byte per-request limit"})
-            upload_guard.enforce_type_and_archive(display, raw)
-            dest = tmp / parse_name
-            dest.write_bytes(raw)
-            saved.append(dest)
-            src_docs.append(SourceDocument(filename=display, source_key=parse_name, mime=(
-                f.content_type or mimetypes.guess_type(display)[0] or "application/octet-stream"),
-                size_bytes=len(raw), content=raw))
+    skipped_identical: list[dict] = []
+    seen_hashes = existing_content_hashes(ctx)
+    used_names = existing_source_keys(ctx)
+    received_at = _now_iso()
+    for f in files:
+        display = Path(f.filename or "upload").name or "upload"
+        raw = await upload_guard.read_capped(f, display, per_file_cap)
+        running_total += len(raw)
+        if running_total > total_cap:
+            raise HTTPException(status_code=413, detail={
+                "error": "upload too large",
+                "detail": f"batch exceeds the {total_cap}-byte per-request limit"})
+        digest = hashlib.sha256(raw).hexdigest()
+        if digest in seen_hashes:
+            skipped_identical.append({"filename": display,
+                                      "matches_source_key": seen_hashes[digest]})
+            continue
+        upload_guard.enforce_type_and_archive(display, raw)
+        # 🔴 新文件的 source_key 拿**这家公司已占用的 key** 去重（`used_names` 种子）——
+        # `<source_key>:<行号>` 是出处契约的一半，撞 key = 新文档的读数全算到旧文档头上。
+        parse_name = _unique_parse_names([display], taken=used_names)[0]
+        used_names.add(parse_name)
+        seen_hashes[digest] = parse_name
+        src_docs.append(SourceDocument(
+            filename=display, source_key=parse_name,
+            mime=(f.content_type or mimetypes.guess_type(display)[0]
+                  or "application/octet-stream"),
+            size_bytes=len(raw), status="reading", uploaded_at=received_at,
+            content=raw, content_sha256=digest))
 
-        def _extract_and_append() -> object:
-            # 与 /ingest 同一个理由跑在工作线程里：整段 parse+抽取是分钟级同步活，跑在事件循环上
-            # 会冻住 /health，Docker HEALTHCHECK 会在抽取中途把容器重启掉。
-            registry = active_registry()
-            extractor = extractor_factory.make_extractor()
-            rep = append_paths_to_context(registry, context_id, [str(p) for p in saved],
-                                          src_docs, extractor=extractor)
-            return rep, extractor_factory.extraction_mode(extractor)
-
-        try:
-            report, extraction_mode = await run_in_threadpool(_extract_and_append)
-        except KeyError:
-            # context 在鉴权之后、写之前消失了（GC / 另一路删除）——同体 404，不解释。
-            raise HTTPException(status_code=404,
-                                detail=f"unknown company_context_id: {context_id}")
-        except ValueError as e:
-            raise HTTPException(status_code=422,
-                                detail={"error": "upload rejected", "reason": str(e)})
-
-        if not report.ok or report.context is None:
-            raise HTTPException(status_code=422, detail={
-                "error": "extraction refused",
-                "reason": ("red line: a person-scoring/ranking field was extracted"
-                           if report.violations else "no parseable content in the upload"),
-                "violations": [{"kind": v.kind, "person": v.person, "detail": v.detail,
-                                "rule_id": v.rule_id} for v in report.violations],
-                "parse_errors": report.parse_errors})
-
-        # 回执 = 与 /team/{id} 同一张 payload（前端拿它整屏刷新，卡片当场是新读数）。
-        # 🔴 **不发** owner_token：那是创建时才交出去一次的凭据，本端点没有新铸也不该重发一遍
-        #    （调用方已经拿着它才走到这里）。
-        payload = _team_payload(report.context, reg=reg)
-        payload["extraction_mode"] = extraction_mode
-        payload["appended"] = {
-            "documents": [sd.source_key or sd.filename for sd in report.added_documents],
-            "skipped": report.skipped_duplicates,
-            "parse_errors": report.parse_errors,
-            "conflicts_added": report.conflicts_added,
-        }
+    if not src_docs:
+        # 整批都是库里已有的字节——诚实的成功回执，零新工作。前端拿 skipped_identical 措辞
+        # 「这些文件已经在资料库里了」，而不是把一次无害的重传渲染成一次失败。
+        payload = _team_payload(ctx, reg=reg)
+        payload["appended"] = {"documents": [], "skipped": [],
+                               "skipped_identical": skipped_identical, "parse_errors": []}
         return payload
-    finally:
-        for p in saved:
-            p.unlink(missing_ok=True)
-        try:
-            tmp.rmdir()
-        except OSError:
-            pass
+
+    job = IngestJob(id=new_job_id(), context_id=context_id, kind="append",
+                    file_keys=[sd.source_key for sd in src_docs])
+    try:
+        reg.deposit_append(context_id, src_docs, job)
+    except KeyError:
+        # context 在鉴权之后、deposit 之前消失了（GC / 另一路删除）——同体 404，不解释。
+        raise HTTPException(status_code=404,
+                            detail=f"unknown company_context_id: {context_id}")
+    except ValueError as e:
+        raise HTTPException(status_code=422,
+                            detail={"error": "upload rejected", "reason": str(e)})
+    ingest_worker.wake()
+
+    # 回执 = 与 /team/{id} 同一张 payload（此刻 = 旧世界 + 'reading' 文件行；卡片的新读数
+    # 由前端轮询 /files 的任务摘要翻牌后整屏刷新）。
+    # 🔴 **不发** owner_token：那是创建时才交出去一次的凭据，本端点没有新铸也不该重发一遍。
+    fresh = reg.get(context_id)
+    payload = _team_payload(fresh if fresh is not None else ctx, reg=reg)
+    payload["appended"] = {
+        # #90 语义变化（#91 前端契约）：documents = 已收下、正在读取的 key（不再是「已归并落地」
+        # ——那要等 job done）。skipped 恒 []：同名判重由起名唯一化在收字节时就地解决了。
+        "documents": [sd.source_key for sd in src_docs],
+        "skipped": [],
+        "skipped_identical": skipped_identical,
+        "parse_errors": [],
+    }
+    payload["job"] = {"id": job.id, "kind": job.kind, "status": "queued"}
+    return payload
 
 
 @router.get("/team/{context_id}/files")
@@ -883,12 +884,34 @@ def team_files(context_id: str,
     doc_kind / uploaded_at / n_chunks); the bytes live behind the /files/{idx} download seam. The
     manifest is derived from stored data — nothing in a file's CONTENT is executed here.
 
+    #90 · ADDITIVE `last_job`: this context's newest ingest job (status / reason /
+    extraction_mode / file_keys). THE polling surface for the async deposit — the #89 degraded
+    banner flips off of `last_job.extraction_mode` now that POST responses return before extraction
+    runs, and a `failed` + reason is how "有文件没能读懂" reaches the user instead of a forever
+    spinner. Key OMITTED when this context never ran a job (absent≠none, the payload house style);
+    also omitted for a registry twin that predates the job seam (duck-typed getattr).
+
     feat-038: gated — the owner_token (header) is required, else 404.
     feat-053: OR a verified account that owns this context."""
     reg = active_registry()
     ctx = authorize_context(reg, context_id, extract_owner_token(x_avery_token, authorization),
                             account.resolve_account(x_avery_account))
-    return {"context_id": ctx.context_id, "files": ctx.file_cards()}
+    payload = {"context_id": ctx.context_id, "files": ctx.file_cards()}
+    latest = getattr(reg, "latest_ingest_job", None)
+    if latest is not None:
+        try:
+            job = latest(ctx.context_id)
+        except Exception:   # a job-table hiccup must never take the manifest down with it
+            logger.exception("reading the latest ingest job for %s failed — the manifest renders "
+                             "without a task summary", ctx.context_id)
+            job = None
+        if job is not None:
+            payload["last_job"] = {
+                "id": job.id, "kind": job.kind, "status": job.status, "reason": job.reason,
+                "extraction_mode": job.extraction_mode, "file_keys": list(job.file_keys),
+                "created_at": job.created_at, "updated_at": job.updated_at,
+            }
+    return payload
 
 
 @router.get("/team/{context_id}/files/{idx}")

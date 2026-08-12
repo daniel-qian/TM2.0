@@ -103,11 +103,17 @@ def test_gbk_scoring_sheet_still_hits_the_red_line():
 
 
 def test_gbk_roster_over_real_http_ingest(client):
-    """端到端：真打 /ingest，不是只测 parse。修复前 HTTP 200 + people: []。"""
+    """端到端：真打 /ingest，不是只测 parse。修复前 HTTP 200 + people: []。
+    #90：deposit 秒回骨架——驱动 worker 后从 GET /team 读终态。"""
     resp = client.post("/ingest", files={
         "files": ("员工花名册.csv", ROSTER_SIMPLIFIED.encode("gbk"), "text/csv")})
     assert resp.status_code == 200, resp.text[:400]
-    names = [p["name"] for p in resp.json()["people"]]
+    from service import ingest_worker
+    ingest_worker.run_pending_jobs()
+    body = resp.json()
+    team = client.get(f"/team/{body['context_id']}",
+                      headers={"X-Avery-Token": body["owner_token"]}).json()
+    names = [p["name"] for p in team["people"]]
     assert set(names) == {"张伟", "李娜", "王芳"}, f"/ingest 抽出的人是 {names}"
 
 
@@ -136,12 +142,17 @@ def test_gbk_scoring_sheet_never_puts_a_score_on_a_person_over_real_http(client)
     """
     resp = client.post("/ingest", files={
         "files": ("员工花名册.csv", SCORING_ROSTER.encode("gbk"), "text/csv")})
-    assert resp.status_code in (200, 422), resp.text[:300]
-    if resp.status_code == 422:
-        return  # 启发式路径：整份拒收，更严格，也可接受
+    assert resp.status_code == 200, resp.text[:300]   # #90: deposit 恒 200，判决在 worker
+    from service import ingest_worker
+    ingest_worker.run_pending_jobs()
+    body = resp.json()
+    hdr = {"X-Avery-Token": body["owner_token"]}
+    last = client.get(f"/team/{body['context_id']}/files", headers=hdr).json()["last_job"]
+    if last["status"] == "failed" and "red line" in last["reason"]:
+        return  # 启发式路径：红线整份拒收（原来的同步 422），更严格，也可接受
 
-    # 200 的那条路径：必须证明没有任何评分躲进人对象里。
-    people = resp.json()["people"]
+    # 抽取成功的那条路径：必须证明没有任何评分躲进人对象里。
+    people = client.get(f"/team/{body['context_id']}", headers=hdr).json()["people"]
     assert people, "GBK 表连人都没抽出来（编码修复回归了）"
     SCORE_KEYS = {"score", "rating", "rank", "tier", "percentile", "mood", "capacity",
                   "moodPct", "capacityPct", "绩效", "评分"}
@@ -185,6 +196,8 @@ def test_undecodable_file_is_reported_as_failed_not_silently_ingested(client):
     assert resp.status_code == 200, resp.text[:400]
     body = resp.json()
     token = body["owner_token"]
+    from service import ingest_worker
+    ingest_worker.run_pending_jobs()   # #90
     manifest = client.get(f"/team/{body['context_id']}/files",
                           headers={"X-Avery-Token": token})
     assert manifest.status_code == 200, manifest.text[:300]
@@ -194,14 +207,20 @@ def test_undecodable_file_is_reported_as_failed_not_silently_ingested(client):
         f"读不出来的文件在清单里标成了 {by_name['坏文件.csv']}"
 
 
-def test_all_undecodable_batch_explains_the_encoding_in_the_422(client):
-    """整批都读不出来 → 422。body 里必须带着能自救的那句话，否则用户只看到
-    「that file type isn't accepted」，永远不会想到是编码。"""
+def test_all_undecodable_batch_explains_the_encoding_in_the_failed_job(client):
+    """整批都读不出来 → #90 之前是 422，现在是 job failed。reason 里必须带着能自救的那句话，
+    否则用户只看到「读取失败」，永远不会想到是编码。"""
     junk = bytes([0x80, 0x81, 0x8D, 0x90, 0x9D, 0xFF, 0xFE, 0x81]) * 4
     resp = client.post("/ingest", files={"files": ("坏文件.csv", junk, "text/csv")})
-    assert resp.status_code == 422, resp.text[:300]
-    blob = resp.text.lower()
-    assert "encoding" in blob, f"422 的 body 里没有编码线索: {resp.text[:400]}"
+    assert resp.status_code == 200, resp.text[:300]
+    from service import ingest_worker
+    ingest_worker.run_pending_jobs()
+    body = resp.json()
+    last = client.get(f"/team/{body['context_id']}/files",
+                      headers={"X-Avery-Token": body["owner_token"]}).json()["last_job"]
+    assert last["status"] == "failed"
+    assert "encoding" in last["reason"].lower(), (
+        f"failed job 的 reason 里没有编码线索: {last['reason']!r}")
 
 
 def test_replacement_chars_are_counted_before_they_are_scrubbed():

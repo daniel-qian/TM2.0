@@ -372,7 +372,11 @@ def _http_seed(client) -> tuple[str, str]:
     res = client.post("/ingest", files=files)
     assert res.status_code == 200, res.text
     body = res.json()
-    assert body["source_files"], "自证：种子上传自己就是空的"
+    from service import ingest_worker
+    ingest_worker.run_pending_jobs()   # #90: deposit is async — drive extraction to the terminal
+    seeded = client.get(f"/team/{body['context_id']}",
+                        headers={"X-Avery-Token": body["owner_token"]}).json()
+    assert seeded["source_files"], "自证：种子上传自己就是空的"
     return body["context_id"], body["owner_token"]
 
 

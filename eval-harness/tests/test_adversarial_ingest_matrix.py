@@ -17,8 +17,8 @@ Covers, against the ADVERSARIAL MATRIX brief:
   * (10) a genuinely disguised binary (.docx that is really an .exe stub) -> 415, and the message
          is NOT confused with the password-protected-OLE2 message (upload_guard.py:308-320)
   * (11) duplicate submit -> two independent contexts/tokens; documents the owner_token-lost hazard
-  * (12) all-unparseable batch -> 422 AND the registry gains zero new contexts (extends
-         test_file_truth_encoding.py's 422-body assertion with the registry-side check)
+  * (12) all-unparseable batch -> (#90 async) 200 deposit + a `failed` job with an honest reason,
+         on a REACHABLE archive whose manifest collected the unreadable rows back out
   * (13) NUL in a text file: near the start -> 415 disguised-binary (guards.check_type's OWN 8192-
          byte head window catches it, so it never reaches parse/scrub at all); PAST that window ->
          200, no crash, and the NUL is scrubbed OUT of the citable corpus (avery/ingest/parse.py's
@@ -36,6 +36,13 @@ pytest.importorskip("fastapi.testclient")
 from fastapi.testclient import TestClient  # noqa: E402
 
 HERE = Path(__file__).resolve().parent.parent
+
+
+def _drain() -> None:
+    """#90: /ingest is an async deposit (bytes land, a queued job returns) — drive the worker
+    synchronously so assertions read the terminal world, not the skeleton."""
+    from service import ingest_worker
+    ingest_worker.run_pending_jobs()
 
 
 def _reset_all():
@@ -80,6 +87,7 @@ def test_empty_file_alone_manifest_says_empty_not_ingested(client):
     assert r.status_code == 200, (
         f"an empty file is not itself an error — a 5xx/4xx here would be over-eager: {r.text[:200]}")
     body = r.json()
+    _drain()   # #90: the deposit returns before extraction — drive the worker to the terminal state
     manifest = client.get(f"/team/{body['context_id']}/files",
                           headers={"X-Avery-Token": body["owner_token"]})
     assert manifest.status_code == 200
@@ -96,6 +104,7 @@ def test_whitespace_only_file_alone_manifest_says_empty_not_ingested(client):
     r = client.post("/ingest", files=[("files", ("ws.txt", b"   \n\t \n  ", "text/plain"))])
     assert r.status_code == 200, r.text[:200]
     body = r.json()
+    _drain()
     manifest = client.get(f"/team/{body['context_id']}/files",
                           headers={"X-Avery-Token": body["owner_token"]})
     entry = manifest.json()["files"][0]
@@ -131,21 +140,30 @@ def test_duplicate_submit_mints_two_independent_contexts_and_tokens(client):
 
 
 # ==================================================================================================
-# (12) All-unparseable batch: extends test_file_truth_encoding.py's 422-body assertion with the
-#      registry-side check the brief specifically asks for — a batch that cannot be read at all must
-#      leave ZERO trace in the registry, not just answer 422 while quietly keeping something.
+# (12) All-unparseable batch: the #90 rewrite of the old "422 + zero registry trace" criterion.
+#      The async deposit MUST mint the context + token up front (that durability is the whole point
+#      — a dropped connection no longer orphans an archive), so "no phantom" now means: the archive
+#      is REACHABLE with the returned token, the job lands `failed` with an honest reason, and the
+#      unreadable bytes are collected back out (empty manifest, empty cards) — an honest failure
+#      record instead of an unreachable half-built context.
 # ==================================================================================================
 
-def test_all_unparseable_batch_registers_no_context_and_mints_no_token(client):
-    reg = _registry()
-    before = len(reg._by_id)
+def test_all_unparseable_batch_lands_as_a_failed_job_on_a_reachable_empty_archive(client):
     junk = bytes([0x80, 0x81, 0x8D, 0x90, 0x9D, 0xFF, 0xFE, 0x81]) * 4   # undecodable in every rung
     r = client.post("/ingest", files=[("files", ("坏文件.csv", junk, "text/csv"))])
-    assert r.status_code == 422, r.text[:300]
-    assert len(reg._by_id) == before, (
-        "an all-unparseable batch must register NO context at all (feat-032 P2) — anything left "
-        "behind here is an unreachable phantom (no token was returned for a caller to use it)")
-    assert "owner_token" not in r.json(), "a 422 must never mint a token for content nobody can read"
+    assert r.status_code == 200, r.text[:300]   # the deposit accepted the BYTES; the verdict is async
+    body = r.json()
+    assert body.get("owner_token"), "#90: the token must be durable BEFORE extraction, not after"
+    _drain()
+    hdr = {"X-Avery-Token": body["owner_token"]}
+    manifest = client.get(f"/team/{body['context_id']}/files", headers=hdr)
+    assert manifest.status_code == 200, "the archive must stay reachable — that token is the point"
+    m = manifest.json()
+    assert m["last_job"]["status"] == "failed", m.get("last_job")
+    assert "no parseable content" in m["last_job"]["reason"]
+    assert m["files"] == [], (
+        "failed = 这批文件没进资料库 — the unreadable batch's rows must be collected back out")
+    assert client.get(f"/team/{body['context_id']}", headers=hdr).json()["people"] == []
 
 
 # ==================================================================================================
@@ -244,6 +262,7 @@ def test_nul_past_the_disguise_window_does_not_crash_and_is_scrubbed_from_the_ci
     r = client.post("/ingest", files=[("files", ("late_nul.txt", body, "text/plain"))])
     assert r.status_code == 200, f"a NUL past the disguise window must not crash: {r.status_code} {r.text[:200]}"
     j = r.json()
+    _drain()
     manifest = client.get(f"/team/{j['context_id']}/files",
                           headers={"X-Avery-Token": j["owner_token"]})
     entry = manifest.json()["files"][0]

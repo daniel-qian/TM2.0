@@ -220,6 +220,8 @@ def test_mixed_batch_poison_file_does_not_destroy_the_good_file(client):
     assert r.status_code == 200, (
         f"a good file bundled with a corrupt one must still ingest (poison marked 'failed'), "
         f"not crash the whole batch: {r.status_code} {r.text[:200]}")
+    from service import ingest_worker
+    ingest_worker.run_pending_jobs()   # #90: extraction is async — drive to the terminal state
     manifest = client.get(f"/team/{r.json()['context_id']}/files",
                           headers={"X-Avery-Token": r.json()["owner_token"]})
     by_name = {f["filename"]: f["status"] for f in manifest.json()["files"]}
@@ -233,18 +235,26 @@ def test_mixed_batch_poison_file_does_not_destroy_the_good_file(client):
 # ==================================================================================================
 
 def test_crash_never_leaves_a_partial_context_in_the_registry(client):
-    """Whatever HTTP status a crash produces, it must not be a 200 with a mangled context, and it
-    must not silently register a half-built CompanyContext either. The failure is total-and-honest
-    (nothing registered) rather than partial-and-silent (something registered, unusably)."""
-    before = _registry_size()
+    """#90 rewrite. The old hazard was "a half-built context nobody can reach (no owner_token was
+    ever returned)". The async deposit inverts the mechanics — context + token are durable BEFORE
+    parse ever runs — so the same honesty criterion now reads: the crash lands as a `failed` job
+    with a reason, the crashed batch's rows are collected back out (empty manifest, empty cards),
+    and the archive stays fully REACHABLE with the returned token. Total-and-honest, not
+    partial-and-silent — the difference is the failure now has an address."""
     r = client.post("/ingest", files=[("files", ("weekly.pdf", TRUNCATED_PDF, "application/pdf"))])
-    after = _registry_size()
-    assert after == before, (
-        f"a crashed ingest left a partial context in the registry ({before} -> {after}) — worse than "
-        f"the 500 itself: a caller who retries now has an orphaned, half-built context nobody can "
-        f"reach (no owner_token was ever returned for it)")
-    if r.status_code == 200:
-        assert r.json().get("owner_token"), "a 200 with no owner_token is a context nobody can read back"
+    assert r.status_code == 200, r.text[:200]
+    body = r.json()
+    assert body.get("owner_token"), "a 200 with no owner_token is a context nobody can read back"
+    from service import ingest_worker
+    ingest_worker.run_pending_jobs()
+    hdr = {"X-Avery-Token": body["owner_token"]}
+    manifest = client.get(f"/team/{body['context_id']}/files", headers=hdr)
+    assert manifest.status_code == 200, "the deposited archive must stay reachable after the crash"
+    m = manifest.json()
+    assert m["last_job"]["status"] == "failed", m.get("last_job")
+    assert m["files"] == [], "the crashed batch's rows must be collected back out, not half-kept"
+    team = client.get(f"/team/{body['context_id']}", headers=hdr).json()
+    assert team["people"] == [] and team["projects"] == [], "no mangled cards may survive a crash"
 
 
 def test_service_survives_a_parse_crash_and_health_stays_ok(client):

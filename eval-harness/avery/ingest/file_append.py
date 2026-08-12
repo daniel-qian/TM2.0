@@ -7,10 +7,11 @@
 
 🔴 命门①（与 form_append.py 逐字同一条，arch-0802）：**绝不新造 `CompanyContext`，
 绝不调 `ingest_paths` / `ingest_docs`。** 通道只有一条：`ctx = reg.get(context_id)` →
-在**那个对象**上原地 mutate → `reg.put(ctx)`。pg 侧的 put() 是 DELETE+INSERT 快照替换，
+在**那个对象**上原地 mutate → `reg.put(ctx)`。pg 侧的 put() 语义是快照替换（#90 起实现为
+positional diff：只重写与库中第一处分歧之后的行——但**语义没变**，你交出去的列表就是全部），
 靠两张 ON COMMIT DROP 临时表**只回填 NULL 单元**——回填补的是「行还在、格子是 NULL」，
 补不回「整行不存在」。新造的 CompanyContext 里 source_documents 是空列表：拿它去 put，
-老文档的原件字节、全部旧 chunk、全部实体会在一次写里永久蒸发。
+diff 会从第 0 行起清掉一切——老文档的原件字节、全部旧 chunk、全部实体在一次写里永久蒸发。
 
 🔴 命门②：**只对新文件跑抽取。** LLM 花费与新文件数成正比，不与公司资料总量成正比——
 对整份语料重跑一遍抽取，第十次补传就要为前九批已经读过的文件再付一次钱，而且（更糟）
@@ -34,6 +35,7 @@
 from __future__ import annotations
 
 import logging
+import time
 
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -63,6 +65,10 @@ class AppendReport:
     parse_errors: list[str] = field(default_factory=list)
     added_documents: list[SourceDocument] = field(default_factory=list)
     skipped_duplicates: list[str] = field(default_factory=list)
+    # #90 · 内容幂等：这批里「库里已有一模一样字节」的文件。**新开字段，不复用 skipped_duplicates**
+    # ——语义不同：「你这批里有重名」（同请求竞态守卫）vs「库里已经有一模一样的了」（重试安全），
+    # 前端要能分开措辞。每项 {"filename": 上传名, "matches_source_key": 库里那份的 key}。
+    skipped_identical: list[dict] = field(default_factory=list)
     people_touched: int = 0
     projects_touched: int = 0
     conflicts_added: int = 0
@@ -84,20 +90,51 @@ def existing_source_keys(ctx) -> set[str]:
             if (sd.source_key or sd.filename)}
 
 
+def existing_content_hashes(ctx) -> dict[str, str]:
+    """#90 · 内容幂等的判据表：这家公司库里已有字节的 sha256 -> 那份文档的 source_key。
+
+    上传口拿它判「这份文件的字节库里是不是已经有一模一样的」——命中就整个跳过（连临时文件都
+    不写：不 parse、不烧 LLM、不再入一份重复的 RAG 材料），回执记进 `skipped_identical`。
+    这是「超时后手动重传」这个最常见重试场景的安全网：修前 `_unique_parse_names` 会把同字节
+    重传改名成 `xxx(1)` 当**新文档**接纳（exploration.md 症状③′——LLM 再烧一遍、材料重复入库、
+    血缘虚增）。
+
+    空 hash 的行（0017 backfill 之前铸的、content 为 NULL 的）不进表——它们**判不了**，宁可
+    漏放一次重复，也不把「不知道」翻译成「一样」。keep-first：同字节多份时记第一份的 key
+    （与 `_chunks_per_file` 的 keep-first 姿态一致）。"""
+    out: dict[str, str] = {}
+    for sd in ctx.source_documents:
+        h = (getattr(sd, "content_sha256", "") or "").strip()
+        if h and h not in out:
+            out[h] = sd.source_key or sd.filename
+    return out
+
+
 def append_docs_to_context(reg, context_id: str, docs: list[ParsedDoc],
                            source_documents: list[SourceDocument],
                            *, extractor: Extractor | None = None,
-                           parse_errors: list[str] | None = None) -> AppendReport:
+                           parse_errors: list[str] | None = None,
+                           reserved_keys: set[str] | None = None) -> AppendReport:
     """把一批**已解析**的新文档 append 进 `context_id` 这家公司：抽取 → 红线 → 归并 → put。
 
     抛 KeyError（context 不存在，端点转同体 404）。红线不过按 `ok=False` 回执返回，
-    **一个字段都不写**（端点转 422，与 /ingest 的姿态一致）。
+    **一个字段都不写**（端点转 422，与 /ingest 的姿态一致——异步路里 worker 把它记成
+    job failed 并收走本批 'reading' 行，语义同构）。
+
+    `reserved_keys`（#90 异步 deposit 专用）：**本批**文件在收字节时已经以 status='reading'
+    预挂进 `ctx.source_documents` 的那些 source_key。传了它意味着两件事：
+      ① 判重的 `taken` 集合把这些 key 排除——它们不是「库里已有的别人」，是本批自己；
+      ② 挂行之前先把这些 'reading' 骨架行**原地摘掉**，换成 `_finalize` 之后的终态行
+        （带真字节、真状态）。摘行用切片赋值原地替换（内存腿 get() 返回活引用，
+        `file_delete` 命门① 的同款纪律——绝不换列表对象）。
+    同步直调（demo.py 母本自铸、既有测试）不传它，行为与 #90 之前逐字节相同。
     """
     ctx = reg.get(context_id)
     if ctx is None:
         raise KeyError(context_id)
 
     errors = list(parse_errors or [])
+    reserved = set(reserved_keys or ())
 
     # ── 调用方契约：每份 ParsedDoc 的 `name` 必须**就是**它那份 SourceDocument 的 source_key ──
     # 端点侧靠「把临时文件写成 parse_name」保证这件事（`parse_file` 用的就是那个基名）。写错的
@@ -114,7 +151,8 @@ def append_docs_to_context(reg, context_id: str, docs: list[ParsedDoc],
     # ── 幂等：这份资料的 key 已经在库里就不再落第二份 ────────────────────────────────────
     # 端点侧的 `_unique_parse_names(used=existing_source_keys(ctx))` 已经保证新 key 不撞老 key，
     # 所以这里通常一条都不命中；它守的是重试/并发那一发（同一个请求被送了两次）。
-    taken = existing_source_keys(ctx)
+    # #90：reserved（本批预挂的 'reading' 行）不算「已占用」——那是自己。
+    taken = existing_source_keys(ctx) - reserved
     skipped = [sd.source_key or sd.filename for sd in source_documents
                if (sd.source_key or sd.filename) in taken]
     fresh_sds = [sd for sd in source_documents if (sd.source_key or sd.filename) not in taken]
@@ -134,7 +172,12 @@ def append_docs_to_context(reg, context_id: str, docs: list[ParsedDoc],
     #    里程碑其实属于一个**存量**项目」这种跨批次误判它挡不住——把整份 ctx.extraction 连同
     #    单份新文档喂给它会让它拿一个缺了源文档的 docs 集合去重判每一张老卡，那是整表静默删除，
     #    比漏判坏得多。宁可漏，写在这里。
+    _t0 = time.perf_counter()
     fresh = extract_docs(fresh_docs, extractor=extractor)
+    # #90 · 分段计时（票面 D）：全管线此前 perf_counter 零命中，「越传越慢主凶是谁」只能靠猜。
+    # 四段口径 parse / extract / merge / persist；parse 段在调用方（append_paths / worker）打。
+    log.info("ingest-timing stage=extract context_id=%s files=%d elapsed_ms=%.0f",
+             context_id, len(fresh_docs), (time.perf_counter() - _t0) * 1000)
 
     # ── 红线硬门：先造后挂（命门③）——这一步之前 ctx 一个字段都没动 ──────────────────────
     rl = validate_extraction(fresh)
@@ -145,6 +188,14 @@ def append_docs_to_context(reg, context_id: str, docs: list[ParsedDoc],
     # ── 从这里开始才碰 ctx ──────────────────────────────────────────────────────────────
     # 顺序有讲究：source_documents 必须**先**挂上去，账本才解得出新资料的上传时刻
     # （`AppendLedger` 按 source_key 建的那张时刻表就是从它来的）。
+    _t0 = time.perf_counter()
+    # #90：异步路里本批行已经以 'reading' 态预挂（deposit_append）——先原地摘掉骨架行，
+    # 下一行 extend 的 finalized 才是它们的终态替身。只摘还在 'reading' 的（防御：一条已经
+    # 到终态的行是真数据，绝不因 key 重合被顶掉）。
+    if reserved:
+        ctx.source_documents[:] = [
+            sd for sd in ctx.source_documents
+            if sd.status != "reading" or (sd.source_key or sd.filename) not in reserved]
     finalized = _finalize_source_documents(fresh_sds, fresh_docs, fresh)
     ctx.source_documents.extend(finalized)
     for d in fresh_docs:
@@ -180,6 +231,8 @@ def append_docs_to_context(reg, context_id: str, docs: list[ParsedDoc],
     # 这时候用 `_signal_key` 去重才不是「换尺重筛」。顺带把新项目的 ownerId 解到存量花名册上。
     _link_owners(ctx.extraction)
     dedupe_signals_after_linking(ctx.extraction)
+    log.info("ingest-timing stage=merge context_id=%s files=%d elapsed_ms=%.0f",
+             context_id, len(fresh_docs), (time.perf_counter() - _t0) * 1000)
 
     # 与 pipeline / form_append 同一道门、同一个开关口径（材料本身刻意不扫 —— ADR-0023 只存不听；
     # 这里防的是「context 里既有的违规被本次写意外放行」）。
@@ -199,8 +252,11 @@ def append_docs_to_context(reg, context_id: str, docs: list[ParsedDoc],
 
     # put() 只在 facts.md **不存在**时才重物化——get() 回来的 context 文件必然存在，所以这里必须
     # 自己重写，否则议事室的 recall 面（facts.md）读到的还是补传之前那份卡。
+    _t0 = time.perf_counter()
     materialize_memory(ctx.extraction, ctx.memory_dir)
     reg.put(ctx)
+    log.info("ingest-timing stage=persist context_id=%s files=%d elapsed_ms=%.0f",
+             context_id, len(fresh_docs), (time.perf_counter() - _t0) * 1000)
 
     return AppendReport(
         ok=True, context=ctx, redline=rl, parsed=fresh_docs, parse_errors=errors,
@@ -225,15 +281,21 @@ def _extend_playbooks(extraction: ExtractionResult, fresh: ExtractionResult) -> 
 
 def append_paths_to_context(reg, context_id: str, paths: list[str | Path],
                             source_documents: list[SourceDocument],
-                            *, extractor: Extractor | None = None) -> AppendReport:
+                            *, extractor: Extractor | None = None,
+                            reserved_keys: set[str] | None = None) -> AppendReport:
     """磁盘上的一批新文件 → `append_docs_to_context`。`ingest_paths` 的补传孪生：
-    逐份 parse、读不出来的跳过并记进 `parse_errors`，一份都读不出来时回一条诚实的失败。"""
+    逐份 parse、读不出来的跳过并记进 `parse_errors`，一份都读不出来时回一条诚实的失败。
+    `reserved_keys` 原样透传（#90 异步 worker 的入口就是这条路）。"""
     docs: list[ParsedDoc] = []
     errors: list[str] = []
+    _t0 = time.perf_counter()
     for p in paths:
         try:
             docs.append(parse_file(p))
         except ParseError as e:
             errors.append(str(e))
+    log.info("ingest-timing stage=parse context_id=%s files=%d elapsed_ms=%.0f",
+             context_id, len(paths), (time.perf_counter() - _t0) * 1000)
     return append_docs_to_context(reg, context_id, docs, source_documents,
-                                  extractor=extractor, parse_errors=errors)
+                                  extractor=extractor, parse_errors=errors,
+                                  reserved_keys=reserved_keys)

@@ -319,6 +319,29 @@ class PostgresContextRegistry(ProjectWriteMixin):
 
     # --- the ContextRegistry API -----------------------------------------------------------------
 
+    @staticmethod
+    def _canon_payload(payload: dict) -> str:
+        """One canonical JSON text for jsonb equality checks. The two sides of the #90 diff have
+        different shapes of the SAME value: `asdict()` output (may hold tuples, insertion-ordered
+        keys) vs a psycopg jsonb round trip (lists, jsonb's own key order). dumps(sort_keys=True)
+        maps both onto identical text, so "row unchanged" is judged on VALUE, never on
+        serialization accidents. Used for comparison only — the INSERT still binds the raw dict."""
+        import json
+        return json.dumps(payload, ensure_ascii=False, sort_keys=True)
+
+    @staticmethod
+    def _first_divergence(existing: list, desired: list) -> int:
+        """#90 · the positional-diff pivot: index of the first row where the stored table and the
+        desired snapshot disagree. Everything before it is byte-identical and is NOT rewritten;
+        everything from it on is replaced (DELETE idx>=pivot + INSERT the tail). Equal prefixes of
+        unequal lengths diverge at min(len) — an append diverges exactly at the old length, so the
+        common "补传 adds rows at the end" case writes ONLY the new rows."""
+        n = min(len(existing), len(desired))
+        for i in range(n):
+            if existing[i] != desired[i]:
+                return i
+        return n
+
     def put(self, ctx: CompanyContext) -> str:
         from psycopg.types.json import Jsonb
 
@@ -348,6 +371,15 @@ class PostgresContextRegistry(ProjectWriteMixin):
         notes = (mem / "notes.md").read_text(encoding="utf-8") if (mem / "notes.md").exists() else ""
 
         self._assert_no_control_chars(ctx, facts, notes)   # P3: fail clean, not a raw driver 500
+
+        # #90 · content idempotency belt: any writer that hands us bytes without their hash gets it
+        # computed here, OUTSIDE the transaction — so the INSERT below always carries a real digest
+        # and the idempotency map never misses a row for "the caller forgot".
+        import hashlib
+        for sd in ctx.source_documents:
+            if sd.content is not None and not sd.content_sha256:
+                sd.content_sha256 = hashlib.sha256(sd.content).hexdigest()
+
         self._ensure_schema()
 
         with self._connect() as conn, conn.transaction():
@@ -383,7 +415,11 @@ class PostgresContextRegistry(ProjectWriteMixin):
             conn.execute(
                 "CREATE TEMP TABLE _prior_src_bytes ON COMMIT DROP AS "
                 "SELECT DISTINCT ON (COALESCE(NULLIF(source_key, ''), filename)) "
-                "       COALESCE(NULLIF(source_key, ''), filename) AS key, content "
+                "       COALESCE(NULLIF(source_key, ''), filename) AS key, content, "
+                # #90: the hash rides the SAME lifeboat as the bytes it digests — a rewritten row
+                # whose caller had neither content nor hash (the get()->put() metadata round trip
+                # before a divergence rewrite) gets BOTH backfilled from the prior row below.
+                "       content_sha256 "
                 "FROM avery.source_documents "
                 "WHERE context_id = %s AND content IS NOT NULL "
                 "ORDER BY COALESCE(NULLIF(source_key, ''), filename), idx DESC",
@@ -398,58 +434,136 @@ class PostgresContextRegistry(ProjectWriteMixin):
                 "ORDER BY chunk_id, idx DESC",
                 (ctx.context_id,))
 
-            # re-put = replace: a context is one atomic snapshot, never a merge of two ingests.
-            conn.execute("DELETE FROM avery.entities WHERE context_id = %s", (ctx.context_id,))
-            conn.execute("DELETE FROM avery.materials WHERE context_id = %s", (ctx.context_id,))
-            conn.execute("DELETE FROM avery.memory_files WHERE context_id = %s", (ctx.context_id,))
-            conn.execute("DELETE FROM avery.source_documents WHERE context_id = %s",
-                         (ctx.context_id,))
-
+            # re-put = replace — STILL the contract (a context is one atomic snapshot, never a merge
+            # of two ingests; the caller hands the WHOLE desired state every time). #90 changes only
+            # the IMPLEMENTATION: "delete everything, reinsert everything" became a per-table
+            # POSITIONAL DIFF — compare the stored rows against the desired snapshot in idx order,
+            # keep the untouched prefix, rewrite only from the first divergent row on. Why: the old
+            # shape made the Nth 补传 rewrite the SUM of batches 1..N (bytea + vectors + text, the
+            # measured 118→163→224s production slowdown, exploration.md 症状②); an append diverges
+            # exactly at the old length, so it now writes ONLY the new rows. Worst case (a rewrite
+            # from idx 0 — e.g. a file deletion reshuffling everything) degenerates to precisely the
+            # old full-replace cost, never worse. The @needs_db gate pins this with xmin: rows before
+            # the divergence keep their transaction id — not even a DELETE touched them.
             with conn.cursor() as cur:
-                # kind -> its rows; iterate _ENTITY_KINDS (the set entities_kind_check allows) so the
-                # constant is the one place a new entity kind must be registered.
+                # entities — per (kind) positional diff; payload equality via _canon_payload so
+                # asdict-vs-jsonb serialization accidents never masquerade as changes. Iterate
+                # _ENTITY_KINDS (the set entities_kind_check allows) so the constant stays the one
+                # place a new entity kind must be registered.
                 by_kind = {"person": people, "project": projects,
                            "signal": signals, "playbook": playbooks, "conflict": conflicts}
-                cur.executemany(
-                    "INSERT INTO avery.entities (context_id, kind, idx, payload) "
-                    "VALUES (%s, %s, %s, %s)",
-                    [(ctx.context_id, kind, i, Jsonb(payload))
-                     for kind in _ENTITY_KINDS
-                     for i, payload in enumerate(by_kind[kind])])
+                stored_by_kind: dict[str, list[str]] = {}
+                for kind, payload in conn.execute(
+                        "SELECT kind, payload FROM avery.entities WHERE context_id = %s "
+                        "ORDER BY kind, idx", (ctx.context_id,)).fetchall():
+                    stored_by_kind.setdefault(kind, []).append(self._canon_payload(payload))
+                for kind in _ENTITY_KINDS:
+                    desired = by_kind[kind]
+                    desired_fp = [self._canon_payload(p) for p in desired]
+                    stored_fp = stored_by_kind.get(kind, [])
+                    div = self._first_divergence(stored_fp, desired_fp)
+                    if div < len(stored_fp):
+                        cur.execute(
+                            "DELETE FROM avery.entities "
+                            "WHERE context_id = %s AND kind = %s AND idx >= %s",
+                            (ctx.context_id, kind, div))
+                    cur.executemany(
+                        "INSERT INTO avery.entities (context_id, kind, idx, payload) "
+                        "VALUES (%s, %s, %s, %s)",
+                        [(ctx.context_id, kind, i, Jsonb(desired[i]))
+                         for i in range(div, len(desired))])
+
+                # materials — positional diff on (chunk_id, text, source, doc_kind).
+                mats = ctx.extraction.materials
+                stored_mats = [
+                    (mcid, mtext, msrc, mdk) for mcid, mtext, msrc, mdk in conn.execute(
+                        "SELECT chunk_id, text, source, doc_kind FROM avery.materials "
+                        "WHERE context_id = %s ORDER BY idx", (ctx.context_id,)).fetchall()]
+                desired_mats = [(m.id, m.text, m.source, m.doc_kind) for m in mats]
+                div = self._first_divergence(stored_mats, desired_mats)
+                if div < len(stored_mats):
+                    cur.execute(
+                        "DELETE FROM avery.materials WHERE context_id = %s AND idx >= %s",
+                        (ctx.context_id, div))
                 cur.executemany(
                     "INSERT INTO avery.materials "
                     "(context_id, idx, chunk_id, text, source, doc_kind, embedding) "
                     "VALUES (%s, %s, %s, %s, %s, %s, %s::vector)",   # feat-031 fills embedding
                     # T2/#53：vecs 是 per-row Optional —— 行内 None = 「库里已有这块的向量」，
                     # 先落 NULL，交给下面的 _prior_mat_vecs 回填在库内补齐（向量不出库）。
-                    [(ctx.context_id, i, m.id, m.text, m.source, m.doc_kind,
+                    # #90 之后回填只涉及 tail：前缀行连 DELETE 都没经历，向量原地未动。
+                    [(ctx.context_id, i, mats[i].id, mats[i].text, mats[i].source, mats[i].doc_kind,
                       _vec_literal(vecs[i]) if vecs is not None and vecs[i] is not None else None)
-                     for i, m in enumerate(ctx.extraction.materials)])
-                cur.executemany(
-                    "INSERT INTO avery.memory_files (context_id, filename, content) "
-                    "VALUES (%s, %s, %s)",
-                    [(ctx.context_id, "facts.md", facts), (ctx.context_id, "notes.md", notes)])
-                # feat-032: the per-company file space — raw uploads (bytea + metadata). The bytes
-                # are UNTRUSTED content: stored here, served for download, never followed. content
-                # is bound as a Python `bytes` (psycopg maps it to bytea); NULL when absent.
+                     for i in range(div, len(mats))])
+
+                # memory_files — two rows, keyed (context_id, filename): write only what changed.
+                # facts.md is a WHOLE-file materialization, so an append rewrites its one row in
+                # full — that is the nature of a materialized file, not a diff failure; it is one
+                # text row, not N bytea rows.
+                stored_mem = dict(conn.execute(
+                    "SELECT filename, content FROM avery.memory_files WHERE context_id = %s",
+                    (ctx.context_id,)).fetchall())
+                for fname, want in (("facts.md", facts), ("notes.md", notes)):
+                    if stored_mem.get(fname) != want:
+                        cur.execute(
+                            "INSERT INTO avery.memory_files (context_id, filename, content) "
+                            "VALUES (%s, %s, %s) "
+                            "ON CONFLICT (context_id, filename) "
+                            "DO UPDATE SET content = EXCLUDED.content",
+                            (ctx.context_id, fname, want))
+
+                # source_documents — positional diff on the metadata + content_sha256 (the bytes'
+                # 64-hex stand-in: get() never pulls bytea, so equality is judged on the digest —
+                # feat-032: the rows hold raw uploads (bytea + metadata), UNTRUSTED content that is
+                # stored, served for download, never followed). An unchanged row is not rewritten,
+                # which is what keeps its bytea safe WITHOUT the temp-table lifeboat; the lifeboat
+                # below still guards every row that IS rewritten by a caller holding no bytes.
+                stored_docs = [
+                    (fn, sk, mime, sz, dk, st, sr,
+                     ua.isoformat() if ua is not None else "", sha or "")
+                    for fn, sk, mime, sz, dk, st, sr, ua, sha in conn.execute(
+                        "SELECT filename, source_key, mime, size_bytes, doc_kind, status, "
+                        "storage_ref, uploaded_at, content_sha256 "
+                        "FROM avery.source_documents WHERE context_id = %s ORDER BY idx",
+                        (ctx.context_id,)).fetchall()]
+                desired_docs = [
+                    (sd.filename, sd.source_key, sd.mime, sd.size_bytes, sd.doc_kind, sd.status,
+                     sd.storage_ref, sd.uploaded_at or "", sd.content_sha256 or "")
+                    for sd in ctx.source_documents]
+                div = self._first_divergence(stored_docs, desired_docs)
+                if div < len(stored_docs):
+                    cur.execute(
+                        "DELETE FROM avery.source_documents WHERE context_id = %s AND idx >= %s",
+                        (ctx.context_id, div))
                 cur.executemany(
                     "INSERT INTO avery.source_documents "
                     "(context_id, idx, filename, source_key, mime, size_bytes, doc_kind, status, "
-                    " content, storage_ref, uploaded_at) "
+                    " content, storage_ref, uploaded_at, content_sha256) "
                     "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, "
-                    "        COALESCE(%s::timestamptz, now()))",
+                    "        COALESCE(%s::timestamptz, now()), %s)",
                     [(ctx.context_id, i, sd.filename, sd.source_key, sd.mime, sd.size_bytes,
                       sd.doc_kind, sd.status,
                       # arch-0802：调用方给了字节就写字节；没给（get→put 往返恒 None）先落
                       # NULL，由下面的 UPDATE...FROM 在库内回填——字节不再过 Python。
                       sd.content,
-                      sd.storage_ref, sd.uploaded_at or None)
-                     for i, sd in enumerate(ctx.source_documents)])
+                      sd.storage_ref, sd.uploaded_at or None, sd.content_sha256 or "")
+                     for i, sd in ((j, ctx.source_documents[j])
+                                   for j in range(div, len(ctx.source_documents)))])
                 # arch-0802 · 库内回填（只补 NULL，绝不覆盖真值）。key 口径见上面临时表注释。
                 cur.execute(
                     "UPDATE avery.source_documents sd SET content = pb.content "
                     "FROM _prior_src_bytes pb "
                     "WHERE sd.context_id = %s AND sd.content IS NULL "
+                    "  AND COALESCE(NULLIF(sd.source_key, ''), sd.filename) = pb.key",
+                    (ctx.context_id,))
+                # #90 · the hash backfill, PARALLEL to the bytes one (same key, same only-fill-empty
+                # discipline): a rewritten row whose caller had no bytes gets its digest back from
+                # the prior row, so the idempotency map never loses a document to a metadata rewrite.
+                cur.execute(
+                    "UPDATE avery.source_documents sd SET content_sha256 = pb.content_sha256 "
+                    "FROM _prior_src_bytes pb "
+                    "WHERE sd.context_id = %s AND sd.content_sha256 = '' "
+                    "  AND pb.content_sha256 <> '' "
                     "  AND COALESCE(NULLIF(sd.source_key, ''), sd.filename) = pb.key",
                     (ctx.context_id,))
                 # chunk_id+text 双键：text 变了说明块真变了，不给旧向量（诚实降级）。
@@ -491,9 +605,13 @@ class PostgresContextRegistry(ProjectWriteMixin):
             # feat-032: the file-space manifest is METADATA ONLY — the bytea `content` is NOT pulled
             # here (a listing must not drag every uploaded file into memory); the download seam
             # (source_document_bytes) fetches one file's bytes on demand.
+            # #90: content_sha256 rides the metadata read (64 hex bytes — no "pull every file into
+            # memory" concern). It is what existing_content_hashes() answers the idempotency
+            # question from, and what keeps the hash surviving a get() -> put() round trip.
             srcdocs = conn.execute(
                 "SELECT idx, filename, source_key, mime, size_bytes, doc_kind, status, storage_ref, "
-                "uploaded_at FROM avery.source_documents WHERE context_id = %s ORDER BY idx",
+                "uploaded_at, content_sha256 FROM avery.source_documents WHERE context_id = %s "
+                "ORDER BY idx",
                 (context_id,)).fetchall()
 
         extraction = ExtractionResult(
@@ -534,8 +652,9 @@ class PostgresContextRegistry(ProjectWriteMixin):
         source_documents = [
             SourceDocument(
                 filename=fn, source_key=sk, mime=mime, size_bytes=sz, doc_kind=dk, status=st,
-                storage_ref=sr, uploaded_at=ua.isoformat() if ua is not None else "", content=None)
-            for _idx, fn, sk, mime, sz, dk, st, sr, ua in srcdocs]
+                storage_ref=sr, uploaded_at=ua.isoformat() if ua is not None else "", content=None,
+                content_sha256=sha or "")
+            for _idx, fn, sk, mime, sz, dk, st, sr, ua, sha in srcdocs]
 
         return CompanyContext(
             context_id=context_id, extraction=extraction, store=store, memory_dir=mem_dir,
@@ -590,9 +709,9 @@ class PostgresContextRegistry(ProjectWriteMixin):
                 # 改这里必须同时数两行。
                 "INSERT INTO avery.source_documents "
                 "(context_id, idx, filename, source_key, mime, size_bytes, doc_kind, status, "
-                " content, storage_ref, uploaded_at) "
+                " content, storage_ref, uploaded_at, content_sha256) "
                 "SELECT %s, idx, filename, source_key, mime, size_bytes, doc_kind, status, "
-                " content, storage_ref, now() "
+                " content, storage_ref, now(), content_sha256 "
                 "FROM avery.source_documents WHERE context_id = %s",
                 (new_context_id, src_context_id))
             notes = conn.execute(
@@ -1247,6 +1366,173 @@ class PostgresContextRegistry(ProjectWriteMixin):
                 "SELECT 1 FROM avery.contexts WHERE context_id = %s",
                 (context_id,)).fetchone() is not None
 
+    # --- #90 · async deposit (the pg twin — semantics live on the in-memory docstrings) ----------
+
+    _JOB_COLS = "id, context_id, kind, status, reason, extraction_mode, file_keys, created_at, updated_at"
+
+    @staticmethod
+    def _job_from_row(row) -> "IngestJob":
+        from .registry import IngestJob
+        jid, cid, kind, status, reason, mode, keys, ca, ua = row
+        return IngestJob(id=jid, context_id=cid, kind=kind, status=status, reason=reason or "",
+                         extraction_mode=mode or "", file_keys=list(keys or []),
+                         created_at=ca.isoformat() if ca is not None else "",
+                         updated_at=ua.isoformat() if ua is not None else "")
+
+    @staticmethod
+    def _assert_deposit_no_control_chars(source_documents: list[SourceDocument]) -> None:
+        """feat-030 P3 for the deposit door: the deposited TEXT columns must be NUL-free (a NUL is
+        illegal in a Postgres text value — an opaque driver crash otherwise). Bytea `content` is
+        exempt (a NUL there is legal and preserved). Same wording as put()'s guard so the endpoint
+        maps it onto the same clean 422."""
+        blobs: list[str] = []
+        for sd in source_documents:
+            blobs += [sd.filename, sd.source_key, sd.mime, sd.storage_ref]
+        if any("\x00" in (b or "") for b in blobs):
+            raise ValueError(
+                "unsupported control character (NUL / 0x00) in the upload — cannot be stored")
+
+    @staticmethod
+    def _ensure_doc_hashes(source_documents: list[SourceDocument]) -> None:
+        import hashlib
+        for sd in source_documents:
+            if sd.content is not None and not sd.content_sha256:
+                sd.content_sha256 = hashlib.sha256(sd.content).hexdigest()
+
+    _SRC_DOC_INSERT = (
+        "INSERT INTO avery.source_documents "
+        "(context_id, idx, filename, source_key, mime, size_bytes, doc_kind, status, "
+        " content, storage_ref, uploaded_at, content_sha256) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, "
+        "        COALESCE(%s::timestamptz, now()), %s)")
+
+    def _src_doc_params(self, context_id: str, idx: int, sd: SourceDocument) -> tuple:
+        return (context_id, idx, sd.filename, sd.source_key, sd.mime, sd.size_bytes,
+                sd.doc_kind, sd.status, sd.content, sd.storage_ref,
+                sd.uploaded_at or None, sd.content_sha256 or "")
+
+    def deposit_new_context(self, *, context_id: str, name: str, owner_token: str,
+                            source_documents: list[SourceDocument], job: "IngestJob") -> None:
+        """#90 · ONE transaction: skeleton context row + 'reading' file rows (bytes included) +
+        empty-materialization memory_files + the queued job. The owner_token is durable from this
+        moment — a dropped connection no longer orphans the archive (the #0812 暗伤①′)."""
+        from psycopg.types.json import Jsonb
+        self._assert_deposit_no_control_chars(source_documents)
+        self._ensure_doc_hashes(source_documents)
+        self._ensure_schema()
+        # The skeleton's facts/notes are the EMPTY materialization (the #86 empty_context product,
+        # byte-identical across both twins) — a GET before the worker lands must read a coherent
+        # empty world, not missing files.
+        mem_dir = self._root() / context_id
+        materialize_memory(ExtractionResult(), mem_dir)
+        facts = (mem_dir / "facts.md").read_text(encoding="utf-8")
+        notes = (mem_dir / "notes.md").read_text(encoding="utf-8")
+        with self._connect() as conn, conn.transaction():
+            conn.execute(
+                "INSERT INTO avery.contexts (context_id, name, source_files, owner_token) "
+                "VALUES (%s, %s, %s, %s)",
+                (context_id, name, Jsonb([]), owner_token or None))
+            with conn.cursor() as cur:
+                cur.executemany(
+                    self._SRC_DOC_INSERT,
+                    [self._src_doc_params(context_id, i, sd)
+                     for i, sd in enumerate(source_documents)])
+                cur.executemany(
+                    "INSERT INTO avery.memory_files (context_id, filename, content) "
+                    "VALUES (%s, %s, %s)",
+                    [(context_id, "facts.md", facts), (context_id, "notes.md", notes)])
+            conn.execute(
+                "INSERT INTO avery.ingest_jobs (id, context_id, kind, status, file_keys) "
+                "VALUES (%s, %s, %s, 'queued', %s)",
+                (job.id, context_id, job.kind, Jsonb(list(job.file_keys))))
+
+    def deposit_append(self, context_id: str, source_documents: list[SourceDocument],
+                       job: "IngestJob") -> None:
+        """#90 · ONE transaction: 'reading' file rows appended after the existing manifest + the
+        queued job. KeyError = unknown context (the endpoint's opaque 404). The advisory xact lock
+        serializes concurrent deposits into the SAME context — two racing 补传 would otherwise
+        compute the same MAX(idx)+1 and collide on the (context_id, idx) primary key."""
+        from psycopg.types.json import Jsonb
+        self._assert_deposit_no_control_chars(source_documents)
+        self._ensure_doc_hashes(source_documents)
+        self._ensure_schema()
+        with self._connect() as conn, conn.transaction():
+            conn.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (context_id,))
+            exists = conn.execute(
+                "SELECT 1 FROM avery.contexts WHERE context_id = %s", (context_id,)).fetchone()
+            if exists is None:
+                raise KeyError(context_id)
+            base = conn.execute(
+                "SELECT COALESCE(MAX(idx) + 1, 0) FROM avery.source_documents "
+                "WHERE context_id = %s", (context_id,)).fetchone()[0]
+            with conn.cursor() as cur:
+                cur.executemany(
+                    self._SRC_DOC_INSERT,
+                    [self._src_doc_params(context_id, base + i, sd)
+                     for i, sd in enumerate(source_documents)])
+            conn.execute(
+                "INSERT INTO avery.ingest_jobs (id, context_id, kind, status, file_keys) "
+                "VALUES (%s, %s, %s, 'queued', %s)",
+                (job.id, context_id, job.kind, Jsonb(list(job.file_keys))))
+
+    def claim_next_ingest_job(self) -> "IngestJob | None":
+        """Atomically claim the OLDEST queued job (queued -> processing), or None. FOR UPDATE SKIP
+        LOCKED keeps two claimers (the worker thread + a test driving run_pending_jobs) from ever
+        double-executing one job — the loser simply sees the next row or none."""
+        self._ensure_schema()
+        with self._connect() as conn, conn.transaction():
+            row = conn.execute(
+                "UPDATE avery.ingest_jobs SET status = 'processing', updated_at = now() "
+                "WHERE id = (SELECT id FROM avery.ingest_jobs WHERE status = 'queued' "
+                "            ORDER BY created_at, id LIMIT 1 FOR UPDATE SKIP LOCKED) "
+                f"RETURNING {self._JOB_COLS}").fetchone()
+        return self._job_from_row(row) if row is not None else None
+
+    def finish_ingest_job(self, job_id: str, *, status: str, reason: str = "",
+                          extraction_mode: str = "") -> None:
+        if status not in ("done", "failed"):
+            raise ValueError(f"finish_ingest_job wants 'done' or 'failed', got {status!r}")
+        self._ensure_schema()
+        with self._connect() as conn, conn.transaction():
+            row = conn.execute(
+                "UPDATE avery.ingest_jobs SET status = %s, reason = %s, extraction_mode = %s, "
+                "updated_at = now() WHERE id = %s RETURNING id",
+                (status, reason or "", extraction_mode or "", job_id)).fetchone()
+        if row is None:
+            raise KeyError(job_id)
+
+    def latest_ingest_job(self, context_id: str) -> "IngestJob | None":
+        self._ensure_schema()
+        with self._connect() as conn:
+            row = conn.execute(
+                f"SELECT {self._JOB_COLS} FROM avery.ingest_jobs WHERE context_id = %s "
+                "ORDER BY created_at DESC, id DESC LIMIT 1", (context_id,)).fetchone()
+        return self._job_from_row(row) if row is not None else None
+
+    def recover_orphan_ingest_jobs(self) -> int:
+        """#90 · startup orphan recovery (semantics on the in-memory twin's docstring): every
+        `processing` row at process start belonged to a worker that died mid-flight — mark it
+        failed and drop its still-'reading' file rows. `queued` rows are NOT touched: their bytes
+        are already in the DB and the worker will simply run them — THE restart answer the pure
+        in-memory `_BUILD_LOCK` never had."""
+        self._ensure_schema()
+        recovered = 0
+        with self._connect() as conn, conn.transaction():
+            orphans = conn.execute(
+                "UPDATE avery.ingest_jobs SET status = 'failed', reason = 'server restarted', "
+                "updated_at = now() WHERE status = 'processing' "
+                "RETURNING context_id, file_keys").fetchall()
+            for context_id, file_keys in orphans:
+                keys = [k for k in (file_keys or []) if k]
+                if keys:
+                    conn.execute(
+                        "DELETE FROM avery.source_documents "
+                        "WHERE context_id = %s AND status = 'reading' "
+                        "  AND COALESCE(NULLIF(source_key, ''), filename) = ANY(%s)",
+                        (context_id, keys))
+                recovered += 1
+        return recovered
+
     def empty_context(self, context_id: str) -> bool:
         """#86 · `ContextRegistry.empty_context` 的 Postgres 双胞胎——清掉这家公司上传来的一切，
         **`avery.contexts` 那一行几乎原地不动**（`context_id` / `name` / `owner_token`
@@ -1255,10 +1541,11 @@ class PostgresContextRegistry(ProjectWriteMixin):
         这里只记 pg 侧独有的四条。
 
         🔴 **① 不许用 `put()` 凑数**，哪怕把 ctx 清空了再 put 看上去也能达到同一个结果。
-        `put()` 是「快照替换 + 在库内回填」：它先把 `_prior_src_bytes` / `_prior_mat_vecs` 两张临时表
-        装满旧字节与旧向量，再 DELETE+INSERT，最后 `UPDATE ... FROM` 把新行里为 NULL 的格子补回去。
-        今天的空 ctx 恰好插 0 行、回填因此匹配不到任何行——**它是靠"没有行可回填"这个巧合才空的**，
-        不是靠语义。那两张临时表的存在理由正是「让数据活下来」，把销毁类动作架在它上面，
+        `put()` 是「快照替换（#90 起按 positional diff 实现）+ 在库内回填」：它先把
+        `_prior_src_bytes` / `_prior_mat_vecs` 两张临时表装满旧字节与旧向量，再按分歧点
+        DELETE+INSERT，最后 `UPDATE ... FROM` 把重写行里为 NULL 的格子补回去。
+        空 ctx 之所以清得空，靠的是「分歧点=0 → 全删 + 回填匹配不到新行」这串巧合，不是靠语义。
+        那两张临时表的存在理由正是「让数据活下来」，把销毁类动作架在它上面，
         下一次有人给回填加一条「行没了也补一条回来」的兜底，清空就会静默地不再清空，而没有一道门会红。
         显式 DELETE 是**说得出口的**空。
 

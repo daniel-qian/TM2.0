@@ -55,6 +55,8 @@ def test_duplicate_filenames_are_both_ingested_and_counted_per_document(client):
     assert r.status_code == 200, r.text
     cid = r.json()["context_id"]
     hdr = {"X-Avery-Token": r.json()["owner_token"]}   # feat-038: reads require the owner_token
+    from service import ingest_worker
+    ingest_worker.run_pending_jobs()   # #90: deposit is async — drive extraction to the terminal
 
     ctx = _registry().get(cid)
     corpus = "\n".join(m.text for m in ctx.extraction.materials)
@@ -84,6 +86,8 @@ def test_mixed_batch_marks_the_failed_file_and_reconciles_the_briefing(client):
     body = r.json()
     cid = body["context_id"]
     hdr = {"X-Avery-Token": body["owner_token"]}   # feat-038
+    from service import ingest_worker
+    ingest_worker.run_pending_jobs()   # #90
 
     manifest = client.get(f"/team/{cid}/files", headers=hdr).json()["files"]
     by = {f["filename"]: f for f in manifest}
@@ -92,21 +96,31 @@ def test_mixed_batch_marks_the_failed_file_and_reconciles_the_briefing(client):
     assert by["broken.xyz"]["status"] == "failed", "an unparseable file is not marked as failed"
     assert by["broken.xyz"]["n_chunks"] == 0
 
-    # The briefing count must agree with the manifest (1 ingested of 2 uploaded), not lie either way.
-    assert "1 of 2" in body["briefing"]["headline"], body["briefing"]["headline"]
+    # The briefing count must agree with the manifest (1 ingested of 2 uploaded), not lie either
+    # way. #90: the count lives on the refreshed team payload now (the POST returns pre-extraction).
+    team = client.get(f"/team/{cid}", headers=hdr).json()
+    assert "1 of 2" in team["briefing"]["headline"], team["briefing"]["headline"]
 
     # Look-back honesty: the failed file's original bytes are still downloadable.
     assert client.get(f"/team/{cid}/files/1", headers=hdr).status_code == 200
 
 
-def test_all_unparseable_batch_is_a_real_422(client):
+def test_all_unparseable_batch_lands_as_a_failed_job(client):
     """An upload with content but NOTHING parseable must NOT silently publish an empty context (the
-    pre-fix 200-with-empty-context hole) — it is a 422 'no parseable content', bytes dropped."""
+    pre-fix 200-with-empty-context hole) — #90 makes the refusal ASYNC: the deposit answers 200,
+    the worker lands the job `failed: no parseable content`, and the batch's rows are collected
+    back out (the same honesty, delivered via the job summary instead of an HTTP status)."""
     files = [("files", ("a.xyz", b"unparseable one", "application/octet-stream")),
              ("files", ("b.zzz", b"unparseable two", "application/octet-stream"))]
     r = client.post("/ingest", files=files)
-    assert r.status_code == 422, f"all-unparseable batch published a context: {r.status_code}"
-    assert "parseable" in str(r.json()).lower()
+    assert r.status_code == 200, r.text
+    from service import ingest_worker
+    ingest_worker.run_pending_jobs()
+    hdr = {"X-Avery-Token": r.json()["owner_token"]}
+    m = client.get(f"/team/{r.json()['context_id']}/files", headers=hdr).json()
+    assert m["last_job"]["status"] == "failed"
+    assert "parseable" in m["last_job"]["reason"].lower()
+    assert m["files"] == [], "the unreadable batch's rows must be collected back out"
 
 
 # ============================================================================================== P3
