@@ -1561,3 +1561,72 @@ def test_pg_manual_crud_roundtrip_erases_no_column_anywhere(pg, tmp_path):
     assert before == after, (
         f"get→改→put 往返改写了快照列。整列被抹掉的: { {t: v for t, v in erased.items() if v} }; "
         f"全部差异表: {sorted(t for t in before if before[t] != after.get(t))}")
+
+
+@needs_db
+def test_rls_enabled_on_every_avery_table(pg):
+    """issue #98 / migration 0019 — every avery table carries ROW LEVEL SECURITY, and carries it in
+    the deny-all shape: no policy, and NOT forced.
+
+    Three separate assertions because the migration can fail in three different directions, and the
+    third one is the dangerous one:
+
+      - RLS OFF on a table is a hole in the deny-all floor. The realistic way to get one is drift:
+        migrations replay in filename order, so a table created by a future 0020+ is created AFTER
+        0019 has run and stays uncovered until the next bootstrap. 0019's header spells this out;
+        this assertion is what makes the omission surface as a red test instead of a quiet gap.
+        ⚠ KNOWN LIMIT, measured rather than assumed (2026-08-13): this clause only bites on a FRESH
+        bootstrap. Verified by adding a throwaway 0020 that creates a table — against a brand-new DB
+        the assertion goes red naming that table; run a SECOND time against the same DB it passes,
+        because the `_ensure_schema()` call below replays 0019 and enables RLS on the now-existing
+        table before the assertion is reached. Same reason a hand-disabled table cannot be used to
+        exercise this clause: the replay heals it first. So this catches the drift where CI and new
+        environments actually meet it (first boot), and cannot catch it on a long-lived DB.
+      - A policy would turn deny-all into allow-something. 0019 deliberately ships none, so the
+        expected count is a flat zero rather than anything derived from the schema.
+      - 🔴 FORCE would subject the table OWNER to that empty policy set — deny-all pointed straight
+        at the backend, which connects as the owner. Measured on a throwaway pg16 (2026-08-13):
+        flip FORCE on and the real ingest path dies with `InsufficientPrivilege: new row violates
+        row-level security policy for table "contexts"`, while the same run without FORCE is
+        byte-identical to the pre-0019 baseline. This assertion is the tripwire on that mistake.
+
+    The row-count floor is not decoration: every other assertion here is of the form "no row
+    violates X", which a query matching NOTHING satisfies trivially — all three would go green at
+    once against an empty result. It is a backstop for the query itself going wrong (a mistyped
+    schema name, a relkind filter that excludes everything), not for an unprovisioned DB: that case
+    is already loud, since `_ensure_schema()` below raises "avery schema is not provisioned" first.
+    13 is the table count actually observed after replaying 0001..0019; it is a floor, so adding
+    tables is fine and only removing one forces a deliberate edit here."""
+    import psycopg
+
+    pg.fresh()._ensure_schema()          # replay 0001..0019, including the migration under test
+    with psycopg.connect(_db_url()) as conn:
+        rows = conn.execute("""
+            SELECT c.relname, c.relrowsecurity, c.relforcerowsecurity,
+                   (SELECT count(*) FROM pg_policy p WHERE p.polrelid = c.oid)
+              FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+             WHERE n.nspname = 'avery' AND c.relkind IN ('r', 'p')
+             ORDER BY c.relname
+        """).fetchall()
+
+    assert len(rows) >= 13, (
+        f"expected at least 13 avery tables after bootstrap, found {len(rows)}: "
+        f"{[r[0] for r in rows]} — the RLS assertions below are vacuous against an empty result, "
+        "so this is a broken probe (wrong schema? bootstrap skipped?), not a passing schema")
+
+    no_rls = [r[0] for r in rows if not r[1]]
+    forced = [r[0] for r in rows if r[2]]
+    policied = [r[0] for r in rows if r[3]]
+
+    assert not no_rls, (
+        f"avery tables WITHOUT row level security: {no_rls} — 0019 enables it for every table in "
+        "the schema; a table added by a later migration must enable it in that migration too "
+        "(0019 runs before them and would only catch up on the NEXT bootstrap)")
+    assert not forced, (
+        f"🔴 avery tables with FORCE ROW LEVEL SECURITY: {forced} — FORCE applies the (empty) "
+        "policy set to the table OWNER, which is the backend's own role: every read returns zero "
+        "rows and every write is refused. 0019 must never set it.")
+    assert not policied, (
+        f"avery tables carrying a policy: {policied} — 0019 is deliberately policy-free (RLS on + "
+        "zero policies = deny-all to non-owners). A policy here means someone widened access; that "
+        "is a decision to make explicitly, not a drive-by.")
