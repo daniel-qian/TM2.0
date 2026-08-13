@@ -71,18 +71,42 @@ OpenAI 对家，一组 env 一起换；**schema / 迁移零改动**（`text-embe
 |---|---|
 | 离线全套 `python -m pytest -m "not smoke and not seedgate and not needs_keys and not needs_db"`（cwd=`eval-harness`） | **4257 passed · 151 deselected · 4 xfailed**（基线 4217 + 本票 40，零回归） |
 | 新增 `tests/test_openai_provider_96.py` | **40 passed** |
-| `-m needs_db` 全仓（throwaway 库 `avery_96_test`，docker `teammaster-postgres-1` / pgvector pg17） | 见 §3.1 |
+| `-m needs_db` **全仓**（throwaway 库 `avery_96_test`，docker `teammaster-postgres-1` / pgvector pg17） | **142 passed · 0 failed · 4270 deselected**（18:58） |
 | mock / heuristic / keyword 三条离线默认路径 | 不受影响（它们与 provider 种类无关；4257 那一跑就是它们） |
 
 结尾是 `deselected` 而不是 `skipped` = `eval-harness/pytest.ini` 的离线 addopts 生效了（cwd 对）。
 
 ### 3.1 真库
 
-（见下方"needs_db"小节，跑完填。）
+动了持久层的**旁边**：`make_embedder_from_env()` 的路由是 pg registry 自己构造 embedder 的那条路
+（`avery/ingest/registry.py`），所以按纪律跑**全仓**而不是挑文件（#90 那次按文件挑漏掉四条红了
+一整票的测试）。schema / 迁移 / SQL 一个字没动。
+
+```bash
+docker exec teammaster-postgres-1 psql -U postgres -c "CREATE DATABASE avery_96_test;"
+docker exec teammaster-postgres-1 psql -U postgres -d avery_96_test -c "CREATE EXTENSION IF NOT EXISTS vector;"
+cd eval-harness && AVERY_DB_URL="postgresql://postgres:dev@127.0.0.1:5432/avery_96_test?channel_binding=disable" \
+  TZ=UTC python -m pytest -q -m needs_db      # → 142 passed
+```
 
 ### 3.2 born-red / 变异自检
 
-（见下方，跑完填。）
+「这条判据改动前会红」不是读代码读出来的，是六次手工变异逐条撞出来的（每条主判据配一个专属
+变异；改完 `git checkout -- <file>` 还原，不用 stash——stash 是仓库全局的）：
+
+| # | 变异 | 红的判据 | 保持绿的对照组 |
+|---|---|---|---|
+| 1 | `_make_single` 的 openai 分支退回旧写法（base_url/model 原样传 env） | `never_silently_falls_back_to_minimax` + `minimax_env_cannot_leak` | — |
+| 2 | 抽取链去掉 region 判据 | `never_fails_over_from_openai_to_a_chinese_provider` + `domestic_..._out_to_openai_either` + `machinery_is_actually_armed` | — |
+| 3 | 空 `tools` 照发 | `empty_tool_list_is_omitted_entirely` + `ingest_extraction_call_carries_the_openai_shape` | `non_empty_tools_are_still_sent` ✅ |
+| 4 | 去掉截断抛错 | `reasoning_eats_the_whole_budget_raises...` + `truncation_error_is_recorded_as_a_provider_failure` | `truncated_but_non_empty_answer_is_not_treated_as_an_error` ✅ |
+| 5 | `_EXTRACTION_BRAINS` 去掉 `openai` | `openai_key_alone_arms_llm_extraction` | `every_extraction_provider_has_a_declared_region` ✅（它量的是别的东西） |
+| 6 | `token_param` 默认翻回 `max_tokens` | `openai_call_uses_max_completion_tokens_and_omits_temperature` | `domestic_providers_keep_the_old_request_shape` ✅ · `token_param_escape_hatch` ✅ |
+
+对照组全绿这件事和主判据变红一样重要：它证明尺子没量到自己（境内两家的请求形状、非空 tools、
+被切尾但有正文的回答，都**不该**被这批新判据扫到）。还原后重跑
+`test_openai_provider_96 + test_provider_failover_89 + test_llm_extract + test_spend_gate_coverage +
+test_semantic_recall` → **102 passed**。
 
 ---
 
