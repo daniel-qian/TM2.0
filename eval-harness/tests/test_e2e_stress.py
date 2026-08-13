@@ -172,17 +172,32 @@ def test_stress_concurrency_survival_and_health_not_blocked(tmp_path):
 
         def _health_poller():
             # hammer /health WHILE the ingest/advise load runs — the feat-028 non-block claim.
-            while not stop.is_set():
-                t0 = time.time()
-                try:
-                    r = httpx.get(f"{base}/health", timeout=10)
-                    dt = time.time() - t0
-                    health_latencies.append(dt)
-                    if r.status_code != 200:
-                        errors.append(f"/health -> {r.status_code} during load")
-                except Exception as e:
-                    errors.append(f"/health raised {e!r} during load")
-                time.sleep(0.2)
+            #
+            # 🔴 **这个轮询器必须复用一个 `trust_env=False` 的 Client，否则它量的是它自己。**
+            # 实测（#95 收尾，同机同服务，各 20 次）：
+            #     每次新建 httpx.get      p50 = 1.3876s
+            #     复用一个 httpx.Client   p50 = 0.0013s
+            #     新建但 trust_env=False  p50 = 0.5004s
+            #     裸 socket（地面真值）   p50 = 0.0019s   ← 服务真实成本 ≈ 2 毫秒
+            # 也就是说旧写法（每次 `httpx.get`）里 **99.9% 的「延迟」是客户端自己**：
+            # 约 0.5s 花在构造 Client 上，另外约 0.9s 花在 `trust_env=True` 去读
+            # HTTP_PROXY/NO_PROXY 并建代理表上（本机确实设了 `HTTP_PROXY=127.0.0.1:9567`）。
+            # 于是「压测下 /health 要 6~8 秒」这个结论**整个是量错了东西**——它随开发机有没有
+            # 配代理而变，与服务无关。progress.md 那条「量错了东西的三种形态」再添一种：
+            # **尺子量到了自己**。
+            # `trust_env=False` 不是为了跑得快，是为了让这条判据**不依赖开发机的代理配置**。
+            with httpx.Client(trust_env=False, timeout=10) as hc:
+                while not stop.is_set():
+                    t0 = time.time()
+                    try:
+                        r = hc.get(f"{base}/health")
+                        dt = time.time() - t0
+                        health_latencies.append(dt)
+                        if r.status_code != 200:
+                            errors.append(f"/health -> {r.status_code} during load")
+                    except Exception as e:
+                        errors.append(f"/health raised {e!r} during load")
+                    time.sleep(0.2)
 
         poller = threading.Thread(target=_health_poller, daemon=True)
         poller.start()
@@ -200,31 +215,41 @@ def test_stress_concurrency_survival_and_health_not_blocked(tmp_path):
             f"a parallel /ingest did not succeed: {results['ingest']}")
         assert results["advise"] and all(s == 200 for s in results["advise"]), (
             f"a parallel /advise did not succeed: {results['advise']}")
-        # /health KEPT ANSWERING throughout the load (every non-200 / raise already landed in
-        # `errors` above) and never hung — that is the feat-028 claim this test can actually make.
+        # /health KEPT ANSWERING throughout the load, and FAST — the feat-028 non-block claim.
         #
-        # 🔴 判据形状换过一次（#95），因为旧版 `max(health_latencies) < 8.0` 是一枚**硬币**。
-        # 实测（off/on 各 3 轮，同一台机器、一次性库）：
-        #     worker OFF: n=2 [1.58, 6.62] / [1.46, 7.16] / [1.59, 6.41]
-        #     worker ON : n=2 [1.56, 7.69] / [1.62, 7.90] / [1.75, 6.10]
-        # 两件事因此钉死：
-        #   ① **压测下 /health 本来就要 6~8 秒**，而且**与 worker 开关无关**（两组分布重合）——
-        #      所以 8.0 这条线正压在真实分布上，机器一忙就翻红（#93 收尾实收 8.8s），
-        #      空机就绿。它不是在测阻塞，是在测那天机器忙不忙。
-        #   ② **样本恒为 2**，而且这不是「轮询被饿着了」——它是**延迟的函数**：整个加载窗口约 9 秒，
-        #      一次 /health 就吃掉 6~8 秒。所以任何「最少 N 个样本」的写法在这个形状下不可满足，
-        #      任何「中位数」在 n=2 上就是最大值。
-        # 于是判据落在**这条测试真正能说的那句话**上：全程有应答（上面的 `errors`）、
-        # 一次都没有挂到客户端超时（下面这条），进程还活着。
-        # ⚠ **这不是一条延迟 SLA**：15s 是「挂没挂」的线，不是「快不快」的线。想要延迟 SLA 的话，
-        #    前置是先把「压测下 /health 要 7 秒」这件事本身当成一个产品/运维问题决策掉
-        #    （Docker healthcheck 的 timeout 必须大于它），那不是这条门能替人做的判断。
-        assert len(health_latencies) >= 2, (
-            f"the health poller got {len(health_latencies)} sample(s) — it never really ran "
-            f"alongside the load")
-        assert max(health_latencies) < 15.0, (
-            f"/health stalled outright (max {max(health_latencies):.1f}s over "
-            f"{len(health_latencies)} samples) — that is a hang, not scheduling jitter")
+        # 🔴 这条判据改过**两次**，第一次改错了，值得原样留着当碑：
+        #
+        #   v1（原始）  `max(health_latencies) < 8.0`
+        #   v2（#95 中） 以为「压测下 /health 本来就要 6~8 秒」，于是把线放宽到 15s 并写明
+        #                「这不是延迟 SLA」——**结论是错的，因为尺子量到了它自己**。
+        #   v3（现在）   轮询器复用一个 Client 之后，真实数字是**中位数 2.5 毫秒**。
+        #
+        # 病因（#95 收尾实测，同机同服务各 20 次）：旧轮询器每次 `httpx.get()` **新建一个客户端**，
+        #     每次新建 httpx.get      p50 = 1.3876s
+        #     复用一个 httpx.Client   p50 = 0.0013s
+        #     新建但 trust_env=False  p50 = 0.5004s
+        #     裸 socket（地面真值）   p50 = 0.0019s
+        # 也就是那 1.4 秒里 **99.9% 是客户端构造 + 读 HTTP_PROXY 建代理表**，与服务无关；
+        # 「n 恒等于 2」也不是轮询被饿着，是**加载窗口除以那 1.4 秒**的商。两个「发现」都是假的。
+        #
+        # 修好尺子之后的真实分布（4 轮，8 路 /ingest + 8 路 /advise 并发）：
+        #     n = 13~16，p50 ≈ 0.0025s，其中**恰好两个**离群点落在 1.0~2.2s
+        #     （离群点主要是**测试进程自己**的 GIL：轮询线程与 16 个加载线程同进程抢。
+        #      生产那条 HEALTHCHECK 是**另起一个 python 进程**打一次 urllib，同样负载下实测
+        #      p50 = 0.183s / max = 0.210s / 0 次失败，对着 docker `timeout=5s` 有 ~25 倍余量。）
+        #
+        # 判据因此落在 **p50** 上（3 个数量级的余量，稳；有人往 handler 里加一次 DB 查询立刻红），
+        # max 只留一条宽的「挂没挂」线（离群点实测到 2.2s，6.0 是给它的余量，不是 SLA）。
+        assert len(health_latencies) >= 8, (
+            f"the health poller only got {len(health_latencies)} sample(s) — too few to say "
+            f"anything about blocking (measured 13-16 with a working client)")
+        ordered = sorted(health_latencies)
+        p50 = ordered[len(ordered) // 2]
+        assert p50 < 0.05, (
+            f"/health got EXPENSIVE (p50 {p50 * 1000:.0f}ms over {len(ordered)} samples under "
+            f"load; it costs ~2.5ms) — something was added to the handler, or it now blocks")
+        assert max(ordered) < 6.0, (
+            f"/health stalled outright (max {max(ordered):.1f}s) — that is a hang, not jitter")
         assert proc.poll() is None, "the service process died under concurrency"
     finally:
         _stop_hard(proc, lf)
