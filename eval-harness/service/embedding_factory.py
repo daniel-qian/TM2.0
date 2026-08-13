@@ -2,6 +2,8 @@
 
     AVERY_EMBEDDINGS = keyword | none    -> None: offline keyword recall   [default, AFK-safe]
                      = dashscope | bailian -> DashScopeEmbedder on text-embedding-v4 (DASHSCOPE_API_KEY)
+                     = openai            -> OpenAIEmbedder on text-embedding-3-small @1024 dims
+                                            (OPENAI_API_KEY) — #96 欧盟/海外，同一根 vector(1024) 列
 
 `make_embedder()` returns None whenever embeddings are turned off OR the key is absent, so the
 advisor silently falls back to keyword recall — a missing/rotated key can never break an advise turn.

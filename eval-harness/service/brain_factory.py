@@ -8,7 +8,7 @@ frontend only ever sees SSE events, never a key or a provider credential.
                 = minimax   -> OpenAICompatBrain on MiniMax-M3     (MINIMAX_API_KEY)
                 = deepseek  -> OpenAICompatBrain on DeepSeek       (DEEPSEEK_API_KEY)
                 = claude    -> RealBrain claude-opus-4-8           (ANTHROPIC_API_KEY)
-                = openai-compat -> OpenAICompatBrain, fully env-driven
+                = openai-compat | openai -> OpenAICompatBrain on OpenAI (OPENAI_API_KEY), 全 env 可调
 
 `make_brain` needs the `case` only for the mock brain (it replays the case's MOCK block); real
 brains ignore it.
@@ -19,13 +19,23 @@ import logging
 import os
 
 from avery.brain import (
-    MINIMAX_BASE_URL, MINIMAX_MODEL, Brain, OpenAICompatBrain, make_mock_brain,
+    MINIMAX_BASE_URL, MINIMAX_MODEL, OPENAI_BASE_URL, OPENAI_MODEL, Brain, OpenAICompatBrain,
+    make_mock_brain,
 )
 
 logger = logging.getLogger(__name__)
 
 DEEPSEEK_BASE_URL = "https://api.deepseek.com/v1"
 DEEPSEEK_MODEL = "deepseek-chat"
+
+# #96 · OpenAI 那条路的三个别名（历史上 `openai-compat` 是「任意兼容端点」的逃生口，现在它的
+# **默认**指向 OpenAI 官方；接别家兼容端点仍然只需设 AVERY_OPENAI_BASE_URL/MODEL）。
+OPENAI_KINDS = ("openai-compat", "openai", "compat")
+
+# 供应商的「地理家族」。热备只在同家族内发生：欧盟实例的用户内容绝不许 failover 回境内供应商
+# （合规是单向的，反过来也一样别糊）。EU 实例的一线纪律是 env 里根本没有中国 key + FAILOVER=off，
+# 这条闸是第二把锁——纪律靠人执行，闸不靠。
+PROVIDER_REGION = {"minimax": "cn", "deepseek": "cn", "claude": "intl", "openai": "intl"}
 
 # feat-028: bound every /advise brain CALL. Without this the advisor brain inherited the SDK default
 # (read/write/pool = 600s), so a hung provider ties up the worker/threadpool for ~10 min and hangs
@@ -71,12 +81,59 @@ def failover_enabled() -> bool:
         "off", "0", "false", "no")
 
 
+def canonical_kind(kind: str | None) -> str:
+    """`openai-compat` / `compat` / `openai` 是同一条路的三个写法——归一到 `openai`。
+    不归一的话，AVERY_BRAIN=openai-compat + AVERY_EXTRACTOR_BRAIN=openai 会在 /health 的
+    `providers` 表里长出**两个 key 指同一家供应商**，「到底谁坏了」当场失真（#89 立那张表就是
+    为了不撒谎）。"""
+    kind = (kind or "").strip().lower()
+    return "openai" if kind in OPENAI_KINDS else kind
+
+
 def resolve_brain_kind() -> str:
-    return (os.environ.get("AVERY_BRAIN") or "mock").strip().lower()
+    return canonical_kind(os.environ.get("AVERY_BRAIN") or "mock")
 
 
-# #89 · 互为热备的那一对（境内现实：M3 + DeepSeek）。claude / openai-compat 没有指定的第二家，
+# ── #96 · OpenAI 的 env 面（advise 与抽取共用；抽取只额外换模型 + 输出预算）────────────────────
+
+def openai_key_env() -> str:
+    """Which env var holds the OpenAI key. `AVERY_OPENAI_KEY_ENV` renames it (a host that already
+    uses OPENAI_API_KEY for something else can point Avery at its own name)."""
+    return (os.environ.get("AVERY_OPENAI_KEY_ENV") or "").strip() or "OPENAI_API_KEY"
+
+
+def openai_base_url() -> str:
+    return (os.environ.get("AVERY_OPENAI_BASE_URL") or "").strip() or OPENAI_BASE_URL
+
+
+def _openai_temperature() -> float | None:
+    """None = 不发 temperature（OpenAI 推理模型只接受默认值，显式传 0 直接 400）。设
+    `AVERY_OPENAI_TEMPERATURE` 才发——留给不是推理模型的第三方兼容端点。"""
+    raw = (os.environ.get("AVERY_OPENAI_TEMPERATURE") or "").strip()
+    if not raw:
+        return None
+    try:
+        return float(raw)
+    except ValueError:
+        logger.warning("AVERY_OPENAI_TEMPERATURE=%r is not a number — sending no temperature", raw)
+        return None
+
+
+def openai_request_shape() -> dict:
+    """The parameter-shape kwargs for an OpenAI-family `OpenAICompatBrain` (见其 docstring)。
+    `AVERY_OPENAI_TOKEN_PARAM=max_tokens` 是给只认老名字的第三方兼容端点的逃生口。"""
+    return {
+        "token_param": ((os.environ.get("AVERY_OPENAI_TOKEN_PARAM") or "").strip()
+                        or "max_completion_tokens"),
+        "temperature": _openai_temperature(),
+        "reasoning_effort": (os.environ.get("AVERY_OPENAI_REASONING_EFFORT") or "").strip() or None,
+    }
+
+
+# #89 · 互为热备的那一对（境内现实：M3 + DeepSeek）。claude / openai 没有指定的第二家，
 # 仍包 FallbackBrain（链长 1）——为的是遥测：/health 的 providers 真相来自这层记录点。
+# 🔴 #96：往这里加**跨 PROVIDER_REGION 的一对**就是合规事故（欧盟实例的 /advise 会把用户内容
+#    发去境内供应商）。要加热备只在同 region 内加。
 _PAIR = {"minimax": "deepseek", "deepseek": "minimax"}
 _PAIR_KEY_ENV = {"minimax": "MINIMAX_API_KEY", "deepseek": "DEEPSEEK_API_KEY"}
 
@@ -84,7 +141,7 @@ _PAIR_KEY_ENV = {"minimax": "MINIMAX_API_KEY", "deepseek": "DEEPSEEK_API_KEY"}
 def advise_chain(kind: str | None = None) -> list[str]:
     """The ordered provider chain /advise (and /ask · form drafting) will actually walk.
     ['mock'] 在 mock 下；真脑 = 主脑 + （若 armed 且对家有 key）对家。/health 用它自证。"""
-    kind = (kind or resolve_brain_kind()).strip().lower()
+    kind = canonical_kind(kind) or resolve_brain_kind()
     if kind == "mock":
         return ["mock"]
     chain = [kind]
@@ -102,6 +159,7 @@ def brain_is_live() -> bool:
 
 def _make_single(kind: str) -> Brain:
     """One real brain for `kind`, timeout-bounded. Raises RuntimeError on unknown kind/missing key."""
+    kind = canonical_kind(kind)
     if kind == "minimax":
         return _with_timeout(OpenAICompatBrain(
             name="avery-minimax", api_key_env="MINIMAX_API_KEY",
@@ -118,16 +176,19 @@ def _make_single(kind: str) -> Brain:
         from avery.brain import RealBrain
         return _with_timeout(RealBrain(name="avery-opus"))
 
-    if kind in ("openai-compat", "openai", "compat"):
-        # Fully env-driven OpenAI-compatible endpoint.
+    if kind == "openai":
+        # OpenAI 官方端点（欧盟/海外路径），也是任意 OpenAI 兼容端点的通用出口。
+        # 🔴 base_url / model 必须**显式**给非空值：OpenAICompatBrain 的构造默认落回 MINIMAX_*，
+        #    传 None 就是「配了 OpenAI，实际把用户内容发给 MiniMax」——静默、且正好是欧盟线要堵的
+        #    那个出境点。这两个 `or` 是那道闸，别删。
         return _with_timeout(OpenAICompatBrain(
-            name="avery-openai-compat",
-            api_key_env=os.environ.get("AVERY_OPENAI_KEY_ENV", "OPENAI_API_KEY"),
-            base_url=os.environ.get("AVERY_OPENAI_BASE_URL"),
-            model=os.environ.get("AVERY_OPENAI_MODEL")))
+            name="avery-openai", api_key_env=openai_key_env(),
+            base_url=openai_base_url(),
+            model=(os.environ.get("AVERY_OPENAI_MODEL") or "").strip() or OPENAI_MODEL,
+            **openai_request_shape()))
 
     raise RuntimeError(f"unknown AVERY_BRAIN={kind!r} "
-                       f"(expected mock | minimax | deepseek | claude | openai-compat)")
+                       f"(expected mock | minimax | deepseek | claude | openai-compat | openai)")
 
 
 def make_brain(case, kind: str | None = None) -> Brain:
@@ -140,7 +201,7 @@ def make_brain(case, kind: str | None = None) -> Brain:
     brain is never wrapped (pure/local, and the offline suite's determinism depends on it).
     此 seam 同时覆盖 /advise、/ask 起草、表单起草——三个调用方都从这里拿脑子。
     """
-    kind = (kind or resolve_brain_kind()).strip().lower()
+    kind = canonical_kind(kind) or resolve_brain_kind()
 
     if kind == "mock":
         return make_mock_brain(case, "avery")   # pure/local — no client, no timeout to bound
