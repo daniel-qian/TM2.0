@@ -61,7 +61,11 @@ worker + 孤儿回收 + 'reading' 态）+ pg put() 增量化（positional diff�
   **第 6 次 `-114.2s`** —— 就是那条「Docker PG 时钟来回跳 ~115 秒」，招牌症状正是「单跑绿、整轮红」，
   触发面是 `created_at < now()`。**不是本票造成的，也别当它不存在。**
   ⚠ 本机 docker PG 的口令是 **`dev`** 不是 `postgres`（`docker inspect teammaster-postgres-1` 可查）。
-  跑完记得 `DROP DATABASE`（本 session 的一次性库已删）。
+  跑完记得 `DROP DATABASE`。
+  ⚠ **本 session 收尾时 Docker Desktop 掉了，最后五个一次性库没删成**（连 `SELECT` 都挂）：
+  `avery_t95b` / `avery_t95c` / `avery_health_probe` / `avery_hc_probe` / `avery_client_probe`
+  （更早的 `avery_t93_*` / `avery_t95_*` 已删干净）。Docker 起来之后一句带走：
+  `DROP DATABASE IF EXISTS <名>;` ——它们只占本机磁盘，不影响任何判据。
 - **像素基线现状**：**54 张。#91（0813 凌晨）重冻 4 张**——`{aurora,paper}-home-{desktop,mobile}`
   （首页上传骨架卡的 caption 多了多选引导一句，下方内容顺移；diff 图人审=漂移全部圈定在那张卡），
   **其余 50 张（含全部 18 张数据态）md5 逐字未变**；合并树复跑 54/54 零漂移。
