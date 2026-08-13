@@ -15,6 +15,9 @@ The two hard contracts, in Chinese:
 """
 from __future__ import annotations
 
+import contextlib
+import re
+
 import pytest
 
 from avery import redline
@@ -700,3 +703,349 @@ def test_zh_e_identifier_never_masks_a_later_score_in_the_same_field():
         PersonEntity(id="u_e16", name="安某", owns=["KPI-001 得分 3 分"])]))
     assert any(v.kind == "person-score-value" for v in res.violations), (
         f"混排串没有在结构扫描层被抓到(只靠内容门兜底就说明豁免吃掉了后续匹配): {res.summary()}")
+
+
+# =============================================================================================
+# PART F (#97) — the DIAGNOSIS half of the red line, which existed only in ENGLISH.
+#
+# feat-029 ported SCORE / RISK / TIER to Chinese. It did NOT port `_ALWAYS_DIAGNOSIS` — the rule
+# that catches a CHARACTER or CLINICAL verdict nailed to a person (lazy / toxic / incompetent /
+# stupid / useless / unhinged / worthless). So the ZH side carried only the SCORING forms
+# (情绪值/情绪分/心情值), and the product red line's OWN first example —「臆测偷懒」— was not gated
+# in the language the domestic operator actually reads:
+#
+#     "Honestly he's lazy and probably toxic."   -> FAIL[PERSON-DIAGNOSIS]   (English, since day 1)
+#     "我觉得他就是懒惰，这人有毒。"                -> PASS                     (Chinese, until #97)
+#
+# THE LINE IS 「诊断性标签钉在人身上」, NOT 「负面词」. Every row below is a PAIR, and the pairing is
+# the measurement: the control sentence differs from the diagnosis sentence by ONE WORD and must
+# PASS. Without the control, a red assertion only proves the gate dislikes the sentence — not that
+# it dislikes the LABEL. (This is test_redline_villa_negation_b3.py's `_CONTROL_WORDS` doctrine:
+# 「the control is what makes this a measurement of 「别」 rather than of the sentence」.)
+# =============================================================================================
+
+# (词条, 诊断句 — 必须拦, 对照句 — 必须放行). 对照句只换掉那个诊断词,句式/主语/语气全部不动。
+ZH_F_DIAGNOSIS_PAIRS = [
+    # 懒 / 摸鱼 —— 票面点名的第一族,对应英文 lazy
+    ("偷懒",   "她最近老是偷懒，建议盯紧一点。",        "她最近老是加班，建议盯紧一点。"),
+    ("懒惰",   "我觉得他就是懒惰，交上来的东西一直拖。", "我觉得他就是缺支持，交上来的东西一直拖。"),
+    ("懒散",   "他懒散惯了，节奏一直提不起来。",        "他外派惯了，节奏一直提不起来。"),
+    ("摸鱼",   "这人上班就是在摸鱼，一天写不了两行。",   "这人上班就是在救火，一天写不了两行。"),
+    ("划水",   "他天天划水，活都是别人干的。",          "他天天出差，活都是别人干的。"),
+    ("混日子", "他就是在混日子，没什么产出。",          "他就是在做支撑，没什么产出。"),
+    ("好吃懒做", "这人好吃懒做，不适合留在这个岗位。",   "这人经验不足，不适合留在这个岗位。"),
+    # 精神 / 心理 —— 票面点名的第二族,对应英文 unhinged
+    ("精神状态不正常", "我看他精神状态不正常，先别派活。", "我看他手上压力不小，先别派活。"),
+    ("心理有问题",     "她心理有问题，团队都受不了。",     "她沟通方式很冲，团队都受不了。"),
+    ("脑子有问题",     "这人脑子有问题吧，方案根本讲不通。", "这人思路没对齐吧，方案根本讲不通。"),
+    # 有毒 / 负能量 —— 票面点名的第三族,对应英文 toxic
+    ("有毒",   "这人有毒，谁跟他搭档谁难受。",          "这人很急，谁跟他搭档谁难受。"),
+    ("负能量", "他负能量太重，会影响整个组。",          "他抱怨太多，会影响整个组。"),
+    ("毒瘤",   "他就是团队里的毒瘤。",                  "他就是团队里的老黄牛。"),
+    # 其余英文词表的中文对应 —— useless / worthless / stupid / narcissist / burned-out
+    ("废物",     "他就是个废物，交付一直不达标。",      "他就是个新人，交付一直不达标。"),
+    ("一无是处", "在我看来他一无是处。",                "在我看来他还在爬坡。"),
+    ("玻璃心",   "他玻璃心，反馈重一点就崩。",          "他压力大，反馈重一点就崩。"),
+    ("巨婴",     "他就是个巨婴。",                      "他就是个新人。"),
+    ("弱智",     "他就是弱智，这么简单都不会。",        "他就是没培训过，这么简单都不会。"),
+    ("愚蠢",     "这么干太愚蠢了。",                    "这么干太冒险了。"),
+    ("人品有问题", "他人品有问题，不能带新人。",        "他方法有问题，不能带新人。"),
+    ("职业倦怠", "我判断他是职业倦怠。",                "我判断他是节奏太满。"),
+]
+
+
+@pytest.mark.parametrize("word,diagnosis,control", ZH_F_DIAGNOSIS_PAIRS,
+                         ids=[p[0] for p in ZH_F_DIAGNOSIS_PAIRS])
+def test_zh_f_person_diagnosis_hard_fails(word, diagnosis, control):
+    """正样本：把诊断性标签钉在人身上,必须硬拦。"""
+    res = redline.validate(diagnosis)
+    assert not res.passed, (
+        f"中文人身诊断标签「{word}」逃过了输出闸: {diagnosis!r}\n"
+        f"英文侧同义句 (lazy / toxic / stupid …) 从第一天起就是 FAIL[PERSON-DIAGNOSIS];"
+        f"这条线在中文部署里同样是产品红线,不是可选项。")
+    assert "PERSON-DIAGNOSIS" in {v.rule_id for v in res.violations}, (
+        f"「{word}」拦住了,但落的不是 PERSON-DIAGNOSIS 而是 "
+        f"{[v.rule_id for v in res.violations]} —— 说明它是被旁边的规则顺手带走的,"
+        f"这条判据并没有在验它自己。")
+
+
+@pytest.mark.parametrize("word,diagnosis,control", ZH_F_DIAGNOSIS_PAIRS,
+                         ids=[p[0] for p in ZH_F_DIAGNOSIS_PAIRS])
+def test_zh_f_one_word_control_still_passes(word, diagnosis, control):
+    """负样本(成对)：同一句话,只把诊断词换成一个正常说法,必须放行。
+
+    这半边才是「宽度」的判据。红的那半边单独存在时,它可能是在拒绝整句话的语气、拒绝「他」、
+    拒绝任何带负面色彩的句子 —— 那不是红线要的东西。一词之差的对照句放行,才说明闸判的是
+    **标签**,不是情绪。
+    """
+    res = redline.validate(control)
+    assert res.passed, (
+        f"对照句被误伤 ({res.summary()}): {control!r}\n"
+        f"它和 {diagnosis!r} 只差「{word}」一个词。对照句一旦也被拦,上面那条红就不再是"
+        f"「拦住了诊断标签」的证据,只是「拦住了这句话」。")
+
+
+# --- 宽度：一批带诊断词形、但根本不是在说人的普通中文 ------------------------------------------
+# CJK 没有词边界,这是 B3「别墅」那一课换个词表重演：「懒」不是 lazy,它是 **懒加载** 的第一个字,
+# 而懒加载就写在这个仓库自己的部署纪要里。下面每一句都是词表里某个守卫**专门**挡的那个碰撞。
+ZH_F_WIDTH_MUST_PASS = [
+    # 对事不对人 —— 票面点名必须放行的那两句,以及同族
+    "这周节奏松散，下周把站会拉回来。",
+    "项目拖延了两周，需要重新排期。",
+    "交付质量没达到标准，这件事要直接跟他讲清楚。",
+    # 技术词里的「懒」/「划水」/「摸鱼」
+    "他负责首页图片的懒加载改造，性能提升明显。",
+    "我们把列表改成了懒惰求值，内存占用下来了。",
+    "这次是浑水摸鱼的第三方供应商，合同要收紧。",
+    "他负责游泳课程的划水动作教学。",
+    # 集体/抽象主语的「精神」「心理」—— 说的是文化,不是某个人
+    "团队精神有问题，需要重建协作习惯。",
+    "工匠精神是我们做产品的底色。",
+    "公司很重视员工心理健康，开了咨询热线。",
+    "用户心理研究显示大家更在意首屏速度。",
+    # 「有毒」「废物」的本义,以及「精神病」「神经病」作为机构名/学科名
+    "他负责有毒气体检测模块的开发。",
+    "仓库里存放着有毒气体，必须单独隔离。",
+    "危险废物处理是这个厂区的合规重点。",
+    "我们做了一轮废物回收流程的梳理。",
+    "他在精神病院做过两年信息化项目。",
+    "他是神经病学方向的博士。",
+]
+
+
+@pytest.mark.parametrize("text", ZH_F_WIDTH_MUST_PASS)
+def test_zh_f_ordinary_chinese_is_not_a_diagnosis(text):
+    res = redline.validate(text)
+    assert res.passed, f"新词表误伤了正常中文 ({res.summary()}): {text!r}"
+
+
+# --- ADR-0016：果断的那一面不许被这批词带走 ----------------------------------------------------
+ZH_F_DECISIVE_MUST_PASS = [
+    "他不能胜任现在的岗位，建议启动绩效改进计划，必要时调岗。",
+    "如果三个月后交付还是不达标，就该谈离开的事。",
+    "这件事不能再拖了，本周就跟他把话说开。",
+]
+
+
+@pytest.mark.parametrize("text", ZH_F_DECISIVE_MUST_PASS)
+def test_zh_f_decisive_call_stays_legal(text):
+    """ADR-0016 的第二个方向：红线管的是**评价人**,不是**做决定**。
+
+    「不胜任」是《劳动合同法》第40条的原话,也正是建议走绩效改进/调岗/离开时绕不开的措辞。
+    把它扫进诊断词表,等于让护城河拒绝它本来就是为了放行的那种果断建议。
+    """
+    res = redline.validate(text)
+    assert res.passed, f"果断建议被诊断词表误伤 ({res.summary()}): {text!r}"
+
+
+# --- 否定语境：劝人**别**下诊断,本身不是诊断 ----------------------------------------------------
+ZH_F_NEGATED_MUST_PASS = [
+    "别说他偷懒，先看看是不是需求一直在变。",
+    "不要给他贴懒惰的标签，先把工作说清楚。",
+    "别把他当成摸鱼的人，他手上压着三个需求。",
+    "别对他做精神状态的判断，我们只看交付。",
+]
+
+
+@pytest.mark.parametrize("text", ZH_F_NEGATED_MUST_PASS)
+def test_zh_f_advice_against_diagnosing_passes(text):
+    res = redline.validate(text)
+    assert res.passed, f"劝阻下诊断的建议被误伤 ({res.summary()}): {text!r}"
+
+
+# --- 繁体：同一批词的繁体写法必须同样被拦 -------------------------------------------------------
+# `zh_normalize` 的字表按需扩了 懶魚廢貨腦殘質癡嬰 九个字。不扩就是在补丁内部又造一次中英式的
+# 不对称：简体拦、繁体漏。
+ZH_F_TRADITIONAL_MUST_FAIL = [
+    "我覺得他就是懶惰。",
+    "他上班一直在摸魚。",
+    "他就是個廢物。",
+    "他心理素質差。",
+    "這人腦殘。",
+    "他就是個巨嬰。",
+    "他就是個白癡。",
+]
+
+
+@pytest.mark.parametrize("text", ZH_F_TRADITIONAL_MUST_FAIL)
+def test_zh_f_traditional_diagnosis_hard_fails(text):
+    res = redline.validate(text)
+    assert not res.passed, f"繁体人身诊断标签逃过了输出闸: {text!r}"
+
+
+# --- 抽取层：同一批词在人卡里的两个方向 ---------------------------------------------------------
+# 这一层的误伤比建议层贵得多 —— `validate_extraction` 失败是 pipeline.ingest_docs 上的硬拒,
+# 拒的是客户**整批**上传,不是一张卡。而且 redline_extract 会给每张人卡套一层「she:」前缀,
+# `_has_person` 恒真,所以「靠人称锚定」在这一层等于没锚 —— 词表本身必须扛得住。
+ZH_F_EXTRACTION_LEGIT_OWNS = [
+    ["负责首页图片懒加载改造"],
+    ["负责有毒气体检测模块"],
+    ["搭建废物回收流程"],
+    ["负责游泳课程划水动作教学"],
+    ["把列表改成懒惰求值"],
+]
+
+
+@pytest.mark.parametrize("owns", ZH_F_EXTRACTION_LEGIT_OWNS)
+def test_zh_f_legit_person_card_still_extracts(owns):
+    res = validate_extraction(ExtractionResult(people=[
+        PersonEntity(id="u_f1", name="安某", owns=owns)]))
+    assert res.ok, f"诊断词表把一张合法人卡拒了(整批上传会一起硬拒) ({res.summary()}): {owns!r}"
+
+
+@pytest.mark.parametrize("owns", [["工作态度差，天天摸鱼"], ["精神状态不正常"], ["就是个懒惰的人"]])
+def test_zh_f_diagnosis_in_a_person_card_hard_fails(owns):
+    res = validate_extraction(ExtractionResult(people=[
+        PersonEntity(id="u_f2", name="安某", owns=owns)]))
+    assert not res.ok, f"人卡里的诊断标签逃过了抽取红线: {owns!r}"
+
+
+# =============================================================================================
+# PART F 的变异证明 —— 每条新判据配一个**专属**变异,证明它真的有牙
+#
+# 一条判据绿着,可能是因为它验的东西成立,也可能是因为旁边有别的规则顺手把这句话拦了 —— 后一种
+# 情况下这条判据是装饰,改坏了被测代码它照样绿。所以下面把规则**关掉**再问一遍:
+#   * 整条 _ZH_DIAGNOSIS 关掉 -> 每个正样本都必须翻成 PASS。翻不过去的那句,说明它根本不是被这条
+#     新规则拦的,它在搭旁边判据的便车。
+#   * 每个守卫单独拆掉        -> 它挡的那句误伤必须回来。回不来的守卫是死重,应该删掉而不是留着。
+# =============================================================================================
+
+_NEVER = re.compile(r"(?!)")     # 永不匹配 —— 「这条规则不存在」的那个状态
+
+
+@contextlib.contextmanager
+def _zh_diagnosis_patched(mutant: re.Pattern):
+    """把 _ZH_ALWAYS 里那一条换成 mutant,退出时还原。
+
+    ⚠ 必须改 `_ZH_ALWAYS` 里的那个**元组**,不能只改 `redline._ZH_DIAGNOSIS`：这张表在模块加载时
+    就把编译好的对象按引用抓走了,改模块属性对 `validate` 一点影响都没有,变异会静默地什么都没变
+    而测试照样绿 —— 那正是 b3 那个文件里 `_别_rule()` 的断言在防的失败方式。
+    """
+    table = redline._ZH_ALWAYS
+    idx = [i for i, (_r, rx, _n) in enumerate(table) if rx is redline._ZH_DIAGNOSIS]
+    assert len(idx) == 1, (
+        f"_ZH_ALWAYS 里的 _ZH_DIAGNOSIS 条目不是恰好一条 (找到 {idx}) —— 下面所有变异都指着空气,"
+        f"会空真地通过。先把它接回去。")
+    i = idx[0]
+    rule_id, original, note = table[i]
+    table[i] = (rule_id, mutant, note)
+    try:
+        yield
+    finally:
+        table[i] = (rule_id, original, note)
+
+
+def _mutate_guard(find: str, replace: str) -> re.Pattern:
+    """拆掉词表里的一个守卫,返回变异后的 pattern。`find` 必须真的在 pattern 里 —— 词表一改写法,
+    这里就应该红,而不是安静地替换 0 处然后让变异证明变成空判。"""
+    pattern = redline._ZH_DIAGNOSIS.pattern
+    assert find in pattern, (
+        f"守卫 {find!r} 已经不在 _ZH_DIAGNOSIS 里了 —— 这个变异指着空气,重新对着实现推导一遍。")
+    mutated = pattern.replace(find, replace)
+    assert mutated != pattern, f"变异没有改动 pattern: {find!r}"
+    return re.compile(mutated, re.I)
+
+
+@pytest.mark.parametrize("word,diagnosis,control", ZH_F_DIAGNOSIS_PAIRS,
+                         ids=[p[0] for p in ZH_F_DIAGNOSIS_PAIRS])
+def test_zh_f_each_positive_depends_on_the_new_rule(word, diagnosis, control):
+    """专属变异：整条 _ZH_DIAGNOSIS 关掉后,这一句必须翻成 PASS。
+
+    翻不过去 = 它本来就被别的规则(_ZH_SCORE/_ZH_TIER/英文 _ALWAYS_DIAGNOSIS/…)拦着,那么它在
+    上面那条红里就不是 #97 的证据 —— 换句话说,把 #97 的实现整个删掉,那条判据照样绿。
+    """
+    with _zh_diagnosis_patched(_NEVER):
+        res = redline.validate(diagnosis)
+    assert res.passed, (
+        f"「{word}」这句在 _ZH_DIAGNOSIS 关掉之后依然被拦 ({res.summary()}): {diagnosis!r}\n"
+        f"所以它验的不是这次新增的词表,它搭了旁边判据的便车。换一个只落在新词条上的句子。")
+    # 还原生效了 —— 否则本轮后面每条测试都在跑变异体
+    assert not redline.validate(diagnosis).passed, "变异没还原 —— _ZH_ALWAYS 还挂着 mutant"
+
+
+# (守卫, 拆法, 它挡的那句误伤). 拆掉守卫 -> 这句必须重新被误伤,证明守卫不是装饰。
+ZH_F_GUARD_MUTATIONS = [
+    ("懒惰-技术词", "懒惰(?!求值|计算|加载|初始化|删除|模式|单例)", "懒惰",
+     "我们把列表改成了懒惰求值，内存占用下来了。"),
+    ("摸鱼-浑水", "(?<!浑水)摸鱼", "摸鱼",
+     "这次是浑水摸鱼的第三方供应商，合同要收紧。"),
+    ("划水-游泳", "划水(?!动作|技术|训练|姿势|板|区|线)", "划水",
+     "他负责游泳课程的划水动作教学。"),
+    # ⚠ 这一行的探针句是换过的,原因值得留着：第一版用的是「他负责有毒气体检测模块的开发。」,
+    # 拆掉守卫之后它**依然放行** —— 因为救它的根本不是这个守卫,是 `_zh_about_work`(前面有「负责」、
+    # 后面有「模块」= 人在建工作产物)。用那句话做变异证明,证的是工作抑制,不是守卫;守卫真被删掉了
+    # 它也不会红。探针句必须落在只有守卫能救的位置上。
+    ("有毒-本义", "有毒(?!物质|气体|废|垃圾|有害|化学|试剂|材料|品|性|素|烟|尘)", "有毒",
+     "仓库里存放着有毒气体，必须单独隔离。"),
+    ("废物-本义", "废物(?!利用|回收|处理|处置|分类|管理)", "废物",
+     "危险废物处理是这个厂区的合规重点。"),
+    ("精神病-机构名", "精神病(?!学|院|科|区|房|理|床)", "精神病",
+     "他在精神病院做过两年信息化项目。"),
+    ("神经病-学科名", "神经病(?!学|理)", "神经病",
+     "他是神经病学方向的博士。"),
+]
+
+
+@pytest.mark.parametrize("label,find,replace,false_positive", ZH_F_GUARD_MUTATIONS,
+                         ids=[m[0] for m in ZH_F_GUARD_MUTATIONS])
+def test_zh_f_each_guard_is_load_bearing(label, find, replace, false_positive):
+    """专属变异,反方向：拆掉守卫,它挡的那句普通中文必须重新被误伤。
+
+    守卫拆了还不误伤 = 这个守卫从来没挡住过任何东西,是死重,应该删掉而不是留在词表里假装严谨
+    (b3 那个文件里 test_both_halves_of_the_别_rule_are_load_bearing 的同一条道理)。
+    """
+    assert redline.validate(false_positive).passed, (
+        f"[{label}] 这句现在就被误伤了,变异证明无从谈起: {false_positive!r}")
+    with _zh_diagnosis_patched(_mutate_guard(find, replace)):
+        res = redline.validate(false_positive)
+    assert not res.passed, (
+        f"[{label}] 拆掉守卫 {find!r} 之后,{false_positive!r} 依然没被误伤 —— "
+        f"这个守卫挡的是空气。要么它是死重该删,要么这句话早就不再依赖它,不能再当证据。")
+    assert redline.validate(false_positive).passed, "变异没还原 —— _ZH_ALWAYS 还挂着 mutant"
+
+
+def test_zh_f_collective_lookbehind_is_load_bearing():
+    """「团队精神有问题」和「他精神有问题」的差别,全靠 _ZH_DIAG_COLLECTIVE 那个 lookbehind。
+
+    这就是票面说的 对事不对人 —— 说团队文化有问题是**对事**,必须放行;说某个人精神有问题是
+    **对人**,必须拦。拆掉 lookbehind,前者立刻被误伤,后者不变。
+    """
+    collective, personal = "团队精神有问题，需要重建协作习惯。", "他精神有问题，别让他带新人。"
+    assert redline.validate(collective).passed, "对照前提不成立：集体主语句现在就被拦了"
+    assert not redline.validate(personal).passed, "对照前提不成立：人身诊断句现在就没被拦"
+
+    find = f"(?<![{redline._ZH_DIAG_COLLECTIVE}])"
+    with _zh_diagnosis_patched(_mutate_guard(find, "")):
+        assert not redline.validate(collective).passed, (
+            f"拆掉 {find!r} 之后「{collective}」依然放行 —— 这个 lookbehind 挡的是空气。")
+        assert not redline.validate(personal).passed, (
+            "拆掉 lookbehind 之后人身诊断句反而放行了 —— 变异改坏了别的东西,证明无效。")
+    assert redline.validate(collective).passed, "变异没还原 —— _ZH_ALWAYS 还挂着 mutant"
+
+
+# --- 死针探测：新词表不许把任何一条**既有**判据变成空判 -----------------------------------------
+_ZH_PREEXISTING_MUST_FAIL = [
+    *ZH_PERSON_SCORE_ADVICE, *ZH_B6_TRADITIONAL, *ZH_B7_FALSE_NEGATION, *ZH_B8_PERSON_NUMBER,
+    *ZH_B9_RANK_SYNONYMS, *ZH_B10_STARS, *ZH_R3_NOT_SCORED_WILDCARD, *ZH_R3_ARTIFACT_MORPHEME,
+    *ZH_R3_CONNECTIVE_VERDICT, *ZH_R3_NEW_VERBS_AND_LETTERS, *ZH_R4_ARTIFACT_GUARD_STILL_FAIL,
+    *ZH_R4_SUPERLATIVE_HARD_FAIL, *ZH_R4_NOTSCORED_BYPASS_HARD_FAIL,
+]
+
+
+@pytest.mark.parametrize("text", _ZH_PREEXISTING_MUST_FAIL)
+def test_zh_f_new_lexicon_does_not_prop_up_an_existing_criterion(text):
+    """加词表**不会**让既有判据变红 —— 那是看得见的。它让判据失明的方式是把判据**架起来**：
+    一句本来靠 PERSON-SCORE 拦住的话,现在顺带撞上 PERSON-DIAGNOSIS,于是就算 PERSON-SCORE 被改坏
+    了,那条判据照样绿。判据还在跑,只是不再判任何东西 —— 本仓管这叫死针。
+
+    所以问题不是「套件红了吗」(没红),而是：把 _ZH_DIAGNOSIS 关掉,这些**既有**的必拦句还拦得住吗。
+
+    实测(改动落地前跑的探针,覆盖全套件 5257 条含中文的非 docstring 字面量)：0 条死针,
+    0 条被新词表新拦下的既有语料。这条测试把那次测量钉成回归。
+    """
+    with _zh_diagnosis_patched(_NEVER):
+        res = redline.validate(text)
+    assert not res.passed, (
+        f"这条既有必拦句现在只剩 _ZH_DIAGNOSIS 在拦它: {text!r}\n"
+        f"它原本要验的规则(评分/排名/风险/画像…)已经被新词表架空,改坏了也不会红。"
+        f"要么这句语料该换,要么新词表收窄。")

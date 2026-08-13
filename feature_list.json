@@ -569,6 +569,12 @@
       "name": "T8 全链端到端循环自检 + 中文关键词检索修复（差距战役收官 / #57）",
       "status": "done",
       "evidence_ref": ".issues/gap-design-0805/receipt-T8-e2e.md"
+    },
+    {
+      "id": "feat-104",
+      "name": "redline 中文诊断词零覆盖补齐——_ZH_DIAGNOSIS（懒/摸鱼 · 精神/心理 · 有毒/负能量 · 蠢/废）+ 成对判据 + 逐条变异（#97）",
+      "status": "done",
+      "evidence_ref": ".issues/redline-zh-diagnosis-0814/session-handoff.md"
     }
   ]
 }
