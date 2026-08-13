@@ -1189,6 +1189,17 @@ export const zh: Dict = {
     "projectsArchivedAria": "已归档的项目",
     "projectsArchivedRestore": "恢复",
     "projectsArchivedNote": "这个项目已归档。",
+    // issue #93 · 「已并入」区 —— 补传之后粒度闸把资料里的检查点/阶段并进了对应的项目卡。
+    // 🔴 与「已归档」故意不同词、也故意没有恢复键：归档是经理自己收的，这是系统判的，而重判
+    //    每次补传都跑全档案 —— 手动放回来的卡下一次上传会被原样再折，那是个会自己撤销的按钮。
+    //    这个区回答的是那个具体的问题：「我资料都传完了，那张卡怎么没了。」
+    "projectsFoldedTitle": "已并入其他项目（{count}）",
+    "projectsFoldedAria": "已并入其他项目的条目",
+    "projectsFoldedLede": "这几条在你上传的资料里，是别的项目下面的检查点或阶段，已经并进对应的项目卡，不单独占一张。",
+    "projectsFoldedNote": "原文都还在。删掉判定它的那份资料，它会自动回到上面的网格。",
+    "projectsFoldedInto": "已并入「{title}」",
+    "projectsFoldedIntoUnknown": "已并入另一张项目卡",
+    "projectsFoldedEvidence": "依据：{source}",
     "detailEdit": "编辑",
     "detailSave": "保存",
     "detailCancel": "取消",

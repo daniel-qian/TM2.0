@@ -33,6 +33,7 @@ from .extract import (
     ProjectEntity,
     ProjectMilestone,
     doc_key_of,
+    hidden_reason,
     ProjectRisk,
     norm_milestone_status,
     norm_risk_level,
@@ -268,28 +269,49 @@ class ProjectWriteMixin:
             raise KeyError(context_id)
         return ctx
 
+    def _commit(self, ctx: CompanyContext) -> None:
+        """手编 CRUD 的**唯一**落盘出口：先重物化公司记忆，再 `put()`。
+
+        🔴 为什么加这一步（#93 收尾挖出来的真洞，不是整洁）：这个 mixin 的八个写法原来都是
+        裸 `put()`，而 `put()` 一个字节都不碰 facts.md。于是——
+
+          · 经理把一张卡扔进归档抽屉 → 卡从网格上消失了，`facts.md` 里那句
+            「Project '停车场改造': …」原地不动 → 议事室的 recall 照旧引得到它，
+            经理点不开、对不上，只会觉得这东西在胡说；
+          · 更难看的是 pg 腿：`PostgresContextRegistry.put()` 是**从磁盘读** facts.md 存进
+            DB 行的，所以陈旧的那份会被就地烤进数据库，下一次 `get()` 再原样写回磁盘。
+            自愈是不会发生的——它反过来固化。
+
+        改名/编辑字段是同一个洞的温和版本（卡上写着新名字，语料里还是旧的），所以八个写法一起
+        走这个出口，而不是只给归档那两个打补丁。
+
+        顺序不能反：pg 腿的 `put()` 读的是磁盘上那份，必须先写文件再 put。
+        """
+        materialize_memory(ctx.extraction, ctx.memory_dir)
+        self.put(ctx)
+
     def add_project(self, context_id: str, fields: dict) -> ProjectEntity:
         ctx = self._require_ctx(context_id)
         pr = ctx.add_manual_project(fields)
-        self.put(ctx)
+        self._commit(ctx)
         return pr
 
     def patch_project(self, context_id: str, project_id: str, fields: dict) -> ProjectEntity:
         ctx = self._require_ctx(context_id)
         pr = ctx.patch_manual_project(project_id, fields)
-        self.put(ctx)
+        self._commit(ctx)
         return pr
 
     def archive_project(self, context_id: str, project_id: str) -> ProjectEntity:
         ctx = self._require_ctx(context_id)
         pr = ctx.set_project_archived(project_id, True)
-        self.put(ctx)
+        self._commit(ctx)
         return pr
 
     def restore_project(self, context_id: str, project_id: str) -> ProjectEntity:
         ctx = self._require_ctx(context_id)
         pr = ctx.set_project_archived(project_id, False)
-        self.put(ctx)
+        self._commit(ctx)
         return pr
 
     # rich-align-0722/06 · 人员手编 CRUD——同一 get→mutate→put 骨架（05a 先例直接复用）。
@@ -298,25 +320,25 @@ class ProjectWriteMixin:
     def add_person(self, context_id: str, fields: dict):
         ctx = self._require_ctx(context_id)
         p = ctx.add_manual_person(fields)
-        self.put(ctx)
+        self._commit(ctx)
         return p
 
     def patch_person(self, context_id: str, person_id: str, fields: dict):
         ctx = self._require_ctx(context_id)
         p = ctx.patch_manual_person(person_id, fields)
-        self.put(ctx)
+        self._commit(ctx)
         return p
 
     def archive_person(self, context_id: str, person_id: str):
         ctx = self._require_ctx(context_id)
         p = ctx.set_person_archived(person_id, True)
-        self.put(ctx)
+        self._commit(ctx)
         return p
 
     def restore_person(self, context_id: str, person_id: str):
         ctx = self._require_ctx(context_id)
         p = ctx.set_person_archived(person_id, False)
-        self.put(ctx)
+        self._commit(ctx)
         return p
 
 
@@ -453,7 +475,7 @@ class CompanyContext:
         from avery.scoring_policy import person_scoring_allowed
         allow_scoring = person_scoring_allowed()
         return [self._one_person_card(p, allow_scoring) for p in self.extraction.people
-                if getattr(p, "archived", False)]
+                if hidden_reason(p) == "archived"]
 
     @staticmethod
     def _one_project_card(pr) -> dict:
@@ -513,27 +535,66 @@ class CompanyContext:
         return [self._one_project_card(pr) for pr in self._active_projects()]
 
     def _active_projects(self) -> list:
-        """rich-align-0722/05a 软删（archived）+ issue #93 软折叠（folded_into）的**唯一**过滤点。
+        """rich-align-0722/05a 软删（archived）+ issue #93 软折叠（folded_into）在**定级面**的过滤点。
         `project_cards()` 与 `_decision_subjects()` 都从这里取。
 
-        🔴 为什么收成一处：这条业务不变量抄第二份就一定会漂——而漂掉的后果是用户已经扔进
-        折叠抽屉的项目，从今天页和「N 个值得多看一眼」里爬回来。收成一处之后，
-        `test_project_crud_05a` 对 `project_cards()` 的既有门就**传递性**地守住了定级那条路。
+        🔴 判据本身住在 `extract.hidden_reason()`，不在这里——#93 收尾时发现这条口径当时长在
+        三处（这里、`rejudge`、以及**漏掉的** `materialize_memory`），漏掉那处让顾问一直能引用
+        屏幕上不存在的卡。理由整段写在那个函数上方，这里不复述（口径只写一份，注释也是）。
 
-        #93：`folded_into` 走同一个门，理由逐字相同——被折叠的卡读数已经并进母卡，让它在定级面
-        再出现一次，就是拿同一摊事跟经理说两遍。⚠ 两个标记**语义不同、绝不互相翻译**：
-        `archived` 是经理收的（他能在折叠抽屉里看到并恢复），`folded_into` 是系统收的
-        （抽屉 UI 不在 #93 票内，所以今天它对经理是不可见的——这一条写进回执当已知缺口）。
+        收成一处之后，`test_project_crud_05a` 对 `project_cards()` 的既有门就**传递性**地
+        守住了定级那条路。
         """
-        return [pr for pr in self.extraction.projects
-                if not getattr(pr, "archived", False) and not getattr(pr, "folded_into", "")]
+        return [pr for pr in self.extraction.projects if not hidden_reason(pr)]
 
     def archived_project_cards(self) -> list[dict]:
         """rich-align-0722/05a: soft-deleted projects for the 'archived' collapse drawer (restorable).
         Same card shape as active; the frontend greys them + offers restore. Absent list = nothing
         archived (payload key omitted when empty, per absent≠none)."""
         return [self._one_project_card(pr) for pr in self.extraction.projects
-                if getattr(pr, "archived", False)]
+                if hidden_reason(pr) == "archived"]
+
+    def folded_project_cards(self) -> list[dict]:
+        """issue #93 · 被**系统**折叠进母卡的项目，投给「已并入」区。同卡形 + 四个 folded* 键。
+
+        与归档抽屉并列，但不是一回事，UI 上也不该长得一样：`archived` 是经理自己收的、有恢复键；
+        这里是粒度闸判的。这个区存在的唯一理由，是把「为什么这张卡不见了」变成经理自己看得到的
+        一句话——#93 把裁决落了库，就是为了重启之后这句话还答得出，但当时没有任何界面读它。
+
+        🔴 **故意不给恢复键**：`rejudge_archive` 每次补传都对全档案重判一遍，所以经理手动放回来
+        的卡，下一次上传就会被原样再折一次——那是一个会自己撤销的按钮，比没有按钮更伤。真要给
+        「放回来」，得连带把这张卡钉成手编领域（吃 `_manually_touched` 那条豁免），等于让经理给
+        单张卡永久关掉粒度闸；那是一个独立的产品决定，不在 #93 里做。今天卡回来只有一条路而且
+        是自动的：解释它的那份文档被删 → `file_delete._unfold_unexplained` 撤销折叠。
+
+        `foldedIntoTitle` 按 id 查母卡。母卡此刻可能已被经理归档，那也照样查得到、照样显示——
+        经理要的是「并去哪了」这个事实，不是母卡此刻在不在网格上。查不到就不发键。
+        `foldedRule`/`foldedReason`/`foldedEvidence` 取 `granularity` 里 `subject_id` 指着这张卡的
+        那条裁决；不变式保证它在（`file_delete._unfold_unexplained` 是唯一守卫），这里仍按
+        absent≠none 缺就不发键，让万一的违约表现为「少一行字」而不是整个 /team 五百。
+        """
+        by_id = {pr.id: pr for pr in self.extraction.projects}
+        rulings = {r.subject_id: r for r in getattr(self.extraction, "granularity", [])
+                   if getattr(r, "subject_id", "")}
+        out: list[dict] = []
+        for pr in self.extraction.projects:
+            if hidden_reason(pr) != "folded":
+                continue
+            card = self._one_project_card(pr)
+            card["foldedInto"] = pr.folded_into
+            parent = by_id.get(pr.folded_into)
+            if parent is not None and parent.title:
+                card["foldedIntoTitle"] = parent.title
+            r = rulings.get(pr.id)
+            if r is not None:
+                if r.rule:
+                    card["foldedRule"] = r.rule
+                if r.reason:
+                    card["foldedReason"] = r.reason
+                if r.evidence:
+                    card["foldedEvidence"] = r.evidence
+            out.append(card)
+        return out
 
     @staticmethod
     def _one_playbook_card(pb) -> dict:
@@ -1743,19 +1804,32 @@ def new_context_id() -> str:
 def materialize_memory(extraction: ExtractionResult, dest: Path) -> Path:
     """Write extracted, red-line-clean entities to facts.md / notes.md so the EXISTING loop recall +
     cite gate work over ingested data with no engine change. Each fact is one line (facts.md:<line>).
+
+    #93 收尾 · **收走的卡不写进来**。在这之前这个函数把 `extraction.people/projects` 原样全写，
+    于是顾问引得到经理已经软删的项目（`archived`，rich-align-0722/05a 起就漏着）、停用的成员，
+    以及 #93 新加的被系统折叠掉的卡。屏幕上没有、顾问却张口就来，是最难自证的一类错——经理没法
+    点开那张卡去对，只会觉得这东西在胡说。判据用 `hidden_reason()` 这一份（不在这里抄第二份，
+    理由整段写在它上面）。
+
+    ⚠ 折叠掉的那张卡的**原文**并没有从检索里消失：文档正文照旧进 `materials` → RAG 分块
+    （granularity 模块 docstring 里那条 “Their text survives in the RAG material chunks” 同理）。
+    这里去掉的只是「存在一个叫 X 的项目」这句**由卡合成的断言**——而那张卡确实已经不存在了。
     """
     dest = Path(dest)
     dest.mkdir(parents=True, exist_ok=True)
 
+    people = [p for p in extraction.people if not hidden_reason(p)]
+    projects = [pr for pr in extraction.projects if not hidden_reason(pr)]
+
     facts: list[str] = ["# Company facts (ingested from uploads — qualitative, red-line-clean)", ""]
-    if extraction.people:
+    if people:
         facts.append("## People (qualitative only — no scores, no blood bars)")
-        for p in extraction.people:
+        for p in people:
             facts += p.as_facts_lines()
         facts.append("")
-    if extraction.projects:
+    if projects:
         facts.append("## Projects")
-        for pr in extraction.projects:
+        for pr in projects:
             facts += pr.as_facts_lines()
         facts.append("")
     if extraction.materials:

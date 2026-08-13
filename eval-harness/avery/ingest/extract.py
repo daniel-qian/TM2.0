@@ -402,6 +402,38 @@ class ProjectEntity:
         return out
 
 
+# ── 「这张卡今天在经理屏幕上吗」 ─────────────────────────────────────────────────────────────────
+# 收成一处的**唯一**那份判据。今天三条路都要问它：
+#   · `registry._active_projects()`  —— 项目网格 + 决策定级面
+#   · `registry.materialize_memory()` —— 顾问引得到的 facts.md
+#   · `rejudge.rejudge_archive()`     —— 重判时谁算「存量里还在的卡」（既是待判集也是母卡池）
+#
+# 🔴 为什么必须收成一处：这条判据抄第几份就在第几份上漂，而三处漂掉的后果各不相同、
+# **各自都不会让任何现有的门变红**——
+#   · 定级面漂 → 经理扔进归档抽屉的项目从「今天要决策的」里爬回来；
+#   · facts.md 漂 → 顾问张口引用一张屏幕上根本不存在的卡。这一条不是假设：#93 收尾前
+#     `materialize_memory` 一直把 `extraction.projects` **原样全写**，`archived` 从
+#     rich-align-0722/05a 起就在里面躺着，`folded_into` 落地时又原样继承了这个洞；
+#   · 重判面漂 → 母卡池里混进已经被收走的卡，一张活卡被折进一张死卡。
+# 三处各写一份注释保证不了一致，只有同一个函数能。
+#
+# 返回**原因**而不是布尔：""=在屏幕上，否则是它被收走的方式，可以直接进日志/回执/前端分区。
+# 两个标记语义不同、绝不互相翻译（见 `ProjectEntity.folded_into` 上那段）；`archived` 先判，
+# 所以万一一张卡两个标都带着，它算经理收的——手编领域压过系统裁决，而且两个抽屉因此是个划分，
+# 同一张卡绝不会同时出现在两处。
+def hidden_reason(entity) -> str:
+    """"" = 这张卡今天对经理可见；"archived" = 经理自己软删的；"folded" = 系统折叠进母卡的。
+
+    duck-typed：人卡只有 `archived`（人不会被折叠），项目卡两个都有。用 `getattr` 取是因为存量
+    payload 回读出来可能连键都没有——#93 之前落库的项目行里没有 `folded_into` 这个键。
+    """
+    if getattr(entity, "archived", False):
+        return "archived"
+    if getattr(entity, "folded_into", ""):
+        return "folded"
+    return ""
+
+
 @dataclass
 class SignalEntity:
     """A doc-derived signal. If subjectType == 'person' the summary STOPS at situation (red line):

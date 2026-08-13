@@ -170,6 +170,24 @@ R3 在补传路是窄口（要同时满足阶段标记 + 零跟踪字段 + paren
 - `db/migrations/0010_entities_kind_playbook.sql`：**就地**加 `'ruling'`（want + ADD 两处）。
 - `tests/test_granularity_rejudge_93.py`（新，29 条）。
 
+**08-13 收尾追加（§8）**
+
+- `avery/ingest/extract.py`：`hidden_reason(entity)` —— 「这张卡今天在经理屏幕上吗」的**唯一**判据。
+- `avery/ingest/registry.py`：三处改问 `hidden_reason`（`_active_projects` /
+  `archived_*_cards` / `materialize_memory`）；新增 `folded_project_cards()`；
+  **`ProjectWriteMixin._commit()`** —— 手编 CRUD 的唯一落盘出口（先重物化 facts.md 再 put）。
+- `avery/ingest/rejudge.py`：`visible` 改问 `hidden_reason`（第三份手写谓词退役）。
+- `service/ingest_api.py`：`/team` 载荷新增 `folded_projects`（absent≠none）。
+- `src/lite2/transport.ts`：`RawTeam.folded_projects` + `LiveProjectCard` 的五个 `folded*` 键。
+- `src/lite2/projectView.ts`：`ProjectFoldView` + `ProjectView.fold` + `foldViewOf()`。
+- `src/lite2/screens/ProjectsScreen.tsx`：`FoldedDrawer`（无恢复键，理由写在组件头上）。
+- `src/lite2/styles/lite2.css`：`.lite-projects-folded*` 一族（APPEND-ONLY，列表不是卡网格）。
+- `src/shared/i18n/{zh,en}.ts`：七个 `projectsFolded*` 键。
+- `eval-harness/tools/verify-folded-drawer-93.mjs`（新，17 判据）+ `run-battery.mjs` ROSTER 注册。
+- `tests/test_granularity_rejudge_93.py` +10 条（facts.md 过滤 / 投影枚举门 / 抽屉载荷 /
+  两抽屉划分 / 单批不折叠 / 真库一路验到投影）；
+  `tests/test_registry_contract.py` 的全列往返守卫改判（§8.3 a′）。
+
 ---
 
 ## 6 · 验证账
@@ -242,13 +260,12 @@ R3 在补传路是窄口（要同时满足阶段标记 + 零跟踪字段 + paren
 
 ## 7 · 已知边界与缺口（明写，不藏在绿灯后面）
 
-1. 🟠 **被折叠的卡今天对经理是不可见的** —— 折叠抽屉 UI 不在本票内（票面明写「UI 抽屉不进本票，
-   报告即可」）。后端**答得出**「为什么这张卡不见了」（裁决落库 + `subject_id` 指到卡），
-   但今天只有后端答得出。**产品级犹豫已按票面要求带回编排会话**：折叠卡要不要在某处可见、
-   放归档抽屉旁边还是单开一格、要不要给「放回来」的按钮。
-2. 🟠 **被折叠的卡仍然进 `facts.md`**（`materialize_memory` 对 `archived` 从来也没过滤过）。
-   本票不动它 —— 改它会同时改归档语义，是另一张票的事。后果：顾问仍可能引用一张经理在项目轴上
-   看不到的卡，与今天 `archived` 的处境**完全相同**。
+1. ~~🟠 **被折叠的卡今天对经理是不可见的**~~ → **✅ 2026-08-13 收尾补完，见 §8.1**。
+   （原文：折叠抽屉 UI 不在本票内，票面明写「UI 抽屉不进本票，报告即可」。后端答得出
+   「为什么这张卡不见了」，但今天只有后端答得出。）Danny 08-13 拍板：欠着的全部在本轮一起做完。
+2. ~~🟠 **被折叠的卡仍然进 `facts.md`**~~ → **✅ 2026-08-13 收尾补完，见 §8.2**。
+   （原文：`materialize_memory` 对 `archived` 从来也没过滤过，顾问仍可能引用一张经理在项目轴上
+   看不到的卡。）修的时候挖出一个更深的：这个函数**根本没在手编 CRUD 之后被调用过**。
 3. **重跑成本随档案线性涨**：每次补传要把整个档案的字节重建一遍（每份一次 bytea 查询 + 一次
    parse）。CSV 秒级；大 PDF 的缓存策略票面说「先不做，量出来再说」—— 计时已埋
    （`ingest-timing stage=rejudge ... files=<档案文档数>`，⚠ 这一段的 `files=` 数的是**整个档案**，
@@ -264,3 +281,160 @@ R3 在补传路是窄口（要同时满足阶段标记 + 零跟踪字段 + paren
    下一个人跑任何上传型门/截图前先重打带 `VITE_AVERY_API_BASE` 的 dist 并在浏览器里验 apiBase。
 8. 🔴 **发现的、不属于本票的真问题**：四条 needs_db 测试自 #90 起就红（§6）。修它属于 #90 线
    的收尾，不是 #93 的范围 —— 本票没有顺手修（AGENTS.md「Stay in scope」），只留了可复现的证据。
+   → 已在 #95 结清（`receipt-95.md`）。
+
+---
+
+## 8 · 收尾（2026-08-13，Danny 授权把欠账一起做完）
+
+§7 的头两条本来是「明写在绿灯外面」的缺口，这一节把它们关掉。**两条修的是同一件事的两面**：
+折叠把一张卡从经理眼前拿走了，那么 ① 他得看得到它去哪了，② 顾问不能反过来还在引用它。
+
+### 8.1 「已并入其他项目」区（§7.1）
+
+`GET /team/{id}` 新增 `folded_projects`（同 absent≠none，一张没折就不发键），前端项目屏在归档区
+**之下**多一个默认折起的区。展开后每条一行：**标题 · 已并入「母卡」· 闸自己写的那句理由 ·
+依据 `本周周报.md:6`**。这就是 #93 把裁决落库换来的东西第一次真被读出来。
+
+**三个刻意的不同，都不是省事：**
+
+| | 归档抽屉 | 已并入区 |
+|---|---|---|
+| 谁收的 | 经理自己 | 粒度闸 |
+| 有没有恢复键 | **有** | **没有** |
+| 卡形 | 灰化项目卡（负责人/进度…） | 一行文字（去向 + 理由 + 原文行号） |
+
+🔴 **没有恢复键是想清楚的，不是漏做**。`rejudge_archive` 每次补传都对**全档案**重跑一遍，
+所以手动放回来的卡下一次上传就会被原样再折 —— 那是一个会自己撤销的按钮，比没有按钮更伤。
+真要给「放回来」，得连带把这张卡钉成手编领域（吃 `_manually_touched` 那条豁免），
+等于让经理给单张卡**永久关掉**粒度闸。那是一个独立的产品决定，不在这里替 Danny 做。
+今天卡回来只有一条路而且是自动的：解释它的那份文档被删 → `file_delete` 撤销折叠。
+这条路写进了区尾那句话（「原文都还在。删掉判定它的那份资料，它会自动回到上面的网格。」）。
+
+🔴 **卡形不同**也不是审美：那些读数已经被 `_absorb_project` 并到母卡上了，在这儿再摆一遍卡面事实
+就是拿同一摊事跟经理说两遍 —— 而那正是 `_active_projects()` 过滤它们的理由。
+
+🔴 **理由用后端原句**（`Ruling.reason`），前端不按 `rule` id 编人话。编一句 = 同一条口径长两处，
+闸改了措辞这边不会红。`rule` 是给工程师看的，**不渲染**。
+
+**门**：`eval-harness/tools/verify-folded-drawer-93.mjs`，**17 判据 · 0 FAIL**，已进 run-battery
+ROSTER 的 A 区（A 区 38 → 39 道）。剧本就是合伙人真实的动作序列：传台账（6 张，**此刻没有这个区**
+——对照基准）→ 补周报 → 网格 4 张 + 「已并入其他项目（3）」→ 展开逐条验去向/理由/行号 →
+区里除展开键零按钮（配一条自证：归档抽屉那边**有**恢复键，证明不是 CRUD 挂了）。
+
+**born-red 实证**：把 `foldedIntoTitle` 那一格打歪（恒走 unknown 分支）→ 重打 dist → 跑门 →
+**16 PASS · 1 FAIL，红的正是「每行都说得出并进了哪张母卡」那一条，邻居一条都没跟着塌**。
+判据是各自锚住的，不是靠一条塌带一片。还原后 17/17。
+
+**人眼过图**：`scratchpad/folded-drawer.png`（1440×960 中文壳）+ `folded-en.png`（EN 壳，
+壳文案全英、尾注也没进渐隐带；那句仍是中文的理由见 §8.6.4）。
+⚠ **第一版截图是假的** —— 见 §8.3(b)。
+
+**真库那一层单独验到投影为止**：「已并入」区那四格是 `folded_into` 与 `granularity` 现场
+join 出来的（`subject_id` 是 join key），真库往返只要丢一格，抽屉就退化成「它没了，别问」，
+而**离线套 100% 全绿**（内存腿从来不 asdict→JSONB→回读）。所以
+`test_a_fold_and_its_ruling_survive_a_real_snapshot_replace` 从实体一路验到
+`folded_project_cards()` 和 `_team_payload()`，不停在 `folded_into` 上。
+
+### 8.2 `facts.md` 不再写收走的卡（§7.2）
+
+`materialize_memory` 在这之前把 `extraction.people/projects` **原样全写**。于是顾问引得到
+经理软删的项目、停用的成员，以及 #93 新加的被折叠的卡。屏幕上没有、顾问却张口就来，
+是最难自证的一类错：经理没法点开那张卡去对，只会觉得这东西在胡说。
+
+**判据收成一处**：`extract.hidden_reason(entity)` —— `""`=在屏幕上 / `"archived"` / `"folded"`。
+三条路现在问同一个函数：`registry._active_projects()`、`materialize_memory()`、
+`rejudge.rejudge_archive()`。之前是**三份手写谓词、其中一份压根不存在**。
+
+⚠ **折叠掉的那张卡的原文并没有从检索里消失**：文档正文照旧进 `materials` → RAG 分块。
+去掉的只是「存在一个叫 X 的项目」这句**由卡合成的断言** —— 而那张卡确实已经不在了。
+这一条有专门的反向哨兵判据（不然「把标题从语料里一律抹掉」也能让主判据全绿）。
+
+### 8.3 修的过程里挖出来的两个真问题
+
+**(a) 手编 CRUD 从来不重物化 `facts.md`。** 写完过滤，测试红了 —— `archive_project` 之后
+facts.md 一个字节没变。`ProjectWriteMixin` 的八个写法都是裸 `self.put(ctx)`，而 `put()`
+不碰 facts.md。**pg 腿更难看**：`PostgresContextRegistry.put()` 是**从磁盘读** facts.md 存进 DB 行的，
+所以陈旧那份会被就地烤进数据库，下一次 `get()` 再原样写回磁盘 —— 自愈不会发生，它**反过来固化**。
+修法是给这个 mixin 一个唯一落盘出口 `_commit(ctx)`（先重物化、再 put，顺序不能反），
+八个写法全走它。防复发的门按 AST 扫这个类：除 `_commit` 外谁再调 `self.put(` 就红。
+
+**(a′) 那个修复自己炸出一条真库红，而红的是判据不是代码。**
+`test_pg_manual_crud_roundtrip_erases_no_column_anywhere`（全列往返守卫）在 `-m needs_db` 全仓
+里唯一一条红，报 `memory_files` 变了。实测差异是 **facts.md 多了一行
+`Project 'Roundtrip Guard':.`**（notes.md 逐字相同、`整列被抹掉的: {}`）—— 那正是修复要的效果：
+在这之前，经理手加的这张卡，议事室的 recall **一个字都不知道**。
+改判据不是把这张表从 diff 里划掉（那会连「整列被抹掉」也一起放过），换的是一条**更严的**：
+notes.md 必须逐字不变 + facts.md 必须**只增不减**（旧行一行不少，新增的必须包含新卡那一行、
+其余只许是段标题）。⚠ 第一版判据写成「新增的正好是那一行」，红了 —— 这份 fixture 的语料本来
+一个项目都没有，所以还会长出 `## Projects` 段标题。判据写死行数就会跟着语料形状漂。
+
+**(b) 我自己的截图骗了我一次。** 第一张人眼过的图上，区尾那句话是糊的、像被屏底家具压住。
+查下去两层都不是我以为的：`window.scrollTo` 是**空动作**（滚动条在 `.lite-projects-scroll` 上），
+而 `scrollIntoView({block:'end'})` 只把这一段底边对齐到容器底边、**还剩 90px 没滚**，
+尾注正好落进容器末尾 44px 的**渐隐遮罩**里。滚到真底之后：尾注 y730–750、渐隐线 796、
+发射器 874 —— 完全干净，**布局没有缺陷，缺陷在我的量法**。
+
+这件事的后果不止一张图：`elementFromPoint` **看不见 mask**（被遮罩淡成透明的元素照样命中自己、
+`opacity` 照样是 1），所以第一版那条「没被压住」的判据对着一片看不见的字**是绿的**。
+门里现在是三条一起：真命中 + 几何式的「底边在渐隐带之上」（遮罩宽度**从计算值读**，不写死 44）+
+最后一行取的是**尾注**不是最后一个 item（第一版只探 item，尾注整行糊掉而门全绿）。
+
+### 8.4 像素基线为什么不会漂 —— 前提写成了判据
+
+这个 worktree 里 visual 基线 **0 张**（gitignored 的 per-worktree 产物），在这儿跑 visual 是空跑
+——「新 worktree 里 visual 门是 40 张『没有基线』，一张都没比对」那条碑的现场。所以没跑它，
+改成把**论证的前提**钉成判据：`visual-data.spec.mjs` 把 demo-seed 九份文件**一次全选**上传，
+而一次全选**永远折不出卡**（抽取路对降级候选是丢弃，折叠只发生在补传路）→ `folded_projects` 恒缺席
+→ 这个区一次都不渲染 → 新加的那族 CSS 一条都匹配不上。
+判据：`test_a_single_batch_upload_never_produces_a_folded_card`，带补传路 3 张的对照。
+
+### 8.5 收尾验证账
+
+| 项 | 结果 |
+|---|---|
+| 离线全仓 | **4217 passed · 0 failed**（收尾前 4207 → 新增 10 条） |
+| `-m needs_db` **全仓**（一次性库 `avery_t93b`） | **142 passed · 0 failed**（约 13 分钟；不按文件挑） |
+| 途中那条唯一的红 | `test_pg_manual_crud_roundtrip_erases_no_column_anywhere` —— **判据该改，不是代码坏**，见 §8.3(a′) |
+| `#93` 那个文件 | 39 passed |
+| 前端 typecheck / lint / css-brace / css-scope / i18n-orphans | 全绿（lint 的 6 条 warning 是既有的、无关文件） |
+| `verify-folded-drawer-93.mjs` | **17 PASS · 0 FAIL**（含 390×780 手机视口） |
+| born-red | 打歪 `foldedIntoTitle` → 只红目标那一条（16/1） |
+| 一次性库清理 | `avery_t95b` / `avery_t95c`（#95 遗留）已删；本轮 `avery_t93b` 用完即删 |
+
+🔴 **收尾时我自己踩了一次「缺一真烧钱」，如实记账**：有一轮离线全仓是从**仓库根**跑的裸
+`pytest`，而离线兜底那行 `addopts = -m "not smoke and not seedgate and not needs_keys and not
+needs_db"` **只住在 `eval-harness/pytest.ini`，仓库根一个 pytest 配置都没有**。于是 `seedgate`
+被一起选上，而 `test_seed_gate.py::live_service` 这个 fixture **自己 spawn 一个
+`AVERY_BRAIN=minimax` + `AVERY_EMBEDDINGS=dashscope` 的 uvicorn**（`.env` 里两把真 key 都在）。
+日志实录：2 次 `/ingest`（真 LLM 抽取）+ 1 次 `/advise`（真生成 + dashscope 向量），全 200 —— **真花了钱**。
+* **招牌症状**：结尾那行是 **`142 skipped`** 而不是 **`151 deselected`**。看到 `skipped` 就是
+  cwd 错了，别去查代码。带路径参数时不会踩（pytest 会沿参数往上找到那份 ini），**只有裸
+  `pytest` 会踩**，而那正是「跑一遍全仓」最自然的写法。
+* 那 3 条 seedgate 红**不是本票的回归**：它们要真 key + 真 `:8137`，默认排除，本仓的「绿」
+  从不包含它们；失败形态是 `advice: None`（模型没返回可用内容），本票的 diff 造不出这个。
+  没有为了定性再跑一遍去二次花钱。
+* fixture 的 teardown 把 `:8137` 收干净了（实测无监听），没留下一个付费形状的后端在跑。
+* 已落碑：`memory/pytest-cwd-repo-root-burns-money.md`。
+
+⚠ **`dist/` 现在指向 `http://127.0.0.1:8393`**（本轮为跑门重打过）。下一个人跑任何上传型门或
+截图前，照 §7.7 那条先重打带自己 `VITE_AVERY_API_BASE` 的 dist，并在浏览器里验 `apiBase`。
+
+### 8.6 仍然留在台面上的
+
+1. 🟠 **「放回来」按钮**：见 §8.1，是一个独立的产品决定（等于给单张卡永久关掉粒度闸）。
+   今天唯一的回退路是删掉判它的那份资料，并且已经写在界面上。
+2. **母卡被经理归档之后**，「已并入」区仍然显示 `已并入「<母卡名>」`（母卡查得到，只是不在网格上）。
+   这是刻意的：经理问的是「它并去哪了」，不是「母卡此刻在不在网格上」。
+3. `SignalEntity`（notes.md）没有可见性标记，所以一条挂在被停用成员身上的信号仍会进 notes.md。
+   `hidden_reason` 是 duck-typed 的，那天要加只是给它一个字段的事 —— 但今天信号上没有那个字段，
+   不假装有。
+4. 🟠 **EN 壳下那句理由仍是中文**（实测截图 `scratchpad/folded-en.png`）。壳本身全英
+   （`Merged into other projects (3)` / lede / 尾注都对），中文的是 `Ruling.reason` ——
+   **后端派生文案，`granularity.py` 无条件写中文，今天整个模块没有 locale 这个概念**。
+   这是本票**第一次**把它投上屏（此前它只活在回执和日志里），所以缺口是这一票暴露的、不是造的。
+   没有顺手翻：那句话把文档自己的词整段引进去了（「…列在项目「秋季营销冲刺」的「里程碑」清单里」），
+   给中文引文套一层英文框架仍然是混排；而且它与回执里那句**逐字相同**是刻意的。真要做，
+   是给整个粒度闸加 locale 的一张独立票。
+   ⚠ **今天没有任何一道门够得着它**：`verify-locale-parity` 用的是**一次全选**的 demo-seed 语料
+   （见 §8.4），那条路永远折不出卡，这个区一次都不渲染。记在这里，别指望门会提醒。

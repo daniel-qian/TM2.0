@@ -7013,6 +7013,69 @@
   font-size: 12px;
 }
 
+/* ═══ issue #93 — 「已并入其他项目」区（归档区之下）。APPEND-ONLY。 ═══
+   刻意**不**复用 .lite-projects-archived-grid：那是卡网格，而这里要读的是一行文字
+   （「谁 → 并进了谁 → 凭哪一行」）。读数已经并到母卡上了，在这儿再摆一遍卡面事实，
+   就是拿同一摊事跟经理说两遍。所以是列表不是网格，也没有恢复键（理由写在组件上）。 */
+.lite2-shell .lite-projects-folded {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+}
+.lite2-shell .lite-projects-folded-toggle {
+  font-size: 12.5px;
+}
+.lite2-shell .lite-projects-folded-body {
+  margin-top: 10px;
+}
+.lite2-shell .lite-projects-folded-lede,
+.lite2-shell .lite-projects-folded-note {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+.lite2-shell .lite-projects-folded-note {
+  margin-top: 10px;
+  font-style: italic;
+}
+.lite2-shell .lite-projects-folded-list {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.lite2-shell .lite-projects-folded-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  /* 🔴 min-width:0 —— flex 子项默认 min-width:auto，长中文标题会把整块撑出容器
+     （溢出朝两头同时溢、ellipsis 不生效，#85 那条实收）。这里让文字老实换行。 */
+  min-width: 0;
+}
+.lite2-shell .lite-projects-folded-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.lite2-shell .lite-projects-folded-into {
+  font-size: 12.5px;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.lite2-shell .lite-projects-folded-reason,
+.lite2-shell .lite-projects-folded-evidence {
+  font-size: 12px;
+  color: var(--ink-soft);
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
 /* ── 详情浮层：编辑态容器 + 归档提示 + 恢复/归档键 ── */
 .lite2-shell .lite-detail-edit {
   display: block;

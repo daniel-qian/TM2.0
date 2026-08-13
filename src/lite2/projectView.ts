@@ -50,6 +50,26 @@ export interface MilestoneView {
   statusRaw: string | null
 }
 
+/**
+ * issue #93 · 一次**软折叠**的去向与理由 —— 「这张卡为什么不见了」在屏幕上的全部内容。
+ *
+ * 🔴 这不是归档。归档是经理自己收的、有恢复键；折叠是粒度闸判的（那一条在资料里本来就是
+ * 别的项目底下的一个检查点），所以这里**故意没有恢复键**：重判每次补传都跑全档案，手动放回来
+ * 的卡下一次上传会被原样再折一次，那是个会自己撤销的按钮。
+ */
+export interface ProjectFoldView {
+  /** 母卡 id。恒非空 —— 没有去向就不成其为一次折叠（后端同一格既是标记也是去向）。 */
+  intoId: string
+  /** 母卡标题；null = 后端没给出（母卡查不到）。UI 退回只说规则，绝不自己编一个名字。 */
+  intoTitle: string | null
+  /** 稳定规则 id（如 `R1-milestone-section`）。null = 裁决记录缺失——不变式被破坏时的样子。 */
+  rule: string | null
+  /** 给经理看的中文整句，后端 `Ruling.reason` 原样透传（不是前端拼的）。 */
+  reason: string | null
+  /** `"<文件名>:<第几行>"` —— 判它的那一行原文在哪。 */
+  evidence: string | null
+}
+
 export interface ProjectView {
   id: string
   title: string
@@ -73,6 +93,11 @@ export interface ProjectView {
    * 🔴 只用于详情浮层逐字段「手动编辑」角标；判据不进 riskLevel/progress 等真值派生（那些仍只认原始值）。
    */
   provenance: Record<string, LiveFieldProvenance>
+  /**
+   * issue #93 · 折叠去向。🔴 null = 这张卡没被折叠 —— 主网格与归档抽屉里的卡**恒** null，
+   * 只有 `folded_projects` 那一批有值（后端 `hidden_reason` 保证两个抽屉是划分）。
+   */
+  fold: ProjectFoldView | null
 }
 
 /** 某字段是否为人手编（origin==='manual'）。缺席/doc/form 出处 → false（不替文档冒充手编）。 */
@@ -193,7 +218,28 @@ export function buildProjectViews(
     milestones: milestoneViewsOf(card.milestones),
     // rich-align-0722/05a：出处 side-car 原样透传（缺席=空 dict → isManualField 恒 false）。
     provenance: card.provenance ?? {},
+    // #93：折叠去向。缺席 → null（主网格与归档抽屉里的每一张卡都走这一路）。
+    fold: foldViewOf(card),
   }))
+}
+
+/**
+ * #93 · 折叠 side-car → UI 事实。
+ *
+ * 🔴 `foldedInto` 是唯一的在场判据：后端那一格既是「被折了」的标记，也是「折去哪」的答案，
+ * 所以没有「折了但不知道去哪」这种中间态可言。其余三格各自缺席=各自不显示（absent≠none），
+ * 绝不互相兜底 —— 尤其不拿规则 id 当理由渲染给经理看，那是给工程师看的字符串。
+ */
+function foldViewOf(card: LiveProjectCard): ProjectFoldView | null {
+  const intoId = trimmedOrNull(card.foldedInto)
+  if (!intoId) return null
+  return {
+    intoId,
+    intoTitle: trimmedOrNull(card.foldedIntoTitle),
+    rule: trimmedOrNull(card.foldedRule),
+    reason: trimmedOrNull(card.foldedReason),
+    evidence: trimmedOrNull(card.foldedEvidence),
+  }
 }
 
 /** 里程碑状态 → 人话标签。other 回显文档原词（不改写）。卡面 chips 与详情清单共用一份口径。 */

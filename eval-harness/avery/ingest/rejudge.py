@@ -51,7 +51,7 @@ import time
 
 from dataclasses import dataclass, field, replace
 
-from .extract import MANUAL_PROVENANCE_ORIGIN, _absorb_project
+from .extract import MANUAL_PROVENANCE_ORIGIN, _absorb_project, hidden_reason
 # 🔴 ONE RULER：parent 的比对键必须与闸**判定 parent 存在**时用的那把尺逐字相同。
 # `classify` 里 R3 是在 `project_titles`（按 `granularity._key` 建的）里找到 parent 的，
 # R1 的 parent 是 `build_milestone_index` 按同一把尺索引出来的块标题。这里改用
@@ -192,10 +192,10 @@ def rejudge_archive(reg, ctx, ready: dict[str, ParsedDoc] | None = None) -> Reju
     """
     report = RejudgeReport()
     projects = list(getattr(ctx.extraction, "projects", []) or [])
-    # 判的是**经理此刻看得见的那张表**（`registry._active_projects()` 的同一条口径）：
-    # 归档过的卡已经离开项目轴，被折过的卡读数已经在母卡上 —— 再判一次只会把它们折第二次。
-    visible = [pr for pr in projects
-               if not getattr(pr, "archived", False) and not getattr(pr, "folded_into", "")]
+    # 判的是**经理此刻看得见的那张表**：归档过的卡已经离开项目轴，被折过的卡读数已经在母卡上
+    # —— 再判一次只会把它们折第二次。判据是 `extract.hidden_reason()` 那**一份**（#93 收尾把
+    # 原先散在三处的同一条口径收了口，理由整段写在那个函数上方）。既是待判集，也是母卡池。
+    visible = [pr for pr in projects if not hidden_reason(pr)]
     report.active_before = len(visible)
     report.active_after = len(visible)
     if not visible:

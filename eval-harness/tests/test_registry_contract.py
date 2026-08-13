@@ -1471,6 +1471,9 @@ def test_pg_manual_crud_roundtrip_erases_no_column_anywhere(pg, tmp_path):
     get→add_project→put 往返之后对 avery.* 里**每张带 context_id 的表逐列** diff（时间戳审计列
     updated_at/created_at 除外；uploaded_at 是业务数据，**不豁免**）：未来任何进快照的新列被
     往返抹掉，这里直接红——不需要有人预言是哪一列。
+
+    ⚠ 两张表**该**变，各自单独判、判得比"逐字相同"更严（见下）：`entities`（多一行新卡）与
+    `memory_files`（#93 收尾起手编 CRUD 会重物化 facts.md）。别顺手把它们从 diff 里划掉。
     """
     import psycopg
 
@@ -1515,6 +1518,28 @@ def test_pg_manual_crud_roundtrip_erases_no_column_anywhere(pg, tmp_path):
 
     with psycopg.connect(_db_url()) as conn:
         after = dump(conn)
+
+    # memory_files 本来就该跟着变（#93 收尾）：手编 CRUD 现在走 `ProjectWriteMixin._commit`，
+    # **先重物化 facts.md 再 put()**。在那之前这张表在一次 add_project 后逐字不变——听着像
+    # 「守卫全绿」，其实是「经理刚加的这张卡，议事室的 recall 一个字都不知道」，而 pg 腿的
+    # `put()` 是从磁盘读 facts.md 存进库的，那份陈旧语料会被就地烤进数据库、下次 get() 再原样
+    # 写回，不自愈。
+    #
+    # 🔴 所以这里不是把这张表从守卫里划掉（那会连"整列被抹掉"也一起放过），是换一条**更严的**：
+    # notes.md 必须逐字不变（这一趟跟信号无关），facts.md 必须是**只增不减**——旧的每一行都还在，
+    # 且新增的正好是新卡那一行。
+    mem_before = {r["filename"]: r["content"] for r in before.pop("memory_files")}
+    mem_after = {r["filename"]: r["content"] for r in after.pop("memory_files")}
+    assert set(mem_before) == set(mem_after), "重物化改动了 memory_files 的文件集合"
+    assert mem_after["notes.md"] == mem_before["notes.md"], "这一趟不该碰 notes.md"
+    fb, fa = mem_before["facts.md"].splitlines(), mem_after["facts.md"].splitlines()
+    assert [ln for ln in fb if ln not in fa] == [], "facts.md 里原有的行被重物化弄丢了"
+    gained = [ln for ln in fa if ln not in fb]
+    # 这份 fixture 语料本来一个项目都没有，所以除了卡那一行还会长出 `## Projects` 段标题。
+    # 判据不写死行数（那会跟着语料形状漂），写成：新卡那行必须在，其余只许是段标题。
+    assert "Project 'Roundtrip Guard':." in gained, f"新卡没进 facts.md：{gained}"
+    assert [ln for ln in gained if not ln.startswith("## ")] == \
+           ["Project 'Roundtrip Guard':."], f"facts.md 长出了新卡以外的内容：{gained}"
 
     # entities 本来就该多一行（新项目）：非 project 行必须逐列原样，project 旧行原样 +1 新行。
     ent_before = before.pop("entities")

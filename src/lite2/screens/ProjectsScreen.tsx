@@ -296,6 +296,11 @@ export function ProjectsScreen() {
     () => buildProjectViews(rawTeam?.archived_projects, rawTeam?.people),
     [rawTeam],
   )
+  // #93：被粒度闸并进母卡的条目 → 归档区**下面**再一个区。同 absent≠none（缺键 → []）。
+  const foldedViews = useMemo(
+    () => buildProjectViews(rawTeam?.folded_projects, rawTeam?.people),
+    [rawTeam],
+  )
 
   const hasCoverageGap =
     coverage.missingProgress > 0 || coverage.missingDueDate > 0 || coverage.missingStatus > 0
@@ -431,6 +436,8 @@ export function ProjectsScreen() {
 
           {/* rich-align-0722/05a：归档（软删）折叠区——网格下方。有归档项目才出；灰化卡 + 恢复键。 */}
           {archivedViews.length > 0 ? <ArchivedDrawer views={archivedViews} /> : null}
+          {/* #93：「已并入」区——归档区之下。有被折叠的条目才出；说清并去哪、凭哪一行，无恢复键。 */}
+          {foldedViews.length > 0 ? <FoldedDrawer views={foldedViews} /> : null}
         </div>
       </div>
     </section>
@@ -611,6 +618,70 @@ function ArchivedDrawer({ views }: { views: ProjectView[] }) {
               </button>
             </div>
           ))}
+        </div>
+      ) : null}
+    </section>
+  )
+}
+
+// #93 ·「已并入其他项目」区。默认折起，展开见每条并去了哪张卡、凭资料里的哪一行。
+//
+// ## 这个区回答的是一个具体问题
+// 合伙人一份一份地补资料，某次传完之后一张项目卡就没了。后端从 #93 起答得出「为什么」
+// （裁决落了库、重启也在），但在这之前**没有任何界面去读它**——对经理来说那张卡就是凭空消失。
+//
+// ## 🔴 三个刻意的不同（都不是省事）
+//  ① **没有恢复键**。归档抽屉有，是因为归档是经理自己的动作，恢复是把他自己的动作撤回。这里
+//     是粒度闸判的，而重判每次补传都对**全档案**重跑一遍——手动放回来的卡，下一次上传会被
+//     原样再折一次。那是一个会自己撤销的按钮，比没有按钮更伤。真要给「放回来」，得连带把这张
+//     卡钉成手编领域（吃 `_manually_touched` 那条豁免），等于让经理给单张卡永久关掉粒度闸；
+//     那是一个独立的产品决定。今天唯一的那条路写在区尾的说明里：删掉判它的那份资料。
+//  ② **不是 `is-archived` 那种灰化卡，是一行一条**。这里要读的是「它去哪了、凭什么」，
+//     不是负责人/进度那些卡面事实——那些读数已经并到母卡上了，在这儿再显示一遍就是同一摊事
+//     说两遍（也正是 `_active_projects` 过滤它们的理由）。
+//  ③ **理由用后端原句，不在前端拼**。`fold.reason` 是 `Ruling.reason`，那句中文是闸自己写的、
+//     跟回执里那句逐字相同。前端按规则 id 编一句人话 = 同一条口径长两处，闸改了这儿不会红。
+//     规则 id (`fold.rule`) 是给工程师看的，**不渲染**。
+function FoldedDrawer({ views }: { views: ProjectView[] }) {
+  const { t } = useDict()
+  const l = t.lite2
+  const [open, setOpen] = useState(false)
+
+  return (
+    <section className="lite-projects-folded" aria-label={l.projectsFoldedAria}>
+      <button
+        type="button"
+        className="lite-btn lite-btn--ghost lite-projects-folded-toggle"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+      >
+        {fill(l.projectsFoldedTitle, { count: views.length })}
+      </button>
+      {open ? (
+        <div className="lite-projects-folded-body">
+          <p className="lite-projects-folded-lede">{l.projectsFoldedLede}</p>
+          <ul className="lite-projects-folded-list">
+            {views.map((view) => (
+              <li key={view.id} className="lite-projects-folded-item" data-project-id={view.id}>
+                <span className="lite-projects-folded-title">{view.title}</span>
+                <span className="lite-projects-folded-into">
+                  {view.fold?.intoTitle
+                    ? fill(l.projectsFoldedInto, { title: view.fold.intoTitle })
+                    : l.projectsFoldedIntoUnknown}
+                </span>
+                {/* 缺席=不显示（absent≠none）。理由缺了就只剩「并去哪」，绝不拿规则 id 顶上。 */}
+                {view.fold?.reason ? (
+                  <span className="lite-projects-folded-reason">{view.fold.reason}</span>
+                ) : null}
+                {view.fold?.evidence ? (
+                  <span className="lite-projects-folded-evidence">
+                    {fill(l.projectsFoldedEvidence, { source: view.fold.evidence })}
+                  </span>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+          <p className="lite-projects-folded-note">{l.projectsFoldedNote}</p>
         </div>
       ) : null}
     </section>

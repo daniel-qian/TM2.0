@@ -276,6 +276,12 @@ def _team_payload(ctx: CompanyContext, *, reg: ContextRegistry | None = None) ->
     archived = ctx.archived_project_cards()
     if archived:
         payload["archived_projects"] = archived
+    # issue #93 · 被粒度闸折叠进母卡的项目，投给「已并入」区。同 absent≠none：一张没折就不发键。
+    # 与 archived_projects 是**划分**（`extract.hidden_reason` 保证同一张卡只落一边），所以前端
+    # 两个区永远不会把同一张卡画两遍。这个键是「为什么这张卡不见了」在界面上的唯一出口。
+    folded = ctx.folded_project_cards()
+    if folded:
+        payload["folded_projects"] = folded
     # rich-align-0722/06 · 停用（软删）的成员，投给团队目录页尾折叠区。空即缺席（absent≠none）。
     archived_ppl = ctx.archived_people_cards()
     if archived_ppl:

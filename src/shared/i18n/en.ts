@@ -1503,6 +1503,22 @@ export const en = {
     projectsArchivedAria: 'Archived projects',
     projectsArchivedRestore: 'Restore',
     projectsArchivedNote: 'This project is archived.',
+    // issue #93 · the "merged in" section — after a follow-up upload the granularity gate folded
+    // these checkpoints/phases into the project card they belong to.
+    // 🔴 deliberately NOT worded like "archived", and deliberately WITHOUT a restore control:
+    //    archiving is the manager's own action; this is the gate's ruling, and the re-judgement
+    //    re-runs over the whole archive on every upload — a manually restored card would be folded
+    //    again by the next one. This section answers one concrete question: "I finished uploading,
+    //    so where did that card go?"
+    projectsFoldedTitle: 'Merged into other projects ({count})',
+    projectsFoldedAria: 'Items merged into other projects',
+    projectsFoldedLede:
+      'In the files you uploaded these are checkpoints or phases inside another project. They have been merged into that project’s card rather than each taking a card of their own.',
+    projectsFoldedNote:
+      'Nothing was deleted. Remove the file that ruled on an item and it returns to the grid above.',
+    projectsFoldedInto: 'Merged into “{title}”',
+    projectsFoldedIntoUnknown: 'Merged into another project card',
+    projectsFoldedEvidence: 'From {source}',
     detailEdit: 'Edit',
     detailSave: 'Save',
     detailCancel: 'Cancel',

@@ -244,6 +244,12 @@ export interface LiveTeamPayload {
   // rich-align-0722 · issue 06：停用（软删）的成员卡，投给团队目录页尾折叠区（灰化 + 恢复文字键）。
   // 同 archived_projects 的 absent≠none 语义（空即缺席）。
   archived_people?: LivePersonCard[]
+  // issue #93 · 被**粒度闸**折叠进母卡的项目，投给网格下方的「已并入」区。
+  // 🔴 与 archived_projects 不是一回事，也不该长得一样：那是经理自己收的（有恢复键），
+  //    这是系统判的（**没有**恢复键——重判每次补传都跑，手动放回来的卡下次上传会被原样再折，
+  //    那是个会自己撤销的按钮）。这个区回答的是「我上传完，那张卡怎么没了」。
+  // 后端保证与 archived_projects 是划分（同一张卡绝不同时出现在两处）。同 absent≠none：空即缺席。
+  folded_projects?: LiveProjectCard[]
   // rich-align-0722 · issue 08：SOP 方法卡（只读方法库，无 CRUD）。后端从文档 `## 方法：` 小节抽取。
   // 🔴 缺席 = 没有 SOP 方法（absent≠none：playbook_cards() 为空时整键不发）。前端 playbooks 屏
   // `?? []` 收敛——缺席维持 coming-soon 诚实空态，绝不为凑网格造空卡墙（踩 absent≠none）。
@@ -394,6 +400,14 @@ export interface LiveProjectCard {
   // #85 · 文档血缘 side-car（同人卡）。⚠ 它跟的格子比这张卡投出来的**多一个**：`dependsOn`
   // 在血缘里有、在卡上没有。changeLog.ts 的边界① 就是为它写的——卡上读不出现值的格子不进流水。
   lineage?: LiveEntityLineage
+  // issue #93 · 软折叠的去向与理由。**只在 `folded_projects` 里的卡上出现**——主网格与归档抽屉
+  // 的卡永远没有这几个键（后端 `hidden_reason` 保证两个抽屉是划分）。
+  // 缺席=这张卡没被折叠，不是「折了但不知道去哪」：`foldedInto` 与折叠标记是同一格。
+  foldedInto?: string // 母卡 id
+  foldedIntoTitle?: string // 母卡标题；母卡此刻可能已被经理归档，仍照显（问的是「并去哪了」）
+  foldedRule?: string // 稳定规则 id，如 R1-milestone-section
+  foldedReason?: string // 给经理看的中文整句（后端 `Ruling.reason`，不是前端拼的）
+  foldedEvidence?: string // "<文件名>:<第几行>"
 }
 
 // ── rich-align-0722 · issue 05a：项目手编 CRUD 写端点契约（后端 f1ca46d，service/ingest_api.py）──

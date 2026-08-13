@@ -1013,6 +1013,25 @@ def test_a_fold_and_its_ruling_survive_a_real_snapshot_replace(tmp_path):
         # 抽取路那些裁决也一起回来了（R5 那一族），且照旧不带 subject_id
         assert any(r.rule == "R5-duty-column" and r.subject_id == ""
                    for r in fresh.extraction.granularity)
+
+        # 🔴 一路验到**投影**，不停在实体上（#93 收尾补）：「已并入」区那四格是 `folded_into` 与
+        # `granularity` 现场 join 出来的（`subject_id` 是 join key）。真库往返只要丢一格——
+        # 少个 `subject_id`、`reason` 被 payload allowlist 挡掉——抽屉就退化成「它没了，别问」，
+        # 而**离线套 100% 全绿**（内存腿从来不 asdict→JSONB→回读）。这是这个仓库的常驻暗区。
+        cards = fresh.folded_project_cards()
+        assert sorted(c["title"] for c in cards) == sorted(NESTED)
+        for c in cards:
+            assert c["foldedInto"] == parent.id
+            assert c["foldedIntoTitle"] == "秋季营销冲刺"
+            assert c["foldedRule"] == "R1-milestone-section"
+            assert c["title"] in c["foldedReason"]
+            assert c["foldedEvidence"].startswith(f"{WEEKLY_FILE}:")
+        assert len({c["foldedEvidence"] for c in cards}) == 3
+        # 载荷这一层也走一遍（前端读的是它，不是 folded_project_cards()）
+        from service.ingest_api import _team_payload
+        payload = _team_payload(fresh)
+        assert sorted(c["title"] for c in payload["folded_projects"]) == sorted(NESTED)
+        assert len(payload["projects"]) == 4
     finally:
         reg.delete(cid)
 
@@ -1148,3 +1167,254 @@ def test_deleting_the_justifying_document_unfolds_on_a_real_database(tmp_path):
         assert not any(pr.folded_into for pr in fresh.extraction.projects)
     finally:
         reg.delete(cid)
+
+
+# ═════════════════════════════════════════════════════════════════════════════════════════════════
+# #93 收尾 · 被收走之后 —— 顾问引不到，经理看得见
+#
+# 上面每一条钉的都是「卡被收走了」。这一节钉收走之后的两个后果，两个都是 #93 主体留下的活账：
+#
+#   ① 顾问不许引用一张屏幕上没有的卡。`materialize_memory` 写的 facts.md 就是 RAG 检索 + 引用
+#      跑的那份语料，而它一直把 `extraction.projects` **原样全写**。这个洞比 #93 老得多——
+#      `archived` 从 rich-align-0722/05a 起就躺在里面——#93 只是给它加了个新入口。
+#   ② 「为什么这张卡不见了」得有个地方看得到。裁决 #93 已经落库，但当时没有任何投影去读它。
+#
+# 🔴 ① 的门**故意不扫源码**。「谁忘了过滤」这件事扫字面量扫不到：下一个漏的人写的是
+# `if not pr.archived`，一个 `folded_into` 都不含（progress.md「扫字面量扫不到病灶」那条）。
+# 所以判据落在**行为**上——把 Context 上每一个 `*_cards()` 投影枚举出来各跑一遍，被折叠那张卡
+# 一处都不许露头（`folded_project_cards` 是唯一豁免，它的职责就是它）。新加的投影自动进这道门，
+# 不需要任何人记得回来改这个测试。
+# ═════════════════════════════════════════════════════════════════════════════════════════════════
+
+def _facts(ctx) -> str:
+    return (Path(ctx.memory_dir) / "facts.md").read_text(encoding="utf-8")
+
+
+def _fact_line(title: str) -> str:
+    """facts.md 里那句**由卡合成的断言**（`ProjectEntity.as_facts_lines` 的头一行）。
+
+    🔴 判据落在它上面，不落在「标题这几个字出现过没有」：文档原文照旧进 materials，整份周报的
+    正文就躺在同一个文件的下半截，用 `title in facts` 判会**恒真**——那是「兜底文案把一条都
+    没召回伪装成引用正常」的同一族坑，判据必须落在真正被测的那行文本上。
+    """
+    return f"Project '{title}'"
+
+
+def _folded_ctx(tmp_path):
+    """三批全落地：可见 4 张，NESTED 那三张折进「秋季营销冲刺」。"""
+    reg, _, files = _two_batches(tmp_path)
+    _append_weekly(reg, files)
+    ctx = reg.get("ctx_two")
+    assert len(_visible(ctx)) == 4
+    return reg, ctx
+
+
+def test_a_folded_card_stops_being_a_fact_the_advisor_can_cite(tmp_path):
+    """对照基准 3 → 0：第三批之前这三张卡在 facts.md 里各有一句自己的断言，折叠之后一句都没有。
+
+    少了那个「之前 3」，「之后 0」对着一份根本没写过它们的 facts.md 照样绿（空真）。
+    末一条断言守的是反方向：全滤光了也能让前两条绿。
+    """
+    reg, _, files = _two_batches(tmp_path)
+    before = _facts(reg.get("ctx_two"))
+    assert sorted(t for t in NESTED if _fact_line(t) in before) == sorted(NESTED)
+    _append_weekly(reg, files)
+    after = _facts(reg.get("ctx_two"))
+    assert [t for t in NESTED if _fact_line(t) in after] == []
+    assert sorted(t for t in SURVIVORS if _fact_line(t) in after) == sorted(SURVIVORS)
+
+
+def test_the_folded_cards_own_words_are_still_retrievable(tmp_path):
+    """折叠**不是**从检索里删东西：文档正文照旧进 materials，同一份 facts.md 的下半截还看得到
+    「物料采购」这几个字。被拿掉的只是「存在一个叫物料采购的项目」这句由卡合成的断言——而那张
+    卡确实已经不在屏幕上了。
+
+    这条是上一条的反向哨兵：哪天有人把过滤写成「凡被折叠的标题一律从语料里抹掉」，上一条会
+    照样绿，这一条会红。
+    """
+    _, ctx = _folded_ctx(tmp_path)
+    facts = _facts(ctx)
+    assert all(t in facts for t in NESTED)                      # 原文还在
+    assert all(_fact_line(t) not in facts for t in NESTED)      # 卡的断言没了
+
+
+def test_an_archived_project_stops_being_a_fact_too(tmp_path):
+    """顺手补上的老洞（rich-align-0722/05a 起就漏着，与 #93 无关）：经理把一张卡扔进归档抽屉，
+    顾问照样引得到它。对照基准 4 → 3。"""
+    reg, ctx = _folded_ctx(tmp_path)
+    before = _facts(ctx)
+    assert sum(1 for t in SURVIVORS if _fact_line(t) in before) == 4
+    reg.archive_project("ctx_two", _card(ctx, "停车场改造").id)
+    after = _facts(reg.get("ctx_two"))
+    assert sum(1 for t in SURVIVORS if _fact_line(t) in after) == 3
+    assert _fact_line("停车场改造") not in after
+
+
+def test_a_deactivated_person_stops_being_a_fact_too(tmp_path):
+    """人那条腿同一个洞、同一个修法。对照基准 13 → 12（花名册满编）。
+
+    marker 用 `「名字 — 」`（`PersonEntity.as_facts_lines` 的头一行），不用光名字：花名册 CSV 的
+    原文整份都在同一个文件的 materials 段里，`"苏茜" in facts` 会恒真。
+    """
+    reg, ctx = _folded_ctx(tmp_path)
+    before = _facts(ctx)
+    assert sum(1 for n in ROSTER_NAMES if f"{n} — " in before) == 13
+    gone = next(p for p in ctx.extraction.people if p.name == "苏茜")
+    reg.archive_person("ctx_two", gone.id)
+    after = _facts(reg.get("ctx_two"))
+    assert sum(1 for n in ROSTER_NAMES if f"{n} — " in after) == 12
+    assert "苏茜 — " not in after
+    assert "苏茜" in after            # 原文照旧在 materials 里，停用不是从检索里删东西
+
+
+def test_every_manual_write_refreshes_company_memory_instead_of_a_bare_put(tmp_path):
+    """🔴 上面两条能成立的前提：手编 CRUD 落盘时**重物化** facts.md。这一条守住那个前提。
+
+    过滤写对了、文件却没重写，等于没修——而 pg 腿的 `put()` 是从磁盘读 facts.md 存进库的，
+    所以陈旧那份会被烤进数据库，下一次 `get()` 再原样写回，**反过来固化**、永不自愈。
+
+    判据按 AST 找 `ProjectWriteMixin` 里除 `_commit` 之外还有谁在调 `self.put(...)`。这里
+    「扫源码」正好打在病灶上——病就是「在这个类里绕过 `_commit` 直接 put」这一件事本身。
+    下一个加写法的人漏了，这条会红，而不是等到某个经理发现顾问在引用一张他上周就归档掉的卡。
+    """
+    import ast
+    import inspect
+
+    from avery.ingest.registry import ProjectWriteMixin
+
+    cls = ast.parse(inspect.getsource(ProjectWriteMixin)).body[0]
+    methods = [n for n in cls.body if isinstance(n, ast.FunctionDef)]
+
+    def _calls_put(node) -> bool:
+        return any(isinstance(s, ast.Call) and isinstance(s.func, ast.Attribute)
+                   and s.func.attr == "put" and isinstance(s.func.value, ast.Name)
+                   and s.func.value.id == "self"
+                   for s in ast.walk(node))
+
+    def _calls_commit(node) -> bool:
+        return any(isinstance(s, ast.Call) and isinstance(s.func, ast.Attribute)
+                   and s.func.attr == "_commit"
+                   for s in ast.walk(node))
+
+    offenders = [m.name for m in methods if m.name != "_commit" and _calls_put(m)]
+    assert offenders == [], f"这些写法绕过了 `_commit`，facts.md 不会跟着刷新：{offenders}"
+
+    # 反空真三连：把 put 全删光、或者把 `_commit` 删掉，上一条也会绿。
+    commit = next(m for m in methods if m.name == "_commit")
+    assert _calls_put(commit), "`_commit` 自己不 put 了 —— 这个出口成了个空壳"
+    writers = sorted(m.name for m in methods if _calls_commit(m))
+    assert writers == ["add_person", "add_project", "archive_person", "archive_project",
+                       "patch_person", "patch_project", "restore_person", "restore_project"]
+
+
+def test_no_projection_on_the_context_ever_shows_a_folded_card(tmp_path):
+    """🔴 防复发的那道门：**枚举** Context 上所有 `*_cards()` 投影，逐个跑，被折叠的卡 id 一处
+    都不许出现。`folded_project_cards` 是唯一豁免。
+
+    为什么是枚举而不是点名那几个：点名的清单会在下一个投影加进来的那天默默过期，而过期的表现
+    是「门全绿、卡照漏」。枚举让新投影自动进门。
+    """
+    import inspect
+
+    _, ctx = _folded_ctx(tmp_path)
+    ids = {pr.id for pr in ctx.extraction.projects if pr.folded_into}
+    assert len(ids) == 3, ids                       # 反空真：真有东西可漏
+
+    names = sorted(n for n in dir(ctx) if n.endswith("_cards") and not n.startswith("_"))
+    assert "folded_project_cards" in names
+    assert len(names) >= 9, names                   # 反空真：真枚举到了投影，不是空列表
+
+    checked = []
+    for name in names:
+        if name == "folded_project_cards":
+            continue
+        fn = getattr(ctx, name)
+        needed = [p.name for p in inspect.signature(fn).parameters.values()
+                  if p.default is inspect.Parameter.empty]
+        assert not needed, (
+            f"投影 `{name}` 现在要必填参数 {needed}，这道门够不着它了。"
+            f"给它在这里补一组调用参数——**别**把它从清单里划掉。")
+        blob = json.dumps(fn(), ensure_ascii=False, default=str)
+        leaked = sorted(i for i in ids if i in blob)
+        assert not leaked, f"投影 `{name}` 把被折叠的卡投出去了：{leaked}"
+        checked.append(name)
+    assert len(checked) == len(names) - 1
+
+
+def test_every_folded_card_says_where_it_went_and_why(tmp_path):
+    """「已并入」区的载荷：每张卡都答得出并去了哪张卡（id + 标题）、按哪条规则、原文哪一行。
+
+    这就是「为什么这张卡不见了」在界面上的全部内容——#93 把裁决落了库，这一条是去读它的第一个
+    消费者。少任何一格，抽屉就退化成「它没了，别问」。
+    """
+    _, ctx = _folded_ctx(tmp_path)
+    cards = ctx.folded_project_cards()
+    assert sorted(c["title"] for c in cards) == sorted(NESTED)
+    parent = _card(ctx, "秋季营销冲刺")
+    for c in cards:
+        assert c["foldedInto"] == parent.id
+        assert c["foldedIntoTitle"] == "秋季营销冲刺"
+        assert c["foldedRule"] == "R1-milestone-section"
+        assert c["title"] in c["foldedReason"] and "秋季营销冲刺" in c["foldedReason"]
+        assert c["foldedEvidence"].startswith(f"{WEEKLY_FILE}:")
+    # 证据行互不相同 —— 三张卡共用一行会让「原文哪一行」变成一句摆设。
+    assert len({c["foldedEvidence"] for c in cards}) == 3
+
+
+def test_the_two_drawers_are_a_partition_never_the_same_card_twice(tmp_path):
+    """一张卡两个标都带着的时候只能出现在一个抽屉里，而且是**归档**那个（手编领域压过系统裁决）。
+
+    正常路上折不出这种卡（折叠只碰可见卡），所以这里手工造一张——门要守的正是「以后哪天多了
+    一条能同时打两个标的路」，那天两个抽屉不该把同一张卡画两遍。
+    """
+    _, ctx = _folded_ctx(tmp_path)
+    both = _card(ctx, "物料采购")
+    assert both.folded_into                      # 反空真：它确实是被折叠的那张
+    both.archived = True
+    folded = ctx.folded_project_cards()
+    archived = ctx.archived_project_cards()
+    assert both.id not in {c["id"] for c in folded}
+    assert both.id in {c["id"] for c in archived}
+    assert not ({c["id"] for c in folded} & {c["id"] for c in archived})
+
+
+def test_a_single_batch_upload_never_produces_a_folded_card(tmp_path):
+    """一次全选上传**永远**折不出卡 —— 抽取路对降级候选是**丢弃**（`judge_projects` 判完，
+    候选压根没成过卡），折叠只发生在补传路。同一份语料、同样的四张可见卡，两条路的原始列表却
+    不等长：一次全选是 4，逐份补传是 7 张里折了 3。
+
+    🔴 这一条是**像素基线不会漂**那个论证的前提，不是随手补的：`eval-harness/visual/`
+    的数据态 spec 把 demo-seed 九份文件**一次全选**传上去，所以 `folded_projects` 恒缺席、
+    「已并入」区一次都不渲染、新加的那族 CSS 一条都匹配不上。前提写成判据，别写成注释里的
+    一句「应该不会漂」——那个说法没有任何东西在守。
+    """
+    _, ctx = _ingest_all_at_once(tmp_path)
+    assert _visible(ctx) == SURVIVORS                       # 反空真：闸真的判过，四张卡是对的
+    assert ctx.folded_project_cards() == []
+    assert not any(pr.folded_into for pr in ctx.extraction.projects)
+    assert len(ctx.extraction.projects) == len(SURVIVORS)   # 丢弃：没有留壳
+    # 对照：同一份语料走补传路，折出 3 张（否则上面三条对着一个折不动的语料全绿）。
+    _, one, _ = _ingest_one_by_one(tmp_path)
+    assert len(one.folded_project_cards()) == 3
+    assert len(one.extraction.projects) == len(SURVIVORS) + 3
+
+
+def test_the_team_payload_carries_folded_projects_and_omits_the_key_when_empty(tmp_path):
+    """/team 载荷同 absent≠none：一张没折就不发 `folded_projects` 键。
+
+    对照基准写成 缺席 → 3：先在第三批**之前**取一次载荷（那时一张都没折）。
+    """
+    from service.ingest_api import _team_payload
+
+    reg, _, files = _two_batches(tmp_path)
+    before = _team_payload(reg.get("ctx_two"))
+    assert "folded_projects" not in before
+    assert len(before["projects"]) == 6
+
+    _append_weekly(reg, files)
+    after = _team_payload(reg.get("ctx_two"))
+    assert len(after["projects"]) == 4
+    assert sorted(c["title"] for c in after["folded_projects"]) == sorted(NESTED)
+    # 两个键指的不是同一批卡（前端两个区画的不是同一张网格）。
+    assert not ({c["id"] for c in after["projects"]}
+                & {c["id"] for c in after["folded_projects"]})
