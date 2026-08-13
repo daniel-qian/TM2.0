@@ -56,3 +56,7 @@ scripts/__pycache__/
 # T9（gap2 #58）· verify-forms-proactive 的截图 + 逐条 JSON 产物。单机产物，同 review-shots /
 # sweep 的老惯例不入库；门自己会重建（mkdirSync recursive）。
 eval-harness/tools/.t9-shots/
+
+# 0813 · 手工分发给各公司的测试账号（邮箱 + 密码明文）。整个目录绝不进版本库。
+# session-state-files-are-credentials 碑：凭据先立 .gitignore 再落盘。
+/test-accounts/
