@@ -45,6 +45,7 @@ pytest.importorskip("httpx")
 import httpx  # noqa: E402
 
 from avery.env import load_dotenv
+from conftest import SUBPROCESS_WORKER_ON, await_ingest_job   # #90 异步 deposit（理由见 conftest）
 
 HERE = Path(__file__).resolve().parent
 HARNESS = HERE.parent                      # eval-harness/
@@ -77,9 +78,14 @@ def _free_port() -> int:
 
 
 def _start_service(env_extra: dict, log_path: Path):
-    """A REAL uvicorn subprocess (the production process shape), offline brains forced."""
+    """A REAL uvicorn subprocess (the production process shape), offline brains forced.
+
+    🔴 `SUBPROCESS_WORKER_ON` 是必须的，不是保险 —— 完整理由写在
+    `test_persistence_restart._start_service` 与 `tests/conftest.py`：autouse 的
+    `AVERY_INGEST_WORKER=off` 会被 `{**os.environ, ...}` 继承进子进程，把生产进程形状里的
+    worker 线程按死。"""
     port = _free_port()
-    env = {**os.environ, **env_extra, "PYTHONUNBUFFERED": "1"}
+    env = {**os.environ, **env_extra, **SUBPROCESS_WORKER_ON, "PYTHONUNBUFFERED": "1"}
     log_file = open(log_path, "a", encoding="utf-8", errors="replace")
     proc = subprocess.Popen(
         [sys.executable, "-m", "uvicorn", "service.app:app",
@@ -175,7 +181,12 @@ def test_e2e_first_user_full_chain(tmp_path):
             cidA, tokA = a["context_id"], a["owner_token"]
             hdrA = {"X-Avery-Token": tokA}
             assert tokA and len(tokA) >= 32, "A's owner_token is missing / too short to be unguessable"
-            assert set(a["source_files"]) == {SEED_XLSX.name, SEED_PDF.name}
+            # #90：POST /ingest 只**存字节 + 排 job**，回执是「空骨架世界」（端点 docstring 明写），
+            # owner_token 却是当场铸好、当场持久化的 —— 上面那条断言仍然在这里，因为它守的正是
+            # 「断连也不会孤儿化档案」那半个改造。资料清单要等任务落地才有，见下面 (3)。
+            # ⚠ 原来这里是 `assert set(a["source_files"]) == {...}`，#90 之后恒为空集；
+            # 判据搬到 (3) 的清单上 —— 说的是同一件事，而且证明的是**库里**真有这两份。
+            await_ingest_job(httpx, base1, cidA, hdrA)
 
             # (2) the team grew from A's real docs — briefing counts are REAL counts (honesty, R2)
             r_team = httpx.get(f"{base1}/team/{cidA}", headers=hdrA, timeout=30)
@@ -205,6 +216,9 @@ def test_e2e_first_user_full_chain(tmp_path):
             cidB, tokB = b["context_id"], b["owner_token"]
             hdrB = {"X-Avery-Token": tokB}
             assert cidB != cidA and tokB != tokA
+            # B 的抽取也要落地：下面 life 2 的跨租户判据要在 B 的**卡片**里找 A 的字眼，
+            # 而一份还没抽取的档案里什么都找不到 —— 那种「绿」是空真。
+            await_ingest_job(httpx, base1, cidB, hdrB)
         finally:
             _stop_hard(proc1, lf1)   # (5) HARD KILL — the redeploy / crash
 

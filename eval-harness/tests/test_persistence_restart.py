@@ -33,6 +33,7 @@ pytest.importorskip("httpx")
 import httpx  # noqa: E402
 
 from avery.env import load_dotenv
+from conftest import SUBPROCESS_WORKER_ON, await_ingest_job   # #90 异步 deposit（理由见 conftest）
 
 HERE = Path(__file__).resolve().parent
 HARNESS = HERE.parent                      # eval-harness/
@@ -56,8 +57,14 @@ def _free_port() -> int:
 
 
 def _start_service(port: int, env_extra: dict, log_path: Path):
-    """A REAL uvicorn subprocess (the production process shape), offline brains forced."""
-    env = {**os.environ, **env_extra, "PYTHONUNBUFFERED": "1"}
+    """A REAL uvicorn subprocess (the production process shape), offline brains forced.
+
+    🔴 `SUBPROCESS_WORKER_ON` 是必须的，不是保险：`tests/conftest.py` 那条 autouse fixture 把
+    `AVERY_INGEST_WORKER` 设成了 off（离线电池的确定性开关），而 `{**os.environ, ...}` 会把它
+    **继承进子进程** —— 于是「生产进程形状」里的 worker 线程被按死，字节落库、job 排着队、
+    没有任何人去跑它。#90 合入后本文件两条测试就是这么一直红的（#93 收尾时才扫出来）。
+    """
+    env = {**os.environ, **env_extra, **SUBPROCESS_WORKER_ON, "PYTHONUNBUFFERED": "1"}
     log_file = open(log_path, "a", encoding="utf-8", errors="replace")
     proc = subprocess.Popen(
         [sys.executable, "-m", "uvicorn", "service.app:app",
@@ -114,10 +121,18 @@ def test_company_survives_a_service_restart(tmp_path):
         assert r.status_code == 200, f"/ingest failed on the seeds: {r.text[:400]}"
         payload = r.json()
         cid = payload["context_id"]
-        assert set(payload["source_files"]) == {SEED_XLSX.name, SEED_PDF.name}
         # feat-038: the owner_token minted here must persist to the DB and still authorize a read
         # from a BRAND-NEW process in life 2 (the restart) — the tenant-isolation restart story.
         hdr = {"X-Avery-Token": payload["owner_token"]}
+        # #90：POST /ingest 现在只**存字节 + 排 job**，回执是「空骨架世界」（端点 docstring 明写）。
+        # 所以这里等任务落地，再断言这家公司长出来了什么 —— 原来那句
+        # `assert set(payload["source_files"]) == {...}` 断的是 POST 回执，#90 之后恒为空集。
+        # ⚠ 判据从「回执里有」改成了「落地之后清单里有」，说的仍然是同一件事，
+        # 而且比原来强：它现在证明的是**库里**真有这两份，不是响应体里抄了一遍。
+        await_ingest_job(httpx, base1, cid, hdr)
+        r_files1 = httpx.get(f"{base1}/team/{cid}/files", headers=hdr, timeout=30)
+        assert r_files1.status_code == 200
+        assert {f["filename"] for f in r_files1.json()["files"]} == {SEED_XLSX.name, SEED_PDF.name}
 
         r_team = httpx.get(f"{base1}/team/{cid}", headers=hdr, timeout=30)
         assert r_team.status_code == 200
@@ -205,6 +220,9 @@ def test_file_space_survives_a_service_restart(tmp_path):
         assert r.status_code == 200, f"/ingest failed on the seeds: {r.text[:400]}"
         cid = r.json()["context_id"]
         hdr = {"X-Avery-Token": r.json()["owner_token"]}   # feat-038
+        # #90：等抽取落地再读清单——`n_chunks` 是抽取的产物，deposit 那一刻它必然是 0
+        # （下面那条 `sum(n_chunks) > 0` 正是本文件 #90 之后一直红的那一句）。
+        await_ingest_job(httpx, base1, cid, hdr)
 
         r_files = httpx.get(f"{base1}/team/{cid}/files", headers=hdr, timeout=30)
         assert r_files.status_code == 200

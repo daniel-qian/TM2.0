@@ -356,3 +356,93 @@ def test_ingest_pipeline_logs_parse_extract_and_persist(client, caplog):
     stages = {m.split("stage=")[1].split()[0] for m in timing}
     assert {"parse", "extract", "persist"} <= stages, (
         f"the fresh-ingest pipeline must time parse/extract/persist; saw {sorted(stages)}")
+
+
+# ═════════════════════════════════════════════════════════════════════════════════════════════════
+# #95 · 「等抽取落地」这把尺自己得有牙 —— 以及一道防同类暗区复发的静态门
+#
+# 本票的病不是某四条测试写错了，是**异步 deposit 落地时没人重扫全仓**：`/ingest` 从「回来时
+# 库里就有」变成了「回来时是空骨架」，而回执里写的验证口径是「既有五文件 78/78」，
+# 于是四条按旧语义断言的 needs_db 测试红了整整一票没人看见。下面两条守的是**那个机制**：
+# 一条让共享的等待助手在「任务失败」和「任务还没跑完」之间不许含糊，
+# 一条让「起真 uvicorn 却忘了打开 worker」再也藏不住。
+# ═════════════════════════════════════════════════════════════════════════════════════════════════
+
+class _FakeHttpx:
+    """按脚本回 `last_job` 的假 httpx —— 只实现 `await_ingest_job` 用到的那一个 `get`。"""
+
+    def __init__(self, statuses):
+        self._statuses = list(statuses)
+        self.calls = 0
+
+    def get(self, url, headers=None, timeout=None):
+        self.calls += 1
+        status = self._statuses[min(self.calls - 1, len(self._statuses) - 1)]
+
+        class _R:
+            status_code = 200
+
+            @staticmethod
+            def json():
+                return {"files": [], "last_job": ({"status": status} if status else None)}
+        return _R()
+
+
+def test_await_ingest_job_waits_through_queued_and_returns_on_done():
+    """还没跑完（缺席 / queued / processing）要继续等，落到 done 才返回。"""
+    from conftest import await_ingest_job
+    fake = _FakeHttpx([None, "queued", "processing", "done"])
+    job = await_ingest_job(fake, "http://x", "ctx_1", {}, timeout_s=10)
+    assert job == {"status": "done"}
+    assert fake.calls == 4, "轮询在到达终态之前就停了 —— 那正是「空骨架世界」被当成落地的形态"
+
+
+def test_await_ingest_job_fails_loudly_on_a_failed_job_instead_of_reporting_a_timeout():
+    """**terminal 但 failed 必须当场炸，且说的是「失败」不是「超时」。**
+
+    这条分支不是装饰：「抽取失败」和「还没跑完」在库里看起来是同一个样子（0 行），
+    而它们的处置完全不同。含糊过去的下场就是本票修的那四条——四条红全都长着
+    「库里 0 行」这一张脸，病因却各不相同，于是没人看得出发生了什么。
+    """
+    from conftest import await_ingest_job
+    fake = _FakeHttpx(["failed"])
+    # ⚠ `pytest.fail` 抛的是 `Failed`，它继承 **BaseException** 不是 Exception ——
+    # `pytest.raises(Exception)` 根本接不住（第一版就是这么红的）。`pytest.fail.Exception`
+    # 是官方给的那个把手。
+    with pytest.raises(pytest.fail.Exception) as e:
+        await_ingest_job(fake, "http://x", "ctx_1", {}, timeout_s=10)
+    msg = str(e.value)
+    assert "FAILED" in msg, msg
+    assert "never reached a terminal state" not in msg, (
+        f"失败被报成了超时——诊断信息指向错的方向：{msg}")
+
+
+def test_every_uvicorn_subprocess_test_turns_the_ingest_worker_back_on():
+    """🔴 静态门（不用库、不起进程）：**凡是起真 uvicorn 子进程的测试，都必须把
+    `SUBPROCESS_WORKER_ON` 合进子进程 env。**
+
+    这就是本票那片暗区的成因，写成一条判据：`tests/conftest.py` 有一条 autouse fixture 把
+    `AVERY_INGEST_WORKER` 设成 off（离线电池的确定性开关），而 `{**os.environ, ...}` 会把它
+    **继承进子进程**——于是「生产进程形状」里的 worker 线程被按死，字节落库、job 排着队、
+    没有任何人去跑它。#90 合入后两个文件就这样红了一整票没人看见。
+
+    判据落在**源码文本**上而不是运行时，因为运行时的形态恰好是「测试很慢然后超时」，
+    而慢和超时在 CI 上永远会被读成环境问题。
+    """
+    import re
+    from pathlib import Path
+    tests_dir = Path(__file__).resolve().parent
+    offenders = []
+    for path in sorted(tests_dir.glob("test_*.py")):
+        src = path.read_text(encoding="utf-8")
+        # 「起了一个真 uvicorn 子进程」的结构性特征：Popen + uvicorn + 拿 os.environ 当底座
+        if not re.search(r"subprocess\.Popen", src) or "uvicorn" not in src:
+            continue
+        if "**os.environ" not in src:
+            continue
+        if "SUBPROCESS_WORKER_ON" not in src:
+            offenders.append(path.name)
+    assert not offenders, (
+        f"这些文件起了真 uvicorn 子进程、却没把 SUBPROCESS_WORKER_ON 合进子进程 env："
+        f"{offenders}。conftest 的 autouse `AVERY_INGEST_WORKER=off` 会被继承进去，"
+        f"子进程里的 job 永远没人跑——测试会以「超时/空世界」的形态红，而病因看不出来。")

@@ -45,6 +45,7 @@ from avery.ingest import (
 )
 from avery.ingest.extract import MaterialChunk, ExtractionResult
 from avery.ingest.registry import CompanyContext, materialize_memory
+from conftest import drain_and_assert_landed  # #90 异步 deposit：POST 之后要自己把队列跑干净
 
 HERE = Path(__file__).resolve().parent.parent          # eval-harness/
 FIX = HERE / "tests" / "fixtures" / "ingest"
@@ -308,6 +309,12 @@ def test_ingest_over_http_persists_pgvector_and_survives_restart(monkeypatch, tm
             ("files", ("Team_Roster.xlsx", ROSTER.read_bytes(), "application/octet-stream"))])
         assert r.status_code == 200, r.text[:400]
         cid = r.json()["context_id"]
+        # #90 起 POST /ingest 只**存字节 + 排一个 job**（回执明写是「空骨架世界」），嵌入随抽取
+        # 跑在 worker 上。离线电池把 worker 线程关了（conftest），所以这里必须自己把队列跑干净
+        # ——否则下面数 materials 恒得 0/0（#90 合入后本条一直红，#93 收尾时才被扫出来）。
+        # ⚠ 顺带把这条判据变强了：嵌入现在是在 **worker 里**算的，本行证明注入的 embedder
+        # 在那条路上也真的被用上了。
+        drain_and_assert_landed(cid)
 
         import psycopg
         with psycopg.connect(url) as conn:

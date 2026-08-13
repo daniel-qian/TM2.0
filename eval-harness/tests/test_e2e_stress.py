@@ -38,6 +38,7 @@ pytest.importorskip("httpx")
 import httpx  # noqa: E402
 
 from avery.env import load_dotenv
+from conftest import SUBPROCESS_WORKER_ON   # #90 异步 deposit（理由见 conftest）
 
 HERE = Path(__file__).resolve().parent
 HARNESS = HERE.parent
@@ -60,8 +61,13 @@ def _free_port() -> int:
 
 
 def _start_service(env_extra: dict, log_path: Path):
+    # 🔴 `SUBPROCESS_WORKER_ON`（#95）：conftest 那条 autouse 的 `AVERY_INGEST_WORKER=off`
+    # 会被 `{**os.environ, ...}` 继承进子进程。对本文件后果尤其难看——**它把这条压测的主张变成
+    # 了一句空话**：worker 不跑 = 根本没有「长时间的 ingest」，而下面那条判据说的正是
+    # 「/health 没有被并发的长 ingest 堵住」。压测压的是 deposit（毫秒级存字节），
+    # 却自称压过了抽取。打开 worker，主张才重新成立。
     port = _free_port()
-    env = {**os.environ, **env_extra, "PYTHONUNBUFFERED": "1"}
+    env = {**os.environ, **env_extra, **SUBPROCESS_WORKER_ON, "PYTHONUNBUFFERED": "1"}
     log_file = open(log_path, "a", encoding="utf-8", errors="replace")
     proc = subprocess.Popen(
         [sys.executable, "-m", "uvicorn", "service.app:app",
@@ -194,11 +200,31 @@ def test_stress_concurrency_survival_and_health_not_blocked(tmp_path):
             f"a parallel /ingest did not succeed: {results['ingest']}")
         assert results["advise"] and all(s == 200 for s in results["advise"]), (
             f"a parallel /advise did not succeed: {results['advise']}")
-        # /health kept answering, and FAST — the long ingests were offloaded, not blocking the loop.
-        assert health_latencies, "the health poller never ran"
-        assert max(health_latencies) < 8.0, (
-            f"/health was blocked by the concurrent ingests (max {max(health_latencies):.1f}s) — "
-            f"the threadpool offload regressed")
+        # /health KEPT ANSWERING throughout the load (every non-200 / raise already landed in
+        # `errors` above) and never hung — that is the feat-028 claim this test can actually make.
+        #
+        # 🔴 判据形状换过一次（#95），因为旧版 `max(health_latencies) < 8.0` 是一枚**硬币**。
+        # 实测（off/on 各 3 轮，同一台机器、一次性库）：
+        #     worker OFF: n=2 [1.58, 6.62] / [1.46, 7.16] / [1.59, 6.41]
+        #     worker ON : n=2 [1.56, 7.69] / [1.62, 7.90] / [1.75, 6.10]
+        # 两件事因此钉死：
+        #   ① **压测下 /health 本来就要 6~8 秒**，而且**与 worker 开关无关**（两组分布重合）——
+        #      所以 8.0 这条线正压在真实分布上，机器一忙就翻红（#93 收尾实收 8.8s），
+        #      空机就绿。它不是在测阻塞，是在测那天机器忙不忙。
+        #   ② **样本恒为 2**，而且这不是「轮询被饿着了」——它是**延迟的函数**：整个加载窗口约 9 秒，
+        #      一次 /health 就吃掉 6~8 秒。所以任何「最少 N 个样本」的写法在这个形状下不可满足，
+        #      任何「中位数」在 n=2 上就是最大值。
+        # 于是判据落在**这条测试真正能说的那句话**上：全程有应答（上面的 `errors`）、
+        # 一次都没有挂到客户端超时（下面这条），进程还活着。
+        # ⚠ **这不是一条延迟 SLA**：15s 是「挂没挂」的线，不是「快不快」的线。想要延迟 SLA 的话，
+        #    前置是先把「压测下 /health 要 7 秒」这件事本身当成一个产品/运维问题决策掉
+        #    （Docker healthcheck 的 timeout 必须大于它），那不是这条门能替人做的判断。
+        assert len(health_latencies) >= 2, (
+            f"the health poller got {len(health_latencies)} sample(s) — it never really ran "
+            f"alongside the load")
+        assert max(health_latencies) < 15.0, (
+            f"/health stalled outright (max {max(health_latencies):.1f}s over "
+            f"{len(health_latencies)} samples) — that is a hang, not scheduling jitter")
         assert proc.poll() is None, "the service process died under concurrency"
     finally:
         _stop_hard(proc, lf)

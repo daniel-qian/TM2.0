@@ -33,8 +33,10 @@ worker + 孤儿回收 + 'reading' 态）+ pg put() 增量化（positional diff�
   回执：`redesign-0808/` 六份 + `design-0810/` 六份 + `ingest-root-cause-0812/receipt-{90,91,92,93,94}.md`。
   ⚠ 别在这儿写死 ahead 数字——它每提交一次就自己作废。要数就跑：
   `git rev-list --count origin/main..HEAD`。
-- **后端离线套基线：`TZ=UTC` → 4204 passed · 0 failed · 151 deselected · 4 xfailed**（约 2min，
-  #93 合并后实测）。= 4175 + **#93 的 29 条**（`test_granularity_rejudge_93.py`：全档案重跑三道锁 /
+- **后端离线套基线：`TZ=UTC` → 4207 passed · 0 failed · 151 deselected · 4 xfailed**（约 2min，
+  #95 合并后实测）。= 4204 + **#95 的 3 条**（`test_ingest_async_90.py` 尾部：等落地助手两条
+  + **起真 uvicorn 必须打开 worker 的静态门**一条）。
+  上一档 4204 = 4175 + **#93 的 29 条**（`test_granularity_rejudge_93.py`：全档案重跑三道锁 /
   带对照基准的「7 张 → 4 张」不变式 / 链形状哨兵 / 手编护盾 / 裁决落库 / 删除撤销折叠 /
   0010 的 want-ADD 孪生门；其中 4 条 `@needs_db` 走 deselected）。
   上一档 4175 = 4146 + **#92 的 14 条**（`test_granularity_duty_column_92.py`：R5 十条单元
@@ -45,19 +47,15 @@ worker + 孤儿回收 + 'reading' 态）+ pg put() 增量化（positional diff�
   ⚠ #90 起 `tests/conftest.py` autouse 关掉 worker 线程（确定性），HTTP 上传类测试一律
   「POST → `ingest_worker.run_pending_jobs()` → GET 断言」；真线程路径由
   `test_ingest_nonblocking.py` 单独盖。✅ **任何红都是你的。**
-- **真库套（@needs_db）**：#93 起改跑**全仓口径**（`-m needs_db`，不再挑文件）：一次性库
-  `avery_t93_final` → **142 选中 · 137 passed · 5 failed**，五条逐条销账、**没有一条归 #93**：
-  🔴 **四条自 #90 起就红**（`test_e2e_first_user` / `test_persistence_restart` ×2 /
-  `test_pgvector_store` 的 HTTP 那条，症状统一 `0/0 materials`）——在**干净 HEAD** 上换新一次性库
-  复现过，**是 #90 异步 deposit 的欠账**：`/ingest` 现在秒回，这四条仍按同步路断言。
-  #90 回执写的「既有**五文件** 78/78」不含这四条=当时没扫到的暗区。**已开后续票建议，本票没顺手修。**
-  🟠 第五条 `test_e2e_stress::...health_not_blocked` 是**负载下的延迟 flake**（判据
-  `max<8.0s`，整轮量到 8.8s；机器空下来单跑 2/2 绿，16s vs 整轮 47s），且它结构上够不着 #93 的代码
-  （压测打 `/ingest` → `_execute_ingest` 走 `ingest_paths`，而 `rejudge_after_append` **只有
-  `append_docs_to_context` 一个调用点**）。⚠ 它只采到 **2 个** health 样本，「最大延迟」在这种
-  采样密度下本来就不该当硬门。
-  （历轮跑的是**挑出来的子集**：#88 是 205、#87 是 73、#85 是 62 ——**跟本轮的 142 不是同一个集合，
-  别对减**。#93 换成全仓口径正是因为上面那片暗区。）
+- **真库套（@needs_db）：`-m needs_db` 全仓 → 142 选中 · 142 passed · 0 failed**
+  （一次性库 `avery_t95_final`；#93 起改成全仓口径、#95 把最后五条红清干净）。
+  🔴 **口径只许写全仓的数字，永不写「某几个文件 N/N」**——那不是口径，是挡板：#90 回执写的
+  「既有**五文件** 78/78」把**四条它自己改坏的**测试藏了一整票（已就地订正 receipt-90，
+  完整分析在 `receipt-95.md`）。
+  （历轮那些数字跑的是**挑出来的子集**：#88 是 205、#87 是 73、#85 是 62 ——
+  **跟 142 不是同一个集合，别对减**。）
+  ⚠ **起真 uvicorn 子进程的测试必须合进 `conftest.SUBPROCESS_WORKER_ON`**（autouse 的
+  `AVERY_INGEST_WORKER=off` 会被 `{**os.environ,...}` 继承进子进程）——有静态门钉着了。
   🔴 **本轮实收一条间歇红**：`test_sweep_collects_only_old_unlinked_ephemeral_clones[postgres]`
   整轮红过一次、单跑绿、随后两轮同命令全绿。当场探容器时钟：连采 6 次，前 5 次 `+0.4s`，
   **第 6 次 `-114.2s`** —— 就是那条「Docker PG 时钟来回跳 ~115 秒」，招牌症状正是「单跑绿、整轮红」，
@@ -626,18 +624,24 @@ facts+notes 重物化成空；**留下** `context_id` · `owner_token` · `name`
 
 ## Notes（顺手发现，没顺手修）
 
-- 🔴 **#93 顺手发现：四条 `@needs_db` 自 #90 起就红，而且在一片没人扫的暗区里**
-  （`test_e2e_first_user_full_chain` / `test_company_survives_a_service_restart` /
-  `test_file_space_survives_a_service_restart` /
-  `test_ingest_over_http_persists_pgvector_and_survives_restart`）。症状统一是「POST /ingest
-  回来之后库里 0 行」——几乎肯定是**异步 deposit 改造**的落账：这四条仍按同步语义断言
-  「请求返回时库里就该有数据」，而 #90 之后要等 job done（照 `test_ingest_async_90.py` 的
-  `_drain()` 姿态）。已在**干净 HEAD** 上换新一次性库复现证明与 #93 无关（证据见
-  `receipt-93.md` §6）。**修法归 #90 线的收尾票**，顺带把 #90 回执里「既有五文件 78/78」
-  那句口径订正成全仓口径——否则下次还会漏扫同一片暗区。
-- ⚠ **#93 顺手发现：`test_e2e_stress` 的 `max(health_latencies) < 8.0` 是一条会被机器负载翻红的门**，
-  而且它整轮只采到 **2 个**样本（轮询线程自己被饿着了）。「最大延迟」在这种采样密度下不该当硬门；
-  要么改成分位数 + 最少样本数，要么标 flaky。**不是回归**（空机 2/2 绿）。
+- ✅ **~~四条 `@needs_db` 自 #90 起就红~~ 已销账**（#95，回执 `receipt-95.md`）。四条**全是测试
+  还按同步语义断言**，零产品回归；真正的病是 **#90 的验证口径写成了「既有五文件 78/78」**
+  而全仓是 142 条——那句话本身就是挡板。已就地订正 #90 回执，并补了一道**静态门**
+  （`test_every_uvicorn_subprocess_test_turns_the_ingest_worker_back_on`）：
+  凡起真 uvicorn 子进程且拿 `**os.environ` 当底座的测试文件，必须合进 `conftest.SUBPROCESS_WORKER_ON`。
+  🔴 **这块暗区的机制值得记住**：`conftest.py` 那条 autouse 的 `AVERY_INGEST_WORKER=off`
+  **会被 `subprocess.Popen(env={**os.environ,...})` 继承进子进程**，把「生产进程形状」里的
+  worker 线程按死——表现是「库里 0 行」，与「忘了 drain」长着同一张脸，病因完全不同。
+  ⚠ 静态门写完**当场又扫出两个票面没点名的实例**：`test_seed_gate.py`（潜伏，要真 key 才跑）
+  与 `test_e2e_stress.py`（**它把自己的主张变成了空话**：worker 不跑 = 根本没有「长 ingest」，
+  它压的是毫秒级 deposit）。
+- 🟠 **#95 实测：并发压测下 `/health` 本来就要 6~8 秒，与 worker 开关无关**
+  （off/on 各 3 轮分布重合：`[1.58,6.62]/[1.46,7.16]/[1.59,6.41]` vs `[1.56,7.69]/[1.62,7.90]/[1.75,6.10]`）。
+  所以旧判据 `max < 8.0` 正压在真实分布上 = 在测那天机器忙不忙；而**样本恒为 2 是延迟的函数**
+  （窗口 9 秒，一次 /health 吃掉 6~8 秒），「最少 N 个样本」不可满足、n=2 的中位数就是最大值。
+  已改成这条测试真正能说的话（有应答 + `max < 15.0` 的「挂没挂」线，且在测试里明写**这不是延迟 SLA**）。
+  **「/health 要 7 秒」本身是运维/产品题**（Docker healthcheck timeout 必须大于它，否则容器会在
+  抽取期间被自己杀掉——那正是 feat-041 存在的理由），**已单开一票**，本轮没动。
 - 🟠 **#93 的两条已知缺口**（都写在 `receipt-93.md` §7）：被折叠的卡今天**对经理不可见**
   （折叠抽屉 UI 票面明写不进本票，产品拍板已带回编排会话）；折叠卡**仍然进 `facts.md`**
   ——与 `archived` 今天的处境**完全相同**，改它会同时改归档语义，是另一张票。
@@ -728,7 +732,7 @@ facts+notes 重物化成空；**留下** `context_id` · `owner_token` · `name`
 
 ## Blockers / Risks
 
-- ✅ **~~离线 pytest 3 红＝已知墙钟炸弹~~ 已销账**（#82）。当前基线 **4204 passed · 0 failed**（#93 后），
+- ✅ **~~离线 pytest 3 红＝已知墙钟炸弹~~ 已销账**（#82）。当前基线 **4207 passed · 0 failed**（#95 后），
   **任何红都是你的**。
 - 🔴 **量错了东西的三种形态**（#84 实收，三条第一轮全绿活下来的变异，病因各不相同）：
   - **ⓐ 尺子够不着 → 假绿**：「栏是下陷还是凸起」写成「往祖先链上合成到第一张不透明的面」，

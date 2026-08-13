@@ -97,6 +97,18 @@ parse 在 ingest_paths / append_paths），同步直调（demo.py 母本自铸�
   idx 串行化 / 0017 backfill / 往返+clone 保 hash / **xmin 增量判据** / 零变化 re-put /
   **升级路径**）。既有五文件 needs_db 口径 **78/78**（`-m needs_db`）；整文件口径与 t86 共存
   复跑绿。跑完已 `DROP DATABASE`。
+
+  > 🔴 **2026-08-12 订正（#95）——「既有五文件 78/78」这句口径是错的，它藏了一片暗区。**
+  > 全仓 `-m needs_db` 是 **142** 条，那五个文件只是其中一小半。差的那些里**有四条正是被本票
+  > 改坏的**，红了整整一票没人看见：`test_e2e_first_user_full_chain` /
+  > `test_company_survives_a_service_restart` / `test_file_space_survives_a_service_restart` /
+  > `test_ingest_over_http_persists_pgvector_and_survives_restart`。
+  > 病因就是本票的异步 deposit：`/ingest` 秒回「空骨架世界」，而这四条仍按同步语义断言
+  > 「请求回来时库里就该有东西」。其中两条更毒——它们起的是**真 uvicorn 子进程**，
+  > 而 `tests/conftest.py` 那条 autouse 的 `AVERY_INGEST_WORKER=off` 被
+  > `{**os.environ, ...}` **继承进了子进程**，于是连 worker 线程都没起来。
+  > **真库套一律跑全仓 `-m needs_db`，回执里不许再写「某几个文件 N/N」**——那不是一个口径，
+  > 是一块挡板。四条已由 #95 修好（回执 `receipt-95.md`）。
 - **升级路径真跑**（0810 纪律，且做成了常驻 needs_db 门）：一次性库先只放 0001..0016（生产现状）
   + 一条带字节无 hash 的存量行 → 新代码 `_ensure_schema` 接管 → 复查 0017 列已加、存量行
   hash 已在库内算出、0018 表已建、deposit_append 在升级后的库上真能落 job。

@@ -47,6 +47,7 @@ import pytest
 
 from avery.env import load_dotenv
 from avery.ingest.extract import FORBIDDEN_PERSON_KEYS
+from conftest import SUBPROCESS_WORKER_ON   # #90 异步 deposit（理由见 conftest）
 
 HERE = Path(__file__).resolve().parent
 HARNESS = HERE.parent                      # eval-harness/
@@ -240,8 +241,12 @@ def live_service():
             time.sleep(0.5)
     assert _port_free(SERVICE_PORT), f"port {SERVICE_PORT} still occupied; kill the stray uvicorn"
 
+    # 🔴 `SUBPROCESS_WORKER_ON`：conftest 那条 autouse 的 `AVERY_INGEST_WORKER=off` 会被
+    # `{**os.environ, ...}` 继承进子进程，把「生产进程形状」里的 worker 线程按死——字节落库、
+    # job 排着队、没有任何人去跑它。这条门在实跑时需要真 key（@seedgate），所以它是**潜伏**的
+    # 那一份：#95 的静态门（test_ingest_async_90）把它和 e2e_stress 一起扫了出来。
     env = {**os.environ, "AVERY_BRAIN": "minimax", "AVERY_EMBEDDINGS": "dashscope",
-           "PYTHONUNBUFFERED": "1"}
+           **SUBPROCESS_WORKER_ON, "PYTHONUNBUFFERED": "1"}
     # Server logs go to a file so an extraction fallback (logged as a warning) is diagnosable
     # after the fact — the 07-07 pdf flake was blind while these went to a discarded PIPE.
     log_path = HARNESS / "runs" / "seed-gate-uvicorn.log"
