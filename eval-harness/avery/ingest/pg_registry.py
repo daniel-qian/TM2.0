@@ -798,6 +798,38 @@ class PostgresContextRegistry(ProjectWriteMixin):
                 (context_id,)).fetchone()
         return bool(row[0]) if row is not None and row[0] is not None else False
 
+    def source_document_keys(self, context_id: str) -> set[str] | None:
+        """issue #99 — this company's taken `source_key`s WITHOUT pulling the archive.
+
+        See the in-memory twin for the full why. In one line: the append path used to hold a whole
+        `get()` snapshot across the two-to-three minutes of LLM extraction, and `contexts` has no
+        version column — so anything the manager edited in that window was silently overwritten by
+        the write-back. This is the ONLY read that segment actually needs.
+
+        This is also where the cost argument lives, and it is not decoration: `get()` pulls every
+        entity, every material chunk and both memory files, then re-materializes facts.md/notes.md
+        onto disk. This is one small query against one table.
+
+        🔴 `None` = no such context (same meaning as `get()`'s None). An EMPTY SET means the
+        context exists and holds no documents. Never collapse the two.
+
+        🔴 Key expression is `COALESCE(NULLIF(source_key, ''), filename)` — the same ruler as
+        `source_document_bytes_by_key` and `put()`'s temp-table lifeboat, and byte-equivalent to
+        Python's `sd.source_key or sd.filename` (INSERT writes '' for an absent key, never NULL).
+        A private `source_key`-only projection would miss every pre-0005 row, and a missed key is
+        not a 404 here — it is an idempotency hole: the same document gets re-accepted under a
+        second key, and `<source_key>:<line>` is the citation contract.
+        """
+        self._ensure_schema()
+        with self._connect() as conn:
+            if conn.execute("SELECT 1 FROM avery.contexts WHERE context_id = %s",
+                            (context_id,)).fetchone() is None:
+                return None
+            rows = conn.execute(
+                "SELECT COALESCE(NULLIF(source_key, ''), filename) FROM avery.source_documents "
+                "WHERE context_id = %s", (context_id,)).fetchall()
+        return {r[0] for r in rows if r[0]}
+
     def source_document_bytes(self, context_id: str, idx: int) -> bytes | None:
         """feat-032 download seam: the raw bytea of one uploaded file, pulled on demand (never in
         get()). None for an unknown context / idx or a NULL content. Short-lived connection, same

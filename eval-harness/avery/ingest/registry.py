@@ -1331,6 +1331,29 @@ class ContextRegistry(ProjectWriteMixin):
         ctx = self.get(context_id)
         return ctx.memory_dir if ctx else None
 
+    def source_document_keys(self, context_id: str) -> set[str] | None:
+        """issue #99 —— 这家公司资料库里**已经占用的 source_key**，而**不把整份档案拿在手里**。
+
+        补传原本是「`get()` 整档 → 抽取两三分钟 → `put()` 整档覆盖」，可抽取那一段其实只需要
+        这一个集合（判「这份 key 库里是不是已经有了」）。握着整份快照跨过那两三分钟，等于把
+        期间落地的任何手编改动排进了写回的销毁名单里（`avery.contexts` 没有版本列，`put()` 是
+        快照替换）。这个方法就是那一段唯一需要的读：**够用，且拿不住**。
+
+        🔴 `None` = 这个 context 不存在（与 `get()` 的 None 同义，调用方据此抛 KeyError → 同体
+        404）；**空集合 = 存在但一份文档都没有**。两者绝不许混：混了就是把「档案没了」翻译成
+        「档案是空的」，补传会照着往一个不存在的 id 上写。
+
+        ⚠ 两个适配器各写一遍这个投影（这里是集合推导，pg 腿是一句 SQL）——duck-typed 双胞胎
+        的固有代价，与本模块其余 ~26 个成员一样。它们与 `file_append.existing_source_keys`
+        （整档投影那条老路）必须给出同一个答案，靠判据钉住，不靠共享代码：
+        `test_source_document_keys_answers_without_pulling_the_archive`（合约套，两条腿都跑）。
+        """
+        ctx = self._by_id.get(context_id)
+        if ctx is None:
+            return None
+        return {(sd.source_key or sd.filename) for sd in ctx.source_documents
+                if (sd.source_key or sd.filename)}
+
     def source_document_bytes(self, context_id: str, idx: int) -> bytes | None:
         """feat-032 download seam: the raw bytes of the idx-th uploaded file, or None (unknown
         context / out-of-range idx / no content). In-memory holds the bytes; the pg twin reads
@@ -1678,6 +1701,9 @@ class ContextRegistryProtocol(Protocol):
     def source_document_bytes(self, context_id: str, idx: int) -> bytes | None: ...
     # issue #93 · 全档案重跑闸的字节入口（按 key，不按 idx —— 理由见内存腿那份实现）。
     def source_document_bytes_by_key(self, context_id: str, source_key: str) -> bytes | None: ...
+    # issue #99 · 补传在抽取**之前**唯一需要的那次读：已占用的 key 集合，不留住档案。
+    # None = context 不存在；空集合 = 存在但没有文档（两者不许混）。
+    def source_document_keys(self, context_id: str) -> set[str] | None: ...
     def clone_context(self, src_context_id: str, *, new_context_id: str,
                       new_owner_token: str, ephemeral: bool = True) -> bool: ...
     # #86 · 清空这一份档案（id / owner_token 不变）。⚠ 与 pg 独有的 `delete()` 是**反面**：

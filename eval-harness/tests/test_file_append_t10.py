@@ -14,6 +14,7 @@
   §4 补传主链（离线集成）—— get→原地 mutate→put，只对新文件跑抽取。
   §5 HTTP 端点 —— POST /team/{id}/files 的鉴权/闸/回执。
   §6 @needs_db —— 真库那一层（离线套看不到 pg 持久层，5 型真库 bug 的老坑）。
+  §7 @needs_db · issue #99 —— 抽取期间不持有档案：那两三分钟里落地的手编改动不许被写回抹掉。
 
 零真 LLM：全程 `AVERY_BRAIN=mock` + `AVERY_EXTRACTOR=heuristic` + `AVERY_EMBEDDINGS=keyword`
 （三件套缺一真烧钱），@needs_db 那几条自带显式构造的 HashingEmbedder，不靠 env。
@@ -1025,5 +1026,147 @@ def test_the_pg_registry_answers_is_ephemeral_the_same_way_the_memory_twin_does(
         assert reg.is_ephemeral(twin) is True, "克隆没被标成一次性的，GC 也就收不走它"
     finally:
         reg.delete(twin)
+        reg.delete(cid)
+
+
+# =============================================================================================
+# §7 · issue #99 —— 抽取那两三分钟里落地的手编改动不许被写回静默抹掉
+# =============================================================================================
+#
+# 病灶（exploration.md §4 实证）：补传原本是「`get()` 整档 → `extract_docs()` 真 LLM 两三分钟 →
+# `put()` 整档覆盖」，而 `avery.contexts` 没有版本列、没有乐观锁。于是——
+#
+#   T+0s     worker reg.get()             → 快照 A
+#   T+30s    经理改一张卡的负责人          → 自己的 get→改→put 真的落进库里（库里 = A + 改动）
+#   T+120s   worker put(A + 新文件)        → 库里 = A + 新文件，**那个改动没了**
+#
+# 屏幕上不提示、也不当场闪回旧值，要下次刷新页面才发现改动不见了。
+#
+# 🔴 **这一段只能落在 @needs_db 上**：内存腿 `get()` 返回的是**活对象**，"两边改同一个东西"
+#    结构上丢不了；pg 腿返回的才是快照副本。这类 bug 在**整套离线判据**里 100% 全绿——不是
+#    "碰巧没测到"，是那条腿上根本不可能发生（碑 `offline-suite-blind-to-pg-persistence`）。
+#
+# 🔴 **覆盖类判据天生空真**，所以下面每一条都带**动作前的基准**：先钉住「worker 起跑前负责人是
+#    谁」，再钉住「手编真的落地了」，最后才问「写回之后还在不在」。少了前两步，一条什么都没
+#    发生过的绿是假绿。
+
+
+class _EditsWhileExtracting:
+    """替身：一个「跑得很慢」的抽取器 —— 它在自己被调用的那一刻，替经理把一张卡改掉。
+
+    这就是那两三分钟的确定性替身。用抽取器当注入点不是取巧：`extract_docs(fresh_docs,
+    extractor=extractor)` **就是**那一段慢活，从它里面落地的写与真实世界里「经理等得无聊顺手改了
+    一张卡」发生在**完全相同的窗口**里。比起线程 + sleep，它没有墙上时钟赌注（钟碑）。
+
+    单份文档时 `extract_docs` 走顺序快路（`effective = min(workers, 1) == 1`），所以这一刀恰好
+    落一次；`fired` 就是那个「这条判据到底有没有真的开过枪」的自证计数。
+    """
+
+    def __init__(self, edit):
+        from avery.ingest.extract import HeuristicExtractor
+        self._inner = HeuristicExtractor()
+        self._edit = edit
+        self.fired = 0
+
+    def extract(self, doc):
+        self.fired += 1
+        self._edit()
+        return self._inner.extract(doc)
+
+
+@needs_db
+def test_a_hand_edit_that_lands_DURING_extraction_is_not_swallowed_by_the_write_back(tmp_path):
+    """issue #99 —— 补传写回不许抹掉抽取期间落地的手编改动。
+
+    与上面那条 `test_a_hand_edit_survives_an_append_across_a_real_round_trip` 是**一对**，
+    只差一个字：那条的手编发生在补传**之前**（在 worker 读到的那份快照里，活下来是必然的），
+    这条发生在补传**进行中**（不在那份快照里）。两条一起跑，"没活下来"就只可能是时序，
+    不可能是归并规则——控制变量就在同一个文件里。
+
+    归并规则这条路已经先堵死了：`ownerName` 虽然在 `_APPEND_REFRESHABLE['project']` 里，但
+    `AppendLedger.outranks()` 对 `origin == 'manual'` 的格子恒返回 False（手编赢）。所以补传后
+    负责人变回旧值**只有一个成因**：写回用的是抽取之前那份快照。
+    """
+    url = _skip_without_db()
+    from avery.ingest.pg_registry import PostgresContextRegistry
+    reg = PostgresContextRegistry(url, data_dir=tmp_path / "data")
+    cid = "ctx_t10_lost_update_99"
+    EDITED_OWNER = "李静娴"          # 经理在抽取进行中改成的新负责人（花名册上没有这个人）
+    EARLIER_EDIT = "补传开始之前就写好的摘要"
+    files = [_write(tmp_path, "员工花名册.md", ROSTER_V1),
+             _write(tmp_path, "项目周报.md", PROJECT_V1)]
+    try:
+        assert ingest_paths([str(p) for p in files], registry=reg, work_dir=tmp_path / "mem",
+                            context_id=cid, name="别墅酒店", owner_token="tok_99",
+                            source_documents=[_sd(p, OLD_AT) for p in files]).ok
+
+        # ── 动作前的基准① —— worker 起跑前，这张卡的负责人是周雅婷 ──────────────────────────
+        seeded = PostgresContextRegistry(url, data_dir=tmp_path / "d0").get(cid)
+        before = seeded.extraction.projects[0]
+        pid = before.id
+        assert before.ownerName == ZHOU, (
+            f"种子语料没把负责人抽成 {ZHOU}（实为 {before.ownerName!r}）—— 基准不成立，"
+            f"下面那条「负责人被改回去了」什么都证明不了")
+
+        # ── 对照组：补传**之前**就落地的手编（在 worker 读到的快照里，本来就该活下来）────────
+        reg.patch_project(cid, pid, {"summary": EARLIER_EDIT})
+
+        # ── 抽取进行中，经理改这张卡的负责人 —— 走真手编通道（他自己的 get→改→put）──────────
+        def _manager_edits_mid_flight():
+            reg.patch_project(cid, pid, {"ownerName": EDITED_OWNER})
+
+        probe = _EditsWhileExtracting(_manager_edits_mid_flight)
+        p = _write(tmp_path, "本周周报.md", PROJECT_V2)
+        rep = append_paths_to_context(reg, cid, [str(p)], [_sd(p, NEW_AT)], extractor=probe)
+        assert rep.ok, rep.parse_errors
+        assert probe.fired == 1, (
+            f"那一刀没在抽取期间开枪（fired={probe.fired}）—— 这条判据什么都没测到")
+
+        # ── 动作后的对照 —— 写回之后，两个手编都必须还在 ─────────────────────────────────────
+        after = PostgresContextRegistry(url, data_dir=tmp_path / "d2").get(cid)
+        proj = next(pr for pr in after.extraction.projects if pr.id == pid)
+        assert proj.ownerName == EDITED_OWNER, (
+            f"issue #99 的丢失更新：worker 起跑前 负责人={ZHOU} → 抽取进行中经理改成 "
+            f"负责人={EDITED_OWNER}（真的落进库里了）→ worker 写回后 负责人={proj.ownerName} "
+            f"—— 那两三分钟里的手编被整档覆盖静默抹掉了")
+        assert proj.provenance["ownerName"]["origin"] == "manual", (
+            "负责人的手编出处在写回之后不见了（值对了但出处丢了，前端不会挂手编角标）")
+        assert proj.summary == EARLIER_EDIT, (
+            "对照组也丢了 —— 那就不是本票这条时序 bug，是归并规则出了别的问题")
+        assert proj.status == "blocked", (
+            "手编保住了，但这一趟补传该更新的格子没更新 —— 写回用错了快照的另一面")
+    finally:
+        reg.delete(cid)
+
+
+@needs_db
+def test_the_append_still_refuses_a_context_that_vanished_mid_extraction(tmp_path):
+    """issue #99 的边界：抽取跑完回来一看，档案已经不在了 —— 必须与「一开始就不存在」同一条
+    KeyError（端点转同体 404），而不是把这批文件写进一个已经不存在的档案里。
+
+    这一条只有真库测得出来：内存腿 `get()` 返回的是活对象，第二次 `get()` 拿到的还是同一个引用，
+    「抽取期间被删」这件事在那条腿上根本不可能发生。删档走 pg 独有的 `delete()`——它删的是
+    `contexts` 行本身，子表 ON DELETE CASCADE 一起走。
+    """
+    url = _skip_without_db()
+    from avery.ingest.pg_registry import PostgresContextRegistry
+    reg = PostgresContextRegistry(url, data_dir=tmp_path / "data")
+    cid = "ctx_t10_vanished_99"
+    files = [_write(tmp_path, "员工花名册.md", ROSTER_V1),
+             _write(tmp_path, "项目周报.md", PROJECT_V1)]
+    try:
+        assert ingest_paths([str(p) for p in files], registry=reg, work_dir=tmp_path / "mem",
+                            context_id=cid, name="别墅酒店", owner_token="tok_v",
+                            source_documents=[_sd(p, OLD_AT) for p in files]).ok
+        # 动作前的基准：这一刻档案确实还在（否则下面那条 KeyError 是空真的）
+        assert reg.get(cid) is not None, "基准不成立：档案在删之前就已经不见了"
+
+        probe = _EditsWhileExtracting(lambda: reg.delete(cid))
+        p = _write(tmp_path, "本周周报.md", PROJECT_V2)
+        with pytest.raises(KeyError):
+            append_paths_to_context(reg, cid, [str(p)], [_sd(p, NEW_AT)], extractor=probe)
+        assert probe.fired == 1, "档案是在抽取**之前**就没的 —— 这条判据测的不是它想测的窗口"
+        assert reg.get(cid) is None, "抽取期间被删掉的档案又被这一趟补传写回来了"
+    finally:
         reg.delete(cid)
 

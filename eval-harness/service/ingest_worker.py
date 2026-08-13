@@ -120,6 +120,11 @@ def _refusal_reason(report) -> str:
 
 
 def _execute_ingest(reg, job: IngestJob) -> None:
+    # issue #99 ⚠ 首传这条路**故意**没跟着补传一起改：它下面的 `ingest_paths` 在抽取之前根本不读
+    # 档案（铸一份全新的 CompanyContext 去 put，覆盖语义），所以没有「攥着旧快照跨过抽取」这件事
+    # 可挪；而 `POST /ingest` 恒新建 context，首传那两三分钟里屏幕上一张卡都还没有 —— 暴露面近零。
+    # 这里 `get()` 到的 ctx 只用来取 name/owner_token 与重建这一批的字节，**从不被写回**。
+    # 完整的取舍与「为什么只修了一半」写在 `avery/ingest/file_append.py` 模块头。
     ctx = reg.get(job.context_id)
     if ctx is None:
         reg.finish_ingest_job(job.id, status="failed",

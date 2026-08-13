@@ -21,6 +21,33 @@ diff 会从第 0 行起清掉一切——老文档的原件字节、全部旧 ch
 🔴 命门③：**先造后挂。** 能 raise 的事（解析、抽取、红线）全部做完，才碰 `ctx` 一个字段——
 内存 registry 的 `get()` 返回的是**活引用**，改到一半再失败等于坏状态已经落在库里了。
 
+🔴 命门④（issue #99）：**抽取期间不持有档案。** 顺序是「窄读 key 集合 → 抽取 → `get()` → 归并
+→ `put()`」，不是「`get()` → 抽取 → `put()`」。理由与实证写在 `append_docs_to_context` 里那段
+注释上（一句话：`put()` 是快照替换而 `avery.contexts` 没有版本列，攥着一份两三分钟前的快照写
+回去 = 把这期间落地的手编改动静默删掉）。命门③与命门④说的是**两件事**，别合并：③管「失败时
+别留半拉子」，④管「成功时别抹掉别人的写」。
+
+## 为什么只修了一半（Danny 0813 拍板，别当成漏了）
+#99 票面 §6 还有第二层：`avery.contexts` 加 `version bigint`，`put()` 时 `WHERE version = %s`
+并自增，对不上就当场报错而不是静默吞掉。**本票明确不做**，理由是它与本票不是同一件事：
+命门④把窗口从两三分钟压到几毫秒，而 CAS 是**给未来任何一个长窗口上保险**——它要动迁移、要给
+`CompanyContext` 加顶层字段（0009 那个老坑：加字段漏改迁移 = 每条写入被真库拒而离线一条不红）、
+要给 `put()` 这条全仓最高频的写路径（手编 CRUD 也走它）定义冲突时的产品语义。
+👉 **几毫秒不是零。** 今天仍然存在一个理论窗口：`get()` 与 `put()` 之间那几毫秒里落地的手编
+改动照样会被吞掉，而且**没有任何东西会报错**。要的就是第二层。
+⚠ **谁下次在这里加一段慢活**（一次外部调用、一次重算、一次新的闸），就是在把这个窗口重新
+拉长，而**今天没有任何一道门会告诉你**：守这条的那个判据
+（`test_file_append_t10.py` 里名字以 `test_a_hand_edit_that_lands_DURING_extraction` 打头的那条）
+钉的是「抽取期间」这**一个**位置，不是「`get()` 与 `put()` 之间的任何位置」。
+第二层已开票记账：**issue #102**（版本号 + CAS）。别以为这条路已经彻底安全了。
+
+## 为什么首传路（`ingest_docs`）不在本票范围
+首传是**同一个后果、不同的机制**：`pipeline.ingest_docs` 在抽取之前**根本不读档案**，它铸一份
+全新的 `CompanyContext` 拿去 `put`（覆盖语义，见开头命门①），所以那里没有「攥着旧快照」这件事
+可挪——真要修是把首传也改成归并，那是另一张票。**暴露面近零**才是它今天可以不修的理由：
+`POST /ingest` 恒新建 context（`ingest_api.py`），首传那两三分钟里屏幕上一张卡都还没有，
+没有东西可改。补传不一样——那张表已经渲染在经理屏幕上，被手编过、被归档过。
+
 ## 补传与「新建一家公司」的分界（拍板③）
 补传后卡片**安静更新**：新资料顶掉旧读数时卡直接显新值、逐字段出处指向新资料，不打扰；
 只有互相矛盾/新的更糟才走今天页那条已经在线的双栏通道（跨资料对照的那两条定级规则，
@@ -133,12 +160,28 @@ def append_docs_to_context(reg, context_id: str, docs: list[ParsedDoc],
         `file_delete` 命门① 的同款纪律——绝不换列表对象）。
     同步直调（demo.py 母本自铸、既有测试）不传它，行为与 #90 之前逐字节相同。
     """
-    ctx = reg.get(context_id)
-    if ctx is None:
-        raise KeyError(context_id)
-
+    # ── 🔴 命门④（issue #99）：抽取那两三分钟里，手里**不许**攥着档案 ──────────────────────
+    # 修之前这里是 `ctx = reg.get(context_id)`，而 `put()` 在两三分钟之后才发生。那中间落地的
+    # 任何手编改动都排在了写回的销毁名单里：
+    #   T+0s    worker get()              → 快照 A
+    #   T+30s   经理改一张卡的负责人       → 他自己的 get→改→put 真的落库（库里 = A + 改动）
+    #   T+120s  worker put(A + 新文件)     → 库里 = A + 新文件，**那个改动没了**
+    # 屏幕上不提示、也不闪回旧值，要下次刷新页面才发现。`avery.contexts` 没有版本列、没有乐观
+    # 锁（迁移 0002），所以没有任何一层会拦住它。一个人用也会中：一台电脑传、同一个人换个标签页
+    # 改卡就够了。共用登录/多设备只是把偶发放大成日常。
+    #
+    # 修法是把贵的那段挪到**手里没有档案**的时候跑：`extract_docs` 只吃新文档、不吃 ctx，抽取
+    # 根本不需要档案，只有归并需要。所以这里只读**一个集合**（已占用的 key），抽取跑完之后才
+    # 第一次拍照，几毫秒之后就写回。窗口从两三分钟缩到几毫秒。
+    #
+    # 🔴 **不许**改成「抽取期间禁掉编辑」：共用登录/多设备下另一台浏览器根本不知道有人在传，
+    #    前端结构上挡不住（全仓只有 `UploadPanel.tsx` / `OnboardGate.tsx` 两处看 `ingesting`，
+    #    卡片编辑按钮绑的是它自己的 `projectWriteBusy`）。这是后端问题，得在后端解。
     errors = list(parse_errors or [])
     reserved = set(reserved_keys or ())
+    keys = reg.source_document_keys(context_id)
+    if keys is None:
+        raise KeyError(context_id)
 
     # ── 调用方契约：每份 ParsedDoc 的 `name` 必须**就是**它那份 SourceDocument 的 source_key ──
     # 端点侧靠「把临时文件写成 parse_name」保证这件事（`parse_file` 用的就是那个基名）。写错的
@@ -156,7 +199,9 @@ def append_docs_to_context(reg, context_id: str, docs: list[ParsedDoc],
     # 端点侧的 `_unique_parse_names(used=existing_source_keys(ctx))` 已经保证新 key 不撞老 key，
     # 所以这里通常一条都不命中；它守的是重试/并发那一发（同一个请求被送了两次）。
     # #90：reserved（本批预挂的 'reading' 行）不算「已占用」——那是自己。
-    taken = existing_source_keys(ctx) - reserved
+    # #99：这一步**必须**在抽取之前（要靠它决定「哪几份文件值得花钱去读」），而它也是抽取之前
+    # 唯一需要的读——上面那次窄读给的就是它。归并要用的那份快照在下面、抽取之后才取。
+    taken = keys - reserved
     skipped = [sd.source_key or sd.filename for sd in source_documents
                if (sd.source_key or sd.filename) in taken]
     fresh_sds = [sd for sd in source_documents if (sd.source_key or sd.filename) not in taken]
@@ -183,6 +228,10 @@ def append_docs_to_context(reg, context_id: str, docs: list[ParsedDoc],
     fresh = extract_docs(fresh_docs, extractor=extractor)
     # #90 · 分段计时（票面 D）：全管线此前 perf_counter 零命中，「越传越慢主凶是谁」只能靠猜。
     # 四段口径 parse / extract / merge / persist；parse 段在调用方（append_paths / worker）打。
+    # #99 后四段口径**一个字没动**（`persist` 仍是 materialize + put）。变的是那次 `get()` 的位置：
+    # 它从「extract 段之前」挪到了「extract 段与 merge 段之间」，两处都在四段之外——它此前不被
+    # 计时，此后也不被计时，所以四段的数字仍然可比。⚠ 那次读的耗时随档案规模长，是这份计时今天
+    # 唯一的盲点；真要追「越传越慢」追到它头上时，先给它自己打一段，别改这四段的含义。
     log.info("ingest-timing stage=extract context_id=%s files=%d elapsed_ms=%.0f",
              context_id, len(fresh_docs), (time.perf_counter() - _t0) * 1000)
 
@@ -191,6 +240,18 @@ def append_docs_to_context(reg, context_id: str, docs: list[ParsedDoc],
     if not rl.ok and not person_scoring_allowed():
         return AppendReport(ok=False, context=None, redline=rl, parsed=fresh_docs,
                             parse_errors=errors, skipped_duplicates=skipped)
+
+    # ── #99 · 此刻才第一次拍照 —— 从这里到 put() 是几毫秒，不是几分钟 ────────────────────
+    # 抽取与红线都跑完了（能 raise 的事全在上面，命门③的姿态没变），现在读到的是**包含了那两
+    # 三分钟里所有手编改动**的新鲜快照，归并直接并在它上面。
+    # ⚠ 这一趟里 `ctx` 之后的每一步（挂清单 → 归并 → rejudge → 整体红线 → put）**位次一律没
+    #   动**，本票只把这次 `get()` 从抽取之前挪到了抽取之后。
+    # ⚠ 抽取期间档案被删掉是真会发生的（另一个标签页点了删除、GC 收走了一份一次性克隆）——
+    #   与「一开始就不存在」同样是 KeyError，端点转同体 404。宁可回一条诚实的 404，也不把这批
+    #   文件写进一个已经不存在的档案里。
+    ctx = reg.get(context_id)
+    if ctx is None:
+        raise KeyError(context_id)
 
     # ── 从这里开始才碰 ctx ──────────────────────────────────────────────────────────────
     # 顺序有讲究：source_documents 必须**先**挂上去，账本才解得出新资料的上传时刻

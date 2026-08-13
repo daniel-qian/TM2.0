@@ -155,6 +155,39 @@ def test_unknown_id_resolves_to_nothing(impl):
     assert reg.resolve_memory_dir(ghost) is None
 
 
+def test_source_document_keys_answers_without_pulling_the_archive(impl, tmp_path):
+    """issue #99 —— 补传在抽取**之前**唯一需要的那次读，两条腿必须给同一个答案。
+
+    这个方法存在的理由是时序（见 `file_append` 命门④）：整档 `get()` 一旦被握过那两三分钟，
+    写回就会抹掉期间落地的手编。但它一旦**读漏一个 key**，换来的是另一种安静的坏：同名文档被
+    当成新文档接纳，而 `<source_key>:<行号>` 是出处契约 —— 每文件块数、时间轴那一天、冲突卡
+    引的那份资料三处一起指错，没有任何一道门会红（`existing_source_keys` 的 docstring）。
+    所以这条合约钉三件事：**不存在→None**、**存在但没文档→空集合**、**有文档→就是那几个 key**。
+
+    🔴 期望值**不由被测函数算出来**（尺子长在被量的东西上 = 函数一缩水期望值跟着缩水）：
+    `literal` 是测试侧手写的常量，`existing_source_keys(get(...))` 是另一条独立的路（整档投影，
+    补传路修改之前用的就是它）。三份必须同时相等。
+    """
+    from avery.ingest.file_append import existing_source_keys
+
+    reg = impl.fresh()
+    assert reg.source_document_keys("ctx_never_registered") is None, (
+        "不存在的 context 必须与 get() 同义地回 None —— 回空集合等于把「档案没了」翻译成"
+        "「档案是空的」，补传会照着往一个不存在的 id 上写")
+
+    # 存在、但一份文档都没有（feat-032 之前的形状 / 直接建的 context）→ 空集合，不是 None
+    bare_reg, bare_cid, _ = _ingest(impl, tmp_path / "bare")
+    assert bare_reg.source_document_keys(bare_cid) == set(), (
+        "「存在但没有文档」被答成了 None —— 与「档案不存在」混成了同一个答案")
+
+    with_docs, cid, _ = _ingest(impl, tmp_path / "mem", source_documents=_sample_source_docs())
+    literal = {HANDBOOK.name, ROSTER.name}          # 测试侧手写的那一份
+    narrow = with_docs.source_document_keys(cid)
+    wide = existing_source_keys(with_docs.get(cid))
+    assert narrow == literal, f"窄读漏了/多了 key：{narrow} != {literal}"
+    assert wide == literal, f"整档投影漏了/多了 key：{wide} != {literal}"
+
+
 def test_recall_over_a_stored_context_stays_line_addressable(impl, tmp_path):
     reg, cid, _ = _ingest(impl, tmp_path / "mem")
     got = reg.get(cid)
