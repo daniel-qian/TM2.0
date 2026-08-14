@@ -147,10 +147,20 @@ class PostgresContextRegistry(ProjectWriteMixin):
         statement_timeout, and the whole replay retries with backoff. So a bootstrap that races a
         concurrent /demo/claim holding an entities lock — or an ORPHANED idle-in-transaction claim, the
         exact 2026-07-23 outage — FAILS FAST and retries instead of hanging until Supabase's 2-min
-        statement_timeout and tripping the container HEALTHCHECK. Paired with 0009/0010's guarded ADD
-        CONSTRAINT (a no-op catalog lookup on the normal boot where nothing changed), the steady-state
-        bootstrap takes NO ACCESS EXCLUSIVE lock on entities at all — the lock_timeout is the backstop
-        for the rare apply path (a genuine schema change, or a fresh DB) and for a stuck writer."""
+        statement_timeout and tripping the container HEALTHCHECK. Paired with 0002's guarded DROP and
+        0009/0010's guarded ADD CONSTRAINT (a no-op catalog lookup on the normal boot where nothing
+        changed), the steady-state bootstrap takes NO ACCESS EXCLUSIVE lock on entities at all — the
+        lock_timeout is the backstop for the rare apply path (a genuine schema change, or a fresh DB)
+        and for a stuck writer.
+
+        ⚠ That last sentence was FALSE from 0724 until 2026-08-13, and this note stays so nobody
+        re-learns it: it credited only 0009/0010, but 0002 ended in a bare `DROP CONSTRAINT IF
+        EXISTS`, and `IF EXISTS` decides nothing before it locks — so 0002 took ACCESS EXCLUSIVE on
+        entities on EVERY boot while dropping a constraint that had been retired for months.
+        Measured by replaying each migration against a held ACCESS SHARE lock: 0002 was the only
+        file that failed. A DROP that drops nothing is not a free statement. The invariant is now
+        enforced, not just asserted, by
+        tests/test_registry_contract.py::test_steady_state_bootstrap_takes_no_entities_lock."""
         if self._schema_ready:
             return
         lock_ms = _int_env("AVERY_BOOTSTRAP_LOCK_TIMEOUT_MS", 3000)
