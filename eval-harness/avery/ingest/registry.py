@@ -1000,7 +1000,10 @@ class ContextRegistry(ProjectWriteMixin):
         self._form_submissions: dict[str, object] = {}   # T1: submission_id -> FormSubmission
         self._form_tokens: dict[str, str] = {}           # T1: share_token -> submission_id
         self._account_contexts: dict[str, list[str]] = {}  # feat-053: user_id -> [context_id]
-        self._context_owner: dict[str, str] = {}           # feat-053: context_id -> user_id (1:1)
+        # #100: context_id -> [user_id], oldest link first. Was `_context_owner: dict[str, str]`
+        # (1:1) until 一家公司多个账号 landed; renamed rather than re-typed so nothing keeps reading
+        # it as "the owner". Empty/absent = anonymous context.
+        self._context_accounts: dict[str, list[str]] = {}
         self._ephemeral_at: dict[str, datetime] = {}       # gc-demo-clones-0724: clone_id -> created (UTC)
         self._ingest_jobs: dict[str, IngestJob] = {}       # #90: job_id -> IngestJob (insert order = age)
         # #90: jobs are touched from TWO threads (the event-loop thread deposits, the worker thread
@@ -1289,22 +1292,39 @@ class ContextRegistry(ProjectWriteMixin):
         sub.expires_at = at_iso
         return "ok"
 
-    # --- feat-053: the account seam (Supabase user id <-> context ownership) -------------------
+    # --- feat-053 / #100: the account seam (Supabase user id <-> context membership) ------------
     # ABOVE feat-038, never instead of it: owner_token stays the lower-layer credential and this map
-    # is a SECOND, durable way to prove ownership of a context you already own. A context with no
+    # is a SECOND, durable way to prove membership of a context you already reach. A context with no
     # entry here is anonymous and behaves exactly as it did pre-053 (the guest path).
+    #
+    # #100: membership is MANY-to-many (一家公司的每个成员一个账号). These three methods are the
+    # twin of pg_registry's — 逐条同改是纪律，不是巧合：the offline suite runs almost entirely on
+    # this leg, so a semantic that differs here is a dark area no offline assertion can see.
+    # `avery/db/migrations/0020` carries the full WHY; the two invariants that decide the code:
+    #   · ISOLATION: you reach a context iff your id is in ITS list. Unchanged, and the only thing
+    #     `account_owns` asks.
+    #   · EXCLUSIVITY: survives only as the `allow_shared=False` branch below (the pg twin needs a
+    #     row lock to make that branch atomic; a single-threaded dict does not).
 
-    def link_account_context(self, user_id: str, context_id: str) -> bool:
-        """Bind a context to an account. True when it is now bound to THIS user (including a
-        re-link, which is idempotent), False when another account already owns it — one context has
-        at most one owner account, which is the storage-layer half of "两个账号数据不串". The
-        Postgres twin gets the same answer from a UNIQUE index (migration 0008)."""
+    def link_account_context(self, user_id: str, context_id: str,
+                             *, allow_shared: bool = False) -> bool:
+        """Bind a context to an account. True when this user is now a member (re-linking is
+        idempotent), False when `allow_shared` is False and a DIFFERENT account is already on it.
+
+        `allow_shared` is keyword-only and defaults to the PRE-#100 answer, so `/account/claim` and
+        the signed-in upload path keep their semantics untouched; only the admin binder passes True.
+        Product decision, Danny 0814: an owner_token is a DEVICE-level credential and must not double
+        as a company membership ticket, so claiming someone else's context still fails."""
         if not user_id or not context_id:
             return False
-        current = self._context_owner.get(context_id)
-        if current is not None and current != user_id:
+        # `.get`, not `.setdefault` — a REFUSED link must not leave an empty list behind. That
+        # phantom entry would read as "this context has a members list" to anything asking by key.
+        members = self._context_accounts.get(context_id, ())
+        if not allow_shared and any(m != user_id for m in members):
             return False
-        self._context_owner[context_id] = user_id
+        if user_id not in members:
+            # oldest first — index 0 is the founding member (whoever uploaded or claimed).
+            self._context_accounts.setdefault(context_id, []).append(user_id)
         ctxs = self._account_contexts.setdefault(user_id, [])
         if context_id not in ctxs:
             ctxs.append(context_id)
@@ -1313,22 +1333,29 @@ class ContextRegistry(ProjectWriteMixin):
         return True
 
     def contexts_for_account(self, user_id: str) -> list[str]:
-        """Every context this user owns, newest link first (the order the account picker shows)."""
+        """Every context this user is a member of, newest link first (the account picker's order)."""
         if not user_id:
             return []
         return list(reversed(self._account_contexts.get(user_id, [])))
 
-    def account_for_context(self, context_id: str) -> str | None:
-        """The account that owns this context, or None when it is still anonymous."""
-        return self._context_owner.get(context_id)
+    def accounts_for_context(self, context_id: str) -> list[str]:
+        """Every account on this context, oldest link first; empty when it is still anonymous.
+
+        #100 replaced `account_for_context() -> str | None`. That name asked "who is THE owner", a
+        question with no answer once a context carries several members — and it would have gone on
+        compiling while returning *an* owner, which is the "名字对不上语义" trap. Returns a copy: the
+        internal list is mutable state, and a caller that appended to it would silently add a member."""
+        if not context_id:
+            return []
+        return list(self._context_accounts.get(context_id, ()))
 
     def account_owns(self, user_id: str | None, context_id: str) -> bool:
-        """The authorization question: may THIS signed-in user read THIS context? Requires an exact
-        match — an anonymous (unowned) context is never readable via the account path, only via its
-        owner_token, so signing in can never hand you someone else's un-claimed workspace."""
+        """The authorization question: may THIS signed-in user read THIS context? Membership only —
+        an anonymous (unbound) context is readable via its owner_token and never via the account
+        path, so signing in can never hand you someone else's un-claimed workspace."""
         if not user_id or not context_id:
             return False
-        return self._context_owner.get(context_id) == user_id
+        return user_id in self._context_accounts.get(context_id, ())
 
     def get(self, context_id: str) -> CompanyContext | None:
         return self._by_id.get(context_id)
@@ -1635,7 +1662,7 @@ class ContextRegistry(ProjectWriteMixin):
         batch = max(1, int(limit))
         cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
         victims = [cid for cid, at in sorted(self._ephemeral_at.items(), key=lambda kv: kv[1])
-                   if at < cutoff and cid not in self._context_owner][:batch]
+                   if at < cutoff and not self._context_accounts.get(cid)][:batch]
         for cid in victims:
             self._by_id.pop(cid, None)
             self._notes.pop(cid, None)
@@ -1678,7 +1705,7 @@ class ContextRegistry(ProjectWriteMixin):
         self._form_submissions.clear()
         self._form_tokens.clear()
         self._account_contexts.clear()
-        self._context_owner.clear()
+        self._context_accounts.clear()
         self._ephemeral_at.clear()
         with self._jobs_lock:
             self._ingest_jobs.clear()   # #90: 同 _advise_runs 那条注释的教训——漏清就是残留温床
@@ -1768,10 +1795,11 @@ class ContextRegistryProtocol(Protocol):
     def put_form_submission_if_absent(self, submission): ...
     def expire_form_submission(self, submission_id: str, at_iso: str) -> str: ...
 
-    # account <-> context binding (feat-038 / feat-053)
-    def link_account_context(self, user_id: str, context_id: str) -> bool: ...
+    # account <-> context membership (feat-038 / feat-053 / #100 many-to-many)
+    def link_account_context(self, user_id: str, context_id: str,
+                             *, allow_shared: bool = False) -> bool: ...
     def contexts_for_account(self, user_id: str) -> list[str]: ...
-    def account_for_context(self, context_id: str) -> str | None: ...
+    def accounts_for_context(self, context_id: str) -> list[str]: ...
     def account_owns(self, user_id: str | None, context_id: str) -> bool: ...
 
     # manual CRUD (today via the shared ProjectWriteMixin; enumerated so the seam stays
