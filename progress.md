@@ -9,6 +9,41 @@
 
 （复验回执 `.issues/account-tenancy-0813/receipt-merge-0814.md`）
 
+两票**咬同一张表** `avery.account_contexts`（#98 在它上面开 RLS，#100 退休 0008 的唯一索引换成同名
+非唯一索引），而**各自分支上都没见过对方**，所以必须一起合、一起验，两份旧回执的数字一个都不能直接引用。
+
+**合并树验收**（全部在合并后重跑，merge commit `9e0f894` + `4ff8bd0`）：
+
+- 离线全仓 **4434 passed · 0 failed · 4 xfailed**（合并前 main 实测 **4427** → **+7**，零删除）
+- 全仓 `-m needs_db` **153 passed · 0 failed**（146 → 153，一次性库，不按文件挑）
+- `./init.sh` **exit=0**，`6 problems (0 errors, 6 warnings)`＝存量（本轮前端文件改动数 **0**）
+- 升级路径七步 + 第 8 步「重放两轮」门在**合并树上真跑**：passed。另配探针钉住
+  「0019 真的跑过」（13/13 表 RLS on）+ born-red 对照（撤掉同名索引后如实炸 `UniqueViolation`）
+- RLS「后端零影响」用**最弱身份**（`NOSUPERUSER NOBYPASSRLS`）重验，含 #100 的多成员写路径；
+  FORCE 那条 born-red 如实炸出 `InsufficientPrivilege`
+
+🔴 **合并 ≠ 生产已开 RLS / 已换索引**：main 领先 `origin/main` **40** 个提交、**一个都没推**。
+两份迁移真正落到生产，要等**下次上产换镜像**时由 `_ensure_schema` 的迁移懒加载重放触发；
+在那之前生产库仍是 `0/13 RLS off`。receipt-98 那条「上产后 `/health` + 一次真实读写路径确认」
+**仍是活账**。
+
+🔴 **票面离线基线 4265 已作废**：那是 #97 并入 main 之前量的。合并前 main 实测 **4427**。
+跨了别人几次合并之后，票面基线数字必须重量再用。
+
+### #98 avery schema 全表 ENABLE ROW LEVEL SECURITY（源 `claude/inspiring-chaum-48a5ee` @ `ef1c52a`）
+
+Danny 0814 点头，解开本票 0714 起唯一那道人工闸。迁移 `0019_enable_rls.sql`：按 catalog 遍历
+avery schema 开 RLS，**无 policy、无 FORCE**（deny-all 防御纵深）。回执
+`.issues/rls-deny-all-0813/receipt-98.md`。
+
+- **票面写 12 张表，实为 13 张**（漏了 #90 加的 `avery.ingest_jobs`），所以 0019 不写死表名、从
+  `pg_class` 遍历 —— 手写清单＝同一份真相的两份抄本。
+- **不能裸写 `ALTER TABLE ... ENABLE`**：它即使 RLS 已开仍取 ACCESS EXCLUSIVE，而迁移每次开机全量
+  重放，等于每次开机抢一次排他锁（2026-07-23 停摆的形状）。改成 `NOT relrowsecurity` 才 ALTER 的守卫式。
+- 🔴 **永远别加 FORCE**：FORCE 会把 deny-all 对准 owner 自己＝后端，表现成静默数据丢失。
+- 合并时与 main 冲突在 `test_registry_contract.py`，病因是分支落后三票、其中 **#104 正是本票顺手
+  逮到的那个 0002 存量锁问题**，它先一步进了 main 并改写过那条锁门。
+
 ### #100 一家公司多个账号（源 `claude/reverent-carson-06fdb1` @ `c8ebe6b`）
 
 Danny 0813 拍板「公司的每个成员一个账号，文件与数据属于同一家公司」。形状本来就对，拦着的只有
@@ -38,13 +73,13 @@ Danny 0813 拍板「公司的每个成员一个账号，文件与数据属于同
 对照基准落在存储层（迁移**前**插第二个 owner 真被库拒，走裸连不碰 `_ensure_schema`）。
 排他性退到应用层这一半没含糊：判断跑在 `avery.contexts` 行的 `FOR UPDATE` 之下，恢复原子性。
 
-**验收**（合并当前 main 之后跑的）：离线 **4272 passed · 0 failed**（4265 + 7，完全加法零回归）·
-全仓 `-m needs_db` **152 passed · 0 failed**（146 + 6）· `./init.sh` **exit 0**（6 条 lint warning
-是存量，本票 `.ts/.tsx/.js/.css` 改动数 = 0）· **未 push**。五条变异逐条验过各打中一条判据无交叉；
-升级路径第 8 步单独验过**可达**（临时放行第 5 步后如实抛 `UniqueViolation`），不是死枝。
+**分支上的验收**（数字已被上面的合并树验收取代，留着是为了对账）：离线 4272 · needs_db 152 ·
+`./init.sh` exit 0。五条变异逐条验过各打中一条判据无交叉；升级路径第 8 步单独验过**可达**
+（临时放行第 5 步后如实抛 `UniqueViolation`），不是死枝。
 
-⚠ 留给 Danny 一条：0008 头注释里那句自陈的安全保证自 0020 起为假。按票面红字**没改 0008**；
-最小修法是加一行 `-- SUPERSEDED BY 0020` 指针，零 DDL 改动。要做说一声。
+⚠ **仍留给 Danny 的一条（本轮没动）**：0008 头注释里那句自陈的安全保证自 0020 起为假。
+按票面红字**没改 0008**（已实查确认合并后它一个字节没变）；最小修法是加一行
+`-- SUPERSEDED BY 0020` 指针，零 DDL 改动。要做说一声。
 
 ---
 
