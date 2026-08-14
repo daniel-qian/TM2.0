@@ -569,6 +569,12 @@
       "name": "T8 全链端到端循环自检 + 中文关键词检索修复（差距战役收官 / #57）",
       "status": "done",
       "evidence_ref": ".issues/gap-design-0805/receipt-T8-e2e.md"
+    },
+    {
+      "id": "feat-105",
+      "name": "资料新旧判据的时区错位修复——decision_grading 全模块单钟走 UTC（as_of 由 date.today() 改 today_utc）+ 钉钟边界门",
+      "status": "done",
+      "evidence_ref": ".issues/stale-date-boundary-0814/session-handoff.md"
     }
   ]
 }
