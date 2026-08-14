@@ -1594,3 +1594,63 @@ def test_pg_manual_crud_roundtrip_erases_no_column_anywhere(pg, tmp_path):
     assert before == after, (
         f"get→改→put 往返改写了快照列。整列被抹掉的: { {t: v for t, v in erased.items() if v} }; "
         f"全部差异表: {sorted(t for t in before if before[t] != after.get(t))}")
+
+
+@needs_db
+def test_steady_state_bootstrap_takes_no_entities_lock(pg, monkeypatch):
+    """README rule 2 and the `_ensure_schema` docstring both promise the STEADY-STATE bootstrap takes
+    no ACCESS EXCLUSIVE lock on avery.entities. This is the test that makes the promise true instead
+    of merely written down.
+
+    It was false in production shape until 0002 was guarded (2026-08-13): `ALTER TABLE ... DROP
+    CONSTRAINT IF EXISTS` does not consult the catalog before locking, so 0002 grabbed ACCESS
+    EXCLUSIVE on every single boot even though the constraint it names was retired long ago and the
+    statement dropped nothing. Replaying each migration individually against a held ACCESS SHARE
+    lock, 0002 was the ONLY file that failed. That is the 2026-07-23 outage shape: an orphaned
+    idle-in-transaction /demo/claim holds entities, the bootstrap queues behind it, /demo/* 500s.
+
+    Shape of the test: hold a real ACCESS SHARE lock (what any concurrent reader has) in a second
+    connection, then run a full replay. ACCESS EXCLUSIVE conflicts with ACCESS SHARE, so any
+    migration that reaches for it dies on lock_timeout rather than blocking the suite — retries are
+    pinned to 1 so a regression fails in ~3s instead of backing off four times.
+
+    🔴 The `lock_held()` assertions on BOTH sides are the point, not ceremony. If the blocker's
+    transaction ended early — driver autocommit, an idle-timeout, a stray commit — the replay would
+    sail through against an unlocked table and this test would report success for a bootstrap that
+    was never actually contended. That is the exact false green this test exists to rule out, so it
+    proves the lock was live before the replay AND still live after it."""
+    import psycopg
+
+    pg.fresh()._ensure_schema()          # reach steady state; boot #1 legitimately does lock
+
+    monkeypatch.setenv("AVERY_BOOTSTRAP_LOCK_TIMEOUT_MS", "3000")
+    monkeypatch.setenv("AVERY_BOOTSTRAP_RETRIES", "1")
+
+    def lock_held() -> bool:
+        with psycopg.connect(_db_url()) as probe:
+            return probe.execute("""
+                SELECT count(*) FROM pg_locks l
+                  JOIN pg_class c ON c.oid = l.relation
+                  JOIN pg_namespace n ON n.oid = c.relnamespace
+                 WHERE n.nspname = 'avery' AND c.relname = 'entities'
+                   AND l.mode = 'AccessShareLock' AND l.granted
+            """).fetchone()[0] > 0
+
+    blocker = psycopg.connect(_db_url())          # NOT autocommit: the tx stays open below
+    try:
+        blocker.execute("SELECT count(*) FROM avery.entities")   # takes ACCESS SHARE, holds it
+        assert lock_held(), (
+            "the blocking connection never actually took an ACCESS SHARE lock on avery.entities — "
+            "without it the replay below is uncontended and proves nothing")
+
+        registry = pg.fresh()
+        assert registry._schema_ready is False, (
+            "a registry that already believes the schema is ready short-circuits _ensure_schema "
+            "and would replay nothing at all")
+        registry._ensure_schema()      # raises RuntimeError if any migration wants ACCESS EXCLUSIVE
+
+        assert lock_held(), (
+            "the ACCESS SHARE lock was gone by the end of the replay, so the run was not contended "
+            "for its whole duration — treat the pass as unproven, not as evidence")
+    finally:
+        blocker.close()
