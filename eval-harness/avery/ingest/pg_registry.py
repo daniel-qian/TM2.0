@@ -174,11 +174,17 @@ class PostgresContextRegistry(ProjectWriteMixin):
                 return
             except contended as e:
                 if attempt >= retries:
+                    # #100: no longer names `entities`. Until 0019 that was the only table a
+                    # migration could block on, so hardcoding it was a free hint; 0019 made
+                    # `account_contexts` lock-sensitive too, and an outage message that sends the
+                    # operator to the wrong table costs more than saying nothing. The underlying
+                    # psycopg error (chained via `from e`) carries the real relation name.
                     raise RuntimeError(
-                        f"avery schema bootstrap could not lock the entities table after {retries} "
-                        f"attempts (lock_timeout={lock_ms}ms) — a concurrent /demo/claim or an "
-                        "orphaned idle-in-transaction connection is likely holding it; clear it "
-                        "(SELECT pg_terminate_backend(pid) on the blocker) and restart."
+                        f"avery schema bootstrap could not acquire a lock after {retries} attempts "
+                        f"(lock_timeout={lock_ms}ms) — a concurrent /demo/claim or an orphaned "
+                        "idle-in-transaction connection is likely holding one of the avery tables; "
+                        "find it (SELECT relation::regclass, pid FROM pg_locks WHERE NOT granted), "
+                        "clear it (SELECT pg_terminate_backend(pid) on the blocker) and restart."
                     ) from e
                 logger.warning(
                     "schema bootstrap attempt %d/%d hit a lock/timeout (%s); retrying",
@@ -1373,39 +1379,74 @@ class PostgresContextRegistry(ProjectWriteMixin):
                 return "already" if exists else "unknown"
         return "ok"
 
-    # --- feat-053: the account seam (Supabase user id <-> context ownership) ----------------------
+    # --- feat-053 / #100: the account seam (Supabase user id <-> context membership) --------------
     # The Postgres twin of the in-memory map, same duck-typed API so the service layer never asks
-    # which registry it holds. Storage: avery.account_contexts (migration 0008). Ownership is 1:1 by
-    # a UNIQUE index on context_id — the DB, not a service-layer check, is what makes "两个账号数据
-    # 不串" true even under a race between two simultaneous claims.
+    # which registry it holds. Storage: avery.account_contexts (0008, relaxed by 0019).
+    #
+    # #100 (Danny 0813): membership is MANY-to-many — 一家公司的每个成员一个账号，看同一份档案。
+    # 0008's UNIQUE(context_id) is retired by 0019; read that file's header for exactly which half of
+    # "两个账号数据不串" moved and which half did not. The short version, because it decides how you
+    # read the three methods below:
+    #   · ISOLATION is untouched and still storage-enforced — you reach a context iff a
+    #     (user_id, context_id) ROW exists. `account_owns` asks precisely that and nothing else.
+    #     An anonymous context has no rows, so no account reaches it, exactly as before.
+    #   · EXCLUSIVITY ("at most one account") is gone as a DB constraint and survives only as the
+    #     `allow_shared=False` branch of link_account_context, serialized by a row lock.
 
-    def link_account_context(self, user_id: str, context_id: str) -> bool:
-        """Bind a context to an account; False when another account already owns it (or the context
-        does not exist — the FK refuses it). Idempotent for the SAME user: ON CONFLICT DO NOTHING on
-        the primary key, then confirm the owner really is this user before reporting success. That
-        re-read is what distinguishes 'already yours' from 'someone else's' — both hit a conflict."""
+    def link_account_context(self, user_id: str, context_id: str,
+                             *, allow_shared: bool = False) -> bool:
+        """Bind a context to an account. False when the context does not exist, or when
+        `allow_shared` is False and a DIFFERENT account is already on it. Idempotent for the SAME
+        user (ON CONFLICT DO NOTHING on the primary key).
+
+        `allow_shared` is keyword-only and defaults to the PRE-#100 behaviour, so both existing
+        callers — `/account/claim` (auth_api) and the signed-in upload path (ingest_api) — keep their
+        semantics byte-for-byte without being touched. Only the admin binder
+        (scripts/ops/link-account-context.py) passes True. That default is the product decision,
+        Danny 0814: an owner_token is a DEVICE-level credential and must not double as a company
+        membership ticket, so claiming a context someone else already holds still fails.
+
+        🔴 WHY THE `FOR UPDATE` (this is the line that replaces a dropped DB constraint): until 0019
+        the refusal was a UNIQUE index, i.e. ATOMIC — two simultaneous claims could not both win, no
+        matter how they interleaved. Read-then-insert in Python is NOT atomic under READ COMMITTED:
+        each transaction's existence check runs against a snapshot that cannot see the other's
+        uncommitted row, so both would pass the check and both would insert. Locking the parent
+        `avery.contexts` row first serializes every claim on the SAME context, which restores the old
+        guarantee instead of merely approximating it. The row is one we already write to below
+        (`ephemeral`), so this costs no extra contention.
+
+        The lock also makes the old `ForeignKeyViolation` catch dead code, so it is gone rather than
+        left as a branch nothing can reach: a missing context is now the explicit `row is None`
+        below, and a context that EXISTS cannot be deleted out from under us (GC's DELETE blocks on
+        the same row lock) between the check and the INSERT."""
         if not user_id or not context_id:
             return False
         self._ensure_schema()
-        try:
-            with self._connect() as conn:
-                conn.execute(
-                    "INSERT INTO avery.account_contexts (user_id, context_id) VALUES (%s, %s) "
-                    "ON CONFLICT DO NOTHING", (user_id, context_id))
-                # gc-demo-clones-0724: a context now bound to THIS account is a real owned workspace,
-                # never GC'd — clear the ephemeral flag (only when the link actually landed for this
-                # user, so a losing race against another owner does not touch their row).
-                conn.execute(
-                    "UPDATE avery.contexts SET ephemeral = false WHERE context_id = %s "
-                    "AND EXISTS (SELECT 1 FROM avery.account_contexts a "
-                    "            WHERE a.context_id = %s AND a.user_id = %s)",
-                    (context_id, context_id, user_id))
-        except self._psycopg.errors.ForeignKeyViolation:
-            return False   # unknown context_id — nothing to claim
-        return self.account_for_context(context_id) == user_id
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT 1 FROM avery.contexts WHERE context_id = %s FOR UPDATE",
+                (context_id,)).fetchone()
+            if row is None:
+                return False   # unknown context_id — nothing to bind
+            if not allow_shared:
+                taken = conn.execute(
+                    "SELECT 1 FROM avery.account_contexts "
+                    "WHERE context_id = %s AND user_id <> %s LIMIT 1",
+                    (context_id, user_id)).fetchone()
+                if taken is not None:
+                    return False   # someone else's company — claim is not the way in (see docstring)
+            conn.execute(
+                "INSERT INTO avery.account_contexts (user_id, context_id) VALUES (%s, %s) "
+                "ON CONFLICT DO NOTHING", (user_id, context_id))
+            # gc-demo-clones-0724: a context bound to a real account is an owned workspace, never
+            # GC'd — clear the ephemeral flag. Unconditional now: we hold the row lock and have
+            # already inserted, so "the link landed" is not in question the way it was pre-#100.
+            conn.execute(
+                "UPDATE avery.contexts SET ephemeral = false WHERE context_id = %s", (context_id,))
+        return True
 
     def contexts_for_account(self, user_id: str) -> list[str]:
-        """Every context this user owns, newest link first."""
+        """Every context this user is a member of, newest link first."""
         if not user_id:
             return []
         self._ensure_schema()
@@ -1415,23 +1456,40 @@ class PostgresContextRegistry(ProjectWriteMixin):
                 "ORDER BY created_at DESC", (user_id,)).fetchall()
         return [r[0] for r in rows]
 
-    def account_for_context(self, context_id: str) -> str | None:
-        """The account that owns this context, or None when it is still anonymous."""
+    def accounts_for_context(self, context_id: str) -> list[str]:
+        """Every account on this context, oldest link first; empty when it is still anonymous.
+
+        #100 replaced `account_for_context() -> str | None`. The old name asked "who is THE owner",
+        a question that stopped having an answer the moment a context could carry several members —
+        it would have kept compiling and kept returning *an* owner, which is the "名字对不上语义"
+        trap. Oldest-first so index 0 is the founding member (the one who uploaded or claimed),
+        which is the only ordering anyone has ever wanted from it."""
         if not context_id:
-            return None
+            return []
+        self._ensure_schema()
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT user_id FROM avery.account_contexts WHERE context_id = %s "
+                "ORDER BY created_at, user_id", (context_id,)).fetchall()
+        return [r[0] for r in rows]
+
+    def account_owns(self, user_id: str | None, context_id: str) -> bool:
+        """May THIS signed-in user read THIS context? Membership only — an anonymous (unclaimed)
+        context has no rows and is never readable through the account path.
+
+        #100: a direct EXISTS on the pair, not `accounts_for_context(cid) == [user_id]` and not a
+        containment test over a fetched list. Same answer, but the question the DB is asked is now
+        exactly the question being decided — no list to grow, no ordering to matter, and the index
+        on (user_id, context_id) settles it without materialising a company's whole roster on every
+        authorized read."""
+        if not user_id or not context_id:
+            return False
         self._ensure_schema()
         with self._connect() as conn:
             row = conn.execute(
-                "SELECT user_id FROM avery.account_contexts WHERE context_id = %s",
-                (context_id,)).fetchone()
-        return row[0] if row else None
-
-    def account_owns(self, user_id: str | None, context_id: str) -> bool:
-        """May THIS signed-in user read THIS context? Exact match only — an anonymous (unclaimed)
-        context is never readable through the account path."""
-        if not user_id or not context_id:
-            return False
-        return self.account_for_context(context_id) == user_id
+                "SELECT 1 FROM avery.account_contexts WHERE context_id = %s AND user_id = %s",
+                (context_id, user_id)).fetchone()
+        return row is not None
 
     def resolve_memory_dir(self, context_id: str) -> Path | None:
         ctx = self.get(context_id)

@@ -28,6 +28,7 @@ so the offline default suite stays green with no external service.
 """
 from __future__ import annotations
 
+import contextlib
 import os
 import re
 import shutil
@@ -486,6 +487,78 @@ def test_empty_context_keeps_the_account_binding(impl, tmp_path):
     fresh = impl.fresh()
     assert fresh.contexts_for_account(user) == [cid]
     assert fresh.account_owns(user, cid) is True
+
+
+# ── #100 · 一家公司多个账号：成员语义的两腿同一契约 ──────────────────────────────────────────
+#
+# 这一组跑在 `impl` 上（memory + postgres 各一遍）是本票的纪律要求：#100 改的是**授权**语义，
+# 而两条腿此前是靠「pg 有唯一索引 / 内存有 1:1 字典」各自实现同一句承诺的。两边分头改就会造出
+# 一片离线看不见的暗区 —— 离线套 4200+ 条判据几乎全跑在内存腿上，pg 腿独有的行为一条都照不到。
+
+
+def test_a_context_carries_several_member_accounts(impl, tmp_path):
+    """一份档案挂两个成员：两人各自 account_owns 为真、各自的公司列表都含它；第三个人一概够不着。
+
+    这条同时是 0019 那个非唯一索引的行为面判据 —— 迁移前第二次 link 会被库拒（见
+    `test_upgrade_path_from_the_single_owner_schema` 的第 3 步对照基准），迁移后必须真的收下。"""
+    reg, cid, _ = _ingest(impl, tmp_path / "mem")
+    alice = "user_" + uuid.uuid4().hex[:10]
+    bob = "user_" + uuid.uuid4().hex[:10]
+    carol = "user_" + uuid.uuid4().hex[:10]
+
+    assert reg.link_account_context(alice, cid) is True                       # 创始成员
+    assert reg.link_account_context(bob, cid, allow_shared=True) is True      # admin 加人
+
+    fresh = impl.fresh()
+    assert fresh.account_owns(alice, cid) is True
+    assert fresh.account_owns(bob, cid) is True
+    assert fresh.account_owns(carol, cid) is False, "没绑过的账号够着了这份档案"
+    assert cid in fresh.contexts_for_account(alice)
+    assert cid in fresh.contexts_for_account(bob)
+    assert fresh.contexts_for_account(carol) == []
+    # 花名册按最早绑上的在前 —— index 0 是创始成员，这是 accounts_for_context 唯一被承诺的顺序。
+    assert fresh.accounts_for_context(cid) == [alice, bob]
+
+
+def test_claim_still_refuses_a_context_owned_by_someone_else(impl, tmp_path):
+    """`allow_shared` 是本票**唯一**的加人开关：默认拒绝（认领语义），显式传 True 才收。
+
+    🔴 这条判据落在开关本身，不落在它的下游后果。产品决定（Danny 0814）：owner_token 是设备级
+    凭据，不该当公司门票，所以 `/account/claim` 那条路必须继续拒 —— 0008 的唯一索引没了以后，
+    这条拒绝的**唯一**执行者就是下面这个默认参数。"""
+    reg, cid, _ = _ingest(impl, tmp_path / "mem")
+    alice = "user_" + uuid.uuid4().hex[:10]
+    intruder = "user_" + uuid.uuid4().hex[:10]
+    assert reg.link_account_context(alice, cid) is True
+
+    # 默认（= /account/claim 与上传路径走的那条）：别人的公司，拒。
+    assert reg.link_account_context(intruder, cid) is False
+    assert impl.fresh().account_owns(intruder, cid) is False, "被拒之后居然还是留下了成员行"
+    assert impl.fresh().accounts_for_context(cid) == [alice]
+
+    # 自己重绑自己：幂等，且不会在花名册里多出一行。
+    assert reg.link_account_context(alice, cid) is True
+    assert impl.fresh().accounts_for_context(cid) == [alice]
+
+    # 显式 allow_shared（admin 脚本那条路）：同一个人、同一份档案，这次收。
+    assert reg.link_account_context(intruder, cid, allow_shared=True) is True
+    assert impl.fresh().account_owns(intruder, cid) is True
+
+
+def test_an_anonymous_context_belongs_to_no_account(impl, tmp_path):
+    """匿名档案：花名册为空，任何账号 account_owns 都为假。
+
+    🔴 对照基准：先证明这份档案**真的存在**（`cid in reg`），否则「谁都够不着」在一个不存在的
+       id 上恒真 —— 销毁类/否定类判据天生空真，必须配一个正向锚点。"""
+    reg, cid, _ = _ingest(impl, tmp_path / "mem")
+    assert cid in reg, "对照基准塌了：这份档案根本不在库里，下面的否定判据什么都证明不了"
+
+    assert reg.accounts_for_context(cid) == []
+    for who in ("user_nobody", "user_" + uuid.uuid4().hex[:10], ""):
+        assert reg.account_owns(who, cid) is False
+    # 空 user_id / 空 context_id 一律为假（授权问题上不许有「空即通过」的缝）。
+    assert reg.account_owns(None, cid) is False
+    assert reg.account_owns("user_x", "") is False
 
 
 def test_empty_context_claims_an_ephemeral_clone(impl, tmp_path):
@@ -1375,6 +1448,36 @@ def test_sweep_collects_only_old_unlinked_ephemeral_clones(impl, tmp_path):
     assert linked in reg, "已登账号的克隆被误删（link 应清 ephemeral 标 + sweep 有 account 守卫）"
 
 
+def test_sweep_keeps_a_clone_that_has_several_members(impl, tmp_path):
+    """#100 · GC 的账号守卫在多行世界里照样成立：挂了**两个**成员的克隆一样不被回收。
+
+    为什么这条非有不可：pg 侧的守卫是 `NOT EXISTS (SELECT 1 FROM account_contexts WHERE ...)`，
+    多行照样成立 —— 但这是**读代码论证**，而 0019 恰恰改了这张表能有几行。真正会坏的是内存腿：
+    它此前写的是 `cid not in self._context_owner`（一个 1:1 字典），本票把那本账换成了
+    `dict[str, list[str]]`，判空方式必须跟着从「有没有这个键」改成「这个键下面有没有人」，
+    否则一条被拒绝的 link 留下的空列表就会让一份**无人认领**的克隆永久免疫 GC。
+
+    🔴 对照基准（销毁类判据天生空真）：同一次 sweep 里必须有一个**没绑人**的克隆真的被收走。
+       少了它，「两成员的克隆还在」在一个压根没删任何东西的 sweep 上恒真。"""
+    reg, master, _ = _ingest(impl, tmp_path / "mem", owner_token="token-master")
+    shared = _demo_clone(impl, master)      # 两个成员的公司
+    orphan = _demo_clone(impl, master)      # 对照基准：谁都没绑
+    for c in (shared, orphan):
+        _backdate_clone(impl, c, hours=1)
+
+    alice = "user_" + uuid.uuid4().hex[:10]
+    bob = "user_" + uuid.uuid4().hex[:10]
+    assert reg.link_account_context(alice, shared) is True
+    assert reg.link_account_context(bob, shared, allow_shared=True) is True
+    assert sorted(reg.accounts_for_context(shared)) == sorted([alice, bob])
+
+    assert reg.sweep_ephemeral(older_than_hours=0, limit=50) == 1, (
+        "对照基准塌了：这一次 sweep 该且只该收走那个没绑人的克隆")
+    assert orphan not in reg, "没绑任何账号的过期克隆没被回收 —— GC 被这张票放松了"
+    assert shared in reg, "挂着两个成员的公司被 GC 收走了 —— 多行世界里账号守卫失效"
+    assert sorted(reg.accounts_for_context(shared)) == sorted([alice, bob])
+
+
 def test_sweep_respects_the_batch_limit(impl, tmp_path):
     """A bounded sweep deletes at most `limit`, leaving the rest for the next claim's sweep — so an
     opportunistic claim-time GC is a small, cheap delete, never an unbounded one on the hot path."""
@@ -1467,6 +1570,126 @@ def test_pg_link_clears_ephemeral_flag(pg, tmp_path):
     assert flag is False, "link 之后 ephemeral 标没清"
     assert reg.sweep_ephemeral(older_than_hours=0, limit=50) == 0
     assert clone in reg
+
+
+@contextlib.contextmanager
+def _throwaway_db():
+    """一次性库：CREATE DATABASE → yield 它的 url → DROP DATABASE。
+
+    为什么升级路径不能跑在共享的那个本机库上：这条测试要**造回旧世界的唯一索引**，而共享库同一轮
+    里还有几十条 needs_db 判据在用同一张 `avery.account_contexts`。中途任何一处 assert 挂掉，那条
+    唯一索引就留在原地，后面每一条绑第二个成员的判据全部连坐变红 —— 一条测试有能力污染整轮，
+    它报的红就不再是自己的证据。一次性库把这个可能性从结构上去掉（#93「在一次性库上真跑」的原话）。"""
+    import psycopg
+    from urllib.parse import urlsplit, urlunsplit
+
+    base = _db_url()
+    name = "avery_upgrade_" + uuid.uuid4().hex[:12]
+    with psycopg.connect(base, autocommit=True) as admin:
+        admin.execute(f'CREATE DATABASE "{name}"')
+    parts = urlsplit(base)
+    try:
+        yield urlunsplit((parts.scheme, parts.netloc, "/" + name, parts.query, parts.fragment))
+    finally:
+        with psycopg.connect(base, autocommit=True) as admin:
+            admin.execute(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)')
+
+
+def _context_index_state(url: str) -> list[tuple[str, bool]]:
+    """`avery.account_contexts` 上以 context_id 打头的索引：[(名字, 是否唯一)]，直接读 catalog。"""
+    import psycopg
+    with psycopg.connect(url) as conn:
+        return [(r[0], r[1]) for r in conn.execute("""
+            SELECT i.relname, x.indisunique
+              FROM pg_class i
+              JOIN pg_index x ON x.indexrelid = i.oid
+              JOIN pg_namespace n ON n.oid = i.relnamespace
+             WHERE n.nspname = 'avery' AND i.relname = 'account_contexts_context_key'
+        """).fetchall()]
+
+
+@needs_db
+def test_upgrade_path_from_the_single_owner_schema(tmp_path):
+    """#100 · 0019 的升级路径，七步在**一次性真库**上真跑（#93 纪律，常驻门）。
+
+    这条门守的是「一份已经在生产上跑了几个月的旧库，装上新代码之后会发生什么」—— 而那是读代码
+    永远证不出来的东西。七步逐条对应票面：
+
+      1. 在跑的库（一次性库，新代码 bootstrap 一遍）
+      2. 造回旧世界：唯一索引 + 一条存量单主人行
+      3. 🔴 对照基准：**此状态下插第二人真被库拒**（落在存储层，不是读代码论证）
+      4. 新代码 `_ensure_schema` 接管
+      5. 复查索引已换（同名、不再唯一）
+      6. 升级后的库上真绑第二人
+      7. 全新实例回读两人都在
+
+    ⚠ 第 3 步必须走 `psycopg.connect` **裸连**，一个 registry 方法都不许碰：registry 上每个公开
+      方法都先调 `_ensure_schema()`，拿它去验对照组＝让自愈式迁移当场把自己的对照组治好，
+      「旧世界 vs 新世界」变成「新世界 vs 新世界」，这条门会永远绿着而什么也没验。
+
+    ⚠ 第 8 步（票面之外，2026-08-14 实收的真 bug 补的）：再重放两轮，钉死索引不会**变回唯一**。
+      0008 那句 `CREATE UNIQUE INDEX IF NOT EXISTS account_contexts_context_key` 每次开机都会跑，
+      排在 0019 前面；替换索引一旦改名，0008 就会把 UNIQUE 重建回来，而库里已有多成员数据时那句
+      直接 UniqueViolation、**整个 bootstrap 炸掉**。第一版 0019 就是这么写的，八条 needs_db 判据
+      连带炸掉才逮到。这一步是那条 bug 的常驻守卫。"""
+    import psycopg
+    from avery.ingest.pg_registry import PostgresContextRegistry
+
+    with _throwaway_db() as url:
+        impl = _Impl("postgres", lambda: PostgresContextRegistry(url, data_dir=tmp_path / "data"))
+
+        # ── 1 · 在跑的库：真走一遍 ingest，拿到一份有内容的档案 ──────────────────────────
+        _reg, cid, _ = _ingest(impl, tmp_path / "mem")
+        alice, bob = "user_alice_100", "user_bob_100"
+
+        # ── 2 · 造回旧世界：0008 的唯一索引 + 一条存量单主人行 ──────────────────────────
+        with psycopg.connect(url, autocommit=True) as raw:
+            raw.execute("DROP INDEX IF EXISTS avery.account_contexts_context_key")
+            raw.execute("CREATE UNIQUE INDEX account_contexts_context_key "
+                        "ON avery.account_contexts (context_id)")
+            raw.execute("INSERT INTO avery.account_contexts (user_id, context_id) VALUES (%s, %s)",
+                        (alice, cid))
+        assert _context_index_state(url) == [("account_contexts_context_key", True)], (
+            "旧世界没造起来：下面那条对照基准会对着一个已经升级过的库跑，证明不了任何事")
+
+        # ── 3 · 🔴 对照基准：旧世界里插第二人**真被库拒**（裸连，绝不碰 _ensure_schema）──
+        with psycopg.connect(url, autocommit=True) as raw:
+            with pytest.raises(psycopg.errors.UniqueViolation):
+                raw.execute(
+                    "INSERT INTO avery.account_contexts (user_id, context_id) VALUES (%s, %s)",
+                    (bob, cid))
+
+        # ── 4 · 新代码接管（全新实例：_schema_ready 为 False 才会真重放）────────────────
+        upgraded = PostgresContextRegistry(url, data_dir=tmp_path / "data")
+        assert upgraded._schema_ready is False, "这个实例已经认为 schema 就绪，重放会被整段跳过"
+        upgraded._ensure_schema()
+
+        # ── 5 · 复查索引已换：同名还在，但不再唯一 ────────────────────────────────────
+        assert _context_index_state(url) == [("account_contexts_context_key", False)], (
+            "0019 没把唯一索引换掉 —— 升级路径断在这一步")
+
+        # ── 6 · 升级后的库上真绑第二人（admin 那条路）───────────────────────────────────
+        assert upgraded.link_account_context(bob, cid, allow_shared=True) is True
+        # 存量那位没被动过，且认领语义仍然拒绝第三个人。
+        assert upgraded.link_account_context("user_carol_100", cid) is False
+
+        # ── 7 · 全新实例回读：两人都在，顺序按最早绑上的在前 ──────────────────────────
+        fresh = PostgresContextRegistry(url, data_dir=tmp_path / "data")
+        assert fresh.accounts_for_context(cid) == [alice, bob]
+        assert fresh.account_owns(alice, cid) is True
+        assert fresh.account_owns(bob, cid) is True
+        assert fresh.account_owns("user_carol_100", cid) is False
+        assert cid in fresh.contexts_for_account(alice)
+        assert cid in fresh.contexts_for_account(bob)
+
+        # ── 8 · 再重放两轮：索引不许变回唯一，bootstrap 不许炸（见 docstring 的红字）───
+        for round_no in (1, 2):
+            again = PostgresContextRegistry(url, data_dir=tmp_path / "data")
+            again._ensure_schema()      # 0008 会再跑一次 CREATE UNIQUE INDEX IF NOT EXISTS
+            assert _context_index_state(url) == [("account_contexts_context_key", False)], (
+                f"第 {round_no} 轮重放之后索引变回唯一了 —— 0008 把它重建了回来，"
+                f"下一次有多成员数据的开机会直接 UniqueViolation 炸掉整个 bootstrap")
+            assert again.accounts_for_context(cid) == [alice, bob], "重放把成员行弄丢了"
 
 
 @needs_db
@@ -1597,10 +1820,20 @@ def test_pg_manual_crud_roundtrip_erases_no_column_anywhere(pg, tmp_path):
 
 
 @needs_db
-def test_steady_state_bootstrap_takes_no_entities_lock(pg, monkeypatch):
+@pytest.mark.parametrize("table", ["entities", "account_contexts"])
+def test_steady_state_bootstrap_takes_no_table_lock(pg, monkeypatch, table):
     """README rule 2 and the `_ensure_schema` docstring both promise the STEADY-STATE bootstrap takes
     no ACCESS EXCLUSIVE lock on avery.entities. This is the test that makes the promise true instead
     of merely written down.
+
+    #100 widened it from `entities` to a PARAMETRIZED pair, because 0019 made a second table
+    lock-sensitive. `account_contexts` is read on EVERY authorized request (`account_owns`), and
+    0019's retirement of the unique index is a `DROP INDEX` — the single most ACCESS-EXCLUSIVE
+    statement in the repo. Written bare as `DROP INDEX IF EXISTS`, it would grab that lock on every
+    boot forever (0002's header is the first-hand evidence that `IF EXISTS` decides nothing before it
+    locks), which is the 2026-07-23 outage shape replayed on a different table. Widening the existing
+    test rather than adding a sibling is deliberate: the invariant is "the steady-state boot locks
+    NOTHING hot", and a per-table copy is how the next hot table gets forgotten.
 
     It was false in production shape until 0002 was guarded (2026-08-13): `ALTER TABLE ... DROP
     CONSTRAINT IF EXISTS` does not consult the catalog before locking, so 0002 grabbed ACCESS
@@ -1632,15 +1865,16 @@ def test_steady_state_bootstrap_takes_no_entities_lock(pg, monkeypatch):
                 SELECT count(*) FROM pg_locks l
                   JOIN pg_class c ON c.oid = l.relation
                   JOIN pg_namespace n ON n.oid = c.relnamespace
-                 WHERE n.nspname = 'avery' AND c.relname = 'entities'
+                 WHERE n.nspname = 'avery' AND c.relname = %s
                    AND l.mode = 'AccessShareLock' AND l.granted
-            """).fetchone()[0] > 0
+            """, (table,)).fetchone()[0] > 0
 
     blocker = psycopg.connect(_db_url())          # NOT autocommit: the tx stays open below
     try:
-        blocker.execute("SELECT count(*) FROM avery.entities")   # takes ACCESS SHARE, holds it
+        # takes ACCESS SHARE on the table under test, and holds it for the whole replay below.
+        blocker.execute(f"SELECT count(*) FROM avery.{table}")
         assert lock_held(), (
-            "the blocking connection never actually took an ACCESS SHARE lock on avery.entities — "
+            f"the blocking connection never actually took an ACCESS SHARE lock on avery.{table} — "
             "without it the replay below is uncontended and proves nothing")
 
         registry = pg.fresh()
