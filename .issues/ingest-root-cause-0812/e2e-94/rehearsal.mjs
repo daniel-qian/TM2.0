@@ -5,6 +5,11 @@
 //   { supabaseUrl, anonKey, apiBase, appBase, accounts: [{tag:'A'|'B', email, password}] }
 //   🔴 凭据/状态/截图一律落 creds.json 同目录（scratchpad），绝不进仓（本目录 .gitignore 通配挡）。
 //
+// 🔴 建号先跑 `mkaccounts.mjs`（#101 起）：原来那套「anon key 打 signup → SSH 进生产容器把
+//   email_confirmed_at 改上」在注册门冻结后**第一步就被真闸挡死**，且报错完全不像「注册关了」。
+//   现行是 `admin.createUser({ email_confirm: true })` 一步建成已确认。
+//   本脚本自己的动线（password grant + 登录表单）不含任何 signup 调用，冻结后照常跑。
+//
 // 九判据（正源 issue #94 / exploration.md §2）：
 //   ① 登录态上传 → account_linked:true        ② /account/contexts 列出 + 无 header 401
 //   ③ 换设备登录 adoptContext 恢复（核心）     ④ 游客上传 → 手动认领 claimed:true

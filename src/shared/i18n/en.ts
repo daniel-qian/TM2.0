@@ -1012,15 +1012,15 @@ export const en = {
     authEmailLabel: 'Email',
     authPasswordLabel: 'Password',
     authDoSignIn: 'Sign in',
-    authDoSignUp: 'Sign up',
-    authSwitchToSignUp: 'No account yet? Sign up',
-    authSwitchToSignIn: 'Already have an account? Sign in',
+    // #101：`authDoSignUp` / `authSwitchToSignUp` / `authSwitchToSignIn` / `authVerifyNote`
+    // / `authPasswordHint` 五个键随注册入口一起退役（AuthPanel.tsx 顶部有理由全文）。
+    // authVerifyNote 尤其不该留：#94 实测 Supabase 对已注册邮箱回 200 + 假 user id，那句
+    // 「去邮箱点确认链接」是只可能在说谎时才亮的提示。
     authSignOut: 'Sign out',
     authWorking: 'Working…',
     // 游客态的诚实说明：不登录能干什么、登录多给什么。
     authGuestNote:
       'You can use Avery without an account. What you upload while signed in is kept under your name and opens on another device; anything uploaded before signing in becomes yours only after you click "Attach to my account" here.',
-    authVerifyNote: 'Account created. Click the confirmation link in your email, then sign in.',
     authSignedInAs: 'Signed in',
     authClaimTitle: 'This company data is not attached to your account yet',
     authClaimAction: 'Attach to my account',
@@ -1029,7 +1029,6 @@ export const en = {
     authClaimFailed: 'Could not attach it — try again later',
     authRestoreFailed: 'Could not load the companies on your account',
     authRetry: 'Try again',
-    authPasswordHint: 'At least 6 characters',
 
     // ── Team grouping view (feat-025 Q2: cluster people cards by department/role) ──
     groupCollapse: 'Collapse',

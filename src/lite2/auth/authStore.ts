@@ -1,4 +1,17 @@
-// feat-053 · 账号状态（注册/登录/登出/会话恢复）—— zustand，与 lite2 其余 store 同族。
+// feat-053 · 账号状态（登录/登出/会话恢复）—— zustand，与 lite2 其余 store 同族。
+//
+// ── #101（0813）· `signUp` 已整个删除，不是「留着不调用」──────────────────────────────
+// 账号改由 Danny 用 `supabase.auth.admin.createUser` 手工建（见 `scripts/ops/create-account.mjs`），
+// 产品里不再有任何注册路径。删掉而不是留一条 UI 够不到的死枝，理由是本仓的老碑
+// ——「死枝要在 docstring 自陈测不到」：一个没人能走到的 `signUp()` 只会让下一个人写出一条
+// **永远绿的空判据**（伪造网络响应直接调它，测的是函数自己，不是产品）。跟着一起走的还有
+// `pendingVerification` / `busy: 'signing-up'` 两个状态和 `authVerifyNote` 那句文案——
+// #94 实测：Supabase 对已注册邮箱的 signup 回 200 + 假 user id（防枚举），于是那句
+// 「注册成功。去邮箱点一下确认链接」是**只可能在说谎时才亮**的提示。
+//
+// 🔴 前端删干净 ≠ 注册关了。真闸只有 Supabase 后台的 `disable_signup`（anon key 就在
+// 浏览器 bundle 里，谁都能直接 POST `/auth/v1/signup`）。活体判据：
+// `node .issues/account-tenancy-0813/probe-signup-frozen.mjs`。
 //
 // 口径（PRD G1）：`Supabase user → 公司 context_id`。**owner_token 保留在下层不动**——
 // 服务端按 user 查到 context 再放行读端点（authorize_context 的 account 支路），
@@ -22,7 +35,8 @@ import { apiBase } from '../transport'
 // authed    = 已登录
 export type AuthStatus = 'disabled' | 'loading' | 'guest' | 'authed'
 
-export type AuthBusy = 'idle' | 'signing-in' | 'signing-up' | 'signing-out'
+// #101：`'signing-up'` 随 signUp() 一起退役 —— 没有任何代码路径再能把 busy 置成它。
+export type AuthBusy = 'idle' | 'signing-in' | 'signing-out'
 
 // ── 门缝二（07-20 kickoff）：key 配了 ≠ 后端接得住 ──────────────────────────────────────
 // 07-20 生产实测：avery.dannyqian.com 的 Vercel 环境已经填了 Supabase 两个 key，但
@@ -44,15 +58,11 @@ interface AuthState {
   userId: string | null
   busy: AuthBusy
   error: string | null
-  // 注册后 Supabase 若开了邮箱验证，会返回 user 但没有 session——必须诚实告诉用户去收信，
-  // 绝不做假的"注册成功已登录"态。
-  pendingVerification: boolean
   // 门缝二：后端是否真挂了账号路由（与 status 正交——status 讲的是"这个人有没有登录"，
   // 这个字段讲的是"这份部署的后端接不接得住登录"）。AuthPanel 的渲染判据两者都要看。
   accountCapability: AccountCapability
 
   init: () => void
-  signUp: (email: string, password: string) => Promise<void>
   signIn: (email: string, password: string) => Promise<void>
   signOut: () => Promise<void>
   clearError: () => void
@@ -147,9 +157,10 @@ function humanizeAuthError(raw: string, locale: 'en' | 'zh'): string {
   const lower = msg.toLowerCase()
   if (lower.includes('invalid login credentials')) return '邮箱或密码不对'
   if (lower.includes('email not confirmed')) return '邮箱还没验证，请先去收件箱点确认链接'
-  if (lower.includes('user already registered') || lower.includes('already been registered'))
-    return '这个邮箱已经注册过了，直接登录'
-  if (lower.includes('password should be at least')) return '密码太短了（至少 6 位）'
+  // #101：这里原来还有两条 —— 「这个邮箱已经注册过了」与「密码太短了（至少 6 位）」。
+  // 两条都只可能从 signup 回来（`signInWithPassword` 对错密码一律回 invalid_credentials，
+  // 不会评论密码长度，也不会承认某个邮箱存在——那正是防枚举设计）。signUp 删掉之后它们
+  // **一条也够不到**：留着就是两条谁都判不动的死枝。
   if (lower.includes('unable to validate email') || lower.includes('invalid email'))
     return '邮箱格式不对'
   if (lower.includes('rate limit') || lower.includes('too many'))
@@ -176,7 +187,6 @@ export const useAuth = create<AuthState>((set) => ({
   userId: null,
   busy: 'idle',
   error: null,
-  pendingVerification: false,
   // 未配置 → 探测压根不必发（登录入口本来就不出）；配了 → 首帧 'unknown'，
   // 面板照 disabled 的规格隐藏，直到探测给出确切答案。
   accountCapability: 'unknown',
@@ -202,31 +212,10 @@ export const useAuth = create<AuthState>((set) => ({
     sb.auth.onAuthStateChange((_event, session) => set(applySession(session)))
   },
 
-  signUp: async (email, password) => {
-    const sb = getSupabase()
-    if (!sb) return
-    set({ busy: 'signing-up', error: null, pendingVerification: false })
-    try {
-      const { data, error } = await sb.auth.signUp({ email: email.trim(), password })
-      if (error) throw error
-      // 开了邮箱验证时：有 user、没 session。必须如实说"去收信"，不能假装已登录。
-      if (!data.session) {
-        set({ busy: 'idle', pendingVerification: true })
-        return
-      }
-      set({ ...applySession(data.session), busy: 'idle' })
-    } catch (err) {
-      set({
-        busy: 'idle',
-        error: humanizeAuthError(err instanceof Error ? err.message : String(err), localeOf()),
-      })
-    }
-  },
-
   signIn: async (email, password) => {
     const sb = getSupabase()
     if (!sb) return
-    set({ busy: 'signing-in', error: null, pendingVerification: false })
+    set({ busy: 'signing-in', error: null })
     try {
       const { data, error } = await sb.auth.signInWithPassword({
         email: email.trim(),
@@ -252,10 +241,10 @@ export const useAuth = create<AuthState>((set) => ({
       // 登出失败也要把本地会话当掉——宁可本地看起来已登出，也不要卡在"登不出去"。
     }
     accessToken = null
-    set({ status: 'guest', email: null, userId: null, busy: 'idle', pendingVerification: false })
+    set({ status: 'guest', email: null, userId: null, busy: 'idle' })
   },
 
-  clearError: () => set({ error: null, pendingVerification: false }),
+  clearError: () => set({ error: null }),
 }))
 
 // 门缝：同 __lite2Store 先例，供集成/验收脚本读账号态（产品代码不经 window 读 store）。
