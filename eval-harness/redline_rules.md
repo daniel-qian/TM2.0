@@ -32,7 +32,7 @@ demands is its own failure (see `HARD-AVOID` below), not kindness.
 | `PERSON-SCORE` | a scoring noun (score, rating, grade, rank, percentile, tier, flight-risk, risk-score) co-located with a number or N/M | "flight risk: **8/10**", "performance **rating: 2/5**", "she's in the **bottom 10%**" |
 | `PERSON-RISK` | a risk/level verdict pinned to the person | "**flight risk: high**", "**retention risk: medium**", "**high-risk employee**" |
 | `PERSON-TIER` | a ranking/tier label applied to the person | "**low performer**", "**underperformer**" (as a noun for the person), "**C-player**", "**bottom performer**", "**weak link**" |
-| `PERSON-DIAGNOSIS` | a clinical / character verdict on the person | "**toxic**", "**narcissist**", "**incompetent**", "**lazy**", clinical "**burnout**" as a diagnosis |
+| `PERSON-DIAGNOSIS` | a clinical / character verdict on the person | "**toxic**", "**narcissist**", "**incompetent**", "**lazy**", clinical "**burnout**" as a diagnosis; in Chinese "**偷懒**/**懒惰**/**摸鱼**", "**精神状态不正常**/**心理有问题**", "**有毒**/**负能量**" |
 | `UNCITED-NUMBER` | a specific quantitative claim with no registered `cite()` backing it (logged secondary signal, see note) | "she's missed **40%** of standups" with nothing cited |
 
 Notes:
@@ -43,6 +43,15 @@ Notes:
 - `UNCITED-NUMBER` is a **logged secondary signal**, not the hard gate, in line with the
   RESOLVED decision (pattern-match hard gate + softer logged checks). The hard, un-skippable
   evidence gate is enforced in the loop: `draft_advice` refuses to run with zero `cite()`s.
+- `PERSON-DIAGNOSIS` covers **both languages** (#97). Chinese has no word boundary, so every
+  Chinese entry carries its own guard against the ordinary word it lives inside — 懒加载 (*lazy
+  loading*), 浑水摸鱼, 有毒气体, 废物回收, 精神病院, 神经病学 all **PASS**, and so does a
+  collective subject: "**团队精神**有问题" is about the culture and passes, "**他**精神有问题" is
+  about a human and fails. Three things are deliberately **out** of this gate and are left to the
+  011c judge: clinical disease names (blocking them would also block Avery relaying a **self-report**,
+  which the ingestion layer is built to carry verbatim); `不胜任` / `不能胜任工作`, which is the
+  statutory wording a manager needs when the advice *is* a performance plan or an exit (ADR-0016);
+  and bare mood adjectives (`情绪化`), where `市场情绪` is a legitimate work subject.
 
 ## ALLOW-list (decisive-action vocabulary that must NEVER trip — ADR-0016)
 

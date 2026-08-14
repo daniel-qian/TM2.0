@@ -453,9 +453,16 @@ _ALWAYS = [
 # false-positive that Simplified would not also produce. Simplified input contains none of these
 # Traditional glyphs, so it is untouched.
 _ZH_TRAD = ("績評級數結潛緒狀態離職風險員團隊屬應選畫劃優單檔問題顆墊紅產飽統體邏輯開發負設導維護"
-            "報項機晉專總監經資師時綜這顧戶圖標動傾業訊較歲週車華話語說論讀認證據觀見覺慮廠銷營額場縣")
+            "報項機晉專總監經資師時綜這顧戶圖標動傾業訊較歲週車華話語說論讀認證據觀見覺慮廠銷營額場縣"
+            # #97 — the glyphs the ZH DIAGNOSIS lexicon needs, so 偷懶/摸魚/廢物/腦殘/白癡/巨嬰/
+            # 心理素質差 behave exactly like their Simplified forms. Each is inert outside that
+            # lexicon (none of these Simplified glyphs appears in any other pattern in this file),
+            # so the fold's existing guarantee holds unchanged: Traditional can only end up
+            # behaving IDENTICALLY to Simplified, never worse.
+            "懶魚廢貨腦殘質癡嬰")
 _ZH_SIMP = ("绩评级数结潜绪状态离职风险员团队属应选画划优单档问题颗垫红产饱统体逻辑开发负设导维护"
-            "报项机晋专总监经资师时综这顾户图标动倾业讯较岁周车华话语说论读认证据观见觉虑厂销营额场县")
+            "报项机晋专总监经资师时综这顾户图标动倾业讯较岁周车华话语说论读认证据观见觉虑厂销营额场县"
+            "懒鱼废货脑残质痴婴")
 assert len(_ZH_TRAD) == len(_ZH_SIMP), "ZH trad/simp fold tables must align 1:1"
 _ZH_T2S = str.maketrans(_ZH_TRAD, _ZH_SIMP)
 
@@ -492,6 +499,91 @@ _ZH_TIER = re.compile(
     r"|(?:员工|人才)(?:分级|定级|评级)",
     re.I)
 
+# --- #97: the DIAGNOSIS half of the red line, which existed only in English ---------------------
+# feat-029 ported SCORE / RISK / TIER to Chinese and stopped there. `_ALWAYS_DIAGNOSIS` — the rule
+# that catches a CHARACTER or CLINICAL verdict nailed to a person (lazy / toxic / incompetent /
+# stupid / useless / unhinged / worthless) — was never ported, so the ZH side carried only the
+# SCORING forms (情绪值/情绪分/心情值) plus the extraction key list. MEASURED over the repo before
+# this change: 懒惰 zero occurrences, 偷懒 only in self-deprecating code comments, 精神/心理 with no
+# constraining use anywhere. 「他就是懒」/「精神状态不正常」/「这人有毒」 walked straight through the
+# output gate, in the deployment where the operator reads Chinese. That is the whole of #97.
+#
+# THE SEMANTIC LINE IS 「诊断性标签钉在人身上」, NOT 「负面词」. Naming the WORK is protected by
+# ADR-0016 and must stay protected — 「这周节奏松散」「项目拖延了两周」「交付质量没达到标准」 are the
+# decisive-but-not-person-scoring advice the moat exists to let through. So nothing here matches a
+# bare adjective; every alternative carries its own person-domain evidence, which is the same
+# principle _ZH_SCORE already states (「A PERSON-domain qualifier is baked into every compound」).
+#
+# CJK HAS NO WORD BOUNDARY, AND THAT IS THE ENTIRE DIFFICULTY — this is the 别墅 lesson (B3) applied
+# to a new lexicon. A bare 懒 does not mean "lazy"; it is the first glyph of 懒加载 (LAZY LOADING),
+# which is in this repo's own deployment notes. Each guard below is a real collision, not a
+# hypothetical one:
+#   懒惰(?!求值|计算|加载|…)   懒惰求值 / 懒惰加载 — lazy evaluation, ordinary engineering vocabulary
+#   懒人(?!包|沙发|神器)        懒人包 (a digest) / 懒人沙发 (a bean bag)
+#   (?<!浑水)摸鱼               浑水摸鱼 = 'fish in troubled waters', about opportunism, not sloth
+#   划水(?!动作|技术|训练|…)    the first customer is a resort; 划水动作 is a swimming stroke
+#   有毒(?!物质|气体|废|…)      有毒气体检测 is a product a person can legitimately OWN
+#   废物(?!利用|回收|处理|…)    危险废物处理 / 废物回收流程 — a compliance workstream, not an insult
+#   精神病(?!学|院|科|区|房)    精神病院 is an EMPLOYER; 神经病学 is a DEGREE
+# and 精神/心理 additionally take a lookbehind, because they are the tail of a large class of
+# collective-subject compounds where the diagnostic suffix is a statement about a CULTURE, not a
+# verdict on a human: 「团队精神有问题」 is about the team and must PASS, 「他精神有问题」 is about
+# him and must FAIL. That distinction IS the ticket's 对事不对人 boundary, made mechanical.
+#
+# MEASURED BEFORE LANDING (probe over the corpora this suite actually feeds the gate, not reasoning
+# about the regex): 0 hits across the 25 ZH fixture files (demo-seed + cjk + ingest), and 0 hits
+# across 6163 CJK-bearing string literals in the whole test suite except two self-deprecating
+# 「偷懒写成…」 DOCSTRINGS, which are never handed to `validate`. So this lexicon costs nothing on
+# the corpus that exists today — every catch below is a new catch, not a re-labelled old one.
+#
+# DELIBERATELY OUT — recorded so the next reader knows these were considered and declined, not
+# missed:
+#   * CLINICAL DISEASE NAMES (抑郁症 / 焦虑症 / 双相 / 强迫症). Blocking them would also block Avery
+#     RELAYING a self-report, and the extraction layer is explicitly built to carry 自述 verbatim
+#     (self_report 只准照抄自述). Whether the output gate may repeat a self-reported diagnosis is a
+#     product call about a FEATURE THAT EXISTS, not a lexicon gap, and it belongs in its own ticket.
+#   * 不胜任 / 不能胜任工作 / 能力不足. These are ADR-0016's protected territory and, in 不胜任's
+#     case, the statutory wording of 《劳动合同法》第40条 — the exact phrase a manager needs when the
+#     advice IS a performance plan or an exit. Catching them would make the moat refuse the decisive
+#     call it was built to permit.
+#   * 情绪 adjectives (情绪化 / 情绪不稳定). 市场情绪 is a legitimate work subject already pinned as
+#     PASS by this suite, and 「避免情绪化决策」 is ordinary management advice that no negation cue in
+#     `_NEG` reaches. The SCORING forms (情绪值/情绪分/情绪评分/心情值) are already caught by
+#     `_ZH_SCORE`; the adjectives are gray and are left to the 011c judge.
+#   * 状态描述 short of a verdict (精神状态不佳 / 状态不好). 不佳 describes a day; 不正常 diagnoses a
+#     person. The suffix list below is the line, and it is drawn at pathology.
+# 精神/心理 as the TAIL of a collective/abstract compound — 团队精神 / 工匠精神 / 敬业精神 / 文件精神
+# / 用户心理 / 消费心理 / 从众心理 / 侥幸心理. Same shape as `_NEG_别_COMPOUND`, same reason: the
+# glyph before the cue is what says whether a person is the subject.
+_ZH_DIAG_COLLECTIVE = "队业匠运族学育新代锋会件导献搏取约费户众场者反幸比"
+
+_ZH_DIAGNOSIS = re.compile(
+    # 懒 / 摸鱼 — mirrors `lazy`. 臆测偷懒 is the product red line's own first example.
+    r"偷懒|犯懒|懒散|好吃懒做|游手好闲|不思进取"
+    r"|懒惰(?!求值|计算|加载|初始化|删除|模式|单例)"
+    r"|懒人(?!包|沙发|神器|模式)"
+    r"|(?<!浑水)摸鱼"
+    r"|划水(?!动作|技术|训练|姿势|板|区|线)"
+    r"|磨洋工|混日子|出工不出力|尸位素餐"
+    # 精神 / 心理 — mirrors `unhinged` and the clinical half of the English list.
+    rf"|(?<![{_ZH_DIAG_COLLECTIVE}])(?:精神状态|精神|心理)(?:上)?"
+    r"(?:有点|有些|比较|明显|似乎|好像|可能|已经|确实|真的)?"
+    r"(?:不正常|不太正常|有问题|有毛病|有病|不稳定|失常|异常|不健康|扭曲|阴暗)"
+    r"|精神涣散|精神崩溃|精神内耗|心理素质差"
+    r"|精神病(?!学|院|科|区|房|理|床)"
+    r"|神经病(?!学|理)"
+    r"|脑子(?:有(?:病|问题|坑)|不(?:好使|清楚|正常))"
+    # 有毒 / 负能量 — mirrors `toxic`.
+    r"|负能量|毒瘤|巨婴|玻璃心"
+    r"|有毒(?!物质|气体|废|垃圾|有害|化学|试剂|材料|品|性|素|烟|尘)"
+    r"|人品(?:有问题|差|不行)"
+    # 蠢 / 废 — mirrors `stupid` / `useless` / `worthless` / `narcissist` / `burned out`.
+    r"|智障|弱智|白痴|脑残|愚蠢|蠢货|蠢材|傻子|傻逼"
+    r"|废物(?!利用|回收|处理|处置|分类|管理)"
+    r"|废柴|窝囊废|一无是处|扶不上墙|自恋狂"
+    r"|职业倦怠|心力交瘁",
+    re.I)
+
 # person-anchored ranking/verdict SYNONYMS and STAR ratings (round 2 §B9/§B10). Complete labels, so
 # they need only a PERSON in view + work-suppression (no scoring-target requirement).
 _ZH_RANK_SYN = re.compile(r"末流|垫底|名列前茅|优等生|差生|差评|红黑榜|黑榜|评比", re.I)
@@ -501,6 +593,13 @@ _ZH_ALWAYS = [
     ("PERSON-SCORE", _ZH_SCORE, "中文人员评分/评级/画像/情绪值构造"),
     ("PERSON-RISK", _ZH_RISK, "中文离职/流失风险标签(钉在人身上)"),
     ("PERSON-TIER", _ZH_TIER, "中文排名/末位淘汰/人员分级标签"),
+    # #97 — the ZH mirror of _ALWAYS_DIAGNOSIS. UNCONDITIONAL, like its English counterpart: the
+    # person-domain evidence is inside each compound, so anchoring would add nothing here and would
+    # be inert at the extraction layer anyway (redline_extract wraps every person blob in a
+    # 'she:' prefix, which makes _has_person unconditionally true — see test_redline_zh.py's note
+    # on ZH_A_LEGIT_OWNS). Negation / work / job-grade suppression still apply, so 「别说他偷懒」
+    # and 「不要给他贴懒惰的标签」 keep passing.
+    ("PERSON-DIAGNOSIS", _ZH_DIAGNOSIS, "中文人身诊断标签(懒/摸鱼/精神状态/心理/有毒/负能量…)"),
 ]
 # person-anchored (require a person referenced in the segment; work-suppressed)
 _ZH_ANCHORED_LABELS = [
