@@ -113,7 +113,7 @@ def test_B_cannot_steal_an_already_claimed_context(client):
     """B 拿着正确的 owner_token 想抢已被 A 认领的 ctx → 同体 404。
 
     ⚠ #100 之后这条**行为没变、理由换了**，别照旧读法维护它：过去的理由是「一个 context 至多一个
-    账号」（0008 的唯一索引），那句话自 0019 起不成立 —— 一份档案现在**可以**挂多个成员账号。
+    账号」（0008 的唯一索引），那句话自 0020 起不成立 —— 一份档案现在**可以**挂多个成员账号。
     今天的理由是产品语义（Danny 0814）：**认领不是加入公司的路径**。owner_token 是设备级凭据，
     谁翻到过那台电脑的 localStorage 谁就能拿着它敲门，所以这扇门对它永远是关的；加人只走 admin
     脚本（`link_account_context(..., allow_shared=True)`）。多成员那一半由

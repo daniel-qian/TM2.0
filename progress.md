@@ -3,7 +3,48 @@
 > 📢 本文件是**当前状态快照，整体重写不追加**。历史都在 git（`git log` + 各 `.issues/*/receipt*.md`），别在这儿堆编年史。
 > 启动路径见 `AGENTS.md` Startup Workflow：读本文件 + `feature_list.json`，跑 `./init.sh` 确认绿，再开工。
 
-**Last Updated:** 2026-08-14（本轮是**合并 + 复验，零新开发**：两条早就做完、一直没合的线进本地 main）
+**Last Updated:** 2026-08-14（本轮：**#100 一家公司多个账号**做完，在分支上，**未 push、未合 main**）
+
+## 本轮：#100 一家公司多个账号（分支 `claude/reverent-carson-06fdb1` @ `2ae4362` + merge `9afcc88`）
+
+Danny 0813 拍板「公司的每个成员一个账号，文件与数据属于同一家公司」。形状本来就对，拦着的只有
+票面点名那三处，都改完了，**两条腿同改**。回执 `.issues/account-tenancy-0813/receipt-100.md`。
+
+**三个待拍项 Danny 0814 拍板**：认领在已有主人时**仍然拒绝**（只能 admin 脚本绑 —— owner_token
+是设备级凭据，不该当公司门票）／**不做角色**，全员平等／owner_token **不轮换**。落地成
+`link_account_context(..., allow_shared=False)` 这个关键字默认参数，所以既有两个调用点
+（`/account/claim`、登录态上传）**行为逐字未变**；全仓只有 `scripts/ops/link-account-context.py`
+显式传 `True`。
+
+🔴 **迁移撞到一个会打死生产的真 bug，值得所有人读一遍**：全量重放下，**退休了一个对象并不能阻止
+建它的那份迁移下次开机再建一次**，而它排在你前面。第一版把替换索引改了名，于是每次开机 0008 把
+`UNIQUE` 重建回来 —— 一旦库里有多成员数据就是 `UniqueViolation`，**整个 bootstrap 炸掉**，离线套
+100% 看不见。本机真库当场撞出来（八条 needs_db 连带炸）。修法是让替换索引**沿用原名**，使 0008
+那句永久 no-op（实测 `CREATE [UNIQUE] INDEX IF NOT EXISTS` 只按名字判重）。已立
+**README 规矩 5「退休既有对象」**（一个前置陷阱 + 三道门）+ 升级路径门第 8 步常驻守卫。
+
+🔴 **迁移号撞车，本票让号 0019 → 0020**：**#98（RLS deny-all，验完了在等 Danny 点头、未合）在它
+自己的分支上早就占了 0019**（`0019_enable_rls.sql`）。`ls db/migrations/` 只看得见**已合并**的号。
+开新迁移前扫一遍所有分支：
+`git log --all --diff-filter=A --name-only -- 'eval-harness/db/migrations/*'`。
+
+**边界**：这张票**放松了一条安全边界**（0008 那条唯一索引是「两个账号数据不串」的存储层保证之一），
+所以验收是**正面**证明边界还在 —— 两成员读同一档案**逐字节相同** / 第三方 404 与「id 不存在」
+抹掉回显 id 后**整个正文逐字节同体** / 匿名档案谁都够不着（配 owner_token 能读到的对照基准） /
+对照基准落在存储层（迁移**前**插第二个 owner 真被库拒，走裸连不碰 `_ensure_schema`）。
+排他性退到应用层这一半没含糊：判断跑在 `avery.contexts` 行的 `FOR UPDATE` 之下，恢复原子性。
+
+**验收**（合并当前 main 之后跑的）：离线 **4272 passed · 0 failed**（4265 + 7，完全加法零回归）·
+全仓 `-m needs_db` **152 passed · 0 failed**（146 + 6）· `./init.sh` **exit 0**（6 条 lint warning
+是存量，本票 `.ts/.tsx/.js/.css` 改动数 = 0）· **未 push**。五条变异逐条验过各打中一条判据无交叉；
+升级路径第 8 步单独验过**可达**（临时放行第 5 步后如实抛 `UniqueViolation`），不是死枝。
+
+⚠ 留给 Danny 一条：0008 头注释里那句自陈的安全保证自 0020 起为假。按票面红字**没改 0008**；
+最小修法是加一行 `-- SUPERSEDED BY 0020` 指针，零 DDL 改动。要做说一声。
+
+---
+
+（上一轮：**合并 + 复验，零新开发**——两条早就做完、一直没合的线进本地 main）
 
 **① feat-105 / #103 合进 main**（`032c7e8`，`--no-ff`，源 `claude/stale-date-boundary` @ `4971f85`）——
 `decision_grading` 里比较的两头来自两个钟：`_uploaded_day` 归一到 **UTC 日**，`as_of` 默认

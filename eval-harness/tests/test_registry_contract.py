@@ -499,7 +499,7 @@ def test_empty_context_keeps_the_account_binding(impl, tmp_path):
 def test_a_context_carries_several_member_accounts(impl, tmp_path):
     """一份档案挂两个成员：两人各自 account_owns 为真、各自的公司列表都含它；第三个人一概够不着。
 
-    这条同时是 0019 那个非唯一索引的行为面判据 —— 迁移前第二次 link 会被库拒（见
+    这条同时是 0020 那个非唯一索引的行为面判据 —— 迁移前第二次 link 会被库拒（见
     `test_upgrade_path_from_the_single_owner_schema` 的第 3 步对照基准），迁移后必须真的收下。"""
     reg, cid, _ = _ingest(impl, tmp_path / "mem")
     alice = "user_" + uuid.uuid4().hex[:10]
@@ -1452,7 +1452,7 @@ def test_sweep_keeps_a_clone_that_has_several_members(impl, tmp_path):
     """#100 · GC 的账号守卫在多行世界里照样成立：挂了**两个**成员的克隆一样不被回收。
 
     为什么这条非有不可：pg 侧的守卫是 `NOT EXISTS (SELECT 1 FROM account_contexts WHERE ...)`，
-    多行照样成立 —— 但这是**读代码论证**，而 0019 恰恰改了这张表能有几行。真正会坏的是内存腿：
+    多行照样成立 —— 但这是**读代码论证**，而 0020 恰恰改了这张表能有几行。真正会坏的是内存腿：
     它此前写的是 `cid not in self._context_owner`（一个 1:1 字典），本票把那本账换成了
     `dict[str, list[str]]`，判空方式必须跟着从「有没有这个键」改成「这个键下面有没有人」，
     否则一条被拒绝的 link 留下的空列表就会让一份**无人认领**的克隆永久免疫 GC。
@@ -1610,7 +1610,7 @@ def _context_index_state(url: str) -> list[tuple[str, bool]]:
 
 @needs_db
 def test_upgrade_path_from_the_single_owner_schema(tmp_path):
-    """#100 · 0019 的升级路径，七步在**一次性真库**上真跑（#93 纪律，常驻门）。
+    """#100 · 0020 的升级路径，七步在**一次性真库**上真跑（#93 纪律，常驻门）。
 
     这条门守的是「一份已经在生产上跑了几个月的旧库，装上新代码之后会发生什么」—— 而那是读代码
     永远证不出来的东西。七步逐条对应票面：
@@ -1629,8 +1629,8 @@ def test_upgrade_path_from_the_single_owner_schema(tmp_path):
 
     ⚠ 第 8 步（票面之外，2026-08-14 实收的真 bug 补的）：再重放两轮，钉死索引不会**变回唯一**。
       0008 那句 `CREATE UNIQUE INDEX IF NOT EXISTS account_contexts_context_key` 每次开机都会跑，
-      排在 0019 前面；替换索引一旦改名，0008 就会把 UNIQUE 重建回来，而库里已有多成员数据时那句
-      直接 UniqueViolation、**整个 bootstrap 炸掉**。第一版 0019 就是这么写的，八条 needs_db 判据
+      排在 0020 前面；替换索引一旦改名，0008 就会把 UNIQUE 重建回来，而库里已有多成员数据时那句
+      直接 UniqueViolation、**整个 bootstrap 炸掉**。第一版 0020 就是这么写的，八条 needs_db 判据
       连带炸掉才逮到。这一步是那条 bug 的常驻守卫。"""
     import psycopg
     from avery.ingest.pg_registry import PostgresContextRegistry
@@ -1666,7 +1666,7 @@ def test_upgrade_path_from_the_single_owner_schema(tmp_path):
 
         # ── 5 · 复查索引已换：同名还在，但不再唯一 ────────────────────────────────────
         assert _context_index_state(url) == [("account_contexts_context_key", False)], (
-            "0019 没把唯一索引换掉 —— 升级路径断在这一步")
+            "0020 没把唯一索引换掉 —— 升级路径断在这一步")
 
         # ── 6 · 升级后的库上真绑第二人（admin 那条路）───────────────────────────────────
         assert upgraded.link_account_context(bob, cid, allow_shared=True) is True
@@ -1826,9 +1826,9 @@ def test_steady_state_bootstrap_takes_no_table_lock(pg, monkeypatch, table):
     no ACCESS EXCLUSIVE lock on avery.entities. This is the test that makes the promise true instead
     of merely written down.
 
-    #100 widened it from `entities` to a PARAMETRIZED pair, because 0019 made a second table
+    #100 widened it from `entities` to a PARAMETRIZED pair, because 0020 made a second table
     lock-sensitive. `account_contexts` is read on EVERY authorized request (`account_owns`), and
-    0019's retirement of the unique index is a `DROP INDEX` — the single most ACCESS-EXCLUSIVE
+    0020's retirement of the unique index is a `DROP INDEX` — the single most ACCESS-EXCLUSIVE
     statement in the repo. Written bare as `DROP INDEX IF EXISTS`, it would grab that lock on every
     boot forever (0002's header is the first-hand evidence that `IF EXISTS` decides nothing before it
     locks), which is the 2026-07-23 outage shape replayed on a different table. Widening the existing

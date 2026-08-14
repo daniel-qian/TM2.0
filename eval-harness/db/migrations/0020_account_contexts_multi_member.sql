@@ -37,7 +37,7 @@
 --
 --     0008: 名字没被占 → 真的重建那条 UNIQUE 索引   ← 一旦库里已经有两个成员的档案，这句直接
 --                                                     UniqueViolation，**整个 bootstrap 当场炸**
---     0019: 把它再删一遍 —— 但已经轮不到它了
+--     0020: 把它再删一遍 —— 但已经轮不到它了
 --
 -- 不是推演，是 2026-08-14 在本机真库上撞出来的：`could not create unique index
 -- "account_contexts_context_key" / Key (context_id)=(ctx_test_...) is duplicated`，八条 needs_db

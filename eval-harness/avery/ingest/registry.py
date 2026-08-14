@@ -1300,7 +1300,7 @@ class ContextRegistry(ProjectWriteMixin):
     # #100: membership is MANY-to-many (一家公司的每个成员一个账号). These three methods are the
     # twin of pg_registry's — 逐条同改是纪律，不是巧合：the offline suite runs almost entirely on
     # this leg, so a semantic that differs here is a dark area no offline assertion can see.
-    # `avery/db/migrations/0019` carries the full WHY; the two invariants that decide the code:
+    # `avery/db/migrations/0020` carries the full WHY; the two invariants that decide the code:
     #   · ISOLATION: you reach a context iff your id is in ITS list. Unchanged, and the only thing
     #     `account_owns` asks.
     #   · EXCLUSIVITY: survives only as the `allow_shared=False` branch below (the pg twin needs a

@@ -89,7 +89,7 @@ def account_claim(body: ClaimRequest, x_avery_account: str | None = Header(None)
     into someone else's account. Re-claiming your own context is idempotent.
 
     #100 · 认领不是「加入公司」的路径，而且这是个**产品决定**，不是遗留行为。一份档案现在挂得下
-    多个成员账号（0019 退休了 0008 的唯一索引），所以「已有主人 → 拒绝」不再是库替我们做的判断
+    多个成员账号（0020 退休了 0008 的唯一索引），所以「已有主人 → 拒绝」不再是库替我们做的判断
     —— 它现在是下面这行 `link(...)` 的默认参数 `allow_shared=False`。之所以保持拒绝（Danny 0814）：
     owner_token 是**设备级**凭据，不该当公司门票，任何翻到过那台电脑 localStorage 的人（离职员工、
     外包、修电脑的）否则都能把自己塞进这家公司，而且没有一个人会收到通知。加成员只走 admin 脚本

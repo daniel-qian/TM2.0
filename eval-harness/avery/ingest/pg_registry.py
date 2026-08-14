@@ -178,8 +178,8 @@ class PostgresContextRegistry(ProjectWriteMixin):
                 return
             except contended as e:
                 if attempt >= retries:
-                    # #100: no longer names `entities`. Until 0019 that was the only table a
-                    # migration could block on, so hardcoding it was a free hint; 0019 made
+                    # #100: no longer names `entities`. Until 0020 that was the only table a
+                    # migration could block on, so hardcoding it was a free hint; 0020 made
                     # `account_contexts` lock-sensitive too, and an outage message that sends the
                     # operator to the wrong table costs more than saying nothing. The underlying
                     # psycopg error (chained via `from e`) carries the real relation name.
@@ -1385,10 +1385,10 @@ class PostgresContextRegistry(ProjectWriteMixin):
 
     # --- feat-053 / #100: the account seam (Supabase user id <-> context membership) --------------
     # The Postgres twin of the in-memory map, same duck-typed API so the service layer never asks
-    # which registry it holds. Storage: avery.account_contexts (0008, relaxed by 0019).
+    # which registry it holds. Storage: avery.account_contexts (0008, relaxed by 0020).
     #
     # #100 (Danny 0813): membership is MANY-to-many — 一家公司的每个成员一个账号，看同一份档案。
-    # 0008's UNIQUE(context_id) is retired by 0019; read that file's header for exactly which half of
+    # 0008's UNIQUE(context_id) is retired by 0020; read that file's header for exactly which half of
     # "两个账号数据不串" moved and which half did not. The short version, because it decides how you
     # read the three methods below:
     #   · ISOLATION is untouched and still storage-enforced — you reach a context iff a
@@ -1410,7 +1410,7 @@ class PostgresContextRegistry(ProjectWriteMixin):
         Danny 0814: an owner_token is a DEVICE-level credential and must not double as a company
         membership ticket, so claiming a context someone else already holds still fails.
 
-        🔴 WHY THE `FOR UPDATE` (this is the line that replaces a dropped DB constraint): until 0019
+        🔴 WHY THE `FOR UPDATE` (this is the line that replaces a dropped DB constraint): until 0020
         the refusal was a UNIQUE index, i.e. ATOMIC — two simultaneous claims could not both win, no
         matter how they interleaved. Read-then-insert in Python is NOT atomic under READ COMMITTED:
         each transaction's existence check runs against a snapshot that cannot see the other's
