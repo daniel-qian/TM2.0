@@ -122,15 +122,21 @@ def test_all_known_bad_requires_every_provider_called_and_failed():
 # ── 2 · 链的组装规则 ─────────────────────────────────────────────────────────────────────
 
 
-def _pin_env(monkeypatch, *, mm_key=None, ds_key=None, explicit=None, switch=None,
+def _pin_env(monkeypatch, *, mm_key=None, ds_key=None, oa_key=None, explicit=None, switch=None,
              extractor=None):
-    for var in ("MINIMAX_API_KEY", "DEEPSEEK_API_KEY", "AVERY_EXTRACTOR_BRAIN",
-                "AVERY_BRAIN_FAILOVER", "AVERY_EXTRACTOR"):
+    """#96: OPENAI_API_KEY / AVERY_OPENAI_KEY_ENV joined this list when openai became a real
+    extraction provider — leaving them out means a box that happens to export an OpenAI key gets a
+    third entry in every chain assertion below (and, worse, a real provider in a test that thinks
+    it pinned everything)."""
+    for var in ("MINIMAX_API_KEY", "DEEPSEEK_API_KEY", "OPENAI_API_KEY", "AVERY_OPENAI_KEY_ENV",
+                "AVERY_EXTRACTOR_BRAIN", "AVERY_BRAIN_FAILOVER", "AVERY_EXTRACTOR"):
         monkeypatch.delenv(var, raising=False)
     if mm_key:
         monkeypatch.setenv("MINIMAX_API_KEY", mm_key)
     if ds_key:
         monkeypatch.setenv("DEEPSEEK_API_KEY", ds_key)
+    if oa_key:
+        monkeypatch.setenv("OPENAI_API_KEY", oa_key)
     if explicit:
         monkeypatch.setenv("AVERY_EXTRACTOR_BRAIN", explicit)
     if switch:
@@ -152,6 +158,10 @@ def test_extraction_chain_permutations(monkeypatch):
     assert extractor_factory.extraction_chain() == ["minimax"], "kill-switch 必须一刀切回单供应商"
     _pin_env(monkeypatch)
     assert extractor_factory.extraction_chain() == []          # 无 key = 无链
+    # #96 · 第三家进来后，境内两家之间的既有行为一个字节都不许变（上面每条都还成立），而
+    # openai 与它们**互不为热备**——跨 region 的链在 test_openai_provider_96.py 里单钉。
+    _pin_env(monkeypatch, oa_key="k3")
+    assert extractor_factory.extraction_chain() == ["openai"]
 
 
 def test_advise_chain_permutations(monkeypatch):
