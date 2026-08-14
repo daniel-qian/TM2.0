@@ -12,7 +12,8 @@
 // ## 怎么够到「真表单」而不碰真 Supabase
 // 与 verify-auth-capability.mjs / verify-null-owner.mjs 同一招：不 mock store、不直接调
 // signIn()/signUp() 这些函数——那样只证明函数本身，证明不了屏幕。本门在**网络层**用
-// `page.route()` 改写 `/auth/v1/token`（登录）、`/auth/v1/signup`（注册）这两个真实
+// `page.route()` 改写 `/auth/v1/token`（登录）、`/auth/v1/signup`（注册——#101 之后它只
+// 作为**陷阱**存在，见 ④ 段）这两个真实
 // Supabase 端点的响应，同一份真构建（真 Supabase env key 烤进 bundle，`getSupabase()`
 // 真的建出客户端）在这层拦截下走完整条前端逻辑：填表单 → 提交 → supabase-js 解析响应 →
 // `onAuthStateChange` 推回 store → 组件重渲染。🔴 全程不发生一次真实网络请求打到
@@ -23,7 +24,8 @@
 //   ① 表单渲染 + 零拉丁词残留（中文纯度，本面板范围）
 //   ② 登录成功 → store 落 authed、邮箱显示、后续 /account/contexts 请求带 X-Avery-Account
 //   ③ 登录失败 → 人话报错（邮箱或密码不对 / 限流），不是原始英文
-//   ④ 注册但要邮箱验证 → 诚实说「去查收件箱」，不假装已登录
+//   ④ 【#101 改判】注册门冻结 → 前端**不存在**任何 signup 路径（原为「注册但要邮箱验证
+//     → 诚实说去查收件箱」；那条路整条撤了，判据翻成反向，逐条理由见该段段首）
 //   ⑤ 游客路径全程健在：未登录时九个场景 tab + 首屏上传入口都能点
 //   ⑥ 凭据卫生不变式：拿到的 access_token 不进 URL、不进任何 `lite2:` 前缀的 localStorage
 //   ⑦ 换身份（A→B，同一标签页、status 全程 authed）→ 公司数据域（contextId/team/files/notes
@@ -270,7 +272,16 @@ console.log('\n═══ ① 表单渲染（capability=supported + key 配了）
   rec('邮箱输入框在', (await p.locator('.lite-auth-pop input[type="email"]').count()) === 1)
   rec('密码输入框在', (await p.locator('.lite-auth-pop input[type="password"]').count()) === 1)
   rec('提交按钮在', (await p.locator('.lite-auth-pop .lite-auth-submit').count()) === 1)
-  rec('注册（signup）切换入口在', (await p.locator('.lite-auth-pop .lite-auth-switch').count()) === 1)
+  // ── #101 改判 ①/1：正向「注册切换入口在」→ 反向「一个都找不到」──────────────────────
+  // 旧判据（`.lite-auth-switch` count === 1）在注册门冻结后**必红**，它守的是一个已经
+  // 被产品判掉的行为。删它的理由不是"删掉就绿了"，是它现在**判反了**：入口存在才是缺陷。
+  // 🔴 反向判据天生有空真风险（面板整个没渲染出来时它也成立）。这里不额外造对照——
+  // 上面三条同块判据（弹层在 / 邮箱框在 / 密码框在 / 提交键在）就是它的在场证明：
+  // 面板没渲染的话那四条先红，这一条绿不了单。
+  rec(
+    '🔴 #101 注册切换入口一个都找不到（.lite-auth-switch 已撤）',
+    (await p.locator('.lite-auth-pop .lite-auth-switch').count()) === 0,
+  )
 
   const guestNote = await p.locator('.lite-auth-pop .lite-auth-note').first().innerText()
   rec('诚实的"游客也能用"说明在', guestNote.includes('不登录也能用'), guestNote)
@@ -428,17 +439,52 @@ console.log('\n═══ ③ 登录失败 → humanizeAuthError 人话，不是�
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════════════
-// ④ 注册但需要邮箱验证 → 诚实说"去查收件箱"，不假装已登录
+// ④ 【#101 改判】注册门冻结 → 前端**不存在**任何 signup 路径
+//
+// ## 旧 ④ 是什么，为什么整段翻面
+// 旧 ④ 测的是「注册返回 user 但没 session（开了邮箱验证）→ pendingVerification → 诚实说
+// 去收信、不假装已登录」。它当时是对的，但 #94 在**生产上**实测出这条路的前提就不成立：
+// Supabase 对**已注册且已确认**的邮箱回的是 **200 + 一个假 user id**（防枚举伪装成功），
+// 于是屏幕上那句「注册成功。去邮箱点一下确认链接」是**只可能在说谎时才亮**的提示。
+// #101 把注册整条撤了（AuthPanel 的切换入口 + authStore.signUp + pendingVerification +
+// authVerifyNote 全删）。旧 ④ 的五条判据里，三条断言的是**已被产品判掉的行为**（切到注册
+// 模式、pendingVerification 为 true、屏上出现那句话），留着必红且守错了方向。
+//
+// ## 换上来的反向判据（四层，逐层为什么）
+//  a. **入口层**：切换键找不到 + 表单里只剩「登录」一个动作键 + 面板文案里没有「注册」二字。
+//     只查 class 不够——换个 class 加回来就绕过去了，所以再从**文案**和**动作键数量**
+//     两个正交角度各钉一条。
+//  b. **store 层**：`signUp` 这个 action 压根不存在、`pendingVerification` 这个字段不存在。
+//     这条守的是碑上那句「死枝要在 docstring 自陈测不到」的另一半——如果 signUp 只是
+//     「留着但 UI 够不到」，下一个人就会写出一条伪造响应直接调它的**永远绿的空判据**。
+//     判它不存在，就把「留死枝」这条路一起焊死了。
+//  c. **网络层（陷阱上膛）**：`/auth/v1/signup` 的 route 照旧挂着，回的**正是 #94 那份假
+//     成功**。它不是拿来用的，是拿来**等**的：谁把注册路径加回来，这个假成功就会当场
+//     被打到，`signupHits` 非零，门红。
+//     🔴 「某个请求没发生」是天生的空真判据——所以配了阳性对照 `tokenHits`：先证明这一页
+//     的表单**真的被驱动了**（登录端点确实被打到），「signup 一次都没被打到」才有分量。
+//  d. **文案层**：#94 那句假话（「去邮箱点一下确认链接」）不再出现在屏幕上。
+//
+// ## 🔴 「直连 signup 接口拿到的是真错误不是假成功」为什么**不在这里**
+// 那条判据问的是**真 Supabase 后台的 disable_signup 关没关**。本门整条 Supabase 链路是
+// page.route 伪造的——在这里断言它，等于让被测对象自己写答案（碑：尺子长在被量的东西上，
+// 判据的期望值不许由被测方给出）。它的正确落点是一支**打真 Supabase 的活体探针**：
+//   node .issues/account-tenancy-0813/probe-signup-frozen.mjs
+// 那支探针只读 `/auth/v1/settings`，`disable_signup` 为真时才继续做一次真实 signup 尝试
+// 并断言「真错误 + 没有 user id」。它需要公网，**不进 init.sh / 不进离线电池**。
 // ═══════════════════════════════════════════════════════════════════════════════════════
-console.log('\n═══ ④ 注册（有 user 无 session）→ pendingVerification，绝不假装已登录 ═══')
+console.log('\n═══ ④ #101 注册门冻结 → 前端不存在任何 signup 路径（反向判据）═══')
 {
   const { ctx, p, errs } = await openPage()
-  await p.route('**/auth/v1/signup*', (route) =>
+
+  // 陷阱：#94 在生产上逮到的那份**假成功**（200 + 假 user id，Supabase 防枚举伪装）。
+  // 一字不改地留在这儿——它是「注册路径被加回来」这件事的报警器。
+  let signupHits = 0
+  await p.route('**/auth/v1/signup*', (route) => {
+    signupHits += 1
     route.fulfill({
       status: 200,
       contentType: 'application/json',
-      // 刻意不带 access_token/refresh_token/expires_in —— GoTrue 开了邮箱验证时的真实形状：
-      // 直接返回 user 对象本身（无 session 包裹），@supabase/auth-js 的 hasSession() 判 false。
       body: JSON.stringify({
         id: 'user-fake-needs-verify-0003',
         aud: 'authenticated',
@@ -454,36 +500,91 @@ console.log('\n═══ ④ 注册（有 user 无 session）→ pendingVerifica
         created_at: '2026-07-20T00:00:00Z',
         updated_at: '2026-07-20T00:00:00Z',
       }),
-    }),
-  )
+    })
+  })
+  // 阳性对照用：登录端点。回 400，因为本段要的是"提交这个动作真的发生过"，不是登录成功。
+  let tokenHits = 0
+  await p.route('**/auth/v1/token*', (route) => {
+    tokenHits += 1
+    route.fulfill({
+      status: 400,
+      contentType: 'application/json',
+      body: JSON.stringify({ error_description: 'Invalid login credentials', error_code: 'invalid_credentials' }),
+    })
+  })
 
   await boot(p)
   await openPanel(p)
-  await p.locator('.lite-auth-pop .lite-auth-switch').click() // 切到注册模式
+
+  // ── a · 入口层 ────────────────────────────────────────────────────────────────────────
+  rec(
+    '🔴 注册切换入口找不到（.lite-auth-switch count === 0）',
+    (await p.locator('.lite-auth-pop .lite-auth-switch').count()) === 0,
+  )
+  // 按类查会被"换个 class 加回来"绕过 —— 再从动作键**数量**钉一条：登录表单里可点的
+  // 只该有「登录」这一个键。将来真要加第二个动作（比如找回密码），这条会红，逼一次
+  // 显式复议——这是想要的效果，不是误报。
+  const formButtons = await p.locator('.lite-auth-pop form button').allInnerTexts()
+  rec(
+    '🔴 登录表单里只有「登录」一个动作键（没有第二条路可点）',
+    formButtons.length === 1 && formButtons[0].trim() === '登录',
+    JSON.stringify(formButtons),
+  )
+  const panelText = await p.locator('.lite-auth-pop').innerText()
+  rec('🔴 面板文案里没有「注册」二字（换 class 也绕不过文案这一关）', !panelText.includes('注册'), panelText.replace(/\n+/g, ' / ').slice(0, 120))
+
+  // ── b · store 层：signUp / pendingVerification 是真的不存在，不是"在但没人调" ─────────
+  const shape = await p.evaluate(() => {
+    const s = window.__lite2Auth.getState()
+    return { signUpType: typeof s.signUp, hasPending: 'pendingVerification' in s, keys: Object.keys(s) }
+  })
+  rec('🔴 authStore 没有 signUp 这个 action（死枝一并删了，不留可被空判据消费的靶子）',
+    shape.signUpType === 'undefined', `typeof signUp = ${shape.signUpType}`)
+  rec('🔴 authStore 没有 pendingVerification 这条状态', shape.hasPending === false, shape.keys.join(','))
+
+  // ── c · 网络层：把表单里能点的都点一遍再提交，signup 端点一次都不该被打到 ────────────
+  // 🔴 born-red 实测（2026-08-13，本段第一版）：只**提交一次登录表单**的话，「signup 零命中」
+  // 与「屏上没有那句假话」两条**把注册入口原样加回来照样全绿**——它们当时是空真，
+  // 阳性对照 tokenHits 也救不了（它只证明登录被驱动了，不证明「所有能走的路都走过」）。
+  // 有牙的驱动是：**把表单里除提交键以外的每一个键都先点一遍**。注册入口回来的那一刻，
+  // 这一圈点击就会把模式切到注册，接下来的提交打到 /auth/v1/signup，陷阱当场响。
+  const extraButtons = p.locator('.lite-auth-pop form button:not(.lite-auth-submit)')
+  const extraCount = await extraButtons.count()
+  for (let i = 0; i < extraCount; i++) await extraButtons.nth(i).click()
+  await p.waitForTimeout(150)
+
   await p.locator('.lite-auth-pop input[type="email"]').fill('newmanager@example.com')
   await p.locator('.lite-auth-pop input[type="password"]').fill('sixchars')
   await p.locator('.lite-auth-pop .lite-auth-submit').click()
-
+  // 落定条件写成「busy 回 idle 且**有了结果**」而不是死等 error：注册路径若被加回来，
+  // 结果是 pendingVerification 而不是 error，死等 error 会白白吃满 5s 超时，然后拿一屏
+  // **还没渲染完**的东西去判 d（那样 d 会因为"读早了"而假绿——又一层空真）。
   await p
-    .waitForFunction(() => window.__lite2Auth?.getState?.()?.pendingVerification === true, undefined, {
-      timeout: 5000,
-    })
+    .waitForFunction(
+      () => {
+        const s = window.__lite2Auth?.getState?.()
+        return !!s && s.busy === 'idle' && (s.error != null || s.pendingVerification === true)
+      },
+      undefined,
+      { timeout: 5000 },
+    )
     .catch(() => {})
-  const store = await p.evaluate(() => {
-    const s = window.__lite2Auth.getState()
-    return { status: s.status, pendingVerification: s.pendingVerification }
-  })
-  rec('store.pendingVerification 为 true', store.pendingVerification === true, JSON.stringify(store))
-  rec('🔴 status 没有变成 authed（绝不假装已登录）', store.status !== 'authed', JSON.stringify(store))
 
-  const notes = await p.locator('.lite-auth-pop .lite-auth-note').allInnerTexts()
-  const combined = notes.join(' | ')
-  rec('屏幕诚实提示"去邮箱点确认链接"', combined.includes('去邮箱点一下确认链接'), combined)
-  rec(
-    '仍显示登录/注册表单（不是"已登录"视图）',
+  // 🔴 阳性对照写成「两个端点**加起来**至少被打到一次」，不是「token 被打到一次」：
+  // 注册路径若被加回来，这一轮驱动打的是 signup 而**不是** token——写成后者的话，
+  // 对照自己会跟着红，读日志的人分不清"是没驱动到"还是"驱动到了别处"。
+  rec('阳性对照：提交确实驱动到了某个 Supabase 认证端点（否则下一条是空真）',
+    tokenHits + signupHits >= 1, `tokenHits=${tokenHits} signupHits=${signupHits}`)
+  rec('🔴 点遍全表单后仍零次请求打到 /auth/v1/signup，且提交走的是登录端点（陷阱上膛未响）',
+    signupHits === 0 && tokenHits >= 1, `tokenHits=${tokenHits} signupHits=${signupHits}`)
+
+  // ── d · 文案层：#94 那句假话不会再出现在屏幕上 ──────────────────────────────────────
+  const notes = (await p.locator('.lite-auth-pop .lite-auth-note').allInnerTexts()).join(' | ')
+  rec('🔴 屏幕上不再出现「去邮箱点一下确认链接」（#94 逮到的那句假话）',
+    !notes.includes('去邮箱点一下确认链接'), notes)
+  rec('提交失败后仍是登录表单（没有被假成功推进任何"已登录"视图）',
     (await p.locator('.lite-auth-pop input[type="email"]').count()) === 1 &&
-      (await p.locator('.lite-auth-who-email').count()) === 0,
-  )
+      (await p.locator('.lite-auth-who-email').count()) === 0)
 
   rec('无 pageerror', errs.length === 0, errs.slice(0, 2).join(' | ') || '0 条')
   await ctx.close()
@@ -649,6 +750,11 @@ console.log('\n═══ ⑧ 点语言开关 → 账号面板文案跟着变（�
   const panelEn = await p.locator('.lite-auth-pop').innerText()
   rec('🔴 弹层内文案整体跟着变（邮箱/密码标签是英文）',
     panelEn.includes('Email') && panelEn.includes('Password'), panelEn.replace(/\n+/g, ' / ').slice(0, 120))
+  // #101：注册入口的**文案侧**反向判据在 ①/④ 两段只有中文那一半（那两段跑的是 zh 构建，
+  // 判的是「没有『注册』二字」）。英文界面对那条判据天生够不着——碑上「门语料全 ASCII
+  // 盲点」的镜像面：只有中文语料同样是盲点。这里补上英文那一半。
+  rec('🔴 #101 · EN 态面板里也没有 "Sign up"（两个语言的注册入口都撤干净了）',
+    !/sign\s*up/i.test(panelEn), panelEn.replace(/\n+/g, ' / ').slice(0, 120))
   rec('🔴 弹层内不再残留中文（旧语言没有卡在任何一格里）',
     !panelEn.includes('邮箱') && !panelEn.includes('密码') && !panelEn.includes('不登录也能用'),
     panelEn.replace(/\n+/g, ' / ').slice(0, 120))

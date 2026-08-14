@@ -6,6 +6,7 @@ key is configured or the SDK is missing, so the suite stays green AFK. Run it li
 
     AVERY_BRAIN=minimax python -m pytest tests/test_service_smoke.py -q -rs -m smoke
     AVERY_BRAIN=claude  python -m pytest tests/test_service_smoke.py -q -rs -m smoke
+    AVERY_BRAIN=openai  python -m pytest tests/test_service_smoke.py -q -rs -m smoke   # #96
 
 (`-m smoke` is required: pytest.ini is offline-by-default since arch-0802, and the explicit CLI
 -m is what overrides that deselect. Without it this file collects 0 tests.)
@@ -42,15 +43,18 @@ def _key_for(kind: str) -> bool:
         "minimax": bool(os.environ.get("MINIMAX_API_KEY")),
         "deepseek": bool(os.environ.get("DEEPSEEK_API_KEY")),
         "claude": bool(os.environ.get("ANTHROPIC_API_KEY")),
+        # #96 · openai 的 key 变量名可被 AVERY_OPENAI_KEY_ENV 改掉，所以问工厂、别写死名字。
+        "openai": bool(os.environ.get(brain_factory.openai_key_env())),
     }.get(kind, False)
 
 
 def _live_kind() -> str | None:
-    """The brain to smoke: AVERY_BRAIN if it's live and keyed, else the first keyed provider."""
+    """The brain to smoke: AVERY_BRAIN if it's live and keyed, else the first keyed provider.
+    (`resolve_brain_kind` already canonicalizes openai-compat/compat -> openai.)"""
     env_kind = brain_factory.resolve_brain_kind()
     if env_kind != "mock" and _key_for(env_kind):
         return env_kind
-    for kind in ("minimax", "deepseek", "claude"):
+    for kind in ("minimax", "deepseek", "claude", "openai"):
         if _key_for(kind):
             return kind
     return None

@@ -4551,10 +4551,8 @@
   outline: none;
 }
 
-.lite2-shell .lite-auth-hint {
-  font-size: 11px;
-  color: var(--ink-faint);
-}
+/* #101：`.lite-auth-hint`（「至少 6 位」）与 `.lite-auth-switch`（「还没有账号？注册」）
+   随注册入口一起撤了，两条规则跟着删——留着空样式等于给下一个人留半套现成脚手架。 */
 
 .lite2-shell .lite-auth-submit {
   padding: 8px 12px;
@@ -4578,8 +4576,7 @@
   cursor: default;
 }
 
-.lite2-shell .lite-auth-secondary,
-.lite2-shell .lite-auth-switch {
+.lite2-shell .lite-auth-secondary {
   align-self: flex-start;
   border: none;
   background: transparent;
@@ -4591,9 +4588,7 @@
 }
 
 .lite2-shell .lite-auth-secondary:hover,
-.lite2-shell .lite-auth-secondary:focus-visible,
-.lite2-shell .lite-auth-switch:hover,
-.lite2-shell .lite-auth-switch:focus-visible {
+.lite2-shell .lite-auth-secondary:focus-visible {
   text-decoration: underline;
   text-underline-offset: 3px;
   outline: none;

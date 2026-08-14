@@ -11,14 +11,17 @@
 """
 from __future__ import annotations
 
+import ast
+import inspect
 import json
 import re
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
+from avery import decision_grading
 from avery import decision_rules as R
 from avery.decision_grading import (
     AveryReview,
@@ -27,6 +30,7 @@ from avery.decision_grading import (
     grade_project,
     grade_projects,
     parse_due_date,
+    today_utc,
 )
 
 TODAY = date(2026, 7, 18)
@@ -1046,9 +1050,12 @@ def test_a_freshly_claimed_sample_team_is_not_told_its_material_is_stale():
     twin = reg.get("ctx_visitor")
     # 副本的资料对这位访客来说，确实是此刻才进他工作区的。
     assert twin.source_documents[0].uploaded_at != master.source_documents[0].uploaded_at
-    from avery.decision_grading import _uploaded_day
-    assert _uploaded_day(twin.source_documents[0].uploaded_at) == date.today()
-    for card in twin.decision_cards():                      # as_of 走 date.today()，同生产
+    from avery.decision_grading import _uploaded_day, today_utc
+    # 🔴 这里必须是 `today_utc()`，不是 `date.today()`。这条断言自己就踩过那个坑：
+    # `_uploaded_day` 归一到 UTC，`date.today()` 是本地 naive 日，UTC+8 的机器上每天
+    # 00:00–08:00 两者差一天，于是这行在那 8 小时里必红——而且红的是断言本身，不是被测行为。
+    assert _uploaded_day(twin.source_documents[0].uploaded_at) == today_utc()
+    for card in twin.decision_cards():                      # as_of 走 today_utc()，同生产
         assert "R-STALE-EVIDENCE" not in [h["rule_id"] for h in card["matched_rules"]], card
 
 
@@ -1353,3 +1360,135 @@ def test_briefing_and_decision_cards_agree_about_conflicts():
     assert [c["grade"] for c in ctx.decision_cards(as_of=TODAY)] == [R.NEEDS_CONFIRMATION]
     look = [m for m in ctx.briefing(as_of=TODAY)["metrics"] if m["label"] == "need a look"]
     assert look and look[0]["value"] == "1", ctx.briefing(as_of=TODAY)["metrics"]
+
+
+# =============================================================================================
+# 时区边界 —— 「今天」和「资料上传日」必须来自同一个钟
+#
+# `_uploaded_day` 把上传时刻归一到 **UTC 日**；`as_of` 的默认值曾经是 `date.today()`，即服务端
+# **本地** naive 日。两个时区的日期直接相减，于是本地日跑在 UTC 前面的那几个小时里，所有资料
+# 凭空老一天。`_uploaded_day` 自己的 docstring 早写下了这个预言，然后没人把它关上。
+#
+# 🔴 这一节**必须钉钟**，不许读运行时的 `date.today()`。原因就写在这个 bug 自己身上：它只在
+# 本地日 != UTC 日 时发作（UTC+8 的机器上是每天 00:00–08:00）。一条 15:00 跑绿的测试对它一无所知
+# ——本票被发现时是 00:29，写这段时是 09:39，同一条既有测试前红后绿，代码一个字没变。
+#
+# 两个瞬间，跨日方向相反，两头的代价不一样，所以两边都钉：
+#   _UTC_AHEAD  本地跑在 UTC 前面 → 资料被算**老**一天 → 假红（吵，但看得见）
+#   _UTC_BEHIND 本地落在 UTC 后面 → 资料被算**新**一天 → 漏报（静默，这头更贵）
+# =============================================================================================
+
+_UTC_AHEAD = datetime(2026, 8, 13, 16, 30, tzinfo=timezone.utc)   # UTC+8 的机器上：本地已 08-14
+_UTC_BEHIND = datetime(2026, 8, 14, 2, 0, tzinfo=timezone.utc)    # UTC-5 的机器上：本地还是 08-13
+
+
+def _pin_clock(monkeypatch, moment):
+    """把本模块唯一那处挂钟读数钉死。
+
+    钉的是 `_utc_now`（`today_utc()` 和 `grade_form_period` 都走它），不是 `today_utc` 本身——
+    钉后者就把被测的那层归一逻辑一起换掉了，等于让尺子长在被量的东西上。
+    """
+    monkeypatch.setattr(decision_grading, "_utc_now", lambda: moment)
+
+
+def _host_local_today(offset_hours: int):
+    """复刻**修复前**的行为：`date.today()` 在 UTC+offset 的机器上返回的那个日期。
+
+    不是随手造一个错值——把钉住的那个瞬间换算到宿主时区再取 `.date()`，正是 `date.today()`
+    当时干的事。变异要faithful，否则证的是另一个 bug。
+    """
+    zone = timezone(timedelta(hours=offset_hours))
+    return lambda: decision_grading._utc_now().astimezone(zone).date()
+
+
+def _stale_hit(cards) -> bool:
+    return any(h["rule_id"] == "R-STALE-EVIDENCE"
+               for h in cards[0]["matched_rules"])
+
+
+def _ctx_aged(moment: datetime, age_days: int):
+    """一份「距离钉住那天恰好 age_days」的资料（上传时刻按 UTC 算）。"""
+    day = (moment.date() - timedelta(days=age_days)).isoformat()
+    return _ctx_with_docs(f"{day}T02:30:00+00:00")
+
+
+@pytest.mark.parametrize("moment,age_days,expect_stale,label", [
+    # 本地跑在 UTC 前面（UTC+8 的 00:30）
+    (_UTC_AHEAD, R.STALE_EVIDENCE_DAYS - 1, False, "UTC+8 · 差一天没到线"),
+    (_UTC_AHEAD, R.STALE_EVIDENCE_DAYS,     True,  "UTC+8 · 恰好踩线"),
+    # 本地落在 UTC 后面（UTC-5 的 21:00）
+    (_UTC_BEHIND, R.STALE_EVIDENCE_DAYS - 1, False, "UTC-5 · 差一天没到线"),
+    (_UTC_BEHIND, R.STALE_EVIDENCE_DAYS,     True,  "UTC-5 · 恰好踩线"),
+], ids=lambda v: v if isinstance(v, str) else "")
+def test_staleness_is_decided_in_one_timezone(monkeypatch, moment, age_days, expect_stale, label):
+    """资料新旧只由「距今多少天」决定，与服务器装在哪个时区无关。
+
+    判据落在**阈值那一天**上：差一天不命中、恰好踩线命中。差一天的 `as_of` 正好能把这两个答案
+    对调，所以这是对时区错位唯一有牙的位置——离阈值远的用例（「刚传的资料不算旧」）两种实现
+    都绿，证不出任何东西。
+
+    走的是 `decision_cards()` **不传 `as_of`** 的那条默认路径，因为生产就走这条
+    （`service/ingest_api.py` 调的是 `ctx.decision_cards(forms=forms)`）。
+    """
+    _pin_clock(monkeypatch, moment)
+    got = _stale_hit(_ctx_aged(moment, age_days).decision_cards())
+    assert got is expect_stale, (
+        f"[{label}] 资料距今 {age_days} 天（阈值 {R.STALE_EVIDENCE_DAYS}），"
+        f"期望 stale={expect_stale}，实得 {got}")
+
+
+@pytest.mark.parametrize("moment,host_offset,age_days,broken,label", [
+    (_UTC_AHEAD, 8, R.STALE_EVIDENCE_DAYS - 1, True,
+     "UTC+8：44 天的资料被算成到线 —— 假红，一进门就说你的资料旧了"),
+    (_UTC_BEHIND, -5, R.STALE_EVIDENCE_DAYS, False,
+     "UTC-5：45 天的资料被算成没到线 —— 静默漏报，这头更贵"),
+], ids=["ahead-of-utc", "behind-utc"])
+def test_the_old_local_clock_really_flipped_these(monkeypatch, moment, host_offset, age_days,
+                                                  broken, label):
+    """专属变异：把 `today_utc` 换回「服务端本地日」那一套，上面那两条判据必须**翻面**。
+
+    翻不过去 = 我挑的那个 age_days 对时区错位根本不敏感，上面那条绿着也证不了修复——判据得
+    重挑，而不是留在这儿当装饰。两个方向都验，因为它们的代价不对称（假红吵、漏报静默），
+    只钉一头等于默认另一头不会发生。
+    """
+    _pin_clock(monkeypatch, moment)
+    correct = _stale_hit(_ctx_aged(moment, age_days).decision_cards())
+    assert correct is not broken, (
+        f"[{label}] 对照前提不成立：修好的实现给出的就已经是 {correct}，这条变异无从翻面")
+
+    monkeypatch.setattr(decision_grading, "today_utc", _host_local_today(host_offset))
+    got = _stale_hit(_ctx_aged(moment, age_days).decision_cards())
+    assert got is broken, (
+        f"[{label}] 换回本地日之后判据没有翻面（仍是 {got}）——"
+        f"说明这个 age_days 落在对时区不敏感的位置上，上面那条测试并没有在验时区。")
+
+
+def test_the_module_reads_the_wall_clock_in_exactly_one_place():
+    """结构闸：全模块只许有一处挂钟读数（`_utc_now`）。
+
+    这不是洁癖。这个 bug 的成因就是**第二处**读钟（`date.today()`）悄悄和第一处（归一到 UTC 的
+    `_uploaded_day`）分了家；只要还能再长出第三处，同一个 bug 就能换个规则再来一次。上面那些
+    钉钟的测试也全都建立在「钉住 `_utc_now` 就钉住了整个模块」这个前提上——多一处直接读钟的，
+    那些测试会**静默**地不再钉得住它。
+
+    按 AST 找调用节点，不扫文本：`date.today()` 在本文件的 docstring 里被引用了好几次
+    （讲的正是这段历史），按字符串扫会把那些注释当成病灶。
+    """
+    tree = ast.parse(inspect.getsource(decision_grading))
+    reads = []
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        for sub in ast.walk(node):
+            if not isinstance(sub, ast.Call) or not isinstance(sub.func, ast.Attribute):
+                continue
+            dotted = f"{getattr(sub.func.value, 'id', '')}.{sub.func.attr}"
+            if dotted in ("date.today", "datetime.now", "datetime.utcnow"):
+                reads.append(f"{node.name}() -> {dotted}() @L{sub.lineno}")
+
+    # 期望值是**手写**的，不从扫描结果里回填：判据的期望一旦由被测物算出来，被测物缩水时期望
+    # 跟着缩水，这条就永远绿（本仓踩过）。
+    assert [r.split(" @L")[0] for r in reads] == ["_utc_now() -> datetime.now()"], (
+        f"挂钟读数不是恰好 `_utc_now` 一处：{reads}\n"
+        f"每多一处，就多一个可以和 `_uploaded_day` 的 UTC 归一分家的地方——本票修的就是那件事。"
+        f"要读此刻，走 `_utc_now()` / `today_utc()`。")

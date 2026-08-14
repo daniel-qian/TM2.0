@@ -15,8 +15,37 @@
 -- THIS migration therefore only DROPS the retired denylist; it must NOT (re-)add a point-in-time
 -- allowlist. To change the allowlist, edit 0009 IN PLACE — never add a superseding migration.
 --
--- Idempotent: DROP IF EXISTS, safe to re-run.
+-- Idempotent: the DROP runs only when the constraint is actually there, so re-runs are free.
+--
+-- 🔴 WHY THE GUARD AND NOT A BARE `DROP CONSTRAINT IF EXISTS` (measured 2026-08-13, pg16 throwaway,
+-- found while writing 0019): `IF EXISTS` decides nothing before it locks. The bare form takes an
+-- ACCESS EXCLUSIVE lock on `entities` EVERY time it runs, including the overwhelmingly common case
+-- where this constraint was retired long ago and the statement drops nothing at all. Since
+-- _ensure_schema replays EVERY migration on EVERY bootstrap (README rule 1), that made this file a
+-- once-per-boot ACCESS EXCLUSIVE grab on the single hottest table — exactly what README rule 2
+-- forbids, and exactly the 2026-07-23 outage shape (an orphaned idle-in-transaction /demo/claim
+-- holds entities, the bootstrap piles up behind it, /demo/* 500s).
+--
+-- It was not theoretical. Replaying each migration individually against a held ACCESS SHARE lock
+-- (lock_timeout=3000), 0002 was the ONLY file that failed — 0001 and 0003+ all passed — and a full
+-- _ensure_schema() under that same contention raised "could not lock the entities table". So rule 2
+-- and the pg_registry._ensure_schema docstring, both of which assert the steady-state bootstrap takes
+-- NO ACCESS EXCLUSIVE lock on entities, were false in the one file nobody thought to look at,
+-- because a DROP that drops nothing reads as harmless. Reading the catalog first costs nothing and
+-- makes the steady-state boot lock-free for real. Guarded in the shape 0009/0010 already use.
+--
+-- Guard: tests/test_registry_contract.py::test_steady_state_bootstrap_takes_no_entities_lock.
 
 SET search_path = avery, public, extensions;
 
-ALTER TABLE avery.entities DROP CONSTRAINT IF EXISTS entities_person_no_scoring_keys;
+DO $mig$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM pg_constraint
+         WHERE conrelid = 'avery.entities'::regclass
+           AND conname  = 'entities_person_no_scoring_keys'
+    ) THEN
+        ALTER TABLE avery.entities DROP CONSTRAINT entities_person_no_scoring_keys;
+    END IF;
+END
+$mig$;

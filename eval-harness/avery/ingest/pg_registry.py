@@ -67,8 +67,12 @@ logger = logging.getLogger(__name__)
 
 _MIGRATIONS_DIR = Path(__file__).resolve().parent.parent.parent / "db" / "migrations"
 
-# avery.materials.embedding is vector(1024) (= AVERY_EMBED_DIM, DashScope text-embedding dim). An
-# embedding of a different dim cannot be stored — feat-031 leaves the column NULL rather than crash.
+# avery.materials.embedding is vector(1024) (= AVERY_EMBED_DIM). Both real embedders land on this
+# number by construction: DashScope text-embedding-v4 default, and (#96) OpenAI
+# text-embedding-3-small asked for at `dimensions=1024` — which is why swapping providers needs no
+# migration. An embedding of a different dim cannot be stored — feat-031 leaves the column NULL
+# rather than crash. (Same dim ≠ same vector space: after a provider swap the OLD rows are noise
+# and must be re-embedded.)
 _DEFAULT_EMBED_DIM = 1024
 
 
@@ -147,10 +151,20 @@ class PostgresContextRegistry(ProjectWriteMixin):
         statement_timeout, and the whole replay retries with backoff. So a bootstrap that races a
         concurrent /demo/claim holding an entities lock — or an ORPHANED idle-in-transaction claim, the
         exact 2026-07-23 outage — FAILS FAST and retries instead of hanging until Supabase's 2-min
-        statement_timeout and tripping the container HEALTHCHECK. Paired with 0009/0010's guarded ADD
-        CONSTRAINT (a no-op catalog lookup on the normal boot where nothing changed), the steady-state
-        bootstrap takes NO ACCESS EXCLUSIVE lock on entities at all — the lock_timeout is the backstop
-        for the rare apply path (a genuine schema change, or a fresh DB) and for a stuck writer."""
+        statement_timeout and tripping the container HEALTHCHECK. Paired with 0002's guarded DROP and
+        0009/0010's guarded ADD CONSTRAINT (a no-op catalog lookup on the normal boot where nothing
+        changed), the steady-state bootstrap takes NO ACCESS EXCLUSIVE lock on entities at all — the
+        lock_timeout is the backstop for the rare apply path (a genuine schema change, or a fresh DB)
+        and for a stuck writer.
+
+        ⚠ That last sentence was FALSE from 0724 until 2026-08-13, and this note stays so nobody
+        re-learns it: it credited only 0009/0010, but 0002 ended in a bare `DROP CONSTRAINT IF
+        EXISTS`, and `IF EXISTS` decides nothing before it locks — so 0002 took ACCESS EXCLUSIVE on
+        entities on EVERY boot while dropping a constraint that had been retired for months.
+        Measured by replaying each migration against a held ACCESS SHARE lock: 0002 was the only
+        file that failed. A DROP that drops nothing is not a free statement. The invariant is now
+        enforced, not just asserted, by
+        tests/test_registry_contract.py::test_steady_state_bootstrap_takes_no_entities_lock."""
         if self._schema_ready:
             return
         lock_ms = _int_env("AVERY_BOOTSTRAP_LOCK_TIMEOUT_MS", 3000)
@@ -797,6 +811,38 @@ class PostgresContextRegistry(ProjectWriteMixin):
                 "SELECT ephemeral FROM avery.contexts WHERE context_id = %s",
                 (context_id,)).fetchone()
         return bool(row[0]) if row is not None and row[0] is not None else False
+
+    def source_document_keys(self, context_id: str) -> set[str] | None:
+        """issue #99 — this company's taken `source_key`s WITHOUT pulling the archive.
+
+        See the in-memory twin for the full why. In one line: the append path used to hold a whole
+        `get()` snapshot across the two-to-three minutes of LLM extraction, and `contexts` has no
+        version column — so anything the manager edited in that window was silently overwritten by
+        the write-back. This is the ONLY read that segment actually needs.
+
+        This is also where the cost argument lives, and it is not decoration: `get()` pulls every
+        entity, every material chunk and both memory files, then re-materializes facts.md/notes.md
+        onto disk. This is one small query against one table.
+
+        🔴 `None` = no such context (same meaning as `get()`'s None). An EMPTY SET means the
+        context exists and holds no documents. Never collapse the two.
+
+        🔴 Key expression is `COALESCE(NULLIF(source_key, ''), filename)` — the same ruler as
+        `source_document_bytes_by_key` and `put()`'s temp-table lifeboat, and byte-equivalent to
+        Python's `sd.source_key or sd.filename` (INSERT writes '' for an absent key, never NULL).
+        A private `source_key`-only projection would miss every pre-0005 row, and a missed key is
+        not a 404 here — it is an idempotency hole: the same document gets re-accepted under a
+        second key, and `<source_key>:<line>` is the citation contract.
+        """
+        self._ensure_schema()
+        with self._connect() as conn:
+            if conn.execute("SELECT 1 FROM avery.contexts WHERE context_id = %s",
+                            (context_id,)).fetchone() is None:
+                return None
+            rows = conn.execute(
+                "SELECT COALESCE(NULLIF(source_key, ''), filename) FROM avery.source_documents "
+                "WHERE context_id = %s", (context_id,)).fetchall()
+        return {r[0] for r in rows if r[0]}
 
     def source_document_bytes(self, context_id: str, idx: int) -> bytes | None:
         """feat-032 download seam: the raw bytea of one uploaded file, pulled on demand (never in

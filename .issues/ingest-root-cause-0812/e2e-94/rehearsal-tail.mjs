@@ -65,7 +65,9 @@ async function loginUI(page, acct) {
     // 登录没落定——把 store 的 error/busy 与弹层上的可见文案一起吐出来再抛，别哑死。
     const diag = await page.evaluate(() => {
       const a = window.__lite2Auth?.getState() ?? {}
-      return { status: a.status, busy: a.busy, error: a.error, pendingVerification: a.pendingVerification }
+      // #101：`pendingVerification` 随注册路径一起从 authStore 删了 —— 继续打印它只会
+      // 恒得一个 undefined，看诊断的人会以为「有这条状态但没置上」。
+      return { status: a.status, busy: a.busy, error: a.error }
     }).catch(() => null)
     const popText = await page.locator('.lite-auth-pop').innerText().catch(() => '(no popup)')
     throw new Error(`loginUI(${acct.tag}) did not reach authed: auth=${JSON.stringify(diag)} popup=${JSON.stringify(popText)}`)

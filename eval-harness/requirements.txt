@@ -3,7 +3,10 @@
 # `anthropic` is only required to run the RealBrain / real LLM judges; mock mode needs none of it.
 
 anthropic>=0.40        # RealBrain (claude-opus-4-8) + cross-family judges via SDK-compatible clients
-openai>=1.40           # baseline codex/GPT brain + non-Claude judge family + MiniMax/DeepSeek
+openai>=1.40,<3        # OpenAI (#96 欧盟/海外) + MiniMax/DeepSeek + non-Claude judge family
+#                        上界是 #96 定的保守闸：openai v3.0.0（2026-08）把默认 HTTP 客户端换成了
+#                        HTTPX2。欧盟那条路第一次接真 key 时不想同时验两件事，先钉住；等真 key
+#                        冒烟过了再单独提。本机实跑版本：2.14.0。
 scipy>=1.11            # Cohen's kappa
 numpy>=1.24
 pytest>=8.0            # test suite

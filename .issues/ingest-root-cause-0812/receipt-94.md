@@ -11,8 +11,8 @@
 | 常驻测试户（保留，下轮复用） | `avery-e2e+20260812@dannyqian.com`（user_id `096eec64-…`，已确认态） |
 | 临时测试户 B | `avery-e2e+20260812b@dannyqian.com` —— **彩排毕已删**（auth.users 现仅 1 行 avery-e2e） |
 | 凭据位置 | 本机 scratchpad `…\scratchpad\e2e-94\creds.json`（密码 24 位强随机；**绝不进仓**，`e2e-94/.gitignore` 通配挡） |
-| 建法 | 正常 signup API（anon key）→ SSH 进生产容器用其 `AVERY_DB_URL` 跑 `UPDATE auth.users SET email_confirmed_at=now()`（凭据不落本机） |
-| 彩排脚本 | `.issues/ingest-root-cause-0812/e2e-94/{rehearsal,rehearsal-tail,probe-claim-refresh}.mjs`（进仓可复用；重跑防呆见 rehearsal.mjs P1 注释：**A 名下有 context 时会明确死掉**，先解绑再跑） |
+| 建法 | ~~正常 signup API（anon key）→ SSH 进生产容器用其 `AVERY_DB_URL` 跑 `UPDATE auth.users SET email_confirmed_at=now()`~~ **已作废（#101，2026-08-13）**：注册门冻结后 signup API 被 `disable_signup` 真闸挡死，这条路第一步就走不通。现行建法 = `supabase.auth.admin.createUser({ email_confirm: true })` **一步建成已确认**，不进生产容器、不发确认信。引导脚本 `e2e-94/mkaccounts.mjs`（要 `SUPABASE_SERVICE_ROLE_KEY`，只本机；产出的 creds.json 仍落 scratchpad）；单个发号/删号走 `scripts/ops/create-account.mjs` |
+| 彩排脚本 | `.issues/ingest-root-cause-0812/e2e-94/{mkaccounts,rehearsal,rehearsal-tail,probe-claim-refresh}.mjs`（进仓可复用；重跑防呆见 rehearsal.mjs P1 注释：**A 名下有 context 时会明确死掉**，先解绑再跑）。⚠ 彩排的**登录**动线本身不受注册冻结影响（走 password grant + 登录表单），受影响的只有建号这一步 |
 
 ## 1 · 九判据逐条实测（主跑 23 + 尾段 10 = 33 条判据，全绿）
 
@@ -70,6 +70,11 @@
    于是 `authStore` 里那句人话「这个邮箱已经注册过了，直接登录」的分支**结构性够不到**（它等的是
    4xx error），用户只会看到「注册成功。去邮箱点一下确认链接」然后永远等不到。方案 A 手动分发账号时，
    **分发话术必须明说「直接登录，别点注册」**，或者产品把注册入口藏起来。
+   → **已处置（#101，2026-08-13）**：产品走的是「藏起来」那条 —— 注册入口、`authStore.signUp`、
+   `pendingVerification`、`authVerifyNote` 全撤（回执 `.issues/account-tenancy-0813/receipt-101.md`），
+   `verify-auth-form` ④ 段翻成反向判据守着，那句假话不会再上屏。话术留着不吃亏。
+   ⚠ **唯一的真闸仍是 Supabase 后台的 `disable_signup`**，只有 Danny 能点。活体读数：
+   `node .issues/account-tenancy-0813/probe-signup-frozen.mjs`。
 2. **无改密/重置入口**：`src/` 全仓 `resetPasswordForEmail|updateUser` 零调用点。运维全靠 Supabase
    后台，密码轮换归 Danny 人手。
 3. **claim 不收权**：⑤ 实证——认领后、登出后，旧 owner_token 仍是那份 context 的万能钥匙。对
@@ -95,8 +100,13 @@
 
 ## 7 · 下轮复用姿势
 
-1. 解绑常驻户名下 context（若上轮没清），或换日期建新号（`mkcreds.mjs`/`signup.mjs`/`pgconfirm.py`
-   在 scratchpad，形状见 §0 建法）。
-2. `node .issues/ingest-root-cause-0812/e2e-94/rehearsal.mjs`（P1-P3+⑥⑨）→ 若中断，
-   `rehearsal-tail.mjs` 补 ⑦⑥⑧。
-3. 收尾照 §2 的 cleanup SQL（unlink → ephemeral → 删临时户）。
+1. **建号**（#101 改法）：`SUPABASE_SERVICE_ROLE_KEY=<...> node .issues/ingest-root-cause-0812/e2e-94/mkaccounts.mjs`
+   —— 按当天日期建 A/B 两个 `avery-e2e+<YYYYMMDD>{a,b}@dannyqian.com`，一步已确认，写 creds.json 到
+   scratchpad。旧的 scratchpad 三件套（`signup.mjs`/`pgconfirm.py`）**已作废**，signup 那步会被真闸挡死。
+   §0 的常驻户 `avery-e2e+20260812@dannyqian.com` 不必复用（它的密码只存在过上一轮的 scratchpad 里，
+   Supabase 读不出来）——还挂着的话用 `scripts/ops/create-account.mjs --delete <email>` 带走。
+2. `E2E94_CREDS=<creds.json> node .issues/ingest-root-cause-0812/e2e-94/rehearsal.mjs`（P1-P3+⑥⑨）→
+   若中断，`rehearsal-tail.mjs` 补 ⑦⑥⑧。
+3. 收尾照 §2 的 cleanup SQL（unlink → ephemeral），**删户改走**
+   `node scripts/ops/create-account.mjs --delete <avery-e2e+*@dannyqian.com>`（它只认这个前缀，
+   真实公司账号一律拒绝）。

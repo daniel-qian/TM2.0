@@ -3,7 +3,59 @@
 > 📢 本文件是**当前状态快照，整体重写不追加**。历史都在 git（`git log` + 各 `.issues/*/receipt*.md`），别在这儿堆编年史。
 > 启动路径见 `AGENTS.md` Startup Workflow：读本文件 + `feature_list.json`，跑 `./init.sh` 确认绿，再开工。
 
-**Last Updated:** 2026-08-13 凌晨（0812 战役五票 **#92、#94、#90、#93、#91 全部落地进本地 main（未 push）**：
+**Last Updated:** 2026-08-14（本轮是**合并 + 复验，零新开发**：两条早就做完、一直没合的线进本地 main）
+
+**① feat-105 / #103 合进 main**（`032c7e8`，`--no-ff`，源 `claude/stale-date-boundary` @ `4971f85`）——
+`decision_grading` 里比较的两头来自两个钟：`_uploaded_day` 归一到 **UTC 日**，`as_of` 默认
+`date.today()` 是服务端**本地** naive 日。本地日跑在 UTC 前面的那几个小时里**所有资料凭空老一天**
+（UTC+8 的机器上就是每天 00:00–08:00，确定性发生，不是 flake）。修法是全模块只留一处挂钟读数
+`_utc_now()`、`as_of` 默认改走 `today_utc()`。**生产没中**（唯一的 Dockerfile 是 `python:3.11-slim`、
+全仓 `scripts/` `docs/deploy/` 无一处设 `TZ` → 容器跑 UTC，已独立查实），离上线只差一个
+`TZ=Asia/Shanghai`。🔴 **#103 票面 §3 那句「阈值远大于 1 天所以今天不会误判」是错的**：差一天不需要
+够到 45 天，只需把某个主体**挪过**阈值（44→45 假红 / 45→44 静默漏报），新判据钉的正是这两格。
+**#103 已关。** 回执 `.issues/stale-date-boundary-0814/receipt-103.md`。
+
+**② #96 合进 main（只有离线半边）**（`3b643dc`，`--no-ff`，源 `claude/dazzling-noether-c151cb` @ `f49dbfc`）——
+三个用户内容出境点各有一个 OpenAI 对家，schema/迁移零改动（`text-embedding-3-small` 传
+`dimensions=1024`，落在既有 `vector(1024)` 列上）。合规第二把锁 `PROVIDER_REGION`：热备只在同
+region 内发生。🔴🔴 **真 key 冒烟一次都没跑过，合并 ≠ 冒烟过了**——模型名是否存在、OpenAI 是否
+接受这个请求形状、工具调用往返、抽取 JSON 质量、真实 429 形状、EU residency 端点，全部仍是离线替身。
+**`#96` 保持 OPEN**，关不关取决于真 key 那一步（凭据墙）。
+⚠ 本票动了**境内两家共用**的 `OpenAICompatBrain.respond()`（空 `tools` 不再发、输出预算耗尽从
+返回空串改成抛错），所以**第一次真 key 冒烟要把 `AVERY_BRAIN=minimax` 也跑一遍**，别只跑 openai。
+回执 `.issues/eu-openai-0814/receipt-96-merge.md`（原线自己的在 `receipt-96.md`）。
+
+**合并树整批复验**（`3b643dc`）：离线全仓 **4265 passed · 0 failed · 155 deselected · 4 xfailed**
+（= 合并前 4218 + 7 + 40，完全加法零回归）· `-m needs_db` 全仓 **146 passed · 0 failed** ·
+`./init.sh` **exit 0**。六个变异里自己重撞了三个（feat-105 那条 + #96 合规风险最高的两条），
+红的判据与两边回执逐条一致；还原后 `git diff HEAD` 为空、离线数字逐字相同。
+⚠ **needs_db 的 146 不是这两条线加的**：它们加的 47 条测试里 `needs_db` 标记为 0，
+第 146 条是 #104 的 `test_steady_state_bootstrap_takes_no_entities_lock`，合并前就在 main 里。
+⚠ **两边回执里的绝对数字都没复现**（#96 写的 4257/151/142 都对不上），但**增量精确复现**——
+回执里可转抄的是增量和签名词（`deselected` / `skipped`），不是绝对数。
+
+（上一轮：**#104 合进本地 main**（`673c986`）——0002 结尾那行裸 `DROP CONSTRAINT IF EXISTS`
+每次 bootstrap 都对 `avery.entities` 取一把 ACCESS EXCLUSIVE，改成 0009/0010 那种守卫式；
+不改 schema。回执 `.issues/rls-deny-all-0813/receipt-104.md`。）
+
+🔴 **#98（avery schema 全表开 RLS，deny-all）验完了但没合，等 Danny 点头**——迁移进 main ＝
+下次部署 `_ensure_schema` 自动重放到生产，**合并即上产**。分支 `claude/inspiring-chaum-48a5ee`
+（`d5c1812`），回执 `.issues/rls-deny-all-0813/receipt-98.md`。票面两处已被实查推翻：表是 **13 张
+不是 12**（漏了 `ingest_jobs`），且票面写的裸 `ALTER ... ENABLE ROW LEVEL SECURITY` **不能用**
+（同样每次开机抢锁）——两点都已在 0019 里改掉。
+
+⚠ **本文件此前停在 #91；中间 #99、#101 也已落 main 而没在这儿记**（`git log 4b355c6..main` 是准的）。
+它们不是本轮的活，这里只按 git 记存在性，不代那两条线下判断——谁手上状态最新谁来补。
+
+⚠ 一次性 PG 容器新坑（0814 实收）：容器可能在 **init 阶段就退**（`pg_ctl: server did not start in
+time`，exit 1），而此时 `pg_isready` / `CREATE DATABASE` 打的是 entrypoint 的**临时 init server**，
+看着全成功、几秒后整个容器没了，pytest 就挂在连一个不存在的库上（表象是「测试跑了 10 分钟不出结果」，
+极像死循环）。八成是那个 ~115s 时钟跳变把 `pg_ctl` 的等待超时撑爆。
+**起库要等日志出现 `PostgreSQL init process complete` 才算就绪，建完库再确认一次容器还活着。**
+
+以下 0813 段落保留（仍是 main 里那批票的准确描述）：
+
+**2026-08-13 凌晨**（0812 战役五票 **#92、#94、#90、#93、#91 全部落地进本地 main（未 push）**：
 **#91 = 上传前端接线**（战役收口票）——transport 超时熔断（deposit 60s AbortController，
 只熔断不重试、超时文案说「可能已经传上了」）+ `uploadFiles/appendFiles` 关门轮询 `GET /files`
 任务摘要、全部文件终态才翻牌（**ingestStatus/appendStatus 对外契约一个字没改**，约 30 道门 +

@@ -480,7 +480,7 @@ def health() -> dict:
             # #89 · 镜像构建时烙进来的 git commit（server 侧 docker build --build-arg AVERY_COMMIT）。
             # 07-21 挂到今天的债：「生产跑的就是这个镜像」此前只能靠换容器日志自证、外部核不了。
             "commit": (os.environ.get("AVERY_COMMIT") or "").strip() or "unknown",
-            "embeddings": embedding_factory.active_embeddings(),  # "keyword" or "dashscope:<model>/<dim>"
+            "embeddings": embedding_factory.active_embeddings(),  # "keyword" | "<provider>:<model>/<dim>"
             "extractor": extractor,                               # configured intent
             "extraction_mode": extraction_mode,                  # effective now: llm / heuristic / degraded
             "extraction_chain": chain,                            # #89: ordered failover chain ([] offline)

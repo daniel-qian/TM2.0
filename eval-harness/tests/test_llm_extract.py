@@ -276,6 +276,8 @@ def test_factory_keyless_auto_degrades_to_heuristic(monkeypatch):
     monkeypatch.delenv("AVERY_EXTRACTOR_BRAIN", raising=False)
     monkeypatch.delenv("MINIMAX_API_KEY", raising=False)
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)         # #96: 第三家也要清，否则这条假绿
+    monkeypatch.delenv("AVERY_OPENAI_KEY_ENV", raising=False)
     from service import extractor_factory
     assert isinstance(extractor_factory.make_extractor(), HeuristicExtractor)
     assert extractor_factory.active_extractor() == "heuristic"

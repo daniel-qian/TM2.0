@@ -155,6 +155,39 @@ def test_unknown_id_resolves_to_nothing(impl):
     assert reg.resolve_memory_dir(ghost) is None
 
 
+def test_source_document_keys_answers_without_pulling_the_archive(impl, tmp_path):
+    """issue #99 —— 补传在抽取**之前**唯一需要的那次读，两条腿必须给同一个答案。
+
+    这个方法存在的理由是时序（见 `file_append` 命门④）：整档 `get()` 一旦被握过那两三分钟，
+    写回就会抹掉期间落地的手编。但它一旦**读漏一个 key**，换来的是另一种安静的坏：同名文档被
+    当成新文档接纳，而 `<source_key>:<行号>` 是出处契约 —— 每文件块数、时间轴那一天、冲突卡
+    引的那份资料三处一起指错，没有任何一道门会红（`existing_source_keys` 的 docstring）。
+    所以这条合约钉三件事：**不存在→None**、**存在但没文档→空集合**、**有文档→就是那几个 key**。
+
+    🔴 期望值**不由被测函数算出来**（尺子长在被量的东西上 = 函数一缩水期望值跟着缩水）：
+    `literal` 是测试侧手写的常量，`existing_source_keys(get(...))` 是另一条独立的路（整档投影，
+    补传路修改之前用的就是它）。三份必须同时相等。
+    """
+    from avery.ingest.file_append import existing_source_keys
+
+    reg = impl.fresh()
+    assert reg.source_document_keys("ctx_never_registered") is None, (
+        "不存在的 context 必须与 get() 同义地回 None —— 回空集合等于把「档案没了」翻译成"
+        "「档案是空的」，补传会照着往一个不存在的 id 上写")
+
+    # 存在、但一份文档都没有（feat-032 之前的形状 / 直接建的 context）→ 空集合，不是 None
+    bare_reg, bare_cid, _ = _ingest(impl, tmp_path / "bare")
+    assert bare_reg.source_document_keys(bare_cid) == set(), (
+        "「存在但没有文档」被答成了 None —— 与「档案不存在」混成了同一个答案")
+
+    with_docs, cid, _ = _ingest(impl, tmp_path / "mem", source_documents=_sample_source_docs())
+    literal = {HANDBOOK.name, ROSTER.name}          # 测试侧手写的那一份
+    narrow = with_docs.source_document_keys(cid)
+    wide = existing_source_keys(with_docs.get(cid))
+    assert narrow == literal, f"窄读漏了/多了 key：{narrow} != {literal}"
+    assert wide == literal, f"整档投影漏了/多了 key：{wide} != {literal}"
+
+
 def test_recall_over_a_stored_context_stays_line_addressable(impl, tmp_path):
     reg, cid, _ = _ingest(impl, tmp_path / "mem")
     got = reg.get(cid)
@@ -1561,3 +1594,63 @@ def test_pg_manual_crud_roundtrip_erases_no_column_anywhere(pg, tmp_path):
     assert before == after, (
         f"get→改→put 往返改写了快照列。整列被抹掉的: { {t: v for t, v in erased.items() if v} }; "
         f"全部差异表: {sorted(t for t in before if before[t] != after.get(t))}")
+
+
+@needs_db
+def test_steady_state_bootstrap_takes_no_entities_lock(pg, monkeypatch):
+    """README rule 2 and the `_ensure_schema` docstring both promise the STEADY-STATE bootstrap takes
+    no ACCESS EXCLUSIVE lock on avery.entities. This is the test that makes the promise true instead
+    of merely written down.
+
+    It was false in production shape until 0002 was guarded (2026-08-13): `ALTER TABLE ... DROP
+    CONSTRAINT IF EXISTS` does not consult the catalog before locking, so 0002 grabbed ACCESS
+    EXCLUSIVE on every single boot even though the constraint it names was retired long ago and the
+    statement dropped nothing. Replaying each migration individually against a held ACCESS SHARE
+    lock, 0002 was the ONLY file that failed. That is the 2026-07-23 outage shape: an orphaned
+    idle-in-transaction /demo/claim holds entities, the bootstrap queues behind it, /demo/* 500s.
+
+    Shape of the test: hold a real ACCESS SHARE lock (what any concurrent reader has) in a second
+    connection, then run a full replay. ACCESS EXCLUSIVE conflicts with ACCESS SHARE, so any
+    migration that reaches for it dies on lock_timeout rather than blocking the suite — retries are
+    pinned to 1 so a regression fails in ~3s instead of backing off four times.
+
+    🔴 The `lock_held()` assertions on BOTH sides are the point, not ceremony. If the blocker's
+    transaction ended early — driver autocommit, an idle-timeout, a stray commit — the replay would
+    sail through against an unlocked table and this test would report success for a bootstrap that
+    was never actually contended. That is the exact false green this test exists to rule out, so it
+    proves the lock was live before the replay AND still live after it."""
+    import psycopg
+
+    pg.fresh()._ensure_schema()          # reach steady state; boot #1 legitimately does lock
+
+    monkeypatch.setenv("AVERY_BOOTSTRAP_LOCK_TIMEOUT_MS", "3000")
+    monkeypatch.setenv("AVERY_BOOTSTRAP_RETRIES", "1")
+
+    def lock_held() -> bool:
+        with psycopg.connect(_db_url()) as probe:
+            return probe.execute("""
+                SELECT count(*) FROM pg_locks l
+                  JOIN pg_class c ON c.oid = l.relation
+                  JOIN pg_namespace n ON n.oid = c.relnamespace
+                 WHERE n.nspname = 'avery' AND c.relname = 'entities'
+                   AND l.mode = 'AccessShareLock' AND l.granted
+            """).fetchone()[0] > 0
+
+    blocker = psycopg.connect(_db_url())          # NOT autocommit: the tx stays open below
+    try:
+        blocker.execute("SELECT count(*) FROM avery.entities")   # takes ACCESS SHARE, holds it
+        assert lock_held(), (
+            "the blocking connection never actually took an ACCESS SHARE lock on avery.entities — "
+            "without it the replay below is uncontended and proves nothing")
+
+        registry = pg.fresh()
+        assert registry._schema_ready is False, (
+            "a registry that already believes the schema is ready short-circuits _ensure_schema "
+            "and would replay nothing at all")
+        registry._ensure_schema()      # raises RuntimeError if any migration wants ACCESS EXCLUSIVE
+
+        assert lock_held(), (
+            "the ACCESS SHARE lock was gone by the end of the replay, so the run was not contended "
+            "for its whole duration — treat the pass as unproven, not as evidence")
+    finally:
+        blocker.close()

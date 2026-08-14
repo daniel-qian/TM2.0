@@ -730,7 +730,10 @@ class CompanyContext:
         叠加层（`decision_grading.apply_review`），只许上调、不许下调；本方法产出的是
         纯规则版，reason_source == "rule"。
 
-        `as_of` 不传则取今天——时间类规则（到期日）以它为准，显式传入即可复现。
+        `as_of` 不传则取**今天（UTC）**——时间类规则（到期日、资料新旧）以它为准，显式传入即可复现。
+        🔴 是 UTC 不是服务端本地：比较的另一头（资料上传日）归一到 UTC，两头必须同一个时区，
+        否则本地日跑在 UTC 前面的那几个小时里，今天传的资料会被算老一天。见
+        `decision_grading.today_utc()`——生产走的正是这条不传 `as_of` 的默认路径。
 
         `forms` / `now`（gap2 T9 · #58）是本期表单收集进度与"此刻"，由服务层从 registry 读出来
         再喂进来（`CompanyContext` 自己不持有 registry 句柄，也不该为了这一条去持有）。
@@ -790,8 +793,12 @@ class CompanyContext:
             projects would invent projects (worst case: zero projects, two signals, 「2 个项目」).
           · "none"     — nothing flagged; the calm sentence is the honest one.
 
-        `as_of` threads through to the date-sensitive rules (due dates) — pass it to reproduce a
-        briefing exactly; omitted means today, same convention as `decision_cards()`.
+        `as_of` threads through to the date-sensitive rules (due dates, material age) — pass it to
+        reproduce a briefing exactly; omitted means today **in UTC**, same convention as
+        `decision_cards()`. UTC and not server-local on purpose: the other side of that comparison
+        (a document's upload day) is normalized to UTC, and mixing the two made everything uploaded
+        "today" read a day older for the hours when the local date runs ahead of UTC. See
+        `decision_grading.today_utc()`.
         """
         from ..decision_grading import grade_projects
         from ..decision_rules import CAN_PROCEED
@@ -1331,6 +1338,29 @@ class ContextRegistry(ProjectWriteMixin):
         ctx = self.get(context_id)
         return ctx.memory_dir if ctx else None
 
+    def source_document_keys(self, context_id: str) -> set[str] | None:
+        """issue #99 —— 这家公司资料库里**已经占用的 source_key**，而**不把整份档案拿在手里**。
+
+        补传原本是「`get()` 整档 → 抽取两三分钟 → `put()` 整档覆盖」，可抽取那一段其实只需要
+        这一个集合（判「这份 key 库里是不是已经有了」）。握着整份快照跨过那两三分钟，等于把
+        期间落地的任何手编改动排进了写回的销毁名单里（`avery.contexts` 没有版本列，`put()` 是
+        快照替换）。这个方法就是那一段唯一需要的读：**够用，且拿不住**。
+
+        🔴 `None` = 这个 context 不存在（与 `get()` 的 None 同义，调用方据此抛 KeyError → 同体
+        404）；**空集合 = 存在但一份文档都没有**。两者绝不许混：混了就是把「档案没了」翻译成
+        「档案是空的」，补传会照着往一个不存在的 id 上写。
+
+        ⚠ 两个适配器各写一遍这个投影（这里是集合推导，pg 腿是一句 SQL）——duck-typed 双胞胎
+        的固有代价，与本模块其余 ~26 个成员一样。它们与 `file_append.existing_source_keys`
+        （整档投影那条老路）必须给出同一个答案，靠判据钉住，不靠共享代码：
+        `test_source_document_keys_answers_without_pulling_the_archive`（合约套，两条腿都跑）。
+        """
+        ctx = self._by_id.get(context_id)
+        if ctx is None:
+            return None
+        return {(sd.source_key or sd.filename) for sd in ctx.source_documents
+                if (sd.source_key or sd.filename)}
+
     def source_document_bytes(self, context_id: str, idx: int) -> bytes | None:
         """feat-032 download seam: the raw bytes of the idx-th uploaded file, or None (unknown
         context / out-of-range idx / no content). In-memory holds the bytes; the pg twin reads
@@ -1678,6 +1708,9 @@ class ContextRegistryProtocol(Protocol):
     def source_document_bytes(self, context_id: str, idx: int) -> bytes | None: ...
     # issue #93 · 全档案重跑闸的字节入口（按 key，不按 idx —— 理由见内存腿那份实现）。
     def source_document_bytes_by_key(self, context_id: str, source_key: str) -> bytes | None: ...
+    # issue #99 · 补传在抽取**之前**唯一需要的那次读：已占用的 key 集合，不留住档案。
+    # None = context 不存在；空集合 = 存在但没有文档（两者不许混）。
+    def source_document_keys(self, context_id: str) -> set[str] | None: ...
     def clone_context(self, src_context_id: str, *, new_context_id: str,
                       new_owner_token: str, ephemeral: bool = True) -> bool: ...
     # #86 · 清空这一份档案（id / owner_token 不变）。⚠ 与 pg 独有的 `delete()` 是**反面**：

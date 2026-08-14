@@ -19,6 +19,21 @@ import { useOnboard, resetOnboardCompanyScope } from '../onboardStore'
 
 // feat-053 · 账号入口（顶栏，LiteBell 旁）。
 //
+// ── #101（0813）· 注册门已冻结：本面板只剩**登录**一条路 ────────────────────────────────
+// 现在没有陌生用户，账号由 Danny 用 `supabase.auth.admin.createUser` 手工建好、连同密码
+// 一起发给合伙人引荐的公司（`test-accounts/<公司代号>.md` 记账）。注册入口开着是纯风险。
+//
+// 🔴 **这里撤掉入口只是第二层，它不是安全边界。** 唯一的真闸是 Supabase 后台的
+// `disable_signup`——不关的话，任何人拿浏览器 bundle 里的 anon key 直接 POST
+// `/auth/v1/signup` 就绕过了这整个组件。前端这一层挡的是「客户误点」，不是「有人想绕」。
+// 真闸的活体判据：`node .issues/account-tenancy-0813/probe-signup-frozen.mjs`（读
+// `/auth/v1/settings` 的 `disable_signup`，只读，不建号）。
+//
+// 顺带收掉的那句假话（#94 实测）：已注册且已确认的邮箱再点注册，Supabase 回 **200 + 一个
+// 假 user id**（防枚举伪装成功），前端照旧显示「注册成功。去邮箱点一下确认链接」——用户
+// 永远等不到那封信。`pendingVerification` 这条状态与 `authVerifyNote` 这句文案一并退役：
+// 留着它就是留着一条**只可能在说谎时才亮**的提示。
+//
 // 🔴 本组件的第一性质：**它永远不挡路**。
 // · 未配置 Supabase → 整块不渲染，应用照常当游客用。
 // · 配置了但没登录 → 只是顶栏多一个「登录」按钮，七屏、上传、议事室一个都不拦。
@@ -194,10 +209,8 @@ export function AuthPanel() {
   const userId = useAuth((s) => s.userId)
   const busy = useAuth((s) => s.busy)
   const error = useAuth((s) => s.error)
-  const pendingVerification = useAuth((s) => s.pendingVerification)
   const init = useAuth((s) => s.init)
   const signIn = useAuth((s) => s.signIn)
-  const signUp = useAuth((s) => s.signUp)
   const signOut = useAuth((s) => s.signOut)
   const clearError = useAuth((s) => s.clearError)
 
@@ -207,7 +220,8 @@ export function AuthPanel() {
   const transport = useLite((s) => s.transport)
 
   const [open, setOpen] = useState(false)
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin')
+  // #101：原来这里还有 `mode: 'signin' | 'signup'`。注册冻结后它只剩一个取值，留着等于
+  // 给下一个人留一条「把切换按钮加回来就能用」的现成开关——连状态一起拿掉。
   const [emailInput, setEmailInput] = useState('')
   const [password, setPassword] = useState('')
   const [claim, setClaim] = useState<ClaimState>('idle')
@@ -347,11 +361,12 @@ export function AuthPanel() {
     }
   }
 
+  // #101：只有登录一条路。`authStore` 里的 `signUp` 已整个删掉——不是「留着但不调用」，
+  // 那样只会变成一条 UI 够不到、门也判不动的死枝（见 authStore.ts 同段注释）。
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
     if (working) return
-    if (mode === 'signup') void signUp(emailInput, password)
-    else void signIn(emailInput, password)
+    void signIn(emailInput, password)
   }
 
   const toggle = () => {
@@ -449,36 +464,29 @@ export function AuthPanel() {
               </label>
               <label className="lite-auth-field">
                 <span className="lite-auth-label">{c.authPasswordLabel}</span>
+                {/* #101：`minLength={6}` 与旁边那句「至少 6 位」都是**注册**期的东西——它约束
+                    的是「你要设一个什么样的新密码」。登录框里它只会干一件事：把密码短于 6 位
+                    的人挡在提交之前，报一句浏览器原生的英文校验气泡（我们自己的 humanize
+                    报错根本轮不上）。密码现在由 admin.createUser 那侧生成，前端无权也无需
+                    对它的形状发表意见。 */}
                 <input
                   type="password"
-                  autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+                  autoComplete="current-password"
                   required
-                  minLength={6}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                 />
-                {mode === 'signup' ? (
-                  <span className="lite-auth-hint">{c.authPasswordHint}</span>
-                ) : null}
               </label>
 
               <button type="submit" className="lite-btn lite-btn--primary lite-auth-submit" disabled={working}>
-                {working ? c.authWorking : mode === 'signup' ? c.authDoSignUp : c.authDoSignIn}
+                {working ? c.authWorking : c.authDoSignIn}
               </button>
 
-              <button
-                type="button"
-                className="lite-btn lite-btn--ghost lite-auth-switch"
-                onClick={() => {
-                  setMode((m) => (m === 'signin' ? 'signup' : 'signin'))
-                  clearError()
-                }}
-              >
-                {mode === 'signin' ? c.authSwitchToSignUp : c.authSwitchToSignIn}
-              </button>
+              {/* #101：`.lite-auth-switch`（「还没有账号？注册」）就撤在这儿。
+                  ⚠ 想加回来的人先读本文件顶部那段：撤掉它**不等于**注册关了，Supabase
+                  后台的 `disable_signup` 才是。两层要一起动，只动一层是化妆。 */}
 
               {error ? <p className="lite-auth-error">{error}</p> : null}
-              {pendingVerification ? <p className="lite-auth-note">{c.authVerifyNote}</p> : null}
               <p className="lite-auth-note">{c.authGuestNote}</p>
             </form>
           )}
