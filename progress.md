@@ -3,7 +3,7 @@
 > 📢 本文件是**当前状态快照，整体重写不追加**。历史都在 git（`git log` + 各 `.issues/*/receipt*.md`），别在这儿堆编年史。
 > 启动路径见 `AGENTS.md` Startup Workflow：读本文件 + `feature_list.json`，跑 `./init.sh` 确认绿，再开工。
 
-**Last Updated:** 2026-08-14（本轮是**合并 + 复验，零新开发**：两条早就做完、一直没合的线进本地 main）
+**Last Updated:** 2026-08-14（本轮是**合并 + 复验，零新开发**：三条早就做完、一直没合的线进本地 main）
 
 **① feat-105 / #103 合进 main**（`032c7e8`，`--no-ff`，源 `claude/stale-date-boundary` @ `4971f85`）——
 `decision_grading` 里比较的两头来自两个钟：`_uploaded_day` 归一到 **UTC 日**，`as_of` 默认
@@ -24,6 +24,35 @@ region 内发生。🔴🔴 **真 key 冒烟一次都没跑过，合并 ≠ 冒�
 ⚠ 本票动了**境内两家共用**的 `OpenAICompatBrain.respond()`（空 `tools` 不再发、输出预算耗尽从
 返回空串改成抛错），所以**第一次真 key 冒烟要把 `AVERY_BRAIN=minimax` 也跑一遍**，别只跑 openai。
 回执 `.issues/eu-openai-0814/receipt-96-merge.md`（原线自己的在 `receipt-96.md`）。
+
+**③ #97 合进 main**（`632a57d`，`--no-ff`，源 `claude/suspicious-satoshi-8ac6e5` @ `df50cc0`）——
+redline 输出闸此前**只有英文**认得「把诊断性标签钉在人身上」：`"he's lazy and probably toxic"`
+第一天就拦，`"我觉得他就是懒惰，这人有毒。"` 一路放行。新增 `_ZH_DIAGNOSIS` 挂进 `_ZH_ALWAYS`，
+复用既有 `PERSON-DIAGNOSIS` rule id（`RULE_IDS` 没动），四族对齐英文词表；繁体折叠表扩 9 字，
+不扩就是在补丁内部再造一次「简体拦、繁体漏」。**真难点是宽度不是召回**——CJK 没词边界，
+「懒」是「懒加载」的第一个字（就写在本仓部署纪要里），所以词表无一个裸形容词、每条自带守卫，
+守卫挡的都是实际碰撞（懒惰求值 / 浑水摸鱼 / 划水动作是泳姿 / 有毒气体检测 / 精神病院是雇主）。
+「对事不对人」做成机械判据：`团队精神有问题`=放行、`他精神有问题`=硬拦。
+明确排除四类并写进 `redline_rules.md` 已发布口径（临床病名——拦它会同时拦掉**转述自述**；
+`不胜任`/`能力不足`——ADR-0016 地界 +《劳动合同法》第40条原话；情绪形容词——评分形态本就被
+`_ZH_SCORE` 拦着；`状态不佳`类——`不佳`说某一天、`不正常`是下诊断）。
+🔴 **国内线才是受益方**：瑞典/英文部署本来就被英文词表盖着，这条补的是中文那半边。
+`feature_list.json` 冲突已解（feat-104 与 feat-105 并存，93 条无重复 id）。
+交接 `.issues/redline-zh-diagnosis-0814/session-handoff.md`。
+
+**合并树复验**（`632a57d`，本轮 integrator 自己量的，非转抄）：合并前在 main 上重量基线
+**4265**，合并后 **4427 passed · 0 failed · 155 deselected · 4 xfailed**，净增 **162**
+= `test_redline_zh.py` 从 138 条长到 300 条，**完全加法零回归**。
+`deselected` 仍是 155（**没有**多出一条）——本线出发时那条必红的 `decision_grading` 因为
+feat-105 已进 main，现在真跑且通过，不再需要它当初那个额外 `--deselect`。
+合并后 `git diff main claude/suspicious-satoshi-8ac6e5` 为空 = 合进去的树与跑出 4427 的树
+逐字节相同，故未重复跑第二遍。
+
+📌 **纠一条上轮收账里的话**：上面写的「#96 回执的 4257/151/142 都对不上」——**对得上，
+只是量的树不同**。本轮在 `claude/dazzling-noether-c151cb` 分支上独立复跑，
+`4257 passed / 151 deselected / 4 xfailed` **逐字复现**；4265/146 是**合并树**（main+#96）的数。
+两个数都对，差的是基线。「回执里可转抄的是增量和签名词不是绝对数」这条教训仍然成立，
+但别据此判定那份回执不可信——**核绝对数之前先对齐是哪棵树**。
 
 **合并树整批复验**（`3b643dc`）：离线全仓 **4265 passed · 0 failed · 155 deselected · 4 xfailed**
 （= 合并前 4218 + 7 + 40，完全加法零回归）· `-m needs_db` 全仓 **146 passed · 0 failed** ·
