@@ -6,6 +6,7 @@
 #   scripts/deploy/dual-smoke.sh              # frontend targets + backend offline (mock)
 #   AVERY_BRAIN=minimax scripts/deploy/dual-smoke.sh   # + a REAL brain contract smoke (境内)
 #   AVERY_BRAIN=claude  scripts/deploy/dual-smoke.sh   # + a REAL brain contract smoke (海外)
+#   AVERY_BRAIN=openai  scripts/deploy/dual-smoke.sh   # + a REAL brain contract smoke (🇪🇺 #96)
 #
 # What it asserts:
 #   FRONTEND  — all three static targets build + carry the right stamp (mode/locale/api base):
@@ -62,7 +63,7 @@ if [ "$BRAIN" != "mock" ]; then
     echo "real-brain smoke: FAILED"; FAIL=1
   fi
 else
-  step "BACKEND — REAL-brain smoke SKIPPED (AVERY_BRAIN=mock; set minimax|deepseek|claude to run)"
+  step "BACKEND — REAL-brain smoke SKIPPED (AVERY_BRAIN=mock; set minimax|deepseek|claude|openai to run)"
 fi
 popd >/dev/null
 

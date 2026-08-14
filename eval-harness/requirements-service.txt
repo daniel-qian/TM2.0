@@ -12,7 +12,9 @@
 # present => no 500) with THIS file installed. Keep in lockstep with requirements.txt when deps move.
 
 anthropic>=0.40          # RealBrain (claude-opus-4-8) — 海外 host; lazy-imported in avery/brain.py
-openai>=1.40             # 境内 minimax/deepseek via the OpenAI-compatible client; lazy in avery/brain.py
+openai>=1.40,<3          # minimax/deepseek + OpenAI (#96 欧盟/海外); lazy-imported in avery/brain.py
+#                          上界见 requirements.txt 同行的碑（v3 换了默认 HTTP 客户端，等真 key
+#                          冒烟过再提）。两个文件的 openai 行必须同步。
 
 # feat-015 — the agent service (FastAPI + SSE).
 fastapi>=0.110           # HTTP app

@@ -195,9 +195,8 @@ def _uploaded_day(uploaded_at: str) -> date | None:
     """`uploaded_at` → 一个 UTC **日期**（天粒度）。
 
     🔴 本模块的时间归一只走这一处（它自己只走 `_uploaded_moment`），谁要算资料年龄都得走它。
-    理由是这是本文件第一条跨 date/datetime 边界的规则：`as_of` 是服务端本地的 naive `date`
-    （生产恒为 `date.today()`），而 `uploaded_at` 是带时区的瞬间。两处各归一一次，早晚会归出
-    两个不同的日子。
+    理由是这是本文件第一条跨 date/datetime 边界的规则：比较的另一头是 `as_of`，一个 naive
+    `date`。两处各归一一次，早晚会归出两个不同的日子——**这条预言应验过一次，见 `today_utc()`。**
 
     ⚠ 天粒度是**定级这条路**的口径，理由是同一批上传彼此只差微秒，用原始时间戳等于让文件遍历
     顺序当判据。表单回流那条路刻意用 `_uploaded_moment` 的原始瞬间：两份提交的 `uploaded_at`
@@ -205,6 +204,55 @@ def _uploaded_day(uploaded_at: str) -> date | None:
     """
     moment = _uploaded_moment(uploaded_at)
     return moment.date() if moment is not None else None
+
+
+def _utc_now() -> datetime:
+    """本模块**唯一**的挂钟读数。别处一律不许直接 `datetime.now()` / `date.today()`。
+
+    只有一个函数读钟，才有一个地方可以在测试里把钟钉住（`_m_form_missing` 那条「快到期了」
+    也走它）。这不是为了好看：本文件开头承诺的是「零随机、同一份 payload 进去逐字节一致」，
+    而一个散落各处的挂钟读数正是把那句承诺变成空话的东西。
+    """
+    return datetime.now(timezone.utc)
+
+
+def today_utc() -> date:
+    """本模块的「今天」——**UTC** 日，和 `_uploaded_day` 同一条归一线。
+
+    🔴 这里原本是 `date.today()`，即服务端**本地**的 naive 日期，而比较的另一头 `_uploaded_day`
+    归一到 **UTC**。两个时区的日期直接相减，`_uploaded_day` 的 docstring 早就写下了这个预言
+    （「两处各归一一次，早晚会归出两个不同的日子」），然后没人把它关上。
+
+    实测（2026-08-14 00:29，UTC+8 的开发机）：
+
+        一份**此刻**上传的资料 : 2026-08-13T16:29:40+00:00
+        _uploaded_day(...)     : 2026-08-13     <- UTC 日
+        date.today()           : 2026-08-14     <- 本地 naive 日
+        (as_of - day).days     : 1              <- 凭空老了一天
+
+    代价落在 `R-STALE-EVIDENCE` 上：**本地日期跑在 UTC 前面的那几个小时里，所有「今天」传的
+    资料都被算老一天**。UTC+8 的机器上就是每天 00:00–08:00，8/24，确定性发生，不是 flake。
+    极端情形是 `test_a_freshly_claimed_sample_team_is_not_told_its_material_is_stale` 钉的那个：
+    三秒前才领到示例团队、一个文件都没传过的访客，一进门就被告知手上的资料已经旧了。
+
+    ⚠ **生产当时没中**，这点要说准：`eval-harness/Dockerfile` 是 `python:3.11-slim`、没设 `TZ`，
+    容器跑在 UTC，于是本地日 == UTC 日、两边碰巧一致。所以这条一直是**潜伏**的——离 UTC 一步之遥：
+    任何一个 `TZ=Asia/Shanghai`（境内部署最顺手的那个动作）就让它上线。开发机上它已经是真红的。
+
+    选 UTC 而不是本地，理由有三，都不是审美：
+      1. `_uploaded_day` 已经是 UTC，改它要动 `_uploaded_moment` 的语义，而表单回流那条路
+         （`ingest/form_reflow.py`）刻意吃它的**原始瞬间**——那是员工两次真按下提交的时刻；
+      2. 全仓其余每一处读钟都已经是 UTC（`ingest/ask.py`、`ingest/form.py`、`ingest/registry.py`，
+         以及本文件 `grade_form_period` 自己那行 `now or _utc_now()`）。`date.today()` 是这里唯一
+         的异类，不是别处的规矩；
+      3. 本地时间让结果**依赖服务器装在哪儿**——同一份 context 在杭州和斯德哥尔摩定出两个等级。
+         那和本文件第一句「纯函数、零随机、逐字节一致」直接冲突。
+
+    到期日（`_m_overdue` / `_m_due_soon`）也跟着走 UTC。这是有代价的、且是**保守**的那一边：
+    本地日跑在 UTC 前面的那几个小时里，一件当天到期的事会显示成「还剩 1 天」而不是「今天到期」，
+    早八点后自动归位。宁可晚一点说「逾期」，也不要早一点说——后者是对着客户的文件说瞎话。
+    """
+    return _utc_now().date()
 
 
 @dataclass(frozen=True)
@@ -942,7 +990,9 @@ def grade_project(project: dict, signals: list[dict] | None = None, *,
 
     `project` 是 `CompanyContext.project_cards()` 的一项（定级这一路还额外带上 `sourceRef`，
     见 `_to_subject`），`signals` 是 `signal_cards()` 全量（本函数自己挑出与该项目相关的）。
-    `as_of` 不传则取 `date.today()` —— 传进来才是可复现的用法，测试和批量调用一律显式传。
+    `as_of` 不传则取 `today_utc()`（**UTC** 日，与资料时间轴同一条归一线——见 `today_utc()`，
+    这里曾经是 `date.today()` 并因此每天有 8 小时把资料算老一天）—— 传进来才是可复现的用法，
+    测试和批量调用一律显式传。
 
     `timeline`（B1）是这份 context 的资料时间轴，由 `build_doc_timeline(ctx.source_documents)`
     建。**不传 = 没有时间轴**，时间轴类规则一条都不命中——它仍然是纯函数，只是判据面少一块。
@@ -950,7 +1000,7 @@ def grade_project(project: dict, signals: list[dict] | None = None, *,
     `conflicts`（B2b）是 `ExtractionResult.conflicts` 全量（本函数自己挑出归这张卡的，见
     `_conflicts_for`）。**不传 = 没有冲突记录**，两条冲突规则一条都不命中，老调用方原样不受影响。
     """
-    today = as_of or date.today()
+    today = as_of or today_utc()
     subject = _to_subject(project, signals or [], today, timeline, conflicts)
 
     hits: list[RuleHit] = []
@@ -1017,7 +1067,7 @@ def grade_form_period(status, *, now: datetime | None = None) -> Decision | None
 
     `now` 不传则取此刻——传进来才是可复现的用法，测试与批量调用一律显式传（同 `as_of` 的约定）。
     """
-    moment = now or datetime.now(timezone.utc)
+    moment = now or _utc_now()
     subject = _Subject(
         subject_id=f"forms:{status.template_id}:{status.period}",
         title=status.template_title or status.template_id,
@@ -1059,7 +1109,7 @@ def grade_projects(projects: list[dict], signals: list[dict] | None = None, *,
     「N 个值得多看一眼」又会对不上（`registry.briefing()` 那段长注释记着的旧伤）。
     不传 = 没有表单数据，这条规则不参评，老调用方一字不受影响。
     """
-    today = as_of or date.today()
+    today = as_of or today_utc()
     out = [grade_project(p, signals, as_of=today, timeline=timeline, conflicts=conflicts)
            for p in (projects or [])]
     for status in (forms or []):

@@ -85,21 +85,72 @@ Two independent artifacts, four targets, one env matrix:
 
 ### Backend (host env / secret store — keys are REAL secrets, never committed)
 
-| Var | Overseas EN | 境内 ZH | Read by |
-|---|---|---|---|
-| `AVERY_BRAIN` | `claude` | `minimax` (or `deepseek`) | `service/brain_factory.py` |
-| `ANTHROPIC_API_KEY` | 🧑 **HITL** set | — | brain (claude) |
-| `MINIMAX_API_KEY` | — | 🧑 **HITL** set | brain (minimax) |
-| `DEEPSEEK_API_KEY` | — | 🧑 **HITL** set (if deepseek) | brain (deepseek) |
-| `AVERY_EMBEDDINGS` | `dashscope`\|`bailian`\|`qwen`\|`text-embedding-v4` → real embeddings; anything else (incl. unset) → `keyword` | same | `avery/embeddings.py:119` (`resolve_embeddings_kind`) |
-| `PGVECTOR_URL` | 🧑 **HITL** (when vector) | 🧑 **HITL** (when vector) | vector store |
-| `AVERY_INGEST_CONCURRENCY` | `4` (default) | `4` (default) | `avery/ingest/extract.py` (feat-027 parallel ingest) |
-| `PORT` | `8137` | `8137` | uvicorn |
-| `AVERY_CORS_ORIGINS` | frontend origin(s) — **SET this** | frontend origin(s) — **SET this** | `service/app.py` CORS (always on) |
+| Var | Overseas EN | 境内 ZH | 🇪🇺 EU (OpenAI) 🆕 | Read by |
+|---|---|---|---|---|
+| `AVERY_BRAIN` | `claude` | `minimax` (or `deepseek`) | `openai` | `service/brain_factory.py` |
+| `ANTHROPIC_API_KEY` | 🧑 **HITL** set | — | — | brain (claude) |
+| `MINIMAX_API_KEY` | — | 🧑 **HITL** set | 🚫 **must be absent** | brain (minimax) |
+| `DEEPSEEK_API_KEY` | — | 🧑 **HITL** set (if deepseek) | 🚫 **must be absent** | brain (deepseek) |
+| `OPENAI_API_KEY` 🆕 | — | — | 🧑 **HITL** set | brain + extraction + embeddings (#96) |
+| `AVERY_OPENAI_MODEL` 🆕 | — | — | `gpt-5.6-terra` (default) | advisor model |
+| `AVERY_OPENAI_EXTRACT_MODEL` 🆕 | — | — | `gpt-5.6-luna` (default) | extraction model |
+| `AVERY_EXTRACTOR_BRAIN` | — | `minimax` (default) | `openai` | `service/extractor_factory.py` |
+| `AVERY_EMBEDDINGS` | `dashscope`\|`bailian`\|`qwen`\|`text-embedding-v4` → real embeddings; anything else (incl. unset) → `keyword` | same | `openai` → `text-embedding-3-small` @1024 dims (same `vector(1024)` column, **no migration**) | `avery/embeddings.py` (`resolve_embeddings_kind`) |
+| `DASHSCOPE_API_KEY` | — | 🧑 **HITL** (when vector) | 🚫 **must be absent** | embeddings (dashscope) |
+| **`AVERY_BRAIN_FAILOVER`** 🆕 | on (default) | on (default) | **`off`** — see §1.1 | `service/brain_factory.py` |
+| **`AVERY_ALLOW_PERSON_SCORING`** | `1` | `1` | **`0`** — see §1.1 | `avery/scoring_policy.py` |
+| `PGVECTOR_URL` | 🧑 **HITL** (when vector) | 🧑 **HITL** (when vector) | 🧑 **HITL** (EU-resident DB) | vector store |
+| `AVERY_INGEST_CONCURRENCY` | `4` (default) | `4` (default) | `4` (default) | `avery/ingest/extract.py` (feat-027 parallel ingest) |
+| `PORT` | `8137` | `8137` | `8137` | uvicorn |
+| `AVERY_CORS_ORIGINS` | frontend origin(s) — **SET this** | frontend origin(s) — **SET this** | frontend origin(s) — **SET this** | `service/app.py` CORS (always on) |
 
 - `AVERY_INGEST_CONCURRENCY` (feat-027): how many documents extract in parallel per `/ingest` upload
   (bounded thread pool). Default `4`; set `1` to force the old sequential path. The cap is the
   rate-limit guardrail — a bursty fan-out tripped M3 429s.
+
+### 1.1 🇪🇺 EU instance — the isolation discipline (#96) 🆕
+
+The EU column above is a **deployment posture**, not a code path. Nothing in the image knows it is
+"the EU box"; what makes it one is which env vars are set and which are *absent*.
+
+Why an OpenAI column exists at all: the Swedish line (Skeppsviken) requires that EU deployments not
+use Chinese models. The 2026-08-13 survey found user content leaves the box at exactly **three**
+points — MiniMax (chat + extraction), DeepSeek (hot standby), Alibaba DashScope (embeddings). #96
+gives all three an OpenAI counterpart, so one env switch closes all three at once. Half a switch is
+worse than none: a box on `AVERY_BRAIN=openai` that still has `AVERY_EMBEDDINGS=dashscope` is still
+shipping every ingested document to Alibaba.
+
+1. **No Chinese-provider keys on the box at all.** `MINIMAX_API_KEY` / `DEEPSEEK_API_KEY` /
+   `DASHSCOPE_API_KEY` must be **absent**, not merely unused — "we don't have the credential" is an
+   answer that survives due diligence; "we chose not to call it" is not.
+2. **`AVERY_BRAIN_FAILOVER=off`.** OpenAI has no designated second provider, and failing over to a
+   Chinese one would be the compliance breach in reverse. (The code also refuses to chain across
+   provider regions — `service/brain_factory.PROVIDER_REGION`, gated by
+   `tests/test_openai_provider_96.py`. That is the **second** lock; rule 1 is the first.)
+3. **`AVERY_ALLOW_PERSON_SCORING=0`.** AI Act Annex III 4(b) treats employment *performance
+   evaluation* as high-risk; the person-scoring red line stays hard-blocked on the EU box even
+   though 境内/overseas run the unblocked build (feat-033). Typos fail CLOSED (still blocking).
+4. **Spend gates as everywhere else:** `AVERY_LLM_CALL_BUDGET` / `AVERY_EMBED_CALL_BUDGET`.
+
+**How to verify a live EU box** (no code reading, no keys needed — just `GET /health`):
+
+| field | must read | a wrong value means |
+|---|---|---|
+| `brain` | `openai` | still on a Chinese/Anthropic brain (the aliases `openai-compat`/`compat` also report `openai`) |
+| `extraction_chain` | `["openai"]` — exactly one entry | a Chinese key is still on the box, or failover is on |
+| `embeddings` | `openai:text-embedding-3-small/1024` | `keyword` = the key or the kind is wrong (it degrades **silently**); `dashscope:…` = the third exit point is still open |
+| `extraction_mode` | `llm` | `degraded`/`heuristic` — key missing, budget spent, or the provider is refusing |
+
+**Account-side prerequisites (Danny/合伙人, not an engineering step):** create a separate project in
+the OpenAI org → set a Monthly spend hard limit (hitting it returns 429 and really stops the flow) →
+self-serve the DPA → apply for EU data residency (sales-approved, **new projects only**, residency
+endpoints cost ~10% more, lead time not under our control — queue it early). Until that key exists,
+the OpenAI path is verified only against local fake servers; see §2.
+
+**Switching an existing box to OpenAI embeddings re-embeds nothing automatically.** The two vector
+spaces are unrelated, so every already-stored vector becomes noise. Same dimension (1024) means no
+schema change and no migration — it does **not** mean the old data still ranks. Re-ingest existing
+contexts, or stand the EU instance up on a fresh database.
 
 - Template: **`eval-harness/service/.env.example`**. The real `eval-harness/.env` is **gitignored**;
   keys rotate there per `eval-harness/.env.example` note. In production, inject via the host's
@@ -148,7 +199,15 @@ scripts/deploy/dual-smoke.sh
 # same + a REAL brain contract smoke for the host you're about to ship
 AVERY_BRAIN=minimax scripts/deploy/dual-smoke.sh   # before 境内
 AVERY_BRAIN=claude  scripts/deploy/dual-smoke.sh   # before 海外  (needs ANTHROPIC_API_KEY)
+AVERY_BRAIN=openai  scripts/deploy/dual-smoke.sh   # before 🇪🇺   (needs OPENAI_API_KEY)  🆕 #96
 ```
+
+> 🇪🇺 **What the offline gate does and does not prove for the OpenAI path.** The #96 battery
+> (`eval-harness/tests/test_openai_provider_96.py`) drives chat, extraction and embeddings against
+> **local fake servers**: it pins the request shape we emit, how we handle 429 / truncation, that
+> the chain never crosses provider regions, and that embeddings ask for 1024 dims. A fake server
+> nods at anything — it cannot prove OpenAI accepts that shape, that the model names exist, or that
+> the key works. **Run the line above with a real key once before the first EU deploy.**
 
 Asserts: all 3 frontend targets build + carry the right stamp; the feat-015 contract battery + the
 feat-018 ingestion HTTP surface (upload → team → advise, **red line clean**); and — when

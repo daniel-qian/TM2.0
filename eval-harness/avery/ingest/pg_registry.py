@@ -67,8 +67,12 @@ logger = logging.getLogger(__name__)
 
 _MIGRATIONS_DIR = Path(__file__).resolve().parent.parent.parent / "db" / "migrations"
 
-# avery.materials.embedding is vector(1024) (= AVERY_EMBED_DIM, DashScope text-embedding dim). An
-# embedding of a different dim cannot be stored — feat-031 leaves the column NULL rather than crash.
+# avery.materials.embedding is vector(1024) (= AVERY_EMBED_DIM). Both real embedders land on this
+# number by construction: DashScope text-embedding-v4 default, and (#96) OpenAI
+# text-embedding-3-small asked for at `dimensions=1024` — which is why swapping providers needs no
+# migration. An embedding of a different dim cannot be stored — feat-031 leaves the column NULL
+# rather than crash. (Same dim ≠ same vector space: after a provider swap the OLD rows are noise
+# and must be re-embedded.)
 _DEFAULT_EMBED_DIM = 1024
 
 
