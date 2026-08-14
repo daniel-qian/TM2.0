@@ -730,7 +730,10 @@ class CompanyContext:
         叠加层（`decision_grading.apply_review`），只许上调、不许下调；本方法产出的是
         纯规则版，reason_source == "rule"。
 
-        `as_of` 不传则取今天——时间类规则（到期日）以它为准，显式传入即可复现。
+        `as_of` 不传则取**今天（UTC）**——时间类规则（到期日、资料新旧）以它为准，显式传入即可复现。
+        🔴 是 UTC 不是服务端本地：比较的另一头（资料上传日）归一到 UTC，两头必须同一个时区，
+        否则本地日跑在 UTC 前面的那几个小时里，今天传的资料会被算老一天。见
+        `decision_grading.today_utc()`——生产走的正是这条不传 `as_of` 的默认路径。
 
         `forms` / `now`（gap2 T9 · #58）是本期表单收集进度与"此刻"，由服务层从 registry 读出来
         再喂进来（`CompanyContext` 自己不持有 registry 句柄，也不该为了这一条去持有）。
@@ -790,8 +793,12 @@ class CompanyContext:
             projects would invent projects (worst case: zero projects, two signals, 「2 个项目」).
           · "none"     — nothing flagged; the calm sentence is the honest one.
 
-        `as_of` threads through to the date-sensitive rules (due dates) — pass it to reproduce a
-        briefing exactly; omitted means today, same convention as `decision_cards()`.
+        `as_of` threads through to the date-sensitive rules (due dates, material age) — pass it to
+        reproduce a briefing exactly; omitted means today **in UTC**, same convention as
+        `decision_cards()`. UTC and not server-local on purpose: the other side of that comparison
+        (a document's upload day) is normalized to UTC, and mixing the two made everything uploaded
+        "today" read a day older for the hours when the local date runs ahead of UTC. See
+        `decision_grading.today_utc()`.
         """
         from ..decision_grading import grade_projects
         from ..decision_rules import CAN_PROCEED
