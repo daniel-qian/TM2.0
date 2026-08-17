@@ -3,9 +3,34 @@
 > 📢 本文件是**当前状态快照，整体重写不追加**。历史都在 git（`git log` + 各 `.issues/*/receipt*.md`），别在这儿堆编年史。
 > 启动路径见 `AGENTS.md` Startup Workflow：读本文件 + `feature_list.json`，跑 `./init.sh` 确认绿，再开工。
 
-**Last Updated:** 2026-08-14（本轮是**合并 + 复验，零新开发**：#98 与 #100 一起进本地 main）
+**Last Updated:** 2026-08-17（本轮是 **#105 上产预案与预检**：真跑了一遍上产链路，**没上产**）
 
-## 本轮：#98（RLS deny-all）+ #100（一家公司多个账号）一起并入 main
+## 本轮：#105 上产预案与预检 —— runbook + 预检真跑，**未 push、未换生产容器**
+
+交付 `.issues/deploy-0817/runbook-105.md`（逐条带判据的上产脚本）+ `receipt-105.md`（预检的账）。
+把上产链路从头到尾真跑了一遍，只把最后一步的箭头指向一个一次性预检库：
+拉 env+挂载 → git bundle 传树 → `--build-arg AVERY_COMMIT` 构建 → 8138 起新容器 →
+在与生产**逐字段同构**的预检库上真升级（0017→0020，两轮）→ 判据全绿 → 全部拆掉。
+
+🔴 **生产一个字节没动**：容器 ContainerId/ImageId/StartedAt/Pid/RestartCount/`docker diff` 计数
+前后逐字段相同，`/health` 仍 `6b70173`，`llm_calls_remaining` 1965→1965（**整个预检零 LLM 调用**），
+生产库仍 12 张表 / RLS 0 / 索引仍 UNIQUE。未 push（main 领先 origin 43 个提交）。
+
+三条订正/新发现，都是实测：
+
+- 🔴 **「迁移不在容器启动时跑」这条旧碑从 #90 起就过期了**。`_lifespan` 启动即
+  `recover_orphan_ingest_jobs()` → `_ensure_schema()` → 全量重放。实测：worker 开着的容器起来后
+  **一个 HTTP 请求都没发过**，库已经是 13/13。`AVERY_INGEST_WORKER=off` 只是**推迟**——
+  同一个容器发一次 `/demo/status`（`__contains__` → `_ensure_schema`）库当场就变。
+  **推论：预检容器不能连生产库，任何配置下都不行；而上产当天的 8138 预检就是迁移的实际执行点。**
+- 🔴 **生产落后的是四条迁移不是两条**：0017（content_sha256）与 0018（ingest_jobs）同样没上过生产
+  （生产镜像 `6b70173` 早于 #90；旧镜像里只有 16 个迁移文件，与库实查互相印证）。
+  代价已量：0017 backfill 目标 277 行 / 2.83 MiB，哈希实测 **0.010 s**；`account_contexts` **0 行**，
+  0020 无数据风险；`pgcrypto` 生产**已装**（`extensions` schema）所以那句 `CREATE EXTENSION` 是 no-op
+  —— 这条重要，因为生产角色 `postgres` 是 `rolsuper=false`，真要它装扩展是装不上的。
+- 🔴 **稳态 bootstrap 还在锁两张表**（#104 那一类的漏网之鱼，见 Notes）。
+
+## 上一轮：#98（RLS deny-all）+ #100（一家公司多个账号）一起并入 main（2026-08-14）
 
 （复验回执 `.issues/account-tenancy-0813/receipt-merge-0814.md`）
 
@@ -250,10 +275,16 @@ worker + 孤儿回收 + 'reading' 态）+ pg put() 增量化（positional diff�
   worktree 里**第一次红、第二次绿**，且 54 张 mtime 全变成那一刻——等于对着一份自己刚写出来的
   东西比对。像素一律 `cd /d/avery` 跑，`VERIFY_BASE` 指 worktree 的 preview，**跑前跑后各取一次
   md5 做全表 diff**（⚠ 别用 `md5sum … | sed 's|.*/||'`，它贪婪吃掉哈希、把对照退化成空判）。
-- **✅ 生产 = 本地 main**（2026-08-10 统一上产）：前端 `35ade3d`、后端镜像
-  `avery-agent:main-20260810-212220`。回滚退一级 = `avery-prev-20260810-212220`
-  （= `main-20260807-190332`）。迁移 **0009 就地升级 + 0015 + 0016** 已在生产库落地
-  （预检容器一次无害 404 触发懒加载）。上产回执 `.issues/design-0810/receipt-deploy-0810.md`。
+- **生产现状（0817 实测，不是读文档）**：后端镜像 `avery-agent:main-20260812-070519`
+  （`/health.commit` = `6b70173`，容器 0812-07:10 起，`RestartCount=0`，healthy）；
+  `origin/main` = `2c74104`（比生产多的那一个提交是纯 docs）。回滚退一级 =
+  `avery-prev-20260812-070519`（= `main-20260810-212220`）。上产回执
+  `.issues/design-0810/receipt-deploy-0812.md`。
+  🔴 **生产库落后 main 四条迁移**：0017 / 0018 / 0019 / 0020 都没上过（实查：无 `content_sha256` 列、
+  无 `ingest_jobs` 表、`0/12 RLS off`、`account_contexts_context_key` 仍 UNIQUE）。
+  ⚠ 生产库连库角色是 `postgres`，**`rolsuper=false` 但 `rolbypassrls=true`**（0817 实查）——
+  凡是「开了 RLS 会不会影响后端」的论证，前提要写这一条；验它得取更弱的身份。
+  上产脚本与全部预检数字见 `.issues/deploy-0817/{runbook-105,receipt-105}.md`。
 - ✅ **迁移账已结清**（0015 / 0016 / 0009 就地升级都已上产）。
   🔴 **给下一个动 `PersonEntity` 顶层字段的人**：`0009` 的守卫里有 `want` 与 `ADD` **两处清单**，
   只改一处＝离线全绿、真库逐条拒收。而且**全新库跑绿证不了升级路径**——要另建一个库、
@@ -822,6 +853,28 @@ facts+notes 重物化成空；**留下** `context_id` · `owner_token` · `name`
 
 ## Notes（顺手发现，没顺手修）
 
+- 🔴 **稳态 bootstrap 还在对 `contexts` 与 `source_documents` 取 ACCESS EXCLUSIVE**
+  （#105 预检顺手量到）。⚠ **票还没开成**：0817 那会儿 GitHub API 走代理连续 EOF，9 次全失败
+  （创建前已确认没有半成功的重复票）。票面正文已经写好落在
+  `.issues/deploy-0817/issue-draft-bootstrap-locks.md`，代理通了直接
+  `gh api repos/daniel-qian/avery/issues --input <json>` 发出去即可。方法照 #104：另一连接持 ACCESS SHARE、
+  `lock_timeout=3000`、`retries=1`、逐迁移文件重放、锁在测试前后各验一次仍握着。
+  | 被占住的表 | 新镜像 | 元凶 |
+  |---|---|---|
+  | `entities` / `account_contexts` / `materials` | PASS ~0.46 s | —（#104 / #100 的守卫生效） |
+  | `contexts` | 🔴 BLOCKED 3.35 s | `0011_contexts_ephemeral_gc.sql` |
+  | `source_documents` | 🔴 BLOCKED 3.29 s | `0005_source_documents_status.sql` + `0017_…sha256.sql` |
+  | `entities` / **旧**镜像 | BLOCKED 3.26 s | born-red 对照（0002 修之前的裸 DROP） |
+  病因同 #104：裸 `ALTER TABLE` 在判断 `IF NOT EXISTS` **之前**就取锁。
+  常驻门 `test_steady_state_bootstrap_takes_no_table_lock` 只参数化了 `entities` 与
+  `account_contexts`，**另外两张从来没被量过** —— 判据够不着，不是判据写错。
+  **不拦上产**：对照实验确认旧镜像对着这两张表同样 BLOCKED，生产已经这样开机好几个月。
+  ⚠ 旧镜像的报错**写死了** "could not lock the entities table"，哪怕真正卡住的是 `contexts`
+  （#100 已改成不点名）—— 按旧日志的字面去查会查错方向。
+- 🔴 **生产机 `/tmp` 里躺着 5 个历史 env 快照，权限 `0644`**（0807×4 / 0810×1），
+  每个含 3 把真 key（MINIMAX / DEEPSEEK / DASHSCOPE），**同机器任何用户可读**——
+  而这台是**合伙人的机器**。#105 本轮自己产生的两个已 `shred -u`；
+  那 5 个属于删除类，**归 Danny**。`runbook-105.md` S7 已把「用完即销毁」写成固定步骤。
 - ✅ **~~四条 `@needs_db` 自 #90 起就红~~ 已销账**（#95，回执 `receipt-95.md`）。四条**全是测试
   还按同步语义断言**，零产品回归；真正的病是 **#90 的验证口径写成了「既有五文件 78/78」**
   而全仓是 142 条——那句话本身就是挡板。已就地订正 #90 回执，并补了一道**静态门**
