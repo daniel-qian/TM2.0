@@ -3,9 +3,40 @@
 > 📢 本文件是**当前状态快照，整体重写不追加**。历史都在 git（`git log` + 各 `.issues/*/receipt*.md`），别在这儿堆编年史。
 > 启动路径见 `AGENTS.md` Startup Workflow：读本文件 + `feature_list.json`，跑 `./init.sh` 确认绿，再开工。
 
-**Last Updated:** 2026-08-17（本轮是 **#105 上产预案与预检**：真跑了一遍上产链路，**没上产**）
+**Last Updated:** 2026-08-17 晚（本轮是 **DeepSeek 暂停、境内改单家 MiniMax**：生产 env-only 换容器，**代码零改动**）
 
-## 本轮：#105 上产预案与预检 —— runbook + 预检真跑，**未 push、未换生产容器**
+## 本轮：DeepSeek 暂停 —— 境内改单家 MiniMax（2026-08-17 19:03，**已上产**）
+
+起因：Danny「deepseek 余额不足，暂时不打算继续充值，能不能全部走 minimax？」
+**答案是代码一行都不用改**——DeepSeek 纯 env 驱动，而主脑与主抽取**本来就已经是 MiniMax**，
+它只是热备（`brain_factory.py:137` 的 `_PAIR`）。改前 `/health` 实测 `providers.deepseek.ok:null`，
+= 容器起来 5 天**一次都没被调用过**。
+
+**做法**：拿掉生产 env 的 `DEEPSEEK_API_KEY`/`_BASE_URL`/`_MODEL`（30 → 27 个变量），
+用**生产正在跑的那个镜像原地换容器**（`main-20260812-070519` = `6b70173`）。
+🔴 **不构建、不 push、不碰 #105 那条迁移链**——`/health` 的 `commit` 前后完全相同，
+这是「没夹带代码」的免费自证；生产库仍落后 main 四条迁移，本轮一条都没上。
+
+**结果**（公网实测）：`extraction_chain:["minimax"]`（原 `["minimax","deepseek"]`）·
+`providers` 只剩 minimax · `degraded:false` · `/demo/status {"available":true,"ready":true}` ·
+新容器 1×2s 转健康 · 日志零 error。回滚梯 `avery-prev-20260817-190306`（旧容器完整保留）。
+离线电池 **4434 passed · 144.83 s**，与基线逐字一致。
+
+**三条值得记住的**：
+
+1. 🔴 **留一把没余额的 key 比拔掉更糟**：`/health` 会继续报热备 armed 而那条臂每次 402 ——
+   #89 事故（「有 key 但从没被问过」）换了张皮，还多赔一次注定失败的往返才落 heuristic。
+2. 🔴 **别用 `AVERY_BRAIN_FAILOVER=off` 表达「某一家欠费」**：那是全局 kill-switch，
+   也是欧盟线的纪律位（EU 箱子必须 `off`）。停一家就拿掉那一家的 key——「『没有』而非『不用』」。
+3. 🔴 **评测裁判这一路不能跟着走 minimax**：SUT 本身就是 MiniMax-M3，只剩它 = 自己给自己打分
+   （`judge.py:63`）。已把 `JUDGE_FAMILIES` 整条注释掉 → 落回 openai/google → 没 key 干净报错，
+   逼下次做一次有意识的选型。**fail-closed，不是待办**（judge 自 7/1 起就没跑过）。
+
+回执：`.issues/deploy-0817/receipt-deepseek-pause.md`（含恢复步骤 §8）。
+顺带堵掉一个凭据泄露口：`eval-harness/.env.bak-predeepseek`（含三把真 key）**没有被 gitignore 挡住**，
+已补 `.env.bak*`（窄模式——`.env*` 会连要提交的 `.env.example` 一起吞）。文件本身没删（销毁类，归 Danny）。
+
+## 上一轮：#105 上产预案与预检 —— runbook + 预检真跑，**未 push、未换生产容器**
 
 交付 `.issues/deploy-0817/runbook-105.md`（逐条带判据的上产脚本）+ `receipt-105.md`（预检的账）。
 把上产链路从头到尾真跑了一遍，只把最后一步的箭头指向一个一次性预检库：
@@ -14,7 +45,8 @@
 
 🔴 **生产一个字节没动**：容器 ContainerId/ImageId/StartedAt/Pid/RestartCount/`docker diff` 计数
 前后逐字段相同，`/health` 仍 `6b70173`，`llm_calls_remaining` 1965→1965（**整个预检零 LLM 调用**），
-生产库仍 12 张表 / RLS 0 / 索引仍 UNIQUE。未 push（main 领先 origin 43 个提交）。
+生产库仍 12 张表 / RLS 0 / 索引仍 UNIQUE。未 push（数 ahead 用
+`git rev-list --count origin/main..HEAD`，别在这儿写死——0817 那句「43」两天不到就作废了）。
 
 三条订正/新发现，都是实测：
 
@@ -30,7 +62,7 @@
   —— 这条重要，因为生产角色 `postgres` 是 `rolsuper=false`，真要它装扩展是装不上的。
 - 🔴 **稳态 bootstrap 还在锁两张表**（#104 那一类的漏网之鱼，见 Notes）。
 
-## 上一轮：#98（RLS deny-all）+ #100（一家公司多个账号）一起并入 main（2026-08-14）
+## 再上一轮：#98（RLS deny-all）+ #100（一家公司多个账号）一起并入 main（2026-08-14）
 
 （复验回执 `.issues/account-tenancy-0813/receipt-merge-0814.md`）
 

@@ -90,7 +90,7 @@ Two independent artifacts, four targets, one env matrix:
 | `AVERY_BRAIN` | `claude` | `minimax` (or `deepseek`) | `openai` | `service/brain_factory.py` |
 | `ANTHROPIC_API_KEY` | 🧑 **HITL** set | — | — | brain (claude) |
 | `MINIMAX_API_KEY` | — | 🧑 **HITL** set | 🚫 **must be absent** | brain (minimax) |
-| `DEEPSEEK_API_KEY` | — | 🧑 **HITL** set (if deepseek) | 🚫 **must be absent** | brain (deepseek) |
+| `DEEPSEEK_API_KEY` | — | ⏸ **暂停中（0817）** — 见下 | 🚫 **must be absent** | brain (deepseek) |
 | `OPENAI_API_KEY` 🆕 | — | — | 🧑 **HITL** set | brain + extraction + embeddings (#96) |
 | `AVERY_OPENAI_MODEL` 🆕 | — | — | `gpt-5.6-terra` (default) | advisor model |
 | `AVERY_OPENAI_EXTRACT_MODEL` 🆕 | — | — | `gpt-5.6-luna` (default) | extraction model |
@@ -103,6 +103,25 @@ Two independent artifacts, four targets, one env matrix:
 | `AVERY_INGEST_CONCURRENCY` | `4` (default) | `4` (default) | `4` (default) | `avery/ingest/extract.py` (feat-027 parallel ingest) |
 | `PORT` | `8137` | `8137` | `8137` | uvicorn |
 | `AVERY_CORS_ORIGINS` | frontend origin(s) — **SET this** | frontend origin(s) — **SET this** | frontend origin(s) — **SET this** | `service/app.py` CORS (always on) |
+
+> ### ⏸ 2026-08-17 · 境内 DeepSeek 暂停，改单家 MiniMax
+>
+> DeepSeek 余额不足，Danny 暂不充值。当晚已把 `DEEPSEEK_API_KEY` / `DEEPSEEK_BASE_URL` /
+> `DEEPSEEK_MODEL` 三个变量从生产容器 env 里拿掉（同镜像 `main-20260812-070519` 原地换容器，
+> **零代码改动**；env 变量 30 → 27；回滚梯 `avery-prev-20260817-190306`）。
+> 境内现状：`/health` 的 `brain:"minimax"`、`extractor:"llm:minimax"`、
+> **`extraction_chain:["minimax"]`**（原先是 `["minimax","deepseek"]`）。
+>
+> 三件要记住的事：
+>
+> 1. **停一家就把它的 key 拿掉，别用 `AVERY_BRAIN_FAILOVER=off`。** 那是**全局** kill-switch，
+>    也是欧盟线的纪律位（§1.1 要求 EU 箱子必须 `off`）；借它表达「某一家没钱了」会把这个 flag
+>    的语义搞浑，下一个人读 `off` 时说不清是合规要求还是欠费。本仓一贯口径：「『没有』而非『不用』」。
+> 2. **别留一把没余额的 key。** 留着的话 `/health` 会继续报 `extraction_chain:["minimax","deepseek"]`，
+>    看起来热备 armed，实际那条臂每次 402 —— 这是 #89 事故（「有 key 但从没被问过」）换了张皮：
+>    热备名义上在、真出事时顶不上，而且 MiniMax 一挂还要多赔一次注定失败的往返才落 heuristic。
+> 3. **恢复的动作就是把三个变量加回去 + 换容器**，代码不用碰（链是「谁有 key 谁进链」算出来的）。
+>    恢复后记得把本节、`runbook-105.md` 的 S3/判据③、两份 `.env.example` 的期望值一起改回去。
 
 - `AVERY_INGEST_CONCURRENCY` (feat-027): how many documents extract in parallel per `/ingest` upload
   (bounded thread pool). Default `4`; set `1` to force the old sequential path. The cap is the

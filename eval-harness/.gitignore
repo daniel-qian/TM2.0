@@ -5,6 +5,9 @@ runs/
 # Secrets: the real .env (with your pasted MiniMax key) NEVER goes into git. .env.example is the
 # committed template. After merging this branch, copy your local .env into the main checkout.
 .env
+# 手工备份的 .env 同样含真 key（0817：换供应商前 cp 了一份 .env.bak-predeepseek，`git status`
+# 当场把它列成待加文件）。模式**故意写窄**：`.env*` 会连 `.env.example` 一起吞，而那是要提交的模板。
+.env.bak*
 
 __pycache__/
 *.pyc

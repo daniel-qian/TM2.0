@@ -169,7 +169,17 @@ sudo -n docker inspect avery --format '{{range .Config.Env}}{{println .}}{{end}}
 chmod 600 /tmp/avery_env_$TS
 grep -c = /tmp/avery_env_$TS
 ```
-- 判据：**30 个变量**（0817 实测值；比这个少就是漏了，多出来的要能说出是哪一票加的）。
+- 判据：**27 个变量**（2026-08-17 19:03 起的实测值）。
+  🔴 **这个数 0817 当天从 30 变成了 27**：DeepSeek 余额不足、Danny 暂不充值，当晚已把
+  `DEEPSEEK_API_KEY` / `DEEPSEEK_BASE_URL` / `DEEPSEEK_MODEL` 三个变量从生产容器 env 里拿掉
+  （同镜像 `main-20260812-070519` 原地换容器，**没动一行代码**，回滚梯
+  `avery-prev-20260817-190306`）。所以：
+  - 提到 **27** 且缺的正好是那三个 `DEEPSEEK_*` = 对的。
+  - 提到 **30** 说明你连的是一台还带 DeepSeek 的箱子，或者有人把 key 放回去了 —— 先搞清楚
+    余额充没充，别默认「补齐到 30」。
+  - 上面那句 grep 的白名单**故意保留 `DEEPSEEK_`**：它现在匹配 0 行，正好当哨兵——
+    哪天真提到了 DeepSeek 变量，就是有人加回来了，会在这条判据上现形。
+  比这个数少就是漏了，多出来的要能说出是哪一票加的。
 - 判据：确认丢掉的 10 个全是镜像自带 + `AVERY_COMMIT`：
   ```bash
   diff <(sudo -n docker inspect avery --format '{{range .Config.Env}}{{println .}}{{end}}' | grep = | sed 's/=.*//' | sort) \
@@ -244,7 +254,10 @@ curl -s https://avery.dannyqian.com/demo/status; echo
 ```
 - 判据①：`commit` == 新 SHA（与 `/tmp/avery_before_$TS` 里的旧值不同）。
 - 判据②：`{"available":true,"ready":true}` —— **`ready:false` 就是示例团队没了**，回滚。
-- 判据③：`"degraded":false`、`extraction_chain:["minimax","deepseek"]`。
+- 判据③：`"degraded":false`、`extraction_chain:["minimax"]`。
+  🔴 **期望值 0817 当晚从 `["minimax","deepseek"]` 改成了单家**（DeepSeek 停用，见 S3 判据下的碑）。
+  同目录 `receipt-105.md` 里记的还是 `["minimax","deepseek"]` —— 那是**回执**，记的是 0817 下午
+  预检当时量到的事实，**不要去改它**；两处对不上是时间差，不是矛盾。以本文件为准。
 - 判据④ 迁移落地（用**新**容器跑一句只读 catalog 查询，不走 registry）：
   ```bash
   sudo -n docker exec avery python -c "
