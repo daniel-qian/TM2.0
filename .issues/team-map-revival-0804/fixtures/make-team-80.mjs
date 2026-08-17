@@ -41,6 +41,39 @@ const DEPARTMENTS = [
 const FIRST = ['Ada', 'Bo', 'Cass', 'Dev', 'Elin', 'Fay', 'Gus', 'Hana', 'Ivo', 'Jo']
 const LAST = ['Aldridge', 'Bhatt', 'Costa', 'Duarte', 'Eriksen', 'Fontaine', 'Grigoryan', 'Hollis']
 
+// ── B2 哨兵：本人自述（组级读数的语料） ──────────────────────────────────────
+//
+// 🔴 组级读数（PRD §3.3）的每一条分支都得有一个**真实例**，否则判据是空真：
+//   · 同组里 strained 与 steady 并存 → 必须说 strained（「先说要你留意的」）；
+//   · 只有 steady 的组 → 说 steady（不是"只报坏消息"）；
+//   · 词表外的词 → 原样回显那个词，不改写成「其他」；
+//   · 🔴 有情绪、**没有出处** → **整条丢掉**（挂不上 data-metric-source 的情绪词在本仓的
+//     定义就是一次泄漏）。这一条最容易写漏，所以专门造一个人；
+//   · 整组没人报 → 那个分区不出现读数（Design / Data / Executive / 未分组四个组担这条）。
+//
+// 另外 u_0 带了 `load`（自述负载 91%）——那是全仓唯一被特许的人身数字，特许的前提是它待在
+// 人卡的出处锚点里。**地图上必须一处都不出现**：判据扫的就是它。
+const SELF_REPORTS = {
+  u_0: {
+    load: { value: 91, caliber: '本人自述', source: 'weekly-2026-W33.md:12' },
+    mood: { value: 'strained', caliber: '本人自述', source: 'weekly-2026-W33.md:12' },
+  },
+  u_1: { mood: { value: 'steady', caliber: '本人自述', source: 'weekly-2026-W33.md:13' } },
+  u_22: { mood: { value: 'steady', caliber: '本人自述', source: 'weekly-2026-W33.md:20' } },
+  u_37: {
+    mood: {
+      value: 'other',
+      valueRaw: 'flat out',
+      caliber: '本人自述',
+      source: 'weekly-2026-W33.md:31',
+    },
+  },
+  // 🔴 出处缺席（空串）：Finance & Legal 那一组因此**没有**读数，尽管组里有人报了情绪。
+  u_49: { mood: { value: 'strained', caliber: '本人自述', source: '' } },
+  u_58: { mood: { value: 'stretched', caliber: '本人自述', source: 'weekly-2026-W33.md:44' } },
+  u_59: { mood: { value: 'steady', caliber: '本人自述', source: 'weekly-2026-W33.md:45' } },
+}
+
 const people = []
 let n = 0
 for (const [team, size] of DEPARTMENTS) {
@@ -54,6 +87,7 @@ for (const [team, size] of DEPARTMENTS) {
       team,
       tenure: `${1 + (n % 9)} years`,
       owns: i % 3 === 0 ? [`${team} workstream ${i}`] : undefined,
+      self_report: SELF_REPORTS[`u_${n}`],
     })
     n += 1
   }
@@ -76,7 +110,10 @@ for (let i = 0; i < 16; i += 1) {
       id: `p_${i}`,
       title: `Workstream ${i + 1} — ${DEPARTMENTS[i % DEPARTMENTS.length][0]}`,
       // owner 打散在各部门：项目列按 owner 部门组序排，全挤在一个组里就验不出排序。
-      ownerId: `u_${(i * 7) % people.length}`,
+      // 🔴 例外是 i===8：让 u_0 同时背**两**件事。B2 的「点一个人 → 亮出他背着的那几件事」
+      // 需要一个真的背着不止一件的人——`(i*7)%81` 恰好人人不重样，全靠它的话「每人恒 1 条边」
+      // 这种错实现会一路全绿（错误的取样在结果恰好相同时是完全隐形的）。
+      ownerId: i === 8 ? 'u_0' : `u_${(i * 7) % people.length}`,
       status: ['on-track', 'at-risk', 'blocked', 'done'][i % 4],
       // 🔴 刻意避开 0：`p_progress_zero` 才是「进度真的是 0」那条哨兵，普通项目里再混进
       // 一个 0 会让「0 宽的条只该出现一次」这条判据数出 2 来，判据当场变得看不出对错。

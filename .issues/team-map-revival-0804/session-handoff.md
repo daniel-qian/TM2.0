@@ -10,27 +10,36 @@
 
 ## What's Done
 
-**#106 B1 骨架棒，全部条目做完。** 逐条账、验收数字、两条实测出来的坑：
-[`receipt-106-b1.md`](receipt-106-b1.md)。
+**#106 B1 骨架棒 + B2 focus 机器，两棒都做完了。**
 
-一句话：`/map` 独立页活了——真数据、按部门站好、右边一列项目条、pan/zoom + 复位、
-空态复用团队页引导语、en/zh 成对。`./init.sh` exit=0，lint 零新增，i18n 孤儿 0。
+- B1 逐条账：[`receipt-106-b1.md`](receipt-106-b1.md)（`/map` 独立页、布局纯函数、calm 渲染）
+- B2 逐条账：[`receipt-106-b2.md`](receipt-106-b2.md)（点选/连线/mini 卡/组级读数/`?focus=` 深链）
+
+一句话：地图能用了——点一个人，他背着的那几件事亮起来、连上线、原位展开一张 mini 卡，
+「打开档案」进既有浮层、关掉回到地图且高亮还在；部门标签下多了一句从本人自述真派生的
+定性短语。`?focus=` 可以发给别人。
+
+电池：`./init.sh` exit=0 · lint 零新增 · i18n 孤儿 0 · 五个 check 共 **163 条判据全绿**
+（B2 三个：46+64+28；B1 两个回归：25 + OK）· born-red 五个变异各红各的。
 
 ## In Progress
 
-无。B1 收口，工作区干净。
+无。B2 收口，工作区干净。
 
 ## Next steps
 
-**换新 session 从 #106 的 B2 段开工**（票是正源，PRD `PRD.md` §3.3 是细则）。B1 已经把接口留好：
+**换新 session 从 #106 的 B3 段开工**（票是正源，PRD `PRD.md` §3.5/§7 是细则）。B2 留下的接口：
 
-- 连线的两端锚点 = `MapPersonNode.pos` / `MapProjectNode.pos`（board px，都是圆点/条的**中心**）。
-- 每条项目已经算好 `zoneIndex`（owner 所属分区序，`-1` = 无 owner ⇒ **不画边**）。
-- world 分层里 z-index 2 是空着的，就是留给 SvgEdge 的（1=分区底板 / 4=节点）。
-- `MapZone` 已按「可收拢」设计（key + rect + members），B4（#107）不用回头改契约。
-
-B3 写门时**先读** `receipt-106-b1.md` 的「两条坑」那一节：镜头那条判据的期望值必须独立算，
-而且 `MapPanZoom` 里那两把锁要各配一个专属变异（一条变异只能红一把锁——本票实测过）。
+- 三个 `check-*.mjs` 的判据就是 `verify-team-map.mjs` 的底稿（**它们不叫 `verify-`**，
+  刻意不进那个自查 glob，见各自文件头）。并进 ROSTER 时注意：镜头那条与两把锁的关系写在
+  `receipt-106-b1.md`，拖动抑制那条写在 `receipt-106-b2.md`，**各配专属变异，别拿一条当两条**。
+- 🔴 **B3 的头号真问题**：大板上 focus 之后被点亮的项目可能在画面外（80 人板宽 3476px，
+  首帧只框得住约 2400px）。B2 刻意没做镜头跟随——「点击聚焦对应簇」这个动词第一次出现是在
+  B3 的 HUD 那条，跟随的凶度/与用户 pan 的关系是那一票的设计题。理由与实测数字在
+  `receipt-106-b2.md` 末节。
+- HUD 触发器（搜索 / chips / 药丸）落地就是往 `mapHref(focusToken({kind,id}))` 里灌 token——
+  focus 的真相源是 URL，HUD 不需要自己存状态。
+- `MapZone` 契约对 B4（#107）仍然够用（key + rect + members + 可选的组级读数）。
 
 ## Blockers
 
@@ -38,23 +47,21 @@ B3 写门时**先读** `receipt-106-b1.md` 的「两条坑」那一节：镜头�
 
 ## Files Modified
 
-改（9）：`src/lite2/{routes.ts,Lite2App.tsx,teamData.ts,projectView.ts}` ·
-`src/lite2/screens/{TeamScreen.tsx,ProjectsScreen.tsx}` · `src/lite2/styles/lite2.css` ·
-`src/shared/i18n/{en.ts,zh.ts}`
+**B2 改（8）**：`src/lite2/{routes.ts,Lite2App.tsx,projectView.ts}` ·
+`src/lite2/map/{MapScreen.tsx,MapPanZoom.tsx}` · `src/lite2/screens/TeamScreen.tsx` ·
+`src/lite2/styles/lite2.css` · `src/shared/i18n/{en.ts,zh.ts}`
 
-新（`src/lite2/map/`）：`mapLayout.ts`（布局纯函数）· `MapPanZoom.tsx`（薄 rzpp wrapper）·
-`MapScreen.tsx`（页面）
+**B2 新**：`src/lite2/selfReportView.ts` · `src/lite2/map/{mapFocus.ts,zoneRead.ts,MapEdges.tsx,MapNodes.tsx}` ·
+`.issues/team-map-revival-0804/{receipt-106-b2.md,check-focus-b2.mjs,check-render-b2.mjs,check-demo-script-b2.mjs}` ·
+`shots/b2-*.png`
 
-新（`.issues/team-map-revival-0804/`）：`receipt-106-b1.md` · 本文件 ·
-`check-layout-80.mjs` · `check-render-b1.mjs` · `fixtures/{make-team-80.mjs,team-80.json}` ·
-`shots/*.png`
-
-⚠ 那两个 `check-*.mjs` **故意不叫 `verify-*`**（不进 `git ls-files "*verify-*.mjs"` 那个
-自查 glob，免得造出没人裁定过的孤儿门）。它们不在任何电池里，要手跑；跑法写在各自文件头。
+（B1 那批见 `receipt-106-b1.md`。）
 
 ## Notes
 
 - 本分支**未 push**；根 `progress.md` 未动（归集成者）。
 - 既有门电池 / 像素基线 / `assertRoomCanvas` 一个字节没动——票面明写属 B3。
-- 顺手发现没顺手修：全局「问 Avery」悬浮胶囊在地图上会盖住底部一排节点（别的屏上盖的是
-  卡片，同一个问题，不属 B1 射程）。
+- `dist/` 收尾时重打成指向 `127.0.0.1`：`./init.sh` 跑的是裸 `npm run build`，会让 dist 落回
+  **生产域名**，之后谁拿 `vite preview` 跑上传类的门就会往生产库写测试数据（AGENTS.md 点过名）。
+- 顺手发现没顺手修：全局「问 Avery」悬浮胶囊盖住地图画布底部一条，**那一条里的空白点不着**
+  （点下去开的是提问框）。别的屏上它盖的是卡片，同一个问题。

@@ -19,6 +19,8 @@ import {
 } from '../teamDirectory'
 import { docFromSource } from '../teamData'
 import type { LitePerson } from '../teamData'
+// team-map-revival-0804（B2）· 情绪归一词 → 字典词的**唯一**一把尺（人卡 / 筛选 chip / 地图分区读数）。
+import { moodWordOf } from '../selfReportView'
 // #67 · 人员卡「去问 Avery」带 person 引用——构造走 refOfPerson（与 @ 弹层候选同一把尺）。
 import { refOfPerson } from '../askRefs'
 
@@ -40,20 +42,14 @@ function classNames(parts: Array<string | false | null | undefined>) {
 }
 
 // rich-align-0722/03 · 情绪定性枚举 → 当前字典的词。other 走文档原词 valueRaw（不替客户改写）。
+// team-map-revival-0804（B2）：函数体原样提进 `selfReportView.ts` 的 `moodWordOf`——地图的
+// 部门组级读数成了第三个消费方（人卡 / 筛选 chip / 分区读数），判断逻辑一字未改，提上去只是
+// 为了同一个归一词在三块屏上不会叫出三个名字。
 function moodLabel(
   mood: NonNullable<NonNullable<LitePerson['selfReport']>['mood']>,
   t: ReturnType<typeof useDict>['t'],
 ): string {
-  switch (mood.value) {
-    case 'steady':
-      return t.lite2.selfReportMoodSteady
-    case 'stretched':
-      return t.lite2.selfReportMoodStretched
-    case 'strained':
-      return t.lite2.selfReportMoodStrained
-    default:
-      return mood.valueRaw?.trim() || t.lite2.selfReportMoodOther
-  }
+  return moodWordOf(mood.value, mood.valueRaw, t.lite2)
 }
 
 // rich-align-0722/03 · 本人自述负载/情绪。🔴 双世界执法的可见端：只在开关开、后端投影了 self_report
@@ -167,17 +163,9 @@ function PersonCard({
 //   · 上传部件在两分支都渲染（降位不卸载）——AFK 上传相位与 skin probe 依赖 .upload-panel。
 // 成员卡 .home-person-card DOM 锚点零改（门相位 C/E 不受影响）；网格保留 .home-lane-people 类
 // （AFK skin probe 轮询 `.upload-panel || .home-lane-people`）。
+// chip 手上只有归一键、没有某一个人的原句，所以 valueRaw 传 null（词表外落回「其他」）。
 function moodChipLabel(key: string, t: ReturnType<typeof useDict>['t']): string {
-  switch (key) {
-    case 'steady':
-      return t.lite2.selfReportMoodSteady
-    case 'stretched':
-      return t.lite2.selfReportMoodStretched
-    case 'strained':
-      return t.lite2.selfReportMoodStrained
-    default:
-      return t.lite2.selfReportMoodOther
-  }
+  return moodWordOf(key, null, t.lite2)
 }
 
 function TeamDirectory({

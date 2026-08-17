@@ -171,6 +171,21 @@ function trimmedOrNull(raw: string | undefined): string | null {
   return value ? value : null
 }
 
+/**
+ * 「文档列出来的卡点」是哪几条。空行不算一条（`['']` 这种脏数据历史上真出现过，会渲染出
+ * 一条证据为空的分诊卡——feat-068 在 `liveHandoffs` 里修过同一个形状）。
+ *
+ * team-map-revival-0804（B2）起导出：地图的项目 mini 卡要显「阻碍数」，而它手上是
+ * `LiteProject.blockers`（原始数组）没有 `ProjectView`。不提上来就得在地图里再写一遍
+ * `.map(trim).filter(Boolean)`——哪天规则变了（比如要去重），两处必然只改一处。
+ *
+ * 🔴 空数组 ≠「文档说没有卡点」：后端只在 `pr.blockers` 非空时才发这个键，缺席与空列表在
+ * 契约上分不开。所以消费方一律只在 `length > 0` 时渲染，永远不印「0 处卡点」。
+ */
+export function blockersOf(raw: readonly string[] | undefined): string[] {
+  return (raw ?? []).map((b) => b.trim()).filter(Boolean)
+}
+
 const KNOWN_RISK = new Set<RiskLevelKey>(['high', 'medium', 'low'])
 
 /**
@@ -231,7 +246,7 @@ export function buildProjectViews(
     statusRaw: trimmedOrNull(card.status),
     progress: progressOf(card.progress),
     dueDate: trimmedOrNull(card.dueDate),
-    blockers: (card.blockers ?? []).map((b) => b.trim()).filter(Boolean),
+    blockers: blockersOf(card.blockers),
     // 🔴 缺席=文档未提及=徽章收起：只有 card.risk 存在且 level 在词表内才给 riskLevel，禁 ?? 默认。
     riskLevel: riskLevelOf(card.risk?.level),
     riskReason: trimmedOrNull(card.risk?.reason),

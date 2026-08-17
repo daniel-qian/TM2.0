@@ -14,7 +14,19 @@
       "tenure": "1 years",
       "owns": [
         "Platform Engineering workstream 0"
-      ]
+      ],
+      "self_report": {
+        "load": {
+          "value": 91,
+          "caliber": "本人自述",
+          "source": "weekly-2026-W33.md:12"
+        },
+        "mood": {
+          "value": "strained",
+          "caliber": "本人自述",
+          "source": "weekly-2026-W33.md:12"
+        }
+      }
     },
     {
       "id": "u_1",
@@ -22,7 +34,14 @@
       "name": "Bo Costa",
       "role": "Platform Engineering specialist",
       "team": "Platform Engineering",
-      "tenure": "2 years"
+      "tenure": "2 years",
+      "self_report": {
+        "mood": {
+          "value": "steady",
+          "caliber": "本人自述",
+          "source": "weekly-2026-W33.md:13"
+        }
+      }
     },
     {
       "id": "u_2",
@@ -214,7 +233,14 @@
       "tenure": "5 years",
       "owns": [
         "Customer Success workstream 0"
-      ]
+      ],
+      "self_report": {
+        "mood": {
+          "value": "steady",
+          "caliber": "本人自述",
+          "source": "weekly-2026-W33.md:20"
+        }
+      }
     },
     {
       "id": "u_23",
@@ -349,7 +375,15 @@
       "tenure": "2 years",
       "owns": [
         "Field Operations workstream 0"
-      ]
+      ],
+      "self_report": {
+        "mood": {
+          "value": "other",
+          "valueRaw": "flat out",
+          "caliber": "本人自述",
+          "source": "weekly-2026-W33.md:31"
+        }
+      }
     },
     {
       "id": "u_38",
@@ -457,7 +491,14 @@
       "tenure": "5 years",
       "owns": [
         "Finance & Legal workstream 0"
-      ]
+      ],
+      "self_report": {
+        "mood": {
+          "value": "strained",
+          "caliber": "本人自述",
+          "source": ""
+        }
+      }
     },
     {
       "id": "u_50",
@@ -538,7 +579,14 @@
       "tenure": "5 years",
       "owns": [
         "People Ops workstream 0"
-      ]
+      ],
+      "self_report": {
+        "mood": {
+          "value": "stretched",
+          "caliber": "本人自述",
+          "source": "weekly-2026-W33.md:44"
+        }
+      }
     },
     {
       "id": "u_59",
@@ -546,7 +594,14 @@
       "name": "Jo Eriksen",
       "role": "People Ops specialist",
       "team": "People Ops",
-      "tenure": "6 years"
+      "tenure": "6 years",
+      "self_report": {
+        "mood": {
+          "value": "steady",
+          "caliber": "本人自述",
+          "source": "weekly-2026-W33.md:45"
+        }
+      }
     },
     {
       "id": "u_60",
@@ -803,7 +858,7 @@
     {
       "id": "p_8",
       "title": "Workstream 9 — Platform Engineering",
-      "ownerId": "u_56",
+      "ownerId": "u_0",
       "status": "on-track",
       "progress": 50,
       "dueDate": "2026-10-09",

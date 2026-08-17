@@ -2100,6 +2100,27 @@ export const en = {
     // pan/zoom affordance. Said plainly: the gesture is not discoverable on a still page.
     mapCanvasHint: 'Drag to move · scroll to zoom',
     mapCanvasReset: 'Reset view',
+
+    // ── B2 · focus ──
+    // Click a person → light up what they carry; click a project → light up who carries it.
+    // These aria-labels say what the click DOES, not what the element is: "Xu Wei, button"
+    // tells a screen-reader user nothing about why they would press it.
+    mapFocusPersonAria: 'Show what {name} is carrying',
+    mapFocusProjectAria: 'Show who is carrying {title}',
+    mapClearFocusCta: 'Back to the whole map',
+    mapOpenPersonCta: 'Open profile',
+    mapOpenProjectCta: 'View project',
+    // 🔴 Department-level read, derived from the team's OWN self-reports (PRD §3.3).
+    // Three things this sentence must never become:
+    //   · a count — "3 people said strained" is a cross-person tally (ADR-0023 forbids it),
+    //   · our verdict — it is "someone SELF-REPORTED", never "this department is strained",
+    //   · unattributable — it renders inside a [data-metric-source] anchor, always.
+    // "Someone" is deliberately vague about how many: we are quoting, not tallying.
+    // ⚠ The colon is load-bearing. {mood} is one of the EXISTING selfReportMood* labels, and
+    // those are standalone chips — capitalised ("Strained"). Dropped into running prose that
+    // reads "…self-reported Strained", which looks like a typo. A colon makes the capital
+    // correct instead of wrong, and survives whatever casing a future locale picks.
+    mapZoneRead: 'Someone self-reported: {mood}',
   },
 
   // ── Ask / Quick ask (feat-034 stage B — ADR-0023 voice: asks about the WORK; whether rating

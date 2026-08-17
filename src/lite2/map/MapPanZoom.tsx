@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useRef, type ReactNode } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from 'react'
 import {
   TransformWrapper,
   TransformComponent,
@@ -74,16 +81,37 @@ function fitBoard(wrapper: HTMLElement, board: { width: number; height: number }
   }
 }
 
+/**
+ * 「这一下算点击还是算拖动」的判据（屏幕 px）。
+ *
+ * 🔴 必须有这个阈值：画布上每一次 pan 都以 pointerdown 开头、pointerup 收尾，只看
+ * "抬手时下面是空白" 的话，**每拖一下板都会把 focus 清掉**——用户想挪一下看清连线，
+ * 结果连线没了。6px 是手指/触控板的抖动量级，比它大的位移一律当拖动。
+ */
+const CLICK_SLOP = 6
+
+/** 抬手落在这些东西上不算「点空白」：它们各自有自己的点击语义。 */
+const INTERACTIVE_WITHIN = '.lite-map-person, .lite-map-project, .lite-map-controls'
+
 export function MapPanZoom({
   board,
   ariaLabel,
+  onBackgroundClick,
+  extraControls,
   children,
 }: {
   board: { width: number; height: number }
   ariaLabel: string
+  /** 点空白（不是拖动、不是点节点）→ 回 calm。B2 的「点空白回 calm」就落在这里。 */
+  onBackgroundClick?: () => void
+  /** HUD 胶囊里额外塞的按钮（B2 的「回到全景」只在 focus 时出现）。 */
+  extraControls?: ReactNode
   children: ReactNode
 }) {
   const ref = useRef<ReactZoomPanPinchRef | null>(null)
+  const pointerDownAt = useRef<{ x: number; y: number } | null>(null)
+  // 「刚才那一下是拖动」——由 pointerup 判定，供紧随其后的 click 在捕获期读（见 onClickCapture）。
+  const draggedRef = useRef(false)
   const { t } = useDict()
   // board 走 ref 而不是进 applyFit 的闭包：`onInit` 是 rzpp 只调一次的回调，捕获到的那份
   // 闭包会一直是首帧那一份。读 ref 才保证「换了公司之后点复位」用的是新板的尺寸。
@@ -126,8 +154,51 @@ export function MapPanZoom({
     return () => window.removeEventListener('resize', onResize)
   }, [applyFit])
 
+  // 拖动与点击在画布上共用同一串指针事件（pointerdown → move* → pointerup → click），
+  // 所以「这一下算不算点击」必须有**一个**判据、判在**一个**地方。
+  function onPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
+    pointerDownAt.current = { x: event.clientX, y: event.clientY }
+    draggedRef.current = false
+  }
+
+  function onPointerUp(event: ReactPointerEvent<HTMLDivElement>) {
+    const down = pointerDownAt.current
+    pointerDownAt.current = null
+    draggedRef.current = !!down && Math.hypot(event.clientX - down.x, event.clientY - down.y) > CLICK_SLOP
+  }
+
+  /**
+   * 🔴 拖动之后那一下 `click` **必须在捕获期就掐掉**，而不是只在背景处理里 return。
+   *
+   * 实测踩到的：从一个人节点上按下去拖板——rzpp 把 content 跟着指针一起平移，于是**同一个
+   * 节点一直待在指针底下**，抬手时 down/up 目标相同，浏览器照常派发一次 click，节点的
+   * onClick 就把他选中了。用户只想挪一下板看清连线，结果 focus 跳到了另一个人身上。
+   *
+   * 捕获期在目标自己的 onClick **之前**跑（React 的合成事件按同一条传播路径走），
+   * 所以在这里 stopPropagation 能一次拦住节点、HUD、背景全部三种点击——一个判据、一个地方。
+   */
+  function onClickCapture(event: ReactMouseEvent<HTMLDivElement>) {
+    if (draggedRef.current) {
+      draggedRef.current = false
+      event.stopPropagation()
+      event.preventDefault()
+      return
+    }
+    if (!onBackgroundClick) return
+    const el = event.target as Element | null
+    // 点在节点/HUD 上 → 那是它们自己的点击，不是「点空白」。
+    if (el?.closest?.(INTERACTIVE_WITHIN)) return
+    onBackgroundClick()
+  }
+
   return (
-    <div className="lite-map-canvas" aria-label={ariaLabel}>
+    <div
+      className="lite-map-canvas"
+      aria-label={ariaLabel}
+      onPointerDown={onPointerDown}
+      onPointerUp={onPointerUp}
+      onClickCapture={onClickCapture}
+    >
       <TransformWrapper
         ref={ref}
         initialScale={0.5}
@@ -151,6 +222,7 @@ export function MapPanZoom({
             world 对象只许 board px，视口单位只有 HUD 能用）。 */}
         <div className="lite-map-controls">
           <span className="lite-map-hint">{t.lite2.mapCanvasHint}</span>
+          {extraControls}
           <button
             type="button"
             className="lite-btn lite-btn--ghost lite-map-reset"

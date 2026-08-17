@@ -1631,7 +1631,25 @@ export const zh: Dict = {
     "mapProjectsAria": "项目",
     // 拖拽/缩放这两个手势在静止的一页上看不出来，得直说。
     "mapCanvasHint": "拖动可平移 · 滚轮可缩放",
-    "mapCanvasReset": "复位视野"
+    "mapCanvasReset": "复位视野",
+
+    // ── B2 · focus ──
+    // aria 说的是「点下去会发生什么」，不是「这是什么」——读屏念一句「小徐，按钮」
+    // 等于什么都没说，用户不知道为什么要按它。
+    "mapFocusPersonAria": "看看{name}背着哪几件事",
+    "mapFocusProjectAria": "看看{title}压在谁身上",
+    "mapClearFocusCta": "回到全景",
+    "mapOpenPersonCta": "打开档案",
+    "mapOpenProjectCta": "看项目",
+    // 🔴 部门组级读数，从**本人自述**真派生（PRD §3.3）。这句话有三条不许越的线：
+    //   · 不许变成计数——「3 个人说吃紧」是跨人计数，ADR-0023 明禁；
+    //   · 不许变成我们的判断——是「**有人自述**吃紧」，不是「这个部门吃紧」；
+    //   · 不许无从追溯——它恒渲染在 data-metric-source 出处锚点里。
+    // 「有人」是刻意的含糊：我们在转述，不在统计。
+    // ⚠ 冒号不是装饰：{mood} 用的是既有的 selfReportMood* 那几个词，它们本来是独立的 chip
+    // 标签（英文侧首字母大写）。直接串进句子里会读成「self-reported Strained」那样的病句；
+    // 加个冒号，那个大写就从错的变成对的，中文侧也更像在**引一句话**而不是在下判断。
+    "mapZoneRead": "有人自述：{mood}"
   },
   "ask": {
     "eyebrow": "快问",
