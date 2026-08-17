@@ -149,11 +149,25 @@ sudo -n docker image inspect avery-agent:main-$TS \
 > 0817 预检已构建过 `avery-agent:preflight105-20260817-151753`（= `1dd35ce`）。
 > 若上产当天 `git rev-parse HEAD` 仍是 `1dd35ce…`，这次 build 会是纯缓存命中，秒出。
 
-### S2 · 🔴 push（对外闸 —— Danny 在场，他点头再敲）
+### S2 · ✅ 已完成（2026-08-17 晚，Danny 点头）—— push 已发生，**跳过本步**
+
+`2c74104..eb9dbc1`，45 个提交（含 13 个前端文件 +806 行）。前端**已上产并实测确认**：
+`__AVERY_BUILD__.commit = eb9dbc1`（⚠ SHA 在 `/assets/index-*.js` 主包里，**不在 index.html**——
+index 只有 736 字节、一个 SHA 都没有，按旧碑去 grep index 会空转到超时然后误判成「没构建」）。
+
+🔴 **但 S1 没做、S3–S7 没做 ⇒ 现在是「新前端 + 老后端(`6b70173`)+ 老库(落后四条迁移)」。**
+runbook §1 的源码论证说这个组合兼容（`store.ts:882` 的 `if (payload.job)` 回落同步路），
+**但没真跑验证过**——0817 晚只验了页面加载与控件在场，没点示例团队、没试上传（都会真写生产库）。
+§1 原本用「先构建、push 完立刻换容器」把这个窗口关掉；**窗口现在是开着的，换后端越早越好。**
+
+接着从 **S1** 做起（构建镜像），然后 S3 → S7。
+
+<details><summary>原步骤（存档）</summary>
 
 ```bash
 git push origin main
 ```
+</details>
 - **这一步一按下去，Vercel 立刻开始构建并上生产前端**，无法撤销、无人工确认。
 - 判据：`git rev-parse origin/main` == 本地 main。
 - 判据（约 1–2 分钟后）：<https://averylite.dannyqian.com> 的 index 里能 grep 到新 SHA。

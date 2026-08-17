@@ -135,6 +135,40 @@ push 是**对外闸**：main 上积压着 #105 那整批（含前端），一 pu
 ⚠ 别在这类文件里写死「领先 origin N 个提交」——每提交一次就自我作废（本回执初稿就写错成 43，
 实际当时是 44）。要数就跑 `git rev-list --count origin/main..HEAD`。
 
+## 7b · 🔴 部署缺口声明（clean-state-checklist 第 6 条）
+
+本 session 发生了两件部署：**后端换容器（env-only）** 与 **push ⇒ 前端自动上产**。
+两者 SHA **不一致**，必须写明：
+
+| 腿 | 跑的是 | 与 `main`(`eb9dbc1`) 的关系 |
+|---|---|---|
+| 前端 | **`eb9dbc1`** | ✅ **就是 main** |
+| 后端镜像 | **`6b70173`**（`main-20260812-070519`） | 🔴 **落后 main** |
+| 生产库 | `6b70173` 那套 schema（12 张表） | 🔴 落后 **四条迁移** |
+
+`git diff 6b70173 main -- eval-harness/{avery,service,db}` = **28 文件 / +3157 / −482**。
+**生产后端目前不含**（按影响排序）：
+
+- **#90 异步上传管线**：`service/ingest_worker.py`（+294，整个文件生产没有）、
+  `service/ingest_api.py`（437 行改动）、`avery/ingest/registry.py`（430 行改动）。
+- **#93 全档案重跑**：`avery/ingest/rejudge.py`（+301，整个文件生产没有）。
+- **#97 中文红线诊断词补齐**：`avery/redline.py`（+103）。⚠ 这条是**红线口径**缺口——
+  生产的输出闸目前仍是「只有英文认得人身标签」那一版。
+- **#104 开机锁修复**：`db/migrations/0002_*.sql` 不再每次开机抢 `entities` 的 ACCESS EXCLUSIVE。
+- **#96 OpenAI provider**：`brain_factory.py` / `extractor_factory.py`（境内不用，但代码没上）。
+- **四条迁移未上**：`0017_source_documents_content_sha256` / `0018_ingest_jobs` /
+  `0019_enable_rls` / `0020_account_contexts_multi_member`（另 `0002`/`0010` 有修改）。
+
+**重拉基线的时间点：下一个 session 的头等事**——把 `runbook-105.md` 的 S1、S3–S7 做完
+（S2 push 已完成，跳过）。runbook §1 原本靠「先构建、push 完立刻换容器」把这个错配窗口
+关掉；**push 已经发生，窗口现在开着。**
+
+⚠ 兼容性的诚实说法：runbook §1 读源码论证过「新前端 + 老后端」兼容
+（`src/lite2/store.ts:882` 是 `if (payload.job)` 分支，老后端不返回 `job` 就回落同步路），
+但 0817 晚**没有真跑验证**：只验了页面加载干净 + 21 个控件在场 + 示例团队入口在，
+**没点示例团队、没试上传**（两者都会往生产库真写数据，0720 的教训）。
+所以**上传那条路在真实错配下顺不顺，仍是未验**，别当成绿的。
+
 ## 8 · 恢复 DeepSeek 怎么做
 
 1. 充值。
