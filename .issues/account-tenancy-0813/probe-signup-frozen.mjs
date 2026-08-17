@@ -50,17 +50,49 @@ const anonKey = process.env.SUPABASE_ANON_KEY || (await anonKeyFromBundle())
 console.log(`═══ #101 注册门活体探针 · ${SUPABASE_URL} ═══`)
 
 // ── ① 真闸读数 ────────────────────────────────────────────────────────────────────────
+//
+// 🔴 0817 实收的一课：**「答不出」不许被渲染成一个确定的答案。**
+// 这一段原本只有 `frozen = settings.disable_signup === true` 一个分支，于是当
+// Supabase 因为组织流量超额把整个 Auth 服务限流掉（`HTTP 402 exceed_egress_quota`）时，
+// 读不到设置 → `undefined !== true` → 探针一脸笃定地报「闸还开着，请 Danny 去关」。
+// 而真相是**这个问题今天问不出来**：Danny 就算已经关了闸，这里照样红。
+// 一个把「不知道」说成「我知道，是坏的」的判据，比没有判据更坏——它会让人去点一个
+// 已经点过的开关，然后怀疑自己。
+//
+// 三态，不是两态：ANSWERED_FROZEN / ANSWERED_OPEN / UNANSWERABLE。
 const settingsRes = await fetch(`${SUPABASE_URL}/auth/v1/settings`, { headers: { apikey: anonKey } })
 const settings = await settingsRes.json().catch(() => ({}))
-const frozen = settings.disable_signup === true
-rec(
-  '🔴 ① Supabase 后台 disable_signup === true（唯一的真闸，只有 Danny 能点）',
-  frozen,
-  `HTTP ${settingsRes.status} · disable_signup=${JSON.stringify(settings.disable_signup)}`,
-)
+const readable = settingsRes.ok && typeof settings.disable_signup === 'boolean'
+const frozen = readable && settings.disable_signup === true
+
+if (!readable) {
+  const why =
+    settingsRes.status === 402
+      ? 'Supabase 组织流量超额，整个 Auth 服务被限流（exceed_egress_quota）'
+      : settingsRes.status === 401
+        ? 'anon key 不被接受（key 轮换过？重新从线上 bundle 抠一次）'
+        : `HTTP ${settingsRes.status}`
+  console.log(
+    `\n  ⚠ 探针答不出：${why}\n` +
+      `     原始响应：${JSON.stringify(settings).slice(0, 200)}\n\n` +
+      '     🔴 这**不是**「闸还开着」，也**不是**「闸已经关了」——是这个问题今天问不出来。\n' +
+      '     先让 Auth 服务恢复（Dashboard → Organization → Usage / Billing），再跑本探针。\n' +
+      '     在那之前，别根据这一行去点任何开关。',
+  )
+  console.log('\n═══ probe-signup-frozen：UNANSWERABLE（既非 PASS 也非 FAIL）═══')
+  process.exitCode = 2 // 与「答出来了但是红」（1）区分开，别让 CI 把两者混成同一件事
+} else {
+  rec(
+    '🔴 ① Supabase 后台 disable_signup === true（唯一的真闸，只有 Danny 能点）',
+    frozen,
+    `HTTP ${settingsRes.status} · disable_signup=${JSON.stringify(settings.disable_signup)}`,
+  )
+}
 
 // ── ②③ 只在真闸已关时才发这一枪 ────────────────────────────────────────────────────────
-if (!frozen) {
+if (!readable) {
+  // 上面已经说清楚了，这里不再重复喊话。
+} else if (!frozen) {
   console.log(
     '\n  ⏭ ②③ 跳过：真闸还开着 —— 这时一次真实 signup 会**真的建出一个用户**。\n' +
       '     前端已撤入口（verify-auth-form ④ 段守着），但那只是化妆；请 Danny 去\n' +
@@ -86,8 +118,15 @@ if (!frozen) {
   )
 }
 
-const pass = R.filter((r) => r.ok).length
-const fail = R.length - pass
-console.log(`\n═══ probe-signup-frozen：${pass} PASS · ${fail} FAIL ═══`)
-if (fail) for (const r of R.filter((x) => !x.ok)) console.log(`  ✗ ${r.n}`)
-process.exit(fail ? 1 : 0)
+// 🔴 答不出的那条路上面已经自己收过尾了（三态里的 UNANSWERABLE），这里不许再打一份
+// 「0 PASS · 0 FAIL」——那行读起来像「跑完了，没发现问题」，正是要避免的那种谎。
+if (readable) {
+  const pass = R.filter((r) => r.ok).length
+  const fail = R.length - pass
+  console.log(`\n═══ probe-signup-frozen：${pass} PASS · ${fail} FAIL ═══`)
+  if (fail) for (const r of R.filter((x) => !x.ok)) console.log(`  ✗ ${r.n}`)
+  process.exitCode = fail ? 1 : 0
+}
+// 退出码三态：0 = 闸已关且验穿 · 1 = 答出来了但闸开着 · 2 = 这个问题今天问不出来。
+// 用 exitCode 而不是 process.exit()：node-exit-after-supabase-js 那条碑（Windows/Node24 上
+// 紧跟网络栈调 exit() 会炸 libuv 断言，让一次全绿以「失败」收场）。

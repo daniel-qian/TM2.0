@@ -962,11 +962,21 @@ facts+notes 重物化成空；**留下** `context_id` · `owner_token` · `name`
     | **Supabase Auth API（登录/注册）** | 🔴 **402，完全不可用** |
   - 于是：**免登录的演示模式照常能演，但发出去的账号一个都登不上**。方案 A 分发在这条恢复之前
     是空的。
-  - 库很小（`materials` 49 MB，其余合计 < 6 MB）→ **吃掉额度的不是存储，是反复读取**。
-    嫌疑在 `reg.get(context_id)` 的读放大：它一次拉全部实体 + 全部 material 块 + 两份 memory 文件，
-    而后端在阿里云、库在 Supabase eu-central-1，**每一次读都是一次跨网出站**。
-    （与 #30「put() 把没变的语料当成要重建的」是同一处架构的两面。）
-  - 🔴 **处置归 Danny**：升 Pro 或摘掉 spend cap。agent 够不着计费。
+  - 🔴 **归因：几乎可以肯定不是 Avery 烧的。** 我先猜「`reg.get()` 读放大」，**两条独立证据把它证伪了**
+    （写下来是因为错的猜测会把下一张票带歪）：
+    1. **Caddy 访问日志：0812 装上至今 5 天只有 196 个请求。** 按每次 `get()` 约 25 kB 算，
+       全部加起来 ≈ **5 MB**，离 5 GB 差三个数量级。
+    2. **向量根本不出库**：`put()` 复用旧向量走的是 `CREATE TEMP TABLE ... AS SELECT`（**库内**完成），
+       RAG 检索是 `1 - (embedding <=> %s::vector)` **在 SQL 里算**、只回文本与分数。
+       49 MB 里那 22 MB 向量一次都没有跨过网络。
+  - **真正的嫌疑：同组织的另一个项目。** 免费额度**按组织**算，而 `DannyQ` 名下有两个：
+    | 项目 | 区域 | 库大小 | auth 用户 |
+    |---|---|---|---|
+    | `avery-fra` | eu-central-1 | ~55 MB | **1** |
+    | `daniel-qian's Project` | us-east-2 | **152 MB** | **49** |
+    → avery 大概率是**被连累**的那个。确认要看 Dashboard → Organization → Usage 的按项目/按服务拆分。
+  - 🔴 **处置归 Danny**（agent 够不着计费）：先看 Usage 页确认是谁烧的，再决定升 Pro / 摘 spend cap /
+    把两个项目分到不同组织。
   - ⚠ 这条给门电池留了一个新的假红源：任何打真 Supabase Auth 的判据（`probe-signup-frozen.mjs`
     首当其冲）在额度恢复前会红，**而它今天把「读不到设置」报成了「闸还开着」**——
     「量错了东西」的第六种形态（把「答不出」渲染成一个确定的答案）。
