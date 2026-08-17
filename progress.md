@@ -940,8 +940,36 @@ facts+notes 重物化成空；**留下** `context_id` · `owner_token` · `name`
 
 ## Blockers / Risks
 
-- ✅ **~~离线 pytest 3 红＝已知墙钟炸弹~~ 已销账**（#82）。当前基线 **4217 passed · 0 failed**（#93 收尾后），
-  **任何红都是你的**。
+- ✅ **~~离线 pytest 3 红＝已知墙钟炸弹~~ 已销账**（#82）。当前基线 **4434 passed · 0 failed · 4 xfailed**
+  （0817 编排实测，#97/#98/#100 合入后），**任何红都是你的**。
+  ⚠ 半夜那条假红（本地 00:00–08:00）已由 feat-105 修好并合入（`032c7e8`），**别再用 `TZ=UTC` 绕它**——
+  那等于把判据变瞎。
+
+- 🔴🔴 **生产 Supabase 项目被限流：登录今天是坏的**（0817 编排实查，**不是**代码问题）：
+
+  ```
+  GET /auth/v1/settings → HTTP 402
+  "Service for this project is restricted due to the following violations:
+   exceed_egress_quota. The project owner must upgrade their plan or remove spend caps."
+  ```
+
+  - 项目 `avery-fra` 本身 `ACTIVE_HEALTHY`，组织 `DannyQ` 是 **free 计划**；超的是**出站流量**额度。
+  - **影响面实测**（三条腿分开验的，别笼统说「生产挂了」）：
+    | 腿 | 状态 |
+    |---|---|
+    | 后端 `/health`、`/demo/status` | ✅ **200**（走直连 Postgres/pooler，不经那道闸） |
+    | 数据库读写 | ✅ 正常（116 contexts · 0 account_contexts · 1 auth user） |
+    | **Supabase Auth API（登录/注册）** | 🔴 **402，完全不可用** |
+  - 于是：**免登录的演示模式照常能演，但发出去的账号一个都登不上**。方案 A 分发在这条恢复之前
+    是空的。
+  - 库很小（`materials` 49 MB，其余合计 < 6 MB）→ **吃掉额度的不是存储，是反复读取**。
+    嫌疑在 `reg.get(context_id)` 的读放大：它一次拉全部实体 + 全部 material 块 + 两份 memory 文件，
+    而后端在阿里云、库在 Supabase eu-central-1，**每一次读都是一次跨网出站**。
+    （与 #30「put() 把没变的语料当成要重建的」是同一处架构的两面。）
+  - 🔴 **处置归 Danny**：升 Pro 或摘掉 spend cap。agent 够不着计费。
+  - ⚠ 这条给门电池留了一个新的假红源：任何打真 Supabase Auth 的判据（`probe-signup-frozen.mjs`
+    首当其冲）在额度恢复前会红，**而它今天把「读不到设置」报成了「闸还开着」**——
+    「量错了东西」的第六种形态（把「答不出」渲染成一个确定的答案）。
 - 🔴 **量错了东西的五种形态**（#84 三条 + #95 一条 + #93 收尾一条，病因各不相同）：
   - **ⓐ 尺子够不着 → 假绿**：「栏是下陷还是凸起」写成「往祖先链上合成到第一张不透明的面」，
     而**实测**（`_px84/lumprobe.mjs`）那条链从 `aside` 一路到 `BODY` **全是 `rgba(0,0,0,0)`**
