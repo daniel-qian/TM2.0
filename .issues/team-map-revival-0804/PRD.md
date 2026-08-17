@@ -1,4 +1,4 @@
-# Team map 复活 · PRD v1(2026-08-17 grill 定稿,待 Danny 终确认)
+# Team map 复活 · PRD v1(2026-08-17 grill 定稿,Danny 已确认;正源票 #106/#107)
 
 > 前置材料:[research-and-proposal.md](research-and-proposal.md)(08-04 调研 + 方案 B + 08-05 大团队策略)。
 > 本文按 main 最新现状(至 `2c74104`,含 ADR-0033/0034、#46-#89 各票)校准。
@@ -103,8 +103,8 @@ HUD-lite(搜索/部门 chips/警报药丸);demo-seed 验收锚定;80 人合成 f
   像素基线(空态+数据态,setFixedTime 钉钟);`assertRoomCanvas` 改判作用域;逐视口 born-red。
 - **B4(独立缓建票)**:部门收拢态,见 §5.3。
 
-开票:一张父票(B1–B3 checklist)+ B4 独立票挂 blocked;gh issue 为正源,中文走
-`gh api --input` JSON(防乱码)。
+开票(2026-08-17 已开,issue 为正源):**父票 #106**(B1–B3 checklist,ready-for-agent)·
+**B4 缓建票 #107**(触发=首个 40 人以上真租户)。
 
 ## 7. 门与验收细则(工程纪律,不需要拍)
 
