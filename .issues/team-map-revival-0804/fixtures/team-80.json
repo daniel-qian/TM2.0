@@ -1,0 +1,937 @@
+{
+  "context_id": "ctx_synth_80",
+  "source_files": [
+    "synthetic-roster.csv",
+    "synthetic-projects.md"
+  ],
+  "people": [
+    {
+      "id": "u_0",
+      "person_id": "EMP-1000",
+      "name": "Ada Aldridge",
+      "role": "Head of Platform Engineering",
+      "team": "Platform Engineering",
+      "tenure": "1 years",
+      "owns": [
+        "Platform Engineering workstream 0"
+      ]
+    },
+    {
+      "id": "u_1",
+      "person_id": "EMP-1001",
+      "name": "Bo Costa",
+      "role": "Platform Engineering specialist",
+      "team": "Platform Engineering",
+      "tenure": "2 years"
+    },
+    {
+      "id": "u_2",
+      "person_id": "EMP-1002",
+      "name": "Cass Eriksen",
+      "role": "Platform Engineering specialist",
+      "team": "Platform Engineering",
+      "tenure": "3 years"
+    },
+    {
+      "id": "u_3",
+      "person_id": "EMP-1003",
+      "name": "Dev Grigoryan",
+      "role": "Platform Engineering specialist",
+      "team": "Platform Engineering",
+      "tenure": "4 years",
+      "owns": [
+        "Platform Engineering workstream 3"
+      ]
+    },
+    {
+      "id": "u_4",
+      "person_id": "EMP-1004",
+      "name": "Elin Aldridge",
+      "role": "Platform Engineering specialist",
+      "team": "Platform Engineering",
+      "tenure": "5 years"
+    },
+    {
+      "id": "u_5",
+      "person_id": "EMP-1005",
+      "name": "Fay Costa",
+      "role": "Platform Engineering specialist",
+      "team": "Platform Engineering",
+      "tenure": "6 years"
+    },
+    {
+      "id": "u_6",
+      "person_id": "EMP-1006",
+      "name": "Gus Eriksen",
+      "role": "Platform Engineering specialist",
+      "team": "Platform Engineering",
+      "tenure": "7 years",
+      "owns": [
+        "Platform Engineering workstream 6"
+      ]
+    },
+    {
+      "id": "u_7",
+      "person_id": "EMP-1007",
+      "name": "Hana Grigoryan",
+      "role": "Platform Engineering specialist",
+      "team": "Platform Engineering",
+      "tenure": "8 years"
+    },
+    {
+      "id": "u_8",
+      "person_id": "EMP-1008",
+      "name": "Ivo Aldridge",
+      "role": "Platform Engineering specialist",
+      "team": "Platform Engineering",
+      "tenure": "9 years"
+    },
+    {
+      "id": "u_9",
+      "person_id": "EMP-1009",
+      "name": "Jo Costa",
+      "role": "Platform Engineering specialist",
+      "team": "Platform Engineering",
+      "tenure": "1 years",
+      "owns": [
+        "Platform Engineering workstream 9"
+      ]
+    },
+    {
+      "id": "u_10",
+      "person_id": "EMP-1010",
+      "name": "Ada Eriksen",
+      "role": "Platform Engineering specialist",
+      "team": "Platform Engineering",
+      "tenure": "2 years"
+    },
+    {
+      "id": "u_11",
+      "person_id": "EMP-1011",
+      "name": "Bo Grigoryan",
+      "role": "Platform Engineering specialist",
+      "team": "Platform Engineering",
+      "tenure": "3 years"
+    },
+    {
+      "id": "u_12",
+      "person_id": "EMP-1012",
+      "name": "Cass Aldridge",
+      "role": "Platform Engineering specialist",
+      "team": "Platform Engineering",
+      "tenure": "4 years",
+      "owns": [
+        "Platform Engineering workstream 12"
+      ]
+    },
+    {
+      "id": "u_13",
+      "person_id": "EMP-1013",
+      "name": "Dev Costa",
+      "role": "Platform Engineering specialist",
+      "team": "Platform Engineering",
+      "tenure": "5 years"
+    },
+    {
+      "id": "u_14",
+      "person_id": "EMP-1014",
+      "name": "Elin Eriksen",
+      "role": "Platform Engineering specialist",
+      "team": "Platform Engineering",
+      "tenure": "6 years"
+    },
+    {
+      "id": "u_15",
+      "person_id": "EMP-1015",
+      "name": "Fay Grigoryan",
+      "role": "Platform Engineering specialist",
+      "team": "Platform Engineering",
+      "tenure": "7 years",
+      "owns": [
+        "Platform Engineering workstream 15"
+      ]
+    },
+    {
+      "id": "u_16",
+      "person_id": "EMP-1016",
+      "name": "Gus Aldridge",
+      "role": "Platform Engineering specialist",
+      "team": "Platform Engineering",
+      "tenure": "8 years"
+    },
+    {
+      "id": "u_17",
+      "person_id": "EMP-1017",
+      "name": "Hana Costa",
+      "role": "Platform Engineering specialist",
+      "team": "Platform Engineering",
+      "tenure": "9 years"
+    },
+    {
+      "id": "u_18",
+      "person_id": "EMP-1018",
+      "name": "Ivo Eriksen",
+      "role": "Platform Engineering specialist",
+      "team": "Platform Engineering",
+      "tenure": "1 years",
+      "owns": [
+        "Platform Engineering workstream 18"
+      ]
+    },
+    {
+      "id": "u_19",
+      "person_id": "EMP-1019",
+      "name": "Jo Grigoryan",
+      "role": "Platform Engineering specialist",
+      "team": "Platform Engineering",
+      "tenure": "2 years"
+    },
+    {
+      "id": "u_20",
+      "person_id": "EMP-1020",
+      "name": "Ada Aldridge",
+      "role": "Platform Engineering specialist",
+      "team": "Platform Engineering",
+      "tenure": "3 years"
+    },
+    {
+      "id": "u_21",
+      "person_id": "EMP-1021",
+      "name": "Bo Costa",
+      "role": "Platform Engineering specialist",
+      "team": "Platform Engineering",
+      "tenure": "4 years",
+      "owns": [
+        "Platform Engineering workstream 21"
+      ]
+    },
+    {
+      "id": "u_22",
+      "person_id": "EMP-1022",
+      "name": "Cass Grigoryan",
+      "role": "Head of Customer Success",
+      "team": "Customer Success",
+      "tenure": "5 years",
+      "owns": [
+        "Customer Success workstream 0"
+      ]
+    },
+    {
+      "id": "u_23",
+      "person_id": "EMP-1023",
+      "name": "Dev Aldridge",
+      "role": "Customer Success specialist",
+      "team": "Customer Success",
+      "tenure": "6 years"
+    },
+    {
+      "id": "u_24",
+      "person_id": "EMP-1024",
+      "name": "Elin Costa",
+      "role": "Customer Success specialist",
+      "team": "Customer Success",
+      "tenure": "7 years"
+    },
+    {
+      "id": "u_25",
+      "person_id": "EMP-1025",
+      "name": "Fay Eriksen",
+      "role": "Customer Success specialist",
+      "team": "Customer Success",
+      "tenure": "8 years",
+      "owns": [
+        "Customer Success workstream 3"
+      ]
+    },
+    {
+      "id": "u_26",
+      "person_id": "EMP-1026",
+      "name": "Gus Grigoryan",
+      "role": "Customer Success specialist",
+      "team": "Customer Success",
+      "tenure": "9 years"
+    },
+    {
+      "id": "u_27",
+      "person_id": "EMP-1027",
+      "name": "Hana Aldridge",
+      "role": "Customer Success specialist",
+      "team": "Customer Success",
+      "tenure": "1 years"
+    },
+    {
+      "id": "u_28",
+      "person_id": "EMP-1028",
+      "name": "Ivo Costa",
+      "role": "Customer Success specialist",
+      "team": "Customer Success",
+      "tenure": "2 years",
+      "owns": [
+        "Customer Success workstream 6"
+      ]
+    },
+    {
+      "id": "u_29",
+      "person_id": "EMP-1029",
+      "name": "Jo Eriksen",
+      "role": "Customer Success specialist",
+      "team": "Customer Success",
+      "tenure": "3 years"
+    },
+    {
+      "id": "u_30",
+      "person_id": "EMP-1030",
+      "name": "Ada Grigoryan",
+      "role": "Customer Success specialist",
+      "team": "Customer Success",
+      "tenure": "4 years"
+    },
+    {
+      "id": "u_31",
+      "person_id": "EMP-1031",
+      "name": "Bo Aldridge",
+      "role": "Customer Success specialist",
+      "team": "Customer Success",
+      "tenure": "5 years",
+      "owns": [
+        "Customer Success workstream 9"
+      ]
+    },
+    {
+      "id": "u_32",
+      "person_id": "EMP-1032",
+      "name": "Cass Costa",
+      "role": "Customer Success specialist",
+      "team": "Customer Success",
+      "tenure": "6 years"
+    },
+    {
+      "id": "u_33",
+      "person_id": "EMP-1033",
+      "name": "Dev Eriksen",
+      "role": "Customer Success specialist",
+      "team": "Customer Success",
+      "tenure": "7 years"
+    },
+    {
+      "id": "u_34",
+      "person_id": "EMP-1034",
+      "name": "Elin Grigoryan",
+      "role": "Customer Success specialist",
+      "team": "Customer Success",
+      "tenure": "8 years",
+      "owns": [
+        "Customer Success workstream 12"
+      ]
+    },
+    {
+      "id": "u_35",
+      "person_id": "EMP-1035",
+      "name": "Fay Aldridge",
+      "role": "Customer Success specialist",
+      "team": "Customer Success",
+      "tenure": "9 years"
+    },
+    {
+      "id": "u_36",
+      "person_id": "EMP-1036",
+      "name": "Gus Costa",
+      "role": "Customer Success specialist",
+      "team": "Customer Success",
+      "tenure": "1 years"
+    },
+    {
+      "id": "u_37",
+      "person_id": "EMP-1037",
+      "name": "Hana Fontaine",
+      "role": "Head of Field Operations",
+      "team": "Field Operations",
+      "tenure": "2 years",
+      "owns": [
+        "Field Operations workstream 0"
+      ]
+    },
+    {
+      "id": "u_38",
+      "person_id": "EMP-1038",
+      "name": "Ivo Hollis",
+      "role": "Field Operations specialist",
+      "team": "Field Operations",
+      "tenure": "3 years"
+    },
+    {
+      "id": "u_39",
+      "person_id": "EMP-1039",
+      "name": "Jo Bhatt",
+      "role": "Field Operations specialist",
+      "team": "Field Operations",
+      "tenure": "4 years"
+    },
+    {
+      "id": "u_40",
+      "person_id": "EMP-1040",
+      "name": "Ada Duarte",
+      "role": "Field Operations specialist",
+      "team": "Field Operations",
+      "tenure": "5 years",
+      "owns": [
+        "Field Operations workstream 3"
+      ]
+    },
+    {
+      "id": "u_41",
+      "person_id": "EMP-1041",
+      "name": "Bo Fontaine",
+      "role": "Field Operations specialist",
+      "team": "Field Operations",
+      "tenure": "6 years"
+    },
+    {
+      "id": "u_42",
+      "person_id": "EMP-1042",
+      "name": "Cass Hollis",
+      "role": "Field Operations specialist",
+      "team": "Field Operations",
+      "tenure": "7 years"
+    },
+    {
+      "id": "u_43",
+      "person_id": "EMP-1043",
+      "name": "Dev Bhatt",
+      "role": "Field Operations specialist",
+      "team": "Field Operations",
+      "tenure": "8 years",
+      "owns": [
+        "Field Operations workstream 6"
+      ]
+    },
+    {
+      "id": "u_44",
+      "person_id": "EMP-1044",
+      "name": "Elin Duarte",
+      "role": "Field Operations specialist",
+      "team": "Field Operations",
+      "tenure": "9 years"
+    },
+    {
+      "id": "u_45",
+      "person_id": "EMP-1045",
+      "name": "Fay Fontaine",
+      "role": "Field Operations specialist",
+      "team": "Field Operations",
+      "tenure": "1 years"
+    },
+    {
+      "id": "u_46",
+      "person_id": "EMP-1046",
+      "name": "Gus Hollis",
+      "role": "Field Operations specialist",
+      "team": "Field Operations",
+      "tenure": "2 years",
+      "owns": [
+        "Field Operations workstream 9"
+      ]
+    },
+    {
+      "id": "u_47",
+      "person_id": "EMP-1047",
+      "name": "Hana Bhatt",
+      "role": "Field Operations specialist",
+      "team": "Field Operations",
+      "tenure": "3 years"
+    },
+    {
+      "id": "u_48",
+      "person_id": "EMP-1048",
+      "name": "Ivo Duarte",
+      "role": "Field Operations specialist",
+      "team": "Field Operations",
+      "tenure": "4 years"
+    },
+    {
+      "id": "u_49",
+      "person_id": "EMP-1049",
+      "name": "Jo Bhatt",
+      "role": "Head of Finance & Legal",
+      "team": "Finance & Legal",
+      "tenure": "5 years",
+      "owns": [
+        "Finance & Legal workstream 0"
+      ]
+    },
+    {
+      "id": "u_50",
+      "person_id": "EMP-1050",
+      "name": "Ada Duarte",
+      "role": "Finance & Legal specialist",
+      "team": "Finance & Legal",
+      "tenure": "6 years"
+    },
+    {
+      "id": "u_51",
+      "person_id": "EMP-1051",
+      "name": "Bo Fontaine",
+      "role": "Finance & Legal specialist",
+      "team": "Finance & Legal",
+      "tenure": "7 years"
+    },
+    {
+      "id": "u_52",
+      "person_id": "EMP-1052",
+      "name": "Cass Hollis",
+      "role": "Finance & Legal specialist",
+      "team": "Finance & Legal",
+      "tenure": "8 years",
+      "owns": [
+        "Finance & Legal workstream 3"
+      ]
+    },
+    {
+      "id": "u_53",
+      "person_id": "EMP-1053",
+      "name": "Dev Bhatt",
+      "role": "Finance & Legal specialist",
+      "team": "Finance & Legal",
+      "tenure": "9 years"
+    },
+    {
+      "id": "u_54",
+      "person_id": "EMP-1054",
+      "name": "Elin Duarte",
+      "role": "Finance & Legal specialist",
+      "team": "Finance & Legal",
+      "tenure": "1 years"
+    },
+    {
+      "id": "u_55",
+      "person_id": "EMP-1055",
+      "name": "Fay Fontaine",
+      "role": "Finance & Legal specialist",
+      "team": "Finance & Legal",
+      "tenure": "2 years",
+      "owns": [
+        "Finance & Legal workstream 6"
+      ]
+    },
+    {
+      "id": "u_56",
+      "person_id": "EMP-1056",
+      "name": "Gus Hollis",
+      "role": "Finance & Legal specialist",
+      "team": "Finance & Legal",
+      "tenure": "3 years"
+    },
+    {
+      "id": "u_57",
+      "person_id": "EMP-1057",
+      "name": "Hana Bhatt",
+      "role": "Finance & Legal specialist",
+      "team": "Finance & Legal",
+      "tenure": "4 years"
+    },
+    {
+      "id": "u_58",
+      "person_id": "EMP-1058",
+      "name": "Ivo Costa",
+      "role": "Head of People Ops",
+      "team": "People Ops",
+      "tenure": "5 years",
+      "owns": [
+        "People Ops workstream 0"
+      ]
+    },
+    {
+      "id": "u_59",
+      "person_id": "EMP-1059",
+      "name": "Jo Eriksen",
+      "role": "People Ops specialist",
+      "team": "People Ops",
+      "tenure": "6 years"
+    },
+    {
+      "id": "u_60",
+      "person_id": "EMP-1060",
+      "name": "Ada Grigoryan",
+      "role": "People Ops specialist",
+      "team": "People Ops",
+      "tenure": "7 years"
+    },
+    {
+      "id": "u_61",
+      "person_id": "EMP-1061",
+      "name": "Bo Aldridge",
+      "role": "People Ops specialist",
+      "team": "People Ops",
+      "tenure": "8 years",
+      "owns": [
+        "People Ops workstream 3"
+      ]
+    },
+    {
+      "id": "u_62",
+      "person_id": "EMP-1062",
+      "name": "Cass Costa",
+      "role": "People Ops specialist",
+      "team": "People Ops",
+      "tenure": "9 years"
+    },
+    {
+      "id": "u_63",
+      "person_id": "EMP-1063",
+      "name": "Dev Eriksen",
+      "role": "People Ops specialist",
+      "team": "People Ops",
+      "tenure": "1 years"
+    },
+    {
+      "id": "u_64",
+      "person_id": "EMP-1064",
+      "name": "Elin Grigoryan",
+      "role": "People Ops specialist",
+      "team": "People Ops",
+      "tenure": "2 years",
+      "owns": [
+        "People Ops workstream 6"
+      ]
+    },
+    {
+      "id": "u_65",
+      "person_id": "EMP-1065",
+      "name": "Fay Bhatt",
+      "role": "Head of Design",
+      "team": "Design",
+      "tenure": "3 years",
+      "owns": [
+        "Design workstream 0"
+      ]
+    },
+    {
+      "id": "u_66",
+      "person_id": "EMP-1066",
+      "name": "Gus Duarte",
+      "role": "Design specialist",
+      "team": "Design",
+      "tenure": "4 years"
+    },
+    {
+      "id": "u_67",
+      "person_id": "EMP-1067",
+      "name": "Hana Fontaine",
+      "role": "Design specialist",
+      "team": "Design",
+      "tenure": "5 years"
+    },
+    {
+      "id": "u_68",
+      "person_id": "EMP-1068",
+      "name": "Ivo Hollis",
+      "role": "Design specialist",
+      "team": "Design",
+      "tenure": "6 years",
+      "owns": [
+        "Design workstream 3"
+      ]
+    },
+    {
+      "id": "u_69",
+      "person_id": "EMP-1069",
+      "name": "Jo Bhatt",
+      "role": "Design specialist",
+      "team": "Design",
+      "tenure": "7 years"
+    },
+    {
+      "id": "u_70",
+      "person_id": "EMP-1070",
+      "name": "Ada Duarte",
+      "role": "Design specialist",
+      "team": "Design",
+      "tenure": "8 years"
+    },
+    {
+      "id": "u_71",
+      "person_id": "EMP-1071",
+      "name": "Bo Hollis",
+      "role": "Head of Data",
+      "team": "Data",
+      "tenure": "9 years",
+      "owns": [
+        "Data workstream 0"
+      ]
+    },
+    {
+      "id": "u_72",
+      "person_id": "EMP-1072",
+      "name": "Cass Bhatt",
+      "role": "Data specialist",
+      "team": "Data",
+      "tenure": "1 years"
+    },
+    {
+      "id": "u_73",
+      "person_id": "EMP-1073",
+      "name": "Dev Duarte",
+      "role": "Data specialist",
+      "team": "Data",
+      "tenure": "2 years"
+    },
+    {
+      "id": "u_74",
+      "person_id": "EMP-1074",
+      "name": "Elin Fontaine",
+      "role": "Data specialist",
+      "team": "Data",
+      "tenure": "3 years",
+      "owns": [
+        "Data workstream 3"
+      ]
+    },
+    {
+      "id": "u_75",
+      "person_id": "EMP-1075",
+      "name": "Fay Hollis",
+      "role": "Data specialist",
+      "team": "Data",
+      "tenure": "4 years"
+    },
+    {
+      "id": "u_76",
+      "person_id": "EMP-1076",
+      "name": "Gus Eriksen",
+      "role": "Head of Executive",
+      "team": "Executive",
+      "tenure": "5 years",
+      "owns": [
+        "Executive workstream 0"
+      ]
+    },
+    {
+      "id": "u_77",
+      "person_id": "EMP-1077",
+      "name": "Hana Grigoryan",
+      "role": "Executive specialist",
+      "team": "Executive",
+      "tenure": "6 years"
+    },
+    {
+      "id": "u_78",
+      "person_id": "EMP-1078",
+      "name": "Ivo Aldridge",
+      "role": "Executive specialist",
+      "team": "Executive",
+      "tenure": "7 years"
+    },
+    {
+      "id": "u_no_team",
+      "name": "Wren Vasquez-Oyelaran",
+      "role": "Contractor"
+    }
+  ],
+  "projects": [
+    {
+      "id": "p_0",
+      "title": "Workstream 1 — Platform Engineering",
+      "ownerId": "u_0",
+      "status": "on-track",
+      "progress": 10,
+      "dueDate": "2026-10-01",
+      "summary": "Synthetic workstream 1."
+    },
+    {
+      "id": "p_1",
+      "title": "Workstream 2 — Customer Success",
+      "ownerId": "u_7",
+      "status": "at-risk",
+      "progress": 15,
+      "dueDate": "2026-11-02",
+      "summary": "Synthetic workstream 2."
+    },
+    {
+      "id": "p_2",
+      "title": "Workstream 3 — Field Operations",
+      "ownerId": "u_14",
+      "status": "blocked",
+      "progress": 20,
+      "dueDate": "2026-10-03",
+      "summary": "Synthetic workstream 3."
+    },
+    {
+      "id": "p_3",
+      "title": "Workstream 4 — Finance & Legal",
+      "ownerId": "u_21",
+      "status": "done",
+      "progress": 25,
+      "dueDate": "2026-11-04",
+      "summary": "Synthetic workstream 4."
+    },
+    {
+      "id": "p_4",
+      "title": "Workstream 5 — People Ops",
+      "ownerId": "u_28",
+      "status": "on-track",
+      "progress": 30,
+      "dueDate": "2026-10-05",
+      "summary": "Synthetic workstream 5."
+    },
+    {
+      "id": "p_5",
+      "title": "Workstream 6 — Design",
+      "ownerId": "u_35",
+      "status": "at-risk",
+      "progress": 35,
+      "dueDate": "2026-11-06",
+      "summary": "Synthetic workstream 6."
+    },
+    {
+      "id": "p_6",
+      "title": "Workstream 7 — Data",
+      "ownerId": "u_42",
+      "status": "blocked",
+      "progress": 40,
+      "dueDate": "2026-10-07",
+      "summary": "Synthetic workstream 7."
+    },
+    {
+      "id": "p_7",
+      "title": "Workstream 8 — Executive",
+      "ownerId": "u_49",
+      "status": "done",
+      "progress": 45,
+      "dueDate": "2026-11-08",
+      "summary": "Synthetic workstream 8."
+    },
+    {
+      "id": "p_8",
+      "title": "Workstream 9 — Platform Engineering",
+      "ownerId": "u_56",
+      "status": "on-track",
+      "progress": 50,
+      "dueDate": "2026-10-09",
+      "summary": "Synthetic workstream 9."
+    },
+    {
+      "id": "p_9",
+      "title": "Workstream 10 — Customer Success",
+      "ownerId": "u_63",
+      "status": "at-risk",
+      "progress": 55,
+      "dueDate": "2026-11-01",
+      "summary": "Synthetic workstream 10."
+    },
+    {
+      "id": "p_10",
+      "title": "Workstream 11 — Field Operations",
+      "ownerId": "u_70",
+      "status": "blocked",
+      "progress": 60,
+      "dueDate": "2026-10-02",
+      "summary": "Synthetic workstream 11."
+    },
+    {
+      "id": "p_11",
+      "title": "Workstream 12 — Finance & Legal",
+      "ownerId": "u_77",
+      "status": "done",
+      "progress": 65,
+      "dueDate": "2026-11-03",
+      "summary": "Synthetic workstream 12."
+    },
+    {
+      "id": "p_12",
+      "title": "Workstream 13 — People Ops",
+      "ownerId": "u_4",
+      "status": "on-track",
+      "progress": 70,
+      "dueDate": "2026-10-04",
+      "summary": "Synthetic workstream 13."
+    },
+    {
+      "id": "p_13",
+      "title": "Workstream 14 — Design",
+      "ownerId": "u_11",
+      "status": "at-risk",
+      "progress": 75,
+      "dueDate": "2026-11-05",
+      "summary": "Synthetic workstream 14."
+    },
+    {
+      "id": "p_14",
+      "title": "Workstream 15 — Data",
+      "ownerId": "u_18",
+      "status": "blocked",
+      "progress": 80,
+      "dueDate": "2026-10-06",
+      "summary": "Synthetic workstream 15."
+    },
+    {
+      "id": "p_15",
+      "title": "Workstream 16 — Executive",
+      "ownerId": "u_25",
+      "status": "done",
+      "progress": 85,
+      "dueDate": "2026-11-07",
+      "summary": "Synthetic workstream 16."
+    },
+    {
+      "id": "p_no_owner_at_all",
+      "title": "No owner anywhere",
+      "status": "on-track",
+      "progress": 30
+    },
+    {
+      "id": "p_owner_name_only",
+      "title": "Owner named but never linked",
+      "ownerName": "Ada Aldridge",
+      "status": "at-risk",
+      "progress": 55
+    },
+    {
+      "id": "p_owner_id_dangling",
+      "title": "Owner id points at nobody",
+      "ownerId": "u_ghost_9999",
+      "status": "on-track",
+      "progress": 10
+    },
+    {
+      "id": "p_no_status",
+      "title": "No status in the documents",
+      "ownerId": "u_3",
+      "progress": 44
+    },
+    {
+      "id": "p_status_out_of_vocab",
+      "title": "Status word we do not know",
+      "ownerId": "u_5",
+      "status": "parked-until-q3",
+      "progress": 5
+    },
+    {
+      "id": "p_no_progress",
+      "title": "No progress in the documents",
+      "ownerId": "u_7",
+      "status": "on-track"
+    },
+    {
+      "id": "p_progress_zero",
+      "title": "Progress really is zero",
+      "ownerId": "u_9",
+      "status": "blocked",
+      "progress": 0
+    },
+    {
+      "id": "p_progress_out_of_range",
+      "title": "A deliberately very long project title that must ellipsis instead of blowing the bar open",
+      "ownerId": "u_11",
+      "status": "at-risk",
+      "progress": 140
+    }
+  ],
+  "briefing": {
+    "tone": "calm",
+    "headline": "Your team: 80 people, 24 projects in flight.",
+    "subhead": "Synthetic tenant — layout stress fixture only.",
+    "metrics": []
+  },
+  "scoring_enabled": false,
+  "archived_people": []
+}

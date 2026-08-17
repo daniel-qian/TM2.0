@@ -9,6 +9,7 @@ import {
   projectCoverage,
   projectRiskLabel,
   projectStatusLabel,
+  projectStatusTone,
   type ProjectGroupKey,
   type ProjectStatusKey,
   type ProjectView,
@@ -61,14 +62,10 @@ function classNames(parts: Array<string | false | null | undefined>) {
 
 // 状态语气色。沿用既有 tone-* / edge-* 语法（与「你的团队」项目卡同一套族色）。
 // 🔴 「文档没写状态」永远是中性的——不给它染成绿色（那是在替文档说"没事"）。
-// unknown 给自己的 tone-unknown（中性灰）：不给 tone class 时 `.status-dot` 落回
-// 默认 sage/绿——那正是 on-track 的颜色，「不知道」绝不能和它撞色。
-function statusTone(statusKey: ProjectStatusKey): string {
-  if (statusKey === 'blocked') return 'tone-danger'
-  if (statusKey === 'at-risk') return 'tone-warning'
-  if (statusKey === 'unknown') return 'tone-unknown'
-  return ''
-}
+// team-map-revival-0804（B1）：本函数原样提进 `projectView.ts` 并导出——地图页的项目条要
+// 用同一套语气色，而它手上只有 `LiteProject.statusRaw` 没有 `ProjectView`。判断逻辑一字未改，
+// 提上去只是为了不让同一个状态在两块屏上有两个颜色（PRD §3.4「单一尺子」）。
+const statusTone = projectStatusTone
 
 // edge 左缘只染「需要经理出手」的两档——on-track/done/未知一律不上色。单独算，
 // 不与 statusTone 共用同一个真值判断：unknown 现在也有非空 tone，不能再用

@@ -92,6 +92,29 @@ export function paperworkHref(): string {
   return `${PAPERWORK_PATH}${carrySearch()}`
 }
 
+// team-map-revival-0804（#106 B1）·「团队地图」关系全景页。
+// **刻意不进 LiteScreen 联合类型**，照 PAPERWORK_PATH 的先例一字不差：它不是第十个 tab。
+// 顶栏已经 9 个 tab 且在窄屏溢出（见上面 PAPERWORK_PATH 那段与 LiteTopbar 的 uiux-narrow-0728
+// 段），再塞一个就是直接往那个 bug 上撞；而地图本来也不该抢「今天」页的决策心流
+// （PRD §1：非默认页、不占 tab）。入口只有一处：团队页 briefing 头的「地图视角」。
+// 于是 screenFromPathname('/map') 照常兜底成 DEFAULT_SCREEN——底屏语义无所谓，因为
+// Lite2App 给这条路由挂的是 MapScreen 自己，不走 ScreenView。
+export const MAP_PATH = '/map'
+
+/** 站内链到「团队地图」的 href（已带粘性 query）。别在组件里手拼——见顶部「粘性 query」节。 */
+export function mapHref(): string {
+  return `${MAP_PATH}${carrySearch()}`
+}
+
+/**
+ * 站内链回「你的团队」的 href（已带粘性 query）。
+ * 地图页左上的返回芯片用它——那是一个 `<Link>`（而不是 `goScreen('team')`）：返回是导航，
+ * 该能中键开新标签、能被右键复制链接，和顶栏 tab 的行为一致。
+ */
+export function teamHref(): string {
+  return `${SCREEN_PATH.team}${carrySearch()}`
+}
+
 // files-hub-0729/01（ADR-0032）· 资料库 tab 上线，「完整版预告」（vision）**降进设置菜单**。
 // 页面与路由原样保留、仍是 LiteScreen 的一员——变的只是"进得去的入口在哪"。
 /** 站内链到「完整版预告」的 href（已带粘性 query）。别在组件里手拼——见顶部「粘性 query」节。 */

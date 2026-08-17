@@ -1617,7 +1617,21 @@ export const zh: Dict = {
     "followupsViewAria": "跟进事项视图",
     "gapEmptyAria": "资料对不上的地方 —— 暂无待看",
     "projectsEmptyAria": "项目 —— 暂无内容",
-    "complianceFooterAria": "如何使用 Avery 给你的建议"
+    "complianceFooterAria": "如何使用 Avery 给你的建议",
+
+    // ── team-map-revival-0804（#106 B1）·「团队地图」/map 关系全景页 ──
+    // 中文直接写大白话（08-03 口径）：不绕、不端着，把话说清楚比说巧重要。
+    // 🔴 这一段任何一个键都不许带人身数字——红线在文案层同样成立。
+    "mapTitle": "团队地图",
+    // 说这一页**是干什么用的**，而不是描述它长什么样（人一眼就看见它是张图）。
+    "mapLede": "每个人站在自己的部门里，旁边是他手上的活。",
+    "mapEntryCta": "地图视角",
+    "mapBackToTeam": "回到团队",
+    "mapCanvasAria": "团队地图 —— 人和项目",
+    "mapProjectsAria": "项目",
+    // 拖拽/缩放这两个手势在静止的一页上看不出来，得直说。
+    "mapCanvasHint": "拖动可平移 · 滚轮可缩放",
+    "mapCanvasReset": "复位视野"
   },
   "ask": {
     "eyebrow": "快问",

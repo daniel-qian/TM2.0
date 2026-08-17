@@ -128,7 +128,12 @@ export function provenanceBadgeKind(
 
 const KNOWN_STATUS = new Set(['blocked', 'at-risk', 'on-track', 'done'])
 
-function statusKeyOf(raw: string | undefined): ProjectStatusKey {
+/**
+ * 裸状态串 → 归一化键。
+ * team-map-revival-0804 起导出：地图页拿的是 `LiteProject.statusRaw`（没有 `ProjectView`），
+ * 但语气色必须和项目屏逐字同判——各写一个 `if (status === 'blocked')` 就是两把尺。
+ */
+export function statusKeyOf(raw: string | undefined): ProjectStatusKey {
   const value = (raw ?? '').trim().toLowerCase()
   if (!value) return 'unknown'
   if (KNOWN_STATUS.has(value)) return value as ProjectStatusKey
@@ -136,11 +141,26 @@ function statusKeyOf(raw: string | undefined): ProjectStatusKey {
 }
 
 /**
+ * 状态 → 语气色 class（沿用既有 tone-* 族色，与「你的团队」项目卡同一套）。
+ *
+ * 🔴 一处定义，两个消费方（项目屏卡面 · 地图项目条）。同一个项目在两块屏上不许一个是
+ * 琥珀、一个是灰——本函数从 ProjectsScreen 提上来正是为了这个（PRD §3.4「单一尺子」）。
+ * unknown 给自己的 tone-unknown（中性灰）：不给 tone class 时 `.status-dot` 落回默认色，
+ * 那个默认色恰好是「一切正常」的绿——「没读到状态」被画成绿点就是在替客户说话。
+ */
+export function projectStatusTone(statusKey: ProjectStatusKey): string {
+  if (statusKey === 'blocked') return 'tone-danger'
+  if (statusKey === 'at-risk') return 'tone-warning'
+  if (statusKey === 'unknown') return 'tone-unknown'
+  return ''
+}
+
+/**
  * 进度：只接受 0–100 的有限数。
  * `0` 是**合法的已知值**（文档真写了 0%）——所以判据是 `typeof === 'number'`，不是真值性。
  * 反过来，NaN / Infinity / 负数 / >100 这类坏值宁可当未知，也不画一条骗人的条。
  */
-function progressOf(raw: number | undefined): number | null {
+export function progressOf(raw: number | undefined): number | null {
   if (typeof raw !== 'number' || !Number.isFinite(raw)) return null
   if (raw < 0 || raw > 100) return null
   return raw

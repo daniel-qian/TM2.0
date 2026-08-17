@@ -11005,3 +11005,458 @@
   margin-top: 6px;
   color: var(--honey-text);
 }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   team-map-revival-0804（#106 B1）·「团队地图」/map 关系全景页
+   ────────────────────────────────────────────────────────────────────────────
+   ⚠ 墙纪律：本段是**从 story 的 `src/story/styles/10-dashboard-nexus.css` 摘选重写**、
+   重作用域到 `.lite2-shell` 的产物，**不是 @import、也不是整段拷贝**。story 那份是冻结
+   路演资产（随 story 退役会断），任何对它的语义依赖都是一颗定时炸弹——所以这里连类名都
+   换过一遍（`.person-node` → `.lite-map-person`、`.project-card` → `.lite-map-project`），
+   免得哪天有人以为两边是同一套东西而去"统一"它们。
+
+   摘了什么：分区标签的安静小字、人节点「圆点 + 名牌、无卡片底」的 calm 语法、项目统一横条
+   （标题 + status + 细进度条）、reduced-motion 收口。
+   没摘什么：PixelAvatar sprite 族（真人没有 sprite，不凭空派脸）、HP/MP 血条族
+   （🔴 人身零数字红线——那一整块在 lite2 里连位置都不该有）、whisper-halo 呼吸动效
+   （B1 是 calm 骨架）、composer / alert-pill / risk-chart（分别属于 #47 与 B2/B3）。
+
+   🔴 色一律走令牌（--ink/--rule/--lite2-surface/--radius/--shadow-soft 与 --lite2-*-rgb），
+   本段不写死任何色值、不加 [data-look] 分支——paper 与 aurora 各自的 token 层自动生效。
+   ════════════════════════════════════════════════════════════════════════════ */
+
+.lite2-shell .lite-map-page {
+  display: flex;
+  flex-direction: column;
+  /* 🔴 画布自己裁自己的世界。窄屏那条 `.lite2-shell .scene { overflow: visible }`
+     （为"靠文档滚动读长内容"放开的）在这一页必须收回来：地图没有文档流，放开之后被 pan
+     出去的 board 会把整个壳撑出一条横向滚动条。 */
+  overflow: hidden;
+}
+
+/* HUD 层（返回芯片 + 页头）。进流不浮动——它不需要盖住 world，只需要在 world 上面。
+   顶距吃 --lite2-clear-top：胶囊顶栏浮在内容之上，每一屏都在给它让位（本页是新的一个
+   消费者，别硬写数字）。 */
+.lite2-shell .lite-map-head {
+  flex: none;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  padding: var(--lite2-clear-top, 96px) 24px 14px;
+}
+
+.lite2-shell .lite-map-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  min-height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--lite2-surface);
+  color: var(--ink-soft);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  transition:
+    border-color var(--fast, 160ms) ease,
+    color var(--fast, 160ms) ease;
+}
+
+.lite2-shell .lite-map-back:hover,
+.lite2-shell .lite-map-back:focus-visible {
+  border-color: var(--rule-strong);
+  color: var(--ink);
+  outline: none;
+}
+
+.lite2-shell .lite-map-headings {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+
+.lite2-shell .lite-map-title {
+  margin: 0;
+  font-family: var(--lite2-heading-font);
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.2;
+  color: var(--ink);
+}
+
+.lite2-shell .lite-map-lede {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+  max-width: 60ch;
+}
+
+/* ── 画布 ───────────────────────────────────────────────────────────────── */
+
+.lite2-shell .lite-map-canvas {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 320px;
+  overflow: hidden;
+  border-top: 1px solid var(--rule);
+}
+
+/* 点阵底：告诉手「这是一块可以拖的板」。story 那份在 .canvas-grid 上挂了 mask-image，
+   这里刻意不用——遮罩会造出一个"淡到透明却仍然命中 elementFromPoint"的面，是本仓吃过的
+   暗坑；低透明度的纯 gradient 效果一样、不带那个陷阱。 */
+.lite2-shell .lite-map-canvas::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(
+    rgba(var(--lite2-ink-rgb, 52, 48, 40), 0.1) 1px,
+    transparent 1px
+  );
+  background-size: 20px 20px;
+  pointer-events: none;
+}
+
+.lite2-shell .lite-map-panzoom-wrapper {
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+}
+
+.lite2-shell .lite-map-panzoom-wrapper:active {
+  cursor: grabbing;
+}
+
+/* world 的原点。board 上的一切都相对它绝对定位（单位一律 board px）。 */
+.lite2-shell .lite-map-panzoom-content {
+  position: relative;
+}
+
+/* HUD：手势提示 + 复位。绝对定位在画布右下角——视口单位/视口锚点只有 HUD 能用
+   （ADR-0012 修订 1 的 world/HUD 分层铁律）。 */
+.lite2-shell .lite-map-controls {
+  position: absolute;
+  z-index: 20;
+  right: 16px;
+  bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px 6px 14px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--lite2-glass);
+  box-shadow: var(--shadow-soft);
+}
+
+.lite2-shell .lite-map-hint {
+  color: var(--ink-faint);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.lite2-shell .lite-map-reset {
+  min-height: 28px;
+  padding: 0 12px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* ── world 分层 ─────────────────────────────────────────────────────────── */
+
+.lite2-shell .lite-map-zone-layer,
+.lite2-shell .lite-map-people-layer,
+.lite2-shell .lite-map-project-layer {
+  position: absolute;
+  inset: 0;
+}
+
+/* 1 = 分区底板 · 2 = 连线（B2 的 SvgEdge 插这一层）· 4 = 节点。 */
+.lite2-shell .lite-map-zone-layer {
+  z-index: 1;
+}
+
+.lite2-shell .lite-map-people-layer,
+.lite2-shell .lite-map-project-layer {
+  z-index: 4;
+}
+
+/* ── 部门分区 ───────────────────────────────────────────────────────────── */
+/* 🔴 story 那版是「组上方一行安静小字」，没有底板。这里给分区一张卡，不是为了好看：
+   验收锚定的真语料是 **10 个部门 / 16 人**（demo-seed），绝大多数部门只有 1-2 人——
+   裸标签 + 一两个圆点会读成一地没写完的碎片。一张卡把「这一小撮人是一个部门」说清楚，
+   顺带就是 B4 部门收拢态要点的那个东西（PRD §5.2：zone 是有 id / 成员清单的实体）。 */
+.lite2-shell .lite-map-zone {
+  position: absolute;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius, 12px);
+  background: rgba(var(--lite2-surface-rgb, 255, 253, 248), 0.55);
+}
+
+.lite2-shell .lite-map-zone.is-ungrouped {
+  /* 「未分组」不是一个部门，是一句「资料里没写他在哪个部门」——虚线说这件事。 */
+  border-style: dashed;
+  background: transparent;
+}
+
+.lite2-shell .lite-map-zone-name {
+  display: block;
+  padding: 12px 20px 0;
+  color: var(--ink-faint);
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1.25;
+  /* 部门名是文档原文，长短不可控——溢出折行而不是撑破卡片。 */
+  overflow-wrap: anywhere;
+}
+
+/* ── 人节点：圆点 + 名字。B1 不可点（点选是 B2）。 ─────────────────────── */
+/* 🔴 人身零数字：这里没有、也永远不会有血条 / 评分 / 百分比的位置
+   （story 那份的 .person-hud / .hud-meter 整族刻意没有摘过来）。 */
+.lite2-shell .lite-map-person {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  /* pos 是圆点中心 —— 自己把自己挪到中心上。 */
+  transform: translate(-50%, -50%);
+  text-align: center;
+}
+
+.lite2-shell .lite-map-person-avatar {
+  flex: none;
+  border: 2px solid rgba(var(--lite2-accent-rgb, 105, 128, 109), 0.45);
+  box-shadow: 0 0 0 4px rgba(var(--lite2-accent-rgb, 105, 128, 109), 0.09);
+}
+
+.lite2-shell .lite-map-person-name {
+  max-width: 100%;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.3;
+  /* 中文姓名与英文全名宽度差一倍——折行，不裁。裁掉的名字是错的名字。 */
+  overflow-wrap: anywhere;
+}
+
+/* ── 项目条：统一横条 ───────────────────────────────────────────────────── */
+/* 🔴 「统一」是语义不是偷懒：条的长短不代表任何量（进度由条内那根细条表达，
+   不由卡宽表达）——ADR-0012 修订 5 的原话。 */
+.lite2-shell .lite-map-project {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 18px;
+  transform: translate(-50%, -50%);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius, 12px);
+  background: var(--lite2-surface);
+  box-shadow: var(--shadow-soft);
+}
+
+.lite2-shell .lite-map-project-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.lite2-shell .lite-map-project-title {
+  min-width: 0;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.3;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.lite2-shell .lite-map-project-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* 「文档没写状态」整枚标记压到最淡——它不是一个状态，是一句"没读到"。 */
+.lite2-shell .lite-map-project.is-status-unknown .lite-map-project-status {
+  color: var(--ink-faint);
+  font-weight: 600;
+}
+
+/* 第二行：左 owner / 右进度，各自不挤对方。 */
+.lite2-shell .lite-map-project-row--facts {
+  align-items: center;
+  gap: 18px;
+}
+
+.lite2-shell .lite-map-project-progress {
+  display: flex;
+  align-items: center;
+  flex: none;
+  gap: 8px;
+  width: 172px;
+}
+
+.lite2-shell .lite-map-progress-track {
+  flex: 1 1 auto;
+  overflow: hidden;
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(var(--lite2-ink-rgb, 52, 48, 40), 0.1);
+}
+
+.lite2-shell .lite-map-progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: rgba(var(--lite2-accent-rgb, 105, 128, 109), 0.78);
+}
+
+.lite2-shell .lite-map-progress-value {
+  flex: none;
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.lite2-shell .lite-map-project-owner {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.lite2-shell .lite-map-project-owner-label {
+  flex: none;
+  color: var(--ink-faint);
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.lite2-shell .lite-map-project-owner > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* ── 空态 ───────────────────────────────────────────────────────────────── */
+/* 引导卡本体复用团队页的 .lite-team-empty-* 族（同一处缺失不许两种说法），
+   这里只给它一个居中的位。 */
+.lite2-shell .lite-map-empty {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+/* ── 团队页 briefing 头的入口 ───────────────────────────────────────────── */
+
+.lite2-shell .lite-team-briefing-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+.lite2-shell .lite-team-map-entry {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  min-height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  font-weight: 700;
+  text-decoration: none;
+  transition:
+    border-color var(--fast, 160ms) ease,
+    color var(--fast, 160ms) ease;
+}
+
+.lite2-shell .lite-team-map-entry:hover,
+.lite2-shell .lite-team-map-entry:focus-visible {
+  border-color: var(--rule-strong);
+  color: var(--ink);
+  outline: none;
+}
+
+/* ── 窄屏 ───────────────────────────────────────────────────────────────── */
+/* Danny 08-17 Q3 拍板 A：手机上**可开、可拖、可缩**（rzpp 原生 pinch/pan），
+   不做手机专门布局。所以这里只收紧 chrome，board 公式一个字不动——同一块板，
+   小窗口看得少一点，靠手指到达。 */
+@media (max-width: 860px) {
+  /* 🔴 窄屏必须给这一页一个**确定**的高度，否则画布会被自己的内容撑开。
+     桌面上 `.scene` 是 `position:absolute; inset:0`（.app-shell 是 100vh + overflow:hidden），
+     所以 `flex:1` 的画布天然被视口框住；窄屏那套把 `.scene-stage/.scene` 换成了
+     `position:relative` + 只给 min-height（00-base 的 ≤860 段），高度改由内容决定——
+     于是 `flex:1 1 auto` 的画布把 flex-basis 摊成了 board 的 1092px，整页被撑到 1219px 高，
+     board 被垂直居中到屏幕外去了（390×844 实测：画布 top=190、高 1093，第一屏全是空点阵）。
+     顶栏在这个断点是 sticky **进流**的，自己占掉 64px——这里减掉它。
+     值走变量而不是散在 calc 里，是为了让「这个数是从哪来的」有个能读的名字；
+     真漂了会被冒烟判据逮到（画布底边必须落在视口内）。 */
+  .lite2-shell .lite-map-page {
+    --lite2-map-topbar-h: 64px;
+    height: calc(100dvh - var(--lite2-map-topbar-h));
+    min-height: 0;
+  }
+
+  /* flex 子项的自动最小尺寸（min-height:auto）就是上面那条被撑开的机制本身——显式归零。 */
+  .lite2-shell .lite-map-canvas {
+    min-height: 0;
+  }
+
+  .lite2-shell .lite-map-head {
+    padding: var(--lite2-clear-top, 72px) 16px 12px;
+  }
+
+  .lite2-shell .lite-map-title {
+    font-size: 19px;
+  }
+
+  /* 提示文字在窄屏收起——「滚轮可缩放」在手机上既占地方又不适用（那儿没有滚轮）。
+     复位键留着：它在手机上反而更需要。 */
+  .lite2-shell .lite-map-hint {
+    display: none;
+  }
+
+  .lite2-shell .lite-map-controls {
+    right: 12px;
+    bottom: 12px;
+    padding: 6px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lite2-shell .lite-map-back,
+  .lite2-shell .lite-team-map-entry {
+    transition: none;
+  }
+}

@@ -21,6 +21,7 @@ import { ProjectsScreen } from './screens/ProjectsScreen'
 import { HomeScreen } from './screens/HomeScreen'
 import { FilesScreen } from './screens/FilesScreen'
 import { PaperworkScreen } from './paperwork/PaperworkScreen'
+import { MapScreen } from './map/MapScreen'
 import { DetailOverlay } from './DetailOverlay'
 import { DraftComposer } from './DraftComposer'
 import { AskAveryLauncher } from './AskAveryLauncher'
@@ -33,6 +34,7 @@ import {
   publishBaseScreen,
   CLOSER_LOOK_LEGACY_PATH,
   DEFAULT_SCREEN,
+  MAP_PATH,
   PAPERWORK_PATH,
   PROJECT_PATH,
   SCREEN_PATH,
@@ -168,6 +170,14 @@ function Lite2Shell() {
               语义（见 routes.ts 的 PAPERWORK_PATH）。上面那段「共用同一个 element」的纪律
               说的是屏与屏之间的复用，跟这条独立页无关——它没有"底下垫哪一屏"这回事。 */}
           <Route path={PAPERWORK_PATH} element={<PaperworkScreen />} />
+
+          {/* team-map-revival-0804（#106 B1）·「团队地图」。第二条 element **不是**
+              <ScreenView /> 的路由，理由与 /paperwork 那条逐字相同：它不进 LiteScreen、
+              没有 tab、不参与详情浮层的底屏语义（见 routes.ts 的 MAP_PATH）。
+              ⚠ 与 /paperwork **不同**的一点：弹层家族在这一页照常挂载（见下方 isPaperwork
+              那段）。地图是应用面不是文档页——B2 的「打开档案」要靠 DetailOverlay 把
+              `/team/:personId` 浮层盖上来。 */}
+          <Route path={MAP_PATH} element={<MapScreen />} />
 
           {/* 兜底：未知路径回默认屏，同样保住 query。 */}
           <Route path="*" element={<RedirectToDefault />} />

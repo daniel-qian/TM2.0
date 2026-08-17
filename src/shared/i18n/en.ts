@@ -2083,6 +2083,23 @@ export const en = {
     gapEmptyAria: 'Document mismatches — nothing pending',
     projectsEmptyAria: 'Projects — nothing yet',
     complianceFooterAria: 'How to use what Avery tells you',
+
+    // ── team-map-revival-0804 (#106 B1) · Team map — the `/map` relationship overview ──
+    // The one question the directory and the projects screen both fail to answer:
+    // "who is all the work actually sitting on". People stand in their departments,
+    // projects run down the side. Not a tab, not the default screen (PRD §1).
+    // 🔴 No key here may carry a per-person number — the red line holds in the copy too.
+    mapTitle: 'Team map',
+    // Says what the page is FOR, not what it is. The reader already sees a map.
+    mapLede: 'Everyone in their department, with the work they carry alongside them.',
+    // Entry point in the team screen's briefing head (Danny 08-17, Q2 = A).
+    mapEntryCta: 'Map view',
+    mapBackToTeam: 'Back to your team',
+    mapCanvasAria: 'Team map — people and projects',
+    mapProjectsAria: 'Projects',
+    // pan/zoom affordance. Said plainly: the gesture is not discoverable on a still page.
+    mapCanvasHint: 'Drag to move · scroll to zoom',
+    mapCanvasReset: 'Reset view',
   },
 
   // ── Ask / Quick ask (feat-034 stage B — ADR-0023 voice: asks about the WORK; whether rating

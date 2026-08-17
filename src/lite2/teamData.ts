@@ -69,6 +69,19 @@ export interface LiteProject {
   /** 文档自述的负责人。**缺失就是缺失**（`undefined`），绝不兜底、绝不猜。 */
   ownerNameRaw?: string
   /**
+   * team-map-revival-0804（B1 契约小补）· 负责人的**花名册主键**，后端 `_link_owners`
+   * 解出来的 join key（extract.py::`_link_owners` / registry.py 的 `if pr.ownerId:`）。
+   *
+   * 以前它在 `liteTeamFromPayload` 里被**消费掉就丢**：只拿来反查一次 `ownerNameRaw`，
+   * 不往外传。屏幕上只显示人名的时候这没问题；地图要画「项目 ↔ 人」的边，而边的两端
+   * 必须是同一套主键。
+   *
+   * 🔴 缺席 = 缺席（`undefined`），**不用名字去花名册里模糊匹配补一个**。名字匹配在同名
+   * 的两个人身上必然错，而地图回答的正是「这活儿压在谁身上」——认错人比不认人贵得多。
+   * （名字→id 的解析是后端的活，它有全文上下文；前端只消费结果。）
+   */
+  ownerId?: string
+  /**
    * 文档自述的状态原值，**没读到就是空串**（07-20 Blockers 5c 起：本字段不再装本地化文案）。
    * 兜底文案由渲染层出（`projectStatusText(statusRaw, t.lite2)`，卡片与浮层早已都走这条）。
    * 🔴 判据仍然一律用 `statusRaw`。
@@ -284,6 +297,9 @@ export function liteTeamFromPayload(payload: LiveTeamPayload): LiteTeam {
       // src/lite/teamData.ts 的既有约定。
       ownerName: ownerNameRaw ?? '',
       ownerNameRaw,
+      // team-map-revival-0804 · 原样透传（空串也当没有——契约上 ownerId?: string，
+      // 收到 '' 不许被当成一个人）。见 LiteProject.ownerId 的红线。
+      ownerId: card.ownerId?.trim() || undefined,
       status: statusRaw ?? '',
       statusRaw,
       progress: card.progress,

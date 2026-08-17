@@ -7,7 +7,7 @@ import { localizeBriefing } from '../../shared/briefing'
 import { localizePersonRead } from '../../shared/handoffCopy'
 // files-hub-0729/03 · UploadPanel 的 import 已删——本屏彻底零文件元素（ADR-0032）。
 import { Link } from 'react-router-dom'
-import { filesHref } from '../routes'
+import { filesHref, mapHref } from '../routes'
 import { InitialAvatar } from '../InitialAvatar'
 import {
   deriveGroupFacets,
@@ -340,7 +340,16 @@ export function TeamScreen() {
             {team && briefing ? (
               <>
                 <header className="home-greeting">
-                  <p className="eyebrow">{t.lite2.briefingEyebrow}</p>
+                  <div className="lite-team-briefing-row">
+                    <p className="eyebrow">{t.lite2.briefingEyebrow}</p>
+                    {/* team-map-revival-0804（#106 B1，Danny 08-17 Q2 拍板 A）· 地图视角入口。
+                        **只有这一处入口**：今天页的入口等真用户反馈再说，顶栏不加第十个 tab
+                        （routes.ts 的 MAP_PATH 那段写了为什么）。挂在 briefing 头而不是目录
+                        网格里——它换的是「看同一批人的另一种视角」，不是对某个人的操作。 */}
+                    <Link className="lite-team-map-entry" to={mapHref()}>
+                      {t.lite2.mapEntryCta} <span aria-hidden="true">↗</span>
+                    </Link>
+                  </div>
                   <h1>{briefing.headline}</h1>
                   <p className="home-greeting-sub">{briefing.subhead}</p>
                   {briefing.metrics.length > 0 ? (
