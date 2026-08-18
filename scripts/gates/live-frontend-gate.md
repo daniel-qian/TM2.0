@@ -48,7 +48,7 @@
    | F1 | `composerCheck()` | composer 无 story 预填/引用(**静态**) |
    | F2 | `await composerAskLive(q)` | 真提交 → /advise SSE 到帧(**动态**,真后端 1–3 分钟)。<br>🔴 verdict 的 `composerIsLive` = F1 **且** F2,漏跑 F2 = 红 |
    | G | `assertTeamGrouped()` | 人栏是分组容器 + 折叠 toggle 真生效 |
-   | H | `assertRoomCanvas()` | 画布已**绝迹**(0729 翻转)+ composer 留滚动区外恒可点。<br>相位名/结果键仍叫 roomCanvas,别改(verdict 聚合认它) |
+   | H | `assertRoomCanvas()` | 画布在**对话屏里**已绝迹(0729 翻转)+ composer 留滚动区外恒可点。<br>⚠ 2026-08-18 改判作用域:三条画布选择器从 `document` 全局查**收窄到 `.lite-room` 子树**——`/map` 是一整页 pan/zoom(#106 的「语法特区」,Danny 08-05 放行),全局查法今天还绿只是因为本相位先点 Chat 标签、地图在另一条路由上没挂载。收窄后判据仍有牙(born-red:往 `.lite-room` 里插一个 `.react-transform-wrapper` 立刻红)。<br>相位名/结果键仍叫 roomCanvas,别改(verdict 聚合认它) |
    | I | `assertPlaybooksEmpty()` | Playbooks 空态形态 |
    | J | `assertVisionSurface()` | Vision 三拍叙事 + mock 必带 preview/coming 标注;示例人零数字(红线) |
    | K | `await assertNotesSurface()` | 笔记屏:常驻红线信任条 + 条目零人卡数字 + 只读。<br>**必须排在 F2 之后**(一次真 advise 才会写出笔记) |

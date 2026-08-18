@@ -927,13 +927,31 @@
       // .lite-room-canvas / .lite-panzoom-* 在 v02 DOM 里必须绝迹（v01 冻结壳的画布
       // 不归本相位管）。composer 仍在滚动区外恒可点。
       // NOTE: board 只在 run 开始后挂载（hasStarted）——仍必须在 composerAskLive 之后调。
+      //
+      // ⚠ 2026-08-18（team-map-revival #106 B3）**改判作用域**：画布绝迹的三条选择器此前是
+      // `document` 全局查的。那在 0729 当时是对的——全站确实一块 pan/zoom 画布都不该有。
+      // 现在不是了：`/map` 是一整页 react-zoom-pan-pinch（PRD §0 的「pan/zoom 语法特区」，
+      // Danny 08-05 随方案 B 一并放行）。全局查法今天**恰好**还绿，只因为本相位先点 Chat 标签、
+      // 而 /map 是另一条路由、此刻没挂载——绿得靠运气，不靠判据。任何一次把地图与对话屏放进
+      // 同一棵树的改动（弹层里开地图、右轨预览、屏内嵌页…）都会让它红，而红的原因跟它想守的
+      // 那件事毫无关系：那是一次**假红**，而且长得像「对话屏又长出画布了」。
+      // 所以收窄到对话屏容器 `.lite-room` 作用域：这一相位守的一直都是**这一屏**的输出语法。
+      // 🔴 收窄之后判据仍然有牙——born-red 实测：往 `.lite-room` 里插一个
+      // `.react-transform-wrapper`，canvasGone 立刻 false（见 receipt-106-b3.md 的死针探测）。
+      // 相位名/结果键仍叫 roomCanvas（verdict 聚合认它），别改。
       this._clickTab('Chat');
       try {
         await poll(() => ($('.lite-room-scroll') ? true : null), 8000, 'room scroll frame to mount');
       } catch (e) { /* fall through */ }
+      const room = $('.lite-room');
       const scroll = $('.lite-room-scroll');
       const board = $('.lite-room-scroll .lite-room-board');
-      const canvasGone = !$('.lite-room-canvas') && !$('.lite-panzoom-wrapper') && !$('.react-transform-wrapper');
+      // 对话屏没挂上时记 false（而不是 true）：那种情况下 scrollPresent 本来就红，
+      // 但「没找到屏 ⇒ 画布已绝迹」这句话本身是假的，不能让它进结果 JSON。
+      const canvasGone = !!room &&
+        !room.querySelector('.lite-room-canvas') &&
+        !room.querySelector('.lite-panzoom-wrapper') &&
+        !room.querySelector('.react-transform-wrapper');
       const scrollable = scroll ? getComputedStyle(scroll).overflowY === 'auto' : false;
       const card = $('.lite-room-board .lite-room-card');
       // 判读卡回文档流且纵向滚动归页面；卡未出（advise 没跑）时记 null 不判红。

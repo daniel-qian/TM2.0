@@ -21,6 +21,7 @@ import { ProjectsScreen } from './screens/ProjectsScreen'
 import { HomeScreen } from './screens/HomeScreen'
 import { FilesScreen } from './screens/FilesScreen'
 import { PaperworkScreen } from './paperwork/PaperworkScreen'
+import { MapScreen } from './map/MapScreen'
 import { DetailOverlay } from './DetailOverlay'
 import { DraftComposer } from './DraftComposer'
 import { AskAveryLauncher } from './AskAveryLauncher'
@@ -31,8 +32,11 @@ import { useLook } from './lookStore'
 import {
   bindNavigator,
   publishBaseScreen,
+  publishDetailReturnTo,
+  readDetailReturnTo,
   CLOSER_LOOK_LEGACY_PATH,
   DEFAULT_SCREEN,
+  MAP_PATH,
   PAPERWORK_PATH,
   PROJECT_PATH,
   SCREEN_PATH,
@@ -64,8 +68,9 @@ export function Lite2App() {
 function Lite2Shell() {
   const navigate = useNavigate()
   const screen = useCurrentScreen()
+  const { pathname, state: locationState } = useLocation()
   // partner-docs-0728 · 文档页不是应用面——见下方弹层家族那段注释。
-  const isPaperwork = useLocation().pathname === PAPERWORK_PATH
+  const isPaperwork = pathname === PAPERWORK_PATH
   // feat-068：观感（Look，原 skin——`Skin` 现专指 ADR-0021 的行业视觉主题，见 CONTEXT.md）。
   // open-loop-0720：issue #16 提到的「运行时热切换」在本棒落地——从 lookStore 订阅而不是
   // useMemo 挂载时算一次，LiteTopbar 的开关点下去后这里跟着重渲染，不必整页刷新。
@@ -84,16 +89,23 @@ function Lite2Shell() {
   //     （这条是真机跑出来的：dev 下点人卡整页刷新、store 归零。）
   //  ③ 同一个口子还要把「当前底屏」发布给 store 侧：openDetail 要知道浮层盖在哪一屏上，
   //     closeDetail 要知道关掉之后把人送回哪一屏（详见 routes.ts 的来源屏一节）。
+  //  ④ team-map-revival-0804（#106 B2）：同一个口子再发布一样东西——当前 history 条目上的
+  //     「关掉之后回这条完整地址」。只有 `/map` 这种不进 LiteScreen 的页面才会写它（详见
+  //     routes.ts 的 DetailNavState.returnTo）；别的屏一律是 null，closeDetail 走老路。
+  const returnTo = readDetailReturnTo(locationState)
   bindNavigator(navigate)
   publishBaseScreen(screen)
+  publishDetailReturnTo(returnTo)
   useEffect(() => {
     bindNavigator(navigate)
     publishBaseScreen(screen)
+    publishDetailReturnTo(returnTo)
     return () => {
       bindNavigator(null)
       publishBaseScreen(null)
+      publishDetailReturnTo(null)
     }
-  }, [navigate, screen])
+  }, [navigate, screen, returnTo])
 
   // feat-045：通知事件接线（真事件订阅，模块级 guard 幂等）。首访 onboarding 向导的开合
   // 判定（unseen/in-progress 且本会话未 ×）feat-052 起收在 OnboardWizard 自己手里——
@@ -168,6 +180,14 @@ function Lite2Shell() {
               语义（见 routes.ts 的 PAPERWORK_PATH）。上面那段「共用同一个 element」的纪律
               说的是屏与屏之间的复用，跟这条独立页无关——它没有"底下垫哪一屏"这回事。 */}
           <Route path={PAPERWORK_PATH} element={<PaperworkScreen />} />
+
+          {/* team-map-revival-0804（#106 B1）·「团队地图」。第二条 element **不是**
+              <ScreenView /> 的路由，理由与 /paperwork 那条逐字相同：它不进 LiteScreen、
+              没有 tab、不参与详情浮层的底屏语义（见 routes.ts 的 MAP_PATH）。
+              ⚠ 与 /paperwork **不同**的一点：弹层家族在这一页照常挂载（见下方 isPaperwork
+              那段）。地图是应用面不是文档页——B2 的「打开档案」要靠 DetailOverlay 把
+              `/team/:personId` 浮层盖上来。 */}
+          <Route path={MAP_PATH} element={<MapScreen />} />
 
           {/* 兜底：未知路径回默认屏，同样保住 query。 */}
           <Route path="*" element={<RedirectToDefault />} />

@@ -2083,6 +2083,68 @@ export const en = {
     gapEmptyAria: 'Document mismatches — nothing pending',
     projectsEmptyAria: 'Projects — nothing yet',
     complianceFooterAria: 'How to use what Avery tells you',
+
+    // ── team-map-revival-0804 (#106 B1) · Team map — the `/map` relationship overview ──
+    // The one question the directory and the projects screen both fail to answer:
+    // "who is all the work actually sitting on". People stand in their departments,
+    // projects run down the side. Not a tab, not the default screen (PRD §1).
+    // 🔴 No key here may carry a per-person number — the red line holds in the copy too.
+    mapTitle: 'Team map',
+    // Says what the page is FOR, not what it is. The reader already sees a map.
+    mapLede: 'Everyone in their department, with the work they carry alongside them.',
+    // Entry point in the team screen's briefing head (Danny 08-17, Q2 = A).
+    mapEntryCta: 'Map view',
+    mapBackToTeam: 'Back to your team',
+    mapCanvasAria: 'Team map — people and projects',
+    mapProjectsAria: 'Projects',
+    // pan/zoom affordance. Said plainly: the gesture is not discoverable on a still page.
+    mapCanvasHint: 'Drag to move · scroll to zoom',
+    mapCanvasReset: 'Reset view',
+
+    // ── B2 · focus ──
+    // Click a person → light up what they carry; click a project → light up who carries it.
+    // These aria-labels say what the click DOES, not what the element is: "Xu Wei, button"
+    // tells a screen-reader user nothing about why they would press it.
+    mapFocusPersonAria: 'Show what {name} is carrying',
+    mapFocusProjectAria: 'Show who is carrying {title}',
+    mapClearFocusCta: 'Back to the whole map',
+    mapOpenPersonCta: 'Open profile',
+    mapOpenProjectCta: 'View project',
+    // 🔴 Department-level read, derived from the team's OWN self-reports (PRD §3.3).
+    // Three things this sentence must never become:
+    //   · a count — "3 people said strained" is a cross-person tally (ADR-0023 forbids it),
+    //   · our verdict — it is "someone SELF-REPORTED", never "this department is strained",
+    //   · unattributable — it renders inside a [data-metric-source] anchor, always.
+    // "Someone" is deliberately vague about how many: we are quoting, not tallying.
+    // ⚠ The colon is load-bearing. {mood} is one of the EXISTING selfReportMood* labels, and
+    // those are standalone chips — capitalised ("Strained"). Dropped into running prose that
+    // reads "…self-reported Strained", which looks like a typo. A colon makes the capital
+    // correct instead of wrong, and survives whatever casing a future locale picks.
+    mapZoneRead: 'Someone self-reported: {mood}',
+
+    // ── B3 · HUD-lite ──
+    // 🔴 The map gets its OWN placeholder even though the MATCHING is the topbar's
+    // `searchTeam` (one ruler, one result set). Reason: on a desktop /map both boxes are on
+    // screen at once, and with the topbar's wording they were word-for-word identical while
+    // doing different things — the topbar opens the record, this one lights up the board.
+    // Two identical labels for two different actions is the confusion; the shared ruler is
+    // about how a word MATCHES, not about what the box says it will do.
+    mapSearchPlaceholder: 'Find someone on the map…',
+    mapSearchAria: 'Find a person or project on the map',
+    // searchEmpty (zero matches) IS reused as-is: "nothing matched" is the same sentence
+    // wherever it is said.
+    // It deliberately carries NO number — "8 of 41" invites the reader to treat the list as
+    // a ranking, and the honest instruction is the same either way: type a bit more.
+    mapSearchMore: 'More matches — type a little more to narrow it down.',
+    mapZonesAria: 'Departments',
+    // 🔴 Chips carry the department NAME ONLY. deriveGroupFacets hands us a count for free
+    // and we throw it away on purpose: a row reading "Kitchen 4 · Front desk 2 · Rooms 1"
+    // is a headcount league table (ADR-0023), and this page has a per-person-number red line.
+    mapZoneChipAria: 'Show the {zone} team and the work they carry',
+    // The alert pill. {group} is the projects screen's OWN group heading, passed in rather
+    // than re-worded here: the same set of projects must be called the same thing on both
+    // screens. {count} is a PROJECT count — projects may carry hard numbers, people may not.
+    mapAlertAria: 'Show the {count} projects under {group}',
   },
 
   // ── Ask / Quick ask (feat-034 stage B — ADR-0023 voice: asks about the WORK; whether rating

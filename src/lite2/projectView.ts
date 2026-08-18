@@ -128,7 +128,12 @@ export function provenanceBadgeKind(
 
 const KNOWN_STATUS = new Set(['blocked', 'at-risk', 'on-track', 'done'])
 
-function statusKeyOf(raw: string | undefined): ProjectStatusKey {
+/**
+ * 裸状态串 → 归一化键。
+ * team-map-revival-0804 起导出：地图页拿的是 `LiteProject.statusRaw`（没有 `ProjectView`），
+ * 但语气色必须和项目屏逐字同判——各写一个 `if (status === 'blocked')` 就是两把尺。
+ */
+export function statusKeyOf(raw: string | undefined): ProjectStatusKey {
   const value = (raw ?? '').trim().toLowerCase()
   if (!value) return 'unknown'
   if (KNOWN_STATUS.has(value)) return value as ProjectStatusKey
@@ -136,11 +141,26 @@ function statusKeyOf(raw: string | undefined): ProjectStatusKey {
 }
 
 /**
+ * 状态 → 语气色 class（沿用既有 tone-* 族色，与「你的团队」项目卡同一套）。
+ *
+ * 🔴 一处定义，两个消费方（项目屏卡面 · 地图项目条）。同一个项目在两块屏上不许一个是
+ * 琥珀、一个是灰——本函数从 ProjectsScreen 提上来正是为了这个（PRD §3.4「单一尺子」）。
+ * unknown 给自己的 tone-unknown（中性灰）：不给 tone class 时 `.status-dot` 落回默认色，
+ * 那个默认色恰好是「一切正常」的绿——「没读到状态」被画成绿点就是在替客户说话。
+ */
+export function projectStatusTone(statusKey: ProjectStatusKey): string {
+  if (statusKey === 'blocked') return 'tone-danger'
+  if (statusKey === 'at-risk') return 'tone-warning'
+  if (statusKey === 'unknown') return 'tone-unknown'
+  return ''
+}
+
+/**
  * 进度：只接受 0–100 的有限数。
  * `0` 是**合法的已知值**（文档真写了 0%）——所以判据是 `typeof === 'number'`，不是真值性。
  * 反过来，NaN / Infinity / 负数 / >100 这类坏值宁可当未知，也不画一条骗人的条。
  */
-function progressOf(raw: number | undefined): number | null {
+export function progressOf(raw: number | undefined): number | null {
   if (typeof raw !== 'number' || !Number.isFinite(raw)) return null
   if (raw < 0 || raw > 100) return null
   return raw
@@ -149,6 +169,21 @@ function progressOf(raw: number | undefined): number | null {
 function trimmedOrNull(raw: string | undefined): string | null {
   const value = (raw ?? '').trim()
   return value ? value : null
+}
+
+/**
+ * 「文档列出来的卡点」是哪几条。空行不算一条（`['']` 这种脏数据历史上真出现过，会渲染出
+ * 一条证据为空的分诊卡——feat-068 在 `liveHandoffs` 里修过同一个形状）。
+ *
+ * team-map-revival-0804（B2）起导出：地图的项目 mini 卡要显「阻碍数」，而它手上是
+ * `LiteProject.blockers`（原始数组）没有 `ProjectView`。不提上来就得在地图里再写一遍
+ * `.map(trim).filter(Boolean)`——哪天规则变了（比如要去重），两处必然只改一处。
+ *
+ * 🔴 空数组 ≠「文档说没有卡点」：后端只在 `pr.blockers` 非空时才发这个键，缺席与空列表在
+ * 契约上分不开。所以消费方一律只在 `length > 0` 时渲染，永远不印「0 处卡点」。
+ */
+export function blockersOf(raw: readonly string[] | undefined): string[] {
+  return (raw ?? []).map((b) => b.trim()).filter(Boolean)
 }
 
 const KNOWN_RISK = new Set<RiskLevelKey>(['high', 'medium', 'low'])
@@ -211,7 +246,7 @@ export function buildProjectViews(
     statusRaw: trimmedOrNull(card.status),
     progress: progressOf(card.progress),
     dueDate: trimmedOrNull(card.dueDate),
-    blockers: (card.blockers ?? []).map((b) => b.trim()).filter(Boolean),
+    blockers: blockersOf(card.blockers),
     // 🔴 缺席=文档未提及=徽章收起：只有 card.risk 存在且 level 在词表内才给 riskLevel，禁 ?? 默认。
     riskLevel: riskLevelOf(card.risk?.level),
     riskReason: trimmedOrNull(card.risk?.reason),
@@ -311,8 +346,17 @@ export function statusTextLabel(raw: string | undefined | null, l: Dict['lite2']
   return statusTokenLabel(statusKeyOf(raw ?? undefined), l, (raw ?? '').trim() || null)
 }
 
-export function groupKeyOf(view: ProjectView): ProjectGroupKey {
-  switch (view.statusKey) {
+/**
+ * 归一化状态 → 看板分组。
+ *
+ * team-map-revival-0804（B3）起从 `groupKeyOf` 里抽出来：地图的警报药丸手上是
+ * `LiteProject.statusRaw`（一个裸串），没有 `ProjectView`。不抽的话地图就得自己写一句
+ * `raw === 'blocked' || raw === 'at-risk'`——那是**第二把尺**：哪天「要你管」的定义变了
+ *（比如把词表外的状态也算进来），项目屏的分组会变、地图的药丸不会，同一批项目在两块屏上
+ * 一个报警一个不报警。`statusTokenLabel` 当年从 `projectStatusLabel` 里抽出来是同一个理由。
+ */
+export function groupKeyOfStatus(statusKey: ProjectStatusKey): ProjectGroupKey {
+  switch (statusKey) {
     case 'blocked':
     case 'at-risk':
       return 'needsYou'
@@ -326,6 +370,20 @@ export function groupKeyOf(view: ProjectView): ProjectGroupKey {
       // 词表外的状态原样单列——塞进「进行中」等于替文档下了个它没下的判断。
       return 'other'
   }
+}
+
+export function groupKeyOf(view: ProjectView): ProjectGroupKey {
+  return groupKeyOfStatus(view.statusKey)
+}
+
+/**
+ * 这个项目属不属于项目屏那一组「需要你管的」（= blocked / at-risk）。
+ *
+ * 🔴 地图的警报药丸（计数）与它点开之后**该亮哪几根条**必须是同一个判据、判在同一处。
+ * 分成两处写的下场是药丸说 3 件、点开亮 2 根——一个当场自证不可信的界面。
+ */
+export function isNeedsYouStatus(statusRaw: string | undefined): boolean {
+  return groupKeyOfStatus(statusKeyOf(statusRaw)) === 'needsYou'
 }
 
 /** 组的展示顺序：先要你管的，最后才是「文档没写状态」的那堆。 */

@@ -89,19 +89,112 @@ export const PAPERWORK_PATH = '/paperwork'
 
 /** 站内链到「文件与表单」的 href（已带粘性 query）。别在组件里手拼——见顶部「粘性 query」节。 */
 export function paperworkHref(): string {
-  return `${PAPERWORK_PATH}${carrySearch()}`
+  return hrefFor(PAPERWORK_PATH)
+}
+
+// team-map-revival-0804（#106 B1）·「团队地图」关系全景页。
+// **刻意不进 LiteScreen 联合类型**，照 PAPERWORK_PATH 的先例一字不差：它不是第十个 tab。
+// 顶栏已经 9 个 tab 且在窄屏溢出（见上面 PAPERWORK_PATH 那段与 LiteTopbar 的 uiux-narrow-0728
+// 段），再塞一个就是直接往那个 bug 上撞；而地图本来也不该抢「今天」页的决策心流
+// （PRD §1：非默认页、不占 tab）。入口只有一处：团队页 briefing 头的「地图视角」。
+// 于是 screenFromPathname('/map') 照常兜底成 DEFAULT_SCREEN——底屏语义无所谓，因为
+// Lite2App 给这条路由挂的是 MapScreen 自己，不走 ScreenView。
+export const MAP_PATH = '/map'
+
+// team-map-revival-0804（#106 B2）· 地图的 focus 深链参数：`/map?focus=person:<id>`。
+//
+// 🔴 **刻意不进 `EPHEMERAL_PARAMS`**（票面明写）。那个黑名单装的是「一次性接力棒」
+// （`?q=` 这次进屋要问什么），进了它就等于对全仓宣布「这个键随时可丢」——将来任何一个新的
+// 导航助手都会静默吃掉它。而 focus 的存在理由恰恰是**发得出去**：把「小徐背着这三件事」
+// 这一帧原样发给合伙人。
+//
+// 它「离开 /map 自然消失」靠的是下面的 `PATH_SCOPED_PARAMS` 那张表：任何一次去往非 /map
+// 路径的导航（href 助手 与 store 的 go() 两条通道都算）自动把它脱掉。作用域是谁引入的谁
+// 收口，不借全局黑名单的手——那个黑名单一旦替它做主，别的线新加的参数也会跟着遭殃
+// （routes.ts 顶部「默认全带走 + 极小黑名单」那一节写着这条口径）。
+export const MAP_FOCUS_PARAM = 'focus'
+
+/**
+ * **路径作用域参数**表：某个键只在某条路径上有意义，导航到别处自动脱落。
+ *
+ * 与 `EPHEMERAL_PARAMS`（见下方）的分工：
+ *   · EPHEMERAL = 一次性接力棒，**任何**一次导航就丢（`?q=` 这次进屋要问什么）；
+ *   · 路径作用域 = 属于某条路径的状态，在**那条路径内部**的导航里必须活下来（否则
+ *     `/map?focus=` 发给别人、他一点开档案再关上就没了），只在离开那条路径时脱落。
+ * focus 要的是后者，所以它进这张表、不进那个黑名单（票面明写）。
+ *
+ * 🔴 这张表由 `go()` 与所有 href 助手**共用**——两条出站通道（store 的 goScreen / 组件里的
+ * `<Link>`）走的是同一份口径。只给 href 助手打补丁是不够的：顶栏 tab 走的是 `go()`，
+ * 漏了它的话，从地图点一下「团队」，`?focus=` 就跟着人跑遍全站再也甩不掉（focus 不是
+ * EPHEMERAL，没有第二处会替它清理）。
+ */
+const PATH_SCOPED_PARAMS: ReadonlyArray<{ param: string; path: string }> = [
+  { param: MAP_FOCUS_PARAM, path: MAP_PATH },
+]
+
+/** 去 `target` 这条路径时，该脱落哪些路径作用域参数。 */
+function pathScopedDrops(target: string): Record<string, null> {
+  const drops: Record<string, null> = {}
+  for (const { param, path } of PATH_SCOPED_PARAMS) {
+    if (target !== path) drops[param] = null
+  }
+  return drops
+}
+
+/**
+ * 站内 href 的唯一造法：路径 + 粘性 query（已脱落不属于目标路径的作用域参数）。
+ * 下面每一个 `xxxHref()` 都走它——新增一个站内链接时照抄一行，就不会漏掉任何一条口径。
+ */
+function hrefFor(path: string, extra?: Record<string, string | null>): string {
+  return `${path}${carrySearch({ ...pathScopedDrops(path), ...extra })}`
+}
+
+/**
+ * 站内链到「团队地图」的 href（已带粘性 query）。别在组件里手拼——见顶部「粘性 query」节。
+ *
+ * `focus` 传 token（`person:<id>` / `project:<id>`）即写进 URL，传 null / 不传即清掉
+ * （= 回 calm）。B2 的点选就是往这个函数里灌 token——**URL 是 focus 的唯一真相源**，
+ * 组件里不另存一份 state（feat-051 把「当前是哪一屏」从 Zustand 换成真路由是同一条道理）。
+ */
+export function mapHref(focus?: string | null): string {
+  return hrefFor(MAP_PATH, { [MAP_FOCUS_PARAM]: focus ?? null })
+}
+
+/**
+ * 站内链回「你的团队」的 href（已带粘性 query，**不带 focus**）。
+ * 地图页左上的返回芯片用它——那是一个 `<Link>`（而不是 `goScreen('team')`）：返回是导航，
+ * 该能中键开新标签、能被右键复制链接，和顶栏 tab 的行为一致。
+ */
+export function teamHref(): string {
+  return hrefFor(SCREEN_PATH.team)
+}
+
+/**
+ * 站内链到人详情浮层 `/team/:personId`（**不带 focus**——见 `PATH_SCOPED_PARAMS`）。
+ *
+ * B2 的 mini 卡上「打开档案」用它，而不是 `openDetail('person', id)`：卡上并排放着两个
+ * 动作（打开档案 / 看项目），它们该是真链接——可中键开新标签、可右键复制。
+ * 配套的「关掉之后回哪儿」见下面的 `detailReturnState()`。
+ */
+export function personDetailHref(personId: string): string {
+  return hrefFor(`${SCREEN_PATH.team}/${encodeURIComponent(personId)}`)
+}
+
+/** 站内链到项目详情浮层 `/projects/:projectId`（**不带 focus**）。同 `personDetailHref`。 */
+export function projectDetailHref(projectId: string): string {
+  return hrefFor(`${PROJECT_PATH}/${encodeURIComponent(projectId)}`)
 }
 
 // files-hub-0729/01（ADR-0032）· 资料库 tab 上线，「完整版预告」（vision）**降进设置菜单**。
 // 页面与路由原样保留、仍是 LiteScreen 的一员——变的只是"进得去的入口在哪"。
 /** 站内链到「完整版预告」的 href（已带粘性 query）。别在组件里手拼——见顶部「粘性 query」节。 */
 export function visionHref(): string {
-  return `${SCREEN_PATH.vision}${carrySearch()}`
+  return hrefFor(SCREEN_PATH.vision)
 }
 
 /** 站内链到「资料库」的 href（已带粘性 query）。别在组件里手拼——见顶部「粘性 query」节。 */
 export function filesHref(): string {
-  return `${SCREEN_PATH.files}${carrySearch()}`
+  return hrefFor(SCREEN_PATH.files)
 }
 
 // feat-057：默认落点从 'team' 改成 'home'（聚合入口）。理由与代价写在
@@ -139,10 +232,54 @@ export function screenFromPathname(pathname: string): LiteScreen {
 // 后退/前进/刷新都还在（浏览器把 state 一起持久化），只有冷深链才没有——那时才退回按路径
 // 派生。所以 URL 形状一个字没变（PRD G2 的 `/projects/:projectId` 照旧可深链），
 // 变的只是「底下垫哪一屏」。
-export type DetailNavState = { baseScreen: LiteScreen }
+export type DetailNavState = {
+  baseScreen: LiteScreen
+  /**
+   * team-map-revival-0804（#106 B2）· 「关掉之后回这条完整地址」。**只有不是屏的页面才写它**。
+   *
+   * 为什么需要它：底屏语义（`baseScreen`）的类型是 `LiteScreen`，而 `/map` 与 `/paperwork`
+   * 一样**刻意不是屏**。于是从地图上点「打开档案」，`screenFromPathname('/map')` 兜底成
+   * DEFAULT_SCREEN，关掉浮层的人会被扔到 `/home`——地图没了、focus 也没了。
+   * 那正是 feat-051 复核逮到的那条 major 的形状（「详情是盖在当前屏上的浮层，不是一次换屏」），
+   * 只是发生在一条不进 `LiteScreen` 的路由上，原来那套按屏名回位的机制够不着它。
+   *
+   * 存的是**路径 + search**（不是屏名），所以 `?focus=person:u_徐` 原样活着：合上档案回到
+   * 地图，小徐还亮着。写进 history state ⇒ 随后退/前进/刷新一起活着，冷深链没有（那时按
+   * 老路走 baseScreen）。
+   */
+  returnTo?: string
+}
 
 function isLiteScreen(value: unknown): value is LiteScreen {
   return typeof value === 'string' && Object.prototype.hasOwnProperty.call(SCREEN_PATH, value)
+}
+
+/**
+ * history state 里那条返回地址，**只接受站内相对路径**。
+ *
+ * 🔴 history state 在浏览器里是可改的（`history.replaceState` 谁都能调），所以这里按不可信
+ * 输入验：必须以单个 `/` 开头。`//evil.example` 会被浏览器当成协议相对的**外站**地址——
+ * 那就是一个开放重定向。不合形状一律当没有（退回按屏名回位，最差也只是回错屏）。
+ */
+function returnToFrom(state: unknown): string | null {
+  const raw = (state as Partial<DetailNavState> | null | undefined)?.returnTo
+  if (typeof raw !== 'string') return null
+  const value = raw.trim()
+  if (!value.startsWith('/') || value.startsWith('//')) return null
+  return value
+}
+
+/**
+ * 给「不是屏的页面」上的详情链接用的 history state。
+ * 在**点击那一刻**把当前完整地址（含 `?focus=`）拍下来——不是在关闭那一刻回推，因为那时
+ * 地址已经是详情自己的了。
+ *
+ * 刻意**不带** `baseScreen`：浮层底下垫哪一屏交给 `screenFromPathname` 兜底就对了
+ * （`/team/:id` → 团队屏、`/projects/:id` → 项目屏），地图从来就不是那一层的候选。
+ */
+export function detailReturnState(): Pick<DetailNavState, 'returnTo'> {
+  const loc = typeof window !== 'undefined' && window.location ? window.location : null
+  return { returnTo: loc ? `${loc.pathname}${loc.search}` : SCREEN_PATH[DEFAULT_SCREEN] }
 }
 
 /** 当前该渲染哪一屏做底：优先 history state 里的来源屏，没有才按路径派生。 */
@@ -212,6 +349,21 @@ export function publishBaseScreen(screen: LiteScreen | null) {
   publishedScreen = screen
 }
 
+// team-map-revival-0804（#106 B2）· 同一个口子的第二样东西：当前 history 条目上那条返回地址。
+// 走「壳发布 → store 读」而不是让 `navigateCloseDetail` 自己去翻 `window.history.state`：
+// 那个对象的形状是 react-router 的私事（用户态藏在 `.usr` 里），照着它写就是把内部实现
+// 当契约用。壳手上有 `useLocation().state`，那是公开的。
+let publishedReturnTo: string | null = null
+
+export function publishDetailReturnTo(returnTo: string | null) {
+  publishedReturnTo = returnTo
+}
+
+/** 壳把 `useLocation().state` 递进来，这里负责验形状（见 `returnToFrom` 的开放重定向那段）。 */
+export function readDetailReturnTo(state: unknown): string | null {
+  return returnToFrom(state)
+}
+
 function currentPathname(): string {
   return typeof window !== 'undefined' && window.location ? window.location.pathname : '/'
 }
@@ -226,7 +378,9 @@ function go(
   path: string,
   options?: { replace?: boolean; params?: Record<string, string | null>; state?: unknown },
 ) {
-  const to = `${path}${carrySearch(options?.params)}`
+  // 路径作用域参数在这里脱落（与 href 助手共用 `pathScopedDrops` 那一份口径）。
+  // `options.params` 排在后面：调用方显式给的值永远压得过默认脱落。
+  const to = `${path}${carrySearch({ ...pathScopedDrops(path), ...options?.params })}`
   if (boundNavigate) {
     boundNavigate(to, { replace: options?.replace, state: options?.state })
     return
@@ -264,8 +418,20 @@ export function navigateToDetail(kind: 'person' | 'project', id: string) {
  * 回的是 currentBaseScreen()（history state 里的来源屏），不是按路径派生的底屏——从
  * 待办清单点开项目详情再关掉，人要留在待办清单，不是被扔到 /team。
  * 冷深链（新标签页直接打开 /projects/:id，没有来源屏可查）才退回默认屏。
+ *
+ * team-map-revival-0804（#106 B2）：多了一条**优先**分支——history state 里若有 `returnTo`
+ * （只有 `/map` 这种不进 `LiteScreen` 的页面才写，见 `DetailNavState.returnTo`），就原样回
+ * 那条完整地址。原样 = 连 `?focus=person:u_徐` 一起，所以合上档案回到地图，小徐还亮着。
+ * 这条分支不叠 `carrySearch()`：地址是**开详情那一刻**拍下来的快照，粘性 query 早就在里面了，
+ * 再叠一次等于拿此刻的参数覆盖当时那一帧。
  */
 export function navigateCloseDetail() {
+  const returnTo = publishedReturnTo
+  if (returnTo) {
+    if (boundNavigate) boundNavigate(returnTo, { replace: true })
+    else if (typeof window !== 'undefined' && window.location) window.location.replace(returnTo)
+    return
+  }
   go(SCREEN_PATH[currentBaseScreen()], { replace: true })
 }
 
