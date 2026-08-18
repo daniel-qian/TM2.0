@@ -29,15 +29,13 @@
 
 ## Next steps
 
-**票面三棒已全部勾完，本线的开发到此为止。** 剩下的：
+**票面三棒已全部勾完，本线的开发到此为止。**
 
-- **集成**：本分支未 push，也**未合本地 main**。合并干跑过 `git merge-tree`：**零冲突**
-  （main 在 `cd6f207`，比本线基线多两个 docs/ops 提交）。
-- 🔴 **像素基线要在主检出重冻一遍**。12 张 `*-map-*.png` 已在**本 worktree** 冻好并复跑零漂移，
-  但基线 PNG 是 gitignore 的单机产物、**每个 worktree 一份**——在这儿冻不算数。
-  合进 main 之后在主检出跑：
-  `node node_modules/playwright/cli.js test -c eval-harness/visual visual-map.spec.mjs --update-snapshots`
-  然后**人眼过一遍 12 张**（spec 自证判据只保证「这一态成立」，不保证好看）。
+- ✅ **已合本地 main**（`00993fd`，`--no-ff`，零冲突；main 原在 `cd6f207`）。合并是 PRD §7
+  「spec 先合本地 main 再冻」要求的前置步骤——基线 PNG 是 gitignore 的单机产物、**每个
+  worktree 一份**，在 worktree 里冻不算数。**未 push**。
+- ✅ **12 张像素基线已冻在主检出** `D:/avery/eval-harness/visual/__snapshots__/`，复跑零漂移，
+  12 张全部人眼过。（主检出的 `dist/` 也被重打成指向 127.0.0.1:8147——它是 gitignore 的产物。）
 - **B4 部门收拢态**（#107，触发＝首个 40 人以上真租户）：契约没动，`MapZone` 仍够用
   （key + rect + members + 组级读数），`.lite-map-zone.is-subject` 这一态 B3 已经先造出来了。
 
@@ -69,9 +67,13 @@
 
 ## Notes
 
-- 本分支**未 push**；根 `progress.md` 未动（归集成者）。
-- `dist/` 收尾时重打成指向 `127.0.0.1`：`./init.sh` 跑的是裸 `npm run build`，会让 dist 落回
-  **生产域名**，之后谁拿 `vite preview` 跑上传类的门就会往生产库写测试数据（AGENTS.md 点过名）。
+- 本分支与本地 main 都**未 push**（push 是对外闸，留给 Danny）。根 `progress.md` 未动（归集成者）。
+- ⚠ **订正一条从 B2 回执抄下来的话**：「`./init.sh` 会让 dist 落回生产域名」在**本仓当前状态下
+  是不成立的**。实测：裸 `npm run build` 没有 `VITE_AVERY_MODE`，`vite.config.ts:21` 兜的是
+  `'(local default 127.0.0.1:8137)'`，不是生产域名；`.env.local` 里也只有一个 Vercel token。
+  真正的危险面是**另一件事**：init.sh 之后 dist 的 apiBase 变回 **8137**，而隔离端口跑的后端在
+  8147 —— 此时跑上传类的门会以「上传等不到」的形态假红。收尾时已把 dist 重打成 8147。
+  （AGENTS.md 那条警告针对的是配了 `VITE_AVERY_MODE=live` 的部署构建，与本地 init.sh 不是同一路。）
 - **加 data 属性前先查重名**：B3 给连线 `<path>` 加的调试属性一度叫 `data-person-id`，
   与节点上的同名，而连线层在 DOM 里排在人员层**前面**——全仓那些
   `querySelector('[data-person-id="…"]')` 一夜之间返回的是一条线。现在叫 `data-edge-person` /
