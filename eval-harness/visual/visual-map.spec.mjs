@@ -29,6 +29,15 @@
 //
 // ⚠ 基线 PNG 是 gitignore 的**单机产物**，且**每个 worktree 一份**：在 worktree 里冻＝白冻。
 //   真基线在主检出、spec 先合进本地 main、人眼过对照板之后再冻（PRD §7）。
+//
+// ## 跑法（🔴 四件套，不是三件套）
+//   cd eval-harness && AVERY_BRAIN=mock AVERY_EXTRACTOR=heuristic AVERY_EMBEDDINGS=keyword \
+//     AVERY_DEMO_SEED_DIR=tests/fixtures/demo-seed AVERY_ALLOW_PERSON_SCORING=1 \
+//     python -m uvicorn service.app:app --port 8137
+// 第四件 `AVERY_ALLOW_PERSON_SCORING=1` 以前没写在任何地方，只活在冻基线那次的 shell 里：
+// 关着它时后端不把 self_report 投影到人卡上，组级读数（「有人自述吃紧」）整行消失，
+// 而当时**没有任何一条判据够得着**——0818 差点把少一行字的那版当成 reducedMotion 的功劳
+// 整批冻进去。现在 calm 那一段有一条 `.lite-map-zone-read` 自证盯着它。
 // ⚠ 依赖后端在场（mock 三件套）：上传落不了地时 `.upload-ready` 超时红——红形态是
 //   「上传等不到」，不是假绿。
 import { test, expect } from 'playwright/test'
@@ -85,6 +94,12 @@ for (const look of LOOKS) {
     // 那时这张图看着仍然「像地图」，只是把新做的那一层悄悄拍没了。
     await expect(page.locator('.lite-map-chip').first(), 'HUD-lite 必须在画面里').toBeVisible()
     await expect(page.locator('.lite-map-edge'), 'calm 态不许有连线').toHaveCount(0)
+    // 🔴 组级读数（「有人自述吃紧」）必须在场。它只在后端开了 AVERY_ALLOW_PERSON_SCORING
+    // 时才投影得出来——那是一条**没写在任何跑法说明里**的前提，0818 实收：忘了带这个变量
+    // 重跑，这四张 calm 基线整体少了一行字，而当时没有任何一条判据够得着，
+    // 差点被当成「reducedMotion 改的」整批冻进去。前提缺席就在这里红，别让它悄悄改画面。
+    await expect(page.locator('.lite-map-zone-read').first(),
+      '组级读数不在画面里 → 后端多半没带 AVERY_ALLOW_PERSON_SCORING=1（见本文件头「跑法」）').toBeVisible()
     await page.evaluate(() => document.fonts.ready)
     await page.waitForTimeout(500)
     await expect(page).toHaveScreenshot(`${look}-map-calm-${testInfo.project.name}.png`, {

@@ -11535,11 +11535,23 @@
   animation: lite-map-card-in 200ms ease-out both;
 }
 
-/* 人：卡比人位宽（148px 塞不下职位与自述读两行），左右居中挂在他底下。 */
+/* 人：卡比人位宽（148px 塞不下职位与自述读两行），左右居中挂在他底下。
+   🔴 居中必须用**自己的一条关键帧**（lite-map-card-in-centered），不能共用上面那条。
+   `animation-fill-mode: both` 的意思是「to 帧的值在动画跑完之后**永久生效**」，而通用那条
+   的 to 帧写的是 `transform: none`——它会把这里的 translateX(-50%) 一起抹掉。于是动画一跑完，
+   卡片就永久停在偏右半个身位（268/2=134px）的地方。
+   实测（2026-08-18，真浏览器量的，不是读码推的）：
+     动效开着  transform=matrix(1,0,0,1,0,0)     卡中心比节点中心偏 98px（134 × 镜头 0.73 倍）
+     动效关掉  transform=matrix(1,0,0,1,-134,0)  偏 0px
+   即**绝大多数用户看到的是歪的那一版**，只有开了「减少动态效果」的人看到对的。
+   它能活下来是因为 #106 B3 冻像素基线时 reducedMotion 恰好没生效（见
+   eval-harness/visual/playwright.config.mjs 头注释），于是歪的那一帧被当成正确答案冻了进去。
+   verify-team-map.mjs 的「mini 卡对准它挂着的节点」那条判据现在盯着这件事。 */
 .lite2-shell .lite-map-person .lite-map-node-card {
   left: 50%;
   width: 268px;
   transform: translateX(-50%);
+  animation-name: lite-map-card-in-centered;
 }
 
 /* 项目：条本来就有 620px，卡与条同宽，看起来就是同一张卡往下续了一段。 */
@@ -11555,6 +11567,7 @@
   border-bottom-right-radius: 0;
 }
 
+/* 项目条那一版：卡靠 left/right 定位，transform 是空的，所以 to 帧写 none 是对的。 */
 @keyframes lite-map-card-in {
   from {
     opacity: 0;
@@ -11563,6 +11576,22 @@
   to {
     opacity: 1;
     transform: none;
+  }
+}
+
+/* 人那一版：to 帧必须把 translateX(-50%) 写回去（理由见上面那段碑）。
+   两条关键帧看着重复，但它们描述的是两件不同的事——「落回原位」对项目条是 none，
+   对人卡是 translateX(-50%)。把它们合成一条的唯一办法是让居中不走 transform，
+   那要么改成 margin-left 负值（写死 -134px，卡宽一改就歪），要么上 `translate:` 独立属性
+   （本仓 15 个 css 里一处都没用过，不在这一票里开先例）。 */
+@keyframes lite-map-card-in-centered {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%);
   }
 }
 

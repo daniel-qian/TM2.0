@@ -295,6 +295,25 @@ rec('D1 点人 → 他是主角、他背的那几件全亮、连线条数对上'
 rec('D1 URL 写上了可分享的 token', lit.focus === `person:${busiestId}`)
 rec('D1 被点的那个原位长出 mini 卡（恰好一张）', lit.cards === 1)
 
+// 🔴 D1b —— 这条是 0818 那个真 bug 逼出来的，形态见 lite2.css 的
+// `.lite-map-person .lite-map-node-card` 那段碑：入场动画 `both` 填充的 to 帧写 `transform: none`，
+// 动画一跑完就把居中用的 translateX(-50%) 永久抹掉，卡片停在偏右半个身位。
+// ⚠ 判据必须**等动画跑完再量**（200ms）：动画进行中它恰好还在正确位置上，早量一帧就是假绿。
+// ⚠ 也别拿 `getComputedStyle(...).transform` 当判据——那量的是实现手段。量的是「卡有没有对准
+// 它挂着的那个人」，实现换成 margin/translate 属性都不该红。
+await page.waitForTimeout(400)
+const centering = await page.evaluate(() => {
+  const card = document.querySelector('.lite-map-person .lite-map-node-card')
+  if (!card) return null
+  const node = card.closest('.lite-map-person')
+  const c = card.getBoundingClientRect(), n = node.getBoundingClientRect()
+  return { off: Math.round(c.x + c.width / 2 - (n.x + n.width / 2)), cardW: Math.round(c.width) }
+})
+// 容差取卡宽的 5%：镜头缩放下半个身位是 cardW/2，5% 离它远得很，够不着的错实现红不了才怪。
+rec('D1b mini 卡横向对准它挂着的那个人（动画跑完之后）',
+  !!centering && Math.abs(centering.off) <= Math.max(2, centering.cardW * 0.05),
+  centering ? `偏 ${centering.off}px（卡宽 ${centering.cardW}，半个身位=${Math.round(centering.cardW / 2)}）` : '没找到卡')
+
 await page.keyboard.press('Escape')
 await page.waitForTimeout(300)
 rec('D2 Esc → 回 calm（高亮、连线、URL 三样一起收）',

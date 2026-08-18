@@ -19,6 +19,10 @@
 //
 // ⚠ 一个 test 串 3 次 toHaveScreenshot，首处不匹配即中止（与 visual.spec 同款撒谎形态⑤）
 // ——所以本 spec 与旧 spec 分文件、每皮一个 test：一处红最多废一皮 3 张的清单，不殃及池鱼。
+// 🔴 跑法要**四件套**：mock 三件套 + AVERY_DEMO_SEED_DIR=tests/fixtures/demo-seed，再加
+//   `AVERY_ALLOW_PERSON_SCORING=1`。第四件以前谁都没写，于是这 18 张是在「关着」的世界冻的、
+//   同目录 visual-map 那 12 张是在「开着」的世界冻的——两套自相矛盾却谁都不红。
+//   team 那一屏现在有一条 `.lite-selfreport` 自证盯着它。
 // ⚠ 依赖后端在场（mock 三件套 + AVERY_DEMO_SEED_DIR=tests/fixtures/demo-seed）：
 //   上传落不了地时 `.upload-ready` 超时红——红形态是「上传等不到」，不是假绿。
 // 基线 PNG 是 gitignore 的单机产物：worktree 里冻＝白冻，真基线只在主检出、人审后冻。
@@ -102,6 +106,14 @@ for (const look of LOOKS) {
       if (sc === 'home') {
         // 自证：#65 后差距对照卡默认展开，是本 spec 的核心覆盖对象——不在场就红，绝不拍假数据态。
         await page.locator('.lite-gap-card').first().waitFor({ timeout: 10000 })
+      }
+      if (sc === 'team') {
+        // 🔴 自证：人卡上的自述行必须在场。它只在后端开了 AVERY_ALLOW_PERSON_SCORING 时
+        // 才投影得出来——这条前提以前没写在任何跑法说明里，于是同一批基线里，
+        // 地图那 12 张是在**开着**的世界冻的、团队这几张是在**关着**的世界冻的，
+        // 两套自相矛盾却谁都不红。前提缺席就在这里红。
+        await expect(page.locator('.lite-selfreport').first(),
+          '人卡自述行不在画面里 → 后端多半没带 AVERY_ALLOW_PERSON_SCORING=1（见本文件头「跑法」）').toBeVisible()
       }
       await page.waitForTimeout(500)
       await expect(page).toHaveScreenshot(`${look}-${sc}-data-${testInfo.project.name}.png`, {
