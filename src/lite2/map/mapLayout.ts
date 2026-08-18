@@ -61,6 +61,11 @@ export interface MapZone {
   /** 部门原文（不翻译）或 `__ungrouped__`——与目录页 chip 的 key 逐字同源。 */
   key: string
   isUngrouped: boolean
+  /**
+   * B4：这一次排布下它是不是收拢成一张部门卡（人位不铺开）。
+   * 🔴 收拢**不改成员清单**——`members` 照样是全员，只是 pos 全落在卡心。
+   */
+  isCollapsed: boolean
   rect: MapRect
   members: MapPersonNode[]
 }
@@ -81,6 +86,10 @@ export interface MapLayout {
   personCols: number
   /** 分区自己排成几列（f(部门数, 各组人数, 项目数)）。门与调试用。 */
   zoneCols: number
+  /** B4：这块板是不是收拢态（人数 ≥ COLLAPSE_MIN_PEOPLE）。 */
+  collapsed: boolean
+  /** B4：收拢态下铺开的那个部门；小团队恒 null。 */
+  expandedZoneKey: string | null
 }
 
 // ── 公式常量（board px）。这里是**唯一**允许出现数字的地方；没有任何一个坐标是手摆的。──
@@ -115,6 +124,25 @@ const PERSON_COLS_MAX = 4
 
 /** 分区网格最多几列。同理：再多就把项目列挤出可读窗。 */
 const ZONE_COLS_MAX = 4
+
+// ── B4 · 部门收拢态（#107）────────────────────────────────────────────────────
+//
+/**
+ * 多少人以上改成「部门是节点」。40 是票面 #107 写死的数。
+ *
+ * 为什么是**人数**而不是部门数：塌掉的是「一屏读不完」，而一屏读不读得完由人位总数决定
+ * ——9 个部门 80 个人要收，9 个部门 16 个人（demo-seed 那份）不收。
+ * 🔴 阈值只影响**默认排布**，不影响任何契约：收拢态下 `zone.members` 一个人都不少，
+ * 只是他们的 pos 全落在卡心（于是连线仍然连得上、focusBounds 仍然框得住）。
+ */
+export const COLLAPSE_MIN_PEOPLE = 40
+
+/**
+ * 收拢卡的高度：标签行 + 一行组级读数 + 一行警报角标的位置。
+ * 不随人数变——**这正是重点**：收拢态回答的是「哪个部门有火情」，不是「哪个部门人多」。
+ * 人数差异由展开之后的行数表达（ADR-0023：跨人计数在本仓读作排行榜）。
+ */
+const ZONE_COLLAPSED_H = 132
 
 /** 名册区 ↔ 项目列。 */
 const COLUMN_GAP = 88
@@ -173,6 +201,11 @@ function zoneHeightOf(memberCount: number, personCols: number): number {
   return ZONE_LABEL_H + rows * PERSON_ROW_STEP + ZONE_PAD_B
 }
 
+/** 一个分区这一次排布下占多高：收拢的取固定卡高，铺开的按人数长行数。 */
+function heightOfGroup(group: RawGroup, personCols: number, collapsedNow: boolean): number {
+  return collapsedNow ? ZONE_COLLAPSED_H : zoneHeightOf(group.people.length, personCols)
+}
+
 interface ShelfPack {
   /** 与 groups 同序的分区框。 */
   rects: MapRect[]
@@ -185,7 +218,13 @@ interface ShelfPack {
  * 同一行的分区卡**统一取该行最高**——高低参差的卡片排一行会读成「坏掉的表格」，
  * 而人数差异本来就该由卡里的行数表达，不该由卡的高度表达。
  */
-function packZones(groups: RawGroup[], personCols: number, zoneCols: number): ShelfPack {
+function packZones(
+  groups: RawGroup[],
+  personCols: number,
+  zoneCols: number,
+  /** 哪几个分区这一次是收拢的（与 groups 同序）。全 false = B1..B3 的老形态。 */
+  collapsedFlags: readonly boolean[] = [],
+): ShelfPack {
   if (groups.length === 0) return { rects: [], width: 0, height: 0 }
   const zoneW = zoneWidthOf(personCols)
   const rects: MapRect[] = []
@@ -194,7 +233,10 @@ function packZones(groups: RawGroup[], personCols: number, zoneCols: number): Sh
 
   for (let start = 0; start < groups.length; start += zoneCols) {
     const row = groups.slice(start, start + zoneCols)
-    const rowH = row.reduce((max, g) => Math.max(max, zoneHeightOf(g.people.length, personCols)), 0)
+    const rowH = row.reduce(
+      (max, g, i) => Math.max(max, heightOfGroup(g, personCols, collapsedFlags[start + i] === true)),
+      0,
+    )
     row.forEach((_, i) => {
       const x = PAD + i * (zoneW + ZONE_GAP_X)
       rects.push({ x, y, width: zoneW, height: rowH })
@@ -230,13 +272,18 @@ function boardSizeOf(rosterW: number, rosterH: number, projectCount: number) {
  * （右列比左边名册长的时候，高度由项目数决定），此时正确的应对是把名册排得更宽而不是更高。
  * 只看部门数的公式看不见这件事——80 人 fixture 恰好就是那个形态。
  */
-function pickZoneCols(groups: RawGroup[], personCols: number, projectCount: number): number {
+function pickZoneCols(
+  groups: RawGroup[],
+  personCols: number,
+  projectCount: number,
+  collapsedFlags: readonly boolean[] = [],
+): number {
   if (groups.length === 0) return 1
   let bestCols = 1
   let bestScore = Infinity
   const maxCols = Math.min(ZONE_COLS_MAX, groups.length)
   for (let cols = 1; cols <= maxCols; cols += 1) {
-    const pack = packZones(groups, personCols, cols)
+    const pack = packZones(groups, personCols, cols, collapsedFlags)
     const board = boardSizeOf(pack.width, pack.height, projectCount)
     const score = Math.abs(board.width / board.height - TARGET_ASPECT)
     if (score < bestScore - 1e-9) {
@@ -291,19 +338,52 @@ function zoneIndexOfProject(
  * 花名册 + 项目 → 一整块 board。纯函数：同样的输入永远同样的输出，不读时钟、不读视口、
  * 不读 store。
  */
-export function buildMapLayout(people: LitePerson[], projects: LiteProject[]): MapLayout {
+export interface MapLayoutOptions {
+  /**
+   * 收拢态下**哪一个部门是铺开的**（B4）。null / 查无此部门 = 全收拢。
+   * 值来自 URL 的 `?focus=zone:<key>`——同一个 token 在小团队里是「点亮这一组」、
+   * 在大团队里顺带把它铺开，于是「展开了哪个部门」跟着一起可分享，零新增状态。
+   */
+  expandedZoneKey?: string | null
+}
+
+export function buildMapLayout(
+  people: LitePerson[],
+  projects: LiteProject[],
+  options: MapLayoutOptions = {},
+): MapLayout {
   const groups = groupsOf(people)
   const personCols = personColsOf(groups)
-  const zoneCols = pickZoneCols(groups, personCols, projects.length)
-  const pack = packZones(groups, personCols, zoneCols)
+
+  // B4：人多就收拢。展开的那一个照常铺人位——「原位展开」的意思正是它在原来的格子里长大，
+  // 不是弹出一个覆盖层（票面明写不做 zoom 阈值 LOD：点击/状态驱动才可回放）。
+  const collapsed = people.length >= COLLAPSE_MIN_PEOPLE
+  const expandedZoneKey =
+    collapsed && options.expandedZoneKey && groups.some((g) => g.key === options.expandedZoneKey)
+      ? options.expandedZoneKey
+      : null
+  const collapsedFlags = groups.map((g) => collapsed && g.key !== expandedZoneKey)
+
+  const zoneCols = pickZoneCols(groups, personCols, projects.length, collapsedFlags)
+  const pack = packZones(groups, personCols, zoneCols, collapsedFlags)
 
   const zones: MapZone[] = groups.map((group, i) => {
     const rect = pack.rects[i]
+    const isCollapsed = collapsedFlags[i]
     return {
       key: group.key,
       isUngrouped: group.isUngrouped,
+      isCollapsed,
       rect,
-      members: membersOf(group, rect, personCols),
+      // 🔴 收拢时成员**一个都不少**，只是 pos 全落在卡心：连线于是从项目条连到那张部门卡
+      //（读作「这活儿压在那个部门」），focusBounds 也照样框得住。少给成员会让
+      // mapFocus / MapEdges 各自需要一条「收拢了就特殊处理」的分支——那是四处各写一遍的开头。
+      members: isCollapsed
+        ? group.people.map((person) => ({
+            person,
+            pos: { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 },
+          }))
+        : membersOf(group, rect, personCols),
     }
   })
 
@@ -346,5 +426,7 @@ export function buildMapLayout(people: LitePerson[], projects: LiteProject[]): M
     projects: projectNodes,
     personCols,
     zoneCols,
+    collapsed,
+    expandedZoneKey,
   }
 }
