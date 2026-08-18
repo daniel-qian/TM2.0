@@ -45,10 +45,16 @@
 
 ## 顺手发现，没顺手改
 
-- 🔴 **`eval-harness/visual/playwright.config.mjs` 的 `reducedMotion: 'reduce'` 实测没生效**
-  （同块里的 locale / timezoneId / deviceScaleFactor 都生效了）。那份配置把它列为「确定性
-  三板斧」之一，实际上 54 张既有基线一直是在**动效开着**的条件下冻的。没在本票改：改了要整批
-  重冻 + 人眼重审，是另一票的活。已开后台任务卡片，细节与实测证据见 `receipt-106-b3.md` 末节。
+- ✅ **`reducedMotion` 那条已做完**（0818，独立一票）：根因是 playwright 1.61.1 的 `use` 顶层
+  没有这个键（`_combinedContextOptions` 是写死白名单，全库 grep 零命中），出口是
+  `contextOptions: { reducedMotion: 'reduce' }`。逐条账见
+  [`../visual-determinism-0818/receipt-visual-determinism.md`](../visual-determinism-0818/receipt-visual-determinism.md)。
+  **它反过来咬了 B3 一口**：修好开关重跑，逮到一个 B3 62 条判据全绿、人眼也过了的真 bug——
+  地图 mini 卡的居中被自己的入场动画（`both` 填充 + to 帧 `transform: none`）永久抹掉，
+  动效开着的世界里**偏 98px**，而歪的那一帧当时被冻进四张 focus 基线当成了正确答案。
+  已修 + 补判据 D1b。另查实：`verify-team-map.mjs` 的 ⓪ 自证硬依赖
+  `AVERY_ALLOW_PERSON_SCORING=1`，而这条前提 B3 一个字都没写——不带它跑这道门必红
+  （`0 人报了负载`）。跑法已补进 ROSTER 与两份 spec 头注释。
 - 全局「问 Avery」悬浮胶囊盖住地图画布底部一条（B2 就记过，仍在）。别的屏上它盖的是卡片，
   同一个问题。
 
