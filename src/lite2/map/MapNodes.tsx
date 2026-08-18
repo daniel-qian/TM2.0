@@ -65,16 +65,23 @@ export function MapZoneCard({
   zone,
   label,
   read,
+  state,
 }: {
   zone: MapZone
   label: string
   read: ZoneRead | null
+  /** B3：部门 chip 点中的那一块是 subject，其余在任何 focus 下都退后一步。 */
+  state: MapNodeState
 }) {
   const { t } = useDict()
   const l = t.lite2
   return (
     <div
-      className={classNames(['lite-map-zone', zone.isUngrouped && 'is-ungrouped'])}
+      className={classNames([
+        'lite-map-zone',
+        zone.isUngrouped && 'is-ungrouped',
+        stateClass(state),
+      ])}
       data-zone-key={zone.key}
       style={{
         left: `${zone.rect.x}px`,

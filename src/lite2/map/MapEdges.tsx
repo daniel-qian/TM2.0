@@ -61,6 +61,15 @@ export function MapEdges({
         <path
           key={`${edge.personId}→${edge.projectId}`}
           className="lite-map-edge"
+          // B3：门要验的是「这条线连的是**哪两个**」，不只是「有几条」。只数条数的判据，
+          // 对着一个把每个人都连到第一个项目上的错实现照样全绿（数目一样多）。
+          //
+          // 🔴 名字**必须**是 `edge-` 打头，不能叫 `data-person-id`。第一版就叫那个，当场
+          // 撞车：节点上也有 `data-person-id`，而连线层在 DOM 里排在人员层**前面**，于是
+          // 全仓那些 `querySelector('[data-person-id="u_0"]')` 一夜之间返回的是一条线、
+          // 不是那个人——B2 的两个 check 立刻红了 7 条，红的样子却是「mini 卡没有职位」。
+          data-edge-person={edge.personId}
+          data-edge-project={edge.projectId}
           d={edgePath(edge)}
         />
       ))}

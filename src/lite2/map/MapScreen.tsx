@@ -4,11 +4,19 @@ import { useLite } from '../store'
 import { useDict } from '../../shared/i18n/useDict'
 import { filesHref, mapHref, teamHref, MAP_FOCUS_PARAM } from '../routes'
 import { GROUP_UNGROUPED } from '../teamDirectory'
+import { isNeedsYouStatus } from '../projectView'
 import { MapPanZoom } from './MapPanZoom'
 import { MapEdges } from './MapEdges'
+import { MapHud } from './MapHud'
 import { MapPersonNodeView, MapProjectNodeView, MapZoneCard, type MapNodeState } from './MapNodes'
 import { buildMapLayout, type MapZone } from './mapLayout'
-import { focusToken, parseFocusToken, resolveMapFocus, type MapFocusTarget } from './mapFocus'
+import {
+  focusBounds,
+  focusToken,
+  parseFocusToken,
+  resolveMapFocus,
+  type MapFocusTarget,
+} from './mapFocus'
 import { deriveZoneRead } from './zoneRead'
 
 // team-map-revival-0804 · B1/B2 ·「团队地图」关系全景页（`/map`，正源票 #106，PRD 见
@@ -108,6 +116,35 @@ export function MapScreen() {
     [layout],
   )
 
+  // ── B3 · HUD-lite 的三份输入。全部是**板上现成事实的投影**，没有一处二次 derive。 ──
+  //
+  // chips 直接吃 `layout.zones`（它自己就是 `deriveGroupFacets` 排出来的），不再调一次 derive：
+  // 再调一次就有了第二条链路，哪天两条不一致，chip 会指向一块板上不存在的分区。
+  // 🔴 只取 key 与标签，**不取 count**——那是一排部门人数排行榜（ADR-0023 禁的形状）。
+  const hudZones = useMemo(
+    () => layout.zones.map((zone) => ({
+      key: zone.key,
+      label: zoneLabel(zone, l.directoryUngroupedLabel),
+    })),
+    [layout, l.directoryUngroupedLabel],
+  )
+  // 药丸上的数与它点开之后亮起来的条数由**同一个函数**决定（`resolveMapFocus` 的 alert 口
+  // 也调它）。两处各写一遍的下场是药丸说 3 件、点开亮 2 根。
+  const alertCount = useMemo(
+    () => projects.filter((p) => isNeedsYouStatus(p.statusRaw)).length,
+    [projects],
+  )
+  // 镜头跟随的输入：这次亮起来的东西整个装在哪个方框里。口径见 `focusBounds`。
+  const focusRect = useMemo(() => focusBounds(layout, focus), [layout, focus])
+  const focusKey = target ? focusToken(target) : null
+
+  // 分区底板：任何 focus 下都退后一步，只有被 chip 点中的那一块留在前面。
+  // 组级答案的主语是那张卡——人再少也得看得见「这是哪个部门」。
+  function zoneState(key: string): MapNodeState {
+    if (!focus) return 'calm'
+    return focus.subject.kind === 'zone' && focus.subject.id === key ? 'subject' : 'dimmed'
+  }
+
   function personState(id: string): MapNodeState {
     if (!focus) return 'calm'
     if (focus.subject.kind === 'person' && focus.subject.id === id) return 'subject'
@@ -139,11 +176,35 @@ export function MapScreen() {
         </div>
       </header>
 
+      {/* ── B3 · HUD-lite ────────────────────────────────────────────────────
+          🔴 它**在画布外面**（页头带里、进文档流），不是浮在板上的一块玻璃。
+          第一版是浮的（画布左上角绝对定位），真机截图当场毙掉：初始镜头是 fit-width 顶锚，
+          于是板的左上角恰好就在 HUD 底下——桌面上第一张部门卡的标签、手机上整个第一组，
+          被搜索框和 chips 盖着。「一进来第一眼看到的东西被工具条挡住」是最贵的那种遮挡。
+          浮层版本要修就得让 fitBoard 知道 HUD 有多高（镜头去耦合一个 DOM 尺寸），
+          而且 pan 之后照样会有东西钻到它底下。进流的代价是画布矮一截，买到的是
+          **任何时候都没有东西被自家工具条盖住**，桌面上 10 个部门 chip 还恰好一行铺得下。
+          它仍然是 HUD：不进 transform、不随镜头缩放，视口单位只有它这一层能用。 */}
+      {hasBoard ? (
+        <div className="lite-map-hud">
+          <MapHud
+            team={team}
+            zones={hudZones}
+            alertCount={alertCount}
+            focusKey={focusKey}
+            subject={target}
+            onFocus={setFocus}
+          />
+        </div>
+      ) : null}
+
       {hasBoard ? (
         <MapPanZoom
           board={layout.board}
           ariaLabel={l.mapCanvasAria}
           onBackgroundClick={() => setFocus(null)}
+          focusKey={focusKey}
+          focusRect={focusRect}
           extraControls={
             focus ? (
               <button
@@ -165,6 +226,7 @@ export function MapScreen() {
                   zone={zone}
                   label={zoneLabel(zone, l.directoryUngroupedLabel)}
                   read={zoneReads[i]}
+                  state={zoneState(zone.key)}
                 />
               ))}
             </div>

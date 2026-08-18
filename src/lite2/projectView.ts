@@ -346,8 +346,17 @@ export function statusTextLabel(raw: string | undefined | null, l: Dict['lite2']
   return statusTokenLabel(statusKeyOf(raw ?? undefined), l, (raw ?? '').trim() || null)
 }
 
-export function groupKeyOf(view: ProjectView): ProjectGroupKey {
-  switch (view.statusKey) {
+/**
+ * 归一化状态 → 看板分组。
+ *
+ * team-map-revival-0804（B3）起从 `groupKeyOf` 里抽出来：地图的警报药丸手上是
+ * `LiteProject.statusRaw`（一个裸串），没有 `ProjectView`。不抽的话地图就得自己写一句
+ * `raw === 'blocked' || raw === 'at-risk'`——那是**第二把尺**：哪天「要你管」的定义变了
+ *（比如把词表外的状态也算进来），项目屏的分组会变、地图的药丸不会，同一批项目在两块屏上
+ * 一个报警一个不报警。`statusTokenLabel` 当年从 `projectStatusLabel` 里抽出来是同一个理由。
+ */
+export function groupKeyOfStatus(statusKey: ProjectStatusKey): ProjectGroupKey {
+  switch (statusKey) {
     case 'blocked':
     case 'at-risk':
       return 'needsYou'
@@ -361,6 +370,20 @@ export function groupKeyOf(view: ProjectView): ProjectGroupKey {
       // 词表外的状态原样单列——塞进「进行中」等于替文档下了个它没下的判断。
       return 'other'
   }
+}
+
+export function groupKeyOf(view: ProjectView): ProjectGroupKey {
+  return groupKeyOfStatus(view.statusKey)
+}
+
+/**
+ * 这个项目属不属于项目屏那一组「需要你管的」（= blocked / at-risk）。
+ *
+ * 🔴 地图的警报药丸（计数）与它点开之后**该亮哪几根条**必须是同一个判据、判在同一处。
+ * 分成两处写的下场是药丸说 3 件、点开亮 2 根——一个当场自证不可信的界面。
+ */
+export function isNeedsYouStatus(statusRaw: string | undefined): boolean {
+  return groupKeyOfStatus(statusKeyOf(statusRaw)) === 'needsYou'
 }
 
 /** 组的展示顺序：先要你管的，最后才是「文档没写状态」的那堆。 */

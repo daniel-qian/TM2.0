@@ -2121,6 +2121,30 @@ export const en = {
     // reads "…self-reported Strained", which looks like a typo. A colon makes the capital
     // correct instead of wrong, and survives whatever casing a future locale picks.
     mapZoneRead: 'Someone self-reported: {mood}',
+
+    // ── B3 · HUD-lite ──
+    // 🔴 The map gets its OWN placeholder even though the MATCHING is the topbar's
+    // `searchTeam` (one ruler, one result set). Reason: on a desktop /map both boxes are on
+    // screen at once, and with the topbar's wording they were word-for-word identical while
+    // doing different things — the topbar opens the record, this one lights up the board.
+    // Two identical labels for two different actions is the confusion; the shared ruler is
+    // about how a word MATCHES, not about what the box says it will do.
+    mapSearchPlaceholder: 'Find someone on the map…',
+    mapSearchAria: 'Find a person or project on the map',
+    // searchEmpty (zero matches) IS reused as-is: "nothing matched" is the same sentence
+    // wherever it is said.
+    // It deliberately carries NO number — "8 of 41" invites the reader to treat the list as
+    // a ranking, and the honest instruction is the same either way: type a bit more.
+    mapSearchMore: 'More matches — type a little more to narrow it down.',
+    mapZonesAria: 'Departments',
+    // 🔴 Chips carry the department NAME ONLY. deriveGroupFacets hands us a count for free
+    // and we throw it away on purpose: a row reading "Kitchen 4 · Front desk 2 · Rooms 1"
+    // is a headcount league table (ADR-0023), and this page has a per-person-number red line.
+    mapZoneChipAria: 'Show the {zone} team and the work they carry',
+    // The alert pill. {group} is the projects screen's OWN group heading, passed in rather
+    // than re-worded here: the same set of projects must be called the same thing on both
+    // screens. {count} is a PROJECT count — projects may carry hard numbers, people may not.
+    mapAlertAria: 'Show the {count} projects under {group}',
   },
 
   // ── Ask / Quick ask (feat-034 stage B — ADR-0023 voice: asks about the WORK; whether rating

@@ -11435,9 +11435,17 @@
   opacity: 0.28;
 }
 
-/* 分区底板在 focus 时整体退后一步（一条规则管全部分区，见 .lite-map-world）。 */
-.lite2-shell .lite-map-world.is-focused .lite-map-zone-layer {
+/* 分区底板在 focus 时退后一步。
+   ⚠ B3 从「整层 opacity」改成**逐块**：父元素的 opacity 是绝对的，孩子再怎么写都提不回来，
+   而部门 chip 点中的那一块必须站在前面（组级答案的主语就是那张卡）。 */
+.lite2-shell .lite-map-world.is-focused .lite-map-zone {
   opacity: 0.5;
+}
+
+.lite2-shell .lite-map-world.is-focused .lite-map-zone.is-subject {
+  opacity: 1;
+  border-color: rgba(var(--lite2-accent-rgb, 105, 128, 109), 0.75);
+  background: rgba(var(--lite2-surface-rgb, 255, 253, 248), 0.9);
 }
 
 /* 相干的人：一块底板把他托起来。这块底板还有个正事——连线的线头收在它下面，
@@ -11642,6 +11650,216 @@
   padding: 0 12px;
   font-size: 12px;
   white-space: nowrap;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   B3 · HUD-lite（搜索 / 部门 chips / 警报药丸）
+   ────────────────────────────────────────────────────────────────────────────
+   🔴 视口单位（vh/vw/%、视口锚点）**只有这一段能用**——ADR-0012 修订 1 的 world/HUD
+   分层铁律。上面那些 `.lite-map-zone / -person / -project` 全是 world 对象，一律 board px，
+   随镜头缩放；HUD 钉在画布上不动。
+   ⚠ 容器自己不吃指针（`pointer-events: none`），只有真控件吃：HUD 是个左上角的长方形，
+   里面大半是空档，吃了指针就等于在板上盖了一块拖不动、点不着的死区。
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* 在文档流里（页头带下面一条），不浮在板上——理由写在 MapScreen 的渲染处。
+   z-index 保证搜索结果面板能盖住底下的画布。 */
+.lite2-shell .lite-map-hud {
+  position: relative;
+  z-index: 30;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  padding: 0 24px 12px;
+}
+
+.lite2-shell .lite-map-hud-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ── 搜索 ───────────────────────────────────────────────────────────────── */
+/* relative 是结果面板的定位父：它必须能盖住底下的 chips 行与板。 */
+.lite2-shell .lite-map-search {
+  position: relative;
+  flex: 1 1 auto;
+  /* 上限而不是定宽：手机上它是整行，桌面上再宽就变成一条横跨全屏的输入框（读起来像
+     这一页的主角是搜索），而这一页的主角是板。 */
+  max-width: 320px;
+  min-width: 0;
+}
+
+.lite2-shell .lite-map-search-input {
+  width: 100%;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--lite2-glass);
+  box-shadow: var(--shadow-soft);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+}
+
+.lite2-shell .lite-map-search-input::placeholder {
+  color: var(--ink-faint);
+}
+
+.lite2-shell .lite-map-search-results {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius, 12px);
+  /* 🔴 **不透明**，不用 `--lite2-surface`：paper 皮那个令牌是 0.86 的半透明（look-paper.css），
+     而这块面板正好落在 chips 行与整块板上——半透明的下场是结果文字与部门 chip 的字叠在
+     一起，两边都读不动（真机截图逮到）。顶栏那个同款浮层没这个问题只是因为它浮在
+     一片空白的页面顶上。 */
+  background: rgba(var(--lite2-surface-rgb, 255, 253, 248), 1);
+  box-shadow: 0 18px 40px -22px rgba(var(--lite2-ink-rgb, 52, 48, 40), 0.5);
+}
+
+.lite2-shell .lite-map-search-results ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lite2-shell .lite-map-search-hit {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.lite2-shell .lite-map-search-hit:hover,
+.lite2-shell .lite-map-search-hit:focus-visible {
+  background: rgba(var(--lite2-accent-rgb, 105, 128, 109), 0.12);
+}
+
+.lite2-shell .lite-map-search-hit-label {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.lite2-shell .lite-map-search-hit-meta {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--ink-faint);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lite2-shell .lite-map-search-empty,
+.lite2-shell .lite-map-search-more {
+  margin: 0;
+  padding: 6px 8px;
+  color: var(--ink-faint);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* ── 部门 chips ─────────────────────────────────────────────────────────── */
+/* 🔴 恒**单行横滚**，不换行：demo-seed 有 10 个部门，换行之后手机上 HUD 会长到半屏高，
+   把它本该服务的那块板盖掉。横滚的行高是常数，哪个视口都一样。 */
+.lite2-shell .lite-map-chips {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  padding-bottom: 2px;
+}
+
+.lite2-shell .lite-map-chip {
+  flex: none;
+  min-height: 28px;
+  padding: 0 12px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--lite2-glass);
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.lite2-shell .lite-map-chip:hover,
+.lite2-shell .lite-map-chip:focus-visible {
+  color: var(--ink);
+  border-color: rgba(var(--lite2-accent-rgb, 105, 128, 109), 0.6);
+}
+
+.lite2-shell .lite-map-chip.is-active {
+  border-color: rgba(var(--lite2-accent-rgb, 105, 128, 109), 0.95);
+  background: rgba(var(--lite2-accent-rgb, 105, 128, 109), 0.16);
+  color: var(--ink);
+}
+
+/* ── 警报药丸 ───────────────────────────────────────────────────────────── */
+/* 语气色走 tone-danger 同族的告警色。**只有它带数字**，而那是个项目计数——
+   项目可硬，人不可（红线在 MapNodes.tsx 文件头）。 */
+.lite2-shell .lite-map-alert {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 8px 0 14px;
+  border: 1px solid rgba(var(--lite2-danger-rgb, 176, 92, 76), 0.5);
+  border-radius: 999px;
+  background: var(--lite2-glass);
+  box-shadow: var(--shadow-soft);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.lite2-shell .lite-map-alert:hover,
+.lite2-shell .lite-map-alert:focus-visible,
+.lite2-shell .lite-map-alert.is-active {
+  border-color: rgba(var(--lite2-danger-rgb, 176, 92, 76), 0.95);
+}
+
+.lite2-shell .lite-map-alert-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(var(--lite2-danger-rgb, 176, 92, 76), 0.18);
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
 }
 
 /* 人数大时关逐节点动效（PRD §4 最后一条；reduced-motion 路径现成）。 */

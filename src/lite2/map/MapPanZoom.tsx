@@ -12,6 +12,7 @@ import {
   type ReactZoomPanPinchRef,
 } from 'react-zoom-pan-pinch'
 import { useDict } from '../../shared/i18n/useDict'
+import type { MapRect } from './mapLayout'
 
 // team-map-revival-0804 · B1 · 地图页的薄 pan/zoom 基座。
 //
@@ -90,14 +91,25 @@ function fitBoard(wrapper: HTMLElement, board: { width: number; height: number }
  */
 const CLICK_SLOP = 6
 
-/** 抬手落在这些东西上不算「点空白」：它们各自有自己的点击语义。 */
+/**
+ * 抬手落在这些东西上不算「点空白」：它们各自有自己的点击语义。
+ * ⚠ 这里**没有** `.lite-map-hud`：B3 的 HUD-lite 在画布外面（页头那一带，见 MapScreen），
+ * 它的点击根本到不了本处理器。写进来会是一根永远判不到任何东西的死针。
+ */
 const INTERACTIVE_WITHIN = '.lite-map-person, .lite-map-project, .lite-map-controls'
+
+/** 动效开关。像素基线 runner 恒开 reducedMotion，于是镜头是**瞬移**——基线里没有中间帧。 */
+function prefersReducedMotion(): boolean {
+  return !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+}
 
 export function MapPanZoom({
   board,
   ariaLabel,
   onBackgroundClick,
   extraControls,
+  focusKey,
+  focusRect,
   children,
 }: {
   board: { width: number; height: number }
@@ -106,6 +118,14 @@ export function MapPanZoom({
   onBackgroundClick?: () => void
   /** HUD 胶囊里额外塞的按钮（B2 的「回到全景」只在 focus 时出现）。 */
   extraControls?: ReactNode
+  /**
+   * 这一次 focus 的**身份**（URL token 或 null）。镜头只在它变化时动一次——
+   * 🔴 不能拿 `focusRect` 当依赖：那是个每次渲染都可能换引用的对象，一旦某天上游的 memo
+   * 断了，镜头会在每一帧把用户刚拖到的位置抢回去（「跟随」变成「拽着不放」）。
+   */
+  focusKey?: string | null
+  /** 该进画面的方框（board px）。null = 这次 focus 没有可框的东西。 */
+  focusRect?: MapRect | null
   children: ReactNode
 }) {
   const ref = useRef<ReactZoomPanPinchRef | null>(null)
@@ -144,6 +164,79 @@ export function MapPanZoom({
   useEffect(() => {
     applyFit(false)
   }, [board, applyFit])
+
+  /**
+   * 🔴 B3 ·「点击聚焦对应簇」里的那个**聚焦**：把亮起来的那一撮东西带进画面。
+   *
+   * ## 它修的是什么
+   * 80 人的板宽 3476px，可读地板（`MIN_FIT_SCALE`）下首帧只框得住约 2400px。点一个人，
+   * 他的项目条在右边 2000px 开外——两条连线径直跑出右边框，屏幕上只剩一个亮着的圆点和两个
+   * 线头。整张图存在的理由恰好在最需要它的那一刻看不见（B2 收尾时实测记档，见回执）。
+   *
+   * ## 三条口径（每一条都是一次「别抢用户的镜头」）
+   * ① **已经全看得见就一个像素都不动**。demo-seed 那种板本来就装得下，镜头一动不动——
+   *    B2 验过的手感一字不变，也让「跟随」不会变成每点一下都晃一下。
+   * ② **只缩小、绝不放大**（`Math.min(scale, need)`）。放大到一个人身上看着像「它替我
+   *    决定了该看多近」，而且回到全景时的落差会让人以为换了一块板。
+   * ③ 装不下才动，动就**居中**——半推半就地只挪到刚好贴边，下一次微小的 focus 变化又要再挪，
+   *    读起来是镜头在抖。
+   *
+   * ⚠ 有意识地允许缩到 `MIN_FIT_SCALE`（可读地板）**以下**：手机竖屏上一个人与他的项目条
+   * 相距 1100 board px，两头都要进画面就只能缩到 0.30 左右，那时字是读不动的。
+   * 权衡是清醒做的——focus 只有一个职责，就是**把那条关系指出来**，只框住一头等于没框
+   *（那正是 B2 收尾时记档的原始问题）。看不清可以捏合放大，也可以「回到全景」原路退回；
+   * 而看不见就是看不见。初始帧仍然守着地板不变（`fitBoard`）：那一帧是「这家公司长什么样」，
+   * 必须能读。两处地板不同，是因为两处回答的不是同一个问题。
+   *
+   * `animate=false` 是**深链**那一路（首帧就该已经框好，见 onInit 那段）：用户没点过任何东西，
+   * 给他放一段从 fit 帧飞过来的动画，等于表演一次他没做过的操作。
+   */
+  const ensureVisible = useCallback((rect: MapRect, animate = true) => {
+    const api = ref.current
+    const wrapper = api?.instance.wrapperComponent
+    if (!api || !wrapper) return
+    const { scale, positionX, positionY } = api.instance.transformState
+    const safeW = Math.max(40, wrapper.clientWidth)
+    const safeH = Math.max(40, wrapper.clientHeight)
+    const left = rect.x * scale + positionX
+    const top = rect.y * scale + positionY
+    const right = left + rect.width * scale
+    const bottom = top + rect.height * scale
+    if (left >= EDGE_PAD && top >= EDGE_PAD && right <= safeW - EDGE_PAD && bottom <= safeH - EDGE_PAD) {
+      return
+    }
+    const roomW = Math.max(40, safeW - EDGE_PAD * 2)
+    const roomH = Math.max(40, safeH - EDGE_PAD * 2)
+    const need = Math.min(roomW / Math.max(1, rect.width), roomH / Math.max(1, rect.height))
+    const next = Math.max(MIN_SCALE, Math.min(scale, need))
+    api.setTransform(
+      safeW / 2 - (rect.x + rect.width / 2) * next,
+      safeH / 2 - (rect.y + rect.height / 2) * next,
+      next,
+      animate && !prefersReducedMotion() ? 320 : 0,
+      'easeOut',
+    )
+  }, [])
+
+  // rect 走 ref：依赖只认 focusKey（见 props 注释）。声明序在 fit effect **之后**——
+  // React 按源码序跑 effect，反过来的话首帧的深链会被紧随其后的 fit 当场盖掉。
+  const focusRectRef = useRef(focusRect)
+  focusRectRef.current = focusRect
+  // 🔴 **首帧不放动画**。深链（`/map?focus=person:小徐` 直接打开）是「开门就该看见」，
+  // 用户没点过任何东西，给他放一段从全景飞过去的动画等于表演一次他没做过的操作。
+  // 之后每一次 focus 变化才动画——那时镜头怎么走过去，本身就是要给人看的信息。
+  //
+  // ⚠ 顺带治了一个能把像素基线冻成假象的陷阱：`page.clock.setFixedTime` 冻住 `Date.now()`，
+  // 而 rzpp 的动画进度是拿它算的——一冻，动画永远停在第 0 帧。像素 spec 恰好既钉钟又走深链，
+  // 于是首帧那张冻进去的是「还没飞过去」的样子：手机上就是**亮着的那一簇整个在画面外**。
+  // 判据全绿（连线在、mini 卡在），只有手机那张基线看得出来（#106 B3 实收）。
+  const framedOnceRef = useRef(false)
+  useEffect(() => {
+    const rect = focusRectRef.current
+    if (!rect) return
+    ensureVisible(rect, framedOnceRef.current)
+    framedOnceRef.current = true
+  }, [focusKey, board, ensureVisible])
 
   // 跨屏不 mis-fit：视口变了按同一把尺重算（含手机横竖屏切换）。
   useEffect(() => {
@@ -212,6 +305,9 @@ export function MapPanZoom({
         onInit={(api) => {
           ref.current = api
           applyFit(false)
+          // ⚠ 这里**刻意不做** focus 框选。试过，是错的：紧随其后的那条被动 effect 会再跑一次
+          // `applyFit`，把刚框好的镜头一把推回 fit 帧。首帧的 focus 归下面那条 effect 管
+          //（它排在 applyFit 之后），一件事只留一处。
         }}
         // 双击禁用（PRD §4）：双击缩放会和 B2 的「点节点 → focus」抢同一串事件。
         doubleClick={{ disabled: true }}
@@ -219,7 +315,9 @@ export function MapPanZoom({
         panning={{ velocityDisabled: true }}
       >
         {/* HUD 层：viewport-fixed，不进 world（ADR-0012 修订 1 的 world/HUD 分层铁律——
-            world 对象只许 board px，视口单位只有 HUD 能用）。 */}
+            world 对象只许 board px，视口单位只有 HUD 能用）。
+            🔴 它是 `TransformComponent` 的**兄弟**而不是它的孩子：进了 transform 就会跟着
+            镜头缩放平移，那时它就不是 HUD 了，是一个飘在世界里的大按钮。 */}
         <div className="lite-map-controls">
           <span className="lite-map-hint">{t.lite2.mapCanvasHint}</span>
           {extraControls}

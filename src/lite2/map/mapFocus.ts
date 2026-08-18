@@ -15,9 +15,32 @@
 // 它离开 /map 就消失，靠的是地图自己那几个出站 href 显式丢掉它（routes.ts 的
 // `mapAwayParams()`），不是靠全局黑名单——「谁引入的作用域谁负责收口」。
 
-import type { MapLayout, MapPos, MapProjectNode } from './mapLayout'
+import { isNeedsYouStatus } from '../projectView'
+import { MAP_CELL, type MapLayout, type MapPos, type MapProjectNode, type MapRect } from './mapLayout'
 
-export type MapFocusKind = 'person' | 'project'
+/**
+ * focus 的四种口。
+ *
+ * B2 只有前两种（点板上一个节点）。B3 的 HUD 又添了两个触发器，而它们指的都**不是**单个节点：
+ * 部门 chip 指一整组人、警报药丸指一撮项目。它们没有各自另立一套「高亮状态」，
+ * 走的是同一个 focus 契约——理由和 B2 把真相源放进 URL 一样：同一件事（板上此刻在亮什么）
+ * 只能有一个真相源。多出来的好处是它们**跟着一起可分享**：`?focus=zone:后厨` 发给合伙人，
+ * 他看到的是同一组人和同一批活。
+ *
+ * 单节点口（person/project）与集合口（zone/alert）的差别只有一处：集合口没有「主角」，
+ * 所以板上不会有任何节点长成 mini 卡（`MapNodeState` 的 subject 态永远不出现）——
+ * 一次组级提问要的是一个组级答案，不是随手挑一个人把他的卡打开。
+ */
+export type MapFocusKind = 'person' | 'project' | 'zone' | 'alert'
+
+/**
+ * 警报药丸那一口唯一合法的 id：项目屏「需要你管的」那一组（blocked / at-risk）。
+ *
+ * 用组名而不是 `blocked` / `at-risk` 两个 token，是因为判据本身走
+ * `isNeedsYouStatus`（项目屏同一把尺）。哪天那组的定义变了，这个 token 的含义跟着变，
+ * URL 不用动——而如果写死成 `alert:blocked,at-risk`，定义一变旧链接就开始说谎。
+ */
+export const ALERT_NEEDS_YOU = 'needsYou'
 
 /** URL 里那个 token 解出来的东西。**只是一个意图**，不保证板上真有这个节点。 */
 export interface MapFocusTarget {
@@ -72,7 +95,7 @@ export function parseFocusToken(raw: string | null | undefined): MapFocusTarget 
   const kind = value.slice(0, cut)
   const id = value.slice(cut + 1).trim()
   if (!id) return null
-  if (kind !== 'person' && kind !== 'project') return null
+  if (kind !== 'person' && kind !== 'project' && kind !== 'zone' && kind !== 'alert') return null
   return { kind, id }
 }
 
@@ -99,47 +122,122 @@ export function resolveMapFocus(
   target: MapFocusTarget | null,
 ): MapFocusView | null {
   if (!target) return null
+  const subject = target
 
   const personNodes = new Map<string, MapPos>()
   for (const zone of layout.zones) {
     for (const member of zone.members) personNodes.set(member.person.id, member.pos)
   }
 
-  if (target.kind === 'person') {
-    const personPos = personNodes.get(target.id)
-    if (!personPos) return null
-    const owned = layout.projects.filter((node) => ownerIdOf(node) === target.id)
-    return {
-      subject: target,
-      personIds: new Set([target.id]),
-      projectIds: new Set(owned.map((node) => node.project.id)),
-      edges: owned.map((node) => ({
-        personId: target.id,
-        projectId: node.project.id,
-        from: personPos,
-        to: node.pos,
-      })),
+  /**
+   * 一撮项目 → 该亮什么。**四种口共用这一段**，于是「缺了不编」只写一遍：
+   * owner 缺席或指向一个不在花名册上的 id ⇒ 这根条自己亮，不画边、不点亮任何人。
+   * 分四处各写一遍的话，将来只会有一处被改对。
+   */
+  function fromProjects(nodes: MapProjectNode[], seedPeople: Iterable<string> = []) {
+    const personIds = new Set<string>(seedPeople)
+    const edges: MapEdge[] = []
+    for (const node of nodes) {
+      const ownerId = ownerIdOf(node)
+      const ownerPos = ownerId ? personNodes.get(ownerId) : undefined
+      if (!ownerId || !ownerPos) continue
+      personIds.add(ownerId)
+      edges.push({ personId: ownerId, projectId: node.project.id, from: ownerPos, to: node.pos })
     }
+    return {
+      subject,
+      personIds,
+      projectIds: new Set(nodes.map((node) => node.project.id)),
+      edges,
+    }
+  }
+
+  if (target.kind === 'person') {
+    if (!personNodes.has(target.id)) return null
+    // 一个人也可能一件活都不背——那时 personIds 只有他自己、零条边，板上只有他亮着。
+    // 这是个**真答案**（「他没扛项目」），不是空结果，所以不返回 null。
+    return fromProjects(
+      layout.projects.filter((node) => ownerIdOf(node) === target.id),
+      [target.id],
+    )
+  }
+
+  if (target.kind === 'zone') {
+    const zone = layout.zones.find((z) => z.key === target.id)
+    if (!zone) return null
+    const memberIds = new Set(zone.members.map((m) => m.person.id))
+    return fromProjects(
+      layout.projects.filter((node) => {
+        const ownerId = ownerIdOf(node)
+        return !!ownerId && memberIds.has(ownerId)
+      }),
+      memberIds,
+    )
+  }
+
+  if (target.kind === 'alert') {
+    // 🔴 只有一个合法 id。别的值（手改 URL）当**看不懂**处理 = calm，不猜一个默认分组。
+    if (target.id !== ALERT_NEEDS_YOU) return null
+    const flagged = layout.projects.filter((node) => isNeedsYouStatus(node.project.statusRaw))
+    // 一件都没有 ⇒ null（= calm）。药丸本来就只在计数 > 0 时才渲染，所以这一路只有手敲
+    // URL 才到得了；到了也不该把整块板暗下去只为了宣布「什么事都没有」。
+    if (flagged.length === 0) return null
+    return fromProjects(flagged)
   }
 
   const projectNode = layout.projects.find((node) => node.project.id === target.id)
   if (!projectNode) return null
-  const ownerId = ownerIdOf(projectNode)
-  const ownerPos = ownerId ? personNodes.get(ownerId) : undefined
-  // 🔴 owner 缺席（或指向一个不在花名册上的 id）⇒ 项目条自己亮，**不画边、不点亮任何人**。
-  // 这是「缺了不编」在 focus 上的样子：文档没说是谁，图上就不许出现一条指向某个人的线。
-  if (!ownerId || !ownerPos) {
-    return {
-      subject: target,
-      personIds: new Set(),
-      projectIds: new Set([target.id]),
-      edges: [],
+  return fromProjects([projectNode])
+}
+
+/** 两个矩形的并。 */
+function union(a: MapRect, b: MapRect): MapRect {
+  const x = Math.min(a.x, b.x)
+  const y = Math.min(a.y, b.y)
+  return {
+    x,
+    y,
+    width: Math.max(a.x + a.width, b.x + b.width) - x,
+    height: Math.max(a.y + a.height, b.y + b.height) - y,
+  }
+}
+
+function boxAround(pos: MapPos, width: number, height: number): MapRect {
+  return { x: pos.x - width / 2, y: pos.y - height / 2, width, height }
+}
+
+/**
+ * 这一次 focus 亮起来的东西，整个装在哪个方框里（board px）。镜头跟随的输入。
+ *
+ * ## 为什么非有不可
+ * 80 人的板宽 3476px，可读地板 `MIN_FIT_SCALE=0.6` 下首帧只框得住约 2400px。点一个人，
+ * 他的项目条在右边、离他 2000px 开外——**两条线径直跑出画面**，屏幕上只剩一个亮着的圆点和
+ * 两根指向虚空的线头。整张图存在的理由（「他背着这几件事」）在最需要它的那一刻恰好看不见。
+ * demo-seed（板宽 1852）上不存在这个问题，所以 B2 的验收一路全绿也没暴露它。
+ *
+ * ## 口径
+ * 装的是**亮着的节点**，不是被点的那一个：一条边有两头，只框住其中一头等于没框。
+ * 分区口额外并进分区卡自己的框——组级答案的主语是那张卡（人再少也要能看见「这是哪个部门」）。
+ * mini 卡不进框：它挂在节点下方、是 focus 之后才长出来的东西，把它算进去会让镜头为一张
+ * 还没画出来的卡先让位（而且它的高度取决于文案换行，不是纯函数算得出来的）。
+ */
+export function focusBounds(layout: MapLayout, view: MapFocusView | null): MapRect | null {
+  if (!view) return null
+  let rect: MapRect | null = null
+  const add = (next: MapRect) => {
+    rect = rect ? union(rect, next) : next
+  }
+
+  for (const zone of layout.zones) {
+    if (view.subject.kind === 'zone' && zone.key === view.subject.id) add(zone.rect)
+    for (const member of zone.members) {
+      if (!view.personIds.has(member.person.id)) continue
+      add(boxAround(member.pos, MAP_CELL.person.width, MAP_CELL.person.height))
     }
   }
-  return {
-    subject: target,
-    personIds: new Set([ownerId]),
-    projectIds: new Set([target.id]),
-    edges: [{ personId: ownerId, projectId: target.id, from: ownerPos, to: projectNode.pos }],
+  for (const node of layout.projects) {
+    if (!view.projectIds.has(node.project.id)) continue
+    add(boxAround(node.pos, MAP_CELL.project.width, MAP_CELL.project.height))
   }
+  return rect
 }
