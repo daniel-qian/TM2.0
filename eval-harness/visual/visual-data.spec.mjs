@@ -87,7 +87,7 @@ for (const look of LOOKS) {
     // 也就是服务器的真实墙钟，`page.clock` 一个字都够不着。这次重冻时 home 那两张就是这么漂的：
     // 真实日期越过了语料里的到期日，风险行凭空多出一句「到期日已过；」。
     // ⇒ 结论：本 spec 的 home/projects 两屏**仍然是会随日历腐烂的**，只是慢一点。
-    //   真要拆掉这颗雷得让后端的 as_of 也可注入（另一票的活），别在这儿写一句
+    //   真要拆掉这颗雷得让后端的 as_of 也可注入（#109），别在这儿写一句
     //   「钉了钟所以稳了」然后让它接着烂——那正是这一票在收拾的那种注释。
     await page.clock.setFixedTime(new Date('2026-08-08T12:00:00+08:00'))
     await page.goto(`${UI}/?v=2&mode=live&look=${look}&lang=zh`, { waitUntil: 'networkidle' })
