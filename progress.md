@@ -3,28 +3,39 @@
 > 📢 本文件是**当前状态快照，整体重写不追加**。历史都在 git（`git log` + 各 `.issues/*/receipt*.md`），别在这儿堆编年史。
 > 启动路径见 `AGENTS.md` Startup Workflow：读本文件 + `feature_list.json`，跑 `./init.sh` 确认绿，再开工。
 
-**Last Updated:** 2026-08-17 晚（**DeepSeek 暂停改单家 MiniMax** + **积压 45 个提交已 push，前端已上产**）
+**Last Updated:** 2026-08-18 下午（**后端已上产 `cd6f207`——前后端同树，四条迁移落地**）
 
-## 🔴 首要状态：main 已推，前端已翻新，后端**仍是老镜像**
+## ✅ 首要状态：前后端已是同一棵树 `cd6f207`，0817 的错配窗口已关
 
-2026-08-17 晚 Danny 点头后 `git push origin main`（`2c74104..eb9dbc1`，45 个提交，
-含 13 个前端文件 +806 行）。**这就是 #105 那批的前端半边上产。**
+2026-08-18 14:17–14:20 CST，Danny 点头「现在就上」后执行 `runbook-105.md` 的 S1/S3–S7
+（S2 push 0817 晚已做，跳过）。**后端从 `6b70173` 换到 `cd6f207`，全程零 error，未触发回滚。**
+逐条判据实测值见 `.issues/deploy-0817/receipt-deploy-0818.md`。
 
 | 腿 | 现状 |
 |---|---|
-| 前端 `averylite.dannyqian.com` | ✅ **新的**，`__AVERY_BUILD__.commit = eb9dbc1`、`apiBase` 指对后端、21 个控件、零 console 错误、示例团队入口在；#101 已兑现（有「登录」无「注册」入口） |
-| 后端 `avery.dannyqian.com` | ⚠️ **仍是老镜像 `6b70173`**（`main-20260812-070519`）—— 本轮只换了 env（去 DeepSeek），**没换代码** |
-| 生产库 | ⚠️ **仍落后 main 四条迁移**（0017/0018/0019/0020 一条都没上） |
+| 前端 `averylite.dannyqian.com` | ✅ `cd6f207`（主包 `/assets/index-C9CFgX2H.js` 实测）；#101 已兑现（有「登录」无「注册」） |
+| 后端 `avery.dannyqian.com` | ✅ **`cd6f207`**，镜像 `avery-agent:main-20260818-141707`，`degraded:false`、`extraction_chain:["minimax"]` |
+| 生产库 | ✅ **四条迁移已落地**：RLS `13/13` on · `forced=0` · `policies=0` · `account_contexts_context_key` 非唯一 · `ingest_jobs` 在 · `content_sha256` 在；`contexts` 116 行未变 |
+| 回滚梯 | `avery-prev-20260818-141707`（保留，30 秒可退；库不跟着退也不需要退） |
 
-🔴 **于是现在是「新前端 + 老后端」的错配状态，`runbook-105.md` 的 S1/S3–S7 全部还没做。**
-runbook §1 查过源码说这个组合是兼容的（新前端 `src/lite2/store.ts:882` 是 `if (payload.job)`
-分支，老后端不返回 `job` 就回落同步路）——但**那是读码结论，没有真跑验证过**：
-0817 晚只验到「页面加载干净 + 控件在」，**没点示例团队、没试上传**（两者都会往生产库真写）。
-所以上传那条路在真实错配下到底顺不顺，仍是**未验**。
+🔴 **上产从 `origin/main`(`cd6f207`) 构建，不是从本地 main(`4505a39`)——这是对 runbook 的一处有意偏离。**
+上产当天本地 main 已多出 **#106 team map 的 25 个文件 / +4090 行**（未审阅、不在本次计划内）。
+先比过后端子树指纹：`eval-harness/{avery,db,Dockerfile}` 在预检点 `1dd35ce`、`cd6f207`、`4505a39`
+三棵树上**逐字节相同**（`service` 只差 `.env.example` 一段注释，运行时不读）。
+所以从 `cd6f207` 构建 = 构建的正是预检验过的后端代码，**预检证据仍逐字覆盖**，
+且 SHA 在远端有、与线上前端同一个，**还不用 push**。
 
-**下一步就是把 runbook-105 剩下的做完**（S1 构建镜像 → S3 预检 → S4/S5 换容器 → S6 复验）。
-⚠ runbook 原本的顺序是「先构建、push 完立刻换容器」以关掉这个窗口；现在 push 已经发生，
-窗口是开着的，换后端这件事**越早越好**。S2（push）已完成，跳过即可。
+**仍未上产的两笔**：#106 team map（11 个提交未 push）· #102 档案版本号 + CAS（未合，在
+`claude/focused-solomon-cff9b9`，含 `f3adbaa` 正好修 #108 那两张表的开机锁）。
+
+⚠️ **上产没有覆盖的**：`/ingest`、`/advise`、`/demo/claim` 一次都没跑，异步 worker 的**执行**那半边
+（claim → parse → extract → merge → finish）在生产上**从没被驱动过**——**第一次真上传是它的首验**。
+示例团队 `/demo/status` 说母本在（`ready:true`），但没真 claim 过。
+
+✅ **一条过期的碑已划掉**：runbook §0① 与 #105 票面写的「登录仍然是坏的，Auth 回 402」
+**已不成立**（Danny 已升级 Supabase）。0818 探针 3 PASS · 0 FAIL：`disable_signup=true`、
+真发注册请求回 `422 signup_disabled`。**Auth 活着、登录能用，注册是主动关的。**
+⚠ 但 `test-accounts/` 里**一个账号都还没建**，演示前要真跑一次 `scripts/ops/create-account.mjs`。
 
 ## 本轮之二：DeepSeek 暂停 —— 境内改单家 MiniMax（2026-08-17 19:03，**已上产**）
 
