@@ -1670,7 +1670,10 @@ export const zh: Dict = {
     "mapZoneChipAria": "亮出「{zone}」这组人和他们背着的活",
     // 警报药丸。{group} 用的是**项目屏那一栏自己的组名**，不在这儿另起一个说法——
     // 同一批项目在两块屏上必须叫同一个名字。{count} 是**项目**计数（项目可硬，人不可）。
-    "mapAlertAria": "亮出「{group}」那 {count} 件"
+    "mapAlertAria": "亮出「{group}」那 {count} 件",
+    "mapZoneExpandAria": "展开{zone}，看看里面都有谁",
+    "mapProjectsShowAllCta": "显示全部（收起了 {count} 件已完结）",
+    "mapProjectsOnlyActiveCta": "把已完结收起来"
   },
   "ask": {
     "eyebrow": "快问",

@@ -11411,8 +11411,11 @@
 /* 🔴 三个 world 分层都是 `position:absolute; inset:0` 的**整块板**，它们互相完全重叠。
    B1 时节点不可点，谁盖着谁无所谓；B2 一开点就成了硬 bug：项目层在 DOM 里排在人员层之后、
    z-index 又相同 ⇒ 它整块盖在人员层上面，点人会被这张透明的板吃掉（透明 ≠ 不吃指针）。
-   所以分层一律不吃指针，只有节点自己吃。分区卡也不吃——B2 里点它就是「点空白」（B4 的
-   收拢态要点它时，在那一票里单独开口子）。 */
+   所以分层一律不吃指针，只有节点自己吃。分区卡也不吃——点它就是「点空白」。
+   🔴 **B4 把这个口子开了，但只开给收拢那一版**（下面 `button.lite-map-zone`）：
+   收拢时卡本身是唯一可点的东西（人位没铺出来），铺开时它仍然只是底板、点它=点空白。
+   开成 `.lite-map-zone { pointer-events: auto }` 的话，铺开态下「点部门卡的空白处回 calm」
+   这条会当场坏掉。 */
 .lite2-shell .lite-map-zone-layer,
 .lite2-shell .lite-map-people-layer,
 .lite2-shell .lite-map-project-layer {
@@ -11674,6 +11677,70 @@
   overflow-wrap: anywhere;
 }
 
+/* ── B4 · 部门收拢态（#107）────────────────────────────────────────────────
+   人多的时候 calm 态从「人人是圆点」换成「部门是节点」。收拢的卡是**按钮**
+   （MapNodes 里只在 isCollapsed 时才渲染成 button——铺开的卡里站着可点的人节点，
+   按钮套按钮是 B2 立的那条 HTML 硬约束）。
+   🔴 卡上没有人数，块头也不表达人数：所有收拢卡等高（ZONE_COLLAPSED_H），
+   规模差异留给展开之后的行数。理由见 MapNodes 里那段碑与 ADR-0023。 */
+.lite2-shell button.lite-map-zone {
+  /* 🔴 分区层整层 `pointer-events: none`（见上面那段碑），所以收拢卡要自己把口子开回来。
+     只有 button 那一版开——铺开的底板仍然不吃指针。 */
+  pointer-events: auto;
+  display: block;
+  margin: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  /* 收拢卡比铺开的底板实一点：它现在是个可点的东西，不是背景。 */
+  background: rgba(var(--lite2-surface-rgb, 255, 253, 248), 0.82);
+  transition: transform 140ms ease, box-shadow 140ms ease, background-color 140ms ease;
+}
+
+.lite2-shell button.lite-map-zone:hover,
+.lite2-shell button.lite-map-zone:focus-visible {
+  background: rgba(var(--lite2-surface-rgb, 255, 253, 248), 0.96);
+  box-shadow: 0 12px 28px -18px rgba(var(--lite2-ink-rgb, 52, 48, 40), 0.55);
+}
+
+.lite2-shell .lite-map-zone.is-collapsed .lite-map-zone-name {
+  /* 收拢时部门名是这张卡的主语，不再是一行小标签。 */
+  color: var(--ink);
+  font-size: 17px;
+}
+
+/* 警报角标：项目计数（项目可硬，人不可）。口径与 HUD 药丸同一个函数。
+   0 件时整块不渲染——不印「0 件」，那是一句没人要读的话。 */
+.lite2-shell .lite-map-zone-alert {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 20px 0;
+  padding: 3px 9px;
+  /* 🔴 颜色跟 HUD 那颗警报药丸**同一个变量**（--lite2-danger-rgb）。两处各挑一个红
+     的下场是：同一批项目在药丸上一个色、在部门卡上另一个色，读起来像两件事。 */
+  border: 1px solid rgba(var(--lite2-danger-rgb, 176, 92, 76), 0.5);
+  border-radius: 999px;
+  background: rgba(var(--lite2-danger-rgb, 176, 92, 76), 0.08);
+  color: var(--ink);
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.lite2-shell .lite-map-zone-alert-count {
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lite2-shell button.lite-map-zone {
+    transition: none;
+  }
+}
+
 .lite2-shell .lite-map-clear-focus {
   min-height: 28px;
   padding: 0 12px;
@@ -11876,6 +11943,31 @@
 .lite2-shell .lite-map-alert:focus-visible,
 .lite2-shell .lite-map-alert.is-active {
   border-color: rgba(var(--lite2-danger-rgb, 176, 92, 76), 0.95);
+}
+
+/* B4 · 项目列同步开关。跟药丸同一行，形状同族但不抢它的红——它是个视图开关，
+   不是一条警报。 */
+.lite2-shell .lite-map-projects-toggle {
+  flex: none;
+  min-height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--lite2-glass);
+  box-shadow: var(--shadow-soft);
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.lite2-shell .lite-map-projects-toggle:hover,
+.lite2-shell .lite-map-projects-toggle:focus-visible,
+.lite2-shell .lite-map-projects-toggle.is-active {
+  border-color: color-mix(in oklab, var(--ink) 35%, transparent);
+  color: var(--ink);
 }
 
 .lite2-shell .lite-map-alert-count {

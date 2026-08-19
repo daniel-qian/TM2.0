@@ -49,6 +49,9 @@ export function MapHud({
   team,
   zones,
   alertCount,
+  hiddenDoneCount = 0,
+  showAllProjects = false,
+  onToggleProjects,
   focusKey,
   subject,
   onFocus,
@@ -57,6 +60,14 @@ export function MapHud({
   zones: MapHudZone[]
   /** 「需要你管的」项目数。0 = 药丸整个不出现（不印「0 件」——那是一句没人要读的话）。 */
   alertCount: number
+  /**
+   * B4 · 收拢态下被折起来的**已完结**项目数。0 或不在收拢态 = 整个开关不出现。
+   * 🔴 这是项目计数（项目可硬），不是人身面上的任何东西。
+   */
+  hiddenDoneCount?: number
+  /** B4 · 现在是不是「显示全部」。 */
+  showAllProjects?: boolean
+  onToggleProjects?: () => void
   /** 这次 focus 的 URL token；用来在它变化时收起结果列表。 */
   focusKey: string | null
   /** 当前 focus 的意图，用来给 chip / 药丸打 aria-pressed。 */
@@ -174,6 +185,24 @@ export function MapHud({
                 一个叫「有风险」。数字单独成元素，好让门量得到它。 */}
             <span className="lite-map-alert-label">{l.projectsGroupNeedsYou}</span>
             <span className="lite-map-alert-count">{alertCount}</span>
+          </button>
+        ) : null}
+
+        {/* B4 · 项目列同步。收拢态下右边那列默认**只铺没完结的**——票面第 4 条。
+            这不是省地方的小把戏：板的高度由项目列决定（收拢名册一个像素都省不出来，
+            B4 第一刀的验收实测），所以这个开关才是「大团队一屏读得完」的那一半。
+            🔴 只折 `done` 一种。`unknown`（资料里没写状态）照铺——把「没写」和「做完了」
+            折进同一个抽屉，是替文档下了一个它没下的结论（缺失诚实渲染那条纪律）。 */}
+        {onToggleProjects && (hiddenDoneCount > 0 || showAllProjects) ? (
+          <button
+            type="button"
+            className={`lite-map-projects-toggle${showAllProjects ? ' is-active' : ''}`}
+            aria-pressed={showAllProjects}
+            onClick={onToggleProjects}
+          >
+            {showAllProjects
+              ? l.mapProjectsOnlyActiveCta
+              : fill(l.mapProjectsShowAllCta, { count: hiddenDoneCount })}
           </button>
         ) : null}
       </div>
