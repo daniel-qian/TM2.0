@@ -340,6 +340,11 @@ function zoneIndexOfProject(
  */
 export interface MapLayoutOptions {
   /**
+   * 允不允许收拢（B4）。**默认 false**：渲染层还没认 `isCollapsed` 之前，
+   * 布局层单方面收拢会把一个部门的人全叠在卡心。见 buildMapLayout 里那段碑。
+   */
+  allowCollapse?: boolean
+  /**
    * 收拢态下**哪一个部门是铺开的**（B4）。null / 查无此部门 = 全收拢。
    * 值来自 URL 的 `?focus=zone:<key>`——同一个 token 在小团队里是「点亮这一组」、
    * 在大团队里顺带把它铺开，于是「展开了哪个部门」跟着一起可分享，零新增状态。
@@ -357,7 +362,13 @@ export function buildMapLayout(
 
   // B4：人多就收拢。展开的那一个照常铺人位——「原位展开」的意思正是它在原来的格子里长大，
   // 不是弹出一个覆盖层（票面明写不做 zoom 阈值 LOD：点击/状态驱动才可回放）。
-  const collapsed = people.length >= COLLAPSE_MIN_PEOPLE
+  //
+  // 🔴 **默认关着，要调用方显式开**（`allowCollapse`）。理由不是保守，是分刀的纪律：
+  // 收拢态下成员的 pos 全落在卡心，而渲染层此刻还在无条件铺 `zone.members`——
+  // 布局层单独把默认翻过来的话，40 人以上的团队会把一个部门的所有头像**叠在同一个点上**
+  // （本刀提交后当场发现，正是"改了一半的默认值"这个经典形态）。
+  // 渲染层那一刀落地时把这里的默认改成开，并同批删掉这段注释。
+  const collapsed = options.allowCollapse === true && people.length >= COLLAPSE_MIN_PEOPLE
   const expandedZoneKey =
     collapsed && options.expandedZoneKey && groups.some((g) => g.key === options.expandedZoneKey)
       ? options.expandedZoneKey

@@ -73,14 +73,20 @@ check('demo-seed 真的没过阈值（于是它是「不该收」的对照组）
   seed.people.length > 0 && seed.people.length < COLLAPSE_MIN_PEOPLE,
   { people: seed.people.length })
 
-const bigL = buildMapLayout(big.people, big.projects)
-const seedL = buildMapLayout(seed.people, seed.projects)
+const bigL = buildMapLayout(big.people, big.projects, { allowCollapse: true })
+const seedL = buildMapLayout(seed.people, seed.projects, { allowCollapse: true })
 
 console.log('\n── ① 收不收，由人数说了算 ────────────────────────────────────────')
 check('80 人 → 收拢态', bigL.collapsed === true)
 check('demo-seed → 不收（小团队一个人位都不少）', seedL.collapsed === false)
 check('小团队里 expandedZoneKey 恒 null（这个概念只属于收拢态）',
-  buildMapLayout(seed.people, seed.projects, { expandedZoneKey: seedL.zones[0].key }).expandedZoneKey === null)
+  buildMapLayout(seed.people, seed.projects, { allowCollapse: true, expandedZoneKey: seedL.zones[0].key }).expandedZoneKey === null)
+
+check('🔴 默认不收——渲染层还在无条件铺 zone.members，布局层单方面收拢会把一个部门的人叠在卡心',
+  buildMapLayout(big.people, big.projects).collapsed === false)
+check('默认路径下 80 人的 board 与 B1 记的铺开态逐字相同（这一刀对存量零影响）',
+  buildMapLayout(big.people, big.projects).board.height === 2522,
+  { h: buildMapLayout(big.people, big.projects).board.height })
 
 console.log('\n── ② 收拢卡不表达人数（ADR-0023：跨人计数读作排行榜）────────────')
 const heights = [...new Set(bigL.zones.map((z) => z.rect.height))]
@@ -111,6 +117,7 @@ const rosterBox = (layout) => {
   return bottom - top
 }
 const openedOne = buildMapLayout(big.people, big.projects, {
+  allowCollapse: true,
   expandedZoneKey: bigL.zones.find((z) => z.members.length > 1).key,
 })
 check('展开一个部门之后名册区变高 —— 反证收拢态确实把名册压下去了',
@@ -121,7 +128,7 @@ check('🔴 记档：此刻 board 高度由项目列决定、不由名册决定�
 
 console.log('\n── ⑤ 原位展开 ────────────────────────────────────────────────────')
 const target = bigL.zones.find((z) => z.members.length > 1)
-const openL = buildMapLayout(big.people, big.projects, { expandedZoneKey: target.key })
+const openL = buildMapLayout(big.people, big.projects, { allowCollapse: true, expandedZoneKey: target.key })
 check('展开的那个部门 isCollapsed = false', openL.zones.find((z) => z.key === target.key).isCollapsed === false)
 check('其余部门仍然收拢', openL.zones.filter((z) => z.key !== target.key).every((z) => z.isCollapsed === true))
 check('layout 自陈展开的是哪个（门与调试读得到）', openL.expandedZoneKey === target.key)
@@ -132,7 +139,7 @@ check('展开之后成员真的各站各位（不再是同一个点）', distinc
 check('展开的那张卡比收拢时高', openedZone.rect.height > bigL.zones[0].rect.height,
   { open: openedZone.rect.height, collapsed: bigL.zones[0].rect.height })
 check('展开一个板上没有的部门 → 老实全收拢，不炸',
-  buildMapLayout(big.people, big.projects, { expandedZoneKey: '查无此部门' }).expandedZoneKey === null)
+  buildMapLayout(big.people, big.projects, { allowCollapse: true, expandedZoneKey: '查无此部门' }).expandedZoneKey === null)
 
 console.log('\n── ⑥ 收拢态下几何仍然自洽（B1 那几条不许因为收拢就破）───────────')
 const inBoard = (r) => r.x >= 0 && r.y >= 0 && r.x + r.width <= bigL.board.width && r.y + r.height <= bigL.board.height
