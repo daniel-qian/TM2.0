@@ -2145,6 +2145,9 @@ export const en = {
     // than re-worded here: the same set of projects must be called the same thing on both
     // screens. {count} is a PROJECT count — projects may carry hard numbers, people may not.
     mapAlertAria: 'Show the {count} projects under {group}',
+    mapZoneExpandAria: 'Open {zone} and show who is in it',
+    mapProjectsShowAllCta: 'Show all ({count} finished hidden)',
+    mapProjectsOnlyActiveCta: 'Hide finished projects',
   },
 
   // ── Ask / Quick ask (feat-034 stage B — ADR-0023 voice: asks about the WORK; whether rating

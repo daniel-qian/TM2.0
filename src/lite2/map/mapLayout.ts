@@ -363,11 +363,11 @@ export function buildMapLayout(
   // B4：人多就收拢。展开的那一个照常铺人位——「原位展开」的意思正是它在原来的格子里长大，
   // 不是弹出一个覆盖层（票面明写不做 zoom 阈值 LOD：点击/状态驱动才可回放）。
   //
-  // 🔴 **默认关着，要调用方显式开**（`allowCollapse`）。理由不是保守，是分刀的纪律：
-  // 收拢态下成员的 pos 全落在卡心，而渲染层此刻还在无条件铺 `zone.members`——
-  // 布局层单独把默认翻过来的话，40 人以上的团队会把一个部门的所有头像**叠在同一个点上**
-  // （本刀提交后当场发现，正是"改了一半的默认值"这个经典形态）。
-  // 渲染层那一刀落地时把这里的默认改成开，并同批删掉这段注释。
+  // 🔴 **默认关着，由调用方显式开**（`allowCollapse`）。B4 的渲染层已经落地并在
+  // `MapScreen` 里显式传 true，所以这个默认值不再是"临时安全阀"，而是长期口径：
+  // 收拢态下成员的 pos 全落在卡心，**任何不认 `zone.isCollapsed` 的渲染路径**都会把
+  // 一个部门的头像叠在同一个点上（B4 第一刀提交后当场踩过）。留着默认关，意味着
+  // 将来任何新的消费方（导出、缩略图、另一块屏）必须先证明自己认这个标志才拿得到收拢。
   const collapsed = options.allowCollapse === true && people.length >= COLLAPSE_MIN_PEOPLE
   const expandedZoneKey =
     collapsed && options.expandedZoneKey && groups.some((g) => g.key === options.expandedZoneKey)

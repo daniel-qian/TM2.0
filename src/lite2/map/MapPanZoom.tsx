@@ -110,6 +110,8 @@ export function MapPanZoom({
   extraControls,
   focusKey,
   focusRect,
+  openingRect,
+  openingKey,
   children,
 }: {
   board: { width: number; height: number }
@@ -126,6 +128,14 @@ export function MapPanZoom({
   focusKey?: string | null
   /** 该进画面的方框（board px）。null = 这次 focus 没有可框的东西。 */
   focusRect?: MapRect | null
+  /**
+   * B4 ·「开局镜头对火情」：首帧不框全员，框住**有警报的那几个部门**（票面 #107 第 3 条）。
+   * null = 照旧 fit-width 顶锚。有 focus 时上游会传 null——深链那一路仍归 focusRect 管，
+   * 否则会先框火情再跳一次，读起来像画面抽了一下。
+   */
+  openingRect?: MapRect | null
+  /** openingRect 的身份。理由与 focusKey 同：对象引用不能当 effect 依赖。 */
+  openingKey?: string | null
   children: ReactNode
 }) {
   const ref = useRef<ReactZoomPanPinchRef | null>(null)
@@ -137,6 +147,8 @@ export function MapPanZoom({
   // 闭包会一直是首帧那一份。读 ref 才保证「换了公司之后点复位」用的是新板的尺寸。
   const boardRef = useRef(board)
   boardRef.current = board
+  const openingRectRef = useRef(openingRect)
+  openingRectRef.current = openingRect
 
   const applyFit = useCallback((animate: boolean) => {
     const api = ref.current
@@ -161,9 +173,49 @@ export function MapPanZoom({
   //   「两条都在起作用」。留着两条各有各的射程：本 effect 管换板（onInit 一辈子只响一次），
   //   onInit 管「父 effect 跑的时候 rzpp 还没量到 wrapper」那个窗口（那时 applyFit 会静默
   //   空转）。B3 给这条写门时，两把锁要各配一个专属变异，别拿一条变异当两条用。
+  /**
+   * B4 · 开局帧。有火情就框火情，没有就照旧 fit-width 顶锚。
+   *
+   * 🔴 与 `applyFit` **分开**是有意的：「复位视野」那枚键仍然回全景。开局帧回答的是
+   * 「今天该看哪儿」，复位回答的是「这家公司长什么样」——两个不同的问题，不该共用一个动作。
+   * 🔴 不守 `MIN_FIT_SCALE` 可读地板的**上**限之外的东西：这里只会比全景**更近**
+   *（火情区是板的一个子集），所以直接取「装得下且不超过 MAX_FIT_SCALE」的那个 scale。
+   */
+  const applyOpening = useCallback((animate: boolean) => {
+    const api = ref.current
+    const wrapper = api?.instance.wrapperComponent
+    if (!api || !wrapper) return
+    const rect = openingRectRef.current
+    if (!rect || rect.width <= 0 || rect.height <= 0) {
+      applyFit(animate)
+      return
+    }
+    const safeW = Math.max(40, wrapper.clientWidth)
+    const safeH = Math.max(40, wrapper.clientHeight)
+    const roomW = Math.max(40, safeW - EDGE_PAD * 2)
+    const roomH = Math.max(40, safeH - EDGE_PAD * 2)
+    // 🔴 开局帧**守可读地板**（MIN_FIT_SCALE），跟 fitBoard 一个口径。
+    // 不守的下场手机上一眼可见：火情区横跨三列分区（约 1300px），390px 竖屏要装下它得缩到
+    // 0.28 倍——九张部门卡缩成一排指甲盖，字全糊掉。桌面上同一份代码看着还挺好，
+    // 「桌面绿≠手机绿」的又一次实收。
+    // 装不下就装不下：宁可只框住火情的一部分（左上角对齐，其余靠 pan），也不要把可读性
+    // 换成"全都在画面里"。B3 的 focus 跟随可以破这条地板（那时用户已经点了一个具体的人，
+    // 看不见就是看不见）；开局帧不行——它是这一屏的第一眼。
+    const raw = Math.min(roomW / rect.width, roomH / rect.height)
+    const scale = Math.max(MIN_SCALE, Math.min(MAX_FIT_SCALE, Math.max(MIN_FIT_SCALE, raw)))
+    // 🔴 水平居中、垂直**顶锚**——跟 fit-width 初始帧同一个口径（ADR-0012 修订 6）。
+    // 第一版是上下也居中的，真机截图上顶着一条 200px 的空白带：火情区只占板的上半，
+    // 居中之后上下各留一半空板，读起来像「页面没加载完」。顶锚之后空白全部收到下面，
+    // 那是「底下还有，拖得到」的正常读法。
+    // 水平：装得下就居中，装不下就把火情区的左边缘顶到画面左侧（从第一个着火的部门读起）。
+    const scaledW = rect.width * scale
+    const x = scaledW <= roomW ? safeW / 2 - (rect.x + rect.width / 2) * scale : EDGE_PAD - rect.x * scale
+    api.setTransform(x, EDGE_PAD - rect.y * scale, scale, animate ? 320 : 0, 'easeOut')
+  }, [applyFit])
+
   useEffect(() => {
-    applyFit(false)
-  }, [board, applyFit])
+    applyOpening(false)
+  }, [board, openingKey, applyOpening])
 
   /**
    * 🔴 B3 ·「点击聚焦对应簇」里的那个**聚焦**：把亮起来的那一撮东西带进画面。
@@ -241,7 +293,7 @@ export function MapPanZoom({
   // 跨屏不 mis-fit：视口变了按同一把尺重算（含手机横竖屏切换）。
   useEffect(() => {
     function onResize() {
-      applyFit(false)
+      applyOpening(false)
     }
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
@@ -304,7 +356,7 @@ export function MapPanZoom({
         // 「rzpp 还没量到 wrapper」那个窗口时的兜底。
         onInit={(api) => {
           ref.current = api
-          applyFit(false)
+          applyOpening(false)
           // ⚠ 这里**刻意不做** focus 框选。试过，是错的：紧随其后的那条被动 effect 会再跑一次
           // `applyFit`，把刚框好的镜头一把推回 fit 帧。首帧的 focus 归下面那条 effect 管
           //（它排在 applyFit 之后），一件事只留一处。

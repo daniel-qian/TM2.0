@@ -66,31 +66,32 @@ export function MapZoneCard({
   label,
   read,
   state,
+  alertCount = 0,
+  onSelect,
 }: {
   zone: MapZone
   label: string
   read: ZoneRead | null
   /** B3：部门 chip 点中的那一块是 subject，其余在任何 focus 下都退后一步。 */
   state: MapNodeState
+  /**
+   * B4：这个部门名下有几件「需要你出手」的项目（blocked / at-risk）。
+   * 🔴 这是**项目计数不是人数**——项目可硬、人不可（ADR-0023）。口径与 HUD 警报药丸、
+   * 项目屏那一组**同一个函数**（`isNeedsYouStatus`），三处不许各写一遍。
+   * 0 = 角标整个不出现（不印「0 件」，那是一句没人要读的话，和药丸同款处理）。
+   */
+  alertCount?: number
+  /** B4：收拢态下点这张卡 = 原位展开它。铺开态传 undefined（卡是底板，不可点）。 */
+  onSelect?: () => void
 }) {
   const { t } = useDict()
   const l = t.lite2
-  return (
-    <div
-      className={classNames([
-        'lite-map-zone',
-        zone.isUngrouped && 'is-ungrouped',
-        stateClass(state),
-      ])}
-      data-zone-key={zone.key}
-      style={{
-        left: `${zone.rect.x}px`,
-        top: `${zone.rect.y}px`,
-        width: `${zone.rect.width}px`,
-        height: `${zone.rect.height}px`,
-      }}
-    >
-      {/* 🔴 标签上只有部门名，**没有人数徽章**——那是一个人身面上的计数。 */}
+  const inner = (
+    <>
+      {/* 🔴 标签上只有部门名，**没有人数徽章**——那是一个人身面上的计数。
+          票面 #107 原话是「人数 + 组级读数 + 警报角标」，人数那一项按红线砍了：
+          B3 的判据 F1 逐字写着「没有部门人数，那是一张人数排行榜」。规模差异由
+          **展开之后的行数**表达，收拢卡连块头都不表达它（所有卡等高）。 */}
       <span className="lite-map-zone-name">{label}</span>
       {read ? (
         <span
@@ -102,6 +103,61 @@ export function MapZoneCard({
           {fill(l.mapZoneRead, { mood: moodWordOf(read.mood, read.moodRaw, l) })}
         </span>
       ) : null}
+      {/* 🔴 角标**只长在收拢卡上**。铺开的卡里，布局公式只给卡头留了 ZONE_LABEL_H=46px
+          （名字 + 读数两行），第三行会直接压在第一排人像上——门的几何尺 E2 当场逮到
+          （「按显示宽度：没有任何带数字的文字压在人节点的框上」）。要让它在铺开态也出现，
+          得先把 ZONE_LABEL_H 加高，那会给全部既有像素基线换前提，不值。 */}
+      {zone.isCollapsed && alertCount > 0 ? (
+        <span
+          className="lite-map-zone-alert"
+          aria-label={fill(l.mapAlertAria, { group: l.projectsGroupNeedsYou, count: alertCount })}
+        >
+          <span className="lite-map-zone-alert-label" aria-hidden="true">
+            {l.projectsGroupNeedsYou}
+          </span>
+          <span className="lite-map-zone-alert-count" aria-hidden="true">
+            {alertCount}
+          </span>
+        </span>
+      ) : null}
+    </>
+  )
+
+  const className = classNames([
+    'lite-map-zone',
+    zone.isUngrouped && 'is-ungrouped',
+    zone.isCollapsed && 'is-collapsed',
+    stateClass(state),
+  ])
+  const style = {
+    left: `${zone.rect.x}px`,
+    top: `${zone.rect.y}px`,
+    width: `${zone.rect.width}px`,
+    height: `${zone.rect.height}px`,
+  }
+
+  // 🔴 收拢时它才是**按钮**，铺开时仍是底板。不能一律用 `<button>`：铺开的卡里站着人节点，
+  // 而人节点自己是可点的（且 mini 卡里有「打开档案」链接）——按钮套按钮是 B2 就立过的那条
+  // HTML 硬约束（MapPersonNodeView 的头注释①）。收拢的卡里什么都没有，可以放心当按钮，
+  // 于是键盘 Tab 和读屏天然拿到「展开这个部门」这个动作，不用另造 role/tabIndex。
+  if (zone.isCollapsed && onSelect) {
+    return (
+      <button
+        type="button"
+        className={className}
+        data-zone-key={zone.key}
+        style={style}
+        aria-label={fill(l.mapZoneExpandAria, { zone: label })}
+        onClick={onSelect}
+      >
+        {inner}
+      </button>
+    )
+  }
+
+  return (
+    <div className={className} data-zone-key={zone.key} style={style}>
+      {inner}
     </div>
   )
 }
