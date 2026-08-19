@@ -103,7 +103,11 @@ export function MapZoneCard({
           {fill(l.mapZoneRead, { mood: moodWordOf(read.mood, read.moodRaw, l) })}
         </span>
       ) : null}
-      {alertCount > 0 ? (
+      {/* 🔴 角标**只长在收拢卡上**。铺开的卡里，布局公式只给卡头留了 ZONE_LABEL_H=46px
+          （名字 + 读数两行），第三行会直接压在第一排人像上——门的几何尺 E2 当场逮到
+          （「按显示宽度：没有任何带数字的文字压在人节点的框上」）。要让它在铺开态也出现，
+          得先把 ZONE_LABEL_H 加高，那会给全部既有像素基线换前提，不值。 */}
+      {zone.isCollapsed && alertCount > 0 ? (
         <span
           className="lite-map-zone-alert"
           aria-label={fill(l.mapAlertAria, { group: l.projectsGroupNeedsYou, count: alertCount })}

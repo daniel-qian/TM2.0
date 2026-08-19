@@ -35,6 +35,8 @@
 //   隔离端口：VERIFY_BASE=http://localhost:5393 node eval-harness/tools/verify-team-map.mjs
 //   （dist 需 bake VITE_AVERY_API_BASE 指向那条隔离后端，后端 AVERY_CORS_ORIGINS 要放行它）
 import { chromium } from 'playwright'
+import esbuild from 'esbuild'
+import { Buffer } from 'node:buffer'
 import { readdirSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
@@ -660,6 +662,205 @@ rec('I1 en 侧 chip 仍然零数字', en.chipDigits === 0)
 rec('I1 en 侧人节点仍然零数字（红线不分语言）', en.personDigits === 0)
 rec('I2 en 侧 HUD 控件里没有被裁掉的文案（按显示宽度量，不按 .length）',
   en.clipped.length === 0, JSON.stringify(en.clipped))
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// J · B4 · 部门收拢态（#107）
+// ────────────────────────────────────────────────────────────────────────────
+// 🔴 这一段**换语料**：上面全程跑的是真上传的 demo-seed（16 人），而收拢态的门槛是 40 人
+// ——用那份语料一条 B4 判据都够不着，写了全是空真。所以这里把 B1 那份 80 人合成 fixture
+// 在 Node 侧过**真 derive**（liteTeamFromPayload）之后灌进 __lite2Store，与
+// check-render-b1.mjs 同一条路子。不重跑上传（省一个 context，也不动上面那些判据的语料）。
+//
+// ⚠ fixture 自带 scoring_enabled:false（B1/B2 拿它当「开关关」那一世界）。收拢卡上的组级
+// 读数只在开着的世界才有，所以这里显式翻成 true 再 derive——不翻的话「收拢卡带组级读数」
+// 那条会以「读数没渲染」的形态假红，而病根在语料不在代码。
+// ════════════════════════════════════════════════════════════════════════════
+const B4_FIXTURE = join(HERE, '..', '..', '.issues', 'team-map-revival-0804', 'fixtures', 'team-80.json')
+const b4Built = await esbuild.build({
+  stdin: {
+    contents: "export { liteTeamFromPayload } from './src/lite2/teamData'",
+    resolveDir: join(HERE, '..', '..'),
+    loader: 'ts',
+    sourcefile: 'b4-entry.ts',
+  },
+  bundle: true, write: false, format: 'esm', platform: 'neutral', target: 'es2022',
+  define: { 'import.meta.env': '__VITE_ENV_SHIM__' },
+  banner: { js: 'const __VITE_ENV_SHIM__ = {};' },
+})
+const { liteTeamFromPayload } = await import(
+  'data:text/javascript;base64,' + Buffer.from(b4Built.outputFiles[0].text, 'utf8').toString('base64')
+)
+const b4Raw = JSON.parse(readFileSync(B4_FIXTURE, 'utf8'))
+const b4Team = liteTeamFromPayload({ ...b4Raw, scoring_enabled: true })
+
+// 🔴 期望值全部在**门这一侧**手算，走 fixture 的原始 statusRaw / ownerId / team，
+// 不去问 buildMapLayout 或 MapScreen 要（尺子长在被量的东西上就没有分辨力）。
+const b4ZoneOfPerson = new Map(b4Team.people.map((p) => [p.id, (p.team || '').trim()]))
+const B4_NEEDS_YOU = new Set(['blocked', 'at-risk'])
+const b4Fire = new Map()
+for (const pr of b4Team.projects) {
+  if (!B4_NEEDS_YOU.has((pr.statusRaw || '').trim())) continue
+  const zone = b4ZoneOfPerson.get((pr.ownerId || '').trim())
+  if (!zone) continue
+  b4Fire.set(zone, (b4Fire.get(zone) ?? 0) + 1)
+}
+const b4Done = b4Team.projects.filter((p) => (p.statusRaw || '').trim() === 'done').length
+const b4NotDone = b4Team.projects.length - b4Done
+const b4ZoneCount = new Set([...b4ZoneOfPerson.values()].filter(Boolean)).size
+
+rec('J0 自证：80 人 fixture 真的过了收拢门槛（否则整段 J 是空真）',
+  b4Team.people.length >= 40, b4Team.people.length + ' 人')
+rec('J0 自证：真有已完结项目、真有着火的部门、且不是全部部门都着火（否则 J4/J6 恒真）',
+  b4Done > 0 && b4Fire.size > 0 && b4Fire.size < b4ZoneCount,
+  'done=' + b4Done + ' · 着火部门=' + b4Fire.size + '/' + b4ZoneCount)
+
+await page.goto(UI + '/map?v=2&mode=live&look=aurora&lang=zh', { waitUntil: 'domcontentloaded' })
+await page.waitForFunction(() => !!window.__lite2Store, null, { timeout: 20000 })
+await page.evaluate((t) => window.__lite2Store.setState({ contextId: 'ctx_b4_80', team: t }), b4Team)
+await page.waitForSelector('.lite-map-zone', { timeout: 20000 })
+await page.waitForTimeout(700)
+
+const b4Calm = await page.evaluate(() => ({
+  zones: document.querySelectorAll('.lite-map-zone').length,
+  collapsed: document.querySelectorAll('.lite-map-zone.is-collapsed').length,
+  buttons: document.querySelectorAll('button.lite-map-zone').length,
+  people: document.querySelectorAll('.lite-map-person').length,
+  reads: document.querySelectorAll('.lite-map-zone.is-collapsed .lite-map-zone-read').length,
+  projects: document.querySelectorAll('.lite-map-project').length,
+  badges: Object.fromEntries([...document.querySelectorAll('.lite-map-zone-alert')].map((n) => [
+    n.closest('.lite-map-zone').dataset.zoneKey,
+    Number(n.querySelector('.lite-map-zone-alert-count').textContent),
+  ])),
+  // 红线：收拢卡子树里一个阿拉伯数字都不许有——**除了**警报角标那一个（项目计数，项目可硬）。
+  digitsOutsideBadge: [...document.querySelectorAll('.lite-map-zone.is-collapsed')].filter((z) => {
+    const clone = z.cloneNode(true)
+    clone.querySelectorAll('.lite-map-zone-alert').forEach((n) => n.remove())
+    return /[0-9]/.test(clone.textContent || '')
+  }).map((z) => z.dataset.zoneKey),
+}))
+
+rec('J1 人一多，板就换成「部门是节点」：每个分区都收拢，一个人位都不铺',
+  b4Calm.zones > 0 && b4Calm.collapsed === b4Calm.zones && b4Calm.people === 0,
+  JSON.stringify({ zones: b4Calm.zones, collapsed: b4Calm.collapsed, people: b4Calm.people }))
+rec('J1 收拢卡是真按钮（键盘与读屏白拿「展开这个部门」这个动作）',
+  b4Calm.buttons === b4Calm.zones, b4Calm.buttons + '/' + b4Calm.zones)
+rec('J1 收拢卡带组级读数（有人自述的那几个部门）', b4Calm.reads > 0, b4Calm.reads + ' 条')
+rec('J2 每个部门的警报角标 = 门这一侧独立手算的 needsYou 项目数',
+  JSON.stringify(b4Calm.badges) === JSON.stringify(Object.fromEntries(b4Fire)),
+  '屏上 ' + JSON.stringify(b4Calm.badges) + ' · 手算 ' + JSON.stringify(Object.fromEntries(b4Fire)))
+// ⚠ 这一条的射程**到角标为止**：它把 `.lite-map-zone-alert` 整块摘掉再扫数字，所以
+// 「角标里印的是人数而不是项目数」它一个字都看不见（变异 N05 实收：J3 绿、J2 红）。
+// 名字因此写成「角标之外」，别再叫它「零人数」——角标里那个数由 J2 逐值比对守着，
+// 两条各守一半，合起来才是那条红线。这就是"判据够不着 ≠ 判据写错"的处理方式：
+// 把射程写进名字，而不是让一个宽名字盖着一个窄判据。
+rec('J3 🔴 收拢卡上「角标之外」一个数字都没有（部门人数是排行榜，ADR-0023；角标里那个数由 J2 守）',
+  b4Calm.digitsOutsideBadge.length === 0, JSON.stringify(b4Calm.digitsOutsideBadge))
+rec('J4 项目列默认把已完结收起来 = 门手算的「非 done」条数',
+  b4Calm.projects === b4NotDone,
+  '屏上 ' + b4Calm.projects + ' · 手算 ' + b4NotDone + '（共 ' + b4Team.projects.length + '）')
+
+// ⚠ 走 DOM click 而不是 locator：开关不在场时（收拢态没出现的那一族变异）返回 null，
+// 判据红在「点了没回来」上，而不是让门等一个永远不出现的元素直到超时。
+const b4Toggle = await page.evaluate(async () => {
+  const btn = document.querySelector('.lite-map-projects-toggle')
+  if (!btn) return null
+  btn.click()
+  await new Promise((r) => setTimeout(r, 500))
+  return { projects: document.querySelectorAll('.lite-map-project').length }
+})
+rec('J4 点「显示全部」→ 已完结那几条回来（折叠是视图，不是删除）',
+  !!b4Toggle && b4Toggle.projects === b4Team.projects.length,
+  JSON.stringify(b4Toggle) + ' · 全量 ' + b4Team.projects.length)
+await page.evaluate(async () => {
+  document.querySelector('.lite-map-projects-toggle')?.click()
+  await new Promise((r) => setTimeout(r, 400))
+})
+
+// ── 点一张收拢卡 → 原位展开 ────────────────────────────────────────────────
+const b4Target = [...b4Fire.keys()][0]
+// ⚠ 两层保险，都是变异逼出来的：
+// ① 选择器**不带 `button`**——带的话「收拢卡没渲染成按钮」那条变异会让门以 locator
+//    超时崩掉，而崩掉的门和「一条判据都没红」在跑器眼里长得一模一样。
+// ② 点击本身**吞掉超时**——收拢态压根没出现时（N01/N02 那一族），这张卡待在
+//    `pointer-events: none` 的分区层里，Playwright 会一直重试到超时把门炸掉。
+//    炸掉之后 J4/J5/J6 一条都不跑，报告只剩半页；而真正该发生的是它们各自红。
+//    门的职责是**说清楚哪儿坏了**，不是陪着一起崩（B3 的 M01 立的规矩）。
+const b4Clicked = await page
+  .click('.lite-map-zone[data-zone-key="' + b4Target + '"]', { timeout: 5000 })
+  .then(() => true, () => false)
+rec('J5 自证：那张部门卡点得着（点不着时下面几条会红在"没展开"上，不是把门炸掉）', b4Clicked)
+await page.waitForTimeout(700)
+const b4Open = await page.evaluate((key) => ({
+  focus: new URLSearchParams(location.search).get('focus'),
+  stillCollapsed: document.querySelectorAll('.lite-map-zone.is-collapsed').length,
+  zones: document.querySelectorAll('.lite-map-zone').length,
+  people: document.querySelectorAll('.lite-map-person').length,
+  openedIsCollapsed: !!document.querySelector('.lite-map-zone[data-zone-key="' + key + '"]')
+    ?.classList.contains('is-collapsed'),
+  subject: document.querySelector('.lite-map-zone.is-subject')?.dataset.zoneKey ?? null,
+}), b4Target)
+const b4Expected = b4Team.people.filter((p) => (p.team || '').trim() === b4Target).length
+rec('J5 点部门卡 → 原位展开：只有它铺开，其余仍然收拢',
+  b4Open.openedIsCollapsed === false && b4Open.stillCollapsed === b4Open.zones - 1,
+  JSON.stringify(b4Open))
+rec('J5 展开之后铺出来的正是这个部门的全部成员（门这一侧按 person.team 手算）',
+  b4Open.people === b4Expected, '屏上 ' + b4Open.people + ' · 手算 ' + b4Expected)
+rec('J5 展开态跟着一起可分享（URL 上是同一个 zone token）', b4Open.focus === 'zone:' + b4Target)
+rec('J5 被展开的那一块站到前面来', b4Open.subject === b4Target)
+
+// ── 开局镜头对火情 ────────────────────────────────────────────────────────
+// 🔴 J6 的两条判据**各去各的视口**，因为它们各自只在一个视口里有分辨力。
+// 这不是讲究，是两发专属变异逼出来的（N08/N09 第一轮双双存活）：
+//   · 桌面 1440：开局帧 scale=0.71、fit 帧 0.60，两者**不同** ⇒ 「有没有对火情」量得出来；
+//     但可读地板在这里根本不绑（0.71 本来就在地板之上），N09 拿掉地板一个像素都不变。
+//   · 手机 390：地板真绑住（不守的话要缩到 0.26）⇒ 「守不守地板」量得出来；
+//     但这份语料的火情恰好起于板的左上角，fit 帧与开局帧**重合**，N08 在这里也量不出来。
+// 一条判据放错视口，就是一条永远绿的判据。
+await page.keyboard.press('Escape')
+await page.waitForTimeout(600)
+
+const fireKeys = [...b4Fire.keys()]
+const camAt = (keys) => page.evaluate((ks) => {
+  const el = document.querySelector('.lite-map-canvas .react-transform-component')
+  const m = el ? new DOMMatrixReadOnly(getComputedStyle(el).transform) : null
+  const w = document.querySelector('.lite-map-canvas')?.getBoundingClientRect()
+  const inView = ks.filter((k) => {
+    const r = document.querySelector('.lite-map-zone[data-zone-key="' + k + '"]')?.getBoundingClientRect()
+    return !!(r && w && r.left >= w.left - 1 && r.right <= w.right + 1 &&
+      r.top >= w.top - 1 && r.bottom <= w.bottom + 1)
+  }).length
+  return { ok: !!m, scale: m ? Number(m.a.toFixed(4)) : null, inView, total: ks.length }
+}, keys)
+
+// ── 桌面：开局帧到底有没有冲着火情去 ────────────────────────────────────────
+const camOpen = await camAt(fireKeys)
+await page.locator('.lite-map-reset').click({ timeout: 5000 }).catch(() => {})
+await page.waitForTimeout(600)
+const camFit = await camAt(fireKeys)
+// ⚠ 「着火的部门在不在画面里」在**两个视口都没有分辨力**，实测过才敢这么写：
+// 这份语料的火情起于板的左上角，桌面 fit 帧（0.60）下五个着火部门本来就全在画面内。
+// 真正有牙的是**开局帧比 fit 更近**——N08（退回 fit）会让这个差消失。
+// 所以判据落在「不是同一帧、而且是更近的那一帧」上，「在画面里」只当附加条件写着，
+// 别把它读成这条判据的力量来源。
+rec('J6 自证：fit 帧此刻恰好也框得住这几个部门 —— 所以「在画面里」这半句没有分辨力，看下一条',
+  camFit.ok && camFit.inView === camFit.total, JSON.stringify(camFit))
+rec('J6 开局镜头冲着火情去：这一帧比 fit 帧更近（不是把全员摊开的那一帧），着火的部门全在画面内',
+  camOpen.ok && camOpen.inView === camOpen.total && camOpen.scale > camFit.scale,
+  '开局 ' + JSON.stringify(camOpen) + ' · fit ' + JSON.stringify(camFit))
+
+// ── 手机：可读地板 ──────────────────────────────────────────────────────────
+await page.setViewportSize({ width: 390, height: 844 })
+await page.goto(UI + '/map?v=2&mode=live&look=aurora&lang=zh', { waitUntil: 'domcontentloaded' })
+await page.waitForFunction(() => !!window.__lite2Store, null, { timeout: 20000 })
+await page.evaluate((t) => window.__lite2Store.setState({ contextId: 'ctx_b4_80', team: t }), b4Team)
+await page.waitForSelector('.lite-map-zone', { timeout: 20000 })
+await page.waitForTimeout(900)
+const camMobile = await camAt(fireKeys)
+rec('J6 手机竖屏：开局帧守可读地板（不守的话要缩到 0.26，九张卡成一排指甲盖）',
+  camMobile.ok && camMobile.scale >= 0.6, 'scale=' + camMobile.scale)
+await page.setViewportSize({ width: 1440, height: 900 })
+
 
 await browser.close()
 const bad = R.filter((r) => !r.ok)
